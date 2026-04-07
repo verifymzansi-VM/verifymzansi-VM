@@ -62,6 +62,17 @@ vi.mock("@/components/shared/report-dialog", () => ({
 vi.mock("@/components/trust/trust-badge", () => ({
   TrustBadge: () => <span>Trust</span>,
 }));
+vi.mock("@/contexts/video-playback-context", () => ({
+  useVideoPlaybackManager: () => ({
+    register: vi.fn(),
+    unregister: vi.fn(),
+    updateVisibility: vi.fn(),
+    requestPriority: vi.fn(),
+    releasePriority: vi.fn(),
+    claimExclusive: vi.fn(),
+    releaseExclusive: vi.fn(),
+  }),
+}));
 
 function buildClient(
   business: Record<string, unknown>,

@@ -57,6 +57,18 @@ vi.mock("@/components/ui/video-with-poster", () => ({
   ),
 }));
 
+vi.mock("@/contexts/video-playback-context", () => ({
+  useVideoPlaybackManager: () => ({
+    register: vi.fn(),
+    unregister: vi.fn(),
+    updateVisibility: vi.fn(),
+    requestPriority: vi.fn(),
+    releasePriority: vi.fn(),
+    claimExclusive: vi.fn(),
+    releaseExclusive: vi.fn(),
+  }),
+}));
+
 const { ListingDetailClient } = await import("@/app/listing/[id]/client");
 
 describe("ListingDetailClient", () => {

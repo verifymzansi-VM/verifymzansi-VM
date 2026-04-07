@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useRef, useState, type VideoHTMLAttributes } from "react";
+import { useCallback, useEffect, useRef, useState, type VideoHTMLAttributes } from "react";
 import { Play, RotateCcw, AlertTriangle, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
 
 /* ------------------------------------------------------------------ */
 /*  Props                                                              */
@@ -53,16 +54,28 @@ export function VideoWithPoster({
   const [retryCount, setRetryCount] = useState(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const posterError = Boolean(posterUrl && posterErrorForSrc === posterUrl);
+  const manager = useVideoPlaybackManager();
 
-  /** Ref callback: set src and auto-play when the <video> mounts */
+  /* ---- Register with global playback manager when video is active ---- */
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!activated || !video) return;
+
+    manager.register(video);
+    manager.requestPriority(video);
+
+    return () => {
+      manager.releasePriority(video);
+      manager.unregister(video);
+    };
+  }, [activated, manager, retryCount]);
+
+  /** Ref callback: set src when the <video> mounts (manager handles playback) */
   const mountVideo = useCallback(
     (node: HTMLVideoElement | null) => {
       videoRef.current = node;
       if (node && src) {
         node.src = src;
-        node.play().catch(() => {
-          /* autoplay may be blocked — not an error, user can use controls */
-        });
       }
     },
     [src]

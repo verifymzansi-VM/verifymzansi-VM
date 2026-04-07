@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { triggerHaptic } from "@/lib/utils/haptics";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -54,6 +55,17 @@ function dist(a: React.Touch, b: React.Touch) {
 
 export function MediaLightbox({ items, startIndex = 0, isOpen, onClose }: MediaLightboxProps) {
   const reducedMotion = useReducedMotion();
+  const manager = useVideoPlaybackManager();
+
+  /* ---- exclusive playback lock: pause all background videos while lightbox is open ---- */
+  useEffect(() => {
+    if (isOpen) {
+      manager.claimExclusive("media-lightbox");
+    }
+    return () => {
+      manager.releaseExclusive("media-lightbox");
+    };
+  }, [isOpen, manager]);
 
   /* ---- slide state ---- */
   const [index, setIndex] = useState(startIndex);

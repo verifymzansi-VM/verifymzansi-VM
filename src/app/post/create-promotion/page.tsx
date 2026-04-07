@@ -37,6 +37,7 @@ import { PromotionDetailContent } from "@/components/listings/promotion-detail-c
 import { SocialAuthorizationFields } from "@/components/promotions/social-authorization-fields";
 import type { PromotionSocialAuthorizationInput } from "@/lib/promotions/social-authorization";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
+import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import type { PromotionDraftData } from "@/lib/post-drafts/storage";
 const SELECT_CLASS =
   "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm";
@@ -410,7 +411,7 @@ function CreatePromotionContent() {
               const uploadData = new FormData();
               uploadData.append("area", "promotion");
               photoFiles.forEach((file) => uploadData.append("files", file));
-              const uploadRes = await fetch("/api/media/upload", {
+              const uploadRes = await fetchWithRetry("/api/media/upload", {
                 method: "POST",
                 headers: withCsrfHeaders(),
                 body: uploadData,
@@ -425,7 +426,7 @@ function CreatePromotionContent() {
         videoFiles.length > 0
           ? Promise.all(
               videoFiles.map(async (file) => {
-                const urlRes = await fetch("/api/media/upload-url", {
+                const urlRes = await fetchWithRetry("/api/media/upload-url", {
                   method: "POST",
                   headers: withCsrfHeaders({ "Content-Type": "application/json" }),
                   body: JSON.stringify({
@@ -437,7 +438,7 @@ function CreatePromotionContent() {
                 });
                 if (!urlRes.ok) throw new Error("Failed to get video upload URL");
                 const { uploadUrl, publicUrl } = await urlRes.json();
-                const putRes = await fetch(uploadUrl, {
+                const putRes = await fetchWithRetry(uploadUrl, {
                   method: "PUT",
                   headers: { "Content-Type": file.type },
                   body: file,
@@ -454,7 +455,7 @@ function CreatePromotionContent() {
               const uploadData = new FormData();
               uploadData.append("area", "promotion");
               uploadData.append("files", videoThumbnailFile[0]);
-              const uploadRes = await fetch("/api/media/upload", {
+              const uploadRes = await fetchWithRetry("/api/media/upload", {
                 method: "POST",
                 headers: withCsrfHeaders(),
                 body: uploadData,

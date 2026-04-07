@@ -22,6 +22,10 @@ interface VideoPlaybackManager {
   requestPriority(el: HTMLVideoElement): void;
   /** Release exclusive playback priority. */
   releasePriority(el: HTMLVideoElement): void;
+  /** Claim exclusive playback — pauses ALL managed videos and blocks arbitration (e.g. lightbox). */
+  claimExclusive(id: string): void;
+  /** Release exclusive claim — re-enables arbitration. */
+  releaseExclusive(id: string): void;
 }
 
 const VideoPlaybackContext = createContext<VideoPlaybackManager | null>(null);
@@ -43,8 +47,13 @@ export function VideoPlaybackProvider({ children }: { children: React.ReactNode 
   const activeRef = useRef<HTMLVideoElement | null>(null);
   // Debounce timer for arbitration
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Active exclusive lock holder (e.g. lightbox/modal)
+  const exclusiveRef = useRef<string | null>(null);
 
   const arbitrate = useCallback(() => {
+    // If exclusive lock is held, do not arbitrate — videos stay paused
+    if (exclusiveRef.current) return;
+
     const videos = videosRef.current;
     const priority = priorityRef.current;
 
@@ -144,6 +153,30 @@ export function VideoPlaybackProvider({ children }: { children: React.ReactNode 
     [scheduleArbitration]
   );
 
+  const claimExclusive = useCallback((id: string) => {
+    exclusiveRef.current = id;
+    // Cancel any pending arbitration
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    // Immediately pause all managed videos
+    for (const [el] of videosRef.current) {
+      if (!el.paused) el.pause();
+    }
+    activeRef.current = null;
+  }, []);
+
+  const releaseExclusive = useCallback(
+    (id: string) => {
+      if (exclusiveRef.current === id) {
+        exclusiveRef.current = null;
+        scheduleArbitration();
+      }
+    },
+    [scheduleArbitration]
+  );
+
   const manager = useMemo<VideoPlaybackManager>(
     () => ({
       register,
@@ -151,8 +184,18 @@ export function VideoPlaybackProvider({ children }: { children: React.ReactNode 
       updateVisibility,
       requestPriority,
       releasePriority,
+      claimExclusive,
+      releaseExclusive,
     }),
-    [register, unregister, updateVisibility, requestPriority, releasePriority]
+    [
+      register,
+      unregister,
+      updateVisibility,
+      requestPriority,
+      releasePriority,
+      claimExclusive,
+      releaseExclusive,
+    ]
   );
 
   return <VideoPlaybackContext.Provider value={manager}>{children}</VideoPlaybackContext.Provider>;

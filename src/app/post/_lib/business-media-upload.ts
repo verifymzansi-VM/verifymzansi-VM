@@ -1,5 +1,6 @@
 import { createLogger } from "@/lib/utils/logger";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import type { UploadArea } from "@/types/enums";
 
 const log = createLogger("BusinessMediaUpload");
@@ -98,7 +99,7 @@ export async function uploadRequiredBusinessMedia({
   uploadData.append("area", area);
   files.forEach((file) => uploadData.append("files", file));
 
-  const response = await fetch("/api/media/upload", {
+  const response = await fetchWithRetry("/api/media/upload", {
     method: "POST",
     headers: withCsrfHeaders(),
     body: uploadData,
@@ -131,7 +132,7 @@ export async function uploadRequiredBusinessVideo({
   file: File;
   area: UploadArea;
 }): Promise<string> {
-  const urlResponse = await fetch("/api/media/upload-url", {
+  const urlResponse = await fetchWithRetry("/api/media/upload-url", {
     method: "POST",
     headers: withCsrfHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({
@@ -175,7 +176,7 @@ export async function uploadRequiredBusinessVideo({
     throw new BusinessMediaUploadError("cover_video");
   }
 
-  const putResponse = await fetch(uploadUrl, {
+  const putResponse = await fetchWithRetry(uploadUrl, {
     method: "PUT",
     headers: { "Content-Type": file.type },
     body: file,

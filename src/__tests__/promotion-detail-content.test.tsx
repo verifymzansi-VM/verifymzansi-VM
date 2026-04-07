@@ -59,6 +59,8 @@ vi.mock("@/contexts/video-playback-context", () => ({
     updateVisibility: vi.fn(),
     requestPriority: vi.fn(),
     releasePriority: vi.fn(),
+    claimExclusive: vi.fn(),
+    releaseExclusive: vi.fn(),
   }),
 }));
 

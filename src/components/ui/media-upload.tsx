@@ -11,6 +11,25 @@ const ALL_ACCEPT = [...IMAGE_TYPES, ...VIDEO_TYPES].join(",");
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50 MB
 
+/** Map MIME types to a canonical extension for files missing one (e.g. Android content-picker). */
+const MIME_TO_EXT: Record<string, string> = {
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/webp": ".webp",
+  "image/gif": ".gif",
+  "image/avif": ".avif",
+  "video/mp4": ".mp4",
+  "video/webm": ".webm",
+};
+
+/** Ensure the file has a proper extension; Android content-picker files are often extensionless. */
+function normalizeFileName(file: File): File {
+  if (file.name.includes(".")) return file;
+  const ext = MIME_TO_EXT[file.type];
+  if (!ext) return file;
+  return new File([file], file.name + ext, { type: file.type, lastModified: file.lastModified });
+}
+
 interface MediaUploadProps {
   /** Label shown above the upload area */
   label?: string;
@@ -41,6 +60,7 @@ export function MediaUpload({
   disabled = false,
 }: MediaUploadProps) {
   const [isDragOver, setIsDragOver] = useState(false);
+  const [failedPreviews, setFailedPreviews] = useState<Set<number>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -63,7 +83,7 @@ export function MediaUpload({
   }, [previews]);
 
   const validateAndAdd = useCallback(
-    (incoming: FileList | File[]) => {
+    async (incoming: FileList | File[]) => {
       if (disabled) return;
 
       const valid: File[] = [];
@@ -106,7 +126,23 @@ export function MediaUpload({
           continue;
         }
 
-        valid.push(file);
+        // Normalize extensionless filenames (common on Android)
+        const normalized = normalizeFileName(file);
+
+        // Verify the file data is actually readable (Android scoped-storage
+        // can revoke access after the picker closes)
+        try {
+          await normalized.slice(0, 1).arrayBuffer();
+        } catch {
+          toast({
+            title: "Could not read file",
+            description: `"${file.name}" is no longer accessible. Please re-select it.`,
+            variant: "destructive",
+          });
+          continue;
+        }
+
+        valid.push(normalized);
       }
 
       // Enforce max count
@@ -133,7 +169,7 @@ export function MediaUpload({
       setIsDragOver(false);
       if (disabled) return;
       if (e.dataTransfer.files.length > 0) {
-        validateAndAdd(e.dataTransfer.files);
+        void validateAndAdd(e.dataTransfer.files);
       }
     },
     [validateAndAdd, disabled]
@@ -143,7 +179,7 @@ export function MediaUpload({
     (e: React.ChangeEvent<HTMLInputElement>) => {
       if (disabled) return;
       if (e.target.files && e.target.files.length > 0) {
-        validateAndAdd(e.target.files);
+        void validateAndAdd(e.target.files);
         // Reset so the same file can be re-selected
         e.target.value = "";
       }
@@ -188,15 +224,25 @@ export function MediaUpload({
                     <Film className="h-6 w-6 text-white" />
                   </div>
                 </div>
+              ) : failedPreviews.has(idx) ? (
+                <div className="w-full h-full flex flex-col items-center justify-center gap-1 p-2 text-center">
+                  <ImagePlus className="h-5 w-5 text-muted-foreground" />
+                  <span className="text-[10px] text-muted-foreground leading-tight">
+                    Preview unavailable
+                  </span>
+                  <span className="text-[9px] text-muted-foreground/70 leading-tight truncate max-w-full">
+                    {`Preview unavailable for "${item.file.name}"`}
+                  </span>
+                </div>
               ) : (
-                /* eslint-disable-next-line @next/next/no-img-element */
+                /* eslint-disable-next-line @next/next/no-img-element, jsx-a11y/no-noninteractive-element-interactions */
                 <img
                   src={item.url}
                   alt={item.file.name}
                   className="w-full h-full object-cover"
-                  loading="lazy"
                   width={200}
                   height={200}
+                  onError={() => setFailedPreviews((prev) => new Set(prev).add(idx))}
                 />
               )}
               {idx === 0 && previews.length > 1 && (

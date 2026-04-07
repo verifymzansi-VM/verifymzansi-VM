@@ -24,6 +24,8 @@ import {
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { useGlobalMute } from "@/hooks/use-global-mute";
+import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
 
 interface ProfileVideoPlayerProps {
   src: string;
@@ -65,6 +67,11 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
     const localVideoRef = useRef<HTMLVideoElement>(null);
     useImperativeHandle(forwardedRef, () => localVideoRef.current as HTMLVideoElement, []);
 
+    const manager = useVideoPlaybackManager();
+    const containerRef = useRef<HTMLDivElement>(null);
+    const isPausedByUserRef = useRef(!autoPlay);
+    const reducedMotion = useReducedMotion();
+
     const { isMuted, toggleMute, setMuted } = useGlobalMute(localVideoRef);
     const [isPlaying, setIsPlaying] = useState(false);
     const [duration, setDuration] = useState(0);
@@ -79,6 +86,33 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
       if (!video) return;
       video.volume = volume;
     }, [volume]);
+
+    /* ---- Register with global playback manager ---- */
+    useEffect(() => {
+      const video = localVideoRef.current;
+      const container = containerRef.current;
+      if (!video || !container) return;
+
+      manager.register(video);
+
+      const observer = new IntersectionObserver(
+        ([entry]) => {
+          if (isPausedByUserRef.current || reducedMotion) {
+            manager.updateVisibility(video, 0);
+            return;
+          }
+          manager.updateVisibility(video, entry.intersectionRatio);
+        },
+        { threshold: [0, 0.25, 0.5, 0.75, 1] }
+      );
+
+      observer.observe(container);
+
+      return () => {
+        observer.disconnect();
+        manager.unregister(video);
+      };
+    }, [manager, retryKey, reducedMotion]);
 
     const handleLoadedMetadata = useCallback(() => {
       const video = localVideoRef.current;
@@ -97,11 +131,14 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
       const video = localVideoRef.current;
       if (!video) return;
       if (video.paused) {
-        video.play().catch(() => {});
+        isPausedByUserRef.current = false;
+        manager.requestPriority(video);
         return;
       }
+      isPausedByUserRef.current = true;
       video.pause();
-    }, []);
+      manager.releasePriority(video);
+    }, [manager]);
 
     const seekTo = useCallback((time: number) => {
       const video = localVideoRef.current;
@@ -205,6 +242,7 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
 
     return (
       <div
+        ref={containerRef}
         className={cn("absolute inset-0", className)}
         tabIndex={0}
         onKeyDown={handleKeyDown}
@@ -240,7 +278,6 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
             ref={localVideoRef}
             src={src}
             poster={poster}
-            autoPlay={autoPlay}
             muted
             loop={loop}
             playsInline

@@ -171,12 +171,17 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      // Cross-validate file extension against declared MIME type
-      const ext = (file.name.split(".").pop() || "").toLowerCase();
-      const expectedMime = EXTENSION_MIME_MAP[ext];
-      if (!expectedMime || expectedMime !== file.type) {
-        errors.push(`"${file.name}": file extension does not match declared type`);
-        continue;
+      // Cross-validate file extension against declared MIME type.
+      // Android content-picker files may have no extension (e.g. "1000061870")
+      // — skip the extension check for those and rely on magic-byte validation below.
+      const hasExtension = file.name.includes(".");
+      if (hasExtension) {
+        const ext = (file.name.split(".").pop() || "").toLowerCase();
+        const expectedMime = EXTENSION_MIME_MAP[ext];
+        if (!expectedMime || expectedMime !== file.type) {
+          errors.push(`"${file.name}": file extension does not match declared type`);
+          continue;
+        }
       }
 
       // Validate magic bytes to prevent MIME spoofing (stored XSS)
