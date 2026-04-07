@@ -179,6 +179,53 @@ export default function VerificationHelpPage() {
         </div>
       </section>
 
+      {/* ---------- Camera troubleshooting ---------- */}
+      <section className="mt-10">
+        <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <Camera className="h-5 w-5 text-brand-red" />
+          Camera Not Opening? (Desktop &amp; Mobile)
+        </h2>
+        <div className="rounded-lg border p-4 space-y-4">
+          <div>
+            <p className="text-sm font-medium">Desktop (Chrome, Edge, Firefox, Safari)</p>
+            <ul className="list-disc list-inside mt-1 space-y-1">
+              <li className="text-xs sm:text-sm text-muted-foreground">
+                Open the lock icon next to the address bar and set Camera to Allow for this site.
+              </li>
+              <li className="text-xs sm:text-sm text-muted-foreground">
+                Refresh the page and press Open Camera again.
+              </li>
+              <li className="text-xs sm:text-sm text-muted-foreground">
+                If no prompt appears, close other apps/tabs using your camera and retry.
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <p className="text-sm font-medium">Mobile (Android / iPhone)</p>
+            <ul className="list-disc list-inside mt-1 space-y-1">
+              <li className="text-xs sm:text-sm text-muted-foreground">
+                Ensure browser camera permission is enabled in your phone Settings.
+              </li>
+              <li className="text-xs sm:text-sm text-muted-foreground">
+                On iPhone Safari: Settings {">"} Safari {">"} Camera {">"} Allow.
+              </li>
+              <li className="text-xs sm:text-sm text-muted-foreground">
+                On Android Chrome: Site settings {">"} Camera {">"} Allow for this site.
+              </li>
+              <li className="text-xs sm:text-sm text-muted-foreground">
+                If the prompt still does not appear, restart the browser and try again.
+              </li>
+            </ul>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            You can always continue verification by uploading a clear image file instead of using
+            the live camera.
+          </p>
+        </div>
+      </section>
+
       {/* ---------- Rejection reasons ---------- */}
       <section>
         <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">

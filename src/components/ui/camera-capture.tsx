@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, RefreshCw, VideoOff } from "lucide-react";
+import Link from "next/link";
+import * as Sentry from "@sentry/nextjs";
+import { Camera, Loader2, RefreshCw, VideoOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -9,16 +11,21 @@ interface CameraCaptureProps {
   onCapture: (file: File) => void;
   facingMode: "user" | "environment";
   disabled?: boolean;
+  cameraStartTimeoutMs?: number;
+  telemetryContext?: string;
   /** Called when camera is unavailable and user falls back to file upload */
   onFallback?: () => void;
 }
 
 type CameraState = "idle" | "streaming" | "captured" | "error";
+const DEFAULT_CAMERA_START_TIMEOUT_MS = 15_000;
 
 export function CameraCapture({
   onCapture,
   facingMode,
   disabled = false,
+  cameraStartTimeoutMs = DEFAULT_CAMERA_START_TIMEOUT_MS,
+  telemetryContext,
   onFallback,
 }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -27,6 +34,88 @@ export function CameraCapture({
   const [state, setState] = useState<CameraState>("idle");
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [capturedUrl, setCapturedUrl] = useState<string>("");
+  const [isStartingCamera, setIsStartingCamera] = useState(false);
+
+  const reportCameraInitFailure = useCallback(
+    (errorName: string, permissionState: PermissionState | null) => {
+      const uaData = (
+        navigator as Navigator & {
+          userAgentData?: { platform?: string; mobile?: boolean };
+        }
+      ).userAgentData;
+
+      try {
+        Sentry.withScope((scope) => {
+          scope.setTag("feature", "verification_camera");
+          scope.setTag("camera_error", errorName || "unknown");
+          scope.setContext("camera_init", {
+            errorName: errorName || "unknown",
+            permissionState: permissionState ?? "unknown",
+            telemetryContext: telemetryContext ?? "unknown",
+            facingMode,
+            isSecureContext,
+            mediaDevicesAvailable: Boolean(navigator.mediaDevices?.getUserMedia),
+            platform: uaData?.platform ?? navigator.platform ?? "unknown",
+            mobile: uaData?.mobile ?? /Android|iPhone|iPad|iPod/i.test(navigator.userAgent),
+          });
+          Sentry.captureMessage("camera_init_failed", "warning");
+        });
+      } catch {
+        // Telemetry should never block camera fallback UX.
+      }
+    },
+    [facingMode, telemetryContext]
+  );
+
+  const getPermissionState = useCallback(async (): Promise<PermissionState | null> => {
+    if (!navigator.permissions?.query) {
+      return null;
+    }
+
+    try {
+      const status = await navigator.permissions.query({ name: "camera" as PermissionName });
+      return status.state;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const getUserMediaWithTimeout = useCallback(
+    (constraints: MediaStreamConstraints) => {
+      return new Promise<MediaStream>((resolve, reject) => {
+        let settled = false;
+        const timeoutHandle = setTimeout(() => {
+          settled = true;
+          const timeoutError = new Error("Camera start timed out.");
+          timeoutError.name = "TimeoutError";
+          reject(timeoutError);
+        }, cameraStartTimeoutMs);
+
+        navigator.mediaDevices
+          .getUserMedia(constraints)
+          .then((stream) => {
+            clearTimeout(timeoutHandle);
+            if (settled) {
+              // If timeout already rejected this attempt, immediately release
+              // the late stream to avoid camera lock on the device.
+              for (const track of stream.getTracks()) {
+                track.stop();
+              }
+              return;
+            }
+            settled = true;
+            resolve(stream);
+          })
+          .catch((error: unknown) => {
+            clearTimeout(timeoutHandle);
+            if (settled) return;
+            settled = true;
+            reject(error);
+          });
+      });
+    },
+    [cameraStartTimeoutMs]
+  );
 
   const stopStream = useCallback(() => {
     if (streamRef.current) {
@@ -38,8 +127,13 @@ export function CameraCapture({
   }, []);
 
   const startCamera = useCallback(async () => {
+    if (isStartingCamera) {
+      return;
+    }
+
     // Guard: mediaDevices API requires a secure context (HTTPS)
     if (!navigator.mediaDevices?.getUserMedia) {
+      reportCameraInitFailure("MediaDevicesUnavailable", null);
       setErrorMessage(
         "Camera is not available. Please make sure you are using HTTPS and a modern browser, or use the file upload below."
       );
@@ -48,8 +142,10 @@ export function CameraCapture({
     }
 
     try {
+      setIsStartingCamera(true);
       setState("idle");
       setErrorMessage("");
+      stopStream();
 
       // Try with full constraints first, then progressively relax
       let stream: MediaStream | null = null;
@@ -61,7 +157,7 @@ export function CameraCapture({
 
       for (const constraints of constraintSets) {
         try {
-          stream = await navigator.mediaDevices.getUserMedia(constraints);
+          stream = await getUserMediaWithTimeout(constraints);
           break;
         } catch (innerErr) {
           const innerName = innerErr instanceof Error ? innerErr.name : "";
@@ -92,13 +188,27 @@ export function CameraCapture({
     } catch (err) {
       stopStream();
       const name = err instanceof Error ? err.name : "";
+      const permissionState = name === "NotAllowedError" ? await getPermissionState() : null;
+
+      reportCameraInitFailure(name || "UnknownCameraError", permissionState);
+
       if (name === "NotAllowedError") {
-        setErrorMessage(
-          "Camera access was denied. Please allow camera access in your browser settings, or use the file upload below."
-        );
+        if (permissionState === "denied") {
+          setErrorMessage(
+            "Camera is blocked for this site. Please enable camera permission in your browser site settings, then try again, or use the file upload below."
+          );
+        } else {
+          setErrorMessage(
+            "Camera access was denied. Please allow camera access in your browser settings, or use the file upload below."
+          );
+        }
       } else if (name === "SecurityError") {
         setErrorMessage(
           "Camera access requires a secure connection (HTTPS). Please use the file upload below."
+        );
+      } else if (name === "TimeoutError") {
+        setErrorMessage(
+          "Camera took too long to start. Please close other apps using the camera and try again, or use the file upload below."
         );
       } else if (name === "NotFoundError" || name === "NotReadableError") {
         setErrorMessage("No camera found on this device. Please use the file upload below.");
@@ -112,8 +222,17 @@ export function CameraCapture({
         setErrorMessage("Could not start camera. Please use the file upload below.");
       }
       setState("error");
+    } finally {
+      setIsStartingCamera(false);
     }
-  }, [facingMode, stopStream]);
+  }, [
+    facingMode,
+    getPermissionState,
+    getUserMediaWithTimeout,
+    isStartingCamera,
+    reportCameraInitFailure,
+    stopStream,
+  ]);
 
   // Cleanup stream on unmount
   useEffect(() => {
@@ -201,15 +320,26 @@ export function CameraCapture({
           <VideoOff className="h-4 w-4 shrink-0" />
           <p>{errorMessage}</p>
         </div>
+        <p className="text-xs text-muted-foreground">
+          No camera prompt? Open{" "}
+          <Link href="/help/verification" className="underline">
+            verification help
+          </Link>{" "}
+          for desktop and mobile permission reset steps.
+        </p>
         <Button
           type="button"
           variant="outline"
           onClick={startCamera}
-          disabled={disabled}
+          disabled={disabled || isStartingCamera}
           className="w-full gap-2"
         >
-          <RefreshCw className="h-4 w-4" />
-          Try Again
+          {isStartingCamera ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
+          {isStartingCamera ? "Trying..." : "Try Again"}
         </Button>
         <div className="space-y-2">
           <Input
@@ -253,11 +383,15 @@ export function CameraCapture({
           type="button"
           variant="outline"
           onClick={startCamera}
-          disabled={disabled}
+          disabled={disabled || isStartingCamera}
           className="w-full gap-2"
         >
-          <Camera className="h-4 w-4" />
-          Open Camera
+          {isStartingCamera ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Camera className="h-4 w-4" />
+          )}
+          {isStartingCamera ? "Opening Camera..." : "Open Camera"}
         </Button>
       )}
 

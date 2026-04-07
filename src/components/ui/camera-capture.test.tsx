@@ -1,5 +1,24 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const sentryMocks = vi.hoisted(() => ({
+  captureMessage: vi.fn(),
+  setTag: vi.fn(),
+  setContext: vi.fn(),
+}));
+
+vi.mock("@sentry/nextjs", () => ({
+  captureMessage: sentryMocks.captureMessage,
+  withScope: (
+    callback: (scope: {
+      setTag: typeof sentryMocks.setTag;
+      setContext: typeof sentryMocks.setContext;
+    }) => void
+  ) => {
+    callback({ setTag: sentryMocks.setTag, setContext: sentryMocks.setContext });
+  },
+}));
+
 import { CameraCapture } from "./camera-capture";
 
 const mockGetUserMedia = vi.fn();
@@ -12,6 +31,13 @@ beforeEach(() => {
   Object.defineProperty(global.navigator, "mediaDevices", {
     configurable: true,
     value: { getUserMedia: mockGetUserMedia },
+  });
+
+  Object.defineProperty(global.navigator, "permissions", {
+    configurable: true,
+    value: {
+      query: vi.fn().mockResolvedValue({ state: "prompt" }),
+    },
   });
 
   vi.stubGlobal(
@@ -68,6 +94,89 @@ describe("CameraCapture", () => {
     });
   });
 
+  it("shows blocked-for-site guidance when permission state is denied", async () => {
+    const err = new Error("denied");
+    err.name = "NotAllowedError";
+    mockGetUserMedia.mockRejectedValueOnce(err);
+
+    const query = vi.fn().mockResolvedValue({ state: "denied" });
+    Object.defineProperty(global.navigator, "permissions", {
+      configurable: true,
+      value: { query },
+    });
+
+    render(<CameraCapture onCapture={vi.fn()} facingMode="user" />);
+    fireEvent.click(screen.getByRole("button", { name: /open camera/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/camera is blocked for this site/i)).toBeInTheDocument();
+    });
+
+    expect(query).toHaveBeenCalled();
+  });
+
+  it("shows timeout guidance when camera start takes too long", async () => {
+    mockGetUserMedia.mockImplementationOnce(
+      () =>
+        new Promise<MediaStream>(() => {
+          // Intentionally unresolved to trigger timeout path
+        })
+    );
+
+    render(<CameraCapture onCapture={vi.fn()} facingMode="user" cameraStartTimeoutMs={1} />);
+    fireEvent.click(screen.getByRole("button", { name: /open camera/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/camera took too long to start/i)).toBeInTheDocument();
+    });
+  });
+
+  it("stops late camera stream after timeout", async () => {
+    let resolveStream: ((stream: MediaStream) => void) | undefined;
+    mockGetUserMedia.mockImplementationOnce(
+      () =>
+        new Promise<MediaStream>((resolve) => {
+          resolveStream = resolve;
+        })
+    );
+
+    render(<CameraCapture onCapture={vi.fn()} facingMode="user" cameraStartTimeoutMs={1} />);
+    fireEvent.click(screen.getByRole("button", { name: /open camera/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/camera took too long to start/i)).toBeInTheDocument();
+    });
+
+    const stream = createMockStream();
+    if (!resolveStream) {
+      throw new Error("Expected getUserMedia resolver to be captured");
+    }
+    resolveStream(stream);
+
+    await waitFor(() => {
+      expect(mockStop).toHaveBeenCalled();
+    });
+  });
+
+  it("prevents duplicate camera-start attempts while one is in progress", async () => {
+    mockGetUserMedia.mockImplementationOnce(
+      () =>
+        new Promise<MediaStream>(() => {
+          // Keep pending to simulate a long-running camera start
+        })
+    );
+
+    render(<CameraCapture onCapture={vi.fn()} facingMode="environment" />);
+    const openButton = screen.getByRole("button", { name: /open camera/i });
+
+    fireEvent.click(openButton);
+    fireEvent.click(openButton);
+
+    await waitFor(() => {
+      expect(mockGetUserMedia).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("shows error message when no camera found", async () => {
     const err = new Error("not found");
     err.name = "NotFoundError";
@@ -93,6 +202,9 @@ describe("CameraCapture", () => {
       const input = document.querySelector("input[type='file']");
       expect(input).toBeTruthy();
     });
+
+    const helpLink = screen.getByRole("link", { name: /verification help/i });
+    expect(helpLink).toHaveAttribute("href", "/help/verification");
   });
 
   it("calls onFallback when file input is used after camera error", async () => {

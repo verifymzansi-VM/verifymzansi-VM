@@ -1734,6 +1734,7 @@ export default function VerificationPage() {
                     <Label>ID document photo</Label>
                     <CameraCapture
                       facingMode="environment"
+                      telemetryContext="id_doc"
                       disabled={verificationSubmissionBlocked}
                       onCapture={(file) => {
                         setIdFile(file);
@@ -1833,6 +1834,7 @@ export default function VerificationPage() {
                     <Label>Selfie image</Label>
                     <CameraCapture
                       facingMode="user"
+                      telemetryContext="selfie"
                       disabled={verificationSubmissionBlocked}
                       onCapture={(file) => {
                         setSelfieFile(file);

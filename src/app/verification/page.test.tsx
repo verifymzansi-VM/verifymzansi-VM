@@ -115,6 +115,14 @@ describe("VerificationPage", () => {
         getCurrentPosition: vi.fn(),
       },
     });
+    Object.defineProperty(global.navigator, "mediaDevices", {
+      configurable: true,
+      value: undefined,
+    });
+    Object.defineProperty(global.navigator, "permissions", {
+      configurable: true,
+      value: undefined,
+    });
     sessionResponse = jsonResponse(
       {
         sessionId: "session-1",
@@ -539,6 +547,81 @@ describe("VerificationPage", () => {
       },
       { timeout: 3500 }
     );
+  });
+
+  it("supports file fallback on the selfie step after ID document submission", async () => {
+    sessionResponse = jsonResponse(
+      {
+        sessionId: "session-1",
+        completedSteps: ["phone"],
+        pendingSteps: [],
+        requiredSteps: ["phone", "id_doc", "selfie", "location"],
+        finalizedAt: null,
+        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
+      },
+      200
+    );
+    statusResponse = jsonResponse(
+      buildStatusPayload({
+        steps: [{ step_type: "phone", status: "approved" }],
+      }),
+      200
+    );
+
+    render(<VerificationPage />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/13-digit SA ID number/i)).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText(/First name \(as shown on ID\)/i), {
+      target: { value: "Sipho" },
+    });
+    fireEvent.change(screen.getByLabelText(/Surname \(as shown on ID\)/i), {
+      target: { value: "Mokoena" },
+    });
+    fireEvent.change(screen.getByLabelText(/13-digit SA ID number/i), {
+      target: { value: "8001015009087" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Open Camera/i }));
+    await waitFor(() => {
+      expect(document.querySelector('input[type="file"]')).toBeInTheDocument();
+    });
+
+    fireEvent.change(document.querySelector('input[type="file"]') as HTMLInputElement, {
+      target: {
+        files: [new File(["fake-id"], "id.jpg", { type: "image/jpeg" })],
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Step 3: Selfie/i)).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Open Camera/i }));
+    await waitFor(() => {
+      expect(document.querySelector('input[type="file"]')).toBeInTheDocument();
+    });
+
+    fireEvent.change(document.querySelector('input[type="file"]') as HTMLInputElement, {
+      target: {
+        files: [new File(["fake-selfie"], "selfie.jpg", { type: "image/jpeg" })],
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Step 4: Verify Your Address/i)).toBeInTheDocument();
+    });
+
+    const verificationUploadCalls = fetchCalls().filter(([input]) =>
+      String(input).includes("/api/verification/upload")
+    );
+    expect(verificationUploadCalls.length).toBeGreaterThanOrEqual(2);
   });
 
   it("shows the explicit email-confirmation blocker when manual location is rejected", async () => {
