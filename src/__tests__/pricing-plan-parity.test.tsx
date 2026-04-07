@@ -100,7 +100,7 @@ describe("Active-area pricing parity", () => {
     expect(
       screen.getByText(
         new RegExp(
-          `${FREE_POST_CONFIG.maxAllowed} free posts per area, each with ${FREE_POST_CONFIG.maxPhotos} photos, ${FREE_POST_CONFIG.maxVideos} video, and ${FREE_POST_CONFIG.durationDays} days visibility`,
+          `1 free post per area every ${FREE_POST_CONFIG.durationDays} days, with ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video`,
           "i"
         )
       )
@@ -116,7 +116,7 @@ describe("Active-area pricing parity", () => {
     expect(
       screen.getByText(
         new RegExp(
-          `${FREE_POST_CONFIG.maxAllowed} free posts per area.*${FREE_POST_CONFIG.maxPhotos} photos, ${FREE_POST_CONFIG.maxVideos} video, ${FREE_POST_CONFIG.durationDays} days each`,
+          `${FREE_POST_CONFIG.maxPhotos} photos, ${FREE_POST_CONFIG.maxVideos} video, ${FREE_POST_CONFIG.durationDays} days`,
           "i"
         )
       )

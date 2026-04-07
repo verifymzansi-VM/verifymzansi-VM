@@ -74,13 +74,13 @@ vi.mock("@/lib/constants/pricing", () => ({
       },
     },
   ],
-  TRIAL_CONFIG: { durationDays: 7, tier: "starter", maxListings: 2 },
+  TRIAL_CONFIG: { durationDays: 30, tier: "starter", maxListings: 1 },
   FREE_POST_CONFIG: {
-    durationDays: 7,
+    durationDays: 30,
     maxPhotos: 5,
     maxVideos: 1,
     videoAllowed: true,
-    maxAllowed: 2,
+    maxAllowed: 1,
   },
   getPlanCheckoutId: (plan: { tier: string; area: string }) => `${plan.area}-${plan.tier}`,
 }));
@@ -185,7 +185,9 @@ describe("PlanGate", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockResolvedValue({ count: 0, error: null }),
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+              }),
             }),
           }),
         };
@@ -307,7 +309,9 @@ describe("PlanGate", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockResolvedValue({ count: 2, error: null }),
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: { id: "used-1" }, error: null }),
+              }),
             }),
           }),
         };

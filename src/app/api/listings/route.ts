@@ -45,7 +45,6 @@ import {
   shouldHidePlaywrightFixtures,
 } from "@/lib/supabase/playwright-visual-fixtures";
 import { createNotification, shouldSendOwnerLifecycleNotifications } from "@/lib/notifications";
-import { claimFreePostSlot } from "@/lib/free-posts/claim-free-post";
 
 const log = createLogger("ListingCreate");
 const AREA: MarketplaceArea = "MZANSI_MARKET";
@@ -634,7 +633,7 @@ export async function POST(request: NextRequest) {
 
     // ── Enforce photo/video limits based on plan ─────────────
     // Validated BEFORE claiming the free post slot so that a validation
-    // failure never consumes any of the user's free-post quota.
+    // failure never consumes the user's one-time free post quota.
     const ent =
       hasPaidPlan && tier
         ? getEntitlements(tier as PlanTier, AREA)
@@ -667,38 +666,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let claimedFreePostSlot: number | null = null;
-
     // Check free post availability for unpaid users
     if (!hasPaidPlan && !postingLimitBypassEnabled) {
-      const claimResult = await claimFreePostSlot(
-        supabase,
-        user.id,
-        AREA,
-        FREE_POST_CONFIG.maxAllowed
-      );
+      // Atomic claim: INSERT (not upsert) to prevent TOCTOU race.
+      // If a concurrent request already claimed, the unique constraint
+      // on (user_id, area) causes a conflict error → return 403.
+      const { error: claimError } = await supabase
+        .from("free_posts_used")
+        .insert({ user_id: user.id, area: AREA });
 
-      if (!claimResult.ok && claimResult.reason === "limit_reached") {
-        return NextResponse.json(
-          {
-            error: "Free post limit reached",
-            reason: `You have already used your ${FREE_POST_CONFIG.maxAllowed} free posts for Mzansi Market. Subscribe to a plan to post more.`,
-            upgradeUrl: "/billing",
-          },
-          { status: 403 }
-        );
-      }
-
-      if (!claimResult.ok) {
+      if (claimError) {
+        // 23505 = unique_violation → free post already used
+        if (claimError.code === "23505") {
+          return NextResponse.json(
+            {
+              error: "Free post already used",
+              reason:
+                "You have already used your free post for Mzansi Market. Subscribe to a plan to post more.",
+              upgradeUrl: "/billing",
+            },
+            { status: 403 }
+          );
+        }
         log.error("Failed to claim free post slot", {
-          error: claimResult.error?.message,
-          code: claimResult.error?.code,
+          error: claimError.message,
+          code: claimError.code,
           userId: user.id,
         });
         return NextResponse.json({ error: "Failed to reserve free post" }, { status: 500 });
       }
-
-      claimedFreePostSlot = claimResult.slot;
     }
 
     if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
@@ -789,8 +785,7 @@ export async function POST(request: NextRequest) {
           .from("free_posts_used")
           .delete()
           .eq("user_id", user.id)
-          .eq("area", AREA)
-          .eq("slot", claimedFreePostSlot);
+          .eq("area", AREA);
         if (rollbackError) {
           log.error("Failed to rollback free post claim after listing insert failure", {
             userId: user.id,
@@ -815,8 +810,7 @@ export async function POST(request: NextRequest) {
           .from("free_posts_used")
           .delete()
           .eq("user_id", user.id)
-          .eq("area", AREA)
-          .eq("slot", claimedFreePostSlot);
+          .eq("area", AREA);
         if (rollbackError) {
           log.error("Failed to rollback free post claim after empty insert result", {
             userId: user.id,

@@ -47,7 +47,6 @@ import {
 } from "@/lib/validations/shared";
 import { toFieldErrorMap } from "@/lib/validations/zod-errors";
 import { z } from "zod";
-import { claimFreePostSlot } from "@/lib/free-posts/claim-free-post";
 
 const log = createLogger("PromotionsCRUD");
 const AREA: MarketplaceArea = "PROMOTIONS_EVENTS";
@@ -312,37 +311,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let claimedFreePostSlot: number | null = null;
-
     if (!hasPaidPlan && !postingLimitBypassEnabled) {
-      const claimResult = await claimFreePostSlot(
-        supabase,
-        user.id,
-        AREA,
-        FREE_POST_CONFIG.maxAllowed
-      );
+      const { error: claimError } = await supabase
+        .from("free_posts_used")
+        .insert({ user_id: user.id, area: AREA });
 
-      if (!claimResult.ok && claimResult.reason === "limit_reached") {
-        return NextResponse.json(
-          {
-            error: "Free post limit reached",
-            reason: `You have already used your ${FREE_POST_CONFIG.maxAllowed} free posts for Tourism & Events. Subscribe to a plan to post more.`,
-            upgradeUrl: "/billing",
-          },
-          { status: 403 }
-        );
-      }
+      if (claimError) {
+        if (claimError.code === "23505") {
+          return NextResponse.json(
+            {
+              error: "Free post already used",
+              reason:
+                "You have already used your free post for Tourism & Events. Subscribe to a plan to post more.",
+              upgradeUrl: "/billing",
+            },
+            { status: 403 }
+          );
+        }
 
-      if (!claimResult.ok) {
         log.error("Failed to claim free post slot", {
-          error: claimResult.error?.message,
-          code: claimResult.error?.code,
+          error: claimError.message,
+          code: claimError.code,
           userId: user.id,
         });
         return NextResponse.json({ error: "Failed to reserve free post" }, { status: 500 });
       }
-
-      claimedFreePostSlot = claimResult.slot;
     }
 
     // Build the promotion row
@@ -406,8 +399,7 @@ export async function POST(request: NextRequest) {
           .from("free_posts_used")
           .delete()
           .eq("user_id", user.id)
-          .eq("area", AREA)
-          .eq("slot", claimedFreePostSlot);
+          .eq("area", AREA);
         if (cleanupErr) {
           log.error("Failed to clean up free_posts_used after promotion insert failure", {
             error: cleanupErr.message,

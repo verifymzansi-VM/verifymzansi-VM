@@ -169,7 +169,7 @@ describe("POST /api/businesses", () => {
     });
   });
 
-  it("blocks a third free post when no paid plan exists", async () => {
+  it("blocks a second free post when no paid plan exists", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
         if (table === "account_profiles") {
@@ -196,12 +196,9 @@ describe("POST /api/businesses", () => {
         }
         if (table === "free_posts_used") {
           return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockResolvedValue({ count: 2, error: null }),
-              }),
+            insert: vi.fn().mockResolvedValue({
+              error: { code: "23505", message: "duplicate key value violates unique constraint" },
             }),
-            insert: vi.fn(),
           };
         }
         return {
@@ -215,81 +212,8 @@ describe("POST /api/businesses", () => {
     const res = await POST(createRequest(VALID_BODY));
     expect(res.status).toBe(403);
     await expect(res.json()).resolves.toMatchObject({
-      error: "Free post limit reached",
+      error: "Free post already used",
     });
-  });
-
-  it("allows a second free business post in the same area", async () => {
-    const insertSpy = vi.fn().mockReturnValue({
-      select: () => ({
-        single: vi.fn().mockResolvedValue({ data: { id: "business-2" }, error: null }),
-      }),
-    });
-    const freePostInsertSpy = vi.fn().mockResolvedValue({ error: null });
-
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "account_profiles") {
-          return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: {
-                id: "seller-1",
-                account_verification_status: "verified",
-              },
-            }),
-          };
-        }
-        if (table === "entitlements") {
-          return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            gt: vi.fn().mockReturnThis(),
-            order: vi.fn().mockReturnThis(),
-            limit: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-          };
-        }
-        if (table === "free_posts_used") {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockResolvedValue({ count: 1, error: null }),
-              }),
-            }),
-            insert: freePostInsertSpy,
-            delete: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  eq: vi.fn().mockResolvedValue({ error: null }),
-                }),
-              }),
-            }),
-          };
-        }
-        if (table === "businesses") {
-          return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            neq: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-            insert: insertSpy,
-          };
-        }
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-        };
-      }),
-    });
-
-    const res = await POST(createRequest(VALID_BODY));
-
-    expect(res.status).toBe(201);
-    expect(freePostInsertSpy).toHaveBeenCalledTimes(1);
-    expect(insertSpy).toHaveBeenCalled();
   });
 
   it("rejects cross-site business creation requests", async () => {
@@ -500,17 +424,10 @@ describe("POST /api/businesses", () => {
         }
         if (table === "free_posts_used") {
           return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockResolvedValue({ count: 0, error: null }),
-              }),
-            }),
             insert: vi.fn().mockResolvedValue({ error: null }),
             delete: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  eq: freePostCleanup,
-                }),
+                eq: freePostCleanup,
               }),
             }),
           };
@@ -611,11 +528,6 @@ describe("POST /api/businesses", () => {
         }
         if (table === "free_posts_used") {
           return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockResolvedValue({ count: 0, error: null }),
-              }),
-            }),
             insert: freePostInsert,
           };
         }
@@ -882,17 +794,10 @@ describe("POST /api/businesses", () => {
         }
         if (table === "free_posts_used") {
           return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockResolvedValue({ count: 0, error: null }),
-              }),
-            }),
             insert: vi.fn().mockResolvedValue({ error: null }),
             delete: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  eq: vi.fn().mockResolvedValue({ error: null }),
-                }),
+                eq: vi.fn().mockResolvedValue({ error: null }),
               }),
             }),
           };

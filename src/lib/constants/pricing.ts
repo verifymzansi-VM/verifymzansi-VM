@@ -416,23 +416,23 @@ export const PAY_PER_POST = {
  * TRIAL_CONFIG.tier or TRIAL_CONFIG.durationDays still works.
  */
 export const TRIAL_CONFIG = {
-  durationDays: 7,
+  durationDays: 30,
   tier: "starter" as PlanTier,
-  maxListings: 2,
+  maxListings: 1,
 } as const;
 
 /* ── Free Post Config ────────────────────────────────────── */
 /**
- * Free posting allowance per marketplace area.
- * Each account gets exactly 2 free posts in each area.
- * Once all free posts are used, the free option disappears for that area.
+ * One-time free post per marketplace area.
+ * Each account gets exactly 1 free post in each area.
+ * Once used, the free option disappears permanently for that area.
  */
 export const FREE_POST_CONFIG = {
-  durationDays: 7,
+  durationDays: 30,
   maxPhotos: 10,
   maxVideos: 1,
   videoAllowed: true,
-  maxAllowed: 2, // 2 posts per area
+  maxAllowed: 1, // 1 post per area
 } as const;
 
 export function formatPlanPrice(priceCents: number): string {

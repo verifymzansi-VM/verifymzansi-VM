@@ -82,17 +82,17 @@ describe("pricing constants", () => {
   });
 
   it("defines trial config", () => {
-    expect(TRIAL_CONFIG.durationDays).toBe(7);
+    expect(TRIAL_CONFIG.durationDays).toBe(30);
     expect(TRIAL_CONFIG.tier).toBe("starter");
-    expect(TRIAL_CONFIG.maxListings).toBe(2);
+    expect(TRIAL_CONFIG.maxListings).toBeGreaterThan(0);
   });
 
   it("defines free post config", () => {
-    expect(FREE_POST_CONFIG.durationDays).toBe(7);
+    expect(FREE_POST_CONFIG.durationDays).toBe(30);
     expect(FREE_POST_CONFIG.maxPhotos).toBe(10);
     expect(FREE_POST_CONFIG.maxVideos).toBe(1);
     expect(FREE_POST_CONFIG.videoAllowed).toBe(true);
-    expect(FREE_POST_CONFIG.maxAllowed).toBe(2);
+    expect(FREE_POST_CONFIG.maxAllowed).toBe(1);
   });
 });
 

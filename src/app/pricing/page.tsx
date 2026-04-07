@@ -49,7 +49,7 @@ export default function PricingPage() {
         <div className="container-page py-4 space-y-4">
           <PageHeader
             title="Pricing"
-            description={`${FREE_POST_CONFIG.maxAllowed} free posts per area, each with ${FREE_POST_CONFIG.maxPhotos} photos, ${FREE_POST_CONFIG.maxVideos} ${FREE_POST_CONFIG.maxVideos === 1 ? "video" : "videos"}, and ${FREE_POST_CONFIG.durationDays} days visibility. Upgrade for more visibility and trust badges.`}
+            description={`1 free post per area every 30 days, with ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} ${FREE_POST_CONFIG.maxVideos === 1 ? "video" : "videos"}. Upgrade for more visibility and trust badges.`}
             breadcrumbs={[{ label: "Pricing" }]}
           />
 
