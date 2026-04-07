@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import {
   Dialog,
   DialogContent,
@@ -99,6 +105,20 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function getZoomWidthClass(zoomLevel: number): string {
+  if (zoomLevel <= 0.5) return "w-1/2";
+  if (zoomLevel <= 0.75) return "w-3/4";
+  if (zoomLevel <= 1) return "w-full";
+  if (zoomLevel <= 1.25) return "w-[125%]";
+  if (zoomLevel <= 1.5) return "w-[150%]";
+  if (zoomLevel <= 1.75) return "w-[175%]";
+  if (zoomLevel <= 2) return "w-[200%]";
+  if (zoomLevel <= 2.25) return "w-[225%]";
+  if (zoomLevel <= 2.5) return "w-[250%]";
+  if (zoomLevel <= 2.75) return "w-[275%]";
+  return "w-[300%]";
+}
+
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
@@ -115,6 +135,14 @@ export function KycPreviewLightbox({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
+  const mousePanRef = useRef<{
+    element: HTMLDivElement;
+    x: number;
+    y: number;
+    scrollLeft: number;
+    scrollTop: number;
+  } | null>(null);
+  const imageViewportRef = useRef<HTMLDivElement | null>(null);
 
   // Decision state
   const [deciding, setDeciding] = useState(false);
@@ -268,6 +296,49 @@ export function KycPreviewLightbox({
     e.preventDefault();
   }, []);
 
+  const handleZoomChange = useCallback((targetZoom: number) => {
+    const boundedZoom = Math.min(3, Math.max(0.5, targetZoom));
+    setZoom(boundedZoom);
+
+    if (boundedZoom <= 1 && imageViewportRef.current) {
+      imageViewportRef.current.scrollLeft = 0;
+      imageViewportRef.current.scrollTop = 0;
+    }
+  }, []);
+
+  const handleImageMouseDown = useCallback(
+    (zoomLevel: number, e: ReactMouseEvent<HTMLDivElement>) => {
+      if (zoomLevel <= 1) {
+        return;
+      }
+
+      const element = e.currentTarget;
+      mousePanRef.current = {
+        element,
+        x: e.clientX,
+        y: e.clientY,
+        scrollLeft: element.scrollLeft,
+        scrollTop: element.scrollTop,
+      };
+    },
+    []
+  );
+
+  const handleImageMouseMove = useCallback((e: ReactMouseEvent<HTMLDivElement>) => {
+    if (!mousePanRef.current) {
+      return;
+    }
+
+    mousePanRef.current.element.scrollLeft =
+      mousePanRef.current.scrollLeft - (e.clientX - mousePanRef.current.x);
+    mousePanRef.current.element.scrollTop =
+      mousePanRef.current.scrollTop - (e.clientY - mousePanRef.current.y);
+  }, []);
+
+  const handleImageMouseUp = useCallback(() => {
+    mousePanRef.current = null;
+  }, []);
+
   async function submitDecision() {
     if (!decision) return;
 
@@ -336,7 +407,7 @@ export function KycPreviewLightbox({
                 variant="ghost"
                 size="sm"
                 className="h-7 w-7 p-0"
-                onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}
+                onClick={() => handleZoomChange(zoom - 0.25)}
                 title="Zoom out"
                 aria-label="Zoom out"
                 disabled={zoom <= 0.5}
@@ -350,12 +421,23 @@ export function KycPreviewLightbox({
                 variant="ghost"
                 size="sm"
                 className="h-7 w-7 p-0"
-                onClick={() => setZoom((z) => Math.min(3, z + 0.25))}
+                onClick={() => handleZoomChange(zoom + 0.25)}
                 title="Zoom in"
                 aria-label="Zoom in"
                 disabled={zoom >= 3}
               >
                 <ZoomIn className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() => handleZoomChange(1)}
+                title="Reset zoom"
+                aria-label="Reset zoom"
+                disabled={zoom === 1}
+              >
+                Reset
               </Button>
             </div>
           </div>
@@ -386,30 +468,27 @@ export function KycPreviewLightbox({
           {blobUrl && !loading && !error && (
             <div className="relative">
               {isImage && (
-                <div className="flex items-center justify-center p-4 overflow-auto">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={blobUrl}
-                    alt={`Evidence: ${step.step_type}`}
-                    className={`max-w-full rounded select-none transition-transform origin-center ${
-                      zoom <= 0.5
-                        ? "scale-50"
-                        : zoom <= 0.75
-                          ? "scale-75"
-                          : zoom <= 1
-                            ? "scale-100"
-                            : zoom <= 1.25
-                              ? "scale-125"
-                              : zoom <= 1.5
-                                ? "scale-150"
-                                : zoom <= 2
-                                  ? "scale-[2]"
-                                  : zoom <= 2.5
-                                    ? "scale-[2.5]"
-                                    : "scale-[3]"
-                    }`}
-                    draggable={false}
-                  />
+                <div
+                  className={`min-h-[60vh] overflow-auto p-4 ${
+                    zoom > 1 ? "cursor-grab active:cursor-grabbing" : ""
+                  }`}
+                  ref={imageViewportRef}
+                  onMouseDown={(e) => handleImageMouseDown(zoom, e)}
+                  onMouseMove={handleImageMouseMove}
+                  onMouseUp={handleImageMouseUp}
+                  onMouseLeave={handleImageMouseUp}
+                >
+                  <div className="flex h-full min-h-[60vh] items-center justify-center">
+                    <div className={`shrink-0 ${getZoomWidthClass(zoom)}`}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={blobUrl}
+                        alt={`Evidence: ${step.step_type}`}
+                        className="h-auto w-full max-w-none rounded object-contain select-none pointer-events-none"
+                        draggable={false}
+                      />
+                    </div>
+                  </div>
                 </div>
               )}
 

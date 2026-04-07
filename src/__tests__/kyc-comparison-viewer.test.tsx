@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 
 vi.mock("next/image", () => ({
   default: ({
@@ -153,5 +153,77 @@ describe("KycComparisonViewer", () => {
     expect(String(mockFetch.mock.calls[1][1]?.body)).toContain('"artifactId":"id-newer"');
     expect(String(mockFetch.mock.calls[2][1]?.body)).toContain('"artifactId":"id-older"');
     expect(screen.getAllByText("ID Document")).toHaveLength(1);
+  });
+
+  it("expands image viewport sizing on zoom in and resets to base size", async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            artifacts: [
+              {
+                id: "id-1",
+                step_type: "id_doc",
+                artifact_kind: "document",
+                r2_key: "kyc/id/current.bin",
+                content_type: "image/jpeg",
+                file_size_bytes: 1000,
+                status: "pending",
+                created_at: "2026-03-27T09:00:00Z",
+                purge_after: null,
+                sha256: null,
+              },
+              {
+                id: "selfie-1",
+                step_type: "selfie",
+                artifact_kind: "selfie",
+                r2_key: "kyc/selfie/current.bin",
+                content_type: "image/jpeg",
+                file_size_bytes: 1200,
+                status: "pending",
+                created_at: "2026-03-27T09:05:00Z",
+                purge_after: null,
+                sha256: null,
+              },
+            ],
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        blob: () => Promise.resolve(new Blob(["id"], { type: "image/jpeg" })),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        blob: () => Promise.resolve(new Blob(["selfie"], { type: "image/jpeg" })),
+      });
+
+    render(
+      <KycComparisonViewer isOpen userId="user-1" displayName="Test User" onClose={vi.fn()} />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Zoom in ID Document")).toBeDefined();
+    });
+
+    const idViewport = screen.getByAltText("ID Document").parentElement;
+    expect(idViewport).toBeDefined();
+    expect(idViewport?.className).toContain("w-full");
+
+    fireEvent.click(screen.getByLabelText("Zoom in ID Document"));
+
+    await waitFor(() => {
+      const wrapper = screen.getByAltText("ID Document").parentElement;
+      expect(wrapper).toBeDefined();
+      expect(wrapper?.className).toContain("w-[125%]");
+    });
+
+    fireEvent.click(screen.getByLabelText("Reset zoom ID Document"));
+
+    await waitFor(() => {
+      const wrapper = screen.getByAltText("ID Document").parentElement;
+      expect(wrapper).toBeDefined();
+      expect(wrapper?.className).toContain("w-full");
+    });
   });
 });

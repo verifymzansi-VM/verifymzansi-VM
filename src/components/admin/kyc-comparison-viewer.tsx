@@ -1,7 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useEffect } from "react";
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import {
   Dialog,
   DialogContent,
@@ -54,6 +60,20 @@ interface DocumentViewerProps {
   isLoading?: boolean;
 }
 
+function getZoomWidthClass(zoomLevel: number): string {
+  if (zoomLevel <= 0.5) return "w-1/2";
+  if (zoomLevel <= 0.75) return "w-3/4";
+  if (zoomLevel <= 1) return "w-full";
+  if (zoomLevel <= 1.25) return "w-[125%]";
+  if (zoomLevel <= 1.5) return "w-[150%]";
+  if (zoomLevel <= 1.75) return "w-[175%]";
+  if (zoomLevel <= 2) return "w-[200%]";
+  if (zoomLevel <= 2.25) return "w-[225%]";
+  if (zoomLevel <= 2.5) return "w-[250%]";
+  if (zoomLevel <= 2.75) return "w-[275%]";
+  return "w-[300%]";
+}
+
 /**
  * Enhanced KYC document comparison viewer
  * Shows ID and Selfie side-by-side for easy comparison
@@ -78,6 +98,17 @@ export function KycComparisonViewer({
   const [panelZoom, setPanelZoom] = useState<Record<string, number>>({
     id_doc: 1,
     selfie: 1,
+  });
+  const mousePanRef = useRef<{
+    element: HTMLDivElement;
+    x: number;
+    y: number;
+    scrollLeft: number;
+    scrollTop: number;
+  } | null>(null);
+  const panelViewportRef = useRef<Record<string, HTMLDivElement | null>>({
+    id_doc: null,
+    selfie: null,
   });
 
   // Fetch metadata and load artifacts
@@ -312,6 +343,54 @@ export function KycComparisonViewer({
     return labels[type] || type;
   };
 
+  const setPanelZoomLevel = useCallback((stepType: string, targetZoom: number) => {
+    const boundedZoom = Math.min(3, Math.max(0.5, targetZoom));
+    setPanelZoom((prev) => ({
+      ...prev,
+      [stepType]: boundedZoom,
+    }));
+
+    if (boundedZoom <= 1) {
+      const viewport = panelViewportRef.current[stepType];
+      if (viewport) {
+        viewport.scrollLeft = 0;
+        viewport.scrollTop = 0;
+      }
+    }
+  }, []);
+
+  const handlePanelMouseDown = useCallback(
+    (zoomLevel: number, e: ReactMouseEvent<HTMLDivElement>) => {
+      if (zoomLevel <= 1) {
+        return;
+      }
+
+      const element = e.currentTarget;
+      mousePanRef.current = {
+        element,
+        x: e.clientX,
+        y: e.clientY,
+        scrollLeft: element.scrollLeft,
+        scrollTop: element.scrollTop,
+      };
+    },
+    []
+  );
+
+  const handlePanelMouseMove = useCallback((e: ReactMouseEvent<HTMLDivElement>) => {
+    if (!mousePanRef.current) {
+      return;
+    }
+
+    const current = mousePanRef.current;
+    current.element.scrollLeft = current.scrollLeft - (e.clientX - current.x);
+    current.element.scrollTop = current.scrollTop - (e.clientY - current.y);
+  }, []);
+
+  const handlePanelMouseUp = useCallback(() => {
+    mousePanRef.current = null;
+  }, []);
+
   const renderArtifactPanel = (artifact: Artifact | null) => {
     if (!artifact) {
       return (
@@ -352,12 +431,7 @@ export function KycComparisonViewer({
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() =>
-                  setPanelZoom((prev) => ({
-                    ...prev,
-                    [artifact.step_type]: Math.max(0.5, (prev[artifact.step_type] ?? 1) - 0.25),
-                  }))
-                }
+                onClick={() => setPanelZoomLevel(artifact.step_type, zoomLevel - 0.25)}
                 disabled={!canZoom || zoomLevel <= 0.5}
                 aria-label={`Zoom out ${getStepLabel(artifact.step_type)}`}
                 title="Zoom out"
@@ -371,12 +445,7 @@ export function KycComparisonViewer({
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() =>
-                  setPanelZoom((prev) => ({
-                    ...prev,
-                    [artifact.step_type]: Math.min(3, (prev[artifact.step_type] ?? 1) + 0.25),
-                  }))
-                }
+                onClick={() => setPanelZoomLevel(artifact.step_type, zoomLevel + 0.25)}
                 disabled={!canZoom || zoomLevel >= 3}
                 aria-label={`Zoom in ${getStepLabel(artifact.step_type)}`}
                 title="Zoom in"
@@ -386,12 +455,7 @@ export function KycComparisonViewer({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() =>
-                  setPanelZoom((prev) => ({
-                    ...prev,
-                    [artifact.step_type]: 1,
-                  }))
-                }
+                onClick={() => setPanelZoomLevel(artifact.step_type, 1)}
                 disabled={!canZoom || zoomLevel === 1}
                 aria-label={`Reset zoom ${getStepLabel(artifact.step_type)}`}
                 title="Reset zoom"
@@ -408,18 +472,31 @@ export function KycComparisonViewer({
               <p className="text-sm font-medium text-red-900">{artifactError}</p>
             </div>
           ) : blobUrl ? (
-            <div className="min-h-[24rem] overflow-auto rounded-lg bg-gray-100">
+            <div
+              className={`min-h-[24rem] overflow-auto rounded-lg bg-gray-100 ${
+                zoomLevel > 1 ? "cursor-grab active:cursor-grabbing" : ""
+              }`}
+              ref={(node) => {
+                panelViewportRef.current[artifact.step_type] = node;
+              }}
+              onMouseDown={(e) => handlePanelMouseDown(zoomLevel, e)}
+              onMouseMove={handlePanelMouseMove}
+              onMouseUp={handlePanelMouseUp}
+              onMouseLeave={handlePanelMouseUp}
+            >
               {artifact.content_type?.startsWith("image") ? (
                 <div className="flex min-h-[24rem] items-center justify-center p-4">
-                  <Image
-                    src={blobUrl}
-                    alt={getStepLabel(artifact.step_type)}
-                    width={1200}
-                    height={900}
-                    unoptimized
-                    style={{ transform: `scale(${zoomLevel})` }}
-                    className="max-h-[32rem] max-w-full object-contain transition-transform duration-150"
-                  />
+                  <div className={`relative shrink-0 ${getZoomWidthClass(zoomLevel)}`}>
+                    <Image
+                      src={blobUrl}
+                      alt={getStepLabel(artifact.step_type)}
+                      width={1200}
+                      height={900}
+                      unoptimized
+                      draggable={false}
+                      className="h-auto w-full max-w-none object-contain select-none pointer-events-none"
+                    />
+                  </div>
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center p-8 text-center">

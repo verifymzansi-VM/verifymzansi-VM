@@ -371,4 +371,36 @@ describe("KycPreviewLightbox", () => {
 
     expect(screen.getByText(/decrypted server-side/i)).toBeDefined();
   });
+
+  it("updates image wrapper zoom class and resets to default", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      blob: () => Promise.resolve(new Blob(["img"], { type: "image/jpeg" })),
+    });
+
+    await renderOpenLightbox();
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Zoom in")).toBeDefined();
+    });
+
+    const image = screen.getByAltText("Evidence: id_doc");
+    const wrapper = image.parentElement;
+    expect(wrapper).toBeTruthy();
+    expect(wrapper?.className).toContain("w-full");
+
+    fireEvent.click(screen.getByLabelText("Zoom in"));
+
+    await waitFor(() => {
+      expect(screen.getByAltText("Evidence: id_doc").parentElement?.className).toContain(
+        "w-[125%]"
+      );
+    });
+
+    fireEvent.click(screen.getByLabelText("Reset zoom"));
+
+    await waitFor(() => {
+      expect(screen.getByAltText("Evidence: id_doc").parentElement?.className).toContain("w-full");
+    });
+  });
 });
