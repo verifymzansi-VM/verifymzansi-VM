@@ -14,8 +14,8 @@ const canaries: Canary[] = [
   {
     name: "navigation blocks open redirect payloads",
     run: () =>
-      sanitizeReturnUrl("https://evil.example/path") === "/dashboard" &&
-      sanitizeReturnUrl("//evil.example/path") === "/dashboard",
+      sanitizeReturnUrl("https://evil.example/path") === "/" &&
+      sanitizeReturnUrl("//evil.example/path") === "/",
   },
   {
     name: "file MIME detection rejects unknown magic bytes",
