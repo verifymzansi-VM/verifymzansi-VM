@@ -116,6 +116,28 @@ describe("GET /auth/callback", () => {
     );
   });
 
+  it("redirects to login with missing_code reason when callback has no code", async () => {
+    const response = await GET(new Request("https://verifymzansi.com/auth/callback?type=signup"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(
+      "https://verifymzansi.com/login?error=auth_callback_failed&reason=missing_code"
+    );
+    expect(mockExchangeCodeForSession).not.toHaveBeenCalled();
+  });
+
+  it("does not attach missing_code reason when provider returned an explicit callback error", async () => {
+    const response = await GET(
+      new Request("https://verifymzansi.com/auth/callback?error=access_denied&type=oauth")
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(
+      "https://verifymzansi.com/login?error=auth_callback_failed"
+    );
+    expect(mockExchangeCodeForSession).not.toHaveBeenCalled();
+  });
+
   it("creates an account profile for new OAuth users with account-first verification fields", async () => {
     const mockUpsert = vi.fn().mockResolvedValue({ error: null });
 

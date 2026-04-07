@@ -151,19 +151,22 @@ describe("PwaInstallPrompt", () => {
     expect(screen.queryByRole("button", { name: "How To Install" })).toBeNull();
   });
 
-  it("suppresses rendering on blocked auth routes even when iOS fallback conditions match", () => {
-    currentPath = "/login";
+  it.each(["/login", "/verification", "/error"])(
+    "suppresses rendering on blocked route %s even when iOS fallback conditions match",
+    (blockedPath) => {
+      currentPath = blockedPath;
 
-    Object.defineProperty(window.navigator, "userAgent", {
-      configurable: true,
-      value: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
-    });
+      Object.defineProperty(window.navigator, "userAgent", {
+        configurable: true,
+        value: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
+      });
 
-    render(<PwaInstallPrompt />);
+      render(<PwaInstallPrompt />);
 
-    expect(screen.queryByText("Install App")).toBeNull();
-    expect(screen.queryByRole("button", { name: "How To Install" })).toBeNull();
-  });
+      expect(screen.queryByText("Install App")).toBeNull();
+      expect(screen.queryByRole("button", { name: "How To Install" })).toBeNull();
+    }
+  );
 
   it("keeps UI usable when userChoice rejects", async () => {
     const setItemSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => undefined);

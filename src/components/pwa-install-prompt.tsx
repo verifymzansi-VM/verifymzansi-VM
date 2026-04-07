@@ -14,6 +14,8 @@ const PROMPT_BLOCKED_PATH_PREFIXES = [
   "/forgot-password",
   "/reset-password",
   "/auth",
+  "/verification",
+  "/error",
 ];
 
 // Define the interface for the beforeinstallprompt event

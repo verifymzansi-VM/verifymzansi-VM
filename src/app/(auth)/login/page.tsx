@@ -69,10 +69,14 @@ export default function LoginPage() {
       window.history.replaceState({}, "", window.location.pathname);
     }
     const error = params.get("error");
+    const reason = params.get("reason");
     if (error === "auth_callback_failed") {
       toast({
         title: "Authentication failed",
-        description: "Your sign-in link has expired or is invalid. Please try again.",
+        description:
+          reason === "missing_code"
+            ? "Your verification link appears incomplete. Please request a new email and try again."
+            : "Your sign-in link has expired or is invalid. Please try again.",
         variant: "destructive",
       });
     } else if (error === "auth_unavailable") {

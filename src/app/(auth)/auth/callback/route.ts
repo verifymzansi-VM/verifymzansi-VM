@@ -85,6 +85,9 @@ export async function GET(request: Request) {
   const rawNext = searchParams.get("next");
   const next = sanitizeReturnUrl(rawNext);
   const type = searchParams.get("type"); // Supabase passes type=signup for email confirmation
+  const callbackError = searchParams.get("error");
+  const userAgent = request.headers.get("user-agent") ?? "unknown";
+  const errorDescription = searchParams.get("error_description");
 
   if (code) {
     const supabase = await createClient();
@@ -101,6 +104,10 @@ export async function GET(request: Request) {
       log.warn("Auth callback code exchange failed", {
         errorCode,
         message: error.message,
+        type,
+        hasNext: Boolean(rawNext),
+        hasErrorDescription: Boolean(errorDescription),
+        userAgent,
       });
       return NextResponse.redirect(`${origin}/login?error=${errorCode}`);
     }
@@ -197,5 +204,13 @@ export async function GET(request: Request) {
   }
 
   // No code parameter — redirect to login
-  return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`);
+  log.warn("Auth callback missing code parameter", {
+    type,
+    callbackError,
+    hasNext: Boolean(rawNext),
+    hasErrorDescription: Boolean(errorDescription),
+    userAgent,
+  });
+  const reason = callbackError ? "" : "&reason=missing_code";
+  return NextResponse.redirect(`${origin}/login?error=auth_callback_failed${reason}`);
 }
