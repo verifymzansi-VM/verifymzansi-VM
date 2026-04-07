@@ -9,11 +9,13 @@ const videoCardPlayerMock = vi.fn(
   ({
     src,
     isVideo,
+    mode,
     fitStrategy,
     muteControlVisibility,
   }: {
     src: string;
     isVideo?: boolean;
+    mode?: string;
     fitStrategy?: string;
     muteControlVisibility?: string;
   }) => (
@@ -21,6 +23,7 @@ const videoCardPlayerMock = vi.fn(
       data-testid="video-card-player"
       data-src={src}
       data-is-video={isVideo ? "true" : "false"}
+      data-mode={mode}
       data-fit-strategy={fitStrategy}
       data-mute-control={muteControlVisibility}
     />
@@ -215,6 +218,7 @@ describe("ListingCard", () => {
     expect(videoPlayer).toBeTruthy();
     expect(videoPlayer).toHaveAttribute("data-src", blobUrl);
     expect(videoPlayer).toHaveAttribute("data-is-video", "true");
+    expect(videoPlayer).toHaveAttribute("data-mode", "ambient");
     expect(videoPlayer).toHaveAttribute("data-fit-strategy", "smart");
     expect(videoPlayer).toHaveAttribute("data-mute-control", "always");
     expect(screen.queryByAltText("Test Listing")).toBeNull();

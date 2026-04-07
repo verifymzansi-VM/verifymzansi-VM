@@ -5,7 +5,7 @@ import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
 /**
  * Hook that lazily loads and plays a video only when it scrolls into view.
  *
- * - The video `src` is NOT set until the element is ≥ 25 % visible, so pages
+ * - The video `src` is NOT set until the element is ≥ 15 % visible, so pages
  *   with many video cards make **zero** video network requests on initial load.
  * - Playback is **managed globally** — only the most-visible video plays at any
  *   given time (Facebook / YouTube-style single-video autoplay).
@@ -47,7 +47,7 @@ export function useVideoVisibility(videoSrc?: string, shouldAutoplay = true) {
           manager.updateVisibility(el, 0);
         }
       },
-      { threshold: [0, 0.25, 0.5, 0.75, 1] }
+      { threshold: [0, 0.15, 0.5, 0.75, 1] }
     );
 
     observer.observe(el);

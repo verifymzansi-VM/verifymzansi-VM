@@ -8,16 +8,19 @@ import { render, screen } from "@testing-library/react";
 const videoCardPlayerMock = vi.fn(
   ({
     src,
+    mode,
     fitStrategy,
     muteControlVisibility,
   }: {
     src: string;
+    mode?: string;
     fitStrategy?: string;
     muteControlVisibility?: string;
   }) => (
     <div
       data-testid="video-card-player"
       data-src={src}
+      data-mode={mode}
       data-fit-strategy={fitStrategy}
       data-mute-control={muteControlVisibility}
     />
@@ -183,6 +186,7 @@ describe("PromotionCard", () => {
 
     const videoPlayer = screen.getByTestId("video-card-player");
     expect(videoPlayer).toHaveAttribute("data-src", "https://example.com/promo.mp4");
+    expect(videoPlayer).toHaveAttribute("data-mode", "ambient");
     expect(videoPlayer).toHaveAttribute("data-fit-strategy", "smart");
     expect(videoPlayer).toHaveAttribute("data-mute-control", "always");
   });

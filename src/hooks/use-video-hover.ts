@@ -5,7 +5,7 @@ import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
 /**
  * Hook that lazily loads a video on viewport visibility but only plays on hover.
  *
- * - The video `src` is NOT set until the element is ≥ 25 % visible, so pages
+ * - The video `src` is NOT set until the element is ≥ 15 % visible, so pages
  *   with many video cards make **zero** video network requests on initial load.
  * - Video plays on `mouseenter` and pauses + rewinds on `mouseleave`.
  * - Hover claims **exclusive playback priority** in the global playback manager
@@ -41,7 +41,7 @@ export function useVideoHover(videoSrc?: string) {
           manager.updateVisibility(el, 0);
         }
       },
-      { threshold: 0.25 }
+      { threshold: 0.15 }
     );
 
     observer.observe(el);

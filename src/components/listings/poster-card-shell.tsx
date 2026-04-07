@@ -103,7 +103,7 @@ export function PosterCardShell({
               posterUrl={normalizedPosterUrl}
               alt={mediaAlt || title}
               sizes={mediaSizes}
-              mode={hasVideo ? "hover" : "ambient"}
+              mode="ambient"
               fitStrategy={fitStrategy}
               containerAspectRatio={16 / 9}
               muteControlVisibility={hasVideo ? "always" : "hidden"}

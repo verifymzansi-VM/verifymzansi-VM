@@ -15,10 +15,18 @@ vi.mock("./use-reduced-motion", () => ({
 }));
 
 let observerCallback: IntersectionObserverCallback | undefined;
+let observerThresholds: ReadonlyArray<number> | undefined;
 
 class MockIntersectionObserver {
-  constructor(callback: IntersectionObserverCallback) {
+  constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
     observerCallback = callback;
+    if (Array.isArray(options?.threshold)) {
+      observerThresholds = options.threshold;
+    } else if (typeof options?.threshold === "number") {
+      observerThresholds = [options.threshold];
+    } else {
+      observerThresholds = undefined;
+    }
   }
 
   observe = vi.fn();
@@ -49,6 +57,7 @@ describe("useVideoVisibility", () => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
     observerCallback = undefined;
+    observerThresholds = undefined;
     reducedMotionMock.mockReturnValue(false);
     vi.stubGlobal("IntersectionObserver", MockIntersectionObserver);
   });
@@ -120,5 +129,11 @@ describe("useVideoVisibility", () => {
     expect(video?.getAttribute("src")).toContain("https://example.com/demo.mp4");
     vi.advanceTimersByTime(100);
     expect(playSpy).not.toHaveBeenCalled();
+  });
+
+  it("configures visibility thresholds with 15% as first autoplay trigger", () => {
+    renderProbe("https://example.com/demo.mp4");
+
+    expect(observerThresholds).toEqual([0, 0.15, 0.5, 0.75, 1]);
   });
 });
