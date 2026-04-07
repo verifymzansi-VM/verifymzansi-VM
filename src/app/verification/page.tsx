@@ -1753,7 +1753,7 @@ export default function VerificationPage() {
                     </div>
                   )}
 
-                  {idPreviewUrl && (
+                  {idPreviewUrl && idCaptureMethod === "file_upload" && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={idPreviewUrl}
@@ -1855,7 +1855,7 @@ export default function VerificationPage() {
                     </div>
                   )}
 
-                  {selfiePreviewUrl && (
+                  {selfiePreviewUrl && selfieCaptureMethod === "file_upload" && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={selfiePreviewUrl}
