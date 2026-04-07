@@ -102,7 +102,6 @@ export function LiveLeadNotifier({ userId }: LiveLeadNotifierProps) {
               icon: "/icons/icon-192.png?v=10",
               tag: notificationId ? `lead-${notificationId}` : "lead-alert",
               data: { url: targetHref },
-              renotify: true,
             })
           )
           .catch(() => {
