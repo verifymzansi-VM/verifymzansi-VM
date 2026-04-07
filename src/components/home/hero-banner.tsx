@@ -266,6 +266,10 @@ export function HeroBanner({
   const activeSlideIsVideo = activeSlide ? isVideoUrl(activeSlide.mediaUrl) : false;
   const activeLogoUrl = activeSlide?.logoUrl ?? null;
 
+  useEffect(() => {
+    setIsActiveVideoPaused(activeSlideIsVideo);
+  }, [activeSlideIsVideo]);
+
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("en-ZA", {
       style: "currency",
@@ -300,6 +304,7 @@ export function HeroBanner({
                     mode="ambient"
                     muteControlVisibility="always"
                     showPlaybackControl={activeSlideIsVideo}
+                    deferVideoLoadUntilPlay={activeSlideIsVideo}
                     onPlaybackStateChange={(isPlaying) => setIsActiveVideoPaused(!isPlaying)}
                     priority
                     mediaClassName="scale-[1.01]"

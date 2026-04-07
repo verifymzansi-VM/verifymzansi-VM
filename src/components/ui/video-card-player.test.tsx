@@ -160,6 +160,22 @@ describe("VideoCardPlayer", () => {
     expect(screen.getByRole("button", { name: /pause video/i })).toBeTruthy();
   });
 
+  it("keeps ambient hero videos poster-only until playback is requested", () => {
+    render(
+      <VideoCardPlayer
+        src="https://example.com/clip.mp4"
+        posterUrl="https://example.com/poster.jpg"
+        alt="Clip"
+        mode="ambient"
+        showPlaybackControl
+        deferVideoLoadUntilPlay
+      />
+    );
+
+    expect(useVideoVisibilityMock).toHaveBeenCalledWith(undefined, false);
+    expect(screen.getByRole("button", { name: /play video/i })).toBeTruthy();
+  });
+
   it("notifies callers when the ambient playback control pauses and resumes video", () => {
     const onPlaybackStateChange = vi.fn();
 

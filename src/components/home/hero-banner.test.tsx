@@ -12,15 +12,18 @@ const { videoCardPlayerMock } = vi.hoisted(() => ({
       alt,
       muteControlVisibility,
       showPlaybackControl,
+      deferVideoLoadUntilPlay,
     }: {
       alt?: string;
       muteControlVisibility?: string;
       showPlaybackControl?: boolean;
+      deferVideoLoadUntilPlay?: boolean;
     }) => (
       <div
         data-testid="hero-media"
         data-mute-control={muteControlVisibility}
         data-playback-control={showPlaybackControl ? "true" : "false"}
+        data-defer-video-load={deferVideoLoadUntilPlay ? "true" : "false"}
       >
         <span>{alt}</span>
       </div>
@@ -142,6 +145,7 @@ describe("HeroBanner", () => {
 
     expect(screen.getByTestId("hero-media")).toHaveAttribute("data-mute-control", "always");
     expect(screen.getByTestId("hero-media")).toHaveAttribute("data-playback-control", "true");
+    expect(screen.getByTestId("hero-media")).toHaveAttribute("data-defer-video-load", "true");
   });
 
   it("renders no logo overlay when no slide logo is provided", () => {

@@ -180,6 +180,8 @@ export interface VideoCardPlayerProps {
   muteControlVisibility?: MuteControlVisibility;
   /** Shows a persistent play/pause toggle for ambient video previews. */
   showPlaybackControl?: boolean;
+  /** Keeps ambient videos poster-only until the user explicitly starts playback. */
+  deferVideoLoadUntilPlay?: boolean;
   /** Notifies callers when the ambient playback control changes state. */
   onPlaybackStateChange?: (isPlaying: boolean) => void;
 }
@@ -204,6 +206,7 @@ export function VideoCardPlayer({
   containerAspectRatio = DEFAULT_CONTAINER_ASPECT_RATIO,
   muteControlVisibility = "auto",
   showPlaybackControl = false,
+  deferVideoLoadUntilPlay = false,
   onPlaybackStateChange,
 }: VideoCardPlayerProps) {
   const isVideoMedia = isVideo ?? isVideoUrl(src);
@@ -284,6 +287,7 @@ export function VideoCardPlayer({
       containerAspectRatio={containerAspectRatio}
       muteControlVisibility={muteControlVisibility}
       showPlaybackControl={showPlaybackControl}
+      deferVideoLoadUntilPlay={deferVideoLoadUntilPlay}
       onPlaybackStateChange={onPlaybackStateChange}
     />
   );
@@ -291,8 +295,13 @@ export function VideoCardPlayer({
 
 function getInitialAmbientPlaybackPaused(
   mode: "interactive" | "ambient",
-  showPlaybackControl: boolean
+  showPlaybackControl: boolean,
+  deferVideoLoadUntilPlay: boolean
 ) {
+  if (mode === "ambient" && showPlaybackControl && deferVideoLoadUntilPlay) {
+    return true;
+  }
+
   if (mode !== "ambient" || !showPlaybackControl || typeof window === "undefined") {
     return false;
   }
@@ -321,6 +330,7 @@ interface VideoCardPlayerInnerProps {
   containerAspectRatio: number;
   muteControlVisibility: MuteControlVisibility;
   showPlaybackControl: boolean;
+  deferVideoLoadUntilPlay: boolean;
   onPlaybackStateChange?: (isPlaying: boolean) => void;
 }
 
@@ -341,6 +351,7 @@ function VideoCardPlayerInner({
   containerAspectRatio,
   muteControlVisibility,
   showPlaybackControl,
+  deferVideoLoadUntilPlay,
   onPlaybackStateChange,
 }: VideoCardPlayerInnerProps) {
   const posterNeedsUnoptimized =
@@ -349,18 +360,17 @@ function VideoCardPlayerInner({
     normalizedSrc?.startsWith("blob:") || normalizedSrc?.startsWith("data:");
 
   const [isPlaybackPaused, setIsPlaybackPaused] = useState(() =>
-    getInitialAmbientPlaybackPaused(mode, showPlaybackControl)
+    getInitialAmbientPlaybackPaused(mode, showPlaybackControl, deferVideoLoadUntilPlay)
   );
   const [hasActivatedPlayback, setHasActivatedPlayback] = useState(false);
   const [tapIndicator, setTapIndicator] = useState<{
     key: number;
     action: "play" | "pause";
   } | null>(null);
+  const managedVideoSrc =
+    isVideo && deferVideoLoadUntilPlay && !hasActivatedPlayback ? undefined : normalizedSrc;
   const shouldAutoplay = !isPlaybackPaused;
-  const { videoRef, reducedMotion } = useVideoVisibility(
-    isVideo ? normalizedSrc : undefined,
-    shouldAutoplay
-  );
+  const { videoRef, reducedMotion } = useVideoVisibility(managedVideoSrc, shouldAutoplay);
   const { isMuted, toggleMute: globalToggleMute } = useGlobalMute(videoRef);
   const [videoReady, setVideoReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
