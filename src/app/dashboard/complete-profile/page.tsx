@@ -86,7 +86,8 @@ export default function CompleteProfilePage() {
   }, [resendCooldown]);
 
   function getReturnUrl(): string {
-    return sanitizeReturnUrl(new URLSearchParams(window.location.search).get("returnUrl"));
+    const returnUrl = new URLSearchParams(window.location.search).get("returnUrl");
+    return returnUrl ? sanitizeReturnUrl(returnUrl) : "/dashboard";
   }
 
   function getContinueLabel(): string {

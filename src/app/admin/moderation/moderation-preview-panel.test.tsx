@@ -49,6 +49,24 @@ const baseBusinessItem: ModerationItem = {
 };
 
 describe("ModerationPreviewPanel", () => {
+  it("uses a mobile-safe scroll container and responsive details grid", () => {
+    const { container } = render(
+      <ModerationPreviewPanel
+        item={{
+          ...baseItem,
+          attributes: {
+            condition: "used",
+            mileage: 123000,
+            transmission: "manual",
+          },
+        }}
+      />
+    );
+
+    expect(container.querySelector("div.h-full.min-h-0.overflow-auto")).toBeInTheDocument();
+    expect(container.querySelector(".grid.grid-cols-1.sm\\:grid-cols-2")).toBeInTheDocument();
+  });
+
   it("renders listing videos with a dedicated video player and video thumbnail poster", () => {
     render(
       <ModerationPreviewPanel

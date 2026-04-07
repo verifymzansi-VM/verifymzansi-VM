@@ -421,8 +421,8 @@ function BusinessModerationPreview({ item }: ModerationPreviewPanelProps) {
   }
 
   return (
-    <ScrollArea className="h-[calc(100vh-10rem)]">
-      <div className="space-y-5 pr-4">
+    <ScrollArea className="h-full min-h-0">
+      <div className="space-y-5 pr-2 sm:pr-4">
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -866,7 +866,7 @@ export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
   );
 
   return (
-    <ScrollArea className="h-[calc(100vh-10rem)]">
+    <div className="h-full min-h-0 overflow-auto">
       <div className="space-y-5 pr-4">
         {/* ── Media Gallery ─────────────────────────── */}
         {allMedia.length > 0 ? (
@@ -1029,7 +1029,7 @@ export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
                 <Tag className="h-3.5 w-3.5" />
                 Details
               </h4>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+              <div className="grid grid-cols-1 gap-x-4 gap-y-1.5 sm:grid-cols-2">
                 {attributeEntries.map(([key, value]) => (
                   <div key={key} className="text-sm">
                     <span className="text-muted-foreground">
@@ -1089,6 +1089,6 @@ export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
           Submitted {formatRelativeTime(item.created_at)}
         </p>
       </div>
-    </ScrollArea>
+    </div>
   );
 }

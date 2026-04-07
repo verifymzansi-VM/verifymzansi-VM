@@ -151,4 +151,16 @@ describe("ModerationQueueClient", () => {
       "Content-Type": "application/json",
     });
   });
+
+  it("uses a horizontally scrollable preview wrapper in the review sheet", () => {
+    render(<ModerationQueueClient items={items} />);
+
+    fireEvent.click(screen.getAllByRole("button", { name: /review/i })[0]);
+
+    const previewNode = screen.getByText("preview:Used iPhone 15");
+    const wrapper = previewNode.parentElement;
+
+    expect(wrapper).toHaveClass("overflow-x-auto");
+    expect(wrapper).not.toHaveClass("overflow-hidden");
+  });
 });

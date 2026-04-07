@@ -380,7 +380,7 @@ export function KycPreviewLightbox({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-4xl max-sm:max-w-[calc(100vw-1rem)] max-h-[90vh] flex flex-col">
         <DialogHeader>
           <div className="flex items-center justify-between">
             <div>

@@ -416,9 +416,10 @@ export default function VerificationPage() {
   const { toast } = useToast();
   const searchParams = useSearchParams();
   const formattedPhone = useMemo(() => formatPhone(phone), [phone]);
+  const rawReturnUrl = searchParams.get("returnUrl");
   const completionHref = useMemo(
-    () => sanitizeReturnUrl(searchParams.get("returnUrl")),
-    [searchParams]
+    () => (rawReturnUrl ? sanitizeReturnUrl(rawReturnUrl) : "/dashboard"),
+    [rawReturnUrl]
   );
 
   const idFileError = validateFile(idFile, false);

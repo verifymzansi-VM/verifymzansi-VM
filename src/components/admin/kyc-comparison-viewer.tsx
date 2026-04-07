@@ -519,7 +519,7 @@ export function KycComparisonViewer({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-5xl max-sm:max-w-[calc(100vw-1rem)] max-h-[90vh] overflow-y-auto sm:overflow-hidden flex flex-col">
         <DialogHeader className="border-b">
           <div className="flex items-center justify-between w-full gap-4">
             <div className="flex-1 min-w-0">
