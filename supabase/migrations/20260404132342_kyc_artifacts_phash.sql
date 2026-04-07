@@ -8,4 +8,4 @@ ALTER TABLE kyc_artifacts
 -- Index for efficient lookups (exact match first, then app-layer Hamming)
 CREATE INDEX IF NOT EXISTS idx_kyc_artifacts_phash
   ON kyc_artifacts (phash)
-  WHERE phash IS NOT NULL;
+  WHERE phash IS NOT NULL;;

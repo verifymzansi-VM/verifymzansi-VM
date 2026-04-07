@@ -62,4 +62,4 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_verification_steps_unique_approved_id_hmac
     AND status = 'approved'
     AND id_number_hmac IS NOT NULL;
 
-COMMIT;
+COMMIT;;
