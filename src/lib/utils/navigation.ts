@@ -19,20 +19,20 @@ const ALLOWED_REDIRECT_PREFIXES = [
  * Only allows relative paths starting with "/" that match known route prefixes.
  */
 export function sanitizeReturnUrl(url: string | null | undefined): string {
-  if (!url) return "/dashboard";
+  if (!url) return "/";
 
   // Normalize backslashes to forward slashes (some browsers treat \ as /)
   const normalized = url.replace(/\\/g, "/");
 
   // Must start with "/" and not "//"
   if (!normalized.startsWith("/") || normalized.startsWith("//")) {
-    return "/dashboard";
+    return "/";
   }
 
   // Block protocol-relative URLs and data URIs
   const lower = normalized.toLowerCase();
   if (lower.includes("://") || lower.startsWith("javascript:") || lower.startsWith("data:")) {
-    return "/dashboard";
+    return "/";
   }
 
   // Allow exact "/" (home page)
@@ -46,7 +46,7 @@ export function sanitizeReturnUrl(url: string | null | undefined): string {
       normalized.startsWith(prefix + "?")
   );
   if (!matchesAllowed) {
-    return "/dashboard";
+    return "/";
   }
 
   return normalized;

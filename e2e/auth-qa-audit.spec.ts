@@ -526,17 +526,17 @@ test.describe("Login Redirect", () => {
     await page.fill("#password", process.env.E2E_PASSWORD!);
     await prepareTurnstile(page);
     await page.getByRole("button", { name: /sign in/i }).click();
-    await page.waitForURL("**/dashboard**", { timeout: 10000 });
+    await page.waitForURL((url) => url.pathname === "/", { timeout: 10000 });
 
-    // Now visit /login — should redirect to /dashboard
+    // Now visit /login — should redirect to /
     await page.goto("/login");
-    await page.waitForURL("**/dashboard**", { timeout: 10000 });
-    expect(page.url()).toContain("/dashboard");
+    await page.waitForURL((url) => url.pathname === "/", { timeout: 10000 });
+    expect(new URL(page.url()).pathname).toBe("/");
 
-    // Visit /register — should redirect to /dashboard
+    // Visit /register — should redirect to /
     await page.goto("/register");
-    await page.waitForURL("**/dashboard**", { timeout: 10000 });
-    expect(page.url()).toContain("/dashboard");
+    await page.waitForURL((url) => url.pathname === "/", { timeout: 10000 });
+    expect(new URL(page.url()).pathname).toBe("/");
 
     await screenshot(page, "TC12-logged-in-redirect");
   });

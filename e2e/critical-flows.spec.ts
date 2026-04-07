@@ -35,11 +35,11 @@ test.describe("Critical Platform Flows", () => {
     await page.fill("input[type='password'], input[name='password']", process.env.E2E_PASSWORD!);
 
     await Promise.all([
-      page.waitForURL(/\/dashboard/),
+      page.waitForURL((url) => url.pathname === "/"),
       page.getByRole("button", { name: /sign in|login/i }).click(),
     ]);
 
-    await expect(page).toHaveURL(/\/dashboard/);
+    await expect(page).toHaveURL((url) => url.pathname === "/");
     await page.goto("/dashboard/listings");
     await expect(page).toHaveURL(/\/dashboard\/listings|\/login/);
   });

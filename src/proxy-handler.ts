@@ -155,7 +155,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   // -- Auth routes: redirect logged-in (real) users away --------------------
   const isRealUser = user && user.is_anonymous !== true;
   if (isRealUser && AUTH_ROUTES.some((r) => pathname === r || pathname.startsWith(r + "/"))) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return NextResponse.redirect(new URL("/", request.url));
   }
 
   // -- Consolidated profile cache -------------------------------------------

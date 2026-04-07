@@ -47,7 +47,7 @@ export function handlePlaywrightStubRouting(
   );
 
   if (stubUser && isAuthRoute) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return NextResponse.redirect(new URL("/", request.url));
   }
 
   if (!isProtected || isAuthRoute) {

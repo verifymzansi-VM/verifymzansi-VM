@@ -16,38 +16,38 @@ describe("sanitizeReturnUrl", () => {
   });
 
   it("blocks unknown route prefixes", () => {
-    expect(sanitizeReturnUrl("/evil-page")).toBe("/dashboard");
-    expect(sanitizeReturnUrl("/unknown/route")).toBe("/dashboard");
+    expect(sanitizeReturnUrl("/evil-page")).toBe("/");
+    expect(sanitizeReturnUrl("/unknown/route")).toBe("/");
   });
 
   it("allows the home page", () => {
     expect(sanitizeReturnUrl("/")).toBe("/");
   });
 
-  it("returns /dashboard for null/undefined", () => {
-    expect(sanitizeReturnUrl(null)).toBe("/dashboard");
-    expect(sanitizeReturnUrl(undefined)).toBe("/dashboard");
+  it("returns / for null/undefined", () => {
+    expect(sanitizeReturnUrl(null)).toBe("/");
+    expect(sanitizeReturnUrl(undefined)).toBe("/");
   });
 
   it("blocks protocol-relative URLs (//)", () => {
-    expect(sanitizeReturnUrl("//evil.com")).toBe("/dashboard");
+    expect(sanitizeReturnUrl("//evil.com")).toBe("/");
   });
 
   it("blocks URLs with protocols", () => {
-    expect(sanitizeReturnUrl("http://evil.com")).toBe("/dashboard");
-    expect(sanitizeReturnUrl("https://evil.com")).toBe("/dashboard");
+    expect(sanitizeReturnUrl("http://evil.com")).toBe("/");
+    expect(sanitizeReturnUrl("https://evil.com")).toBe("/");
   });
 
   it("blocks javascript: URIs", () => {
-    expect(sanitizeReturnUrl("javascript:alert(1)")).toBe("/dashboard");
+    expect(sanitizeReturnUrl("javascript:alert(1)")).toBe("/");
   });
 
   it("blocks data: URIs", () => {
-    expect(sanitizeReturnUrl("data:text/html,<h1>hi</h1>")).toBe("/dashboard");
+    expect(sanitizeReturnUrl("data:text/html,<h1>hi</h1>")).toBe("/");
   });
 
   it("blocks paths not starting with /", () => {
-    expect(sanitizeReturnUrl("evil.com/path")).toBe("/dashboard");
+    expect(sanitizeReturnUrl("evil.com/path")).toBe("/");
   });
 });
 
@@ -62,6 +62,6 @@ describe("buildLoginUrl", () => {
 
   it("sanitizes dangerous returnUrls", () => {
     const result = buildLoginUrl("//evil.com");
-    expect(result).toContain("returnUrl=%2Fdashboard");
+    expect(result).toContain("returnUrl=%2F");
   });
 });

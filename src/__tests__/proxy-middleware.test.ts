@@ -304,7 +304,7 @@ describe("middleware — authenticated routing", () => {
 
     const res = await routeRequest(createMockRequest("/login"));
     expect(res.status).toBe(307);
-    expect(new URL(res.headers.get("location")!).pathname).toBe("/dashboard");
+    expect(new URL(res.headers.get("location")!).pathname).toBe("/");
   });
 
   it("allows the public home page without redirecting", async () => {

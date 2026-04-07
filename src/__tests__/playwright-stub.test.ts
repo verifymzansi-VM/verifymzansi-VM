@@ -135,7 +135,7 @@ describe("handlePlaywrightStubRouting", () => {
     expect(result!.status).toBe(200);
   });
 
-  it("redirects authenticated stub users away from /login to /dashboard", () => {
+  it("redirects authenticated stub users away from /login to /", () => {
     process.env.PLAYWRIGHT_E2E_AUTH = "1";
     const req = createRequest("/login", {
       cookieHeader: "vmz_pw_session=persona%3Aauthenticated",
@@ -143,7 +143,7 @@ describe("handlePlaywrightStubRouting", () => {
     const result = handlePlaywrightStubRouting(req, PROTECTED_PREFIXES, AUTH_ROUTES);
     expect(result).not.toBeNull();
     expect(result!.status).toBe(307);
-    expect(new URL(result!.headers.get("location")!).pathname).toBe("/dashboard");
+    expect(new URL(result!.headers.get("location")!).pathname).toBe("/");
   });
 
   it("blocks stub users from admin pages", () => {

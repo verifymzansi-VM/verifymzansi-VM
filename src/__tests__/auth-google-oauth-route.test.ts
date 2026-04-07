@@ -91,7 +91,7 @@ describe("POST /api/auth/oauth/google", () => {
     expect(mockSignInWithOAuth).toHaveBeenCalledWith(
       expect.objectContaining({
         options: expect.objectContaining({
-          redirectTo: "http://localhost:3000/auth/callback?next=%2Fdashboard",
+          redirectTo: "http://localhost:3000/auth/callback?next=%2F",
         }),
       })
     );

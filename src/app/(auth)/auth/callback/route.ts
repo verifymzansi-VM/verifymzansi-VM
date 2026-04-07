@@ -185,12 +185,12 @@ export async function GET(request: Request) {
       // returning users go to their requested destination.
       if (isNewOAuthUser) {
         const completeProfileUrl = new URL("/dashboard/complete-profile", origin);
-        if (next && next !== "/dashboard") {
+        if (rawNext && next && next !== "/dashboard" && next !== "/") {
           completeProfileUrl.searchParams.set("returnUrl", next);
         }
         return NextResponse.redirect(completeProfileUrl);
       }
-      return NextResponse.redirect(`${origin}${next || "/dashboard"}`);
+      return NextResponse.redirect(`${origin}${next || "/"}`);
     }
 
     return NextResponse.redirect(`${origin}${next}`);
