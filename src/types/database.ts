@@ -322,6 +322,17 @@ export interface Promotion {
   updated_at: string;
 }
 
+/* ── Free Post Claims ────────────────────────────────────── */
+export interface FreePostUsageRecord {
+  id: string;
+  user_id: string;
+  area: MarketplaceArea;
+  content_id: string | null;
+  released_at: string | null;
+  release_reason: string | null;
+  created_at: string;
+}
+
 /* ── Payments ────────────────────────────────────────────── */
 export interface Payment {
   id: string;

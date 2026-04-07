@@ -80,7 +80,7 @@ vi.mock("@/lib/constants/pricing", () => ({
     maxPhotos: 5,
     maxVideos: 1,
     videoAllowed: true,
-    maxAllowed: 1,
+    maxAllowed: 2,
   },
   getPlanCheckoutId: (plan: { tier: string; area: string }) => `${plan.area}-${plan.tier}`,
 }));
@@ -186,7 +186,7 @@ describe("PlanGate", () => {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                is: vi.fn().mockResolvedValue({ count: 0, error: null }),
               }),
             }),
           }),
@@ -310,7 +310,7 @@ describe("PlanGate", () => {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                maybeSingle: vi.fn().mockResolvedValue({ data: { id: "used-1" }, error: null }),
+                is: vi.fn().mockResolvedValue({ count: 2, error: null }),
               }),
             }),
           }),
@@ -352,5 +352,78 @@ describe("PlanGate", () => {
       configurable: true,
       value: originalLocation,
     });
+  });
+
+  it("shows the free-post trial state when one free post remains", async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "account_profiles") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: { id: "sp-1", created_at: new Date().toISOString() },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "entitlements") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  gt: vi.fn().mockReturnValue({
+                    order: vi.fn().mockReturnValue({
+                      limit: vi.fn().mockReturnValue({
+                        maybeSingle: vi.fn().mockResolvedValue({
+                          data: null,
+                          error: null,
+                        }),
+                      }),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "listings") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              neq: vi.fn().mockResolvedValue({ count: 1, error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === "free_posts_used") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                is: vi.fn().mockResolvedValue({ count: 1, error: null }),
+              }),
+            }),
+          }),
+        };
+      }
+
+      return {};
+    });
+
+    render(
+      <PlanGate area={"MZANSI_MARKET" as never}>
+        <div>Protected Content</div>
+      </PlanGate>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/1\/2 free posts left/i)).toBeTruthy();
+    });
+    expect(screen.getByRole("button", { name: /use your free posts/i })).toBeTruthy();
+    expect(screen.queryByText(/used all 2 free posts/i)).toBeNull();
   });
 });

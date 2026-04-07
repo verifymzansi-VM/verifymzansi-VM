@@ -40,10 +40,10 @@ import {
 } from "@/lib/constants/pricing";
 import { getEntitlements } from "@/lib/services/entitlements";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
+import { getActiveFreePostUsage } from "@/lib/billing/free-posts";
 
 const FREE_POST_COUNT = Number(FREE_POST_CONFIG.maxAllowed);
 const FREE_POST_LABEL = FREE_POST_COUNT === 1 ? "post" : "posts";
-const FREE_POST_LABEL_CAP = FREE_POST_COUNT === 1 ? "Post" : "Posts";
 
 interface PlanGateProps {
   area: MarketplaceArea;
@@ -55,6 +55,8 @@ interface PlanInfo {
   isTrial: boolean;
   trialDaysLeft: number;
   freePostAvailable: boolean;
+  freePostsUsed: number;
+  freePostsRemaining: number;
   postingLimitBypassEnabled: boolean;
   currentCount: number;
   maxAllowed: number;
@@ -244,6 +246,8 @@ export function PlanGate({ area, children }: PlanGateProps) {
         isTrial: true,
         trialDaysLeft: FREE_POST_CONFIG.durationDays,
         freePostAvailable: true,
+        freePostsUsed: 0,
+        freePostsRemaining: FREE_POST_COUNT,
         postingLimitBypassEnabled: true,
         currentCount: 0,
         maxAllowed: -1,
@@ -300,17 +304,10 @@ export function PlanGate({ area, children }: PlanGateProps) {
         const tier = (entitlement?.tier as PlanTier) || null;
         const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
 
-        // Check if the user has already used their one-time free post for this area
-        const { data: freePostRow } = await supabase
-          .from("free_posts_used")
-          .select("id")
-          .eq("user_id", user.id)
-          .eq("area", area)
-          .maybeSingle();
-
-        const freePostUsed = !!freePostRow;
+        const freePostUsage = await getActiveFreePostUsage(supabase, user.id, area);
         // In testing mode, keep the free-post flow open and remove the posting count cap.
-        const freePostAvailable = !entitlement && (postingLimitBypassEnabled || !freePostUsed);
+        const freePostAvailable =
+          !entitlement && (postingLimitBypassEnabled || freePostUsage.available);
 
         // Legacy trial compat: treat free-post-available as "trial" for rendering
         const isTrial = freePostAvailable;
@@ -361,6 +358,8 @@ export function PlanGate({ area, children }: PlanGateProps) {
           isTrial,
           trialDaysLeft,
           freePostAvailable,
+          freePostsUsed: freePostUsage.used,
+          freePostsRemaining: freePostUsage.remaining,
           postingLimitBypassEnabled,
           currentCount,
           maxAllowed,
@@ -517,8 +516,8 @@ export function PlanGate({ area, children }: PlanGateProps) {
             <h2 className="font-display text-base font-bold">Choose Your Plan to Start Posting</h2>
           </div>
           <p className="text-white/80 text-xs max-w-xl">
-            You&apos;ve used your free {FREE_POST_LABEL} for {AREA_LABELS[area]}. Select a plan
-            below to continue posting.
+            You&apos;ve used all {FREE_POST_COUNT} free {FREE_POST_LABEL} for {AREA_LABELS[area]}.
+            Select a plan below to continue posting.
           </p>
         </div>
 
@@ -713,12 +712,12 @@ function PlanPickerWithTrial({
                   variant="outline"
                   className="text-xs font-normal border-white/30 text-white bg-white/10"
                 >
-                  {planInfo.postingLimitBypassEnabled ? "Testing Mode" : "One-Time Offer"}
+                  {planInfo.postingLimitBypassEnabled ? "Testing Mode" : "Free Trial"}
                 </Badge>
                 <p className="text-xs text-amber-200">
                   {planInfo.postingLimitBypassEnabled
                     ? `Posting limits removed for testing — ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`
-                    : `${FREE_POST_COUNT} Free ${FREE_POST_LABEL_CAP} Included — ${FREE_POST_CONFIG.durationDays} days visibility`}
+                    : `${planInfo.freePostsRemaining}/${FREE_POST_COUNT} free ${FREE_POST_LABEL} left — ${FREE_POST_CONFIG.durationDays} days visibility`}
                 </p>
               </div>
               <p className="text-white/70 text-xs">
@@ -837,18 +836,12 @@ function fetchSharedEntitlements(area: MarketplaceArea): Promise<PlanEntitlement
       };
     }
 
-    // No plan, no bypass — check if free post is still available
-    const { data: freePostRow } = await supabase
-      .from("free_posts_used")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("area", area)
-      .maybeSingle();
+    const freePostUsage = await getActiveFreePostUsage(supabase, user.id, area);
 
     return {
       maxPhotos: FREE_POST_CONFIG.maxPhotos,
-      maxVideos: freePostRow ? 0 : FREE_POST_CONFIG.maxVideos,
-      videoAllowed: !freePostRow,
+      maxVideos: freePostUsage.available ? FREE_POST_CONFIG.maxVideos : 0,
+      videoAllowed: freePostUsage.available,
       coverVideoAllowed: false,
     };
   })();

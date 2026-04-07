@@ -27,4 +27,10 @@ describe("normalizeCreatePostRuntimeError", () => {
       normalizeCreatePostRuntimeError(new Error("Free post already used"), "Fallback message")
     ).toBe("Free post already used");
   });
+
+  it("preserves the new free-post limit message", () => {
+    expect(
+      normalizeCreatePostRuntimeError(new Error("Free post limit reached"), "Fallback message")
+    ).toBe("Free post limit reached");
+  });
 });

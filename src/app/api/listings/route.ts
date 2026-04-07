@@ -45,6 +45,7 @@ import {
   shouldHidePlaywrightFixtures,
 } from "@/lib/supabase/playwright-visual-fixtures";
 import { createNotification, shouldSendOwnerLifecycleNotifications } from "@/lib/notifications";
+import { claimFreePostSlot, releaseFreePostSlot } from "@/lib/billing/free-posts";
 
 const log = createLogger("ListingCreate");
 const AREA: MarketplaceArea = "MZANSI_MARKET";
@@ -632,8 +633,8 @@ export async function POST(request: NextRequest) {
     const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
 
     // ── Enforce photo/video limits based on plan ─────────────
-    // Validated BEFORE claiming the free post slot so that a validation
-    // failure never consumes the user's one-time free post quota.
+    // Validate before claiming a free-post slot so validation failures never
+    // consume one of the user's free posts.
     const ent =
       hasPaidPlan && tier
         ? getEntitlements(tier as PlanTier, AREA)
@@ -666,34 +667,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const freePostContentId = crypto.randomUUID();
+    let freePostClaimed = false;
+
     // Check free post availability for unpaid users
     if (!hasPaidPlan && !postingLimitBypassEnabled) {
-      // Atomic claim: INSERT (not upsert) to prevent TOCTOU race.
-      // If a concurrent request already claimed, the unique constraint
-      // on (user_id, area) causes a conflict error → return 403.
-      const { error: claimError } = await supabase
-        .from("free_posts_used")
-        .insert({ user_id: user.id, area: AREA });
-
-      if (claimError) {
-        // 23505 = unique_violation → free post already used
-        if (claimError.code === "23505") {
-          return NextResponse.json(
-            {
-              error: "Free post already used",
-              reason:
-                "You have already used your free post for Mzansi Market. Subscribe to a plan to post more.",
-              upgradeUrl: "/billing",
-            },
-            { status: 403 }
-          );
-        }
+      try {
+        freePostClaimed = await claimFreePostSlot(getAdmin(), {
+          userId: user.id,
+          area: AREA,
+          contentId: freePostContentId,
+        });
+      } catch (claimError) {
         log.error("Failed to claim free post slot", {
-          error: claimError.message,
-          code: claimError.code,
+          error: claimError instanceof Error ? claimError.message : "Unknown error",
           userId: user.id,
         });
         return NextResponse.json({ error: "Failed to reserve free post" }, { status: 500 });
+      }
+
+      if (!freePostClaimed) {
+        return NextResponse.json(
+          {
+            error: "Free post limit reached",
+            reason:
+              "You have already used all 2 free posts for Mzansi Market. Subscribe to a plan to post more.",
+            upgradeUrl: "/billing",
+          },
+          { status: 403 }
+        );
       }
     }
 
@@ -729,6 +731,7 @@ export async function POST(request: NextRequest) {
 
     const listingRecord = withOwnerField(
       {
+        id: freePostContentId,
         title: data.title,
         description: data.description,
         price_cents: priceCents,
@@ -780,17 +783,18 @@ export async function POST(request: NextRequest) {
         userId: user.id,
       });
       // Release free post slot if listing insert failed
-      if (!hasPaidPlan && !postingLimitBypassEnabled) {
-        const { error: rollbackError } = await getAdmin()
-          .from("free_posts_used")
-          .delete()
-          .eq("user_id", user.id)
-          .eq("area", AREA);
-        if (rollbackError) {
+      if (freePostClaimed) {
+        try {
+          await releaseFreePostSlot(getAdmin(), {
+            userId: user.id,
+            area: AREA,
+            contentId: freePostContentId,
+            reason: "create_failed",
+          });
+        } catch (rollbackError) {
           log.error("Failed to rollback free post claim after listing insert failure", {
             userId: user.id,
-            error: rollbackError.message,
-            code: rollbackError.code,
+            error: rollbackError instanceof Error ? rollbackError.message : "Unknown error",
           });
         }
       }
@@ -805,17 +809,18 @@ export async function POST(request: NextRequest) {
       log.error("Listing insert returned no row", {
         userId: user.id,
       });
-      if (!hasPaidPlan && !postingLimitBypassEnabled) {
-        const { error: rollbackError } = await getAdmin()
-          .from("free_posts_used")
-          .delete()
-          .eq("user_id", user.id)
-          .eq("area", AREA);
-        if (rollbackError) {
+      if (freePostClaimed) {
+        try {
+          await releaseFreePostSlot(getAdmin(), {
+            userId: user.id,
+            area: AREA,
+            contentId: freePostContentId,
+            reason: "create_failed",
+          });
+        } catch (rollbackError) {
           log.error("Failed to rollback free post claim after empty insert result", {
             userId: user.id,
-            error: rollbackError.message,
-            code: rollbackError.code,
+            error: rollbackError instanceof Error ? rollbackError.message : "Unknown error",
           });
         }
       }

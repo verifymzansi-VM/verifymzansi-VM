@@ -20,6 +20,7 @@ import {
   readOwnerId,
   withOwnerColumn,
 } from "@/lib/account/compat";
+import { releaseRejectedDeletedFreePost } from "@/lib/billing/free-posts";
 
 const log = createLogger("ContentDelete");
 
@@ -186,6 +187,19 @@ export async function POST(request: Request) {
     if (deleteErrorMessage) {
       log.error("Failed to delete content", { error: deleteErrorMessage, itemId, area });
       return NextResponse.json({ error: "Failed to delete content" }, { status: 500 });
+    }
+
+    if (item?.status === "rejected") {
+      try {
+        await releaseRejectedDeletedFreePost(createAdminClient(), user.id, area, itemId);
+      } catch (releaseError) {
+        log.error("Failed to release rejected free post claim after delete", {
+          error: releaseError instanceof Error ? releaseError.message : "Unknown",
+          itemId,
+          area,
+          userId: user.id,
+        });
+      }
     }
 
     const targetTypeMap: Record<string, string> = {

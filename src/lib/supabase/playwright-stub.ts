@@ -1,5 +1,6 @@
 import "server-only";
 
+import crypto from "node:crypto";
 import type { AuthChangeEvent, Session, SupabaseClient } from "@supabase/supabase-js";
 import {
   createPlaywrightSession,
@@ -677,7 +678,39 @@ export function createPlaywrightStubSupabaseClient(
     from(table: string) {
       return new PlaywrightQueryBuilder(table);
     },
-    async rpc(fn: string) {
+    async rpc(fn: string, params?: Record<string, unknown>) {
+      if (fn === "claim_free_post_slot") {
+        const userId = String(params?.p_user_id ?? "");
+        const area = String(params?.p_area ?? "");
+        const contentId = String(params?.p_content_id ?? "");
+        const maxAllowed = Number(params?.p_max_allowed ?? 0);
+        const rows = listPlaywrightTableRows("free_posts_used");
+        const activeRows = rows.filter(
+          (row) => row.user_id === userId && row.area === area && row.released_at == null
+        );
+
+        const existingRow = activeRows.find((row) => row.content_id === contentId);
+        if (existingRow) {
+          return { data: true, error: null };
+        }
+
+        if (activeRows.length >= maxAllowed) {
+          return { data: false, error: null };
+        }
+
+        rows.push({
+          id: crypto.randomUUID(),
+          user_id: userId,
+          area,
+          content_id: contentId,
+          released_at: null,
+          release_reason: null,
+          created_at: new Date().toISOString(),
+        });
+        writePlaywrightTableRows("free_posts_used", rows);
+        return { data: true, error: null };
+      }
+
       if (fn === "get_business_category_counts") {
         const liveBusinesses = listPlaywrightTableRows("businesses").filter(
           (row) => row.status === "live" && typeof row.category === "string"

@@ -169,7 +169,7 @@ describe("POST /api/businesses", () => {
     });
   });
 
-  it("blocks a second free post when no paid plan exists", async () => {
+  it("blocks a free post once the free-post limit is exhausted", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
         if (table === "account_profiles") {
@@ -212,7 +212,66 @@ describe("POST /api/businesses", () => {
     const res = await POST(createRequest(VALID_BODY));
     expect(res.status).toBe(403);
     await expect(res.json()).resolves.toMatchObject({
-      error: "Free post already used",
+      error: "Free post limit reached",
+    });
+  });
+
+  it("returns a free-post limit error when the claim rpc reports no remaining business slots", async () => {
+    mockCreateAdminClient.mockReturnValue({
+      rpc: vi.fn().mockResolvedValue({ data: false, error: null }),
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
+        if (table === "businesses") {
+          return {
+            select: vi.fn((fields: string) => {
+              if (fields === "id, owner_id") {
+                return {
+                  limit: vi.fn().mockResolvedValue({ error: null }),
+                };
+              }
+
+              return {
+                eq: vi.fn().mockReturnThis(),
+                neq: vi.fn().mockReturnThis(),
+                maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+              };
+            }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const res = await POST(createRequest(VALID_BODY));
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Free post limit reached",
     });
   });
 
@@ -427,7 +486,9 @@ describe("POST /api/businesses", () => {
             insert: vi.fn().mockResolvedValue({ error: null }),
             delete: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                eq: freePostCleanup,
+                eq: vi.fn().mockReturnValue({
+                  eq: freePostCleanup,
+                }),
               }),
             }),
           };
@@ -497,6 +558,106 @@ describe("POST /api/businesses", () => {
       details: { slug: "This URL slug is already taken." },
     });
     expect(freePostCleanup).toHaveBeenCalled();
+  });
+
+  it("releases the claimed free-post slot by content id when business insert fails", async () => {
+    const claimRpc = vi.fn().mockResolvedValue({ data: true, error: null });
+    const releaseMaybeSingle = vi.fn().mockResolvedValue({
+      data: { id: "claim-1" },
+      error: null,
+    });
+    const releaseIs = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        maybeSingle: releaseMaybeSingle,
+      }),
+    });
+    const releaseContentEq = vi.fn().mockReturnValue({ is: releaseIs });
+    const releaseAreaEq = vi.fn().mockReturnValue({ eq: releaseContentEq });
+    const releaseUserEq = vi.fn().mockReturnValue({ eq: releaseAreaEq });
+    const generatedBusinessId = "22222222-2222-4222-8222-222222222222";
+    const randomUuidSpy = vi
+      .spyOn(globalThis.crypto, "randomUUID")
+      .mockReturnValue(generatedBusinessId);
+
+    mockCreateAdminClient.mockReturnValue({
+      rpc: claimRpc,
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
+        if (table === "free_posts_used") {
+          return {
+            update: vi.fn().mockReturnValue({
+              eq: releaseUserEq,
+            }),
+          };
+        }
+        if (table === "businesses") {
+          return {
+            select: vi.fn((fields: string) => {
+              if (fields === "id, owner_id") {
+                return {
+                  limit: vi.fn().mockResolvedValue({ error: null }),
+                };
+              }
+
+              return {
+                eq: vi.fn().mockReturnThis(),
+                neq: vi.fn().mockReturnThis(),
+                maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+              };
+            }),
+            insert: vi.fn().mockReturnValue({
+              select: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: null,
+                  error: { message: "insert failed" },
+                }),
+              }),
+            }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const res = await POST(createRequest(VALID_BODY));
+
+    expect(res.status).toBe(500);
+    expect(claimRpc).toHaveBeenCalledWith("claim_free_post_slot", {
+      p_user_id: USER_ID,
+      p_area: "MZANSI_BUSINESS",
+      p_content_id: generatedBusinessId,
+      p_max_allowed: 2,
+    });
+    expect(releaseUserEq).toHaveBeenCalledWith("user_id", USER_ID);
+    expect(releaseAreaEq).toHaveBeenCalledWith("area", "MZANSI_BUSINESS");
+    expect(releaseContentEq).toHaveBeenCalledWith("content_id", generatedBusinessId);
+    expect(releaseMaybeSingle).toHaveBeenCalled();
+    randomUuidSpy.mockRestore();
   });
 
   it("does not claim a free post before validation passes", async () => {

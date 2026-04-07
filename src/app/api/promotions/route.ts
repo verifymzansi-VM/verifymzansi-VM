@@ -47,6 +47,7 @@ import {
 } from "@/lib/validations/shared";
 import { toFieldErrorMap } from "@/lib/validations/zod-errors";
 import { z } from "zod";
+import { claimFreePostSlot, releaseFreePostSlot } from "@/lib/billing/free-posts";
 
 const log = createLogger("PromotionsCRUD");
 const AREA: MarketplaceArea = "PROMOTIONS_EVENTS";
@@ -311,30 +312,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const freePostContentId = crypto.randomUUID();
+    let freePostClaimed = false;
+
     if (!hasPaidPlan && !postingLimitBypassEnabled) {
-      const { error: claimError } = await supabase
-        .from("free_posts_used")
-        .insert({ user_id: user.id, area: AREA });
-
-      if (claimError) {
-        if (claimError.code === "23505") {
-          return NextResponse.json(
-            {
-              error: "Free post already used",
-              reason:
-                "You have already used your free post for Tourism & Events. Subscribe to a plan to post more.",
-              upgradeUrl: "/billing",
-            },
-            { status: 403 }
-          );
-        }
-
+      try {
+        freePostClaimed = await claimFreePostSlot(getAdmin(), {
+          userId: user.id,
+          area: AREA,
+          contentId: freePostContentId,
+        });
+      } catch (claimError) {
         log.error("Failed to claim free post slot", {
-          error: claimError.message,
-          code: claimError.code,
+          error: claimError instanceof Error ? claimError.message : "Unknown error",
           userId: user.id,
         });
         return NextResponse.json({ error: "Failed to reserve free post" }, { status: 500 });
+      }
+
+      if (!freePostClaimed) {
+        return NextResponse.json(
+          {
+            error: "Free post limit reached",
+            reason:
+              "You have already used all 2 free posts for Tourism & Events. Subscribe to a plan to post more.",
+            upgradeUrl: "/billing",
+          },
+          { status: 403 }
+        );
       }
     }
 
@@ -351,6 +356,7 @@ export async function POST(request: NextRequest) {
       .insert(
         withOwnerField(
           {
+            id: freePostContentId,
             title: data.title,
             description: data.description,
             promotion_type: data.promotion_type,
@@ -394,15 +400,17 @@ export async function POST(request: NextRequest) {
 
     if (insertError || !promotion) {
       log.error("Failed to create promotion", { error: insertError?.message });
-      if (!hasPaidPlan && !postingLimitBypassEnabled) {
-        const { error: cleanupErr } = await getAdmin()
-          .from("free_posts_used")
-          .delete()
-          .eq("user_id", user.id)
-          .eq("area", AREA);
-        if (cleanupErr) {
+      if (freePostClaimed) {
+        try {
+          await releaseFreePostSlot(getAdmin(), {
+            userId: user.id,
+            area: AREA,
+            contentId: freePostContentId,
+            reason: "create_failed",
+          });
+        } catch (cleanupErr) {
           log.error("Failed to clean up free_posts_used after promotion insert failure", {
-            error: cleanupErr.message,
+            error: cleanupErr instanceof Error ? cleanupErr.message : "Unknown error",
             userId: user.id,
           });
         }

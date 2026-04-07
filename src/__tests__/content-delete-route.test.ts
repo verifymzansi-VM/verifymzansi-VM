@@ -130,10 +130,118 @@ describe("POST /api/content/delete", () => {
     expect(res.status).toBe(200);
     expect(deleteEq).toHaveBeenCalledWith("id", "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11");
     expect(mockLogAuditEvent).toHaveBeenCalled();
+    expect(mockCreateAdminClient).not.toHaveBeenCalled();
+  });
+
+  it("releases a rejected free-post claim after delete", async () => {
+    const releaseMaybeSingle = vi.fn().mockResolvedValue({
+      data: { id: "claim-1" },
+      error: null,
+    });
+    const deleteEq = vi.fn().mockResolvedValue({ error: null });
+    const from = vi.fn((table: string) => {
+      if (table === "listings") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id: "listing-1", status: "rejected", owner_id: "user-1" },
+            error: null,
+          }),
+          delete: vi.fn().mockReturnValue({
+            eq: deleteEq,
+          }),
+        };
+      }
+
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    mockCreateClient.mockResolvedValue({
+      from,
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
+    });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "free_posts_used") {
+          return {
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    is: vi.fn().mockReturnValue({
+                      select: vi.fn().mockReturnValue({
+                        maybeSingle: releaseMaybeSingle,
+                      }),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
+
+        throw new Error(`Unexpected table ${table}`);
+      }),
+    });
+
+    const res = await POST(
+      createRequest({
+        itemId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        area: "MZANSI_MARKET",
+      })
+    );
+
+    expect(res.status).toBe(200);
+    expect(releaseMaybeSingle).toHaveBeenCalled();
+  });
+
+  it("does not release a free-post claim for non-rejected deletes", async () => {
+    const deleteEq = vi.fn().mockResolvedValue({ error: null });
+    const from = vi.fn((table: string) => {
+      if (table === "listings") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id: "listing-1", status: "live", owner_id: "user-1" },
+            error: null,
+          }),
+          delete: vi.fn().mockReturnValue({
+            eq: deleteEq,
+          }),
+        };
+      }
+
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    mockCreateClient.mockResolvedValue({
+      from,
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
+    });
+
+    const res = await POST(
+      createRequest({
+        itemId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        area: "MZANSI_MARKET",
+      })
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockCreateAdminClient).not.toHaveBeenCalled();
   });
 
   it("deletes MZANSI_BUSINESS items using owner-column compatibility", async () => {
     const deleteEq = vi.fn().mockResolvedValue({ error: null });
+    const releaseMaybeSingle = vi.fn().mockResolvedValue({
+      data: { id: "claim-2" },
+      error: null,
+    });
     const from = vi.fn((table: string) => {
       if (table === "businesses") {
         return {
@@ -180,7 +288,32 @@ describe("POST /api/content/delete", () => {
         getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
       },
     });
-    mockCreateAdminClient.mockReturnValue({ from });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "businesses") {
+          return from(table);
+        }
+        if (table === "free_posts_used") {
+          return {
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    is: vi.fn().mockReturnValue({
+                      select: vi.fn().mockReturnValue({
+                        maybeSingle: releaseMaybeSingle,
+                      }),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
+
+        throw new Error(`Unexpected table ${table}`);
+      }),
+    });
 
     const res = await POST(
       createRequest({
@@ -191,5 +324,6 @@ describe("POST /api/content/delete", () => {
 
     expect(res.status).toBe(200);
     expect(deleteEq).toHaveBeenCalledWith("id", "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11");
+    expect(releaseMaybeSingle).toHaveBeenCalled();
   });
 });

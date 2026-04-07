@@ -46,6 +46,7 @@ import {
   shouldHidePlaywrightFixtures,
 } from "@/lib/supabase/playwright-visual-fixtures";
 import { createNotification, shouldSendOwnerLifecycleNotifications } from "@/lib/notifications";
+import { claimFreePostSlot, releaseFreePostSlot } from "@/lib/billing/free-posts";
 
 const log = createLogger("BusinessesCRUD");
 const AREA: MarketplaceArea = "MZANSI_BUSINESS";
@@ -265,34 +266,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(BUSINESS_SLUG_CONFLICT_RESPONSE, { status: 409 });
     }
 
+    const freePostContentId = crypto.randomUUID();
+    let freePostClaimed = false;
+
     if (!hasPaidPlan && !postingLimitBypassEnabled) {
-      const { error: claimError } = await supabase
-        .from("free_posts_used")
-        .insert({ user_id: user.id, area: AREA });
-
-      if (claimError) {
-        if (claimError.code === "23505") {
-          return NextResponse.json(
-            {
-              error: "Free post already used",
-              reason:
-                "You have already used your free post for Mzansi Business. Subscribe to a plan to post more.",
-              upgradeUrl: "/billing",
-            },
-            { status: 403 }
-          );
-        }
-
+      try {
+        freePostClaimed = await claimFreePostSlot(getAdmin(), {
+          userId: user.id,
+          area: AREA,
+          contentId: freePostContentId,
+        });
+      } catch (claimError) {
         log.error("Failed to claim free post slot", {
-          error: claimError.message,
-          code: claimError.code,
+          error: claimError instanceof Error ? claimError.message : "Unknown error",
           userId: user.id,
         });
         return NextResponse.json({ error: "Failed to reserve free post" }, { status: 500 });
       }
+
+      if (!freePostClaimed) {
+        return NextResponse.json(
+          {
+            error: "Free post limit reached",
+            reason:
+              "You have already used all 2 free posts for Mzansi Business. Subscribe to a plan to post more.",
+            upgradeUrl: "/billing",
+          },
+          { status: 403 }
+        );
+      }
     }
 
     const businessPayload = {
+      id: freePostContentId,
       area: AREA,
       business_type: data.business_type,
       business_name: data.business_name,
@@ -333,15 +339,17 @@ export async function POST(request: NextRequest) {
 
     if (insertError || !business) {
       if (isBusinessSlugConflictError(insertError)) {
-        if (!hasPaidPlan && !postingLimitBypassEnabled) {
-          const { error: cleanupErr } = await getAdmin()
-            .from("free_posts_used")
-            .delete()
-            .eq("user_id", user.id)
-            .eq("area", AREA);
-          if (cleanupErr) {
+        if (freePostClaimed) {
+          try {
+            await releaseFreePostSlot(getAdmin(), {
+              userId: user.id,
+              area: AREA,
+              contentId: freePostContentId,
+              reason: "create_failed",
+            });
+          } catch (cleanupErr) {
             log.error("Failed to clean up free_posts_used after slug conflict", {
-              error: cleanupErr.message,
+              error: cleanupErr instanceof Error ? cleanupErr.message : "Unknown error",
               userId: user.id,
             });
           }
@@ -351,15 +359,17 @@ export async function POST(request: NextRequest) {
       }
 
       log.error("Failed to create business", { error: insertError?.message });
-      if (!hasPaidPlan && !postingLimitBypassEnabled) {
-        const { error: cleanupErr2 } = await getAdmin()
-          .from("free_posts_used")
-          .delete()
-          .eq("user_id", user.id)
-          .eq("area", AREA);
-        if (cleanupErr2) {
+      if (freePostClaimed) {
+        try {
+          await releaseFreePostSlot(getAdmin(), {
+            userId: user.id,
+            area: AREA,
+            contentId: freePostContentId,
+            reason: "create_failed",
+          });
+        } catch (cleanupErr2) {
           log.error("Failed to clean up free_posts_used after insert failure", {
-            error: cleanupErr2.message,
+            error: cleanupErr2 instanceof Error ? cleanupErr2.message : "Unknown error",
             userId: user.id,
           });
         }
