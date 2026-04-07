@@ -39,8 +39,9 @@ export default function BillingPage() {
                   <Gift className="w-3 h-3 mr-1 inline-block" /> Free
                 </Badge>
                 <span className="text-xs font-medium">
-                  1 free post per area — {FREE_POST_CONFIG.maxPhotos} photos,{" "}
-                  {FREE_POST_CONFIG.maxVideos} video, {FREE_POST_CONFIG.durationDays} days
+                  {FREE_POST_CONFIG.maxAllowed} free posts per area — {FREE_POST_CONFIG.maxPhotos}{" "}
+                  photos, {FREE_POST_CONFIG.maxVideos} video, {FREE_POST_CONFIG.durationDays} days
+                  each
                 </span>
               </div>
               <Button

@@ -483,10 +483,17 @@ describe("POST /api/listings", () => {
         }
         if (table === "free_posts_used") {
           return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({ count: 0, error: null }),
+              }),
+            }),
             insert: vi.fn().mockResolvedValue({ error: null }),
             delete: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockResolvedValue({ error: null }),
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockResolvedValue({ error: null }),
+                }),
               }),
             }),
           };
@@ -575,10 +582,17 @@ describe("POST /api/listings", () => {
         }
         if (table === "free_posts_used") {
           return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({ count: 0, error: null }),
+              }),
+            }),
             insert: vi.fn().mockResolvedValue({ error: null }),
             delete: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockResolvedValue({ error: null }),
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockResolvedValue({ error: null }),
+                }),
               }),
             }),
           };
@@ -647,6 +661,11 @@ describe("POST /api/listings", () => {
         }
         if (table === "free_posts_used") {
           return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({ count: 0, error: null }),
+              }),
+            }),
             insert: freePostInsertSpy,
           };
         }
@@ -676,6 +695,160 @@ describe("POST /api/listings", () => {
 
     expect(res.status).toBe(422);
     // free_posts_used.insert must NOT have been called — validation fires before claim
+    expect(freePostInsertSpy).not.toHaveBeenCalled();
+  });
+
+  it("allows a second free listing in the same area", async () => {
+    const insertSpy = vi.fn().mockReturnValue({
+      select: () => ({
+        single: vi.fn().mockResolvedValue({ data: { id: "listing-2" }, error: null }),
+      }),
+    });
+    const freePostInsertSpy = vi.fn().mockResolvedValue({ error: null });
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
+        if (table === "free_posts_used") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({ count: 1, error: null }),
+              }),
+            }),
+            insert: freePostInsertSpy,
+            delete: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockResolvedValue({ error: null }),
+                }),
+              }),
+            }),
+          };
+        }
+        if (table === "listings") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gte: vi.fn().mockReturnThis(),
+            neq: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+            update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
+            insert: insertSpy,
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const res = await POST(createRequest(VALID_BODY));
+
+    expect(res.status).toBe(201);
+    expect(freePostInsertSpy).toHaveBeenCalledTimes(1);
+    expect(insertSpy).toHaveBeenCalled();
+  });
+
+  it("blocks a third free listing in the same area", async () => {
+    const freePostInsertSpy = vi.fn();
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
+        if (table === "free_posts_used") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({ count: 2, error: null }),
+              }),
+            }),
+            insert: freePostInsertSpy,
+          };
+        }
+        if (table === "listings") {
+          return {
+            select: vi.fn((fields: string) => {
+              if (fields === "id, owner_id") {
+                return {
+                  limit: vi.fn().mockResolvedValue({ error: null }),
+                };
+              }
+
+              const chain: Record<string, ReturnType<typeof vi.fn>> = {
+                eq: vi.fn(),
+                gte: vi.fn(),
+                neq: vi.fn(),
+                limit: vi.fn(),
+                maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+              };
+              chain.eq.mockReturnValue(chain);
+              chain.gte.mockReturnValue(chain);
+              chain.neq.mockReturnValue(chain);
+              chain.limit.mockReturnValue(chain);
+              return chain;
+            }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const res = await POST(createRequest(VALID_BODY));
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Free post limit reached",
+    });
     expect(freePostInsertSpy).not.toHaveBeenCalled();
   });
 });

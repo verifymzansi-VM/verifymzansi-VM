@@ -296,7 +296,7 @@ describe("POST /api/promotions", () => {
     });
   });
 
-  it("blocks a second free promotion post when no paid plan exists", async () => {
+  it("blocks a third free promotion post when no paid plan exists", async () => {
     mockAuth({ id: USER_ID });
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
@@ -324,9 +324,12 @@ describe("POST /api/promotions", () => {
         }
         if (table === "free_posts_used") {
           return {
-            insert: vi.fn().mockResolvedValue({
-              error: { code: "23505", message: "duplicate key value violates unique constraint" },
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({ count: 2, error: null }),
+              }),
             }),
+            insert: vi.fn(),
           };
         }
         return {
@@ -345,8 +348,84 @@ describe("POST /api/promotions", () => {
 
     expect(res.status).toBe(403);
     await expect(res.json()).resolves.toMatchObject({
-      error: "Free post already used",
+      error: "Free post limit reached",
     });
+  });
+
+  it("allows a second free promotion post in the same area", async () => {
+    const freePostInsertSpy = vi.fn().mockResolvedValue({ error: null });
+
+    mockAuth({ id: USER_ID });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "sp-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
+        if (table === "free_posts_used") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({ count: 1, error: null }),
+              }),
+            }),
+            insert: freePostInsertSpy,
+            delete: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockResolvedValue({ error: null }),
+                }),
+              }),
+            }),
+          };
+        }
+        if (table === "promotions") {
+          return {
+            insert: vi.fn().mockReturnValue({
+              select: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: { id: VALID_UUID }, error: null }),
+              }),
+            }),
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            neq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: VALID_BODY,
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(201);
+    expect(freePostInsertSpy).toHaveBeenCalledTimes(1);
   });
 
   it("does not claim a free post before validation passes", async () => {
@@ -379,6 +458,11 @@ describe("POST /api/promotions", () => {
         }
         if (table === "free_posts_used") {
           return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({ count: 0, error: null }),
+              }),
+            }),
             insert: freePostInsert,
           };
         }

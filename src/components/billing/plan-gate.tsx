@@ -296,17 +296,21 @@ export function PlanGate({ area, children }: PlanGateProps) {
         const tier = (entitlement?.tier as PlanTier) || null;
         const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
 
-        // Check if the user has already used their one-time free post for this area
-        const { data: freePostRow } = await supabase
+        // Count how many free posts the user has already used in this area.
+        const { count: freePostsUsedCount, error: freePostsUsedCountError } = await supabase
           .from("free_posts_used")
-          .select("id")
+          .select("id", { count: "exact", head: true })
           .eq("user_id", user.id)
-          .eq("area", area)
-          .maybeSingle();
+          .eq("area", area);
 
-        const freePostUsed = !!freePostRow;
+        if (freePostsUsedCountError) {
+          throw freePostsUsedCountError;
+        }
+
         // In testing mode, keep the free-post flow open and remove the posting count cap.
-        const freePostAvailable = !entitlement && (postingLimitBypassEnabled || !freePostUsed);
+        const freePostAvailable =
+          !entitlement &&
+          (postingLimitBypassEnabled || (freePostsUsedCount ?? 0) < FREE_POST_CONFIG.maxAllowed);
 
         // Legacy trial compat: treat free-post-available as "trial" for rendering
         const isTrial = freePostAvailable;
@@ -513,8 +517,8 @@ export function PlanGate({ area, children }: PlanGateProps) {
             <h2 className="font-display text-base font-bold">Choose Your Plan to Start Posting</h2>
           </div>
           <p className="text-white/80 text-xs max-w-xl">
-            You&apos;ve used your free post for {AREA_LABELS[area]}. Select a plan below to continue
-            posting.
+            You&apos;ve used your {FREE_POST_CONFIG.maxAllowed} free posts for {AREA_LABELS[area]}.
+            Select a plan below to continue posting.
           </p>
         </div>
 
@@ -664,7 +668,7 @@ function PlanPickerWithTrial({
             <span className="text-amber-600 dark:text-amber-400 font-medium">
               {planInfo.postingLimitBypassEnabled
                 ? `Testing Mode — Unlimited posts • ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`
-                : `Free Post — ${FREE_POST_CONFIG.durationDays} days • ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`}
+                : `${FREE_POST_CONFIG.maxAllowed} Free Posts — ${FREE_POST_CONFIG.durationDays} days each • ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`}
             </span>
           </div>
 
@@ -709,18 +713,18 @@ function PlanPickerWithTrial({
                   variant="outline"
                   className="text-xs font-normal border-white/30 text-white bg-white/10"
                 >
-                  {planInfo.postingLimitBypassEnabled ? "Testing Mode" : "One-Time Offer"}
+                  {planInfo.postingLimitBypassEnabled ? "Testing Mode" : "Free Trial"}
                 </Badge>
                 <p className="text-xs text-amber-200">
                   {planInfo.postingLimitBypassEnabled
                     ? `Posting limits removed for testing — ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`
-                    : `1 Free Post Included — ${FREE_POST_CONFIG.durationDays} days visibility`}
+                    : `${FREE_POST_CONFIG.maxAllowed} Free Posts Included — ${FREE_POST_CONFIG.durationDays} days visibility each`}
                 </p>
               </div>
               <p className="text-white/70 text-xs">
                 {planInfo.postingLimitBypassEnabled
                   ? `Each post still uses free-tier media limits: ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video.`
-                  : `Post once for free. ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video • ${FREE_POST_CONFIG.durationDays} days • Once per area`}
+                  : `Post up to ${FREE_POST_CONFIG.maxAllowed} times for free in this area. ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video • ${FREE_POST_CONFIG.durationDays} days each`}
               </p>
             </div>
             <Button
