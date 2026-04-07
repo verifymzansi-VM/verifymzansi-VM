@@ -391,6 +391,7 @@ describe("POST /api/verification/upload", () => {
       createFormDataRequest({
         file: createTestFile(),
         docType: "id_document",
+        idNumber: "9001015009087",
       })
     );
 
@@ -1082,5 +1083,82 @@ describe("POST /api/verification/upload", () => {
       }),
       { onConflict: "user_id" }
     );
+  });
+
+  it("returns 409 when an approved ID uniqueness conflict is raised during step save", async () => {
+    mockAuth({ id: "user-1", email: "test@example.com" });
+    setupDefaultAdminMocks();
+
+    const baseFromImpl = mockFrom.getMockImplementation();
+    if (!baseFromImpl) {
+      throw new Error("Expected default admin mock implementation");
+    }
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                single: vi.fn().mockResolvedValue({ data: { risk_score: 0 }, error: null }),
+              }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                neq: vi.fn().mockReturnValue({
+                  select: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({
+                      data: null,
+                      error: {
+                        code: "23505",
+                        message:
+                          "duplicate key value violates unique constraint idx_verification_steps_unique_approved_id_hmac",
+                      },
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+          insert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              single: vi
+                .fn()
+                .mockResolvedValue({ data: { id: "step-1", risk_score: 0 }, error: null }),
+            }),
+          }),
+        };
+      }
+
+      return baseFromImpl(table);
+    });
+
+    mockProcessKycArtifact.mockResolvedValue({
+      sha256: "abc123",
+      riskScore: 0,
+      riskLevel: "low",
+      providerRef: "sim_ref_1",
+      autoStatus: "needs_manual_review",
+      idNumberHmac: "dup-hmac-1",
+    });
+
+    const response = await POST(
+      createFormDataRequest({
+        file: createTestFile(),
+        docType: "id_document",
+      })
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        error: "This ID number is already linked to another account.",
+        code: "id_number_duplicate",
+      })
+    );
+    expect(mockDeleteFromR2).toHaveBeenCalled();
   });
 });

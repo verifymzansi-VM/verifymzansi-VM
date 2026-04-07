@@ -15,6 +15,9 @@ import {
 } from "@/lib/account/identity-policy";
 
 const log = createLogger("EmailChange");
+const ACCOUNT_EMAIL_IN_USE_ERROR = "That email address is already in use by another account.";
+const ACCOUNT_EMAIL_PENDING_CONFLICT_ERROR =
+  "That email address is currently being verified by another account.";
 
 const emailChangeSchema = z.object({
   newEmail: z
@@ -50,6 +53,8 @@ export async function POST(request: NextRequest) {
     if (authError || !user) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
+
+    const admin = createAdminClient();
 
     const parsedBody = await parseAndValidateJsonRequest(request, emailChangeSchema, {
       invalidJsonMessage: "Invalid JSON payload",
@@ -95,6 +100,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const { data: pendingEmailConflict, error: pendingEmailConflictError } = await admin
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
+      .select("user_id")
+      .eq("pending_email", newEmail)
+      .neq("user_id", user.id)
+      .limit(1)
+      .maybeSingle();
+
+    if (pendingEmailConflictError) {
+      log.error("Failed to check pending email ownership conflict", {
+        userId: user.id,
+        error: pendingEmailConflictError.message,
+      });
+      return internalApiError();
+    }
+
+    if (pendingEmailConflict) {
+      return NextResponse.json(
+        { error: ACCOUNT_EMAIL_PENDING_CONFLICT_ERROR, code: "email_pending_conflict" },
+        { status: 409 }
+      );
+    }
+
     // ── Initiate Supabase email change (sends confirmation to newEmail) ─
     const { error: updateError } = await supabase.auth.updateUser({ email: newEmail });
     if (updateError) {
@@ -103,10 +131,7 @@ export async function POST(request: NextRequest) {
         error: updateError.message,
       });
       if (updateError.message.toLowerCase().includes("already registered")) {
-        return NextResponse.json(
-          { error: "That email address is already in use by another account." },
-          { status: 409 }
-        );
+        return NextResponse.json({ error: ACCOUNT_EMAIL_IN_USE_ERROR }, { status: 409 });
       }
       return NextResponse.json(
         { error: "Failed to initiate email change. Please try again." },
@@ -116,7 +141,6 @@ export async function POST(request: NextRequest) {
 
     // ── Stamp cooldown and record audit trail ─────────────────────────
     const nowIso = new Date().toISOString();
-    const admin = createAdminClient();
 
     // Cooldown starts at request time so bulk re-submission is throttled even
     // if the user never confirms the change.
@@ -141,6 +165,11 @@ export async function POST(request: NextRequest) {
         userId: user.id,
         error: String(profileUpdate.reason),
       });
+    } else if (profileUpdate.value.error?.code === "23505") {
+      return NextResponse.json(
+        { error: ACCOUNT_EMAIL_PENDING_CONFLICT_ERROR, code: "email_pending_conflict" },
+        { status: 409 }
+      );
     }
     if (auditInsert.status === "rejected") {
       log.warn("Failed to write email change audit record", {

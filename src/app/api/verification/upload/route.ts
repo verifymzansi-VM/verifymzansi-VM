@@ -31,6 +31,8 @@ import { buildVerificationEmailConfirmationRequiredPayload } from "@/lib/constan
 import { extractDobFromSaId, calculateAgeFromDob } from "@/lib/utils/sa-id-validation";
 
 const log = createLogger("VerificationUpload");
+const ID_NUMBER_IN_USE_ERROR = "This ID number is already linked to another account.";
+const ID_NUMBER_DUPLICATE_CODE = "id_number_duplicate";
 
 // Re-exported from shared module
 import { getDefaultDisplayName } from "@/lib/account/ensure-profile";
@@ -673,7 +675,7 @@ export async function POST(request: NextRequest) {
           .eq("step_type", "id_doc")
           .eq("id_number_hmac", engineResult.idNumberHmac)
           .neq("user_id", user.id)
-          .in("status", ["approved", "pending", "needs_manual_review"])
+          .eq("status", "approved")
           .limit(1)
           .maybeSingle();
 
@@ -697,8 +699,8 @@ export async function POST(request: NextRequest) {
           await deleteFromR2(privateBucket, uploadResult.key).catch(() => {});
           return NextResponse.json(
             {
-              error: "This ID number is already linked to another account.",
-              code: "id_number_duplicate",
+              error: ID_NUMBER_IN_USE_ERROR,
+              code: ID_NUMBER_DUPLICATE_CODE,
               requestId,
             },
             { status: 409 }
@@ -726,6 +728,23 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
 
     if (updateError) {
+      const isApprovedIdConflict =
+        updateError.code === "23505" &&
+        (updateError.message?.includes("idx_verification_steps_unique_approved_id_hmac") ?? false);
+
+      if (isApprovedIdConflict) {
+        const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
+        await deleteFromR2(privateBucket, uploadResult.key).catch(() => {});
+        return NextResponse.json(
+          {
+            error: ID_NUMBER_IN_USE_ERROR,
+            code: ID_NUMBER_DUPLICATE_CODE,
+            requestId,
+          },
+          { status: 409 }
+        );
+      }
+
       stepUpsertError = updateError;
     } else if (!updatedStep) {
       // No row was updated — either no row exists yet, or it's approved.
@@ -738,6 +757,24 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (insertError) {
+        const isApprovedIdConflict =
+          insertError.code === "23505" &&
+          (insertError.message?.includes("idx_verification_steps_unique_approved_id_hmac") ??
+            false);
+
+        if (isApprovedIdConflict) {
+          const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
+          await deleteFromR2(privateBucket, uploadResult.key).catch(() => {});
+          return NextResponse.json(
+            {
+              error: ID_NUMBER_IN_USE_ERROR,
+              code: ID_NUMBER_DUPLICATE_CODE,
+              requestId,
+            },
+            { status: 409 }
+          );
+        }
+
         // Unique constraint violation means the step was approved concurrently
         if (insertError.code === "23505") {
           return NextResponse.json(

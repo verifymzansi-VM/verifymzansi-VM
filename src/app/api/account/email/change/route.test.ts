@@ -89,6 +89,15 @@ function makeDefaultAdminClient() {
     from: vi.fn((table: string) => {
       if (table === "account_profiles") {
         return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              neq: vi.fn().mockReturnValue({
+                limit: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                }),
+              }),
+            }),
+          }),
           update: vi.fn().mockReturnValue({
             eq: vi.fn().mockResolvedValue({ error: null }),
           }),
@@ -253,6 +262,47 @@ describe("POST /api/account/email/change", () => {
     });
   });
 
+  it("returns 409 when another account is already verifying the same pending email", async () => {
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                neq: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockReturnValue({
+                    maybeSingle: vi
+                      .fn()
+                      .mockResolvedValue({ data: { user_id: "other-user" }, error: null }),
+                  }),
+                }),
+              }),
+            }),
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          };
+        }
+        if (table === "contact_change_history") {
+          return {
+            insert: vi.fn().mockResolvedValue({ error: null }),
+          };
+        }
+        return {
+          insert: vi.fn().mockResolvedValue({ error: null }),
+        };
+      }),
+    });
+
+    const response = await POST(createRequest({ newEmail: "new@example.com" }));
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: "That email address is currently being verified by another account.",
+      code: "email_pending_conflict",
+    });
+  });
+
   it("returns 500 for non-conflict email update failures", async () => {
     const client = makeDefaultSupabaseClient();
     client.auth.updateUser = vi.fn().mockResolvedValue({ error: { message: "unexpected" } });
@@ -282,6 +332,15 @@ describe("POST /api/account/email/change", () => {
       from: vi.fn((table: string) => {
         if (table === "account_profiles") {
           return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                neq: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                  }),
+                }),
+              }),
+            }),
             update: vi.fn().mockReturnValue({
               eq: vi.fn().mockRejectedValue(new Error("profile update failed")),
             }),

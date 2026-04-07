@@ -23,6 +23,7 @@ import {
 } from "@/lib/services/email";
 
 const log = createLogger("AdminVerification");
+const ID_NUMBER_IN_USE_ERROR = "This ID number is already linked to another account.";
 
 /**
  * POST /api/admin/verification/decide
@@ -91,6 +92,33 @@ export async function POST(request: Request) {
       );
     }
 
+    if (decision === "approved" && step.step_type === "id_doc" && step.id_number_hmac) {
+      const { data: idConflict, error: idConflictError } = await admin
+        .from("verification_steps")
+        .select("id, user_id")
+        .eq("step_type", "id_doc")
+        .eq("status", "approved")
+        .eq("id_number_hmac", step.id_number_hmac)
+        .neq("user_id", step.user_id)
+        .limit(1)
+        .maybeSingle();
+
+      if (idConflictError) {
+        log.error("Failed to verify ID ownership conflict before approval", {
+          stepId,
+          error: idConflictError.message,
+        });
+        return NextResponse.json({ error: "Failed to validate ID ownership" }, { status: 500 });
+      }
+
+      if (idConflict) {
+        return NextResponse.json(
+          { error: ID_NUMBER_IN_USE_ERROR, code: "id_number_duplicate" },
+          { status: 409 }
+        );
+      }
+    }
+
     // Update the verification step
     const updateData: Record<string, unknown> = {
       status: decision,
@@ -117,6 +145,17 @@ export async function POST(request: Request) {
       .select("id");
 
     if (updateError) {
+      const isApprovedIdConflict =
+        updateError.code === "23505" &&
+        (updateError.message?.includes("idx_verification_steps_unique_approved_id_hmac") ?? false);
+
+      if (isApprovedIdConflict) {
+        return NextResponse.json(
+          { error: ID_NUMBER_IN_USE_ERROR, code: "id_number_duplicate" },
+          { status: 409 }
+        );
+      }
+
       log.error("Failed to update verification step", {
         stepId,
         decision,

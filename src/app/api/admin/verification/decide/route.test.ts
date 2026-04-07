@@ -799,6 +799,57 @@ describe("POST /api/admin/verification/decide", () => {
     );
   });
 
+  it("returns 409 when approving an ID step already verified by another account", async () => {
+    mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
+
+    const idDocStep = {
+      ...baseStep,
+      id_number_hmac: "hmac-dup-1",
+    };
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockImplementation((...args: unknown[]) => {
+            if (args[0] === "*") {
+              return {
+                eq: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({ data: idDocStep, error: null }),
+                }),
+              };
+            }
+
+            return {
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    neq: vi.fn().mockReturnValue({
+                      limit: vi.fn().mockReturnValue({
+                        maybeSingle: vi
+                          .fn()
+                          .mockResolvedValue({ data: { id: "step-other" }, error: null }),
+                      }),
+                    }),
+                  }),
+                }),
+              }),
+            };
+          }),
+          update: vi.fn(),
+        };
+      }
+
+      return {};
+    });
+
+    const response = await POST(createMockRequest({ stepId: STEP_UUID, decision: "approved" }));
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: "This ID number is already linked to another account.",
+      code: "id_number_duplicate",
+    });
+  });
+
   it("sends verification approved email when an account becomes fully approved", async () => {
     mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
 
