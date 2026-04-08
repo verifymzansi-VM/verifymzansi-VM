@@ -22,9 +22,24 @@ export function buildCsp(
 ): string {
   const supabaseOrigin = env("NEXT_PUBLIC_SUPABASE_URL") ?? "";
   const cdnOrigin = env("R2_PUBLIC_URL") ?? "";
+
+  // Supabase Realtime uses WebSockets — derive wss:// origin so the CSP
+  // connect-src allows the upgrade.  Without this iOS Safari throws
+  // SecurityError("The operation is insecure") and the app crashes.
+  let supabaseWsOrigin = "";
+  if (supabaseOrigin) {
+    try {
+      const u = new URL(supabaseOrigin);
+      supabaseWsOrigin = `wss://${u.host}`;
+    } catch {
+      /* invalid URL – skip */
+    }
+  }
+
   const connectSrcValues = [
     "'self'",
     ...(supabaseOrigin ? [supabaseOrigin] : []),
+    ...(supabaseWsOrigin ? [supabaseWsOrigin] : []),
     "https://*.ingest.us.sentry.io",
     "https://challenges.cloudflare.com",
     "https://static.cloudflareinsights.com",

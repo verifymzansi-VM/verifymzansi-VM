@@ -2,7 +2,10 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { createLogger } from "@/lib/utils/logger";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+
+const log = createLogger("useRealtime");
 
 interface UseRealtimeOptions {
   /** Supabase table to subscribe to */
@@ -86,7 +89,15 @@ export function useRealtime({
           callbackRef.current(payload);
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          log.warn("Realtime subscription degraded", { table, status, error: err?.message });
+          // Graceful degradation — don't let WebSocket failures crash the app.
+          // iOS Safari throws SecurityError when CSP blocks wss:// connections;
+          // catching here prevents the error from reaching the React error boundary.
+          cleanup();
+        }
+      });
 
     channelRef.current = channel;
 

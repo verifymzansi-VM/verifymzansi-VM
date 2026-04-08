@@ -100,6 +100,11 @@ describe("buildCsp", () => {
     expect(csp).toContain("https://cdn.example.com");
   });
 
+  it("includes wss:// Supabase origin for Realtime WebSocket connections", () => {
+    const csp = buildCsp(null);
+    expect(csp).toContain("wss://test.supabase.co");
+  });
+
   it("adds WebSocket sources when allowDevWebSocket is true", () => {
     const csp = buildCsp(null, { allowDevWebSocket: true });
     expect(csp).toContain("ws:");
