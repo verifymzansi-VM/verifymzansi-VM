@@ -38,6 +38,8 @@ interface ListingRow {
   boost_until: string | null;
   featured: boolean;
   owner_id: string;
+  focal_x: number | null;
+  focal_y: number | null;
 }
 
 interface OwnerRow {
@@ -372,7 +374,7 @@ export function MzansiMarketGrid() {
             return (
               <div
                 key={listing.id}
-                className={`animate-in fade-in fill-mode-both [animation-duration:400ms] sm:slide-in-from-bottom-2 ${getStaggerDelayClass(index)}`}
+                className={`content-auto animate-in fade-in fill-mode-both [animation-duration:400ms] sm:slide-in-from-bottom-2 ${getStaggerDelayClass(index)}`}
               >
                 <ListingCard
                   id={listing.id}
@@ -392,6 +394,8 @@ export function MzansiMarketGrid() {
                   ownerName={seller?.display_name}
                   boosted={isBoosted}
                   featured={listing.featured}
+                  focalX={listing.focal_x}
+                  focalY={listing.focal_y}
                 />
               </div>
             );
@@ -435,6 +439,8 @@ export function MzansiMarketGrid() {
                   viewCount={undefined}
                   boosted={isBoosted}
                   featured={listing.featured}
+                  focalX={listing.focal_x}
+                  focalY={listing.focal_y}
                 />
               </div>
             );

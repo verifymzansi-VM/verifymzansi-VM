@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
+import { normalizeMediaUrl } from "@/lib/utils/media-url";
 
 export interface SideCardItem {
   id: string;
@@ -79,12 +80,23 @@ export function ShowroomSideCard({ items, initialDelayMs = 0 }: ShowroomSideCard
           fading ? "opacity-0" : "opacity-100"
         )}
       >
+        {/* Blur backdrop for mismatched aspect ratios */}
         <Image
-          src={item.imageUrl}
+          src={normalizeMediaUrl(item.imageUrl) || item.imageUrl}
+          alt=""
+          aria-hidden="true"
+          fill
+          className="absolute inset-0 scale-110 object-cover blur-2xl brightness-90 saturate-150"
+          sizes="(min-width: 1024px) 15vw, 0px"
+        />
+        <div className="absolute inset-0 bg-black/10" />
+        {/* Foreground image — contain to avoid cropping */}
+        <Image
+          src={normalizeMediaUrl(item.imageUrl) || item.imageUrl}
           alt=""
           fill
           sizes="(min-width: 1024px) 15vw, 0px"
-          className="object-cover"
+          className="object-contain relative z-10"
         />
       </div>
     </Link>

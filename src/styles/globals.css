@@ -326,7 +326,6 @@
   /* Hide scrollbar but keep scroll functionality */
   .scrollbar-hide {
     -ms-overflow-style: none;
-    scrollbar-width: none;
   }
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
@@ -334,6 +333,12 @@
 
   .safe-area-inset-bottom {
     padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Virtualize off-screen card grid items for perf */
+  .content-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 420px;
   }
 }
 

@@ -27,7 +27,6 @@ const CF_RESIZING_ENABLED = process.env.NEXT_PUBLIC_CF_IMAGE_RESIZING === "true"
 
 const MEDIA_HOST = "media.verifymzansi.com";
 const STAGING_MEDIA_HOST = "media-staging.verifymzansi.com";
-const PROXY_MEDIA_PREFIX = "/api/media/serve/";
 
 export default function cloudflareImageLoader({ src, width, quality }: ImageLoaderParams): string {
   // If Cloudflare Image Resizing is not available, return the src unchanged
@@ -38,14 +37,8 @@ export default function cloudflareImageLoader({ src, width, quality }: ImageLoad
 
   const cfParams = `width=${width},quality=${quality || 75},format=auto`;
 
-  // Do not resize media-proxy API paths. Cloudflare Image Resizing can return
-  // 404 when the source is an app route even if the source URL itself is 200.
-  // Keep these paths direct so media always renders in production.
-  if (src.startsWith(PROXY_MEDIA_PREFIX)) {
-    return src;
-  }
-
-  // Keep other relative sources (static assets, app images) pass-through so
+  // Keep relative sources (static assets, app images, media-proxy API paths)
+  // pass-through so local/staging/prod render reliably even when /cdn-cgi/image
   // local/staging/prod render reliably even when /cdn-cgi/image is unavailable.
   if (!src.startsWith("http://") && !src.startsWith("https://")) {
     return src;

@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
 import { CategoryPicker } from "@/components/listings/category-picker";
 import { MediaUpload } from "@/components/ui/media-upload";
+import { FocalPointPicker, type FocalPoint } from "@/components/ui/focal-point-picker";
 import {
   usePlanMaxPhotos,
   usePlanMaxVideos,
@@ -36,6 +37,7 @@ import { ListingCard } from "@/components/listings/listing-card";
 import { ListingDetailContent } from "@/components/listings/listing-detail-content";
 import { createLogger } from "@/lib/utils/logger";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
+import { readMediaDimensions } from "@/lib/utils/media-metadata";
 
 const log = createLogger("EditListingPage");
 const TITLE_MAX = 120;
@@ -74,6 +76,7 @@ export default function EditListingPage() {
   const [newPhotoFiles, setNewPhotoFiles] = useState<File[]>([]);
   const [newVideoFile, setNewVideoFile] = useState<File[]>([]);
   const [newVideoCoverFile, setNewVideoCoverFile] = useState<File[]>([]);
+  const [focalPoint, setFocalPoint] = useState<FocalPoint>({ x: 0.5, y: 0.5 });
   const router = useRouter();
   const { toast } = useToast();
   const maxPhotos = usePlanMaxPhotos("MZANSI_MARKET");
@@ -194,6 +197,16 @@ export default function EditListingPage() {
         );
         setExistingPhotos(Array.isArray(data.photos) ? (data.photos as string[]) : []);
         setExistingVideos(Array.isArray(data.videos) ? (data.videos as string[]) : []);
+        setFocalPoint({
+          x:
+            typeof (data as Record<string, unknown>).focal_x === "number"
+              ? ((data as Record<string, unknown>).focal_x as number)
+              : 0.5,
+          y:
+            typeof (data as Record<string, unknown>).focal_y === "number"
+              ? ((data as Record<string, unknown>).focal_y as number)
+              : 0.5,
+        });
         setListingUpdatedAt(
           ((data as Record<string, unknown>).updated_at as string | null) ?? null
         );
@@ -434,6 +447,8 @@ export default function EditListingPage() {
 
       const allPhotos = [...existingPhotos, ...newPhotoUrls];
       const allVideos = [...existingVideos, ...(newVideoUrl ? [newVideoUrl] : [])];
+      const primaryMediaFile = newVideoFile[0] ?? newPhotoFiles[0] ?? null;
+      const mediaDimensions = primaryMediaFile ? await readMediaDimensions(primaryMediaFile) : null;
 
       setSubmitProgress("Saving listing...");
 
@@ -458,6 +473,10 @@ export default function EditListingPage() {
           videoThumbnail,
           logo_url: finalLogoUrl,
           contactMethods,
+          media_width: mediaDimensions?.width,
+          media_height: mediaDimensions?.height,
+          focal_x: focalPoint.x,
+          focal_y: focalPoint.y,
           expected_updated_at: listingUpdatedAt,
         }),
       });
@@ -780,6 +799,16 @@ export default function EditListingPage() {
                     disabled={existingPhotos.length >= maxPhotos}
                   />
                   {fieldErrors.images && <p className="inline-form-error">{fieldErrors.images}</p>}
+
+                  {/* ── Focal Point Picker ────────────────────── */}
+                  {existingPhotos.length > 0 && (
+                    <FocalPointPicker
+                      src={normalizeMediaUrl(existingPhotos[0])}
+                      alt="Set focal point for primary photo"
+                      value={focalPoint}
+                      onChange={setFocalPoint}
+                    />
+                  )}
 
                   {/* ── Existing Videos ──────────────────────── */}
                   {existingVideos.length > 0 && (

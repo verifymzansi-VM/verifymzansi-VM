@@ -55,6 +55,10 @@ type PromotionOwnerRow = {
   photos?: string[] | null;
   videos?: string[] | null;
   video_thumbnail?: string | null;
+  media_width?: number | null;
+  media_height?: number | null;
+  focal_x?: number | null;
+  focal_y?: number | null;
   view_count?: number | null;
   social_distribution_authorized?: boolean;
   social_distribution_authorized_at?: string | null;
@@ -91,7 +95,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const { data: promotion, error } = await supabase
       .from("promotions")
       .select(
-        "id, owner_id, seller_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, location_town, location_address, contact_methods, start_date, end_date, social_distribution_authorized, social_distribution_authorized_at, social_distribution_revoked_at, social_authorizer_name, social_authorizer_role, social_authorizer_relationship, social_authorization_version, social_monetization_acknowledged, boost_until, featured_until, status, view_count, published_at, created_at, updated_at"
+        "id, owner_id, seller_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, media_width, media_height, focal_x, focal_y, price_cents, price_negotiable, location_province, location_city, location_town, location_address, contact_methods, start_date, end_date, social_distribution_authorized, social_distribution_authorized_at, social_distribution_revoked_at, social_authorizer_name, social_authorizer_role, social_authorizer_relationship, social_authorization_version, social_monetization_acknowledged, boost_until, featured_until, status, view_count, published_at, created_at, updated_at"
       )
       .eq("id", id)
       .maybeSingle();
@@ -209,7 +213,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         .from("promotions")
         .select(
           withOwnerColumn(
-            "id, owner_id, status, title, description, promotion_type, category, category_key, business_id, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, location_town, location_address, contact_methods, start_date, end_date, social_distribution_authorized, social_distribution_authorized_at, social_distribution_revoked_at, social_authorizer_name, social_authorizer_role, social_authorizer_relationship, social_authorization_version, social_monetization_acknowledged",
+            "id, owner_id, status, title, description, promotion_type, category, category_key, business_id, photos, videos, video_thumbnail, media_width, media_height, focal_x, focal_y, price_cents, price_negotiable, location_province, location_city, location_town, location_address, contact_methods, start_date, end_date, social_distribution_authorized, social_distribution_authorized_at, social_distribution_revoked_at, social_authorizer_name, social_authorizer_role, social_authorizer_relationship, social_authorization_version, social_monetization_acknowledged",
             ownerColumn
           )
         )
@@ -334,6 +338,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           photos: data.images,
           videos: data.videos,
           video_thumbnail: data.video_thumbnail || null,
+          media_width:
+            data.media_width !== undefined ? data.media_width : (existing.media_width ?? null),
+          media_height:
+            data.media_height !== undefined ? data.media_height : (existing.media_height ?? null),
+          focal_x: data.focal_x ?? existing.focal_x ?? 0.5,
+          focal_y: data.focal_y ?? existing.focal_y ?? 0.5,
           price_cents: priceCents,
           price_negotiable: data.negotiable,
           location_province: data.province,

@@ -31,6 +31,8 @@ interface BusinessRow {
   boost_until: string | null;
   featured_until: string | null;
   service_areas: Record<string, unknown> | null;
+  focal_x: number | null;
+  focal_y: number | null;
 }
 
 interface BusinessesResponse {
@@ -266,6 +268,8 @@ export function MzansiBusinessGrid() {
               boostUntil={business.boost_until}
               featuredUntil={business.featured_until}
               serviceAreas={business.service_areas}
+              focalX={business.focal_x}
+              focalY={business.focal_y}
             />
           </div>
         ))}

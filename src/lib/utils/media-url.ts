@@ -140,3 +140,65 @@ export function normalizeVideoUrl(url: string | null | undefined): string {
 export function normalizeMediaUrls(urls: string[]): string[] {
   return urls.map(normalizeMediaUrl);
 }
+
+// ── Responsive variant helpers ───────────────────────────────
+
+export type ImageVariant = "thumb" | "card" | "full" | "original";
+
+/** Cloudflare Image Resizing widths & qualities per variant. */
+const VARIANT_PARAMS: Record<
+  Exclude<ImageVariant, "original">,
+  { width: number; quality: number }
+> = {
+  thumb: { width: 400, quality: 80 },
+  card: { width: 800, quality: 85 },
+  full: { width: 1600, quality: 90 },
+};
+
+/**
+ * Return the CDN-addressable URL for a media storage key.
+ * This URL can be used with Cloudflare Image Resizing or as a direct
+ * source in `<Image>` components. Falls back to the proxy path if the
+ * key cannot be resolved.
+ */
+export function getMediaCdnUrl(keyOrUrl: string): string {
+  const key = extractMediaStorageKey(keyOrUrl);
+  if (!key) return keyOrUrl;
+  return `https://${MEDIA_BASE.replace(/^https?:\/\//, "")}/${key}`;
+}
+
+/**
+ * Build a Cloudflare Image Resizing URL for a specific variant.
+ *
+ * When CF Image Resizing is disabled (dev/staging), returns the proxy path
+ * unchanged so images still render (unoptimised but functional).
+ *
+ * @param url     - Any media URL or storage key
+ * @param variant - Size preset: "thumb" (400w), "card" (800w), "full" (1600w), "original"
+ */
+export function getVariantUrl(url: string, variant: ImageVariant = "original"): string {
+  if (variant === "original") return normalizeMediaUrl(url);
+
+  const key = extractMediaStorageKey(url);
+  if (!key) return url;
+
+  // Video files don't have image variants
+  if (isVideoUrl(url)) return normalizeMediaUrl(url);
+
+  const { width, quality } = VARIANT_PARAMS[variant];
+  return `/cdn-cgi/image/width=${width},quality=${quality},format=auto/https://${MEDIA_BASE.replace(/^https?:\/\//, "")}/${key}`;
+}
+
+/**
+ * Return all variant URLs for responsive `<Image>` srcSet usage.
+ * Falls back to the proxy URL for each variant when CF Image Resizing
+ * is unavailable (the Next.js custom loader handles the same fallback).
+ */
+export function getResponsiveImageUrls(url: string): Record<ImageVariant, string> {
+  return {
+    thumb: getVariantUrl(url, "thumb"),
+    card: getVariantUrl(url, "card"),
+    full: getVariantUrl(url, "full"),
+    original: normalizeMediaUrl(url),
+  };
+}

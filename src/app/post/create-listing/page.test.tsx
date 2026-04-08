@@ -266,10 +266,14 @@ describe("CreateListingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(3);
+      const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+      expect(calls.some((call) => call[0] === "/api/listings")).toBe(true);
     });
 
-    const request = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[2];
+    const request = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.find(
+      (call) => call[0] === "/api/listings"
+    );
+    expect(request).toBeDefined();
     const payload = JSON.parse(request[1].body as string);
 
     expect(payload.logo_url).toBe("https://media.verifymzansi.com/listings/logo.jpg");

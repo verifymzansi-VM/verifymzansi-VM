@@ -43,7 +43,7 @@ const BUSINESS_DETAIL_SELECT = `
   store_number, map_directions, phone, whatsapp, email, website, social_links,
   services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
   delivery_options, layout_template, boost_until, featured_until, published_at, status, area, created_at,
-  updated_at
+  updated_at, media_width, media_height, focal_x, focal_y
 `;
 type BusinessOwnerRow = {
   id: string;
@@ -55,6 +55,10 @@ type BusinessOwnerRow = {
   cover_video?: string | null;
   video_thumbnail?: string | null;
   gallery_photos?: string[] | null;
+  media_width?: number | null;
+  media_height?: number | null;
+  focal_x?: number | null;
+  focal_y?: number | null;
   business_details?: BusinessDetails | null;
   phone?: string | null;
   whatsapp?: string | null;
@@ -211,7 +215,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         .from("businesses")
         .select(
           withOwnerColumn(
-            "id, owner_id, status, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, business_details",
+            "id, owner_id, status, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, media_width, media_height, focal_x, focal_y, business_details",
             ownerColumn
           )
         )
@@ -349,6 +353,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           payment_methods_accepted: data.payment_methods_accepted,
           delivery_options: data.delivery_options,
           layout_template: data.layout_template || null,
+          media_width:
+            data.media_width !== undefined ? data.media_width : (existing.media_width ?? null),
+          media_height:
+            data.media_height !== undefined ? data.media_height : (existing.media_height ?? null),
+          focal_x: data.focal_x ?? existing.focal_x ?? 0.5,
+          focal_y: data.focal_y ?? existing.focal_y ?? 0.5,
           // Re-trigger moderation only for live businesses so changed content is reviewed.
           // Draft and rejected businesses keep their current status.
           ...(existing.status === "live" ? { status: "pending_moderation" as const } : {}),

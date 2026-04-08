@@ -257,42 +257,42 @@ export async function GET(request: NextRequest) {
     const selectAttempts = [
       {
         select: withOwnerColumn(
-          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured",
+          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured, media_width, media_height, focal_x, focal_y",
           ownerColumn
         ),
         omittedFields: [] as const,
       },
       {
         select: withOwnerColumn(
-          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured",
+          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured, media_width, media_height, focal_x, focal_y",
           ownerColumn
         ),
         omittedFields: ["featured_until"] as const,
       },
       {
         select: withOwnerColumn(
-          "id, owner_id, title, description, price_cents, price_negotiable, category, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured",
+          "id, owner_id, title, description, price_cents, price_negotiable, category, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured, media_width, media_height, focal_x, focal_y",
           ownerColumn
         ),
         omittedFields: ["condition"] as const,
       },
       {
         select: withOwnerColumn(
-          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured",
+          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured, media_width, media_height, focal_x, focal_y",
           ownerColumn
         ),
         omittedFields: ["video_thumbnail"] as const,
       },
       {
         select: withOwnerColumn(
-          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured_until, featured",
+          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured_until, featured, media_width, media_height, focal_x, focal_y",
           ownerColumn
         ),
         omittedFields: ["logo_url"] as const,
       },
       {
         select: withOwnerColumn(
-          "id, owner_id, title, description, price_cents, price_negotiable, category, attributes, photos, videos, location_province, location_city, created_at, boost_until, featured",
+          "id, owner_id, title, description, price_cents, price_negotiable, category, attributes, photos, videos, location_province, location_city, created_at, boost_until, featured, media_width, media_height, focal_x, focal_y",
           ownerColumn
         ),
         omittedFields: ["featured_until", "condition", "video_thumbnail", "logo_url"] as const,
@@ -750,6 +750,10 @@ export async function POST(request: NextRequest) {
         video_thumbnail: data.videoThumbnail || null,
         logo_url: data.logo_url || null,
         contact_methods: data.contactMethods,
+        media_width: data.media_width ?? null,
+        media_height: data.media_height ?? null,
+        focal_x: data.focal_x ?? 0.5,
+        focal_y: data.focal_y ?? 0.5,
       },
       ownerColumn,
       user.id

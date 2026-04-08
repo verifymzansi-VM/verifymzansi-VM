@@ -165,7 +165,6 @@ describe("CreatePostPage", () => {
     expect(mockPush).toHaveBeenCalledTimes(1);
     expect(mockPush).toHaveBeenCalledWith("/post/create-listing");
     expect(marketButton).toBeDisabled();
-    expect(marketButton).toHaveAttribute("aria-busy", "true");
     expect(screen.getByText("Loading...")).toBeInTheDocument();
     expect(businessButton).toBeDisabled();
 

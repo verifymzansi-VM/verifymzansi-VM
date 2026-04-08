@@ -51,6 +51,10 @@ interface PosterCardShellProps {
   priority?: boolean;
   /** Video duration in seconds — shown as badge on thumbnail (e.g. "2:34"). */
   videoDuration?: number | null;
+  /** Focal point X coordinate (0..1). Controls object-position when cropping. */
+  focalX?: number | null;
+  /** Focal point Y coordinate (0..1). Controls object-position when cropping. */
+  focalY?: number | null;
 }
 
 export function PosterCardShell({
@@ -79,6 +83,8 @@ export function PosterCardShell({
   fitStrategy = "smart",
   priority = false,
   videoDuration,
+  focalX,
+  focalY,
 }: PosterCardShellProps) {
   const normalizedMediaUrl = mediaUrl ? normalizeMediaUrl(mediaUrl) : undefined;
   const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
@@ -94,8 +100,8 @@ export function PosterCardShell({
         )}
         trustLevel={trustLevel}
       >
-        {/* ── 16:9 video/image thumbnail ─────────────────────────── */}
-        <div className="relative aspect-video w-full overflow-hidden bg-slate-900 rounded-t-xl">
+        {/* ── 4:5 video/image thumbnail ──────────────────────────── */}
+        <div className="relative aspect-[4/5] w-full overflow-hidden bg-slate-900 rounded-t-xl">
           {normalizedMediaUrl ? (
             <VideoCardPlayer
               src={normalizedMediaUrl}
@@ -105,10 +111,12 @@ export function PosterCardShell({
               sizes={mediaSizes}
               mode="ambient"
               fitStrategy={fitStrategy}
-              containerAspectRatio={16 / 9}
+              containerAspectRatio={4 / 5}
               muteControlVisibility={hasVideo ? "always" : "hidden"}
               mediaClassName="transition-transform duration-700 group-hover:scale-[1.03]"
               priority={priority}
+              focalX={focalX}
+              focalY={focalY}
             />
           ) : fallback ? (
             <div className="absolute inset-0 skeleton-shimmer">{fallback}</div>

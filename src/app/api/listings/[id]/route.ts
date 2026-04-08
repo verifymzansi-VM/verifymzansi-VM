@@ -39,6 +39,10 @@ type ListingUpdateRow = {
   videos?: string[] | null;
   video_thumbnail?: string | null;
   logo_url?: string | null;
+  media_width?: number | null;
+  media_height?: number | null;
+  focal_x?: number | null;
+  focal_y?: number | null;
   owner_id?: string | null;
   seller_id?: string | null;
   updated_at?: string | null;
@@ -126,7 +130,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         .from("listings")
         .select(
           withOwnerColumn(
-            "id, owner_id, status, area, photos, videos, video_thumbnail, logo_url, updated_at",
+            "id, owner_id, status, area, photos, videos, video_thumbnail, logo_url, media_width, media_height, focal_x, focal_y, updated_at",
             ownerColumn
           )
         )
@@ -244,6 +248,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       video_thumbnail: nextVideoThumbnail,
       logo_url: nextLogoUrl,
       contact_methods: data.contactMethods,
+      media_width:
+        data.media_width !== undefined ? data.media_width : (listing.media_width ?? null),
+      media_height:
+        data.media_height !== undefined ? data.media_height : (listing.media_height ?? null),
+      focal_x: data.focal_x ?? listing.focal_x ?? 0.5,
+      focal_y: data.focal_y ?? listing.focal_y ?? 0.5,
       // Re-submit for moderation on edit (covers both live and approved listings)
       status: ["live", "approved"].includes(listing.status) ? "pending_moderation" : listing.status,
     };

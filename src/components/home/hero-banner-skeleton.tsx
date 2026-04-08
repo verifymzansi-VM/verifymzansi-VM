@@ -5,7 +5,7 @@ export function HeroBannerSkeleton() {
   return (
     <section className="w-full overflow-hidden bg-warm-950">
       {/* Slide area */}
-      <div className="relative aspect-[2/1] sm:aspect-[3/1] md:aspect-[3/1]">
+      <div className="relative aspect-video">
         <Skeleton className="absolute inset-0 rounded-none" />
       </div>
 

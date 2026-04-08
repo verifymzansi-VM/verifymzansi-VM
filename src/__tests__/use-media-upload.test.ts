@@ -213,4 +213,25 @@ describe("useMediaUpload", () => {
     expect(result.current.error).toBeNull();
     expect(result.current.url).toBeNull();
   });
+
+  it("should expose posterUrl (null initially)", () => {
+    const { result } = renderHook(() => useMediaUpload());
+    expect(result.current.posterUrl).toBeNull();
+  });
+
+  it("should expose blurhash (null initially)", () => {
+    const { result } = renderHook(() => useMediaUpload());
+    expect(result.current.blurhash).toBeNull();
+  });
+
+  it("should reset posterUrl and blurhash", async () => {
+    const { result } = renderHook(() => useMediaUpload());
+
+    act(() => {
+      result.current.reset();
+    });
+
+    expect(result.current.posterUrl).toBeNull();
+    expect(result.current.blurhash).toBeNull();
+  });
 });

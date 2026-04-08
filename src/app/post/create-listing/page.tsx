@@ -23,6 +23,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { usePostDraftAutosave } from "@/hooks/use-post-draft-autosave";
 import { CategoryPicker } from "@/components/listings/category-picker";
 import { MediaUpload } from "@/components/ui/media-upload";
+import { VideoFrameSelector } from "@/components/ui/video-frame-selector";
+import { MediaCropPreview, type CropPosition } from "@/components/ui/media-crop-preview";
 import { PlanGate, usePlanMaxPhotos, usePlanVideoAllowed } from "@/components/billing/plan-gate";
 import { LocationSelector, type LocationValue } from "@/components/ui/location-selector";
 import type { ListingCategory, ListingCondition } from "@/types/enums";
@@ -44,6 +46,7 @@ import { checkUploadServiceReachable } from "@/lib/utils/upload-preflight";
 import type { ListingDraftData } from "@/lib/post-drafts/storage";
 import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
 import { ListingDetailContent } from "@/components/listings/listing-detail-content";
+import { readMediaDimensions } from "@/lib/utils/media-metadata";
 
 const STEPS: PostFormStep[] = [
   { label: "Details", icon: FileText, description: "Category, title, and description" },
@@ -139,6 +142,7 @@ export default function CreateListingPage() {
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [videoFile, setVideoFile] = useState<File[]>([]);
   const [videoCoverFile, setVideoCoverFile] = useState<File[]>([]);
+  const [focalPoint, setFocalPoint] = useState<CropPosition>({ x: 0.5, y: 0.5 });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submissionInFlightRef = useRef(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
@@ -563,6 +567,8 @@ export default function CreateListingPage() {
 
       setSubmitProgress("Saving listing...");
       setUploadStatuses((current) => ({ ...current, saving: "uploading" }));
+      const primaryMediaFile = videoFile[0] ?? photoFiles[0] ?? null;
+      const mediaDimensions = primaryMediaFile ? await readMediaDimensions(primaryMediaFile) : null;
 
       const res = await fetch("/api/listings", {
         method: "POST",
@@ -584,6 +590,10 @@ export default function CreateListingPage() {
           videos: videoUrl ? [videoUrl] : [],
           videoThumbnail: videoThumbnailUrl,
           contactMethods,
+          media_width: mediaDimensions?.width,
+          media_height: mediaDimensions?.height,
+          focal_x: focalPoint.x,
+          focal_y: focalPoint.y,
         }),
       });
 
@@ -1091,6 +1101,14 @@ export default function CreateListingPage() {
                       )}
                     </div>
 
+                    {photoFiles.length > 0 && videoFile.length === 0 && (
+                      <MediaCropPreview
+                        file={photoFiles[0]}
+                        value={focalPoint}
+                        onChange={setFocalPoint}
+                      />
+                    )}
+
                     <div id="listing-video" tabIndex={-1} className="space-y-2 rounded-lg">
                       <MediaUpload
                         label={`Video (max 1)${!videoAllowed ? " — Upgrade to unlock" : ""}`}
@@ -1110,13 +1128,28 @@ export default function CreateListingPage() {
                     </div>
 
                     {videoFile.length > 0 && (
-                      <MediaUpload
-                        label="Video cover image (optional)"
-                        maxFiles={1}
-                        files={videoCoverFile}
-                        onChange={setVideoCoverFile}
-                        accept="image/*"
-                      />
+                      <div className="space-y-3">
+                        <VideoFrameSelector
+                          file={videoFile[0]}
+                          onFrameSelect={(frame) => {
+                            setVideoCoverFile(frame ? [frame] : []);
+                          }}
+                        />
+                        <details className="group">
+                          <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                            Or upload a custom cover image…
+                          </summary>
+                          <div className="mt-2">
+                            <MediaUpload
+                              label="Custom cover image"
+                              maxFiles={1}
+                              files={videoCoverFile}
+                              onChange={setVideoCoverFile}
+                              accept="image/*"
+                            />
+                          </div>
+                        </details>
+                      </div>
                     )}
 
                     {renderPreview()}

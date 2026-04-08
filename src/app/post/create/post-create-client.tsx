@@ -180,7 +180,6 @@ export function PostCreateClient({
               type="button"
               onClick={() => handleCategoryClick(option.href)}
               disabled={isDisabled}
-              aria-busy={isPending || undefined}
               className="group block h-full w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/50 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-100"
             >
               <Card

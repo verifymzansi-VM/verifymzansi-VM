@@ -406,10 +406,14 @@ describe("CreateBusinessPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(4);
+      const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+      expect(calls.some((call) => call[0] === "/api/businesses")).toBe(true);
     });
 
-    const submitCall = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[3];
+    const submitCall = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.find(
+      (call) => call[0] === "/api/businesses"
+    );
+    expect(submitCall).toBeDefined();
     expect(submitCall[0]).toBe("/api/businesses");
 
     const payload = JSON.parse(submitCall[1].body as string);

@@ -39,6 +39,7 @@ import type { PromotionSocialAuthorizationInput } from "@/lib/promotions/social-
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { checkUploadServiceReachable } from "@/lib/utils/upload-preflight";
+import { readMediaDimensions } from "@/lib/utils/media-metadata";
 import type { PromotionDraftData } from "@/lib/post-drafts/storage";
 const SELECT_CLASS =
   "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm";
@@ -110,6 +111,7 @@ function CreatePromotionContent() {
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [videoFiles, setVideoFiles] = useState<File[]>([]);
   const [videoThumbnailFile, setVideoThumbnailFile] = useState<File[]>([]);
+  const [focalPoint, setFocalPoint] = useState({ x: 0.5, y: 0.5 });
   const [socialAuthorization, setSocialAuthorization] = useState<PromotionSocialAuthorizationInput>(
     {
       granted: false,
@@ -502,6 +504,8 @@ function CreatePromotionContent() {
       ]);
 
       setSubmitProgress("Saving promotion...");
+      const primaryMediaFile = videoFiles[0] ?? photoFiles[0] ?? null;
+      const mediaDimensions = primaryMediaFile ? await readMediaDimensions(primaryMediaFile) : null;
 
       const body = {
         title: title.trim(),
@@ -519,6 +523,10 @@ function CreatePromotionContent() {
         images: imageUrls,
         videos: videoUrls,
         video_thumbnail: uploadedVideoThumbnailUrl,
+        media_width: mediaDimensions?.width,
+        media_height: mediaDimensions?.height,
+        focal_x: focalPoint.x,
+        focal_y: focalPoint.y,
         start_date: startDate ? new Date(startDate).toISOString() : undefined,
         end_date: endDate ? new Date(endDate).toISOString() : undefined,
         business_id: businessId || undefined,
@@ -573,6 +581,7 @@ function CreatePromotionContent() {
     setPhotoFiles([]);
     setVideoFiles([]);
     setVideoThumbnailFile([]);
+    setFocalPoint({ x: 0.5, y: 0.5 });
     setSocialAuthorization({ granted: false });
     setFieldErrors({});
     setFormError(null);

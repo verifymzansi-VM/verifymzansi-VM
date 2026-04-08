@@ -29,6 +29,7 @@ import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
 import { SocialAuthorizationFields } from "@/components/promotions/social-authorization-fields";
 import type { PromotionSocialAuthorizationInput } from "@/lib/promotions/social-authorization";
+import { readMediaDimensions } from "@/lib/utils/media-metadata";
 const selectClass =
   "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-shadow sm:h-10 sm:text-sm";
 
@@ -66,6 +67,7 @@ export default function EditPromotionPage() {
   // New files to upload
   const [newPhotoFiles, setNewPhotoFiles] = useState<File[]>([]);
   const [newVideoFiles, setNewVideoFiles] = useState<File[]>([]);
+  const [focalPoint, setFocalPoint] = useState({ x: 0.5, y: 0.5 });
   const [socialAuthorization, setSocialAuthorization] = useState<PromotionSocialAuthorizationInput>(
     {
       granted: false,
@@ -117,6 +119,10 @@ export default function EditPromotionPage() {
         setExistingImages(p.photos || []);
         setExistingVideos(p.videos || []);
         setVideoThumbnail(p.video_thumbnail || "");
+        setFocalPoint({
+          x: typeof p.focal_x === "number" ? p.focal_x : 0.5,
+          y: typeof p.focal_y === "number" ? p.focal_y : 0.5,
+        });
         setBusinessId(p.business_id || "");
         setSocialAuthorization(
           p.socialAuthorization ?? {
@@ -264,6 +270,8 @@ export default function EditPromotionPage() {
 
       const allImages = [...existingImages, ...newImageUrls];
       const allVideos = [...existingVideos, ...newVideoUrls];
+      const primaryMediaFile = newVideoFiles[0] ?? newPhotoFiles[0] ?? null;
+      const mediaDimensions = primaryMediaFile ? await readMediaDimensions(primaryMediaFile) : null;
 
       setSubmitProgress("Saving promotion...");
 
@@ -283,6 +291,10 @@ export default function EditPromotionPage() {
         images: allImages,
         videos: allVideos,
         video_thumbnail: videoThumbnail || undefined,
+        media_width: mediaDimensions?.width,
+        media_height: mediaDimensions?.height,
+        focal_x: focalPoint.x,
+        focal_y: focalPoint.y,
         start_date: startDate ? new Date(startDate).toISOString() : undefined,
         end_date: endDate ? new Date(endDate).toISOString() : undefined,
         business_id: businessId || undefined,

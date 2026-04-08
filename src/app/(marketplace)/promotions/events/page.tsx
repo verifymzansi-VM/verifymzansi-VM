@@ -35,6 +35,8 @@ type EventRow = {
   photos?: string[] | null;
   videos?: string[] | null;
   video_thumbnail?: string | null;
+  focal_x?: number | null;
+  focal_y?: number | null;
   price_cents?: number | null;
   price_negotiable?: boolean | null;
   location_province?: string | null;
@@ -87,7 +89,7 @@ export default async function EventsPage() {
     .select(
       withOwnerColumn(
         `id, owner_id, business_id, title, description, promotion_type, category,
-       photos, videos, price_cents, price_negotiable, location_province, location_city,
+       photos, videos, video_thumbnail, focal_x, focal_y, price_cents, price_negotiable, location_province, location_city,
        start_date, end_date, boost_until, featured_until, view_count, created_at`,
         promotionOwnerColumn
       )
@@ -107,7 +109,7 @@ export default async function EventsPage() {
     .select(
       withOwnerColumn(
         `id, owner_id, business_id, title, promotion_type,
-       photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city,
+       photos, videos, video_thumbnail, focal_x, focal_y, price_cents, price_negotiable, location_province, location_city,
        start_date, end_date, view_count, created_at`,
         promotionOwnerColumn
       )
@@ -209,7 +211,7 @@ export default async function EventsPage() {
                   return (
                     <div
                       key={event.id}
-                      className={`animate-in fade-in fill-mode-both [animation-duration:400ms] sm:slide-in-from-bottom-2 [animation-delay:${Math.min(index * 50, 400)}ms]`}
+                      className={`content-auto animate-in fade-in fill-mode-both [animation-duration:400ms] sm:slide-in-from-bottom-2 [animation-delay:${Math.min(index * 50, 400)}ms]`}
                     >
                       <PromotionCard
                         id={event.id}
@@ -233,6 +235,8 @@ export default async function EventsPage() {
                         endDate={event.end_date as string | null}
                         businessName={businessName}
                         logoUrl={businessLogo}
+                        focalX={(event.focal_x as number | null | undefined) ?? null}
+                        focalY={(event.focal_y as number | null | undefined) ?? null}
                       />
                     </div>
                   );

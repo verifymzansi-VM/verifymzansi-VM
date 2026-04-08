@@ -5,6 +5,10 @@ import Image from "next/image";
 import { Volume2, VolumeX, Play, Pause, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
+import {
+  getFocalPositionClassName,
+  getProgressWidthClassName,
+} from "@/lib/utils/media-position-classes";
 import { useHoverCapability } from "@/hooks/use-hover-capability";
 import { useVideoVisibility } from "@/hooks/use-video-visibility";
 import { useVideoHover } from "@/hooks/use-video-hover";
@@ -12,7 +16,7 @@ import { useVideoFeed } from "@/hooks/use-video-feed";
 import { useGlobalMute } from "@/hooks/use-global-mute";
 
 const DEFAULT_MEDIA_FIT = "object-cover";
-const DEFAULT_CONTAINER_ASPECT_RATIO = 5 / 4;
+const DEFAULT_CONTAINER_ASPECT_RATIO = 4 / 5;
 const SMART_FIT_CROP_THRESHOLD = 0.2;
 
 export type MediaFitStrategy = "cover" | "smart" | "contain";
@@ -93,8 +97,10 @@ function SmartFitBackdrop({
   if (!src) {
     return (
       <>
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950" />
-        <div className="absolute inset-0 bg-black/35" />
+        <div className="absolute inset-0 bg-gradient-to-br from-warm-200 via-warm-100 to-warm-300 dark:from-warm-800 dark:via-warm-900 dark:to-warm-950" />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="h-12 w-12 rounded-full bg-warm-300/50 dark:bg-warm-700/50 skeleton-shimmer" />
+        </div>
       </>
     );
   }
@@ -128,7 +134,7 @@ function MuteButton({
       <button
         type="button"
         onClick={onToggle}
-        className="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-full border border-white/10 bg-black/55 text-white shadow-lg backdrop-blur-md transition-colors hover:bg-black/70 sm:min-h-[40px] sm:min-w-[40px]"
+        className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full border border-white/10 bg-black/55 text-white shadow-lg backdrop-blur-md transition-colors hover:bg-black/70"
         aria-label={isMuted ? "Unmute" : "Mute"}
       >
         {isMuted ? (
@@ -184,6 +190,10 @@ export interface VideoCardPlayerProps {
   deferVideoLoadUntilPlay?: boolean;
   /** Notifies callers when the ambient playback control changes state. */
   onPlaybackStateChange?: (isPlaying: boolean) => void;
+  /** Horizontal focal point (0–1, left to right). */
+  focalX?: number | null;
+  /** Vertical focal point (0–1, top to bottom). */
+  focalY?: number | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -208,6 +218,8 @@ export function VideoCardPlayer({
   showPlaybackControl = false,
   deferVideoLoadUntilPlay = false,
   onPlaybackStateChange,
+  focalX,
+  focalY,
 }: VideoCardPlayerProps) {
   const isVideoMedia = isVideo ?? isVideoUrl(src);
   const normalizedSrc = src ? normalizeMediaUrl(src) : undefined;
@@ -234,6 +246,8 @@ export function VideoCardPlayer({
         fitStrategy={fitStrategy}
         containerAspectRatio={containerAspectRatio}
         muteControlVisibility={muteControlVisibility}
+        focalX={focalX}
+        focalY={focalY}
       />
     );
   }
@@ -264,6 +278,8 @@ export function VideoCardPlayer({
         fitStrategy={fitStrategy}
         containerAspectRatio={containerAspectRatio}
         muteControlVisibility={muteControlVisibility}
+        focalX={focalX}
+        focalY={focalY}
       />
     );
   }
@@ -289,6 +305,8 @@ export function VideoCardPlayer({
       showPlaybackControl={showPlaybackControl}
       deferVideoLoadUntilPlay={deferVideoLoadUntilPlay}
       onPlaybackStateChange={onPlaybackStateChange}
+      focalX={focalX}
+      focalY={focalY}
     />
   );
 }
@@ -332,6 +350,8 @@ interface VideoCardPlayerInnerProps {
   showPlaybackControl: boolean;
   deferVideoLoadUntilPlay: boolean;
   onPlaybackStateChange?: (isPlaying: boolean) => void;
+  focalX?: number | null;
+  focalY?: number | null;
 }
 
 function VideoCardPlayerInner({
@@ -353,6 +373,8 @@ function VideoCardPlayerInner({
   showPlaybackControl,
   deferVideoLoadUntilPlay,
   onPlaybackStateChange,
+  focalX,
+  focalY,
 }: VideoCardPlayerInnerProps) {
   const posterNeedsUnoptimized =
     normalizedPoster?.startsWith("blob:") || normalizedPoster?.startsWith("data:");
@@ -377,8 +399,12 @@ function VideoCardPlayerInner({
   const [hasError, setHasError] = useState(false);
   const [posterError, setPosterError] = useState(false);
   const [mediaAspectRatio, setMediaAspectRatio] = useState<number | null>(null);
+  const [imageLoaded, setImageLoaded] = useState(false);
 
   const usesSmartFit = shouldUseSmartFit(fitStrategy, mediaAspectRatio, containerAspectRatio);
+  const focalPositionClassName = !usesSmartFit
+    ? getFocalPositionClassName(focalX, focalY)
+    : undefined;
   const backgroundMediaSrc = normalizedPoster || normalizedSrc;
   const animatedMediaClassName = getAnimatedMediaClassName(
     mediaFitClassName,
@@ -454,6 +480,7 @@ function VideoCardPlayerInner({
     if (image.naturalWidth > 0 && image.naturalHeight > 0) {
       setMediaAspectRatio(image.naturalWidth / image.naturalHeight);
     }
+    setImageLoaded(true);
   }, []);
 
   const handlePosterError = useCallback(() => {
@@ -580,11 +607,16 @@ function VideoCardPlayerInner({
           data-media-fit={usesSmartFit ? "smart" : "cover"}
         >
           <SmartFitBackdrop src={backgroundMediaSrc} sizes={sizes} priority={priority} />
+          {!imageLoaded && <div className="absolute inset-0 z-[1] skeleton-shimmer" />}
           <Image
             src={normalizedSrc}
             alt={alt}
             fill
-            className={foregroundMediaClassName}
+            className={cn(
+              foregroundMediaClassName,
+              "transition-opacity duration-300",
+              imageLoaded ? "opacity-100" : "opacity-0"
+            )}
             sizes={sizes}
             priority={priority}
             onLoad={handleImageLoad}
@@ -597,18 +629,27 @@ function VideoCardPlayerInner({
     }
 
     return (
-      <Image
-        src={normalizedSrc}
-        alt={alt}
-        fill
-        className={animatedMediaClassName}
-        sizes={sizes}
-        priority={priority}
-        onLoad={handleImageLoad}
-        onError={handlePosterError}
-        data-media-fit="cover"
-        unoptimized={srcNeedsUnoptimized ? true : undefined}
-      />
+      <>
+        {!imageLoaded && <div className="absolute inset-0 skeleton-shimmer" />}
+        <Image
+          src={normalizedSrc}
+          alt={alt}
+          fill
+          className={cn(
+            animatedMediaClassName,
+            "focal-position-object",
+            focalPositionClassName,
+            "transition-opacity duration-300",
+            imageLoaded ? "opacity-100" : "opacity-0"
+          )}
+          sizes={sizes}
+          priority={priority}
+          onLoad={handleImageLoad}
+          onError={handlePosterError}
+          data-media-fit="cover"
+          unoptimized={srcNeedsUnoptimized ? true : undefined}
+        />
+      </>
     );
   }
 
@@ -630,6 +671,8 @@ function VideoCardPlayerInner({
             className={cn(
               "absolute inset-0 z-[2] transition-opacity duration-300",
               foregroundMediaClassName,
+              "focal-position-object",
+              focalPositionClassName,
               videoReady && !hasError && canDisplayVideo && !isPlaybackPaused
                 ? "opacity-0"
                 : "opacity-100"
@@ -656,6 +699,8 @@ function VideoCardPlayerInner({
           className={cn(
             "absolute inset-0 z-[3] transition-opacity duration-300",
             foregroundMediaClassName,
+            "focal-position-object",
+            focalPositionClassName,
             hasError || !videoReady || !canDisplayVideo || isPlaybackPaused
               ? "opacity-0"
               : "opacity-100"
@@ -727,6 +772,8 @@ function VideoCardPlayerInner({
           className={cn(
             "absolute inset-0 z-[2] transition-opacity duration-300",
             foregroundMediaClassName,
+            "focal-position-object",
+            focalPositionClassName,
             videoReady && !hasError && isPlaying ? "opacity-0" : "opacity-100"
           )}
           sizes={sizes}
@@ -753,6 +800,8 @@ function VideoCardPlayerInner({
         className={cn(
           "absolute inset-0 z-[3] transition-opacity duration-300",
           foregroundMediaClassName,
+          "focal-position-object",
+          focalPositionClassName,
           !videoReady || hasError || !isPlaying ? "opacity-0" : "opacity-100"
         )}
         data-media-fit={usesSmartFit ? "smart" : "cover"}
@@ -835,6 +884,8 @@ interface HoverVideoPlayerProps {
   fitStrategy: MediaFitStrategy;
   containerAspectRatio: number;
   muteControlVisibility: MuteControlVisibility;
+  focalX?: number | null;
+  focalY?: number | null;
 }
 
 function HoverVideoPlayer({
@@ -850,6 +901,8 @@ function HoverVideoPlayer({
   fitStrategy,
   containerAspectRatio,
   muteControlVisibility,
+  focalX,
+  focalY,
 }: HoverVideoPlayerProps) {
   const posterNeedsUnoptimized =
     normalizedPoster?.startsWith("blob:") || normalizedPoster?.startsWith("data:");
@@ -863,6 +916,9 @@ function HoverVideoPlayer({
   const [hoverProgress, setHoverProgress] = useState(0);
 
   const usesSmartFit = shouldUseSmartFit(fitStrategy, mediaAspectRatio, containerAspectRatio);
+  const focalPositionClassName = !usesSmartFit
+    ? getFocalPositionClassName(focalX, focalY)
+    : undefined;
   const backgroundMediaSrc = normalizedPoster || normalizedSrc;
   const animatedMediaClassName = getAnimatedMediaClassName(
     mediaFitClassName,
@@ -972,7 +1028,7 @@ function HoverVideoPlayer({
         src={normalizedPoster}
         alt={alt}
         fill
-        className={animatedMediaClassName}
+        className={cn(animatedMediaClassName, "focal-position-object", focalPositionClassName)}
         sizes={sizes}
         priority={priority}
         onLoad={handleImageLoad}
@@ -1001,6 +1057,8 @@ function HoverVideoPlayer({
           className={cn(
             "absolute inset-0 z-[2] transition-opacity duration-300",
             foregroundMediaClassName,
+            "focal-position-object",
+            focalPositionClassName,
             isHovering && videoReady && !hasError && !reducedMotion ? "opacity-0" : "opacity-100"
           )}
           sizes={sizes}
@@ -1025,6 +1083,8 @@ function HoverVideoPlayer({
         className={cn(
           "absolute inset-0 z-[3] transition-opacity duration-300",
           usesSmartFit ? foregroundMediaClassName : animatedMediaClassName,
+          "focal-position-object",
+          focalPositionClassName,
           hasError || reducedMotion || !videoReady || !isHovering ? "opacity-0" : "opacity-100"
         )}
         data-media-fit={usesSmartFit ? "smart" : "cover"}
@@ -1036,8 +1096,10 @@ function HoverVideoPlayer({
       {isHovering && videoReady && !hasError && !reducedMotion ? (
         <div className="absolute bottom-0 left-0 z-[9] h-[3px] w-full bg-white/20">
           <div
-            className="h-full bg-red-600 transition-[width] duration-200 ease-linear"
-            style={{ width: `${hoverProgress}%` }}
+            className={cn(
+              "h-full bg-red-600 transition-[width] duration-200 ease-linear",
+              getProgressWidthClassName(hoverProgress)
+            )}
           />
         </div>
       ) : null}
@@ -1092,6 +1154,8 @@ interface FeedVideoPlayerProps {
   fitStrategy: MediaFitStrategy;
   containerAspectRatio: number;
   muteControlVisibility: MuteControlVisibility;
+  focalX?: number | null;
+  focalY?: number | null;
 }
 
 function FeedVideoPlayer({
@@ -1107,6 +1171,8 @@ function FeedVideoPlayer({
   fitStrategy,
   containerAspectRatio,
   muteControlVisibility,
+  focalX,
+  focalY,
 }: FeedVideoPlayerProps) {
   const posterNeedsUnoptimized =
     normalizedPoster?.startsWith("blob:") || normalizedPoster?.startsWith("data:");
@@ -1124,6 +1190,9 @@ function FeedVideoPlayer({
   const tapKeyRef = useRef(0);
 
   const usesSmartFit = shouldUseSmartFit(fitStrategy, mediaAspectRatio, containerAspectRatio);
+  const focalPositionClassName = !usesSmartFit
+    ? getFocalPositionClassName(focalX, focalY)
+    : undefined;
   const backgroundMediaSrc = normalizedPoster || normalizedSrc;
   const foregroundMediaClassName = getForegroundMediaClassName(
     mediaFitClassName,
@@ -1210,7 +1279,11 @@ function FeedVideoPlayer({
         src={normalizedPoster}
         alt={alt}
         fill
-        className={getForegroundMediaClassName(mediaFitClassName, usesSmartFit, mediaClassName)}
+        className={cn(
+          getForegroundMediaClassName(mediaFitClassName, usesSmartFit, mediaClassName),
+          "focal-position-object",
+          focalPositionClassName
+        )}
         sizes={sizes}
         priority={priority}
         onLoad={handleImageLoad}
@@ -1239,6 +1312,8 @@ function FeedVideoPlayer({
           className={cn(
             "absolute inset-0 z-[2] transition-opacity duration-300",
             foregroundMediaClassName,
+            "focal-position-object",
+            focalPositionClassName,
             showPoster ? "opacity-100" : "opacity-0"
           )}
           sizes={sizes}
@@ -1264,6 +1339,8 @@ function FeedVideoPlayer({
         className={cn(
           "absolute inset-0 z-[3] transition-opacity duration-300",
           foregroundMediaClassName,
+          "focal-position-object",
+          focalPositionClassName,
           hasError || !videoReady ? "opacity-0" : "opacity-100"
         )}
         data-media-fit={usesSmartFit ? "smart" : "cover"}

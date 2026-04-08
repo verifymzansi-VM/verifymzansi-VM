@@ -49,6 +49,10 @@ const listingBase = z.object({
     .array(z.enum(CONTACT_METHODS))
     .min(1, "Choose at least one contact method.")
     .default(["call"]),
+  media_width: z.number().int().positive().optional(),
+  media_height: z.number().int().positive().optional(),
+  focal_x: z.number().min(0).max(1).optional(),
+  focal_y: z.number().min(0).max(1).optional(),
 });
 
 // ── Category-specific attributes ────────────────────────────

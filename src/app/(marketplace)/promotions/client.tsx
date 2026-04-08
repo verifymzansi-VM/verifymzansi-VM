@@ -50,6 +50,8 @@ interface PromotionRow {
   boost_until: string | null;
   featured_until: string | null;
   view_count: number;
+  focal_x: number | null;
+  focal_y: number | null;
   created_at: string;
 }
 
@@ -94,6 +96,8 @@ interface BusinessRow {
   boost_until: string | null;
   featured_until: string | null;
   service_areas: Record<string, unknown> | null;
+  focal_x: number | null;
+  focal_y: number | null;
 }
 
 interface BusinessesResponse {
@@ -419,38 +423,69 @@ export function PromotionsExplorer() {
         aria-label="Tourism & Events sections"
         className="flex items-center gap-1.5 rounded-[1.25rem] border border-border/70 bg-background/95 p-1.5 shadow-sm"
       >
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "tourism"}
-          aria-controls="tab-panel-tourism"
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-            activeTab === "tourism"
-              ? "border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-700 dark:bg-teal-950 dark:text-teal-200"
-              : "border-transparent text-muted-foreground hover:bg-muted/60"
-          )}
-          onClick={() => switchTab("tourism")}
-        >
-          <TreePalm className="h-4 w-4" />
-          Tourism
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "events"}
-          aria-controls="tab-panel-events"
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-            activeTab === "events"
-              ? "border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-700 dark:bg-teal-950 dark:text-teal-200"
-              : "border-transparent text-muted-foreground hover:bg-muted/60"
-          )}
-          onClick={() => switchTab("events")}
-        >
-          <CalendarDays className="h-4 w-4" />
-          Events
-        </button>
+        {activeTab === "tourism" ? (
+          <button
+            type="button"
+            role="tab"
+            aria-selected="true"
+            aria-controls="tab-panel-tourism"
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              "border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-700 dark:bg-teal-950 dark:text-teal-200"
+            )}
+            onClick={() => switchTab("tourism")}
+          >
+            <TreePalm className="h-4 w-4" />
+            Tourism
+          </button>
+        ) : (
+          <button
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="tab-panel-tourism"
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              "border-transparent text-muted-foreground hover:bg-muted/60"
+            )}
+            onClick={() => switchTab("tourism")}
+          >
+            <TreePalm className="h-4 w-4" />
+            Tourism
+          </button>
+        )}
+
+        {activeTab === "events" ? (
+          <button
+            type="button"
+            role="tab"
+            aria-selected="true"
+            aria-controls="tab-panel-events"
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              "border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-700 dark:bg-teal-950 dark:text-teal-200"
+            )}
+            onClick={() => switchTab("events")}
+          >
+            <CalendarDays className="h-4 w-4" />
+            Events
+          </button>
+        ) : (
+          <button
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="tab-panel-events"
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              "border-transparent text-muted-foreground hover:bg-muted/60"
+            )}
+            onClick={() => switchTab("events")}
+          >
+            <CalendarDays className="h-4 w-4" />
+            Events
+          </button>
+        )}
       </div>
 
       {/* Mobile filter drawer (FAB visible < lg only) */}
@@ -596,7 +631,7 @@ export function PromotionsExplorer() {
           {loading ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6 xl:gap-6">
               {Array.from({ length: 6 }).map((_, index) => (
-                <div key={index} className="aspect-[5/4] rounded-xl bg-muted animate-pulse" />
+                <div key={index} className="aspect-[4/5] rounded-xl bg-muted animate-pulse" />
               ))}
             </div>
           ) : error ? (
@@ -648,7 +683,7 @@ export function PromotionsExplorer() {
                 {tourismBusinesses.map((business, index) => (
                   <div
                     key={business.id}
-                    className={`animate-in fade-in fill-mode-both [animation-duration:400ms] sm:slide-in-from-bottom-2 [animation-delay:${Math.min(index * 50, 400)}ms]`}
+                    className={`content-auto animate-in fade-in fill-mode-both [animation-duration:400ms] sm:slide-in-from-bottom-2 [animation-delay:${Math.min(index * 50, 400)}ms]`}
                   >
                     <BusinessCard
                       id={business.id}
@@ -667,6 +702,8 @@ export function PromotionsExplorer() {
                       boostUntil={business.boost_until}
                       featuredUntil={business.featured_until}
                       serviceAreas={business.service_areas}
+                      focalX={business.focal_x}
+                      focalY={business.focal_y}
                     />
                   </div>
                 ))}
@@ -711,7 +748,7 @@ export function PromotionsExplorer() {
                   return (
                     <div
                       key={promotion.id}
-                      className={`animate-in fade-in fill-mode-both [animation-duration:400ms] sm:slide-in-from-bottom-2 [animation-delay:${Math.min(index * 50, 400)}ms]`}
+                      className={`content-auto animate-in fade-in fill-mode-both [animation-duration:400ms] sm:slide-in-from-bottom-2 [animation-delay:${Math.min(index * 50, 400)}ms]`}
                     >
                       <PromotionCard
                         id={promotion.id}
@@ -737,6 +774,8 @@ export function PromotionsExplorer() {
                         endDate={promotion.end_date}
                         businessName={businessName}
                         logoUrl={businessLogo}
+                        focalX={promotion.focal_x}
+                        focalY={promotion.focal_y}
                       />
                     </div>
                   );

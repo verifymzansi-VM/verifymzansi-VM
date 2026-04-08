@@ -85,6 +85,10 @@ type PromotionResultRow = {
   boost_until?: string | null;
   featured_until?: string | null;
   view_count?: number | null;
+  media_width?: number | null;
+  media_height?: number | null;
+  focal_x?: number | null;
+  focal_y?: number | null;
   published_at?: string | null;
   created_at: string;
 };
@@ -365,6 +369,10 @@ export async function POST(request: NextRequest) {
             photos: data.images,
             videos: data.videos,
             video_thumbnail: data.video_thumbnail || null,
+            media_width: data.media_width ?? null,
+            media_height: data.media_height ?? null,
+            focal_x: data.focal_x ?? 0.5,
+            focal_y: data.focal_y ?? 0.5,
             price_cents: priceCents,
             price_negotiable: data.negotiable,
             location_province: data.province,
@@ -610,11 +618,11 @@ export async function GET(request: NextRequest) {
     };
 
     const primarySelect = withOwnerColumn(
-      "id, owner_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, view_count, published_at, created_at",
+      "id, owner_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, media_width, media_height, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, view_count, focal_x, focal_y, published_at, created_at",
       ownerColumn
     );
     const fallbackWithoutCategoryKey = withOwnerColumn(
-      "id, owner_id, business_id, title, description, promotion_type, category, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, view_count, published_at, created_at",
+      "id, owner_id, business_id, title, description, promotion_type, category, photos, videos, video_thumbnail, media_width, media_height, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, view_count, focal_x, focal_y, published_at, created_at",
       ownerColumn
     );
 

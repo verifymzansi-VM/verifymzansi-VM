@@ -136,6 +136,10 @@ export const promotionSchema = z
         message: "Video thumbnail must be hosted on the VerifyMzansi platform",
       })
       .optional(),
+    media_width: z.number().int().positive().optional(),
+    media_height: z.number().int().positive().optional(),
+    focal_x: z.number().min(0).max(1).optional(),
+    focal_y: z.number().min(0).max(1).optional(),
     start_date: z.string().datetime().optional(),
     end_date: z.string().datetime().optional(),
     business_id: z.string().uuid().optional(),

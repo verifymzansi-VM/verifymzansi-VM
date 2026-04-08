@@ -31,6 +31,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { usePostDraftAutosave } from "@/hooks/use-post-draft-autosave";
 import { MediaUpload } from "@/components/ui/media-upload";
+import { VideoFrameSelector } from "@/components/ui/video-frame-selector";
+import { MediaCropPreview, type CropPosition } from "@/components/ui/media-crop-preview";
 import {
   PlanGate,
   usePlanCoverVideoAllowed,
@@ -78,6 +80,7 @@ import {
 } from "@/components/ui/operating-hours-input";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { checkUploadServiceReachable } from "@/lib/utils/upload-preflight";
+import { readMediaDimensions } from "@/lib/utils/media-metadata";
 
 const SELECT_CLASS =
   "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm";
@@ -241,6 +244,7 @@ function CreateBusinessContent() {
   const [mallPhotoFiles, setMallPhotoFiles] = useState<File[]>([]);
   const [promoVideoFile, setPromoVideoFile] = useState<File[]>([]);
   const [videoThumbnailFile, setVideoThumbnailFile] = useState<File[]>([]);
+  const [focalPoint, setFocalPoint] = useState<CropPosition>({ x: 0.5, y: 0.5 });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -831,6 +835,8 @@ function CreateBusinessContent() {
             ? sanitizeBusinessDetailsForSubmission(normalizedBusinessDetails, deliveryAvailable)
             : undefined;
       const normalizedDeliveryOptions = getNormalizedDeliveryOptions(deliveryAvailable);
+      const primaryMediaFile = promoVideoFile[0] ?? coverFile[0] ?? null;
+      const mediaDimensions = primaryMediaFile ? await readMediaDimensions(primaryMediaFile) : null;
       const body = {
         business_name: businessName.trim(),
         slug: (slug || generateSlug(businessName)).trim(),
@@ -863,6 +869,10 @@ function CreateBusinessContent() {
           normalizedDeliveryOptions.length > 0 ? normalizedDeliveryOptions : undefined,
         social_links: Object.keys(socialLinks).length > 0 ? socialLinks : undefined,
         layout_template: layoutTemplate || undefined,
+        media_width: mediaDimensions?.width,
+        media_height: mediaDimensions?.height,
+        focal_x: focalPoint.x,
+        focal_y: focalPoint.y,
       };
       const res = await fetch("/api/businesses", {
         method: "POST",
@@ -1773,6 +1783,17 @@ function CreateBusinessContent() {
                           1200×400.
                         </p>
                       </div>
+                      {/* Crop preview for cover photo */}
+                      {coverFile.length > 0 && (
+                        <div className="space-y-2">
+                          <MediaCropPreview
+                            file={coverFile[0]}
+                            aspectRatio={4 / 1}
+                            value={focalPoint}
+                            onChange={setFocalPoint}
+                          />
+                        </div>
+                      )}
                     </div>
 
                     {/* Visual placement preview */}
@@ -1938,18 +1959,32 @@ function CreateBusinessContent() {
                       <div
                         id="business-video-thumbnail"
                         tabIndex={-1}
-                        className="space-y-2 rounded-lg"
+                        className="space-y-3 rounded-lg"
                       >
-                        <MediaUpload
-                          label="Video thumbnail (optional)"
-                          maxFiles={1}
-                          files={videoThumbnailFile}
-                          onChange={(files) => {
-                            setVideoThumbnailFile(files);
+                        <VideoFrameSelector
+                          file={promoVideoFile[0]}
+                          onFrameSelect={(frame) => {
+                            setVideoThumbnailFile(frame ? [frame] : []);
                             clearErrors("video_thumbnail");
                           }}
-                          accept="image/*"
                         />
+                        <details className="group">
+                          <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                            Or upload a custom thumbnail…
+                          </summary>
+                          <div className="mt-2">
+                            <MediaUpload
+                              label="Custom thumbnail"
+                              maxFiles={1}
+                              files={videoThumbnailFile}
+                              onChange={(files) => {
+                                setVideoThumbnailFile(files);
+                                clearErrors("video_thumbnail");
+                              }}
+                              accept="image/*"
+                            />
+                          </div>
+                        </details>
                         {fieldErrors.video_thumbnail && (
                           <p className="inline-form-error">{fieldErrors.video_thumbnail}</p>
                         )}

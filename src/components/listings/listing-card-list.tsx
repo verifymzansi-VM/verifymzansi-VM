@@ -9,6 +9,7 @@ import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
 import { formatZARShort } from "@/lib/utils/format";
+import { getFocalPositionClassName } from "@/lib/utils/media-position-classes";
 import type { TrustLevel } from "@/types/enums";
 
 interface ListingCardListProps {
@@ -31,6 +32,8 @@ interface ListingCardListProps {
   featured?: boolean;
   urgent?: boolean;
   logoUrl?: string | null;
+  focalX?: number | null;
+  focalY?: number | null;
 }
 
 function isNew(createdAt: string): boolean {
@@ -74,6 +77,8 @@ export const ListingCardList = memo(function ListingCardList({
   featured,
   urgent,
   logoUrl,
+  focalX,
+  focalY,
 }: ListingCardListProps) {
   const isVideo = isVideoUrl(imageUrl);
   const normalizedImageUrl = imageUrl ? normalizeMediaUrl(imageUrl) : undefined;
@@ -98,13 +103,18 @@ export const ListingCardList = memo(function ListingCardList({
                   mode="ambient"
                   fitStrategy="smart"
                   mediaClassName="transition-transform duration-700 group-hover:scale-[1.04]"
+                  focalX={focalX}
+                  focalY={focalY}
                 />
               ) : (
                 <Image
                   src={normalizedImageUrl}
                   alt={title}
                   fill
-                  className="object-contain transition-transform duration-700 group-hover:scale-[1.04]"
+                  className={cn(
+                    "object-cover focal-position-object transition-transform duration-700 group-hover:scale-[1.04]",
+                    getFocalPositionClassName(focalX, focalY)
+                  )}
                   sizes="160px"
                 />
               )

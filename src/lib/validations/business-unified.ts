@@ -209,6 +209,10 @@ export const businessSchema = z
       .default([]),
     social_links: z.record(z.string(), z.string().url()).optional(),
     layout_template: z.enum(["cinematic", "showcase", "professional"]).nullable().optional(),
+    media_width: z.number().int().positive().optional(),
+    media_height: z.number().int().positive().optional(),
+    focal_x: z.number().min(0).max(1).optional(),
+    focal_y: z.number().min(0).max(1).optional(),
   })
   .superRefine((data, ctx) => {
     // Province + city required for all types except online_only

@@ -30,6 +30,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 import { MediaUpload } from "@/components/ui/media-upload";
+import { FocalPointPicker, type FocalPoint } from "@/components/ui/focal-point-picker";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { useToast } from "@/hooks/use-toast";
 import { LocationSelector } from "@/components/ui/location-selector";
@@ -66,6 +67,7 @@ import {
   formatHoursValue,
   parseHoursValue,
 } from "@/components/ui/operating-hours-input";
+import { readMediaDimensions } from "@/lib/utils/media-metadata";
 
 const selectClass =
   "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-shadow sm:h-10 sm:text-sm";
@@ -155,6 +157,7 @@ export default function EditBusinessPage() {
   const [removeGallery, setRemoveGallery] = useState(false);
   const [removeMallPhotos, setRemoveMallPhotos] = useState(false);
   const [removeVideo, setRemoveVideo] = useState(false);
+  const [focalPoint, setFocalPoint] = useState<FocalPoint>({ x: 0.5, y: 0.5 });
 
   const maxPhotos = usePlanMaxPhotos("MZANSI_BUSINESS");
   const coverVideoAllowed = usePlanCoverVideoAllowed("MZANSI_BUSINESS");
@@ -251,6 +254,10 @@ export default function EditBusinessPage() {
 
         // Layout template
         setLayoutTemplate(b.layout_template || null);
+        setFocalPoint({
+          x: typeof b.focal_x === "number" ? (b.focal_x as number) : 0.5,
+          y: typeof b.focal_y === "number" ? (b.focal_y as number) : 0.5,
+        });
 
         // Service areas
         if (b.service_areas?.areas) {
@@ -517,6 +524,8 @@ export default function EditBusinessPage() {
           ? { ...normalizedBusinessDetails, mall_photos: finalMallPhotos }
           : sanitizeBusinessDetailsForSubmission(normalizedBusinessDetails, deliveryAvailable);
       const normalizedDeliveryOptions = getNormalizedDeliveryOptions(deliveryAvailable);
+      const primaryMediaFile = newPromoVideoFile[0] ?? newCoverFile[0] ?? null;
+      const mediaDimensions = primaryMediaFile ? await readMediaDimensions(primaryMediaFile) : null;
 
       const body = {
         business_name: businessName,
@@ -549,6 +558,10 @@ export default function EditBusinessPage() {
         delivery_options: normalizedDeliveryOptions,
         social_links: Object.keys(socialLinks).length > 0 ? socialLinks : undefined,
         layout_template: layoutTemplate || undefined,
+        media_width: mediaDimensions?.width,
+        media_height: mediaDimensions?.height,
+        focal_x: focalPoint.x,
+        focal_y: focalPoint.y,
       };
 
       const res = await fetch(`/api/businesses/${businessId}`, {
@@ -1335,6 +1348,14 @@ export default function EditBusinessPage() {
                     />
                     {fieldErrors.cover_photo && (
                       <p className="inline-form-error">{fieldErrors.cover_photo}</p>
+                    )}
+                    {existingCoverPhoto && (
+                      <FocalPointPicker
+                        src={normalizeMediaUrl(existingCoverPhoto)}
+                        alt="Set focal point for cover photo"
+                        value={focalPoint}
+                        onChange={setFocalPoint}
+                      />
                     )}
                   </div>
                 </div>

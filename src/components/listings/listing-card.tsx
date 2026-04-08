@@ -27,6 +27,8 @@ interface ListingCardProps {
   urgent?: boolean;
   logoUrl?: string | null;
   videoDuration?: number | null;
+  focalX?: number | null;
+  focalY?: number | null;
 }
 
 function isNew(createdAt: string): boolean {
@@ -74,6 +76,8 @@ export const ListingCard = memo(function ListingCard({
   urgent,
   logoUrl,
   videoDuration,
+  focalX,
+  focalY,
 }: ListingCardProps) {
   const status = getListingStatus(featured, boosted, urgent, createdAt);
   const priceLabel = price > 0 ? formatZARShort(price) : null;
@@ -97,6 +101,8 @@ export const ListingCard = memo(function ListingCard({
       trustLevel={ownerTrustLevel}
       logoUrl={logoUrl}
       videoDuration={videoDuration}
+      focalX={focalX}
+      focalY={focalY}
     />
   );
 });

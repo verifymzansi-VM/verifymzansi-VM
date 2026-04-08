@@ -1,5 +1,22 @@
 import type { Config } from "tailwindcss";
 import tailwindcssAnimate from "tailwindcss-animate";
+import plugin from "tailwindcss/plugin";
+
+const mediaPositionUtilities = plugin(({ addUtilities }) => {
+  const utilities: Record<string, Record<string, string>> = {
+    ".focal-position-object": {
+      objectPosition: "var(--focal-pos-x, 50%) var(--focal-pos-y, 50%)",
+    },
+  };
+
+  for (let i = 0; i <= 100; i += 1) {
+    utilities[`.focal-pos-x-${i}`] = { "--focal-pos-x": `${i}%` };
+    utilities[`.focal-pos-y-${i}`] = { "--focal-pos-y": `${i}%` };
+    utilities[`.progress-w-${i}`] = { width: `${i}%` };
+  }
+
+  addUtilities(utilities);
+});
 
 const config: Config = {
   darkMode: ["class"],
@@ -263,7 +280,7 @@ const config: Config = {
       },
     },
   },
-  plugins: [tailwindcssAnimate],
+  plugins: [tailwindcssAnimate, mediaPositionUtilities],
   safelist: [
     // Trust-level badge colors (dynamically applied based on seller verification status)
     "bg-trust-unregistered",
@@ -284,6 +301,9 @@ const config: Config = {
     "shadow-trust-pending",
     "shadow-trust-verified",
     "shadow-trust-premium",
+    { pattern: /focal-pos-x-(\d|[1-9]\d|100)/ },
+    { pattern: /focal-pos-y-(\d|[1-9]\d|100)/ },
+    { pattern: /progress-w-(\d|[1-9]\d|100)/ },
   ],
 };
 
