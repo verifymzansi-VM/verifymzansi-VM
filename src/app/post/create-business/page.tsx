@@ -731,7 +731,14 @@ function CreateBusinessContent() {
         return;
       }
 
-      await checkUploadServiceReachable();
+      // Best-effort preflight — never block the form on a health check.
+      // The actual upload will produce a specific, actionable error if the
+      // service is truly unreachable.
+      try {
+        await checkUploadServiceReachable();
+      } catch {
+        // logged inside checkUploadServiceReachable; continue to real upload
+      }
       setSubmitProgress("Uploading media...");
 
       const [logoUrls, coverUrls, galleryUrls, mallPhotoUrls, videoUrl] = await Promise.all([

@@ -71,6 +71,32 @@ describe("fetchWithRetry", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("retries on DOMException AbortError (timeout) and succeeds", async () => {
+    const mockResponse = new Response("ok", { status: 200 });
+    vi.mocked(fetch)
+      .mockRejectedValueOnce(new DOMException("The operation was aborted", "AbortError"))
+      .mockResolvedValueOnce(mockResponse);
+
+    const promise = fetchWithRetry("/api/test");
+    await vi.runAllTimersAsync();
+
+    const result = await promise;
+    expect(result).toBe(mockResponse);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws after exhausting retries on DOMException AbortError", async () => {
+    vi.mocked(fetch).mockRejectedValue(new DOMException("The operation was aborted", "AbortError"));
+
+    const promise = fetchWithRetry("/api/test");
+    promise.catch(() => {});
+
+    await vi.runAllTimersAsync();
+
+    await expect(promise).rejects.toThrow("The operation was aborted");
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
   it("respects custom maxRetries", async () => {
     const mockResponse = new Response("ok", { status: 200 });
     vi.mocked(fetch)

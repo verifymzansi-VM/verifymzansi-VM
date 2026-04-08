@@ -404,7 +404,12 @@ function CreatePromotionContent() {
         return;
       }
 
-      await checkUploadServiceReachable();
+      // Best-effort preflight — never block the form on a health check.
+      try {
+        await checkUploadServiceReachable();
+      } catch {
+        // logged inside checkUploadServiceReachable; continue to real upload
+      }
       setSubmitProgress("Uploading media...");
 
       const readUploadError = async (response: Response, fallback: string): Promise<string> => {

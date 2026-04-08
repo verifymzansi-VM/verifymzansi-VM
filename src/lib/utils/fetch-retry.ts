@@ -10,10 +10,21 @@ function delay(ms: number): Promise<void> {
 }
 
 /**
- * Execute a fetch with automatic retries on network errors (TypeError).
+ * Returns true for errors that indicate a transient network / timeout problem
+ * where a retry is likely to help.
+ *
+ * - TypeError  – network failures ("Failed to fetch")
+ * - AbortError – timeout signals on mobile browsers
+ */
+function isRetryable(err: unknown): boolean {
+  return err instanceof TypeError || (err instanceof DOMException && err.name === "AbortError");
+}
+
+/**
+ * Execute a fetch with automatic retries on network and timeout errors.
  * Uses exponential back-off: 600 ms → 1 200 ms.
- * Mobile connections (especially Android on LTE) can drop momentarily;
- * retries recover most transient failures without annoying the user.
+ * Mobile connections (especially Android on LTE / iOS Safari) can drop
+ * momentarily or time out; retries recover most transient failures.
  */
 export async function fetchWithRetry(
   input: RequestInfo | URL,
@@ -27,12 +38,12 @@ export async function fetchWithRetry(
       return await fetch(input, init);
     } catch (err) {
       lastError = err;
-      if (!(err instanceof TypeError) || attempt === maxRetries) {
+      if (!isRetryable(err) || attempt === maxRetries) {
         break;
       }
       const backoff = BASE_DELAY_MS * Math.pow(2, attempt);
       log.warn("Network error during fetch, retrying", {
-        message: err.message,
+        message: err instanceof Error ? err.message : String(err),
         attempt: attempt + 1,
         maxRetries,
         nextDelayMs: backoff,
