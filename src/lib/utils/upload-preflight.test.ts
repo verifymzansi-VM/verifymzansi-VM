@@ -30,14 +30,14 @@ describe("checkUploadServiceReachable", () => {
     await expect(checkUploadServiceReachable()).resolves.toBeUndefined();
   });
 
-  it("throws UploadServiceUnreachableError on 500 server error", async () => {
+  it("resolves on 500 server error so the real upload can still be attempted", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 500 }));
-    await expect(checkUploadServiceReachable()).rejects.toThrow(UploadServiceUnreachableError);
+    await expect(checkUploadServiceReachable()).resolves.toBeUndefined();
   });
 
-  it("throws UploadServiceUnreachableError on 503 server error", async () => {
+  it("resolves on 503 server error so the real upload can still be attempted", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 503 }));
-    await expect(checkUploadServiceReachable()).rejects.toThrow(UploadServiceUnreachableError);
+    await expect(checkUploadServiceReachable()).resolves.toBeUndefined();
   });
 
   it("throws UploadServiceUnreachableError on network failure (TypeError)", async () => {

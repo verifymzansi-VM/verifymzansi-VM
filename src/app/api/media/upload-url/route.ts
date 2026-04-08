@@ -72,6 +72,7 @@ const uploadUrlRequestSchema = z
  * - publicUrl: string (CDN URL for the uploaded file)
  */
 export async function POST(request: NextRequest) {
+  const traceId = crypto.randomUUID();
   try {
     const hasRequestContext =
       typeof request.url === "string" &&
@@ -182,12 +183,20 @@ export async function POST(request: NextRequest) {
 
     const r2PublicUrl = process.env.R2_PUBLIC_URL;
     if (!r2PublicUrl) {
-      log.error("R2_PUBLIC_URL env var is not configured");
-      return NextResponse.json({ error: "Upload service misconfigured" }, { status: 500 });
+      log.error("R2_PUBLIC_URL env var is not configured", {
+        traceId,
+        userId: user.id,
+        area,
+      });
+      return NextResponse.json(
+        { error: "Upload service misconfigured", code: "upload_service_misconfigured", traceId },
+        { status: 500, headers: { "x-upload-trace-id": traceId } }
+      );
     }
     const publicUrl = `${r2PublicUrl}/${key}`;
 
     log.info("Generated presigned upload URL", {
+      traceId,
       userId: user.id,
       area,
       contentType,
@@ -201,8 +210,12 @@ export async function POST(request: NextRequest) {
     });
   } catch (err) {
     log.error("Failed to generate upload URL", {
+      traceId,
       error: err instanceof Error ? err.message : "Unknown error",
     });
-    return NextResponse.json({ error: "Failed to generate upload URL" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to generate upload URL", code: "upload_url_generation_failed", traceId },
+      { status: 500, headers: { "x-upload-trace-id": traceId } }
+    );
   }
 }

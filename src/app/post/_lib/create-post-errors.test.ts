@@ -22,6 +22,18 @@ describe("normalizeCreatePostRuntimeError", () => {
     );
   });
 
+  it("maps upload service misconfiguration errors to a temporary service message", () => {
+    expect(
+      normalizeCreatePostRuntimeError(new Error("Upload service misconfigured"), "Fallback")
+    ).toBe("Upload service is temporarily unavailable. Please try again in a moment.");
+  });
+
+  it("maps upload URL generation failures to a temporary service message", () => {
+    expect(
+      normalizeCreatePostRuntimeError(new Error("Failed to generate upload URL"), "Fallback")
+    ).toBe("Upload service is temporarily unavailable. Please try again in a moment.");
+  });
+
   it("preserves explicit non-upload errors", () => {
     expect(
       normalizeCreatePostRuntimeError(new Error("Free post already used"), "Fallback message")

@@ -38,6 +38,14 @@ export function normalizeCreatePostRuntimeError(error: unknown, fallbackMessage:
     return "Video upload could not be completed. Check your connection and try again. You can remove the video and submit again.";
   }
 
+  if (
+    /upload service misconfigured|failed to generate upload url|upload_url_generation_failed|media_upload_failed|failed to upload media/i.test(
+      message
+    )
+  ) {
+    return "Upload service is temporarily unavailable. Please try again in a moment.";
+  }
+
   if (/failed to upload photos|failed to upload photo|upload failed/i.test(message)) {
     return "One or more files could not be uploaded. Check your connection and try again.";
   }

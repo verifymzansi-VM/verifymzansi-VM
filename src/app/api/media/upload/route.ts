@@ -61,6 +61,7 @@ export function HEAD() {
 }
 
 export async function POST(request: NextRequest) {
+  const traceId = crypto.randomUUID();
   try {
     const sameOriginFailure = enforceSameOriginMutation(request, log);
     if (sameOriginFailure) {
@@ -281,7 +282,14 @@ export async function POST(request: NextRequest) {
           continue;
         }
       } catch (err) {
-        log.error(`Failed to upload ${file.name}`, { error: err });
+        log.error(`Failed to upload ${file.name}`, {
+          traceId,
+          userId: user.id,
+          area,
+          contentType: file.type,
+          fileSize: file.size,
+          error: err instanceof Error ? err.message : "Unknown error",
+        });
         hadUploadFailure = true;
         errors.push(`"${file.name}": upload failed`);
       }
@@ -300,9 +308,13 @@ export async function POST(request: NextRequest) {
     );
   } catch (err) {
     log.error("Unexpected error", {
+      traceId,
       error: err instanceof Error ? err.message : "Unknown error",
       stack: err instanceof Error ? err.stack : undefined,
     });
-    return NextResponse.json({ error: "Failed to upload media" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to upload media", code: "media_upload_failed", traceId },
+      { status: 500, headers: { "x-upload-trace-id": traceId } }
+    );
   }
 }

@@ -16,8 +16,11 @@ export class UploadServiceUnreachableError extends Error {
 /**
  * Lightweight preflight check to verify the upload API is reachable before
  * attempting a full upload.  Sends a small HEAD request to /api/media/upload.
- * Throws {@link UploadServiceUnreachableError} on failure so callers can
- * surface a precise message without waiting for the full upload to fail.
+ * Throws {@link UploadServiceUnreachableError} only on network/timeout failure.
+ *
+ * A 5xx response means the edge is reachable but currently degraded. In that
+ * case we log and continue so callers can make one real upload attempt instead
+ * of blocking immediately on a transient preflight failure.
  */
 export async function checkUploadServiceReachable(): Promise<void> {
   try {
@@ -30,10 +33,10 @@ export async function checkUploadServiceReachable(): Promise<void> {
     // Any HTTP response (even 401/405) means the server is reachable.
     // Network-level failures throw instead of returning a Response.
     if (res.status >= 500) {
-      log.warn("Upload preflight returned server error", { status: res.status });
-      throw new UploadServiceUnreachableError(
-        "The upload service returned an error. Please try again in a moment."
-      );
+      log.warn("Upload preflight returned server error; allowing live upload attempt", {
+        status: res.status,
+      });
+      return;
     }
   } catch (err) {
     if (err instanceof UploadServiceUnreachableError) {

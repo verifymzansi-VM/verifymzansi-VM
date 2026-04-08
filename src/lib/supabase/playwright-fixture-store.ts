@@ -7,6 +7,7 @@ import { getStablePlanId } from "@/lib/constants/plan-ids";
 type StubUser = {
   id: string;
   email: string;
+  email_confirmed_at: string;
   password: string;
   persona: string;
   is_anonymous: false;
@@ -209,6 +210,7 @@ export function ensurePlaywrightVerifiedMember(persona: string): StubUser {
     user = {
       id: userId,
       email,
+      email_confirmed_at: nowIso(),
       password,
       persona,
       is_anonymous: false,

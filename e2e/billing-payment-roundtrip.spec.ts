@@ -20,6 +20,8 @@ async function openAuthenticatedBilling(page: Page) {
 
     const redirectedToAuth = /\/(login|sign-in)(\?|$)/i.test(new URL(page.url()).pathname);
     if (!redirectedToAuth) {
+      const csrfResponse = await page.request.get("/api/csrf");
+      expect(csrfResponse.ok()).toBeTruthy();
       return;
     }
 

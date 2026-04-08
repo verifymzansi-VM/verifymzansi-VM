@@ -407,6 +407,25 @@ function CreatePromotionContent() {
       await checkUploadServiceReachable();
       setSubmitProgress("Uploading media...");
 
+      const readUploadError = async (response: Response, fallback: string): Promise<string> => {
+        const payload = (await response.json().catch(() => null)) as {
+          error?: unknown;
+          code?: unknown;
+          traceId?: unknown;
+        } | null;
+        const payloadError =
+          payload && typeof payload.error === "string" ? payload.error.trim() : "";
+        const traceId =
+          payload && typeof payload.traceId === "string" ? payload.traceId.trim() : "";
+        if (payloadError && traceId) {
+          return `${payloadError} (trace: ${traceId})`;
+        }
+        if (payloadError) {
+          return payloadError;
+        }
+        return `${fallback} (HTTP ${response.status})`;
+      };
+
       // Upload photos, videos, and video thumbnail in parallel
       const [imageUrls, videoUrls, uploadedVideoThumbnailUrl] = await Promise.all([
         // Photos via server proxy (small files)
@@ -420,7 +439,9 @@ function CreatePromotionContent() {
                 headers: withCsrfHeaders(),
                 body: uploadData,
               });
-              if (!uploadRes.ok) throw new Error("Failed to upload photos");
+              if (!uploadRes.ok) {
+                throw new Error(await readUploadError(uploadRes, "Failed to upload photos"));
+              }
               const uploadJson = await uploadRes.json();
               return (uploadJson.urls || []) as string[];
             })()
@@ -440,14 +461,18 @@ function CreatePromotionContent() {
                     area: "promotion",
                   }),
                 });
-                if (!urlRes.ok) throw new Error("Failed to get video upload URL");
+                if (!urlRes.ok) {
+                  throw new Error(await readUploadError(urlRes, "Failed to get video upload URL"));
+                }
                 const { uploadUrl, publicUrl } = await urlRes.json();
                 const putRes = await fetchWithRetry(uploadUrl, {
                   method: "PUT",
                   headers: { "Content-Type": file.type },
                   body: file,
                 });
-                if (!putRes.ok) throw new Error("Failed to upload video");
+                if (!putRes.ok) {
+                  throw new Error(`Failed to upload video (HTTP ${putRes.status})`);
+                }
                 return publicUrl as string;
               })
             )
