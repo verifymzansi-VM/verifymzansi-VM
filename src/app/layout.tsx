@@ -127,7 +127,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       suppressHydrationWarning
       data-playwright={isPlaywrightTestMode ? "1" : undefined}
     >
-      <head>{csrfToken ? <meta name="csrf-token" content={csrfToken} /> : null}</head>
+      <head>
+        {/* Prevent iOS Safari from auto-detecting phone numbers, dates, emails,
+            and addresses — it wraps detected content in <a> tags which causes
+            React 19 hydration mismatches ("Something went wrong" crash). */}
+        <meta name="format-detection" content="telephone=no, date=no, email=no, address=no" />
+        {csrfToken ? <meta name="csrf-token" content={csrfToken} /> : null}
+      </head>
       <body className="min-h-screen antialiased">
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: TURBOPACK_NAME_POLYFILL }} />
         {process.env.NODE_ENV === "development" ? (

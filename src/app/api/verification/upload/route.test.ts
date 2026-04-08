@@ -1278,12 +1278,10 @@ describe("POST /api/verification/upload", () => {
                   }),
                 }),
               }),
-              maybeSingle: vi
-                .fn()
-                .mockResolvedValue({
-                  data: { id: "profile-1", phone: "+27123456789" },
-                  error: null,
-                }),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: "profile-1", phone: "+27123456789" },
+                error: null,
+              }),
               limit: vi.fn().mockResolvedValue({ data: [], error: null }),
             })),
           })),

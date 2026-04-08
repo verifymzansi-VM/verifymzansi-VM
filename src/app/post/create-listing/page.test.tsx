@@ -38,6 +38,10 @@ vi.mock("@/lib/utils/csrf", () => ({
   withCsrfHeaders: (headers?: HeadersInit) => new Headers(headers),
 }));
 
+vi.mock("@/lib/utils/upload-preflight", () => ({
+  checkUploadServiceReachable: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("next/link", () => ({
   default: ({
     children,

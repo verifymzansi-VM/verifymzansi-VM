@@ -18,6 +18,14 @@ function normalizeErrorMessage(error: unknown): string {
 export function normalizeCreatePostRuntimeError(error: unknown, fallbackMessage: string): string {
   const message = normalizeErrorMessage(error);
 
+  // Surface the dedicated preflight error directly.
+  if (error && typeof error === "object" && "name" in error) {
+    const namedError = error as { name: string };
+    if (namedError.name === "UploadServiceUnreachableError") {
+      return message || "Upload service is not reachable. Check your connection and try again.";
+    }
+  }
+
   if (!message) {
     return fallbackMessage;
   }
@@ -32,6 +40,14 @@ export function normalizeCreatePostRuntimeError(error: unknown, fallbackMessage:
 
   if (/failed to upload photos|failed to upload photo|upload failed/i.test(message)) {
     return "One or more files could not be uploaded. Check your connection and try again.";
+  }
+
+  if (/security check failed|csrf/i.test(message)) {
+    return "Security check failed. Please refresh the page and try again.";
+  }
+
+  if (/unauthorized|session expired|auth/i.test(message)) {
+    return "Your session has expired. Please sign in again and retry.";
   }
 
   if (/failed to fetch/i.test(message)) {

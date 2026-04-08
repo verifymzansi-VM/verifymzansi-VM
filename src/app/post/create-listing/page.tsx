@@ -40,6 +40,7 @@ import {
 } from "@/app/post/_lib/create-post-errors";
 import { coerceListingAttributes, validateListingAttributes } from "@/lib/forms/listing-form";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
+import { checkUploadServiceReachable } from "@/lib/utils/upload-preflight";
 import type { ListingDraftData } from "@/lib/post-drafts/storage";
 import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
 import { ListingDetailContent } from "@/components/listings/listing-detail-content";
@@ -441,7 +442,7 @@ export default function CreateListingPage() {
     clearErrors();
     setIsSubmitting(true);
     submissionInFlightRef.current = true;
-    setSubmitProgress("Uploading media...");
+    setSubmitProgress("Checking upload service...");
     setUploadStatuses({
       logo: logoFile.length > 0 ? "uploading" : "skipped",
       photos: photoFiles.length > 0 ? "uploading" : "skipped",
@@ -455,6 +456,9 @@ export default function CreateListingPage() {
         setFormError("Security check failed. Please refresh the page and try again.");
         return;
       }
+
+      await checkUploadServiceReachable();
+      setSubmitProgress("Uploading media...");
 
       const normalizedAttributes = category
         ? coerceListingAttributes(category, categoryAttributes)
@@ -725,6 +729,11 @@ export default function CreateListingPage() {
                 steps={STEPS}
                 currentStep={step}
                 error={formError}
+                onRetry={
+                  formError && !isSubmitting
+                    ? () => handleSubmit(new Event("submit") as unknown as React.FormEvent)
+                    : undefined
+                }
                 footer={
                   <>
                     {user?.id && !isSubmitting && (

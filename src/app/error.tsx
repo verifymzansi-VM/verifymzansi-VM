@@ -25,7 +25,7 @@ export default function GlobalError({
 
   useEffect(() => {
     Sentry.captureException(error);
-    console.error("[GlobalError]", error.digest ?? error.message);
+    console.error("[GlobalError]", error.digest ?? error.message, error.stack);
   }, [error]);
 
   return (
@@ -39,6 +39,10 @@ export default function GlobalError({
         {error.digest && (
           <p className="text-xs text-muted-foreground">Error reference: {error.digest}</p>
         )}
+        {/* Always show a brief error summary so users can screenshot it for support. */}
+        <p className="text-xs text-muted-foreground/60 max-w-md break-all">
+          {error.message || "(no message)"}
+        </p>
         {debugVisible && (
           <pre className="mt-2 max-w-md overflow-auto rounded bg-neutral-100 p-2 text-left text-xs text-red-700 dark:bg-neutral-900 dark:text-red-400">
             {error.message}\n{error.stack ?? "(no stack)"}

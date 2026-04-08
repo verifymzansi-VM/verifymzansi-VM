@@ -111,6 +111,10 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     request: { headers: request.headers },
   });
 
+  // Track cookies set by the Supabase client (token refresh, etc.) so they
+  // can be forwarded onto redirect responses that would otherwise drop them.
+  const pendingCookies: Array<{ name: string; value: string; options: CookieOptions }> = [];
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
@@ -125,6 +129,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
             request: { headers: request.headers },
           });
           response.cookies.set({ name, value, ...options });
+          pendingCookies.push({ name, value, options });
         },
         remove(name: string, options: CookieOptions) {
           request.cookies.set({ name, value: "", ...options });
@@ -132,10 +137,21 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
             request: { headers: request.headers },
           });
           response.cookies.set({ name, value: "", ...options });
+          pendingCookies.push({ name, value: "", options });
         },
       },
     }
   );
+
+  /** Create a redirect that preserves any cookies set during this request. */
+  function redirectWithCookies(url: URL | string): NextResponse {
+    const target = typeof url === "string" ? new URL(url, request.url) : url;
+    const redir = NextResponse.redirect(target);
+    for (const { name, value, options } of pendingCookies) {
+      redir.cookies.set({ name, value, ...options });
+    }
+    return redir;
+  }
 
   let user = null;
   try {
@@ -147,7 +163,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
       if (isApiRoute) {
         return NextResponse.json({ error: "Authentication service unavailable" }, { status: 503 });
       }
-      return NextResponse.redirect(new URL("/login?error=auth_unavailable", request.url));
+      return redirectWithCookies(new URL("/login?error=auth_unavailable", request.url));
     }
     return response;
   }
@@ -155,7 +171,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   // -- Auth routes: redirect logged-in (real) users away --------------------
   const isRealUser = user && user.is_anonymous !== true;
   if (isRealUser && AUTH_ROUTES.some((r) => pathname === r || pathname.startsWith(r + "/"))) {
-    return NextResponse.redirect(new URL("/", request.url));
+    return redirectWithCookies(new URL("/", request.url));
   }
 
   // -- Consolidated profile cache -------------------------------------------
@@ -182,7 +198,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     }
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("returnUrl", protectedReturnUrl);
-    return NextResponse.redirect(loginUrl);
+    return redirectWithCookies(loginUrl);
   }
 
   // Block anonymous Supabase sessions from accessing protected routes
@@ -192,7 +208,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     }
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("returnUrl", protectedReturnUrl);
-    return NextResponse.redirect(loginUrl);
+    return redirectWithCookies(loginUrl);
   }
 
   // -- Admin gate -----------------------------------------------------------

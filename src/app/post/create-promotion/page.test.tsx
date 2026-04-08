@@ -28,6 +28,10 @@ vi.mock("@/hooks/use-auth", () => ({
   useAuth: useAuthMock,
 }));
 
+vi.mock("@/lib/utils/upload-preflight", () => ({
+  checkUploadServiceReachable: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("next/link", () => ({
   default: ({
     children,

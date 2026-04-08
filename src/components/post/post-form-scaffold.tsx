@@ -27,6 +27,7 @@ interface PostFormScaffoldProps {
   steps: readonly PostFormStep[];
   currentStep: number;
   error?: string | null;
+  onRetry?: () => void;
   children: React.ReactNode;
   footer?: React.ReactNode;
 }
@@ -42,6 +43,7 @@ export function PostFormScaffold({
   steps,
   currentStep,
   error,
+  onRetry,
   children,
   footer,
 }: PostFormScaffoldProps) {
@@ -143,6 +145,17 @@ export function PostFormScaffold({
               <div>
                 <AlertTitle>Please review this form</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
+                {onRetry && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={onRetry}
+                  >
+                    Try again
+                  </Button>
+                )}
               </div>
             </Alert>
           )}

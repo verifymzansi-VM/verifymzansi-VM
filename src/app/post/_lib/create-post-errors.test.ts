@@ -33,4 +33,24 @@ describe("normalizeCreatePostRuntimeError", () => {
       normalizeCreatePostRuntimeError(new Error("Free post limit reached"), "Fallback message")
     ).toBe("Free post limit reached");
   });
+
+  it("maps UploadServiceUnreachableError by name", () => {
+    const err = new Error("Upload service is not reachable. Check your connection and try again.");
+    err.name = "UploadServiceUnreachableError";
+    expect(normalizeCreatePostRuntimeError(err, "Fallback")).toBe(
+      "Upload service is not reachable. Check your connection and try again."
+    );
+  });
+
+  it("maps CSRF errors to a security-check message", () => {
+    expect(normalizeCreatePostRuntimeError(new Error("Security check failed"), "Fallback")).toBe(
+      "Security check failed. Please refresh the page and try again."
+    );
+  });
+
+  it("maps session/auth errors to a sign-in message", () => {
+    expect(normalizeCreatePostRuntimeError(new Error("Unauthorized"), "Fallback")).toBe(
+      "Your session has expired. Please sign in again and retry."
+    );
+  });
 });

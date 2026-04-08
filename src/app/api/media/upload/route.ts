@@ -54,6 +54,12 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
  * - files: one or more media files
  * - area: one of UPLOAD_AREAS (see @/types/enums)
  */
+
+/** Lightweight health-check for upload preflight. */
+export function HEAD() {
+  return new NextResponse(null, { status: 200 });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const sameOriginFailure = enforceSameOriginMutation(request, log);

@@ -38,6 +38,7 @@ import { SocialAuthorizationFields } from "@/components/promotions/social-author
 import type { PromotionSocialAuthorizationInput } from "@/lib/promotions/social-authorization";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
+import { checkUploadServiceReachable } from "@/lib/utils/upload-preflight";
 import type { PromotionDraftData } from "@/lib/post-drafts/storage";
 const SELECT_CLASS =
   "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm";
@@ -394,7 +395,7 @@ function CreatePromotionContent() {
 
     clearErrors();
     setIsSubmitting(true);
-    setSubmitProgress("Uploading media...");
+    setSubmitProgress("Checking upload service...");
 
     try {
       const csrfToken = await ensureCsrfTokenReady();
@@ -402,6 +403,9 @@ function CreatePromotionContent() {
         setFormError("Security check failed. Please refresh the page and try again.");
         return;
       }
+
+      await checkUploadServiceReachable();
+      setSubmitProgress("Uploading media...");
 
       // Upload photos, videos, and video thumbnail in parallel
       const [imageUrls, videoUrls, uploadedVideoThumbnailUrl] = await Promise.all([
@@ -572,6 +576,11 @@ function CreatePromotionContent() {
                 steps={STEPS}
                 currentStep={step}
                 error={formError}
+                onRetry={
+                  formError && !isSubmitting
+                    ? () => handleSubmit(new Event("submit") as unknown as React.FormEvent)
+                    : undefined
+                }
                 footer={
                   <>
                     {user?.id && !isSubmitting && (
