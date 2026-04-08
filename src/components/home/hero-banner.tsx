@@ -304,7 +304,6 @@ export function HeroBanner({
                     mode="ambient"
                     muteControlVisibility="always"
                     showPlaybackControl={activeSlideIsVideo}
-                    deferVideoLoadUntilPlay={activeSlideIsVideo}
                     onPlaybackStateChange={(isPlaying) => setIsActiveVideoPaused(!isPlaying)}
                     priority
                     mediaClassName="scale-[1.01]"

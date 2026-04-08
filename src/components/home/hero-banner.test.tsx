@@ -145,7 +145,7 @@ describe("HeroBanner", () => {
 
     expect(screen.getByTestId("hero-media")).toHaveAttribute("data-mute-control", "always");
     expect(screen.getByTestId("hero-media")).toHaveAttribute("data-playback-control", "true");
-    expect(screen.getByTestId("hero-media")).toHaveAttribute("data-defer-video-load", "true");
+    expect(screen.getByTestId("hero-media")).toHaveAttribute("data-defer-video-load", "false");
   });
 
   it("renders no logo overlay when no slide logo is provided", () => {
