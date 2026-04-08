@@ -43,11 +43,15 @@ describe("checkUploadServiceReachable", () => {
   it("throws UploadServiceUnreachableError on network failure (TypeError) after retries", async () => {
     vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
     await expect(checkUploadServiceReachable()).rejects.toThrow(UploadServiceUnreachableError);
+    // 1 initial + 2 retries = 3 total attempts
+    expect(fetch).toHaveBeenCalledTimes(3);
   });
 
-  it("throws UploadServiceUnreachableError on abort/timeout", async () => {
+  it("throws UploadServiceUnreachableError on abort/timeout after retries", async () => {
     vi.mocked(fetch).mockRejectedValue(new DOMException("Aborted", "AbortError"));
     await expect(checkUploadServiceReachable()).rejects.toThrow(UploadServiceUnreachableError);
+    // Timeout errors are now also retried
+    expect(fetch).toHaveBeenCalledTimes(3);
   });
 
   it("error has correct name property", async () => {
@@ -78,6 +82,20 @@ describe("checkUploadServiceReachable", () => {
       .mockResolvedValueOnce(new Response(null, { status: 200 }));
     await expect(checkUploadServiceReachable()).resolves.toBeUndefined();
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("recovers if first fetch times out but retry succeeds", async () => {
+    vi.mocked(fetch)
+      .mockRejectedValueOnce(new DOMException("Aborted", "AbortError"))
+      .mockResolvedValueOnce(new Response(null, { status: 200 }));
+    await expect(checkUploadServiceReachable()).resolves.toBeUndefined();
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry on non-retryable errors", async () => {
+    vi.mocked(fetch).mockRejectedValue(new Error("Something unexpected"));
+    await expect(checkUploadServiceReachable()).rejects.toThrow(UploadServiceUnreachableError);
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("works when AbortSignal.timeout is unavailable (iOS < 17.4)", async () => {
