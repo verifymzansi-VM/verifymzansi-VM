@@ -61,6 +61,30 @@ function normalizeFileName(file: File): File {
   return new File([file], file.name + ext, { type: file.type, lastModified: file.lastModified });
 }
 
+/**
+ * Read a File into a stable in-memory copy so Android scoped-storage can't
+ * revoke the handle later.  Retries once after a short delay because some
+ * Android browsers need a tick after the picker closes before the content
+ * URI becomes readable.
+ */
+async function stabiliseFile(file: File): Promise<File | null> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const buf = await file.arrayBuffer();
+      return new File([buf], file.name, {
+        type: file.type,
+        lastModified: file.lastModified,
+      });
+    } catch {
+      if (attempt === 0) {
+        // Give Android a moment to settle
+        await new Promise((r) => setTimeout(r, 120));
+      }
+    }
+  }
+  return null;
+}
+
 interface MediaUploadProps {
   /** Label shown above the upload area */
   label?: string;
@@ -157,14 +181,10 @@ export function MediaUpload({
           continue;
         }
 
-        // Normalize extensionless filenames (common on Android)
-        let normalized = normalizeFileName(file);
-
-        // Verify the file data is actually readable (Android scoped-storage
-        // can revoke access after the picker closes)
-        try {
-          await normalized.slice(0, 1).arrayBuffer();
-        } catch {
+        // Read file into a stable in-memory copy so Android scoped-storage
+        // can't revoke the handle later, and normalize extensionless filenames.
+        const stable = await stabiliseFile(normalizeFileName(file));
+        if (!stable) {
           toast({
             title: "Could not read file",
             description: `"${file.name}" is no longer accessible. Please re-select it.`,
@@ -172,6 +192,7 @@ export function MediaUpload({
           });
           continue;
         }
+        let normalized = stable;
 
         // Convert HEIC/HEIF → JPEG client-side (iOS camera default format)
         if (HEIC_TYPES.has(normalized.type)) {
