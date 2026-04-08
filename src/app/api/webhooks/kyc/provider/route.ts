@@ -401,11 +401,5 @@ function normalizePayload(body: unknown): ProviderWebhookPayload | null {
     return body as unknown as ProviderWebhookPayload;
   }
 
-  // SmileID format (example — uncomment when SmileID is integrated)
-  // if (body.SmileJobID && body.ResultCode) { ... }
-
-  // Veriff format (example)
-  // if (body.verification && body.verification.id) { ... }
-
   return null;
 }

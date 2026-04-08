@@ -162,8 +162,10 @@ pnpm wrangler secret put OZOW_WEBHOOK_SECRET
 | `pnpm typecheck`                                                                       | TypeScript typecheck                                 |
 | `pnpm test`                                                                            | Blocking Vitest lane used for launch gating          |
 | `pnpm test:blocking`                                                                   | Explicit blocking Vitest lane                        |
+| `pnpm run stability:check`                                                             | One-command full stabilization gate                  |
 | `pnpm test:coverage`                                                                   | Alias for the core coverage lane                     |
 | `pnpm test:coverage:core`                                                              | Coverage lane focused on core server and domain code |
+| `pnpm test:dev-startup`                                                                | Local dev startup smoke (boot + / + /api/health)     |
 | `pnpm test:launch:flows`                                                               | Billing + OTP + DSAR launch-confidence bundle        |
 | `pnpm test:deep`                                                                       | Core coverage plus Playwright                        |
 | `pnpm test:all`                                                                        | Full validation shortcut                             |
@@ -198,7 +200,13 @@ so duplicate webhooks cannot create duplicate invoices.
 
 ## Testing
 
-Run the blocking launch gate with:
+Run the one-command stabilization gate with:
+
+```bash
+pnpm run stability:check
+```
+
+Or run the blocking launch gate step-by-step with:
 
 ```bash
 pnpm lint
@@ -210,6 +218,12 @@ pnpm security:audit
 pnpm licenses:check
 pnpm build
 pnpm exec playwright test --grep "@smoke" --project chromium --project mobile-chrome
+```
+
+To specifically validate local `pnpm dev` startup behavior in one command, run:
+
+```bash
+pnpm test:dev-startup
 ```
 
 Run the deeper confidence lane when you want broader coverage before a release

@@ -50,12 +50,11 @@ describe("MediaCropPreview", () => {
     expect(URL.createObjectURL).toHaveBeenCalled();
   });
 
-  it("renders crop preview with aria slider role", () => {
+  it("renders crop preview as an interactive button", () => {
     const onChange = vi.fn();
     render(<MediaCropPreview file={makeImageFile()} onChange={onChange} />);
-    const slider = screen.getByRole("slider");
-    expect(slider).toBeInTheDocument();
-    expect(slider).toHaveAttribute("aria-label", "Drag to position crop");
+    const control = screen.getByRole("button", { name: "Drag to position crop" });
+    expect(control).toBeInTheDocument();
   });
 
   it("shows default 4:5 card overlay label", () => {
@@ -70,15 +69,12 @@ describe("MediaCropPreview", () => {
     expect(screen.getByText("16:9 hero")).toBeInTheDocument();
   });
 
-  it("shows aria-valuetext reflecting focal point coordinates", () => {
+  it("keeps the drag control discoverable by accessible name", () => {
     const onChange = vi.fn();
     render(
       <MediaCropPreview file={makeImageFile()} value={{ x: 0.3, y: 0.7 }} onChange={onChange} />
     );
-    expect(screen.getByRole("slider")).toHaveAttribute(
-      "aria-valuetext",
-      "Focal point at 30% horizontal, 70% vertical"
-    );
+    expect(screen.getByRole("button", { name: "Drag to position crop" })).toBeInTheDocument();
   });
 
   it("calls onChange on ArrowRight key", () => {
@@ -86,8 +82,8 @@ describe("MediaCropPreview", () => {
     render(
       <MediaCropPreview file={makeImageFile()} value={{ x: 0.5, y: 0.5 }} onChange={onChange} />
     );
-    const slider = screen.getByRole("slider");
-    fireEvent.keyDown(slider, { key: "ArrowRight" });
+    const control = screen.getByRole("button", { name: "Drag to position crop" });
+    fireEvent.keyDown(control, { key: "ArrowRight" });
     expect(onChange).toHaveBeenCalledWith({ x: 0.52, y: 0.5 });
   });
 
@@ -96,8 +92,8 @@ describe("MediaCropPreview", () => {
     render(
       <MediaCropPreview file={makeImageFile()} value={{ x: 0.5, y: 0.5 }} onChange={onChange} />
     );
-    const slider = screen.getByRole("slider");
-    fireEvent.keyDown(slider, { key: "ArrowLeft" });
+    const control = screen.getByRole("button", { name: "Drag to position crop" });
+    fireEvent.keyDown(control, { key: "ArrowLeft" });
     expect(onChange).toHaveBeenCalledWith({ x: 0.48, y: 0.5 });
   });
 
@@ -106,8 +102,8 @@ describe("MediaCropPreview", () => {
     render(
       <MediaCropPreview file={makeImageFile()} value={{ x: 0.5, y: 0.5 }} onChange={onChange} />
     );
-    const slider = screen.getByRole("slider");
-    fireEvent.keyDown(slider, { key: "ArrowUp" });
+    const control = screen.getByRole("button", { name: "Drag to position crop" });
+    fireEvent.keyDown(control, { key: "ArrowUp" });
     expect(onChange).toHaveBeenCalledWith({ x: 0.5, y: 0.48 });
   });
 
@@ -116,8 +112,8 @@ describe("MediaCropPreview", () => {
     render(
       <MediaCropPreview file={makeImageFile()} value={{ x: 0.5, y: 0.5 }} onChange={onChange} />
     );
-    const slider = screen.getByRole("slider");
-    fireEvent.keyDown(slider, { key: "ArrowDown" });
+    const control = screen.getByRole("button", { name: "Drag to position crop" });
+    fireEvent.keyDown(control, { key: "ArrowDown" });
     expect(onChange).toHaveBeenCalledWith({ x: 0.5, y: 0.52 });
   });
 
@@ -126,8 +122,8 @@ describe("MediaCropPreview", () => {
     render(
       <MediaCropPreview file={makeImageFile()} value={{ x: 0.01, y: 0.5 }} onChange={onChange} />
     );
-    const slider = screen.getByRole("slider");
-    fireEvent.keyDown(slider, { key: "ArrowLeft" });
+    const control = screen.getByRole("button", { name: "Drag to position crop" });
+    fireEvent.keyDown(control, { key: "ArrowLeft" });
     expect(onChange).toHaveBeenCalledWith({ x: 0, y: 0.5 });
   });
 
@@ -136,8 +132,8 @@ describe("MediaCropPreview", () => {
     render(
       <MediaCropPreview file={makeImageFile()} value={{ x: 0.99, y: 0.5 }} onChange={onChange} />
     );
-    const slider = screen.getByRole("slider");
-    fireEvent.keyDown(slider, { key: "ArrowRight" });
+    const control = screen.getByRole("button", { name: "Drag to position crop" });
+    fireEvent.keyDown(control, { key: "ArrowRight" });
     expect(onChange).toHaveBeenCalledWith({ x: 1, y: 0.5 });
   });
 

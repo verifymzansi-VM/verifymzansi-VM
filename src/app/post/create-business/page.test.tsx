@@ -414,6 +414,9 @@ describe("CreateBusinessPage", () => {
       (call) => call[0] === "/api/businesses"
     );
     expect(submitCall).toBeDefined();
+    if (!submitCall) {
+      throw new Error("Expected /api/businesses submission call");
+    }
     expect(submitCall[0]).toBe("/api/businesses");
 
     const payload = JSON.parse(submitCall[1].body as string);

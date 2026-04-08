@@ -41,7 +41,7 @@ export function MediaCropPreview({
   onChange,
   className,
 }: MediaCropPreviewProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLButtonElement>(null);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef<{ x: number; y: number; startVal: CropPosition } | null>(null);
@@ -112,7 +112,8 @@ export function MediaCropPreview({
 
       <div className={cn("flex items-start gap-4", focalPositionClassName)}>
         {/* Crop preview container */}
-        <div
+        <button
+          type="button"
           ref={containerRef}
           className={cn(
             "relative w-40 cursor-grab overflow-hidden rounded-lg border-2 border-brand-green/40 touch-none select-none",
@@ -122,13 +123,7 @@ export function MediaCropPreview({
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
-          role="slider"
           aria-label="Drag to position crop"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(value.x * 100)}
-          aria-valuetext={`Focal point at ${Math.round(value.x * 100)}% horizontal, ${Math.round(value.y * 100)}% vertical`}
-          tabIndex={0}
           onKeyDown={(e) => {
             const step = 0.02;
             let { x, y } = value;
@@ -161,7 +156,7 @@ export function MediaCropPreview({
           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-2 py-1">
             <p className="text-[10px] font-medium text-white">{overlayLabel}</p>
           </div>
-        </div>
+        </button>
 
         {/* Full image reference (dimmed) */}
         {naturalSize && (

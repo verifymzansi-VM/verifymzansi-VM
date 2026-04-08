@@ -33,6 +33,18 @@ vi.mock("@/hooks/use-auth", () => ({
   useAuth: useAuthMock,
 }));
 
+vi.mock("@/contexts/video-playback-context", () => ({
+  useVideoPlaybackManager: () => ({
+    register: vi.fn(),
+    unregister: vi.fn(),
+    updateVisibility: vi.fn(),
+    requestPriority: vi.fn(),
+    releasePriority: vi.fn(),
+    claimExclusive: vi.fn(),
+    releaseExclusive: vi.fn(),
+  }),
+}));
+
 vi.mock("@/lib/utils/csrf", () => ({
   ensureCsrfTokenReady: vi.fn().mockResolvedValue("a".repeat(64)),
   withCsrfHeaders: (headers?: HeadersInit) => new Headers(headers),
@@ -274,6 +286,9 @@ describe("CreateListingPage", () => {
       (call) => call[0] === "/api/listings"
     );
     expect(request).toBeDefined();
+    if (!request) {
+      throw new Error("Expected /api/listings submission call");
+    }
     const payload = JSON.parse(request[1].body as string);
 
     expect(payload.logo_url).toBe("https://media.verifymzansi.com/listings/logo.jpg");

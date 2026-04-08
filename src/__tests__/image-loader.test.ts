@@ -21,7 +21,7 @@ describe("cloudflareImageLoader", () => {
       width: 800,
       quality: 75,
     });
-    expect(result).toBe(`${PROXY}media/listing/abc.jpg`);
+    expect(result).toBe(`${PROXY}media/listing/abc.jpg?w=800&q=75`);
   });
 
   it("passes proxy path through unchanged even when CF resizing is enabled", async () => {
@@ -45,12 +45,12 @@ describe("cloudflareImageLoader", () => {
     expect(result).toContain("/media/listing/abc.jpg");
   });
 
-  it("returns src unchanged for relative non-proxy paths", async () => {
+  it("returns width-aware src for relative non-proxy paths", async () => {
     const loader = await importLoader(true);
     const result = loader({
       src: "/images/logo.png",
       width: 200,
     });
-    expect(result).toBe("/images/logo.png");
+    expect(result).toBe("/images/logo.png?w=200&q=75");
   });
 });

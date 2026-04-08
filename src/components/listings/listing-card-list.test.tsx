@@ -20,7 +20,17 @@ const { videoCardPlayerMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("next/link", () => ({
-  default: ({ children, href, ...props }: { children: React.ReactNode; href: string }) => (
+  default: ({
+    children,
+    href,
+    prefetch: _prefetch,
+    ...props
+  }: {
+    children: React.ReactNode;
+    href: string;
+    prefetch?: boolean;
+    [key: string]: unknown;
+  }) => (
     <a href={href} {...props}>
       {children}
     </a>
@@ -35,7 +45,15 @@ vi.mock("next/image", () => ({
 }));
 
 vi.mock("@/components/ui/card", () => ({
-  Card: ({ children, ...props }: { children: React.ReactNode; [key: string]: unknown }) => (
+  Card: ({
+    children,
+    trustLevel: _trustLevel,
+    ...props
+  }: {
+    children: React.ReactNode;
+    trustLevel?: unknown;
+    [key: string]: unknown;
+  }) => (
     <div data-testid="card" {...props}>
       {children}
     </div>
