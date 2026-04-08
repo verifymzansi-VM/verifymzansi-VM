@@ -21,6 +21,12 @@ const MAGIC_SIGNATURES: Array<{
   { mime: "image/avif", bytes: [0x66, 0x74, 0x79, 0x70, 0x61, 0x76, 0x69, 0x66], offset: 4 },
   // AVIF sequence: ISO BMFF with "ftypavis" at offset 4
   { mime: "image/avif", bytes: [0x66, 0x74, 0x79, 0x70, 0x61, 0x76, 0x69, 0x73], offset: 4 },
+  // HEIC: ISO BMFF with "ftypheic" at offset 4
+  { mime: "image/heic", bytes: [0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63], offset: 4 },
+  // HEIF: ISO BMFF with "ftypmif1" at offset 4
+  { mime: "image/heif", bytes: [0x66, 0x74, 0x79, 0x70, 0x6d, 0x69, 0x66, 0x31], offset: 4 },
+  // HEIC sequence: ISO BMFF with "ftypheix" at offset 4
+  { mime: "image/heic", bytes: [0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x78], offset: 4 },
   // PDF: %PDF
   { mime: "application/pdf", bytes: [0x25, 0x50, 0x44, 0x46] },
   // MP4 / QuickTime: bytes 4-7 = "ftyp" (ISO base media file, covers mp4 & mov)

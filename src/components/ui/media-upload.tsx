@@ -5,8 +5,18 @@ import { ImagePlus, X, Film } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"];
+const IMAGE_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/avif",
+  "image/heic",
+  "image/heif",
+];
 const VIDEO_TYPES = ["video/mp4", "video/webm"];
+/** HEIC/HEIF are accepted by the file-picker but converted client-side to JPEG before upload. */
+const HEIC_TYPES = new Set(["image/heic", "image/heif"]);
 const ALL_ACCEPT = [...IMAGE_TYPES, ...VIDEO_TYPES].join(",");
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50 MB
@@ -18,9 +28,30 @@ const MIME_TO_EXT: Record<string, string> = {
   "image/webp": ".webp",
   "image/gif": ".gif",
   "image/avif": ".avif",
+  "image/heic": ".heic",
+  "image/heif": ".heif",
   "video/mp4": ".mp4",
   "video/webm": ".webm",
 };
+
+/**
+ * Lazily convert a HEIC/HEIF blob to JPEG using heic2any.
+ * Returns the converted File or null on failure.
+ */
+async function convertHeicToJpeg(file: File): Promise<File | null> {
+  try {
+    const heic2any = (await import("heic2any")).default;
+    const blob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.92 });
+    const result = Array.isArray(blob) ? blob[0] : blob;
+    const baseName = file.name.replace(/\.[^.]+$/, "") || file.name;
+    return new File([result], `${baseName}.jpg`, {
+      type: "image/jpeg",
+      lastModified: file.lastModified,
+    });
+  } catch {
+    return null;
+  }
+}
 
 /** Ensure the file has a proper extension; Android content-picker files are often extensionless. */
 function normalizeFileName(file: File): File {
@@ -127,7 +158,7 @@ export function MediaUpload({
         }
 
         // Normalize extensionless filenames (common on Android)
-        const normalized = normalizeFileName(file);
+        let normalized = normalizeFileName(file);
 
         // Verify the file data is actually readable (Android scoped-storage
         // can revoke access after the picker closes)
@@ -140,6 +171,29 @@ export function MediaUpload({
             variant: "destructive",
           });
           continue;
+        }
+
+        // Convert HEIC/HEIF → JPEG client-side (iOS camera default format)
+        if (HEIC_TYPES.has(normalized.type)) {
+          const converted = await convertHeicToJpeg(normalized);
+          if (!converted) {
+            toast({
+              title: "Conversion failed",
+              description: `"${file.name}" could not be converted. Please save it as JPEG and try again.`,
+              variant: "destructive",
+            });
+            continue;
+          }
+          // Re-check size after HEIC→JPEG conversion (JPEG is usually larger)
+          if (converted.size > MAX_IMAGE_SIZE) {
+            toast({
+              title: "File too large",
+              description: `"${file.name}" exceeds the 5 MB image limit after conversion.`,
+              variant: "destructive",
+            });
+            continue;
+          }
+          normalized = converted;
         }
 
         valid.push(normalized);
@@ -305,8 +359,8 @@ export function MediaUpload({
             {accept?.startsWith("video/")
               ? "Videos (MP4, WebM) up to 50 MB"
               : accept?.startsWith("image/")
-                ? "Images (JPG, PNG, WebP, GIF, AVIF) up to 5 MB"
-                : "Images (JPG, PNG, WebP, GIF, AVIF) up to 5 MB • Videos (MP4, WebM) up to 50 MB"}
+                ? "Images (JPG, PNG, WebP, GIF, AVIF, HEIC) up to 5 MB"
+                : "Images (JPG, PNG, WebP, GIF, AVIF, HEIC) up to 5 MB • Videos (MP4, WebM) up to 50 MB"}
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">
             {remaining} of {maxFiles} remaining

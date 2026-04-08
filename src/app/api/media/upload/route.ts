@@ -17,7 +17,15 @@ import { z } from "zod";
 
 const log = createLogger("MediaUpload");
 
-const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"]);
+const IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/avif",
+  "image/heic",
+  "image/heif",
+]);
 const VIDEO_TYPES = new Set(["video/mp4", "video/webm"]);
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50 MB
@@ -31,6 +39,8 @@ const EXTENSION_MIME_MAP: Record<string, string> = {
   webp: "image/webp",
   gif: "image/gif",
   avif: "image/avif",
+  heic: "image/heic",
+  heif: "image/heif",
   mp4: "video/mp4",
   webm: "video/webm",
 };
@@ -242,6 +252,12 @@ export async function POST(request: NextRequest) {
         } else if (file.type === "image/png") {
           const stripped = stripMetadataFromPng(fileBuffer);
           uploadFile = new Blob([toArrayBuffer(stripped)], { type: file.type });
+        } else if (file.type === "image/heic" || file.type === "image/heif") {
+          // HEIC/HEIF EXIF stripping is not supported server-side.
+          // Clients must convert to JPEG before upload. Reject raw HEIC to
+          // prevent GPS/PII metadata leaks (POPIA compliance).
+          errors.push(`"${file.name}": HEIC/HEIF must be converted to JPEG before upload`);
+          continue;
         }
 
         const result = await uploadToR2({
