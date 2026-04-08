@@ -25,6 +25,7 @@ function makeVideo(id: string): HTMLVideoElement {
   });
   el.play = vi.fn(() => {
     paused = false;
+    el.dispatchEvent(new Event("play"));
     return Promise.resolve();
   });
   el.pause = vi.fn(() => {

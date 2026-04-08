@@ -509,8 +509,22 @@ function VideoCardPlayerInner({
         if (!el.src && normalizedSrc) {
           el.src = normalizedSrc;
         }
+        // Optimistic play attempt — works when data is already cached.
+        // For deferred videos the browser hasn't loaded any data yet, so
+        // we also attach a one-shot canplay listener to retry once the
+        // browser has buffered enough to begin playback.
         el.play().catch(() => {
-          /* autoplay may be blocked */
+          if (el.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) {
+            el.addEventListener(
+              "canplay",
+              () => {
+                el.play().catch(() => {
+                  /* autoplay policy */
+                });
+              },
+              { once: true }
+            );
+          }
         });
         setIsPlaybackPaused(false);
         setHasActivatedPlayback(true);
@@ -540,9 +554,15 @@ function VideoCardPlayerInner({
       if (el && normalizedSrc) {
         el.src = "";
         el.src = normalizedSrc;
-        el.play().catch(() => {
-          /* autoplay may be blocked */
-        });
+        el.addEventListener(
+          "canplay",
+          () => {
+            el.play().catch(() => {
+              /* autoplay policy */
+            });
+          },
+          { once: true }
+        );
       }
     },
     [videoRef, normalizedSrc]
@@ -644,7 +664,21 @@ function VideoCardPlayerInner({
         />
 
         {showMuteControl ? <MuteButton isMuted={isMuted} onToggle={toggleMute} /> : null}
-        {showPlaybackToggle ? (
+        {hasError && showPlaybackToggle ? (
+          <div
+            role="button"
+            tabIndex={0}
+            className="absolute inset-0 z-20 flex cursor-pointer flex-col items-center justify-center gap-2 bg-black/40 backdrop-blur-sm"
+            onClick={handleRetry}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") handleRetry(e);
+            }}
+            aria-label="Retry loading video"
+          >
+            <AlertTriangle className="h-5 w-5 text-amber-400" />
+            <span className="text-xs font-medium text-white/90">Video unavailable</span>
+          </div>
+        ) : showPlaybackToggle ? (
           <>
             <div
               role="button"

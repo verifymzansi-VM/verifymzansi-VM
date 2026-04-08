@@ -49,6 +49,11 @@ export function VideoPlaybackProvider({ children }: { children: React.ReactNode 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Active exclusive lock holder (e.g. lightbox/modal)
   const exclusiveRef = useRef<string | null>(null);
+  // Play-event listeners keyed per element (for cleanup in unregister)
+  const playListenersRef = useRef(new Map<HTMLVideoElement, () => void>());
+  // One-shot override: when a video starts playing externally (click, component toggle),
+  // the next arbitration should honour that choice before falling back to visibility.
+  const playInitiatedRef = useRef<HTMLVideoElement | null>(null);
 
   const arbitrate = useCallback(() => {
     // If exclusive lock is held, do not arbitrate — videos stay paused
@@ -57,10 +62,16 @@ export function VideoPlaybackProvider({ children }: { children: React.ReactNode 
     const videos = videosRef.current;
     const priority = priorityRef.current;
 
+    // Consume one-shot play-initiated override (cleared every arbitration)
+    const playTarget = playInitiatedRef.current;
+    playInitiatedRef.current = null;
+
     // If a priority element exists and is registered, it wins
     let winner: HTMLVideoElement | null = null;
 
-    if (priority && videos.has(priority)) {
+    if (playTarget && videos.has(playTarget)) {
+      winner = playTarget;
+    } else if (priority && videos.has(priority)) {
       winner = priority;
     } else {
       // Pick the video with the highest intersection ratio
@@ -90,7 +101,24 @@ export function VideoPlaybackProvider({ children }: { children: React.ReactNode 
     // Play the winner
     if (winner && winner.paused && winner.src) {
       winner.play().catch(() => {
-        /* autoplay may be blocked */
+        // Video src may have just been assigned (deferred load) and the
+        // browser hasn't buffered enough data yet.  Retry once on canplay,
+        // but only if this element is still the active winner when the
+        // event fires (another arbitration may have elected a new winner).
+        if (winner && winner.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) {
+          const target = winner;
+          target.addEventListener(
+            "canplay",
+            () => {
+              if (activeRef.current === target) {
+                target.play().catch(() => {
+                  /* autoplay policy */
+                });
+              }
+            },
+            { once: true }
+          );
+        }
       });
     }
 
@@ -109,11 +137,46 @@ export function VideoPlaybackProvider({ children }: { children: React.ReactNode 
 
   const register = useCallback((el: HTMLVideoElement) => {
     videosRef.current.set(el, 0);
+
+    // Enforce singleton: when any registered video starts playing
+    // outside of arbitration (e.g. manual click, component toggle),
+    // immediately pause all other registered videos.
+    const onPlay = () => {
+      if (exclusiveRef.current) {
+        // Exclusive lock held — nothing should play
+        el.pause();
+        return;
+      }
+      if (activeRef.current !== el) {
+        // Cancel pending debounced arbitration so it doesn't immediately
+        // override this external play.  The next visibility/priority change
+        // will re-schedule arbitration naturally.
+        if (timerRef.current) {
+          clearTimeout(timerRef.current);
+          timerRef.current = null;
+        }
+        // Set one-shot override so the next arbitration respects this play.
+        playInitiatedRef.current = el;
+        for (const [other] of videosRef.current) {
+          if (other !== el && !other.paused) {
+            other.pause();
+          }
+        }
+        activeRef.current = el;
+      }
+    };
+    el.addEventListener("play", onPlay);
+    playListenersRef.current.set(el, onPlay);
   }, []);
 
   const unregister = useCallback(
     (el: HTMLVideoElement) => {
       videosRef.current.delete(el);
+      const onPlay = playListenersRef.current.get(el);
+      if (onPlay) {
+        el.removeEventListener("play", onPlay);
+        playListenersRef.current.delete(el);
+      }
       if (activeRef.current === el) {
         activeRef.current = null;
       }
