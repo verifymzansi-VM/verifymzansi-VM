@@ -440,11 +440,12 @@ export async function POST(request: Request) {
       duration_days: action === "suspend" ? durationDays : null,
     });
     if (modInsertErr) {
-      log.error("Failed to record moderation action (non-fatal)", {
+      log.error("Failed to record moderation action", {
         error: modInsertErr.message,
         reportId,
         action,
       });
+      return NextResponse.json({ error: "Failed to record enforcement action" }, { status: 500 });
     }
 
     // Resolve the report

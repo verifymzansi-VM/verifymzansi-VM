@@ -176,7 +176,7 @@ describe("POST /api/auth/login", () => {
     });
   });
 
-  it("returns a confirmation-specific error when credentials are correct but email is unconfirmed", async () => {
+  it("returns generic 401 when credentials are correct but email is unconfirmed (anti-enumeration)", async () => {
     mockAuth({
       data: { user: null, session: null },
       error: { message: "Email not confirmed", status: 400 },
@@ -190,11 +190,10 @@ describe("POST /api/auth/login", () => {
       })
     );
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
     const body = await res.json();
     expect(body).toEqual({
-      error: "Please confirm your email address before signing in.",
-      code: "email_not_confirmed",
+      error: "Invalid email or password",
     });
   });
 

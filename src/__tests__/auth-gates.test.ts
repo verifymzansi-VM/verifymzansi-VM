@@ -53,6 +53,8 @@ function mockSupabase(overrides: {
   stepsData?: Array<{ step_type: string; status: string }>;
   stepsError?: { message: string; code?: string } | null;
   updateResult?: { error: null };
+  /** Simulate the auto-unsuspend update chain result */
+  unsuspendResult?: { error?: { message: string } | null };
 }) {
   return {
     from: vi.fn().mockImplementation((table: string) => {
@@ -73,7 +75,11 @@ function mockSupabase(overrides: {
           data: overrides.profileData ?? null,
           error: overrides.profileError ?? null,
         }),
-        update: vi.fn().mockReturnThis(),
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({
+            error: overrides.unsuspendResult?.error ?? null,
+          }),
+        }),
       };
     }),
   } as unknown as Parameters<typeof checkPhoneGate>[2];
@@ -307,6 +313,43 @@ describe("checkBanEnforcement", () => {
     const location = new URL(result.response!.headers.get("location")!);
     expect(location.pathname).toBe("/dashboard");
     expect(location.searchParams.get("suspended")).toBe("true");
+  });
+
+  it("auto-unsuspends users when suspendedUntil has passed and DB update succeeds", async () => {
+    const supabase = mockSupabase({
+      profileData: {
+        account_status: "suspended",
+        suspended_until: "2020-01-01T00:00:00Z",
+      },
+      unsuspendResult: { error: null },
+    });
+    const result = await checkBanEnforcement(
+      createRequest("/billing"),
+      supabase,
+      "user-1",
+      true,
+      null
+    );
+    expect(result.response).toBeNull();
+  });
+
+  it("still treats user as suspended when auto-unsuspend DB update errors", async () => {
+    const supabase = mockSupabase({
+      profileData: {
+        account_status: "suspended",
+        suspended_until: "2020-01-01T00:00:00Z",
+      },
+      unsuspendResult: { error: { message: "connection lost" } },
+    });
+    const result = await checkBanEnforcement(
+      createRequest("/billing"),
+      supabase,
+      "user-1",
+      true,
+      null
+    );
+    expect(result.response).not.toBeNull();
+    expect(result.response!.status).toBe(307);
   });
 
   it("allows active users through", async () => {

@@ -81,9 +81,17 @@ export function useAuth() {
           return data;
         }
 
-        // No row and no error — profile doesn't exist yet, no point retrying.
+        // No row yet — for OAuth signups the profile may be created
+        // asynchronously by a trigger, so retry before giving up.
         if (!error && !data) {
-          return null;
+          const isLastAttempt = attempt === PROFILE_FETCH_RETRY_DELAYS_MS.length;
+          if (isLastAttempt) {
+            return null;
+          }
+          await new Promise((resolve) => {
+            setTimeout(resolve, PROFILE_FETCH_RETRY_DELAYS_MS[attempt]);
+          });
+          continue;
         }
 
         lastError = error;

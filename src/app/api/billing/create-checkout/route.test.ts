@@ -139,6 +139,8 @@ function createPlansTableMock(
 }
 
 describe("POST /api/billing/create-checkout", () => {
+  const CONFIRMED_USER = { id: "user-1", email_confirmed_at: "2024-01-01T00:00:00Z" };
+
   const mockSupabase = {
     from: vi.fn(),
     auth: { getUser: vi.fn() },
@@ -152,6 +154,7 @@ describe("POST /api/billing/create-checkout", () => {
     vi.clearAllMocks();
     vi.mocked(createClient).mockResolvedValue(mockSupabase as never);
     vi.mocked(createAdminClient).mockReturnValue(mockAdmin as never);
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: CONFIRMED_USER } });
     mockSupabase.from.mockImplementation((table: string) => mockAdmin.from(table));
     mockAdmin.from.mockImplementation((table: string) => {
       if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
@@ -209,6 +212,19 @@ describe("POST /api/billing/create-checkout", () => {
     expect(res.status).toBe(401);
   });
 
+  it("returns 403 when email is not confirmed", async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({
+      data: { user: { id: "user-1", email_confirmed_at: null } },
+    });
+
+    const req = createMockRequest({ planId: "550e8400-e29b-41d4-a716-446655440000" });
+    const res = await createCheckout(req);
+    const data = await res.json();
+
+    expect(res.status).toBe(403);
+    expect(data.error).toContain("confirm your email");
+  });
+
   it("rejects cross-site checkout creation requests", async () => {
     const res = await createCheckout(
       createCrossSiteRequest({ planId: "550e8400-e29b-41d4-a716-446655440000" })
@@ -226,8 +242,6 @@ describe("POST /api/billing/create-checkout", () => {
   });
 
   it("returns 404 cleanly instead of crashing when profile is not found", async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
-
     mockAdmin.from.mockImplementation((table: string) => {
       if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
@@ -247,8 +261,6 @@ describe("POST /api/billing/create-checkout", () => {
   });
 
   it("returns 404 cleanly instead of crashing when plan is not found", async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
-
     mockAdmin.from.mockImplementation((table: string) => {
       if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
@@ -275,8 +287,6 @@ describe("POST /api/billing/create-checkout", () => {
   });
 
   it("returns 400 for an invalid checkout payload", async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
-
     const req = createMockRequest({ planId: "not-a-uuid" });
     const res = await createCheckout(req);
     const data = await res.json();
@@ -287,7 +297,7 @@ describe("POST /api/billing/create-checkout", () => {
 
   it("happy path: returns checkoutUrl and paymentId on success", async () => {
     mockSupabase.auth.getUser.mockResolvedValue({
-      data: { user: { id: "user-1", email: "member@test.com" } },
+      data: { user: { ...CONFIRMED_USER, email: "member@test.com" } },
     });
 
     mockAdmin.from.mockImplementation((table: string) => {
@@ -366,7 +376,7 @@ describe("POST /api/billing/create-checkout", () => {
     const stablePlanToken = getStablePlanId("MZANSI_MARKET", "growth");
 
     mockSupabase.auth.getUser.mockResolvedValue({
-      data: { user: { id: "user-1", email: "member@test.com" } },
+      data: { user: { ...CONFIRMED_USER, email: "member@test.com" } },
     });
 
     mockAdmin.from.mockImplementation((table: string) => {
@@ -435,8 +445,6 @@ describe("POST /api/billing/create-checkout", () => {
   });
 
   it("returns 503 when Ozow credentials are missing", async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
-
     vi.mocked(createHostedCheckout).mockRejectedValueOnce(
       new OzowConfigurationError("Ozow credentials are not configured")
     );
@@ -450,8 +458,6 @@ describe("POST /api/billing/create-checkout", () => {
   });
 
   it("returns 503 when Ozow authentication fails", async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
-
     vi.mocked(createHostedCheckout).mockRejectedValueOnce(
       new OzowAuthenticationError("Payment provider authentication failed")
     );
@@ -467,8 +473,6 @@ describe("POST /api/billing/create-checkout", () => {
   });
 
   it("returns 503 when Ozow is temporarily unavailable", async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
-
     vi.mocked(createHostedCheckout).mockRejectedValueOnce(
       new OzowProviderError("Ozow payment creation failed")
     );
@@ -490,7 +494,7 @@ describe("POST /api/billing/create-checkout", () => {
       degraded: false,
       retryAfter: 30,
     });
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: CONFIRMED_USER } });
 
     const res = await createCheckout(
       createMockRequest({ planId: "550e8400-e29b-41d4-a716-446655440000" })
@@ -507,7 +511,7 @@ describe("POST /api/billing/create-checkout", () => {
       degraded: true,
       retryAfter: 60,
     });
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: CONFIRMED_USER } });
 
     const res = await createCheckout(
       createMockRequest({ planId: "550e8400-e29b-41d4-a716-446655440000" })
@@ -517,8 +521,6 @@ describe("POST /api/billing/create-checkout", () => {
   });
 
   it("returns 400 when user already has an active entitlement for the area", async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
-
     mockAdmin.from.mockImplementation((table: string) => {
       if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
@@ -561,8 +563,6 @@ describe("POST /api/billing/create-checkout", () => {
   });
 
   it("returns 409 when a pending payment already exists for the area", async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
-
     mockAdmin.from.mockImplementation((table: string) => {
       if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
@@ -618,8 +618,6 @@ describe("POST /api/billing/create-checkout", () => {
   });
 
   it("returns 500 when profile fetch encounters a DB error", async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
-
     mockAdmin.from.mockImplementation((table: string) => {
       if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
@@ -643,8 +641,6 @@ describe("POST /api/billing/create-checkout", () => {
   });
 
   it("returns 503 when entitlement check encounters a DB error", async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
-
     mockAdmin.from.mockImplementation((table: string) => {
       if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
@@ -691,8 +687,6 @@ describe("POST /api/billing/create-checkout", () => {
   });
 
   it("returns 503 when pending payment check encounters a DB error", async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
-
     mockAdmin.from.mockImplementation((table: string) => {
       if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {

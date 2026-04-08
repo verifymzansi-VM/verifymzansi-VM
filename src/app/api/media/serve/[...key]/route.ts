@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { S3Client, GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { createLogger } from "@/lib/utils/logger";
+import { checkLocalRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 
 const logger = createLogger("MediaServe");
 
@@ -323,6 +324,19 @@ export async function GET(
   const ALLOWED_PREFIXES = ["media/", "listings/"];
   if (!ALLOWED_PREFIXES.some((p) => key.startsWith(p))) {
     return NextResponse.json({ error: "Invalid key" }, { status: 400 });
+  }
+
+  // Rate-limit: generous threshold (public CDN-cached content)
+  const ip = getClientIp(request);
+  const rl = checkLocalRateLimit(ip, "media:serve", 300);
+  if (rl.limited) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      {
+        status: 429,
+        headers: { "Retry-After": String(rl.retryAfter ?? 60) },
+      }
+    );
   }
 
   // ── Conditional GET (If-None-Match) ─────────────────────────────────

@@ -195,23 +195,44 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Pre-flight: check account status BEFORE creating a session so that
+    // suspended/banned/deleted users never briefly hold a valid session.
+    const adminClient = createAdminClient();
+    const { data: preflightProfile } = await adminClient
+      .from("account_profiles")
+      .select("account_status, user_id")
+      .eq("email", parsedBody.data.email.toLowerCase())
+      .maybeSingle();
+
+    const preflightStatus = preflightProfile?.account_status;
+    if (
+      preflightStatus === "suspended" ||
+      preflightStatus === "banned" ||
+      preflightStatus === "deleted"
+    ) {
+      log.warn("Login blocked: account status (pre-session)", {
+        email: parsedBody.data.email.replace(/(.{2}).*(@.*)/, "$1***$2"),
+        status: preflightStatus,
+      });
+      // Return generic error to avoid leaking account existence
+      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
+    }
+
     const supabase = await createClient();
     const { error } = await supabase.auth.signInWithPassword({
       email: parsedBody.data.email,
       password: parsedBody.data.password,
     });
 
-    const isEmailNotConfirmed = error?.message?.toLowerCase().includes("email not confirmed");
-
     if (!error) {
       clearLockout(parsedBody.data.email);
 
-      // Block login for suspended/banned/deleted accounts
+      // Double-check account status post-login in case preflight missed
+      // (e.g. email column doesn't exist yet on account_profiles).
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (user) {
-        const adminClient = createAdminClient();
         const { data: accountProfile } = await adminClient
           .from("account_profiles")
           .select("account_status")
@@ -248,21 +269,8 @@ export async function POST(request: NextRequest) {
         });
       });
 
-      if (isEmailNotConfirmed) {
-        log.info("Login failed: email not confirmed", {
-          email: parsedBody.data.email.replace(/(.{2}).*(@.*)/, "$1***$2"),
-        });
-        return NextResponse.json(
-          {
-            error: "Please confirm your email address before signing in.",
-            code: "email_not_confirmed",
-          },
-          { status: 403 }
-        );
-      }
-
-      // Return the same generic error for all auth failures to avoid leaking
-      // whether an account exists or is merely awaiting confirmation.
+      // Return the same generic error for ALL auth failures (including
+      // email-not-confirmed) to avoid leaking whether an account exists.
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
     }
 

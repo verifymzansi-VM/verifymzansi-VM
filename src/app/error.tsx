@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import * as Sentry from "@sentry/nextjs";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,17 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const [debugVisible] = useState(() => {
+    try {
+      return (
+        typeof window !== "undefined" &&
+        new URLSearchParams(window.location.search).get("debug") === "1"
+      );
+    } catch {
+      return false;
+    }
+  });
+
   useEffect(() => {
     Sentry.captureException(error);
     console.error("[GlobalError]", error.digest ?? error.message);
@@ -27,6 +38,11 @@ export default function GlobalError({
         </p>
         {error.digest && (
           <p className="text-xs text-muted-foreground">Error reference: {error.digest}</p>
+        )}
+        {debugVisible && (
+          <pre className="mt-2 max-w-md overflow-auto rounded bg-neutral-100 p-2 text-left text-xs text-red-700 dark:bg-neutral-900 dark:text-red-400">
+            {error.message}\n{error.stack ?? "(no stack)"}
+          </pre>
         )}
       </div>
       <div className="flex gap-3">

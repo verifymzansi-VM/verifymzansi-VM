@@ -327,17 +327,26 @@ async function handleSuspension(
 
   if (suspendedUntil && new Date(suspendedUntil) <= new Date()) {
     try {
-      await supabase
+      const { error: unsuspendError } = await supabase
         .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .update({ account_status: "active", suspended_until: null })
         .eq("user_id", userId);
+      if (unsuspendError) {
+        logger.error("Auto-unsuspend DB update failed — treating as still suspended", {
+          userId,
+          error: unsuspendError.message,
+        });
+        // Fall through to suspension handling below
+      } else {
+        return null;
+      }
     } catch (unsuspendErr) {
       logger.error("Auto-unsuspend DB update failed — user will retry on next request", {
         userId,
         error: unsuspendErr instanceof Error ? unsuspendErr.message : "Unknown",
       });
+      // Fall through to suspension handling below
     }
-    return null;
   }
 
   // Avoid redirect loop: if already on /dashboard with ?suspended, let it through

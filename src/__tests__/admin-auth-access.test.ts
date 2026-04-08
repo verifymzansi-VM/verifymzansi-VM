@@ -51,6 +51,12 @@ vi.mock("@/lib/auth/admin-access", () => ({
       return role === "admin" || role === "moderator" ? role : null;
     }
   ),
+  verifyCapabilityFromDb: vi.fn(
+    async (user: { app_metadata?: Record<string, unknown> } | null | undefined) => {
+      const role = user?.app_metadata?.role;
+      return role === "admin" || role === "moderator";
+    }
+  ),
 }));
 
 vi.mock("@/lib/utils/logger", () => ({

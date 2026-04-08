@@ -78,10 +78,11 @@ export async function POST(request: NextRequest) {
 
     const { data: entitlement, error: entitlementError } = await admin
       .from("entitlements")
-      .select("id, user_id, area, tier, status")
+      .select("id, user_id, area, tier, status, expires_at")
       .eq("id", currentEntitlementId)
       .eq("user_id", user.id)
       .eq("type", "subscription")
+      .gte("expires_at", new Date().toISOString())
       .maybeSingle();
 
     if (entitlementError) {
@@ -136,8 +137,18 @@ export async function POST(request: NextRequest) {
 
     // Block downgrades — only upgrades are supported via self-service
     const TIER_RANK: Record<string, number> = { starter: 0, growth: 1, pro: 2 };
-    const currentRank = TIER_RANK[entitlement.tier] ?? -1;
-    const newRank = TIER_RANK[newPlan.tier] ?? -1;
+    const currentRank = TIER_RANK[entitlement.tier];
+    const newRank = TIER_RANK[newPlan.tier];
+    if (currentRank === undefined || newRank === undefined) {
+      log.error("Unknown tier encountered in plan change", {
+        currentTier: entitlement.tier,
+        newTier: newPlan.tier,
+      });
+      return NextResponse.json(
+        { error: "Unrecognised plan tier. Please contact support." },
+        { status: 400 }
+      );
+    }
     if (newRank < currentRank) {
       return NextResponse.json(
         { error: "Plan downgrades are not yet supported. Please contact support for assistance." },

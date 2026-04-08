@@ -16,7 +16,15 @@ Sentry.init({
   replaysSessionSampleRate: 0.01,
   replaysOnErrorSampleRate: 1.0,
 
-  integrations: [Sentry.replayIntegration()],
+  integrations: (() => {
+    try {
+      return [Sentry.replayIntegration()];
+    } catch {
+      // Replay may fail to initialise on iOS Safari due to blob worker
+      // restrictions. Degrade gracefully rather than crashing the app.
+      return [];
+    }
+  })(),
 
   // Scrub PII from breadcrumbs
   beforeBreadcrumb(breadcrumb) {

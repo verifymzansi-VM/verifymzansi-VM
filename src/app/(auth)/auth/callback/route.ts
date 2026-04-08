@@ -139,11 +139,17 @@ export async function GET(request: Request) {
 
         let profile = await ensureAccountProfile(supabase, user);
         if (!profile) {
-          // Retry once for transient DB errors — ensureAccountProfile uses upsert so this is safe
-          log.warn("First ensureAccountProfile attempt returned null, retrying", {
-            userId: user.id,
-          });
-          profile = await ensureAccountProfile(supabase, user);
+          // Exponential backoff for transient DB errors — ensureAccountProfile uses upsert so retries are safe
+          const retryDelays = [200, 500, 1500];
+          for (const delay of retryDelays) {
+            log.warn("ensureAccountProfile returned null, retrying with backoff", {
+              userId: user.id,
+              delayMs: delay,
+            });
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            profile = await ensureAccountProfile(supabase, user);
+            if (profile) break;
+          }
         }
         if (!profile) {
           log.error("Failed to create account profile for OAuth user", {

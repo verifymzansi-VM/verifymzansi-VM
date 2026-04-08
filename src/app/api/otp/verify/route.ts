@@ -20,6 +20,7 @@ const log = createLogger("OTPVerify");
 const MAX_VERIFY_ATTEMPTS = 5;
 const _LOCKOUT_MS = 15 * 60 * 1000;
 const OTP_PBKDF2_ITERATIONS = 100000;
+const NO_CACHE_HEADERS = { "Cache-Control": "private, no-store" } as const;
 
 // Re-exported from shared module
 import { ensureAccountProfile } from "@/lib/account/ensure-profile";
@@ -166,6 +167,11 @@ async function finalizePhoneVerification(
 
   if (stepsError) {
     log.error("Failed to update verification steps", { error: stepsError.message });
+    return {
+      success: false,
+      error: "Failed to record phone verification. Please try again.",
+      status: 500,
+    };
   }
 
   const { error: sessionError } = await supabase.from("verification_sessions").upsert(
@@ -180,6 +186,11 @@ async function finalizePhoneVerification(
     log.error("Failed to update verification session phone state", {
       error: sessionError.message,
     });
+    return {
+      success: false,
+      error: "Failed to record phone verification. Please try again.",
+      status: 500,
+    };
   }
 
   const { error: otpLogError } = await adminSupabase
@@ -451,12 +462,15 @@ export async function POST(request: NextRequest) {
       });
     });
 
-    return NextResponse.json({ success: true, verified: true });
+    return NextResponse.json({ success: true, verified: true }, { headers: NO_CACHE_HEADERS });
   } catch (err) {
     log.error("Unexpected error", {
       error: err instanceof Error ? err.message : "unknown error",
       stack: err instanceof Error ? err.stack : undefined,
     });
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500, headers: NO_CACHE_HEADERS }
+    );
   }
 }

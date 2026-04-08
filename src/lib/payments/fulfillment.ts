@@ -18,10 +18,11 @@ function computeVatInclusiveBreakdown(totalCents: number): {
   vatCents: number;
 } {
   const vatCents = Math.round((totalCents * VAT_RATE_BPS) / (10000 + VAT_RATE_BPS));
-  return {
-    amountCents: totalCents - vatCents,
-    vatCents,
-  };
+  const amountCents = totalCents - vatCents;
+  if (amountCents + vatCents !== totalCents) {
+    throw new Error(`VAT breakdown mismatch: ${amountCents} + ${vatCents} !== ${totalCents}`);
+  }
+  return { amountCents, vatCents };
 }
 
 function buildInvoiceNumber(payment: PaymentRecordShape): string {
@@ -101,8 +102,11 @@ export async function fulfillPayment(
       getOwnerColumn(client as never, "businesses"),
       getOwnerColumn(client as never, "promotions"),
     ]);
-  } catch {
-    log.warn("Owner column detection failed, falling back to owner_id");
+  } catch (ownerColErr) {
+    log.error("Owner column detection failed — aborting fulfillment to prevent misattribution", {
+      error: ownerColErr instanceof Error ? ownerColErr.message : "Unknown",
+    });
+    throw new Error("Owner column detection failed — cannot safely fulfil payment");
   }
 
   // Storefronts are not in OWNER_COMPAT_TABLES — probe separately
@@ -123,8 +127,11 @@ export async function fulfillPayment(
     if (probe.error?.code === "42703") {
       storefrontsOwnerCol = "seller_id";
     }
-  } catch {
-    log.warn("Storefront owner column detection failed, falling back to owner_id");
+  } catch (sfOwnerErr) {
+    log.error("Storefront owner column detection failed — aborting fulfillment", {
+      error: sfOwnerErr instanceof Error ? sfOwnerErr.message : "Unknown",
+    });
+    throw new Error("Storefront owner column detection failed — cannot safely fulfil payment");
   }
 
   // Anchor all duration calculations to payment creation time for idempotent re-runs
@@ -146,8 +153,14 @@ export async function fulfillPayment(
         .eq("user_id", payment.user_id)
         .maybeSingle();
 
+      if (!accountProfile) {
+        throw new Error(
+          `Account profile not found for user ${payment.user_id} — cannot create entitlement`
+        );
+      }
+
       const entitlementStatus =
-        accountProfile?.account_status === "restricted" ? "pending_verification" : "active";
+        accountProfile.account_status === "restricted" ? "pending_verification" : "active";
 
       const { error } = await supabase.from("entitlements").upsert(
         {

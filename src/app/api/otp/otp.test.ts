@@ -1166,5 +1166,222 @@ describe("OTP Routes", () => {
         error: "Invalid or expired OTP",
       });
     });
+
+    it("returns error when verification_steps upsert fails", async () => {
+      const storedHash = await hashOtpForTest("123456");
+      const challengeUpdateIs = vi.fn().mockResolvedValue({ error: null });
+      const challengeUpdateEq: ReturnType<typeof vi.fn> = vi.fn().mockImplementation(() => ({
+        eq: challengeUpdateEq,
+        is: challengeUpdateIs,
+      }));
+      const profileUpdateEq = vi.fn().mockResolvedValue({ error: null });
+      const verificationStepUpsert = vi
+        .fn()
+        .mockResolvedValue({ error: { message: "DB connection lost" } });
+      const otpLogVerifyIs = vi.fn().mockResolvedValue({ error: null });
+      const otpLogVerifyHashEq = vi.fn().mockReturnValue({ is: otpLogVerifyIs });
+      const otpLogVerifyPhoneEq = vi.fn().mockReturnValue({ eq: otpLogVerifyHashEq });
+
+      const mockAdminClient = {
+        from: vi.fn((table: string) => {
+          if (table === "otp_challenges") {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              is: vi.fn().mockReturnThis(),
+              gte: vi.fn().mockReturnThis(),
+              order: vi.fn().mockReturnThis(),
+              limit: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: "challenge-1",
+                  otp_hash: storedHash,
+                  attempt_count: 0,
+                  locked_until: null,
+                  expires_at: new Date(Date.now() + 60_000).toISOString(),
+                },
+                error: null,
+              }),
+              update: vi.fn().mockReturnValue({
+                eq: challengeUpdateEq,
+              }),
+            };
+          }
+
+          if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: { id: "profile-1", display_name: "Member" },
+                    error: null,
+                  }),
+                }),
+              }),
+            };
+          }
+
+          if (table === "verification_steps") {
+            return {
+              upsert: verificationStepUpsert,
+            };
+          }
+
+          if (table === "otp_logs") {
+            return {
+              update: vi.fn().mockReturnValue({
+                eq: otpLogVerifyPhoneEq,
+              }),
+            };
+          }
+
+          return {};
+        }),
+      };
+
+      vi.mocked(createAdminClient).mockReturnValue(mockAdminClient as never);
+      mockUserClient.from.mockImplementation((table: string) => {
+        if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: { id: "profile-1" },
+                  error: null,
+                }),
+              }),
+            }),
+            update: vi.fn().mockReturnValue({
+              eq: profileUpdateEq,
+            }),
+          };
+        }
+
+        if (table === "verification_sessions") {
+          return {
+            upsert: vi.fn().mockResolvedValue({ error: null }),
+          };
+        }
+
+        return {};
+      });
+
+      const res = await verifyOtp(
+        createMockRequest("/api/otp/verify", { phone: "+27821234567", otp: "123456" })
+      );
+      const data = await res.json();
+
+      expect(res.status).toBe(500);
+      expect(data.error).toBe("Failed to record phone verification. Please try again.");
+    });
+
+    it("returns error when verification_sessions upsert fails", async () => {
+      const storedHash = await hashOtpForTest("123456");
+      const challengeUpdateIs = vi.fn().mockResolvedValue({ error: null });
+      const challengeUpdateEq: ReturnType<typeof vi.fn> = vi.fn().mockImplementation(() => ({
+        eq: challengeUpdateEq,
+        is: challengeUpdateIs,
+      }));
+      const profileUpdateEq = vi.fn().mockResolvedValue({ error: null });
+      const verificationStepUpsert = vi.fn().mockResolvedValue({ error: null });
+      const sessionUpsert = vi
+        .fn()
+        .mockResolvedValue({ error: { message: "Session table unavailable" } });
+      const otpLogVerifyIs = vi.fn().mockResolvedValue({ error: null });
+      const otpLogVerifyHashEq = vi.fn().mockReturnValue({ is: otpLogVerifyIs });
+      const otpLogVerifyPhoneEq = vi.fn().mockReturnValue({ eq: otpLogVerifyHashEq });
+
+      const mockAdminClient = {
+        from: vi.fn((table: string) => {
+          if (table === "otp_challenges") {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              is: vi.fn().mockReturnThis(),
+              gte: vi.fn().mockReturnThis(),
+              order: vi.fn().mockReturnThis(),
+              limit: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: "challenge-1",
+                  otp_hash: storedHash,
+                  attempt_count: 0,
+                  locked_until: null,
+                  expires_at: new Date(Date.now() + 60_000).toISOString(),
+                },
+                error: null,
+              }),
+              update: vi.fn().mockReturnValue({
+                eq: challengeUpdateEq,
+              }),
+            };
+          }
+
+          if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: { id: "profile-1", display_name: "Member" },
+                    error: null,
+                  }),
+                }),
+              }),
+            };
+          }
+
+          if (table === "verification_steps") {
+            return {
+              upsert: verificationStepUpsert,
+            };
+          }
+
+          if (table === "otp_logs") {
+            return {
+              update: vi.fn().mockReturnValue({
+                eq: otpLogVerifyPhoneEq,
+              }),
+            };
+          }
+
+          return {};
+        }),
+      };
+
+      vi.mocked(createAdminClient).mockReturnValue(mockAdminClient as never);
+      mockUserClient.from.mockImplementation((table: string) => {
+        if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: { id: "profile-1" },
+                  error: null,
+                }),
+              }),
+            }),
+            update: vi.fn().mockReturnValue({
+              eq: profileUpdateEq,
+            }),
+          };
+        }
+
+        if (table === "verification_sessions") {
+          return {
+            upsert: sessionUpsert,
+          };
+        }
+
+        return {};
+      });
+
+      const res = await verifyOtp(
+        createMockRequest("/api/otp/verify", { phone: "+27821234567", otp: "123456" })
+      );
+      const data = await res.json();
+
+      expect(res.status).toBe(500);
+      expect(data.error).toBe("Failed to record phone verification. Please try again.");
+    });
   });
 });

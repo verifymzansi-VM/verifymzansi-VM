@@ -54,7 +54,9 @@ type CachedToken = {
 const MAX_CACHED_TOKENS = 20;
 const cachedTokens = new Map<string, CachedToken>();
 const pendingTokenFetches = new Map<string, Promise<string>>();
-const OZOW_WEBHOOK_TOLERANCE_SECONDS = 5 * 60;
+// 90 seconds tolerance (45s each way) — tight enough to limit replay attacks
+// while accommodating reasonable clock drift and network latency.
+const OZOW_WEBHOOK_TOLERANCE_SECONDS = 90;
 const OZOW_REFERENCE_FIELD_MAX_LENGTH = 14;
 
 const OZOW_ALLOWED_HOSTS = {

@@ -60,6 +60,10 @@ vi.mock("@/lib/utils/rate-limit", () => ({
   getClientIp: mockGetClientIp,
 }));
 
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: vi.fn(() => null),
+}));
+
 import { POST } from "@/app/api/auth/resend-confirmation/route";
 
 function createRequest(body: unknown): NextRequest {

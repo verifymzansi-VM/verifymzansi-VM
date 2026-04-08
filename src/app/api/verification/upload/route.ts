@@ -172,6 +172,13 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Parse multipart form ─────────────────────────────────
+    // Reject oversized bodies before buffering into memory (belt check; Content-Length can be spoofed)
+    const contentLength = parseInt(request.headers.get("content-length") ?? "", 10);
+    const MAX_BODY_BYTES = 6 * 1024 * 1024; // 6 MB (5 MB file + metadata overhead)
+    if (contentLength > MAX_BODY_BYTES) {
+      return jsonError({ error: "Request body too large" }, { status: 413 });
+    }
+
     let formData: FormData;
     try {
       formData = await request.formData();
@@ -567,13 +574,21 @@ export async function POST(request: NextRequest) {
         userId: user.id,
         flaggedProfileId: phoneFlaggedUserId,
       });
-      await admin.from("kyc_risk_signals").insert({
+      const { error: riskSignalError } = await admin.from("kyc_risk_signals").insert({
         user_id: user.id,
         artifact_id: artifact.id,
         signal_code: "phone_linked_to_flagged_account",
         severity: "block",
         value_json: { flaggedProfileId: phoneFlaggedUserId },
       });
+      if (riskSignalError) {
+        log.error("CRITICAL: failed to persist block-severity risk signal", {
+          error: riskSignalError.message,
+          userId: user.id,
+          artifactId: artifact.id,
+        });
+        return NextResponse.json({ error: "Upload processing failed" }, { status: 500 });
+      }
     }
 
     // ── Risk engine: SHA-256, velocity, ID reuse, provider ───
@@ -656,6 +671,8 @@ export async function POST(request: NextRequest) {
       }
       const iv = crypto.randomBytes(12);
       const cipher = crypto.createCipheriv("aes-256-gcm", Buffer.from(encKey, "hex"), iv);
+      // Bind ciphertext to this user + step so it cannot be transplanted across rows
+      cipher.setAAD(Buffer.from(`${user.id}:${stepType}`));
       let encrypted = cipher.update(idNumber, "utf8", "hex");
       encrypted += cipher.final("hex");
       const tag = cipher.getAuthTag().toString("hex");

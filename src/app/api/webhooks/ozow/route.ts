@@ -287,6 +287,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, duplicate: true });
     }
 
+    // Reject webhooks whose providerPaymentId contradicts the stored value
+    if (
+      payment.provider_payment_id &&
+      payload.providerPaymentId &&
+      payment.provider_payment_id !== payload.providerPaymentId
+    ) {
+      log.error("providerPaymentId mismatch — possible replay/substitution", {
+        paymentId: payment.id,
+        stored: payment.provider_payment_id,
+        received: payload.providerPaymentId,
+      });
+      return NextResponse.json({ error: "Payment ID mismatch" }, { status: 400 });
+    }
+
     if (eventType === "transaction.complete" && isFailedTransactionStatus(status)) {
       if (payment.status === "failed") {
         return NextResponse.json({ success: true, duplicate: true });
@@ -384,7 +398,10 @@ export async function POST(request: NextRequest) {
       if (hasFulfillmentCompletion(currentPayment)) {
         const finalized = await finalizeCompletedPayment(supabase, currentPayment, payload);
         if (!finalized) {
-          return NextResponse.json({ error: "Payment finalization failed" }, { status: 500 });
+          return NextResponse.json(
+            { error: "Payment finalization failed" },
+            { status: 500, headers: { "Retry-After": "30" } }
+          );
         }
 
         await auditPaymentCompleted(currentPayment);
@@ -426,7 +443,10 @@ export async function POST(request: NextRequest) {
           paymentId: currentPayment.id,
           error: error instanceof Error ? error.message : "Unknown error",
         });
-        return NextResponse.json({ error: "Payment fulfillment failed" }, { status: 500 });
+        return NextResponse.json(
+          { error: "Payment fulfillment failed" },
+          { status: 500, headers: { "Retry-After": "30" } }
+        );
       }
 
       const marked = await persistFulfillmentCompletion(supabase, currentPayment, payload);
@@ -444,12 +464,18 @@ export async function POST(request: NextRequest) {
 
       const reloadedPayment = await getPaymentById(supabase, currentPayment.id);
       if (!reloadedPayment) {
-        return NextResponse.json({ error: "Payment finalization failed" }, { status: 500 });
+        return NextResponse.json(
+          { error: "Payment finalization failed" },
+          { status: 500, headers: { "Retry-After": "30" } }
+        );
       }
 
       const finalized = await finalizeCompletedPayment(supabase, reloadedPayment, payload);
       if (!finalized) {
-        return NextResponse.json({ error: "Payment finalization failed" }, { status: 500 });
+        return NextResponse.json(
+          { error: "Payment finalization failed" },
+          { status: 500, headers: { "Retry-After": "30" } }
+        );
       }
 
       await auditPaymentCompleted(reloadedPayment);
@@ -492,12 +518,18 @@ export async function POST(request: NextRequest) {
         error: error instanceof Error ? error.message : "Unknown error",
       });
       await rollbackPaymentProcessing(supabase as never, payment.id);
-      return NextResponse.json({ error: "Payment fulfillment failed" }, { status: 500 });
+      return NextResponse.json(
+        { error: "Payment fulfillment failed" },
+        { status: 500, headers: { "Retry-After": "30" } }
+      );
     }
 
     const processingPayment = await getPaymentById(supabase, payment.id);
     if (!processingPayment) {
-      return NextResponse.json({ error: "Payment finalization failed" }, { status: 500 });
+      return NextResponse.json(
+        { error: "Payment finalization failed" },
+        { status: 500, headers: { "Retry-After": "30" } }
+      );
     }
 
     const marked = await persistFulfillmentCompletion(supabase, processingPayment, payload);
@@ -518,12 +550,18 @@ export async function POST(request: NextRequest) {
 
     const finalPayment = await getPaymentById(supabase, payment.id);
     if (!finalPayment) {
-      return NextResponse.json({ error: "Payment finalization failed" }, { status: 500 });
+      return NextResponse.json(
+        { error: "Payment finalization failed" },
+        { status: 500, headers: { "Retry-After": "30" } }
+      );
     }
 
     const finalized = await finalizeCompletedPayment(supabase, finalPayment, payload);
     if (!finalized) {
-      return NextResponse.json({ error: "Payment finalization failed" }, { status: 500 });
+      return NextResponse.json(
+        { error: "Payment finalization failed" },
+        { status: 500, headers: { "Retry-After": "30" } }
+      );
     }
 
     await auditPaymentCompleted(finalPayment);
@@ -550,6 +588,9 @@ export async function POST(request: NextRequest) {
     log.error("Ozow webhook processing failed", {
       error: error instanceof Error ? error.message : "Unknown error",
     });
-    return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Webhook processing failed" },
+      { status: 500, headers: { "Retry-After": "30" } }
+    );
   }
 }

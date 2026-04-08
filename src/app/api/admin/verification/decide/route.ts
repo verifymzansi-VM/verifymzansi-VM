@@ -10,7 +10,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { adminVerificationDecideSchema } from "@/lib/validations/admin";
 import { createLogger } from "@/lib/utils/logger";
-import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
+import { verifyCapabilityFromDb, verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { createNotification } from "@/lib/notifications";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
@@ -46,10 +46,12 @@ export async function POST(request: Request) {
       return unauthorizedResponse();
     }
 
-    const adminRole = await verifyStaffActorRoleFromDb(user);
-    if (!adminRole) {
+    const hasCapability = await verifyCapabilityFromDb(user, "decision:approve");
+    if (!hasCapability) {
       return forbiddenResponse();
     }
+    // Extract role for audit logging (capability check already verified DB role)
+    const adminRole = (await verifyStaffActorRoleFromDb(user)) ?? undefined;
 
     const rl = checkLocalRateLimit(user.id, "admin:verification:decide");
     if (rl.limited) {
@@ -585,12 +587,18 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json({ success: true, decision });
+    return NextResponse.json(
+      { success: true, decision },
+      { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+    );
   } catch (err) {
     log.error("Verification decide failed", {
       error: err instanceof Error ? err.message : "Unknown error",
       stack: err instanceof Error ? err.stack : undefined,
     });
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500, headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+    );
   }
 }

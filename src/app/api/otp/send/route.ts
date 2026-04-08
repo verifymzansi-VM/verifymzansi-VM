@@ -48,7 +48,10 @@ function otpSendError(
     },
     {
       status,
-      headers: retryAfter !== undefined ? { "Retry-After": String(retryAfter) } : undefined,
+      headers: {
+        "Cache-Control": "private, no-store",
+        ...(retryAfter !== undefined ? { "Retry-After": String(retryAfter) } : {}),
+      },
     }
   );
 }
@@ -288,7 +291,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json(
+      { success: true },
+      { headers: { "Cache-Control": "private, no-store" } }
+    );
   } catch (error) {
     logApiError(log, "Unexpected error in OTP generation", error, {
       errorType: error instanceof Error ? error.name : typeof error,

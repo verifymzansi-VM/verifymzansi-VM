@@ -42,7 +42,9 @@ describe("POST /api/dsar/submit", () => {
     vi.clearAllMocks();
     delete process.env.TURNSTILE_SECRET_KEY;
     mockGetUser.mockResolvedValue({
-      data: { user: { id: "user-123", is_anonymous: false } },
+      data: {
+        user: { id: "user-123", is_anonymous: false, email_confirmed_at: "2024-01-01T00:00:00Z" },
+      },
     });
     mockCreateClient.mockResolvedValue({
       auth: {
@@ -67,6 +69,28 @@ describe("POST /api/dsar/submit", () => {
 
     expect(res.status).toBe(401);
     await expect(res.json()).resolves.toMatchObject({ error: "Unauthorized" });
+  });
+
+  it("returns 403 when email is not confirmed", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-123", is_anonymous: false, email_confirmed_at: null } },
+    });
+
+    const res = await POST(
+      createRequest({
+        type: "access",
+        name: "Nomsa Dlamini",
+        email: "nomsa@example.com",
+        idNumber: "8001015009087",
+        details: "Please send me a copy of my stored account data.",
+        turnstileToken: "tok",
+      })
+    );
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({
+      error: expect.stringContaining("confirm your email"),
+    });
   });
 
   it("rejects invalid request bodies", async () => {

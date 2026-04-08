@@ -77,9 +77,10 @@ describe("buildCsp", () => {
     expect(csp).toContain("object-src 'none'");
   });
 
-  it("uses unsafe-inline/unsafe-eval for scripts when no nonce", () => {
+  it("uses unsafe-inline for scripts when no nonce but NOT unsafe-eval", () => {
     const csp = buildCsp(null);
-    expect(csp).toContain("script-src 'self' 'unsafe-inline' 'unsafe-eval'");
+    expect(csp).toContain("script-src 'self' 'unsafe-inline'");
+    expect(csp).not.toContain("'unsafe-eval'");
     expect(csp).toContain("style-src 'self' 'unsafe-inline'");
   });
 

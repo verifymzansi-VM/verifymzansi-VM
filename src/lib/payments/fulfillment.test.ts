@@ -100,6 +100,16 @@ function createMockAdminClient(options?: {
       };
     }
 
+    if (table === "account_profiles") {
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: { account_status: "active" },
+        }),
+      };
+    }
+
     return {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),

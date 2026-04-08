@@ -89,10 +89,28 @@ export async function POST(request: NextRequest) {
     // already-compromised session cannot survive the credential rotation.
     const { error: revokeError } = await supabase.auth.signOut({ scope: "others" });
     if (revokeError) {
-      log.warn("Password updated but failed to revoke other sessions", {
+      // Session revocation failure is a security concern — log at error level
+      // and inform the caller so they can manually sign out other devices.
+      log.error("Password updated but failed to revoke other sessions", {
         userId: user.id,
         error: revokeError.message,
       });
+
+      void sendPasswordChangeNotification(user.email).catch((err) => {
+        log.warn("Failed to send password change notification", {
+          userId: user.id,
+          error: err instanceof Error ? err.message : "Unknown",
+        });
+      });
+
+      return NextResponse.json(
+        {
+          success: true,
+          warning:
+            "Password updated but other sessions could not be revoked. Please sign out on other devices manually.",
+        },
+        { status: 200 }
+      );
     }
 
     // Non-blocking notification so users can spot unauthorized changes

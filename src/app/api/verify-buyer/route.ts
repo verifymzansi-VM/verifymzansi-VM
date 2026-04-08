@@ -5,6 +5,7 @@ import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/li
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 
 const verifyBuyerSchema = z.object({
   token: z.string().uuid("Enter a valid buyer token"),
@@ -19,6 +20,9 @@ export async function POST(request: NextRequest) {
     if (originBlock) {
       return originBlock;
     }
+
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     // Rate limit by client IP to prevent token enumeration
     const ip = getClientIp(request);

@@ -44,7 +44,7 @@ export function buildCsp(
   // compatible with Cloudflare's infrastructure.
   const scriptSrc = nonce
     ? `script-src 'self' 'nonce-${nonce}' https://challenges.cloudflare.com https://static.cloudflareinsights.com`
-    : "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com";
+    : "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com";
   const styleSrc = nonce ? `style-src 'self' 'nonce-${nonce}'` : "style-src 'self' 'unsafe-inline'";
   const directives = [
     "default-src 'self'",
@@ -63,7 +63,7 @@ export function buildCsp(
     connectSrc,
     "frame-src https://challenges.cloudflare.com",
     "form-action 'self'",
-    "worker-src 'self'",
+    "worker-src 'self' blob:",
   ];
 
   if (options?.enforceHttps) {

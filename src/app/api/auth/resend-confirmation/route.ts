@@ -5,6 +5,7 @@ import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { buildAuthCallbackUrl } from "@/lib/utils/auth-redirect";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { getTurnstileConfigStatus, verifyTurnstileToken } from "@/lib/utils/turnstile";
 import { isPlaywrightTestMode as checkPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import { emailSchema, trimmedStringSchema, turnstileTokenSchema } from "@/lib/validations/shared";
@@ -21,6 +22,9 @@ export async function POST(request: NextRequest) {
   try {
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) return originBlock;
+
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     const isPlaywrightTestMode = checkPlaywrightTestMode();
     const turnstileStatus = getTurnstileConfigStatus({ requestHost: request.nextUrl.hostname });

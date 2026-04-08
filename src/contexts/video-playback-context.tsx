@@ -141,29 +141,36 @@ export function VideoPlaybackProvider({ children }: { children: React.ReactNode 
     // Enforce singleton: when any registered video starts playing
     // outside of arbitration (e.g. manual click, component toggle),
     // immediately pause all other registered videos.
+    //
+    // Wrapped in queueMicrotask so the handler never runs synchronously
+    // inside a React render cycle — iOS Safari fires the play event
+    // earlier than other browsers during IntersectionObserver callbacks,
+    // which can trigger state mutations during render and crash the app.
     const onPlay = () => {
-      if (exclusiveRef.current) {
-        // Exclusive lock held — nothing should play
-        el.pause();
-        return;
-      }
-      if (activeRef.current !== el) {
-        // Cancel pending debounced arbitration so it doesn't immediately
-        // override this external play.  The next visibility/priority change
-        // will re-schedule arbitration naturally.
-        if (timerRef.current) {
-          clearTimeout(timerRef.current);
-          timerRef.current = null;
+      queueMicrotask(() => {
+        if (exclusiveRef.current) {
+          // Exclusive lock held — nothing should play
+          el.pause();
+          return;
         }
-        // Set one-shot override so the next arbitration respects this play.
-        playInitiatedRef.current = el;
-        for (const [other] of videosRef.current) {
-          if (other !== el && !other.paused) {
-            other.pause();
+        if (activeRef.current !== el) {
+          // Cancel pending debounced arbitration so it doesn't immediately
+          // override this external play.  The next visibility/priority change
+          // will re-schedule arbitration naturally.
+          if (timerRef.current) {
+            clearTimeout(timerRef.current);
+            timerRef.current = null;
           }
+          // Set one-shot override so the next arbitration respects this play.
+          playInitiatedRef.current = el;
+          for (const [other] of videosRef.current) {
+            if (other !== el && !other.paused) {
+              other.pause();
+            }
+          }
+          activeRef.current = el;
         }
-        activeRef.current = el;
-      }
+      });
     };
     el.addEventListener("play", onPlay);
     playListenersRef.current.set(el, onPlay);

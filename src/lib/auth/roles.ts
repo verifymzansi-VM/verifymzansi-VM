@@ -102,12 +102,11 @@ const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
 
 /* ── Admin Email Allowlist ─────────────────────────────────
    Hard cap: only these accounts can ever hold the admin role.
-   The hardcoded list serves as the bootstrap default. Set the
-   ADMIN_EMAIL_ALLOWLIST env var (comma-separated) to override
-   without redeploying code.
+   Production requires ADMIN_EMAIL_ALLOWLIST env var (comma-separated).
+   The hardcoded list is used ONLY in development/test.
    ────────────────────────────────────────────────────────── */
 
-const DEFAULT_ADMIN_EMAILS: ReadonlyArray<string> = Object.freeze([
+const DEV_ADMIN_EMAILS: ReadonlyArray<string> = Object.freeze([
   "ivelosm@gmail.com",
   "senzonsm@gmail.com",
 ]);
@@ -122,7 +121,12 @@ function loadAdminAllowlist(): ReadonlyArray<string> {
         .filter(Boolean)
     );
   }
-  return DEFAULT_ADMIN_EMAILS;
+  // In production, require the env var — never fall back to hardcoded emails
+  const isProduction = typeof process !== "undefined" && process.env?.NODE_ENV === "production";
+  if (isProduction) {
+    return Object.freeze([]);
+  }
+  return DEV_ADMIN_EMAILS;
 }
 
 export const ADMIN_EMAIL_ALLOWLIST: ReadonlyArray<string> = loadAdminAllowlist();

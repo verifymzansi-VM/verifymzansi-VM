@@ -369,4 +369,88 @@ describe("POST /api/admin/flagging/action", () => {
     );
     expect(accountUpdateEq).toHaveBeenCalledWith("user_id", "owner-1");
   });
+
+  it("returns 500 when moderation_actions audit trail insert fails", async () => {
+    const reportsEq = vi.fn().mockReturnValue({
+      single: vi.fn().mockResolvedValue({
+        data: {
+          id: "report-1",
+          area: "MZANSI_MARKET",
+          target_type: "listing",
+          target_id: "listing-1",
+        },
+        error: null,
+      }),
+      update: vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    });
+    const listingsEq = vi.fn().mockReturnValue({
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: { owner_id: "owner-1" },
+        error: null,
+      }),
+      update: vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    });
+
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: "mod-1", app_metadata: { role: "moderator" } } },
+        }),
+      },
+    });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "reports") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: reportsEq,
+            }),
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          };
+        }
+
+        if (table === "listings") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: listingsEq,
+            }),
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          };
+        }
+
+        if (table === "moderation_actions") {
+          return {
+            insert: vi.fn().mockResolvedValue({
+              error: { message: "moderation_actions insert failed" },
+            }),
+          };
+        }
+
+        throw new Error(`Unexpected table ${table}`);
+      }),
+      auth: { admin: { getUserById: mockGetUserById } },
+      rpc: vi.fn().mockResolvedValue({ error: null }),
+    });
+
+    const res = await POST(
+      createRequest({
+        reportId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        action: "hide",
+        reason: "Audit trail failure test",
+      })
+    );
+
+    expect(res.status).toBe(500);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Failed to record enforcement action",
+    });
+  });
 });

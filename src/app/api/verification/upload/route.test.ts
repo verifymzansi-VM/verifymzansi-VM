@@ -1253,4 +1253,65 @@ describe("POST /api/verification/upload", () => {
       })
     );
   });
+
+  it("returns 500 when risk signal insert fails for phone linked to flagged account", async () => {
+    mockAuth({ id: "user-1", email: "test@example.com" });
+    setupDefaultAdminMocks();
+
+    const baseFromImpl = mockFrom.getMockImplementation();
+    if (!baseFromImpl) {
+      throw new Error("Expected default admin mock implementation");
+    }
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        const baseResult = baseFromImpl(table);
+        return {
+          ...baseResult,
+          select: vi.fn().mockImplementation(() => ({
+            eq: vi.fn().mockImplementation(() => ({
+              neq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue({
+                    data: [{ id: "flagged-profile-1" }],
+                    error: null,
+                  }),
+                }),
+              }),
+              maybeSingle: vi
+                .fn()
+                .mockResolvedValue({
+                  data: { id: "profile-1", phone: "+27123456789" },
+                  error: null,
+                }),
+              limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+            })),
+          })),
+        };
+      }
+
+      if (table === "kyc_risk_signals") {
+        return {
+          insert: vi.fn().mockResolvedValue({
+            error: { message: "risk_signals insert failed" },
+          }),
+        };
+      }
+
+      return baseFromImpl(table);
+    });
+
+    const req = createFormDataRequest({
+      file: createTestFile(),
+      docType: "id_document",
+    });
+
+    const response = await POST(req);
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        error: "Upload processing failed",
+      })
+    );
+  });
 });

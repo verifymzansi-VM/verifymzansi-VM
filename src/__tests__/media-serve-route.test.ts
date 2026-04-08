@@ -17,6 +17,15 @@ vi.mock("@aws-sdk/client-s3", () => ({
   },
 }));
 
+const { mockCheckLocalRateLimit } = vi.hoisted(() => ({
+  mockCheckLocalRateLimit: vi.fn().mockReturnValue({ limited: false }),
+}));
+
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkLocalRateLimit: mockCheckLocalRateLimit,
+  getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
+}));
+
 import { GET } from "@/app/api/media/serve/[...key]/route";
 
 function createRequest(headers: Record<string, string> = {}) {
@@ -109,5 +118,16 @@ describe("GET /api/media/serve/[...key]", () => {
     });
 
     expect(res.status).toBe(503);
+  });
+
+  it("returns 429 when rate-limited", async () => {
+    mockCheckLocalRateLimit.mockReturnValueOnce({ limited: true, retryAfter: 60 });
+
+    const res = await GET(createRequest(), {
+      params: Promise.resolve({ key: ["media", "listing", "abc", "photo.jpg"] }),
+    });
+
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("60");
   });
 });

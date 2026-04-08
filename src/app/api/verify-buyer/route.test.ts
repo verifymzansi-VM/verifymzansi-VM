@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { type NextRequest } from "next/server";
 
-const { mockFrom, mockCreateAdminClient } = vi.hoisted(() => ({
+const { mockFrom, mockCreateAdminClient, mockEnforceCsrfToken } = vi.hoisted(() => ({
   mockFrom: vi.fn(),
   mockCreateAdminClient: vi.fn(),
+  mockEnforceCsrfToken: vi.fn().mockReturnValue(null),
 }));
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -13,6 +14,10 @@ vi.mock("@/lib/supabase/admin", () => ({
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: vi.fn().mockResolvedValue({ limited: false }),
   getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
+}));
+
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: mockEnforceCsrfToken,
 }));
 
 import { POST } from "./route";

@@ -40,6 +40,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    if (!user.email_confirmed_at) {
+      return NextResponse.json(
+        { error: "Please confirm your email address before submitting a data request." },
+        { status: 403 }
+      );
+    }
+
     const clientIp = getClientIp(request) || "unknown";
     const rl = checkLocalRateLimit(clientIp, "dsar:submit");
     if (rl.limited) {

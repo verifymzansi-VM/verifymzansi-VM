@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
-const { mockCreateAdminClient, mockCheckRateLimit, mockLoggerError } = vi.hoisted(() => ({
-  mockCreateAdminClient: vi.fn(),
-  mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
-  mockLoggerError: vi.fn(),
-}));
+const { mockCreateAdminClient, mockCheckRateLimit, mockLoggerError, mockEnforceCsrfToken } =
+  vi.hoisted(() => ({
+    mockCreateAdminClient: vi.fn(),
+    mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
+    mockLoggerError: vi.fn(),
+    mockEnforceCsrfToken: vi.fn().mockReturnValue(null),
+  }));
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/utils/rate-limit", () => ({
@@ -14,6 +16,10 @@ vi.mock("@/lib/utils/rate-limit", () => ({
 }));
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ error: mockLoggerError, info: vi.fn(), warn: vi.fn() }),
+}));
+
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: mockEnforceCsrfToken,
 }));
 
 import { POST } from "@/app/api/verify-buyer/route";
@@ -37,6 +43,7 @@ describe("POST /api/verify-buyer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCheckRateLimit.mockResolvedValue({ limited: false });
+    mockEnforceCsrfToken.mockReturnValue(null);
   });
 
   it("returns 429 when buyer verification attempts are rate limited", async () => {
@@ -148,5 +155,19 @@ describe("POST /api/verify-buyer", () => {
     await expect(response.json()).resolves.toEqual({
       error: "Cross-site requests are not allowed",
     });
+  });
+
+  it("rejects requests with a missing or invalid CSRF token", async () => {
+    mockEnforceCsrfToken.mockReturnValue(
+      new Response(JSON.stringify({ error: "Missing CSRF token" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const response = await POST(createRequest({ token: "00000000-0000-4000-8000-000000000001" }));
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({ error: "Missing CSRF token" });
   });
 });

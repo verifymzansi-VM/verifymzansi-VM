@@ -137,6 +137,7 @@ describe("POST /api/billing/change-plan", () => {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
+          gte: vi.fn().mockReturnThis(),
           maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
         };
       }
@@ -161,6 +162,7 @@ describe("POST /api/billing/change-plan", () => {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
+          gte: vi.fn().mockReturnThis(),
           maybeSingle: vi.fn().mockResolvedValue({
             data: {
               id: "ent-1",
@@ -206,6 +208,7 @@ describe("POST /api/billing/change-plan", () => {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
+          gte: vi.fn().mockReturnThis(),
           maybeSingle: vi.fn().mockResolvedValue({
             data: {
               id: "ent-1",
@@ -273,6 +276,7 @@ describe("POST /api/billing/change-plan", () => {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
+          gte: vi.fn().mockReturnThis(),
           maybeSingle: vi.fn().mockResolvedValue({
             data: {
               id: "ent-1",
@@ -340,6 +344,7 @@ describe("POST /api/billing/change-plan", () => {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
+          gte: vi.fn().mockReturnThis(),
           maybeSingle: vi.fn().mockResolvedValue({
             data: {
               id: "ent-1",
@@ -375,6 +380,7 @@ describe("POST /api/billing/change-plan", () => {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
+          gte: vi.fn().mockReturnThis(),
           maybeSingle: vi.fn().mockResolvedValue({
             data: {
               id: "ent-1",
@@ -424,6 +430,7 @@ describe("POST /api/billing/change-plan", () => {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
+          gte: vi.fn().mockReturnThis(),
           maybeSingle: vi.fn().mockResolvedValue({
             data: {
               id: "ent-1",

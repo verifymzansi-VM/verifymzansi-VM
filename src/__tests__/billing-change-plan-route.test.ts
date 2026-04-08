@@ -89,15 +89,17 @@ describe("POST /api/billing/change-plan", () => {
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 eq: vi.fn().mockReturnValue({
-                  maybeSingle: vi.fn().mockResolvedValue({
-                    data: {
-                      id: "ent-1",
-                      user_id: "u1",
-                      area: "MZANSI_MARKET",
-                      tier: "pro",
-                      status: "active",
-                    },
-                    error: null,
+                  gte: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({
+                      data: {
+                        id: "ent-1",
+                        user_id: "u1",
+                        area: "MZANSI_MARKET",
+                        tier: "pro",
+                        status: "active",
+                      },
+                      error: null,
+                    }),
                   }),
                 }),
               }),
@@ -133,15 +135,17 @@ describe("POST /api/billing/change-plan", () => {
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 eq: vi.fn().mockReturnValue({
-                  maybeSingle: vi.fn().mockResolvedValue({
-                    data: {
-                      id: "ent-1",
-                      user_id: "u1",
-                      area: "MZANSI_MARKET",
-                      tier: "growth",
-                      status: "active",
-                    },
-                    error: null,
+                  gte: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({
+                      data: {
+                        id: "ent-1",
+                        user_id: "u1",
+                        area: "MZANSI_MARKET",
+                        tier: "growth",
+                        status: "active",
+                      },
+                      error: null,
+                    }),
                   }),
                 }),
               }),
@@ -177,15 +181,17 @@ describe("POST /api/billing/change-plan", () => {
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 eq: vi.fn().mockReturnValue({
-                  maybeSingle: vi.fn().mockResolvedValue({
-                    data: {
-                      id: "ent-1",
-                      user_id: "u1",
-                      area: "MZANSI_MARKET",
-                      tier: "starter",
-                      status: "pending_verification",
-                    },
-                    error: null,
+                  gte: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({
+                      data: {
+                        id: "ent-1",
+                        user_id: "u1",
+                        area: "MZANSI_MARKET",
+                        tier: "starter",
+                        status: "pending_verification",
+                      },
+                      error: null,
+                    }),
                   }),
                 }),
               }),
