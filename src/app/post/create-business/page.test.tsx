@@ -38,6 +38,10 @@ vi.mock("@/lib/utils/upload-preflight", () => ({
   checkUploadServiceReachable: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("@/lib/media/compress-before-upload", () => ({
+  compressVideoForUpload: vi.fn(async (file: File) => file),
+}));
+
 vi.mock("next/link", () => ({
   default: ({
     children,

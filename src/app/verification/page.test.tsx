@@ -90,6 +90,21 @@ function fetchCalls() {
   return (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
 }
 
+async function openCameraAndUseFileFallback(file: File) {
+  fireEvent.click(screen.getByRole("button", { name: /Open Camera/i }));
+  fireEvent.click(await screen.findByRole("button", { name: /Allow Camera/i }));
+
+  await waitFor(() => {
+    expect(document.querySelector('input[type="file"]')).toBeInTheDocument();
+  });
+
+  fireEvent.change(document.querySelector('input[type="file"]') as HTMLInputElement, {
+    target: {
+      files: [file],
+    },
+  });
+}
+
 describe("VerificationPage", () => {
   let sessionResponse: ReturnType<typeof jsonResponse>;
   let statusResponse: ReturnType<typeof jsonResponse>;
@@ -445,18 +460,7 @@ describe("VerificationPage", () => {
       target: { value: "8001015009087" },
     });
 
-    // CameraCapture starts in idle state; clicking "Open Camera" triggers error in jsdom
-    // (no navigator.mediaDevices) which reveals the fallback file input.
-    fireEvent.click(screen.getByRole("button", { name: /Open Camera/i }));
-    await waitFor(() => {
-      expect(document.querySelector('input[type="file"]')).toBeInTheDocument();
-    });
-    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-    fireEvent.change(fileInput, {
-      target: {
-        files: [new File(["fake-img"], "id.jpg", { type: "image/jpeg" })],
-      },
-    });
+    await openCameraAndUseFileFallback(new File(["fake-img"], "id.jpg", { type: "image/jpeg" }));
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /^Continue$/i })).toBeEnabled();
     });
@@ -518,18 +522,7 @@ describe("VerificationPage", () => {
       target: { value: "8001015009087" },
     });
 
-    // CameraCapture starts in idle state; clicking "Open Camera" triggers error in jsdom
-    // (no navigator.mediaDevices) which reveals the fallback file input.
-    fireEvent.click(screen.getByRole("button", { name: /Open Camera/i }));
-    await waitFor(() => {
-      expect(document.querySelector('input[type="file"]')).toBeInTheDocument();
-    });
-    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-    fireEvent.change(fileInput, {
-      target: {
-        files: [new File(["fake-img"], "id.jpg", { type: "image/jpeg" })],
-      },
-    });
+    await openCameraAndUseFileFallback(new File(["fake-img"], "id.jpg", { type: "image/jpeg" }));
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /^Continue$/i })).toBeEnabled();
     });
@@ -584,16 +577,7 @@ describe("VerificationPage", () => {
       target: { value: "8001015009087" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /Open Camera/i }));
-    await waitFor(() => {
-      expect(document.querySelector('input[type="file"]')).toBeInTheDocument();
-    });
-
-    fireEvent.change(document.querySelector('input[type="file"]') as HTMLInputElement, {
-      target: {
-        files: [new File(["fake-id"], "id.jpg", { type: "image/jpeg" })],
-      },
-    });
+    await openCameraAndUseFileFallback(new File(["fake-id"], "id.jpg", { type: "image/jpeg" }));
 
     fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
 
@@ -601,16 +585,9 @@ describe("VerificationPage", () => {
       expect(screen.getByText(/Step 3: Selfie/i)).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /Open Camera/i }));
-    await waitFor(() => {
-      expect(document.querySelector('input[type="file"]')).toBeInTheDocument();
-    });
-
-    fireEvent.change(document.querySelector('input[type="file"]') as HTMLInputElement, {
-      target: {
-        files: [new File(["fake-selfie"], "selfie.jpg", { type: "image/jpeg" })],
-      },
-    });
+    await openCameraAndUseFileFallback(
+      new File(["fake-selfie"], "selfie.jpg", { type: "image/jpeg" })
+    );
 
     fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
 

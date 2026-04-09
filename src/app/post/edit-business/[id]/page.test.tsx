@@ -92,6 +92,10 @@ vi.mock("@/components/billing/plan-gate", () => ({
   usePlanCoverVideoAllowed: () => true,
 }));
 
+vi.mock("@/lib/media/compress-before-upload", () => ({
+  compressVideoForUpload: vi.fn(async (file: File) => file),
+}));
+
 vi.mock("@/lib/constants/sa-provinces", () => ({
   getProvinceNames: () => ["Gauteng", "Western Cape"],
   getCitiesForProvince: (province: string) =>

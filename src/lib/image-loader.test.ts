@@ -6,13 +6,13 @@ describe("cloudflareImageLoader", () => {
     vi.resetModules();
   });
 
-  it("returns src unchanged when CF_IMAGE_RESIZING is disabled", async () => {
+  it("adds width/quality query params when CF_IMAGE_RESIZING is disabled", async () => {
     vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "false");
     const { default: loader } = await import("./image-loader");
-    expect(loader({ src: "/hero.jpg", width: 800 })).toBe("/hero.jpg");
+    expect(loader({ src: "/hero.jpg", width: 800 })).toBe("/hero.jpg?w=800&q=75");
   });
 
-  it("returns absolute remote URLs unchanged when resizing is enabled", async () => {
+  it("keeps absolute remote URLs as pass-through with width/quality query params", async () => {
     vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "true");
     const { default: loader } = await import("./image-loader");
     const result = loader({
@@ -20,14 +20,14 @@ describe("cloudflareImageLoader", () => {
       width: 640,
       quality: 80,
     });
-    expect(result).toBe("https://images.unsplash.com/photo-example");
+    expect(result).toBe("https://images.unsplash.com/photo-example?w=640&q=80");
   });
 
-  it("keeps static relative URLs unchanged when resizing is enabled", async () => {
+  it("keeps static relative URLs as pass-through with width/quality query params", async () => {
     vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "true");
     const { default: loader } = await import("./image-loader");
     const result = loader({ src: "/images/hero.jpg", width: 1024 });
-    expect(result).toBe("/images/hero.jpg");
+    expect(result).toBe("/images/hero.jpg?w=1024&q=75");
   });
 
   it("keeps media proxy paths unchanged when resizing is enabled", async () => {
