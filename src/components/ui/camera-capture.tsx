@@ -3,8 +3,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import * as Sentry from "@sentry/nextjs";
-import { Camera, Loader2, RefreshCw, VideoOff } from "lucide-react";
+import { Camera, Loader2, RefreshCw, ShieldCheck, VideoOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 
 interface CameraCaptureProps {
@@ -43,6 +51,14 @@ export function CameraCapture({
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [capturedUrl, setCapturedUrl] = useState<string>("");
   const [isStartingCamera, setIsStartingCamera] = useState(false);
+  const [showPermissionDialog, setShowPermissionDialog] = useState(false);
+
+  const permissionDescription =
+    telemetryContext === "selfie"
+      ? "We need to access your camera to capture your selfie. Your photo will be used only for identity verification."
+      : telemetryContext === "id_doc"
+        ? "We need to access your camera to capture your ID document photo. Your photo will be used only for identity verification."
+        : "We need to access your camera to take a photo. Your photo will be used only for identity verification.";
 
   const reportCameraInitFailure = useCallback(
     (
@@ -352,9 +368,45 @@ export function CameraCapture({
     };
   }, [capturedUrl]);
 
+  const permissionDialog = (
+    <Dialog open={showPermissionDialog} onOpenChange={setShowPermissionDialog}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/40">
+            <ShieldCheck className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+          </div>
+          <DialogTitle className="text-center">Camera Access Required</DialogTitle>
+          <DialogDescription className="text-center">{permissionDescription}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="flex-col gap-2 sm:flex-col">
+          <Button
+            type="button"
+            className="w-full"
+            onClick={() => {
+              setShowPermissionDialog(false);
+              startCamera();
+            }}
+          >
+            <Camera className="mr-2 h-4 w-4" />
+            Allow Camera
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={() => setShowPermissionDialog(false)}
+          >
+            Cancel
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   if (state === "error") {
     return (
       <div className="space-y-3">
+        {permissionDialog}
         <div className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200">
           <VideoOff className="h-4 w-4 shrink-0" />
           <p>{errorMessage}</p>
@@ -369,7 +421,7 @@ export function CameraCapture({
         <Button
           type="button"
           variant="outline"
-          onClick={startCamera}
+          onClick={() => setShowPermissionDialog(true)}
           disabled={disabled || isStartingCamera}
           className="w-full gap-2"
         >
@@ -417,11 +469,12 @@ export function CameraCapture({
 
   return (
     <div className="space-y-3">
+      {permissionDialog}
       {state === "idle" && (
         <Button
           type="button"
           variant="outline"
-          onClick={startCamera}
+          onClick={() => setShowPermissionDialog(true)}
           disabled={disabled || isStartingCamera}
           className="w-full gap-2"
         >

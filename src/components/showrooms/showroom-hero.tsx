@@ -170,7 +170,7 @@ export function ShowroomHero({
     <section className="w-full">
       <div className="relative overflow-hidden border-b border-warm-200 dark:border-warm-800">
         <div
-          className="relative aspect-video w-full overflow-hidden bg-warm-100 dark:bg-warm-900"
+          className="relative aspect-video w-full max-h-[400px] sm:max-h-[420px] lg:max-h-[460px] overflow-hidden bg-warm-100 dark:bg-warm-900"
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
