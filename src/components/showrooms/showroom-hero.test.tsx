@@ -211,49 +211,6 @@ describe("ShowroomHero", () => {
     expect(screen.getByTestId("showroom-media")).toHaveAttribute("data-playback-control", "false");
   });
 
-  it("renders the slide logo tag when a slide logo is provided", () => {
-    render(
-      <ShowroomHero
-        slides={[
-          {
-            id: "listing-1",
-            type: "listing",
-            title: "Verified Phone",
-            description: "Great condition",
-            location: "Cape Town",
-            mediaUrl: "https://example.com/photo.jpg",
-            logoUrl: "https://example.com/listing-logo.png",
-          },
-        ]}
-      />
-    );
-
-    expect(screen.getByTestId("showroom-logo-tag")).toBeInTheDocument();
-    expect(screen.getByAltText("Verified Phone logo tag")).toHaveAttribute(
-      "src",
-      expect.stringContaining("listing-logo.png")
-    );
-  });
-
-  it("renders no logo overlay when a slide logo is missing", () => {
-    render(
-      <ShowroomHero
-        slides={[
-          {
-            id: "listing-1",
-            type: "listing",
-            title: "Verified Phone",
-            description: "Great condition",
-            location: "Cape Town",
-            mediaUrl: "https://example.com/photo.jpg",
-          },
-        ]}
-      />
-    );
-
-    expect(screen.queryByTestId("showroom-logo-tag")).not.toBeInTheDocument();
-  });
-
   it("uses shared slide indicators without desktop arrow buttons", async () => {
     render(
       <ShowroomHero

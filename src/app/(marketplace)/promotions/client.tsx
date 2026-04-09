@@ -20,12 +20,9 @@ import {
   type PromotionType,
   type TrustLevel,
 } from "@/types/enums";
-import { getStoredPromotionTypePresentation } from "@/lib/promotions/type-presentation";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 import { useDebouncedCallback } from "@/hooks/use-debounce";
-import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { triggerHaptic } from "@/lib/utils/haptics";
-import { ShowroomHero, type ShowroomSlide } from "@/components/showrooms/showroom-hero";
 import { cn } from "@/lib/utils";
 
 type ActiveTab = "tourism" | "events";
@@ -390,17 +387,6 @@ export function PromotionsExplorer() {
   /* ── Events data ── */
   const promotions = eventsResponse.promotions ?? [];
   const now = new Date();
-  const featuredPromotion =
-    activeTab === "events" && page === 1
-      ? promotions.find(
-          (p) =>
-            (p.featured_until && new Date(p.featured_until) > now) ||
-            (p.boost_until && new Date(p.boost_until) > now)
-        )
-      : undefined;
-  const gridPromotions = featuredPromotion
-    ? promotions.filter((p) => p.id !== featuredPromotion.id)
-    : promotions;
 
   return (
     <div className="container-page py-8 space-y-6">
@@ -561,43 +547,6 @@ export function PromotionsExplorer() {
         </aside>
 
         <div className="min-w-0 flex-1 space-y-5">
-          {/* ── Featured ShowroomHero (events tab only) ── */}
-          {activeTab === "events" && featuredPromotion && !loading && (
-            <div>
-              <ShowroomHero
-                slides={[
-                  {
-                    id: featuredPromotion.id,
-                    type: "listing" as const,
-                    title: featuredPromotion.title,
-                    description: featuredPromotion.business_id
-                      ? (businessMap.get(featuredPromotion.business_id) ?? "")
-                      : "",
-                    location: `${featuredPromotion.location_city}, ${featuredPromotion.location_province}`,
-                    mediaUrl: normalizeMediaUrl(
-                      featuredPromotion.videos?.[0] ||
-                        featuredPromotion.photos?.[0] ||
-                        "/images/fallbacks/hero-shop.svg"
-                    ),
-                    posterUrl:
-                      featuredPromotion.video_thumbnail ||
-                      featuredPromotion.photos?.[0] ||
-                      undefined,
-                    price:
-                      featuredPromotion.price_cents != null
-                        ? featuredPromotion.price_cents / 100
-                        : null,
-                    hrefOverride: `/promotion/${featuredPromotion.id}`,
-                    ctaLabelOverride: "View Event",
-                    badgeLabelOverride: getStoredPromotionTypePresentation(
-                      featuredPromotion.promotion_type
-                    ).label,
-                  } satisfies ShowroomSlide,
-                ]}
-              />
-            </div>
-          )}
-
           {/* ── Results Count + CTA ── */}
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground" aria-live="polite" role="status">
@@ -647,9 +596,7 @@ export function PromotionsExplorer() {
               </CardContent>
             </Card>
           ) : (
-              activeTab === "tourism"
-                ? tourismBusinesses.length === 0
-                : gridPromotions.length === 0 && !featuredPromotion
+              activeTab === "tourism" ? tourismBusinesses.length === 0 : promotions.length === 0
             ) ? (
             <Card>
               <CardContent className="space-y-3 p-6 text-center">
@@ -730,7 +677,7 @@ export function PromotionsExplorer() {
                 aria-labelledby="tab-events"
                 className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6 xl:gap-6"
               >
-                {gridPromotions.map((promotion, index) => {
+                {promotions.map((promotion, index) => {
                   const accountProfile = accountProfileMap.get(promotion.owner_id);
                   const businessName = promotion.business_id
                     ? businessMap.get(promotion.business_id)

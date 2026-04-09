@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { MapPin, Building2, TreePalm, ArrowRight, ShieldCheck } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
@@ -83,7 +82,6 @@ interface HeroSlide {
   location: string;
   mediaUrl: string;
   posterUrl?: string;
-  logoUrl?: string;
   promotions: HeroPromotion[];
   price: number | null;
 }
@@ -158,7 +156,6 @@ export function HeroBanner({
             usesVideo && (b.video_thumbnail || b.cover_photo)
               ? normalizeMediaUrl(b.video_thumbnail || b.cover_photo || "")
               : undefined,
-          logoUrl: b.logo_url ? normalizeMediaUrl(b.logo_url) : undefined,
           promotions: [],
           price: null,
         };
@@ -180,7 +177,6 @@ export function HeroBanner({
                 : "/images/fallbacks/hero-listing.svg"
           ),
           posterUrl: usesVideo && posterSrc ? normalizeMediaUrl(posterSrc) : undefined,
-          logoUrl: l.logo_url ? normalizeMediaUrl(l.logo_url) : undefined,
           promotions: [],
           price: l.price_cents ? l.price_cents / 100 : null,
         };
@@ -264,7 +260,6 @@ export function HeroBanner({
 
   const activeSlide = slides[current] || null;
   const activeSlideIsVideo = activeSlide ? isVideoUrl(activeSlide.mediaUrl) : false;
-  const activeLogoUrl = activeSlide?.logoUrl ?? null;
 
   useEffect(() => {
     setIsActiveVideoPaused(activeSlideIsVideo);
@@ -302,7 +297,7 @@ export function HeroBanner({
                     alt={activeSlide.title}
                     sizes="100vw"
                     mode="ambient"
-                    fitStrategy="smart"
+                    fitStrategy="contain"
                     containerAspectRatio={16 / 9}
                     muteControlVisibility="always"
                     showPlaybackControl={activeSlideIsVideo}
@@ -314,27 +309,6 @@ export function HeroBanner({
               </div>
             </>
           )}
-
-          {activeSlide && activeLogoUrl ? (
-            <div
-              className={cn(
-                "pointer-events-none absolute bottom-3 right-3 z-20 transition-opacity duration-500 sm:bottom-5 sm:right-5 lg:bottom-6 lg:right-6",
-                fading ? "opacity-0" : "opacity-100"
-              )}
-            >
-              <div className="flex items-center" data-testid="showroom-logo-tag">
-                <div className="relative h-8 w-[72px] sm:h-9 sm:w-[88px] md:h-12 md:w-[120px] lg:h-14 lg:w-[144px] xl:h-16 xl:w-[168px]">
-                  <Image
-                    src={activeLogoUrl}
-                    alt={`${activeSlide.title} logo tag`}
-                    fill
-                    sizes="(max-width: 640px) 72px, (max-width: 768px) 88px, (max-width: 1024px) 120px, (max-width: 1280px) 144px, 168px"
-                    className="object-contain"
-                  />
-                </div>
-              </div>
-            </div>
-          ) : null}
 
           {/* Slide navigation dots + arrows */}
           <div className="absolute bottom-2.5 sm:bottom-6 right-3 sm:right-0 sm:left-0 sm:container-page z-30 flex items-center justify-end pointer-events-none">
@@ -414,11 +388,11 @@ export function HeroBanner({
                   prefetch={false}
                   className={cn(
                     buttonVariants({ size: "sm" }),
-                    "shrink-0 h-8 px-3 text-xs bg-brand-green hover:bg-brand-green-600 text-white font-bold gap-1 rounded-full sm:h-10 sm:px-5 sm:text-sm sm:gap-2"
+                    "h-11 shrink-0 rounded-full bg-brand-green px-4 text-sm font-bold text-white hover:bg-brand-green-600 gap-1 sm:px-5 sm:gap-2"
                   )}
                 >
                   {ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.cta || "View"}
-                  <ArrowRight className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                  <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4" />
                 </Link>
               </div>
             </div>

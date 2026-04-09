@@ -87,7 +87,6 @@ export default async function MzansiBusinessPage() {
             : b.cover_photo
               ? normalizeMediaUrl(b.cover_photo)
               : undefined,
-          logoUrl: b.logo_url ? normalizeMediaUrl(b.logo_url) : undefined,
         }))
       : [
           {

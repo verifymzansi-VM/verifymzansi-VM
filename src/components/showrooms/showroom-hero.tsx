@@ -1,13 +1,11 @@
 "use client";
 
-import Image from "next/image";
 import { useState, useEffect, useCallback, useRef, useMemo, type TouchEvent } from "react";
 import Link from "next/link";
-import { MapPin, Building2, ArrowRight, ShieldCheck } from "lucide-react";
+import { MapPin, Building2, ArrowRight, ShieldCheck, TreePalm } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
 import { cn } from "@/lib/utils";
-import { normalizeMediaUrl } from "@/lib/utils/media-url";
 
 const ENTITY_CONFIG = {
   storefront: {
@@ -31,17 +29,23 @@ const ENTITY_CONFIG = {
     href: "/listing/",
     cta: "View Listing",
   },
+  promotion: {
+    Icon: TreePalm,
+    badgeColor: "bg-teal-500/90 text-white border border-white/10",
+    badge: "Tourism & Events",
+    href: "/promotion/",
+    cta: "View Event",
+  },
 };
 
 export interface ShowroomSlide {
   id: string;
-  type: "storefront" | "business" | "listing";
+  type: "storefront" | "business" | "listing" | "promotion";
   title: string;
   description: string;
   location: string;
   mediaUrl: string;
   posterUrl?: string;
-  logoUrl?: string;
   price?: number | null;
   promotions?: Record<string, unknown>[];
   hrefOverride?: string;
@@ -164,13 +168,12 @@ export function ShowroomHero({
   const activeBadge = activeSlide.badgeLabelOverride || activeConfig.badge;
   const ActiveIcon = activeConfig.Icon;
   const activeSlideIsVideo = isVideoUrl(activeSlide.mediaUrl);
-  const activeLogoUrl = activeSlide.logoUrl ? normalizeMediaUrl(activeSlide.logoUrl) : null;
 
   return (
     <section className="w-full">
       <div className="relative overflow-hidden border-b border-warm-200 dark:border-warm-800">
         <div
-          className="relative aspect-video w-full max-h-[400px] sm:max-h-[420px] lg:max-h-[460px] overflow-hidden bg-warm-100 dark:bg-warm-900"
+          className="relative aspect-video w-full overflow-hidden bg-warm-100 dark:bg-warm-900"
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
@@ -186,7 +189,7 @@ export function ShowroomHero({
               alt={activeSlide.title}
               sizes="100vw"
               mode="ambient"
-              fitStrategy="smart"
+              fitStrategy="contain"
               containerAspectRatio={16 / 9}
               muteControlVisibility="always"
               showPlaybackControl={activeSlideIsVideo}
@@ -195,28 +198,6 @@ export function ShowroomHero({
               mediaClassName="scale-[1.01]"
             />
           </div>
-
-          {activeLogoUrl ? (
-            <div
-              className={cn(
-                "pointer-events-none absolute bottom-3 right-3 z-20 transition-opacity duration-500 sm:bottom-5 sm:right-5 lg:bottom-6 lg:right-6",
-                fading ? "opacity-0" : "opacity-100"
-              )}
-            >
-              <div className="flex items-center" data-testid="showroom-logo-tag">
-                <div className="relative h-8 w-[72px] sm:h-9 sm:w-[88px] md:h-12 md:w-[120px] lg:h-14 lg:w-[144px] xl:h-16 xl:w-[168px]">
-                  <Image
-                    src={activeLogoUrl}
-                    alt={`${activeSlide.title} logo tag`}
-                    fill
-                    sizes="(max-width: 640px) 72px, (max-width: 768px) 88px, (max-width: 1024px) 120px, (max-width: 1280px) 144px, 168px"
-                    className="object-contain"
-                    unoptimized
-                  />
-                </div>
-              </div>
-            </div>
-          ) : null}
 
           {slides.length > 1 ? (
             <div className="absolute bottom-2.5 left-0 right-0 z-20 flex items-center justify-center sm:bottom-5">
@@ -286,7 +267,7 @@ export function ShowroomHero({
                 href={activeHref}
                 className={cn(
                   buttonVariants({ size: "sm" }),
-                  "h-8 shrink-0 rounded-full bg-brand-green px-3 text-xs font-bold text-white hover:bg-brand-green-600 sm:h-10 sm:px-5 sm:text-sm"
+                  "h-11 shrink-0 rounded-full bg-brand-green px-4 text-sm font-bold text-white hover:bg-brand-green-600 sm:px-5"
                 )}
               >
                 {activeCta}

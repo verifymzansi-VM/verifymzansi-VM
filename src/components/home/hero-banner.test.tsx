@@ -147,22 +147,4 @@ describe("HeroBanner", () => {
     expect(screen.getByTestId("hero-media")).toHaveAttribute("data-playback-control", "true");
     expect(screen.getByTestId("hero-media")).toHaveAttribute("data-defer-video-load", "false");
   });
-
-  it("renders no logo overlay when no slide logo is provided", () => {
-    render(
-      <HeroBanner
-        latestListings={[
-          {
-            id: "listing-1",
-            title: "Honda Fit",
-            description: "Clean hatchback",
-            location_city: "Johannesburg",
-            photos: ["/images/fallbacks/hero-listing.svg"],
-          },
-        ]}
-      />
-    );
-
-    expect(screen.queryByTestId("showroom-logo-tag")).not.toBeInTheDocument();
-  });
 });
