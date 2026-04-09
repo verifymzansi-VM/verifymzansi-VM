@@ -47,6 +47,7 @@ export function CameraCapture({
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const pendingStartRef = useRef(false);
   const [state, setState] = useState<CameraState>("idle");
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [capturedUrl, setCapturedUrl] = useState<string>("");
@@ -186,15 +187,9 @@ export function CameraCapture({
       setErrorMessage("");
       stopStream();
 
-      // If camera permission is already blocked, browsers often suppress
-      // additional prompts. Surface actionable guidance immediately.
-      const initialPermissionLookup = await getPermissionState();
-      if (initialPermissionLookup.state === "denied") {
-        reportCameraInitFailure("PermissionPreDenied", "denied", initialPermissionLookup);
-        setErrorMessage(BLOCKED_FOR_SITE_MESSAGE);
-        setState("error");
-        return;
-      }
+      // Pre-check permission for diagnostics only. We still call getUserMedia
+      // so the browser always receives a camera access request after user consent.
+      await getPermissionState();
 
       // Try with full constraints first, then progressively relax
       let stream: MediaStream | null = null;
@@ -345,8 +340,8 @@ export function CameraCapture({
       URL.revokeObjectURL(capturedUrl);
       setCapturedUrl("");
     }
-    startCamera();
-  }, [capturedUrl, startCamera]);
+    setShowPermissionDialog(true);
+  }, [capturedUrl]);
 
   const handleFileFallback = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -368,6 +363,17 @@ export function CameraCapture({
     };
   }, [capturedUrl]);
 
+  // Start camera after the permission dialog closes with confirmation.
+  // Deferring via effect avoids stale-closure issues and ensures the
+  // Radix Dialog focus-trap is fully unmounted before getUserMedia fires,
+  // which would otherwise block the browser's camera permission prompt.
+  useEffect(() => {
+    if (!showPermissionDialog && pendingStartRef.current) {
+      pendingStartRef.current = false;
+      startCamera();
+    }
+  }, [showPermissionDialog, startCamera]);
+
   const permissionDialog = (
     <Dialog open={showPermissionDialog} onOpenChange={setShowPermissionDialog}>
       <DialogContent className="max-w-sm">
@@ -383,8 +389,8 @@ export function CameraCapture({
             type="button"
             className="w-full"
             onClick={() => {
+              pendingStartRef.current = true;
               setShowPermissionDialog(false);
-              startCamera();
             }}
           >
             <Camera className="mr-2 h-4 w-4" />

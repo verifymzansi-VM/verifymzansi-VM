@@ -134,6 +134,10 @@ describe("CameraCapture", () => {
   });
 
   it("shows blocked-for-site guidance when permission state is denied", async () => {
+    const err = new Error("denied");
+    err.name = "NotAllowedError";
+    mockGetUserMedia.mockRejectedValueOnce(err);
+
     const query = vi.fn().mockResolvedValue({ state: "denied" });
     Object.defineProperty(global.navigator, "permissions", {
       configurable: true,
@@ -148,7 +152,7 @@ describe("CameraCapture", () => {
     });
 
     expect(query).toHaveBeenCalled();
-    expect(mockGetUserMedia).not.toHaveBeenCalled();
+    expect(mockGetUserMedia).toHaveBeenCalledTimes(1);
     expect(screen.getByText(/may not show the camera prompt again/i)).toBeInTheDocument();
   });
 
@@ -335,5 +339,42 @@ describe("CameraCapture", () => {
     await waitFor(() => {
       expect(mockGetUserMedia).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it("shows permission dialog on Retake and requests camera again after confirm", async () => {
+    const stream = createMockStream();
+    mockGetUserMedia.mockResolvedValueOnce(stream);
+    mockGetUserMedia.mockResolvedValueOnce(stream);
+
+    const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      drawImage: vi.fn(),
+      translate: vi.fn(),
+      scale: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+
+    const toBlobSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, "toBlob")
+      .mockImplementation((callback) => {
+        callback(new Blob(["img"], { type: "image/jpeg" }));
+      });
+
+    render(<CameraCapture onCapture={vi.fn()} facingMode="user" />);
+    await clickOpenCameraAndConfirm();
+
+    const takePhotoBtn = await screen.findByRole("button", { name: /take photo/i });
+    fireEvent.click(takePhotoBtn);
+
+    const retakeBtn = await screen.findByRole("button", { name: /retake/i });
+    fireEvent.click(retakeBtn);
+
+    const allowBtn = await screen.findByRole("button", { name: /allow camera/i });
+    fireEvent.click(allowBtn);
+
+    await waitFor(() => {
+      expect(mockGetUserMedia).toHaveBeenCalledTimes(2);
+    });
+
+    getContextSpy.mockRestore();
+    toBlobSpy.mockRestore();
   });
 });
