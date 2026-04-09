@@ -109,13 +109,13 @@ export async function HeroBannerWithData() {
   return (
     <section className="w-full">
       <div className="lg:flex lg:items-stretch lg:gap-2 lg:px-2 xl:gap-3 xl:px-3">
-        <div className="hidden w-[15%] shrink-0 self-stretch lg:block">
+        <div className="hidden lg:block lg:w-[17.5%] lg:shrink-0 lg:self-stretch xl:w-[18%]">
           <div className="h-full">
             <ShowroomSideCard items={leftItems} initialDelayMs={0} />
           </div>
         </div>
-        <div className="min-w-0 lg:flex-1">{heroBannerNode}</div>
-        <div className="hidden w-[15%] shrink-0 self-stretch lg:block">
+        <div className="min-w-0 lg:w-[65%] lg:shrink-0">{heroBannerNode}</div>
+        <div className="hidden lg:block lg:w-[17.5%] lg:shrink-0 lg:self-stretch xl:w-[18%]">
           <div className="h-full">
             <ShowroomSideCard items={rightItems} initialDelayMs={3000} />
           </div>

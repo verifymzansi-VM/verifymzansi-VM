@@ -74,29 +74,41 @@ export function ShowroomSideCard({ items, initialDelayMs = 0 }: ShowroomSideCard
       )}
       aria-label="View promotion"
     >
-      <div
-        className={cn(
-          "absolute inset-0 transition-opacity duration-300",
-          fading ? "opacity-0" : "opacity-100"
-        )}
-      >
-        {/* Blur backdrop for mismatched aspect ratios */}
+      <div className="absolute inset-x-0 top-0 h-[55%] overflow-hidden border-b border-white/15">
+        <div
+          className={cn(
+            "absolute inset-0 transition-opacity duration-300",
+            fading ? "opacity-0" : "opacity-100"
+          )}
+        >
+          {/* Blur backdrop for mismatched aspect ratios */}
+          <Image
+            src={normalizeMediaUrl(item.imageUrl) || item.imageUrl}
+            alt=""
+            aria-hidden="true"
+            fill
+            className="absolute inset-0 scale-110 object-cover blur-2xl brightness-90 saturate-150"
+            sizes="(min-width: 1024px) 15vw, 0px"
+          />
+          <div className="absolute inset-0 bg-black/10" />
+          {/* Foreground image — contain to avoid cropping */}
+          <Image
+            src={normalizeMediaUrl(item.imageUrl) || item.imageUrl}
+            alt=""
+            fill
+            sizes="(min-width: 1024px) 15vw, 0px"
+            className="relative z-10 object-contain"
+          />
+        </div>
+      </div>
+      <div className="absolute inset-x-0 bottom-0 h-[45%] overflow-hidden">
         <Image
-          src={normalizeMediaUrl(item.imageUrl) || item.imageUrl}
-          alt=""
-          aria-hidden="true"
-          fill
-          className="absolute inset-0 scale-110 object-cover blur-2xl brightness-90 saturate-150"
-          sizes="(min-width: 1024px) 15vw, 0px"
-        />
-        <div className="absolute inset-0 bg-black/10" />
-        {/* Foreground image — contain to avoid cropping */}
-        <Image
-          src={normalizeMediaUrl(item.imageUrl) || item.imageUrl}
-          alt=""
+          src="/images/South African flag with confetti burst.png"
+          alt="South African flag"
           fill
           sizes="(min-width: 1024px) 15vw, 0px"
-          className="object-contain relative z-10"
+          className="object-cover"
+          priority={false}
         />
       </div>
     </Link>
