@@ -71,6 +71,8 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1018.0",
     "@aws-sdk/s3-request-presigner": "^3.1018.0",
+    "@ffmpeg/ffmpeg": "^0.12",
+    "@ffmpeg/util": "^0.12",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-dialog": "^1.1.15",

@@ -79,7 +79,7 @@ describe("buildCsp", () => {
 
   it("uses unsafe-inline for scripts when no nonce but NOT unsafe-eval", () => {
     const csp = buildCsp(null);
-    expect(csp).toContain("script-src 'self' 'unsafe-inline'");
+    expect(csp).toContain("script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'");
     expect(csp).not.toContain("'unsafe-eval'");
     expect(csp).toContain("style-src 'self' 'unsafe-inline'");
   });
@@ -87,7 +87,7 @@ describe("buildCsp", () => {
   it("uses nonce-based scripts with explicit URL allowlists when nonce provided", () => {
     const csp = buildCsp("abc123");
     expect(csp).toContain(
-      "script-src 'self' 'nonce-abc123' https://challenges.cloudflare.com https://static.cloudflareinsights.com"
+      "script-src 'self' 'nonce-abc123' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com"
     );
     expect(csp).not.toContain("'strict-dynamic'");
     expect(csp).toContain("style-src 'self' 'nonce-abc123'");

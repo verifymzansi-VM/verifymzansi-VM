@@ -10,6 +10,8 @@
  */
 
 const CACHE_NAME = "verifymzansi-v3-logo-refresh";
+const MEDIA_CACHE_NAME = "verifymzansi-media-v1";
+const MEDIA_CACHE_MAX_ENTRIES = 100;
 const OFFLINE_URL = "/offline";
 
 const PRECACHE_URLS = ["/", "/offline", "/manifest.json"];
@@ -35,7 +37,11 @@ self.addEventListener("activate", (event) => {
     caches
       .keys()
       .then((keys) =>
-        Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
+        Promise.all(
+          keys
+            .filter((key) => key !== CACHE_NAME && key !== MEDIA_CACHE_NAME)
+            .map((key) => caches.delete(key))
+        )
       )
       .then(() => self.clients.claim())
   );
@@ -52,8 +58,16 @@ self.addEventListener("fetch", (event) => {
 
   // Skip non-GET, API routes, and cross-origin
   if (request.method !== "GET") return;
-  if (url.pathname.startsWith("/api/")) return;
   if (url.origin !== self.location.origin) return;
+
+  // Media serve — cache-first for images/small videos served from R2
+  // Skip large video responses (>10 MB) to avoid blowing the cache quota.
+  if (url.pathname.startsWith("/api/media/serve/")) {
+    event.respondWith(mediaCacheFirst(request));
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/")) return;
 
   // Static assets — cache-first
   if (
@@ -92,6 +106,43 @@ async function cacheFirst(request) {
     cache.put(request, response.clone());
   }
   return response;
+}
+
+/**
+ * Cache-first strategy for media assets served from /api/media/serve/*.
+ * Skips caching for responses >10 MB (large videos) to avoid quota issues.
+ * Uses LRU eviction when the cache exceeds MEDIA_CACHE_MAX_ENTRIES.
+ */
+async function mediaCacheFirst(request) {
+  const cached = await caches.match(request);
+  if (cached) return cached;
+
+  try {
+    const response = await fetch(request);
+    if (!response.ok) return response;
+
+    // Never cache 206 Partial Content — video players use Range requests
+    // and caching a partial response would serve truncated data later.
+    if (response.status === 206) return response;
+
+    // Don't cache large responses (>10 MB) — they blow out quota.
+    const size = parseInt(response.headers.get("content-length") || "0", 10);
+    if (size > 10 * 1024 * 1024) return response;
+
+    const cache = await caches.open(MEDIA_CACHE_NAME);
+    // LRU eviction: trim oldest entries when we exceed the cap.
+    const keys = await cache.keys();
+    if (keys.length >= MEDIA_CACHE_MAX_ENTRIES) {
+      // Delete the oldest 10% to avoid evicting on every insert.
+      const toDelete = keys.slice(0, Math.max(1, Math.ceil(keys.length * 0.1)));
+      await Promise.all(toDelete.map((k) => cache.delete(k)));
+    }
+    cache.put(request, response.clone());
+    return response;
+  } catch {
+    // Offline — already checked cache above, nothing available
+    return new Response("Offline", { status: 503 });
+  }
 }
 
 async function networkFirst(request) {

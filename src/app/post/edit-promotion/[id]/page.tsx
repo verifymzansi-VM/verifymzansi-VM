@@ -24,6 +24,7 @@ import {
 import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-errors";
 import { validatePromotionForm } from "@/lib/forms/promotion-form";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { useToast } from "@/hooks/use-toast";
 import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
@@ -221,7 +222,26 @@ export default function EditPromotionPage() {
         return;
       }
 
+      const readUploadError = async (response: Response, fallback: string): Promise<string> => {
+        try {
+          const payload = (await response.json()) as { error?: unknown; message?: unknown };
+          const payloadError =
+            typeof payload.error === "string"
+              ? payload.error
+              : typeof payload.message === "string"
+                ? payload.message
+                : null;
+          if (payloadError) {
+            return payloadError;
+          }
+        } catch {
+          // Ignore JSON parse failures and use fallback below.
+        }
+        return `${fallback} (HTTP ${response.status})`;
+      };
+
       // Upload new photos and videos in parallel
+      let compressedVideoFileRef: File | null = null;
       const [newImageUrls, newVideoUrls] = await Promise.all([
         // Photos via server proxy
         newPhotoFiles.length > 0
@@ -229,12 +249,14 @@ export default function EditPromotionPage() {
               const uploadData = new FormData();
               uploadData.append("area", "promotion");
               for (const f of newPhotoFiles) uploadData.append("files", f);
-              const uploadRes = await fetch("/api/media/upload", {
+              const uploadRes = await fetchWithRetry("/api/media/upload", {
                 method: "POST",
                 headers: withCsrfHeaders(),
                 body: uploadData,
               });
-              if (!uploadRes.ok) throw new Error("Failed to upload photos");
+              if (!uploadRes.ok) {
+                throw new Error(await readUploadError(uploadRes, "Failed to upload photos"));
+              }
               const uploadJson = await uploadRes.json();
               return (uploadJson.urls || []) as string[];
             })()
@@ -242,35 +264,54 @@ export default function EditPromotionPage() {
 
         // Videos via presigned URL (direct to R2)
         newVideoFiles.length > 0
-          ? Promise.all(
-              newVideoFiles.map(async (file) => {
-                const urlRes = await fetch("/api/media/upload-url", {
-                  method: "POST",
-                  headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-                  body: JSON.stringify({
-                    filename: file.name,
-                    contentType: file.type,
-                    size: file.size,
-                    area: "promotion",
-                  }),
-                });
-                if (!urlRes.ok) throw new Error("Failed to get video upload URL");
-                const { uploadUrl, publicUrl } = await urlRes.json();
-                const putRes = await fetch(uploadUrl, {
-                  method: "PUT",
-                  headers: { "Content-Type": file.type },
-                  body: file,
-                });
-                if (!putRes.ok) throw new Error("Failed to upload video");
-                return publicUrl as string;
-              })
-            )
+          ? (async () => {
+              setSubmitProgress("Compressing video...");
+              const { compressVideoForUpload } = await import("@/lib/media/compress-before-upload");
+              // Compress sequentially — parallel would spawn multiple ~25 MB FFmpeg
+              // WASM instances and risk OOM on mobile devices.
+              const compressed: File[] = [];
+              for (const f of newVideoFiles) {
+                compressed.push(await compressVideoForUpload(f));
+              }
+              compressedVideoFileRef = compressed[0] ?? null;
+              setSubmitProgress("Uploading media...");
+              return Promise.all(
+                compressed.map(async (file) => {
+                  const urlRes = await fetchWithRetry("/api/media/upload-url", {
+                    method: "POST",
+                    headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+                    body: JSON.stringify({
+                      filename: file.name,
+                      contentType: file.type,
+                      size: file.size,
+                      area: "promotion",
+                    }),
+                  });
+                  if (!urlRes.ok) {
+                    throw new Error(
+                      await readUploadError(urlRes, "Failed to get video upload URL")
+                    );
+                  }
+                  const { uploadUrl, publicUrl } = await urlRes.json();
+                  const putRes = await fetchWithRetry(uploadUrl, {
+                    method: "PUT",
+                    headers: { "Content-Type": file.type },
+                    body: file,
+                  });
+                  if (!putRes.ok) {
+                    throw new Error(`Failed to upload video (HTTP ${putRes.status})`);
+                  }
+                  return publicUrl as string;
+                })
+              );
+            })()
           : Promise.resolve([] as string[]),
       ]);
 
       const allImages = [...existingImages, ...newImageUrls];
       const allVideos = [...existingVideos, ...newVideoUrls];
-      const primaryMediaFile = newVideoFiles[0] ?? newPhotoFiles[0] ?? null;
+      const primaryMediaFile =
+        compressedVideoFileRef ?? newVideoFiles[0] ?? newPhotoFiles[0] ?? null;
       const mediaDimensions = primaryMediaFile ? await readMediaDimensions(primaryMediaFile) : null;
 
       setSubmitProgress("Saving promotion...");

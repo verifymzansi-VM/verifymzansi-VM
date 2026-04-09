@@ -132,13 +132,17 @@ export async function uploadRequiredBusinessVideo({
   file: File;
   area: UploadArea;
 }): Promise<string> {
+  // Compress before upload — falls back to original on failure
+  const { compressVideoForUpload } = await import("@/lib/media/compress-before-upload");
+  const compressed = await compressVideoForUpload(file);
+
   const urlResponse = await fetchWithRetry("/api/media/upload-url", {
     method: "POST",
     headers: withCsrfHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({
-      filename: file.name,
-      contentType: file.type,
-      size: file.size,
+      filename: compressed.name,
+      contentType: compressed.type,
+      size: compressed.size,
       area,
     }),
   });
@@ -178,15 +182,15 @@ export async function uploadRequiredBusinessVideo({
 
   const putResponse = await fetchWithRetry(uploadUrl, {
     method: "PUT",
-    headers: { "Content-Type": file.type },
-    body: file,
+    headers: { "Content-Type": compressed.type },
+    body: compressed,
   });
 
   if (!putResponse.ok) {
     log.warn("Blocking business save because video upload PUT failed", {
       field: "cover_video",
       area,
-      filename: file.name,
+      filename: compressed.name,
       status: putResponse.status,
     });
     throw new BusinessMediaUploadError("cover_video");

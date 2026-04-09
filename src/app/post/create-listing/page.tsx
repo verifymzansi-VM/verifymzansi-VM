@@ -42,6 +42,7 @@ import {
 } from "@/app/post/_lib/create-post-errors";
 import { coerceListingAttributes, validateListingAttributes } from "@/lib/forms/listing-form";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
+import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { checkUploadServiceReachable } from "@/lib/utils/upload-preflight";
 import type { ListingDraftData } from "@/lib/post-drafts/storage";
 import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
@@ -473,19 +474,40 @@ export default function CreateListingPage() {
         ? coerceListingAttributes(category, categoryAttributes)
         : {};
 
+      const readUploadError = async (response: Response, fallback: string): Promise<string> => {
+        try {
+          const payload = (await response.json()) as { error?: unknown; message?: unknown };
+          const payloadError =
+            typeof payload.error === "string"
+              ? payload.error
+              : typeof payload.message === "string"
+                ? payload.message
+                : null;
+          if (payloadError) {
+            return payloadError;
+          }
+        } catch {
+          // Ignore JSON parse failures and use fallback below.
+        }
+        return `${fallback} (HTTP ${response.status})`;
+      };
+
       // Upload photos, video, and video cover in parallel
+      let compressedVideoFileRef: File | null = null;
       const [logoUrls, photoUrls, videoUrl, videoThumbnailUrl] = await Promise.all([
         logoFile.length > 0
           ? (async () => {
               const uploadData = new FormData();
               uploadData.append("area", "listing_logo");
               uploadData.append("files", logoFile[0]);
-              const uploadRes = await fetch("/api/media/upload", {
+              const uploadRes = await fetchWithRetry("/api/media/upload", {
                 method: "POST",
                 headers: withCsrfHeaders(),
                 body: uploadData,
               });
-              if (!uploadRes.ok) throw new Error("Failed to upload listing logo");
+              if (!uploadRes.ok) {
+                throw new Error(await readUploadError(uploadRes, "Failed to upload listing logo"));
+              }
               const uploadJson = await uploadRes.json();
               setUploadStatuses((current) => ({ ...current, logo: "done" }));
               return (uploadJson.urls || []) as string[];
@@ -497,12 +519,14 @@ export default function CreateListingPage() {
               const uploadData = new FormData();
               uploadData.append("area", "listing");
               photoFiles.forEach((file) => uploadData.append("files", file));
-              const uploadRes = await fetch("/api/media/upload", {
+              const uploadRes = await fetchWithRetry("/api/media/upload", {
                 method: "POST",
                 headers: withCsrfHeaders(),
                 body: uploadData,
               });
-              if (!uploadRes.ok) throw new Error("Failed to upload photos");
+              if (!uploadRes.ok) {
+                throw new Error(await readUploadError(uploadRes, "Failed to upload photos"));
+              }
               const uploadJson = await uploadRes.json();
               const urls = (uploadJson.urls || []) as string[];
               const fileErrors = (uploadJson.errors || []) as string[];
@@ -523,8 +547,12 @@ export default function CreateListingPage() {
         // Video via presigned URL (direct to R2, avoids proxying large files)
         videoFile.length > 0
           ? (async () => {
-              const file = videoFile[0];
-              const urlRes = await fetch("/api/media/upload-url", {
+              setSubmitProgress("Compressing video...");
+              const { compressVideoForUpload } = await import("@/lib/media/compress-before-upload");
+              const file = await compressVideoForUpload(videoFile[0]);
+              compressedVideoFileRef = file;
+              setSubmitProgress("Uploading media...");
+              const urlRes = await fetchWithRetry("/api/media/upload-url", {
                 method: "POST",
                 headers: withCsrfHeaders({ "Content-Type": "application/json" }),
                 body: JSON.stringify({
@@ -534,14 +562,16 @@ export default function CreateListingPage() {
                   area: "listing_video",
                 }),
               });
-              if (!urlRes.ok) throw new Error("Failed to get video upload URL");
+              if (!urlRes.ok) {
+                throw new Error(await readUploadError(urlRes, "Failed to get video upload URL"));
+              }
               const { uploadUrl, publicUrl } = await urlRes.json();
-              const putRes = await fetch(uploadUrl, {
+              const putRes = await fetchWithRetry(uploadUrl, {
                 method: "PUT",
                 headers: { "Content-Type": file.type },
                 body: file,
               });
-              if (!putRes.ok) throw new Error("Failed to upload video");
+              if (!putRes.ok) throw new Error(`Failed to upload video (HTTP ${putRes.status})`);
               setUploadStatuses((current) => ({ ...current, video: "done" }));
               return publicUrl as string;
             })()
@@ -553,7 +583,7 @@ export default function CreateListingPage() {
               const uploadData = new FormData();
               uploadData.append("area", "listing");
               uploadData.append("files", videoCoverFile[0]);
-              const uploadRes = await fetch("/api/media/upload", {
+              const uploadRes = await fetchWithRetry("/api/media/upload", {
                 method: "POST",
                 headers: withCsrfHeaders(),
                 body: uploadData,
@@ -567,7 +597,7 @@ export default function CreateListingPage() {
 
       setSubmitProgress("Saving listing...");
       setUploadStatuses((current) => ({ ...current, saving: "uploading" }));
-      const primaryMediaFile = videoFile[0] ?? photoFiles[0] ?? null;
+      const primaryMediaFile = compressedVideoFileRef ?? videoFile[0] ?? photoFiles[0] ?? null;
       const mediaDimensions = primaryMediaFile ? await readMediaDimensions(primaryMediaFile) : null;
 
       const res = await fetch("/api/listings", {

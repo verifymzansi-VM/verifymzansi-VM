@@ -37,6 +37,7 @@ import { ListingCard } from "@/components/listings/listing-card";
 import { ListingDetailContent } from "@/components/listings/listing-detail-content";
 import { createLogger } from "@/lib/utils/logger";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
+import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
 
 const log = createLogger("EditListingPage");
@@ -98,6 +99,24 @@ export default function EditListingPage() {
     () => (newVideoCoverFile.length > 0 ? URL.createObjectURL(newVideoCoverFile[0]) : null),
     [newVideoCoverFile]
   );
+
+  const readUploadError = async (response: Response, fallback: string): Promise<string> => {
+    try {
+      const payload = (await response.json()) as { error?: unknown; message?: unknown };
+      const payloadError =
+        typeof payload.error === "string"
+          ? payload.error
+          : typeof payload.message === "string"
+            ? payload.message
+            : null;
+      if (payloadError) {
+        return payloadError;
+      }
+    } catch {
+      // Ignore JSON parse failures and use fallback below.
+    }
+    return `${fallback} (HTTP ${response.status})`;
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -328,12 +347,12 @@ export default function EditListingPage() {
     const uploadData = new FormData();
     uploadData.append("area", area);
     files.forEach((f) => uploadData.append("files", f));
-    const uploadRes = await fetch("/api/media/upload", {
+    const uploadRes = await fetchWithRetry("/api/media/upload", {
       method: "POST",
       headers: withCsrfHeaders(),
       body: uploadData,
     });
-    if (!uploadRes.ok) throw new Error("Upload failed");
+    if (!uploadRes.ok) throw new Error(await readUploadError(uploadRes, "Upload failed"));
     const uploadJson = await uploadRes.json();
     return uploadJson.urls || [];
   }
@@ -408,13 +427,18 @@ export default function EditListingPage() {
         : {};
 
       // Upload photos, video, and video cover in parallel
+      let compressedVideoFileRef: File | null = null;
       const [newLogoUrls, newPhotoUrls, newVideoUrl, newCoverUrls] = await Promise.all([
         uploadMedia(newLogoFile, "listing_logo"),
         uploadMedia(newPhotoFiles, "listing"),
         newVideoFile.length > 0
           ? (async () => {
-              const file = newVideoFile[0];
-              const urlRes = await fetch("/api/media/upload-url", {
+              setSubmitProgress("Compressing video...");
+              const { compressVideoForUpload } = await import("@/lib/media/compress-before-upload");
+              const file = await compressVideoForUpload(newVideoFile[0]);
+              compressedVideoFileRef = file;
+              setSubmitProgress("Uploading media...");
+              const urlRes = await fetchWithRetry("/api/media/upload-url", {
                 method: "POST",
                 headers: withCsrfHeaders({ "Content-Type": "application/json" }),
                 body: JSON.stringify({
@@ -424,14 +448,16 @@ export default function EditListingPage() {
                   area: "listing_video",
                 }),
               });
-              if (!urlRes.ok) throw new Error("Failed to get video upload URL");
+              if (!urlRes.ok) {
+                throw new Error(await readUploadError(urlRes, "Failed to get video upload URL"));
+              }
               const { uploadUrl, publicUrl } = await urlRes.json();
-              const putRes = await fetch(uploadUrl, {
+              const putRes = await fetchWithRetry(uploadUrl, {
                 method: "PUT",
                 headers: { "Content-Type": file.type },
                 body: file,
               });
-              if (!putRes.ok) throw new Error("Failed to upload video");
+              if (!putRes.ok) throw new Error(`Failed to upload video (HTTP ${putRes.status})`);
               return publicUrl as string;
             })()
           : Promise.resolve(null as string | null),
@@ -447,7 +473,8 @@ export default function EditListingPage() {
 
       const allPhotos = [...existingPhotos, ...newPhotoUrls];
       const allVideos = [...existingVideos, ...(newVideoUrl ? [newVideoUrl] : [])];
-      const primaryMediaFile = newVideoFile[0] ?? newPhotoFiles[0] ?? null;
+      const primaryMediaFile =
+        compressedVideoFileRef ?? newVideoFile[0] ?? newPhotoFiles[0] ?? null;
       const mediaDimensions = primaryMediaFile ? await readMediaDimensions(primaryMediaFile) : null;
 
       setSubmitProgress("Saving listing...");

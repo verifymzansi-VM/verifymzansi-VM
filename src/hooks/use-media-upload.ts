@@ -1,11 +1,17 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { generateBlurHash } from "@/lib/utils/blurhash";
+import { fetchWithRetry } from "@/lib/utils/fetch-retry";
+import type { CompressionResult } from "@/lib/media/video-compressor";
 
 interface UploadState {
   isUploading: boolean;
+  /** Whether video compression is in progress (before upload begins) */
+  isCompressing: boolean;
+  /** Compression progress 0-100 (only meaningful when isCompressing is true) */
+  compressionProgress: number;
   progress: number;
   error: string | null;
   url: string | null;
@@ -344,6 +350,8 @@ export function useMediaUpload(options: UploadOptions = {}) {
 
   const [state, setState] = useState<UploadState>({
     isUploading: false,
+    isCompressing: false,
+    compressionProgress: 0,
     progress: 0,
     error: null,
     url: null,
@@ -352,6 +360,8 @@ export function useMediaUpload(options: UploadOptions = {}) {
   const [dimensions, setDimensions] = useState<MediaDimensions | null>(null);
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [blurhash, setBlurhash] = useState<string | null>(null);
+  const [compressionResult, setCompressionResult] = useState<CompressionResult | null>(null);
+  const compressionAbortRef = useRef<AbortController | null>(null);
 
   const validate = useCallback(
     (file: File): string | null => {
@@ -377,6 +387,8 @@ export function useMediaUpload(options: UploadOptions = {}) {
       if (validationError) {
         setState({
           isUploading: false,
+          isCompressing: false,
+          compressionProgress: 0,
           progress: 0,
           error: validationError,
           url: null,
@@ -384,7 +396,15 @@ export function useMediaUpload(options: UploadOptions = {}) {
         return null;
       }
 
-      setState({ isUploading: true, progress: 0, error: null, url: null });
+      setCompressionResult(null);
+      setState({
+        isUploading: true,
+        isCompressing: false,
+        compressionProgress: 0,
+        progress: 0,
+        error: null,
+        url: null,
+      });
 
       const isVideo = VIDEO_TYPES.has(file.type);
 
@@ -402,6 +422,8 @@ export function useMediaUpload(options: UploadOptions = {}) {
               : `${maxDurationSec} seconds`;
           setState({
             isUploading: false,
+            isCompressing: false,
+            compressionProgress: 0,
             progress: 0,
             error: `Video is too long. Maximum duration is ${label}.`,
             url: null,
@@ -432,18 +454,60 @@ export function useMediaUpload(options: UploadOptions = {}) {
       }
 
       try {
-        // ── Video: presigned direct upload to R2 ──────────────
+        // ── Video: compress + presigned direct upload to R2 ──────────
         if (isVideo) {
+          // ── Compress video before upload ─────────────────────────
+          compressionAbortRef.current?.abort();
+          const compAbort = new AbortController();
+          compressionAbortRef.current = compAbort;
+
+          setState((prev) => ({
+            ...prev,
+            isCompressing: true,
+            compressionProgress: 0,
+            progress: 0,
+          }));
+
+          let uploadFile = file;
+          try {
+            const { compressVideo } = await import("@/lib/media/video-compressor");
+            const result = await compressVideo(file, {
+              onProgress: (pct) => {
+                setState((prev) => ({ ...prev, compressionProgress: pct }));
+              },
+              signal: compAbort.signal,
+            });
+            setCompressionResult(result);
+            uploadFile = result.file;
+          } catch (compErr) {
+            // Abort means user cancelled — bail out
+            if (compErr instanceof DOMException && compErr.name === "AbortError") {
+              setState({
+                isUploading: false,
+                isCompressing: false,
+                compressionProgress: 0,
+                progress: 0,
+                error: null,
+                url: null,
+              });
+              return null;
+            }
+            // Other errors — upload original file with a console warning
+            console.warn("[use-media-upload] Compression failed, uploading original:", compErr);
+          }
+
+          setState((prev) => ({ ...prev, isCompressing: false, compressionProgress: 100 }));
+
           // 1. Get presigned URL from our API
           setState((prev) => ({ ...prev, progress: 2 }));
 
-          const urlResponse = await fetch("/api/media/upload-url", {
+          const urlResponse = await fetchWithRetry("/api/media/upload-url", {
             method: "POST",
             headers: withCsrfHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify({
-              filename: file.name,
-              contentType: file.type,
-              size: file.size,
+              filename: uploadFile.name,
+              contentType: uploadFile.type,
+              size: uploadFile.size,
               area,
             }),
           });
@@ -455,6 +519,8 @@ export function useMediaUpload(options: UploadOptions = {}) {
               `Failed to get upload URL (${urlResponse.status})`;
             setState({
               isUploading: false,
+              isCompressing: false,
+              compressionProgress: 0,
               progress: 0,
               error: errorMsg,
               url: null,
@@ -469,20 +535,20 @@ export function useMediaUpload(options: UploadOptions = {}) {
           };
 
           // 2. Upload directly to R2 with real progress
-          await uploadWithPresignedUrl(file, uploadUrl, (pct) => {
+          await uploadWithPresignedUrl(uploadFile, uploadUrl, (pct) => {
             // Reserve last 5% for poster extraction
             setState((prev) => ({ ...prev, progress: Math.round(pct * 0.95) }));
           });
 
           // 3. Extract poster frame and upload it (non-blocking for main result)
-          extractVideoFrame(file).then(async (posterFile) => {
+          extractVideoFrame(uploadFile).then(async (posterFile) => {
             if (!posterFile) return;
             try {
               const posterForm = new FormData();
               posterForm.append("files", posterFile);
               posterForm.append("area", area);
               posterForm.append("bucket", bucket);
-              const posterRes = await fetch("/api/media/upload", {
+              const posterRes = await fetchWithRetry("/api/media/upload", {
                 method: "POST",
                 headers: withCsrfHeaders(),
                 body: posterForm,
@@ -502,6 +568,8 @@ export function useMediaUpload(options: UploadOptions = {}) {
 
           setState({
             isUploading: false,
+            isCompressing: false,
+            compressionProgress: 100,
             progress: 100,
             error: null,
             url: publicUrl,
@@ -520,7 +588,7 @@ export function useMediaUpload(options: UploadOptions = {}) {
 
         setState((prev) => ({ ...prev, progress: 30 }));
 
-        const response = await fetch("/api/media/upload", {
+        const response = await fetchWithRetry("/api/media/upload", {
           method: "POST",
           headers: withCsrfHeaders(),
           body: formData,
@@ -535,6 +603,8 @@ export function useMediaUpload(options: UploadOptions = {}) {
             `Upload failed (${response.status})`;
           setState({
             isUploading: false,
+            isCompressing: false,
+            compressionProgress: 0,
             progress: 0,
             error: errorMsg,
             url: null,
@@ -547,7 +617,14 @@ export function useMediaUpload(options: UploadOptions = {}) {
           success: boolean;
         };
         const url = result.urls?.[0] ?? null;
-        setState({ isUploading: false, progress: 100, error: null, url });
+        setState({
+          isUploading: false,
+          isCompressing: false,
+          compressionProgress: 0,
+          progress: 100,
+          error: null,
+          url,
+        });
 
         // Generate BlurHash from the uploaded image (non-blocking)
         if (url) {
@@ -560,6 +637,8 @@ export function useMediaUpload(options: UploadOptions = {}) {
       } catch {
         setState({
           isUploading: false,
+          isCompressing: false,
+          compressionProgress: 0,
           progress: 0,
           error: "Upload failed. Please try again.",
           url: null,
@@ -571,10 +650,20 @@ export function useMediaUpload(options: UploadOptions = {}) {
   );
 
   const reset = useCallback(() => {
-    setState({ isUploading: false, progress: 0, error: null, url: null });
+    compressionAbortRef.current?.abort();
+    compressionAbortRef.current = null;
+    setState({
+      isUploading: false,
+      isCompressing: false,
+      compressionProgress: 0,
+      progress: 0,
+      error: null,
+      url: null,
+    });
     setDimensions(null);
     setPosterUrl(null);
     setBlurhash(null);
+    setCompressionResult(null);
   }, []);
 
   return {
@@ -582,6 +671,7 @@ export function useMediaUpload(options: UploadOptions = {}) {
     dimensions,
     posterUrl,
     blurhash,
+    compressionResult,
     upload,
     reset,
     validate,

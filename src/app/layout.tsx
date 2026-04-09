@@ -133,6 +133,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             React 19 hydration mismatches ("Something went wrong" crash). */}
         <meta name="format-detection" content="telephone=no, date=no, email=no, address=no" />
         {csrfToken ? <meta name="csrf-token" content={csrfToken} /> : null}
+        {/* Early connection to media CDN — saves ~100-200 ms on first media load */}
+        <link rel="preconnect" href="https://media.verifymzansi.com" />
+        <link rel="dns-prefetch" href="https://media.verifymzansi.com" />
       </head>
       <body className="min-h-screen antialiased">
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: TURBOPACK_NAME_POLYFILL }} />

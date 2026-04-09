@@ -434,6 +434,7 @@ function CreatePromotionContent() {
       };
 
       // Upload photos, videos, and video thumbnail in parallel
+      let compressedVideoFileRef: File | null = null;
       const [imageUrls, videoUrls, uploadedVideoThumbnailUrl] = await Promise.all([
         // Photos via server proxy (small files)
         photoFiles.length > 0
@@ -456,33 +457,47 @@ function CreatePromotionContent() {
 
         // Videos via presigned URL (direct to R2, avoids proxying large files)
         videoFiles.length > 0
-          ? Promise.all(
-              videoFiles.map(async (file) => {
-                const urlRes = await fetchWithRetry("/api/media/upload-url", {
-                  method: "POST",
-                  headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-                  body: JSON.stringify({
-                    filename: file.name,
-                    contentType: file.type,
-                    size: file.size,
-                    area: "promotion",
-                  }),
-                });
-                if (!urlRes.ok) {
-                  throw new Error(await readUploadError(urlRes, "Failed to get video upload URL"));
-                }
-                const { uploadUrl, publicUrl } = await urlRes.json();
-                const putRes = await fetchWithRetry(uploadUrl, {
-                  method: "PUT",
-                  headers: { "Content-Type": file.type },
-                  body: file,
-                });
-                if (!putRes.ok) {
-                  throw new Error(`Failed to upload video (HTTP ${putRes.status})`);
-                }
-                return publicUrl as string;
-              })
-            )
+          ? (async () => {
+              setSubmitProgress("Compressing video...");
+              const { compressVideoForUpload } = await import("@/lib/media/compress-before-upload");
+              // Compress sequentially — parallel would spawn multiple ~25 MB FFmpeg
+              // WASM instances and risk OOM on mobile devices.
+              const compressed: File[] = [];
+              for (const f of videoFiles) {
+                compressed.push(await compressVideoForUpload(f));
+              }
+              compressedVideoFileRef = compressed[0] ?? null;
+              setSubmitProgress("Uploading media...");
+              return Promise.all(
+                compressed.map(async (file) => {
+                  const urlRes = await fetchWithRetry("/api/media/upload-url", {
+                    method: "POST",
+                    headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+                    body: JSON.stringify({
+                      filename: file.name,
+                      contentType: file.type,
+                      size: file.size,
+                      area: "promotion",
+                    }),
+                  });
+                  if (!urlRes.ok) {
+                    throw new Error(
+                      await readUploadError(urlRes, "Failed to get video upload URL")
+                    );
+                  }
+                  const { uploadUrl, publicUrl } = await urlRes.json();
+                  const putRes = await fetchWithRetry(uploadUrl, {
+                    method: "PUT",
+                    headers: { "Content-Type": file.type },
+                    body: file,
+                  });
+                  if (!putRes.ok) {
+                    throw new Error(`Failed to upload video (HTTP ${putRes.status})`);
+                  }
+                  return publicUrl as string;
+                })
+              );
+            })()
           : Promise.resolve([] as string[]),
 
         // Video thumbnail via server proxy
@@ -504,7 +519,7 @@ function CreatePromotionContent() {
       ]);
 
       setSubmitProgress("Saving promotion...");
-      const primaryMediaFile = videoFiles[0] ?? photoFiles[0] ?? null;
+      const primaryMediaFile = compressedVideoFileRef ?? videoFiles[0] ?? photoFiles[0] ?? null;
       const mediaDimensions = primaryMediaFile ? await readMediaDimensions(primaryMediaFile) : null;
 
       const body = {
