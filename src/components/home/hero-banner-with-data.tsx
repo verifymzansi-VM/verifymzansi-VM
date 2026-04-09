@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { HeroBanner } from "./hero-banner";
 import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
+import { SHOWROOM_LAYOUT_CLASSES } from "@/components/showrooms/showroom-layout-classes";
 import { ShowroomSideCard, type SideCardItem } from "@/components/showrooms/showroom-side-card";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { BRANDED_SIDE_CARD_FALLBACKS } from "@/components/showrooms/side-card-fallbacks";
@@ -108,14 +109,14 @@ export async function HeroBannerWithData() {
 
   return (
     <section className="w-full">
-      <div className="lg:flex lg:items-stretch lg:gap-2 lg:px-2 xl:gap-3 xl:px-3">
-        <div className="hidden lg:block lg:w-[17.5%] lg:shrink-0 lg:self-stretch xl:w-[18%]">
+      <div className={SHOWROOM_LAYOUT_CLASSES.container}>
+        <div className={SHOWROOM_LAYOUT_CLASSES.side}>
           <div className="h-full">
             <ShowroomSideCard items={leftItems} initialDelayMs={0} />
           </div>
         </div>
-        <div className="min-w-0 lg:w-[65%] lg:shrink-0">{heroBannerNode}</div>
-        <div className="hidden lg:block lg:w-[17.5%] lg:shrink-0 lg:self-stretch xl:w-[18%]">
+        <div className={SHOWROOM_LAYOUT_CLASSES.center}>{heroBannerNode}</div>
+        <div className={SHOWROOM_LAYOUT_CLASSES.side}>
           <div className="h-full">
             <ShowroomSideCard items={rightItems} initialDelayMs={3000} />
           </div>
