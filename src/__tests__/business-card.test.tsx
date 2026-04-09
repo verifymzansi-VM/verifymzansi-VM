@@ -108,7 +108,7 @@ describe("BusinessCard", () => {
   it("shows the business logo when provided", () => {
     render(<BusinessCard {...defaultProps} logoUrl="https://example.com/logo.jpg" />);
 
-    expect(screen.getByAltText("Business logo")).toHaveAttribute(
+    expect(screen.getByAltText("Nomsa Fashion logo")).toHaveAttribute(
       "src",
       "https://example.com/logo.jpg"
     );

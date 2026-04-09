@@ -5,6 +5,8 @@ import { MapPin, Play } from "lucide-react";
 import Image from "next/image";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
+import { getFocalPositionClassName } from "@/lib/utils/media-position-classes";
+import { cn } from "@/lib/utils";
 
 interface AreaPreviewCardProps {
   href: string;
@@ -19,6 +21,8 @@ interface AreaPreviewCardProps {
   showViewDetails?: boolean;
   accentColor?: "green" | "gold" | "blue";
   boosted?: boolean;
+  focalX?: number | null;
+  focalY?: number | null;
 }
 
 const accentBorder: Record<string, string> = {
@@ -46,6 +50,8 @@ export function AreaPreviewCard({
   showViewDetails: _showViewDetails,
   accentColor = "green",
   boosted: _boosted,
+  focalX,
+  focalY,
 }: AreaPreviewCardProps) {
   const isVideo = isVideoUrl(imageUrl);
   const normalizedImageUrl = imageUrl ? normalizeMediaUrl(imageUrl) : undefined;
@@ -68,17 +74,24 @@ export function AreaPreviewCard({
           isVideo ? (
             <VideoCardPlayer
               src={imageUrl}
-              posterUrl={posterUrl}
+              posterUrl={posterUrl || imageUrl}
               alt={title}
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
               mode="ambient"
+              fitStrategy="smart"
+              containerAspectRatio={4 / 3}
+              focalX={focalX}
+              focalY={focalY}
             />
           ) : (
             <Image
               src={normalizedImageUrl}
               alt={title || "Preview image"}
               fill
-              className="object-cover transition-transform duration-500 group-hover:scale-110"
+              className={cn(
+                "object-cover focal-position-object transition-transform duration-500 group-hover:scale-110",
+                getFocalPositionClassName(focalX, focalY)
+              )}
             />
           )
         ) : (
@@ -101,7 +114,7 @@ export function AreaPreviewCard({
           </div>
         )}
 
-        {/* Video play overlay */}
+        {/* Video play overlay — only shown when video is available but not auto-detected from URL */}
         {hasVideo && !isVideo && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-sm transition-transform group-hover:scale-110">

@@ -212,9 +212,9 @@ export function MediaLightbox({ items, startIndex = 0, isOpen, onClose }: MediaL
       if (e.touches.length === 2) {
         const d = dist(e.touches[0], e.touches[1]);
         if (!pinchRef.current) {
-          pinchRef.current = { dist: d, scale };
+          pinchRef.current = { dist: d || 1, scale };
         } else {
-          const ratio = d / pinchRef.current.dist;
+          const ratio = pinchRef.current.dist > 0 ? d / pinchRef.current.dist : 1;
           setScale(clamp(pinchRef.current.scale * ratio, 1, 3));
         }
         e.preventDefault();
@@ -244,16 +244,21 @@ export function MediaLightbox({ items, startIndex = 0, isOpen, onClose }: MediaL
     [isZoomed, translate]
   );
 
-  const handlePanMove = useCallback((e: React.TouchEvent) => {
-    if (!panRef.current || e.touches.length !== 1) return;
-    const dx = e.touches[0].clientX - panRef.current.x;
-    const dy = e.touches[0].clientY - panRef.current.y;
-    setTranslate({
-      x: panRef.current.tx + dx,
-      y: panRef.current.ty + dy,
-    });
-    e.preventDefault();
-  }, []);
+  const panBound = scale * 150;
+
+  const handlePanMove = useCallback(
+    (e: React.TouchEvent) => {
+      if (!panRef.current || e.touches.length !== 1) return;
+      const dx = e.touches[0].clientX - panRef.current.x;
+      const dy = e.touches[0].clientY - panRef.current.y;
+      setTranslate({
+        x: clamp(panRef.current.tx + dx, -panBound, panBound),
+        y: clamp(panRef.current.ty + dy, -panBound, panBound),
+      });
+      e.preventDefault();
+    },
+    [panBound]
+  );
 
   const handlePanEnd = useCallback(() => {
     panRef.current = null;
@@ -314,13 +319,16 @@ export function MediaLightbox({ items, startIndex = 0, isOpen, onClose }: MediaL
     [isZoomed, translate]
   );
 
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!mousePanRef.current) return;
-    setTranslate({
-      x: mousePanRef.current.tx + (e.clientX - mousePanRef.current.x),
-      y: mousePanRef.current.ty + (e.clientY - mousePanRef.current.y),
-    });
-  }, []);
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (!mousePanRef.current) return;
+      setTranslate({
+        x: clamp(mousePanRef.current.tx + (e.clientX - mousePanRef.current.x), -panBound, panBound),
+        y: clamp(mousePanRef.current.ty + (e.clientY - mousePanRef.current.y), -panBound, panBound),
+      });
+    },
+    [panBound]
+  );
 
   const handleMouseUp = useCallback(() => {
     mousePanRef.current = null;

@@ -169,7 +169,7 @@ describe("PromotionCard", () => {
   it("renders the linked business logo when provided", () => {
     render(<PromotionCard {...defaultProps} logoUrl="https://example.com/logo.jpg" />);
 
-    expect(screen.getByAltText("Business logo")).toHaveAttribute(
+    expect(screen.getByAltText("Night Market logo")).toHaveAttribute(
       "src",
       "https://example.com/logo.jpg"
     );

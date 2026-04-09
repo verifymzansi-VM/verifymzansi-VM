@@ -13,6 +13,8 @@ interface MarketPreviewCardProps {
   boosted?: boolean;
   logoUrl?: string | null;
   priority?: boolean;
+  focalX?: number | null;
+  focalY?: number | null;
 }
 
 const formatPrice = (price: number) =>
@@ -33,6 +35,8 @@ export function MarketPreviewCard({
   boosted: _boosted,
   logoUrl,
   priority,
+  focalX,
+  focalY,
 }: MarketPreviewCardProps) {
   return (
     <PosterCardShell
@@ -48,6 +52,8 @@ export function MarketPreviewCard({
       accentClassName="hover:border-brand-green/55"
       logoUrl={logoUrl}
       priority={priority}
+      focalX={focalX}
+      focalY={focalY}
     />
   );
 }

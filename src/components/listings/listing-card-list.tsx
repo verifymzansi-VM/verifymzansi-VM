@@ -6,6 +6,7 @@ import Image from "next/image";
 import { MapPin } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
+import { VideoDurationBadge } from "@/components/ui/video-duration-badge";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
 import { formatZARShort } from "@/lib/utils/format";
@@ -34,6 +35,7 @@ interface ListingCardListProps {
   logoUrl?: string | null;
   focalX?: number | null;
   focalY?: number | null;
+  videoDuration?: number | null;
 }
 
 function isNew(createdAt: string): boolean {
@@ -79,6 +81,7 @@ export const ListingCardList = memo(function ListingCardList({
   logoUrl,
   focalX,
   focalY,
+  videoDuration,
 }: ListingCardListProps) {
   const isVideo = isVideoUrl(imageUrl);
   const normalizedImageUrl = imageUrl ? normalizeMediaUrl(imageUrl) : undefined;
@@ -96,12 +99,12 @@ export const ListingCardList = memo(function ListingCardList({
             {normalizedImageUrl ? (
               isVideo ? (
                 <VideoCardPlayer
-                  src={imageUrl}
+                  src={normalizedImageUrl}
                   posterUrl={posterUrl}
                   alt={title}
                   sizes="160px"
                   mode="ambient"
-                  fitStrategy="smart"
+                  fitStrategy="cover"
                   mediaClassName="transition-transform duration-700 group-hover:scale-[1.04]"
                   focalX={focalX}
                   focalY={focalY}
@@ -122,6 +125,7 @@ export const ListingCardList = memo(function ListingCardList({
               <div className="absolute inset-0 bg-gradient-to-br from-warm-300 via-warm-200 to-warm-100 dark:from-warm-800 dark:via-warm-700 dark:to-warm-900" />
             )}
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-black/10" />
+            {isVideo ? <VideoDurationBadge seconds={videoDuration} /> : null}
           </div>
 
           <div className="flex flex-1 flex-col justify-end gap-1.5 p-3 sm:p-3.5">
@@ -153,7 +157,7 @@ export const ListingCardList = memo(function ListingCardList({
                 <div className="h-5 w-5 shrink-0 overflow-hidden rounded-full ring-1 ring-border">
                   <Image
                     src={normalizedLogoUrl}
-                    alt="Business logo"
+                    alt={`${title} logo`}
                     width={20}
                     height={20}
                     className="h-full w-full object-cover"

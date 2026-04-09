@@ -49,6 +49,8 @@ interface TourismBusinessRow {
   location_city: string;
   boost_until: string | null;
   featured_until: string | null;
+  focal_x: number | null;
+  focal_y: number | null;
 }
 
 type ShowcaseItem =
@@ -84,7 +86,7 @@ export async function HomePromotionsShowcase() {
   const { data: tourismData } = await supabase
     .from("businesses")
     .select(
-      "id, business_name, business_type, cover_photo, cover_video, video_thumbnail, logo_url, location_province, location_city, boost_until, featured_until"
+      "id, business_name, business_type, cover_photo, cover_video, video_thumbnail, logo_url, location_province, location_city, boost_until, featured_until, focal_x, focal_y"
     )
     .eq("category", "tourism_hospitality")
     .in("status", ["live", "active"])
@@ -190,6 +192,8 @@ export async function HomePromotionsShowcase() {
                       : false
                   }
                   priority={false}
+                  focalX={item.data.focal_x}
+                  focalY={item.data.focal_y}
                 />
               ) : (
                 <PromotionCard

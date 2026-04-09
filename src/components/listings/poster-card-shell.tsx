@@ -150,7 +150,7 @@ export function PosterCardShell({
               <div className="h-7 w-7 overflow-hidden rounded-full border border-black/8 shadow-sm">
                 <Image
                   src={normalizedLogoUrl}
-                  alt="Business logo"
+                  alt={`${title} logo`}
                   width={28}
                   height={28}
                   className="h-full w-full object-cover"

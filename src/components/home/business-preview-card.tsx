@@ -17,6 +17,8 @@ interface BusinessPreviewCardProps {
   boosted?: boolean;
   featured?: boolean;
   priority?: boolean;
+  focalX?: number | null;
+  focalY?: number | null;
 }
 
 export function BusinessPreviewCard({
@@ -31,6 +33,8 @@ export function BusinessPreviewCard({
   boosted: _boosted,
   featured: _featured,
   priority,
+  focalX,
+  focalY,
 }: BusinessPreviewCardProps) {
   const typeLabel =
     BUSINESS_TYPE_OPTIONS.find((t) => t.value === businessType)?.label || businessType;
@@ -49,6 +53,8 @@ export function BusinessPreviewCard({
       statusClassName={undefined}
       accentClassName="hover:border-brand-blue/55"
       priority={priority}
+      focalX={focalX}
+      focalY={focalY}
       fallback={
         <div className="flex h-full w-full items-center justify-center text-brand-blue/35">
           <Store className="h-16 w-16" />

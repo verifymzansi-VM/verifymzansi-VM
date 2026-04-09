@@ -184,7 +184,7 @@ describe("ListingCard", () => {
   it("renders the listing logo when provided", () => {
     render(<ListingCard {...defaultProps} logoUrl="https://example.com/logo.jpg" />);
 
-    expect(screen.getByAltText("Business logo")).toHaveAttribute(
+    expect(screen.getByAltText("Test Listing logo")).toHaveAttribute(
       "src",
       "https://example.com/logo.jpg"
     );

@@ -78,6 +78,8 @@ export async function HomeBusinessShowcase() {
                 boosted={b.boost_until ? new Date(b.boost_until) > new Date() : false}
                 featured={b.featured_until ? new Date(b.featured_until) > new Date() : false}
                 priority={false}
+                focalX={b.focal_x as number | null | undefined}
+                focalY={b.focal_y as number | null | undefined}
               />
             </div>
           ))}

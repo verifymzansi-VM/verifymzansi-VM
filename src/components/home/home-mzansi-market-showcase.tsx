@@ -87,6 +87,8 @@ export async function HomeMzansiMarketShowcase() {
                   boosted={isBoosted}
                   logoUrl={l.logo_url}
                   priority={false}
+                  focalX={l.focal_x as number | null | undefined}
+                  focalY={l.focal_y as number | null | undefined}
                 />
               </div>
             );
