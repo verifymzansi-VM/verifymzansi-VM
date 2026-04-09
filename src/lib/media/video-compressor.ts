@@ -269,7 +269,8 @@ export async function compressVideo(
 
     ffmpeg.terminate();
 
-    const compressedBlob = new Blob([data], { type: "video/mp4" });
+    const blobPart: BlobPart = typeof data === "string" ? data : new Uint8Array(data);
+    const compressedBlob = new Blob([blobPart], { type: "video/mp4" });
     const compressedSize = compressedBlob.size;
 
     // If compression made the file larger, return original
