@@ -95,10 +95,6 @@ describe("CameraCapture", () => {
   });
 
   it("shows blocked-for-site guidance when permission state is denied", async () => {
-    const err = new Error("denied");
-    err.name = "NotAllowedError";
-    mockGetUserMedia.mockRejectedValueOnce(err);
-
     const query = vi.fn().mockResolvedValue({ state: "denied" });
     Object.defineProperty(global.navigator, "permissions", {
       configurable: true,
@@ -113,6 +109,30 @@ describe("CameraCapture", () => {
     });
 
     expect(query).toHaveBeenCalled();
+    expect(mockGetUserMedia).not.toHaveBeenCalled();
+    expect(screen.getByText(/may not show the camera prompt again/i)).toBeInTheDocument();
+  });
+
+  it("falls back to denied guidance when permission query fails", async () => {
+    const err = new Error("denied");
+    err.name = "NotAllowedError";
+    mockGetUserMedia.mockRejectedValueOnce(err);
+
+    const query = vi.fn().mockRejectedValue(new Error("unsupported"));
+    Object.defineProperty(global.navigator, "permissions", {
+      configurable: true,
+      value: { query },
+    });
+
+    render(<CameraCapture onCapture={vi.fn()} facingMode="user" />);
+    fireEvent.click(screen.getByRole("button", { name: /open camera/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/camera access was denied/i)).toBeInTheDocument();
+    });
+
+    expect(query).toHaveBeenCalled();
+    expect(mockGetUserMedia).toHaveBeenCalledTimes(1);
   });
 
   it("shows timeout guidance when camera start takes too long", async () => {

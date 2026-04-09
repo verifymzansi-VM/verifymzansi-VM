@@ -19,6 +19,14 @@ interface CameraCaptureProps {
 
 type CameraState = "idle" | "streaming" | "captured" | "error";
 const DEFAULT_CAMERA_START_TIMEOUT_MS = 15_000;
+const BLOCKED_FOR_SITE_MESSAGE =
+  "Camera is blocked for this site. Your browser may not show the camera prompt again until you allow camera access in site settings. Please enable camera permission, then try again, or use the file upload below.";
+
+interface PermissionLookupResult {
+  state: PermissionState | null;
+  supported: boolean;
+  queryFailed: boolean;
+}
 
 export function CameraCapture({
   onCapture,
@@ -37,12 +45,23 @@ export function CameraCapture({
   const [isStartingCamera, setIsStartingCamera] = useState(false);
 
   const reportCameraInitFailure = useCallback(
-    (errorName: string, permissionState: PermissionState | null) => {
+    (
+      errorName: string,
+      permissionState: PermissionState | null,
+      permissionLookup?: PermissionLookupResult
+    ) => {
       const uaData = (
         navigator as Navigator & {
           userAgentData?: { platform?: string; mobile?: boolean };
         }
       ).userAgentData;
+
+      let topLevelFrame: boolean | "unknown" = "unknown";
+      try {
+        topLevelFrame = window.top === window.self;
+      } catch {
+        topLevelFrame = "unknown";
+      }
 
       try {
         Sentry.withScope((scope) => {
@@ -51,9 +70,13 @@ export function CameraCapture({
           scope.setContext("camera_init", {
             errorName: errorName || "unknown",
             permissionState: permissionState ?? "unknown",
+            permissionApiSupported:
+              permissionLookup?.supported ?? Boolean(navigator.permissions?.query),
+            permissionQueryFailed: permissionLookup?.queryFailed ?? false,
             telemetryContext: telemetryContext ?? "unknown",
             facingMode,
             isSecureContext,
+            topLevelFrame,
             mediaDevicesAvailable: Boolean(navigator.mediaDevices?.getUserMedia),
             platform: uaData?.platform ?? navigator.platform ?? "unknown",
             mobile: uaData?.mobile ?? /Android|iPhone|iPad|iPod/i.test(navigator.userAgent),
@@ -67,16 +90,16 @@ export function CameraCapture({
     [facingMode, telemetryContext]
   );
 
-  const getPermissionState = useCallback(async (): Promise<PermissionState | null> => {
+  const getPermissionState = useCallback(async (): Promise<PermissionLookupResult> => {
     if (!navigator.permissions?.query) {
-      return null;
+      return { state: null, supported: false, queryFailed: false };
     }
 
     try {
       const status = await navigator.permissions.query({ name: "camera" as PermissionName });
-      return status.state;
+      return { state: status.state, supported: true, queryFailed: false };
     } catch {
-      return null;
+      return { state: null, supported: true, queryFailed: true };
     }
   }, []);
 
@@ -147,6 +170,16 @@ export function CameraCapture({
       setErrorMessage("");
       stopStream();
 
+      // If camera permission is already blocked, browsers often suppress
+      // additional prompts. Surface actionable guidance immediately.
+      const initialPermissionLookup = await getPermissionState();
+      if (initialPermissionLookup.state === "denied") {
+        reportCameraInitFailure("PermissionPreDenied", "denied", initialPermissionLookup);
+        setErrorMessage(BLOCKED_FOR_SITE_MESSAGE);
+        setState("error");
+        return;
+      }
+
       // Try with full constraints first, then progressively relax
       let stream: MediaStream | null = null;
       const constraintSets: MediaStreamConstraints[] = [
@@ -188,15 +221,21 @@ export function CameraCapture({
     } catch (err) {
       stopStream();
       const name = err instanceof Error ? err.name : "";
-      const permissionState = name === "NotAllowedError" ? await getPermissionState() : null;
+      const permissionLookup =
+        name === "NotAllowedError"
+          ? await getPermissionState()
+          : {
+              state: null,
+              supported: Boolean(navigator.permissions?.query),
+              queryFailed: false,
+            };
+      const permissionState = permissionLookup.state;
 
-      reportCameraInitFailure(name || "UnknownCameraError", permissionState);
+      reportCameraInitFailure(name || "UnknownCameraError", permissionState, permissionLookup);
 
       if (name === "NotAllowedError") {
         if (permissionState === "denied") {
-          setErrorMessage(
-            "Camera is blocked for this site. Please enable camera permission in your browser site settings, then try again, or use the file upload below."
-          );
+          setErrorMessage(BLOCKED_FOR_SITE_MESSAGE);
         } else {
           setErrorMessage(
             "Camera access was denied. Please allow camera access in your browser settings, or use the file upload below."

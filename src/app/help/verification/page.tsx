@@ -193,6 +193,10 @@ export default function VerificationHelpPage() {
                 Open the lock icon next to the address bar and set Camera to Allow for this site.
               </li>
               <li className="text-xs sm:text-sm text-muted-foreground">
+                If Camera was previously set to Block, Chrome may stop showing a new prompt until
+                you reset permission to Ask or Allow in site settings.
+              </li>
+              <li className="text-xs sm:text-sm text-muted-foreground">
                 Refresh the page and press Open Camera again.
               </li>
               <li className="text-xs sm:text-sm text-muted-foreground">
@@ -212,6 +216,10 @@ export default function VerificationHelpPage() {
               </li>
               <li className="text-xs sm:text-sm text-muted-foreground">
                 On Android Chrome: Site settings {">"} Camera {">"} Allow for this site.
+              </li>
+              <li className="text-xs sm:text-sm text-muted-foreground">
+                If you tapped Block before, Chrome will not re-prompt until you change this site
+                back to Ask or Allow.
               </li>
               <li className="text-xs sm:text-sm text-muted-foreground">
                 If the prompt still does not appear, restart the browser and try again.
