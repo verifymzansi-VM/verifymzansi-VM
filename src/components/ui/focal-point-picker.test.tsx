@@ -9,7 +9,6 @@ vi.mock("@sentry/nextjs", () => ({
 
 // Mock next/image to a plain <img>
 vi.mock("next/image", () => ({
-   
   default: ({ alt, ...props }: { alt?: string } & Record<string, unknown>) => (
     <img alt={typeof alt === "string" ? alt : ""} {...props} />
   ),
