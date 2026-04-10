@@ -2,7 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
 import { fulfillPayment, rollbackPaymentProcessing } from "@/lib/payments/fulfillment";
-import { normalizeOzowWebhook, verifyOzowWebhookSignature } from "@/lib/payments/ozow";
+import {
+  fromOzowMerchantReference,
+  normalizeOzowWebhook,
+  verifyOzowWebhookSignature,
+} from "@/lib/payments/ozow";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import {
   finalizeCompletedPayment,
@@ -238,9 +242,12 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createAdminClient() as unknown as PaymentStoreClient;
+    const reconstructedId = fromOzowMerchantReference(payload.merchantReference);
     const payment =
       (await getPaymentByProviderReference(supabase, payload.merchantReference)) ||
-      (await getPaymentById(supabase, payload.merchantReference));
+      (reconstructedId
+        ? await getPaymentById(supabase, reconstructedId)
+        : await getPaymentById(supabase, payload.merchantReference));
 
     if (!payment) {
       log.warn("Ozow webhook payment not found", { merchantReference: payload.merchantReference });

@@ -363,8 +363,6 @@ export interface OzowHostedPaymentRequest {
   paymentId: string;
   merchantReference: string;
   amountCents: number;
-  itemName: string;
-  itemDescription?: string;
   returnUrl: string;
   cancelUrl: string;
 }
@@ -381,6 +379,19 @@ export interface OzowHostedPaymentResponse {
 
 export function toOzowMerchantReference(paymentId: string): string {
   return paymentId.replace(/[^A-Za-z0-9_]/g, "");
+}
+
+/**
+ * Attempt to reconstruct a UUID from a stripped merchant reference.
+ * UUIDs are 8-4-4-4-12 hex chars = 32 hex chars when stripped.
+ * Returns null if the input doesn't look like a stripped UUID.
+ */
+export function fromOzowMerchantReference(merchantReference: string): string | null {
+  if (!/^[0-9a-f]{32}$/i.test(merchantReference)) {
+    return null;
+  }
+  const m = merchantReference;
+  return `${m.slice(0, 8)}-${m.slice(8, 12)}-${m.slice(12, 16)}-${m.slice(16, 20)}-${m.slice(20)}`;
 }
 
 export function toOzowReferenceField(value: string): string {

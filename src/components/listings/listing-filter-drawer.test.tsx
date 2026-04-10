@@ -67,7 +67,7 @@ describe("ListingFilterDrawer", () => {
     render(<ListingFilterDrawer />);
 
     expect(screen.getByText("Electronics & Tech Filters")).toBeInTheDocument();
-    expect(screen.getByLabelText("Device Type")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Device Type" })).toBeInTheDocument();
     expect(screen.getByLabelText("Brand")).toBeInTheDocument();
   });
 
@@ -92,11 +92,11 @@ describe("ListingFilterDrawer", () => {
 
     render(<ListingFilterDrawer />);
 
-    fireEvent.change(screen.getByLabelText("Category"), {
+    fireEvent.change(screen.getByRole("combobox", { name: "Category" }), {
       target: { value: "electronics" },
     });
 
-    expect(screen.queryByLabelText("Make")).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Make" })).not.toBeInTheDocument();
     expect(screen.getByLabelText("Brand")).toBeInTheDocument();
     expect(replaceFilters).not.toHaveBeenCalled();
 

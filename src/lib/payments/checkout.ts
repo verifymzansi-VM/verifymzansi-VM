@@ -105,8 +105,6 @@ export async function createHostedCheckout(
       paymentId,
       merchantReference: providerReference,
       amountCents: input.amountCents,
-      itemName: input.itemName,
-      itemDescription: input.itemDescription,
       returnUrl,
       cancelUrl,
     });

@@ -59,7 +59,6 @@ describe("ozow payments", () => {
       paymentId: "payment-1",
       merchantReference: "payment1",
       amountCents: 2500,
-      itemName: "Growth Plan",
       returnUrl: "https://verifymzansi.com/billing/success?payment=payment-1",
       cancelUrl: "https://verifymzansi.com/billing/cancel?payment=payment-1",
     });
@@ -68,7 +67,6 @@ describe("ozow payments", () => {
       paymentId: "payment-2",
       merchantReference: "payment2",
       amountCents: 1500,
-      itemName: "Boost Listing",
       returnUrl: "https://verifymzansi.com/billing/success?payment=payment-2",
       cancelUrl: "https://verifymzansi.com/billing/cancel?payment=payment-2",
     });
@@ -101,8 +99,6 @@ describe("ozow payments", () => {
       paymentId: "payment-1",
       merchantReference: "payment1",
       amountCents: 2500,
-      itemName: "Growth Plan",
-      itemDescription: "Growth plan upgrade",
       returnUrl: "https://verifymzansi.com/billing/success?payment=payment-1",
       cancelUrl: "https://verifymzansi.com/billing/cancel?payment=payment-1",
     });
@@ -138,7 +134,6 @@ describe("ozow payments", () => {
           paymentId: "payment-1",
           merchantReference: "payment1",
           amountCents: 2500,
-          itemName: "Growth Plan",
           returnUrl: "https://verifymzansi.com/billing/success?payment=payment-1",
           cancelUrl: "https://verifymzansi.com/billing/cancel?payment=payment-1",
         })
@@ -170,7 +165,6 @@ describe("ozow payments", () => {
         paymentId: "payment-1",
         merchantReference: "payment1",
         amountCents: 2500,
-        itemName: "Growth Plan",
         returnUrl: "https://verifymzansi.com/billing/success?payment=payment-1",
         cancelUrl: "https://verifymzansi.com/billing/cancel?payment=payment-1",
       })
@@ -203,7 +197,6 @@ describe("ozow payments", () => {
       paymentId: "payment-1",
       merchantReference: "payment1",
       amountCents: 2500,
-      itemName: "Growth Plan",
       returnUrl: "https://verifymzansi.com/billing/success?payment=payment-1",
       cancelUrl: "https://verifymzansi.com/billing/cancel?payment=payment-1",
     });
@@ -297,5 +290,20 @@ describe("ozow payments", () => {
     expect(toOzowMerchantReference("payment-1")).toBe("payment1");
     expect(toOzowReferenceField("11111111111141118111111111111111")).toBe("11111111111141");
     expect(toOzowReferenceField("payment_1 two")).toBe("payment1 two");
+  });
+
+  it("reconstructs UUIDs from stripped merchant references", async () => {
+    const { fromOzowMerchantReference } = await import("./ozow");
+
+    expect(fromOzowMerchantReference("11111111111141118111111111111111")).toBe(
+      "11111111-1111-4111-8111-111111111111"
+    );
+    expect(fromOzowMerchantReference("aabbccdd1122334455667788aabbccdd")).toBe(
+      "aabbccdd-1122-3344-5566-7788aabbccdd"
+    );
+    // Non-UUID inputs return null
+    expect(fromOzowMerchantReference("payment1")).toBeNull();
+    expect(fromOzowMerchantReference("too-short")).toBeNull();
+    expect(fromOzowMerchantReference("11111111-1111-4111-8111-111111111111")).toBeNull();
   });
 });
