@@ -107,7 +107,7 @@ describe("POST /api/webhooks/ozow", () => {
     await expect(response.json()).resolves.toEqual({ error: "Webhook secret not configured" });
   });
 
-  it("returns 400 for malformed JSON payloads", async () => {
+  it("returns 401 for malformed JSON payloads (Svix verify rejects unparseable bodies)", async () => {
     const raw = '{"eventType":"transaction.complete",';
     const webhook = new Webhook(webhookSecret);
     const timestamp = new Date();
@@ -127,8 +127,8 @@ describe("POST /api/webhooks/ozow", () => {
       })
     );
 
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({ error: "Invalid JSON payload" });
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({ error: "Invalid webhook signature" });
   });
 
   it("rejects invalid signatures", async () => {

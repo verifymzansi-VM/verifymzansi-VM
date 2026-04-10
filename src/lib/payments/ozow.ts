@@ -54,9 +54,6 @@ type CachedToken = {
 const MAX_CACHED_TOKENS = 20;
 const cachedTokens = new Map<string, CachedToken>();
 const pendingTokenFetches = new Map<string, Promise<string>>();
-// 90 seconds tolerance (45s each way) — tight enough to limit replay attacks
-// while accommodating reasonable clock drift and network latency.
-const OZOW_WEBHOOK_TOLERANCE_SECONDS = 90;
 const OZOW_REFERENCE_FIELD_MAX_LENGTH = 14;
 
 const OZOW_ALLOWED_HOSTS = {
@@ -147,17 +144,6 @@ export function isMockOzowEnabled(): boolean {
 
 function toSafeString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value : null;
-}
-
-function timingSafeEqualStrings(left: string, right: string): boolean {
-  const leftBuffer = Buffer.from(left, "utf8");
-  const rightBuffer = Buffer.from(right, "utf8");
-
-  if (leftBuffer.length !== rightBuffer.length) {
-    return false;
-  }
-
-  return crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 function normalizeScope(scope: string): string {
@@ -421,7 +407,7 @@ export async function createOzowHostedPayment(
         baseUrlHost,
       });
     }
-    const token = await getOzowAccessToken("payments");
+    const token = await getOzowAccessToken("payment");
 
     const requestBody = {
       siteCode,
@@ -551,40 +537,21 @@ export function verifyOzowWebhookSignature(body: string, headers: Pick<Headers, 
     return false;
   }
 
-  const webhookId = headers.get("svix-id");
-  const webhookTimestamp = headers.get("svix-timestamp");
-  const webhookSignature = headers.get("svix-signature");
+  const svixId = headers.get("svix-id");
+  const svixTimestamp = headers.get("svix-timestamp");
+  const svixSignature = headers.get("svix-signature");
 
-  if (!webhookId || !webhookTimestamp || !webhookSignature) {
+  if (!svixId || !svixTimestamp || !svixSignature) {
     return false;
   }
 
   try {
-    const timestampSeconds = Number.parseInt(webhookTimestamp, 10);
-    if (!Number.isFinite(timestampSeconds)) {
-      return false;
-    }
-
-    const currentTimeSeconds = Math.floor(Date.now() / 1000);
-    if (
-      currentTimeSeconds - timestampSeconds > OZOW_WEBHOOK_TOLERANCE_SECONDS ||
-      timestampSeconds > currentTimeSeconds + OZOW_WEBHOOK_TOLERANCE_SECONDS
-    ) {
-      return false;
-    }
-
-    const expectedSignature = new Webhook(secret)
-      .sign(webhookId, new Date(timestampSeconds * 1000), body)
-      .split(",")[1];
-
-    return webhookSignature.split(" ").some((versionedSignature) => {
-      const [version, signature] = versionedSignature.split(",", 2);
-      return (
-        version === "v1" &&
-        Boolean(signature) &&
-        timingSafeEqualStrings(signature, expectedSignature)
-      );
+    new Webhook(secret).verify(body, {
+      "svix-id": svixId,
+      "svix-timestamp": svixTimestamp,
+      "svix-signature": svixSignature,
     });
+    return true;
   } catch {
     return false;
   }

@@ -73,7 +73,7 @@ describe("ozow payments", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls[0][0]).toContain("/v1/token");
-    expect(String((fetchMock.mock.calls[0][1] as RequestInit).body)).toContain("scope=payments");
+    expect(String((fetchMock.mock.calls[0][1] as RequestInit).body)).toContain("scope=payment");
     expect(fetchMock.mock.calls[1][0]).toContain("/payments");
     expect(fetchMock.mock.calls[2][0]).toContain("/payments");
   });
@@ -213,10 +213,12 @@ describe("ozow payments", () => {
     const webhook = new Webhook(envMap.OZOW_WEBHOOK_SECRET);
     const signatureId = "msg_123";
     const timestamp = new Date();
+    const svixTimestamp = Math.floor(timestamp.getTime() / 1000).toString();
+    const svixSignature = webhook.sign(signatureId, timestamp, body);
     const headers = new Headers({
       "svix-id": signatureId,
-      "svix-timestamp": Math.floor(timestamp.getTime() / 1000).toString(),
-      "svix-signature": webhook.sign(signatureId, timestamp, body),
+      "svix-timestamp": svixTimestamp,
+      "svix-signature": svixSignature,
     });
 
     expect(verifyOzowWebhookSignature(body, headers)).toBe(true);
@@ -225,7 +227,7 @@ describe("ozow payments", () => {
         body,
         new Headers({
           "svix-id": signatureId,
-          "svix-timestamp": headers.get("svix-timestamp") ?? "",
+          "svix-timestamp": svixTimestamp,
           "svix-signature": "v1,bad-signature",
         })
       )
