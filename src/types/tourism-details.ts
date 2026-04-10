@@ -36,6 +36,44 @@ export interface TourismCategoryDetails {
   booking_url?: string;
   pets_allowed?: boolean;
   smoking_allowed?: boolean;
+
+  /* ── Spa & Wellness (Group B) ── */
+  /** Subset of TOURISM_TREATMENT_TYPES */
+  treatment_types?: string[];
+
+  /* ── Tours & Safaris (Group C) ── */
+  /** Subset of TOURISM_ACTIVITY_TYPES[subcategory] */
+  activity_types?: string[];
+  /** Key from TOURISM_TOUR_DURATIONS */
+  tour_duration?: string;
+  max_group_size?: number;
+  /** Key from TOURISM_DIFFICULTY_LEVELS (adventure_activities only) */
+  difficulty_level?: string;
+  equipment_provided?: boolean;
+  /** Free-text description of what's included */
+  whats_included?: string;
+  /** Key from TOURISM_AGE_RESTRICTIONS */
+  age_restriction?: string;
+
+  /* ── Travel Agency (Group D) ── */
+  /** Subset of TOURISM_TRAVEL_SERVICES */
+  services_offered?: string[];
+  /** Subset of TOURISM_TRAVEL_SPECIALIZATIONS */
+  specializations?: string[];
+
+  /* ── Attractions & Sites (Group E) ── */
+  guided_tours?: boolean;
+  audio_guide?: boolean;
+  /** Key from TOURISM_VISIT_DURATIONS */
+  visit_duration?: string;
+
+  /* ── Car Rental (Group F) ── */
+  /** Subset of TOURISM_VEHICLE_TYPES */
+  vehicle_types?: string[];
+  delivery_collection?: boolean;
+  min_driver_age?: number;
+  insurance_included?: boolean;
+  gps_available?: boolean;
 }
 
 /* ── Event (stored in promotions.event_details) ── */

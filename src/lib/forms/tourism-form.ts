@@ -4,6 +4,7 @@ import {
 } from "@/lib/promotions/social-authorization";
 import { SOCIAL_AUTHORIZER_RELATIONSHIP_LABELS } from "@/types/enums";
 import type { TourismListingType } from "@/types/tourism-details";
+import { TOURISM_SUBCATEGORY_FIELD_GROUPS } from "@/lib/constants/categories";
 
 /* ── Regex ───────────────────────────────────────────────── */
 
@@ -48,6 +49,26 @@ export interface TourismFormValues {
   socialTwitter: string;
   socialTiktok: string;
 
+  /* category-specific tourism fields */
+  treatmentTypes: string[];
+  activityTypes: string[];
+  tourDuration: string;
+  maxGroupSize: string;
+  difficultyLevel: string;
+  equipmentProvided: boolean;
+  whatsIncluded: string;
+  tourismAgeRestriction: string;
+  servicesOffered: string[];
+  tourismSpecializations: string[];
+  guidedTours: boolean;
+  audioGuide: boolean;
+  visitDuration: string;
+  vehicleTypes: string[];
+  deliveryCollection: boolean;
+  minDriverAge: string;
+  insuranceIncluded: boolean;
+  gpsAvailable: boolean;
+
   /* event */
   eventType: string;
   startDate: string;
@@ -86,22 +107,50 @@ function validateStep0(v: TourismFormValues, errors: Record<string, string>) {
 /* ── Step 1: Details ─────────────────────────────────────── */
 
 function validateStep1Tourism(v: TourismFormValues, errors: Record<string, string>) {
-  if (v.starRating) {
-    const n = Number(v.starRating);
-    if (!Number.isFinite(n) || n < 1 || n > 5) {
-      errors.starRating = "Star rating must be between 1 and 5.";
+  const group = TOURISM_SUBCATEGORY_FIELD_GROUPS[v.subcategory] ?? "A";
+
+  // Accommodation fields (Groups A & B)
+  if (group === "A" || group === "B") {
+    if (v.starRating) {
+      const n = Number(v.starRating);
+      if (!Number.isFinite(n) || n < 1 || n > 5) {
+        errors.starRating = "Star rating must be between 1 and 5.";
+      }
+    }
+    if (v.numberOfRooms) {
+      const n = Number(v.numberOfRooms);
+      if (!Number.isFinite(n) || n < 0) {
+        errors.numberOfRooms = "Number of rooms must be 0 or more.";
+      }
     }
   }
 
-  if (v.numberOfRooms) {
-    const n = Number(v.numberOfRooms);
-    if (!Number.isFinite(n) || n < 0) {
-      errors.numberOfRooms = "Number of rooms must be 0 or more.";
-    }
-  }
-
+  // Booking URL (all groups)
   if (v.bookingUrl.trim() && !isValidUrl(v.bookingUrl.trim())) {
     errors.bookingUrl = "Enter a valid booking URL.";
+  }
+
+  // Tours & Safaris (Group C)
+  if (group === "C") {
+    if (v.maxGroupSize) {
+      const n = Number(v.maxGroupSize);
+      if (!Number.isFinite(n) || n < 1) {
+        errors.maxGroupSize = "Group size must be at least 1.";
+      }
+    }
+    if (v.whatsIncluded && v.whatsIncluded.length > 2000) {
+      errors.whatsIncluded = "What's included cannot exceed 2 000 characters.";
+    }
+  }
+
+  // Car Rental (Group F)
+  if (group === "F") {
+    if (v.minDriverAge) {
+      const n = Number(v.minDriverAge);
+      if (!Number.isFinite(n) || n < 16 || n > 99) {
+        errors.minDriverAge = "Minimum driver age must be between 16 and 99.";
+      }
+    }
   }
 }
 

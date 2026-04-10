@@ -631,6 +631,9 @@ export default function EditPromotionPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <Label htmlFor="event_type">Event Type</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Category that best describes your event.
+                    </p>
                     <select
                       id="event_type"
                       className={selectClass}
@@ -648,6 +651,9 @@ export default function EditPromotionPage() {
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="age_restriction">Age Restriction</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Minimum age for attendees, if any.
+                    </p>
                     <select
                       id="age_restriction"
                       className={selectClass}
@@ -668,6 +674,9 @@ export default function EditPromotionPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <Label htmlFor="venue_name">Venue Name</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Name of the venue or location hosting the event.
+                    </p>
                     <Input
                       id="venue_name"
                       value={venueName}
@@ -678,6 +687,9 @@ export default function EditPromotionPage() {
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="venue_capacity">Venue Capacity</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Maximum number of attendees the venue can hold.
+                    </p>
                     <Input
                       id="venue_capacity"
                       type="number"
@@ -691,6 +703,7 @@ export default function EditPromotionPage() {
 
                 <div className="space-y-1">
                   <Label htmlFor="dress_code">Dress Code</Label>
+                  <p className="text-xs text-muted-foreground">Suggested attire for the event.</p>
                   <Input
                     id="dress_code"
                     value={dressCode}
@@ -702,6 +715,9 @@ export default function EditPromotionPage() {
 
                 <div className="space-y-1">
                   <Label htmlFor="lineup">Lineup / Performers</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Key performers, speakers, or programme highlights.
+                  </p>
                   <Textarea
                     id="lineup"
                     value={lineup}
@@ -715,6 +731,9 @@ export default function EditPromotionPage() {
                 {/* Ticket tiers */}
                 <div className="space-y-2">
                   <Label>Ticket Tiers</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Add pricing tiers (e.g. General, VIP, Early Bird). Up to 10.
+                  </p>
                   {ticketTiers.map((tier, i) => (
                     <div key={i} className="flex items-center gap-2">
                       <Input
@@ -773,6 +792,9 @@ export default function EditPromotionPage() {
 
                 <div className="space-y-1">
                   <Label htmlFor="tickets_url">Tickets URL</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Link where attendees can purchase tickets online.
+                  </p>
                   <Input
                     id="tickets_url"
                     type="url"
@@ -806,6 +828,9 @@ export default function EditPromotionPage() {
 
                 <div className="space-y-1">
                   <Label>Accessibility</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Select all accessibility features available at the venue.
+                  </p>
                   <div className="flex flex-wrap gap-2">
                     {EVENT_ACCESSIBILITY_OPTIONS.map((opt) => {
                       const active = accessibility.includes(opt);
@@ -829,6 +854,9 @@ export default function EditPromotionPage() {
 
                 <div className="space-y-1">
                   <Label htmlFor="bring_your_own">What to Bring</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Items attendees should bring along.
+                  </p>
                   <Input
                     id="bring_your_own"
                     value={bringYourOwn}

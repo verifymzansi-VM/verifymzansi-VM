@@ -50,6 +50,26 @@ const CANCELLATION_POLICY_VALUES = [
 
 const AGE_RESTRICTION_VALUES = ["all_ages", "12_plus", "16_plus", "18_plus", "21_plus"] as const;
 
+const TOURISM_AGE_RESTRICTION_VALUES = [
+  "all_ages",
+  "6_plus",
+  "12_plus",
+  "16_plus",
+  "18_plus",
+] as const;
+
+const TOUR_DURATION_VALUES = ["1_2_hours", "half_day", "full_day", "multi_day", "custom"] as const;
+
+const DIFFICULTY_LEVEL_VALUES = ["easy", "moderate", "challenging", "expert"] as const;
+
+const VISIT_DURATION_VALUES = [
+  "under_1_hour",
+  "1_2_hours",
+  "2_4_hours",
+  "half_day",
+  "full_day",
+] as const;
+
 const SOCIAL_AUTHORIZER_RELATIONSHIP_VALUES = [
   "owner",
   "business_representative",
@@ -173,6 +193,29 @@ const tourismCategoryDetailsSchema = z.object({
   booking_url: z.string().url("Enter a valid booking URL").max(2000).optional().or(z.literal("")),
   pets_allowed: z.boolean().optional(),
   smoking_allowed: z.boolean().optional(),
+  /* Spa & Wellness (Group B) */
+  treatment_types: z.array(z.string().max(80)).optional(),
+  /* Tours & Safaris (Group C) */
+  activity_types: z.array(z.string().max(80)).optional(),
+  tour_duration: z.enum(TOUR_DURATION_VALUES).optional(),
+  max_group_size: z.number().int().min(1).optional(),
+  difficulty_level: z.enum(DIFFICULTY_LEVEL_VALUES).optional(),
+  equipment_provided: z.boolean().optional(),
+  whats_included: z.string().max(2000).optional(),
+  age_restriction: z.enum(TOURISM_AGE_RESTRICTION_VALUES).optional(),
+  /* Travel Agency (Group D) */
+  services_offered: z.array(z.string().max(80)).optional(),
+  specializations: z.array(z.string().max(80)).optional(),
+  /* Attractions & Sites (Group E) */
+  guided_tours: z.boolean().optional(),
+  audio_guide: z.boolean().optional(),
+  visit_duration: z.enum(VISIT_DURATION_VALUES).optional(),
+  /* Car Rental (Group F) */
+  vehicle_types: z.array(z.string().max(80)).optional(),
+  delivery_collection: z.boolean().optional(),
+  min_driver_age: z.number().int().min(16).max(99).optional(),
+  insurance_included: z.boolean().optional(),
+  gps_available: z.boolean().optional(),
 });
 
 export const tourismBusinessSchema = z.object({

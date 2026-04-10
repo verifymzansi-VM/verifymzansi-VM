@@ -954,6 +954,28 @@ export default function EditBusinessPage() {
                             </div>
                           );
                         }
+                        if (field.kind === "url") {
+                          return (
+                            <div key={field.name} className="space-y-1">
+                              <Label htmlFor={`cat-${field.name}`}>{field.label}</Label>
+                              <Input
+                                id={`cat-${field.name}`}
+                                type="url"
+                                value={typeof val === "string" ? val : ""}
+                                onChange={(e) =>
+                                  setCategoryDetails((prev) => ({
+                                    ...prev,
+                                    [field.name]: e.target.value,
+                                  }))
+                                }
+                                placeholder={field.placeholder}
+                              />
+                              {field.description && (
+                                <p className="text-xs text-muted-foreground">{field.description}</p>
+                              )}
+                            </div>
+                          );
+                        }
                         if (field.kind === "select" && field.options) {
                           return (
                             <div key={field.name} className="space-y-1">

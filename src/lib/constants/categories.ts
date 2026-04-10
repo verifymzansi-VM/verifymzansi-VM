@@ -793,6 +793,142 @@ export const TOURISM_ACCOMMODATION_TYPES = [
   "Tent / Glamping",
 ] as const;
 
+/* ── Category-specific tourism constants ──────────────────── */
+
+export const TOURISM_TREATMENT_TYPES = [
+  "Massage",
+  "Facial",
+  "Body Wrap",
+  "Sauna / Steam",
+  "Hot Spring / Thermal",
+  "Aromatherapy",
+  "Hydrotherapy",
+  "Yoga / Meditation",
+  "Detox Programme",
+] as const;
+
+export const TOURISM_ACTIVITY_TYPES: Record<string, readonly string[]> = {
+  tour_operator: [
+    "City Tours",
+    "Wine Tours",
+    "Historical Tours",
+    "Township Tours",
+    "Scenic Routes",
+    "Culinary Tours",
+    "Photography Tours",
+    "Multi-day Packages",
+  ],
+  safari_wildlife: [
+    "Big 5 Safari",
+    "Bird Watching",
+    "Bush Walks",
+    "Night Drives",
+    "Photographic Safari",
+    "Marine Safari",
+    "Horseback Safari",
+    "Walking Safari",
+  ],
+  adventure_activities: [
+    "Bungee Jumping",
+    "Zip-lining",
+    "Hiking / Trail Running",
+    "Scuba Diving",
+    "Snorkelling",
+    "Kayaking / Canoeing",
+    "Paragliding",
+    "Rock Climbing",
+    "Quad Biking",
+    "White-water Rafting",
+    "Shark Cage Diving",
+    "Skydiving",
+  ],
+} as const;
+
+export const TOURISM_TOUR_DURATIONS = [
+  { value: "1_2_hours", label: "1 – 2 hours" },
+  { value: "half_day", label: "Half day" },
+  { value: "full_day", label: "Full day" },
+  { value: "multi_day", label: "Multi-day" },
+  { value: "custom", label: "Custom / Varies" },
+] as const;
+
+export const TOURISM_DIFFICULTY_LEVELS = [
+  { value: "easy", label: "Easy" },
+  { value: "moderate", label: "Moderate" },
+  { value: "challenging", label: "Challenging" },
+  { value: "expert", label: "Expert" },
+] as const;
+
+export const TOURISM_AGE_RESTRICTIONS = [
+  { value: "all_ages", label: "All ages" },
+  { value: "6_plus", label: "6+" },
+  { value: "12_plus", label: "12+" },
+  { value: "16_plus", label: "16+" },
+  { value: "18_plus", label: "18+" },
+] as const;
+
+export const TOURISM_VISIT_DURATIONS = [
+  { value: "under_1_hour", label: "Under 1 hour" },
+  { value: "1_2_hours", label: "1 – 2 hours" },
+  { value: "2_4_hours", label: "2 – 4 hours" },
+  { value: "half_day", label: "Half day" },
+  { value: "full_day", label: "Full day" },
+] as const;
+
+export const TOURISM_VEHICLE_TYPES = [
+  "Sedan",
+  "SUV",
+  "4x4",
+  "Van / Minibus",
+  "Luxury",
+  "Convertible",
+  "Bakkie / Pickup",
+] as const;
+
+export const TOURISM_TRAVEL_SERVICES = [
+  "Flight Booking",
+  "Hotel Booking",
+  "Package Tours",
+  "Visa Assistance",
+  "Travel Insurance",
+  "Car Rental Arrangement",
+  "Cruise Booking",
+  "Airport Transfers",
+] as const;
+
+export const TOURISM_TRAVEL_SPECIALIZATIONS = [
+  "Domestic Travel",
+  "International Travel",
+  "Corporate Travel",
+  "Group Travel",
+  "Luxury Travel",
+  "Budget Travel",
+  "Honeymoon & Romance",
+  "Adventure Packages",
+] as const;
+
+/**
+ * Maps each tourism subcategory to its field group.
+ * A = Accommodation, B = Spa & Wellness, C = Tours & Safaris,
+ * D = Travel Agency, E = Attractions & Sites, F = Car Rental
+ */
+export const TOURISM_SUBCATEGORY_FIELD_GROUPS: Record<string, string> = {
+  hotel_resort: "A",
+  guest_house_bnb: "A",
+  lodge_game_lodge: "A",
+  backpackers_hostel: "A",
+  self_catering: "A",
+  campground_caravan: "A",
+  spa_wellness_retreat: "B",
+  tour_operator: "C",
+  safari_wildlife: "C",
+  adventure_activities: "C",
+  travel_agency: "D",
+  cultural_heritage: "E",
+  tourist_attraction: "E",
+  car_rental_tourism: "F",
+};
+
 export const EVENT_TYPES = [
   { value: "festival_concert", label: "Festival / Concert" },
   { value: "conference_seminar", label: "Conference / Seminar" },

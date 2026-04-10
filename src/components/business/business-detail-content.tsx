@@ -53,6 +53,10 @@ import {
   TOURISM_CANCELLATION_POLICIES,
   TOURISM_PRICE_RANGES,
   TOURISM_SUBCATEGORIES,
+  TOURISM_TOUR_DURATIONS,
+  TOURISM_DIFFICULTY_LEVELS,
+  TOURISM_AGE_RESTRICTIONS,
+  TOURISM_VISIT_DURATIONS,
 } from "@/lib/constants/categories";
 import { getCategoryDetailFields } from "@/lib/forms/business-category-details";
 import type { TourismCategoryDetails } from "@/types/tourism-details";
@@ -561,8 +565,26 @@ function TourismDetailsCard({ details }: { details: TourismCategoryDetails }) {
     details.languages_spoken ||
     details.cancellation_policy ||
     details.booking_url ||
-    details.pets_allowed ||
-    details.smoking_allowed;
+    details.pets_allowed != null ||
+    details.smoking_allowed != null ||
+    details.treatment_types?.length ||
+    details.activity_types?.length ||
+    details.tour_duration ||
+    details.max_group_size ||
+    details.difficulty_level ||
+    details.equipment_provided != null ||
+    details.whats_included ||
+    details.age_restriction ||
+    details.guided_tours != null ||
+    details.audio_guide != null ||
+    details.visit_duration ||
+    details.services_offered?.length ||
+    details.specializations?.length ||
+    details.vehicle_types?.length ||
+    details.delivery_collection != null ||
+    details.min_driver_age ||
+    details.insurance_included != null ||
+    details.gps_available != null;
 
   if (!hasContent) return null;
 
@@ -689,7 +711,7 @@ function TourismDetailsCard({ details }: { details: TourismCategoryDetails }) {
           </div>
         )}
 
-        {(details.pets_allowed || details.smoking_allowed) && (
+        {(details.pets_allowed != null || details.smoking_allowed != null) && (
           <div className="grid grid-cols-2 gap-4">
             {details.pets_allowed != null && (
               <div className="flex items-start justify-between gap-4">
@@ -721,6 +743,181 @@ function TourismDetailsCard({ details }: { details: TourismCategoryDetails }) {
               Book Online
             </a>
           </Button>
+        )}
+
+        {/* ── Spa fields ── */}
+        {details.treatment_types && details.treatment_types.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-muted-foreground">Treatment types</p>
+            <div className="flex flex-wrap gap-2">
+              {details.treatment_types.map((t) => (
+                <Badge key={t} variant="outline">
+                  {t}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Tour / Safari fields ── */}
+        {details.activity_types && details.activity_types.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-muted-foreground">Activity types</p>
+            <div className="flex flex-wrap gap-2">
+              {details.activity_types.map((a) => (
+                <Badge key={a} variant="outline">
+                  {a}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {details.tour_duration && (
+          <div className="flex items-start justify-between gap-4">
+            <span className="text-muted-foreground">Tour duration</span>
+            <span className="font-medium">
+              {lookupLabel(TOURISM_TOUR_DURATIONS, details.tour_duration)}
+            </span>
+          </div>
+        )}
+
+        {typeof details.max_group_size === "number" && (
+          <div className="flex items-start justify-between gap-4">
+            <span className="text-muted-foreground">Max group size</span>
+            <span className="font-medium">{details.max_group_size}</span>
+          </div>
+        )}
+
+        {details.difficulty_level && (
+          <div className="flex items-start justify-between gap-4">
+            <span className="text-muted-foreground">Difficulty</span>
+            <span className="font-medium">
+              {lookupLabel(TOURISM_DIFFICULTY_LEVELS, details.difficulty_level)}
+            </span>
+          </div>
+        )}
+
+        {details.equipment_provided != null && (
+          <div className="flex items-start justify-between gap-4">
+            <span className="text-muted-foreground">Equipment</span>
+            <span className="font-medium">
+              {details.equipment_provided ? "Provided" : "Not provided"}
+            </span>
+          </div>
+        )}
+
+        {details.whats_included && (
+          <div className="flex items-start justify-between gap-4">
+            <span className="text-muted-foreground">What&apos;s included</span>
+            <span className="text-right font-medium">{details.whats_included}</span>
+          </div>
+        )}
+
+        {details.age_restriction && (
+          <div className="flex items-start justify-between gap-4">
+            <span className="text-muted-foreground">Age restriction</span>
+            <span className="font-medium">
+              {lookupLabel(TOURISM_AGE_RESTRICTIONS, details.age_restriction)}
+            </span>
+          </div>
+        )}
+
+        {/* ── Attraction fields ── */}
+        {(details.guided_tours != null || details.audio_guide != null) && (
+          <div className="grid grid-cols-2 gap-4">
+            {details.guided_tours != null && (
+              <div className="flex items-start justify-between gap-4">
+                <span className="text-muted-foreground">Guided tours</span>
+                <span className="font-medium">{details.guided_tours ? "Yes" : "No"}</span>
+              </div>
+            )}
+            {details.audio_guide != null && (
+              <div className="flex items-start justify-between gap-4">
+                <span className="text-muted-foreground">Audio guide</span>
+                <span className="font-medium">{details.audio_guide ? "Yes" : "No"}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {details.visit_duration && (
+          <div className="flex items-start justify-between gap-4">
+            <span className="text-muted-foreground">Visit duration</span>
+            <span className="font-medium">
+              {lookupLabel(TOURISM_VISIT_DURATIONS, details.visit_duration)}
+            </span>
+          </div>
+        )}
+
+        {/* ── Travel Agency fields ── */}
+        {details.services_offered && details.services_offered.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-muted-foreground">Services offered</p>
+            <div className="flex flex-wrap gap-2">
+              {details.services_offered.map((s) => (
+                <Badge key={s} variant="outline">
+                  {s}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {details.specializations && details.specializations.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-muted-foreground">Specializations</p>
+            <div className="flex flex-wrap gap-2">
+              {details.specializations.map((s) => (
+                <Badge key={s} variant="outline">
+                  {s}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Car Rental fields ── */}
+        {details.vehicle_types && details.vehicle_types.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-muted-foreground">Vehicle types</p>
+            <div className="flex flex-wrap gap-2">
+              {details.vehicle_types.map((v) => (
+                <Badge key={v} variant="outline">
+                  {v}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {typeof details.min_driver_age === "number" && (
+          <div className="flex items-start justify-between gap-4">
+            <span className="text-muted-foreground">Min driver age</span>
+            <span className="font-medium">{details.min_driver_age}</span>
+          </div>
+        )}
+
+        {(details.delivery_collection != null ||
+          details.insurance_included != null ||
+          details.gps_available != null) && (
+          <div className="flex flex-wrap gap-4">
+            {details.delivery_collection != null && (
+              <Badge variant={details.delivery_collection ? "secondary" : "outline"}>
+                Delivery &amp; Collection: {details.delivery_collection ? "Yes" : "No"}
+              </Badge>
+            )}
+            {details.insurance_included != null && (
+              <Badge variant={details.insurance_included ? "secondary" : "outline"}>
+                Insurance Included: {details.insurance_included ? "Yes" : "No"}
+              </Badge>
+            )}
+            {details.gps_available != null && (
+              <Badge variant={details.gps_available ? "secondary" : "outline"}>
+                GPS Available: {details.gps_available ? "Yes" : "No"}
+              </Badge>
+            )}
+          </div>
         )}
       </CardContent>
     </Card>

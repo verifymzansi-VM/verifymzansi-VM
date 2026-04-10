@@ -120,6 +120,25 @@ export interface TourismDraftData {
   bookingUrl: string;
   petsAllowed: boolean;
   smokingAllowed: boolean;
+  /* category-specific tourism fields */
+  treatmentTypes: string[];
+  activityTypes: string[];
+  tourDuration: string;
+  maxGroupSize: string;
+  difficultyLevel: string;
+  equipmentProvided: boolean;
+  whatsIncluded: string;
+  tourismAgeRestriction: string;
+  servicesOffered: string[];
+  tourismSpecializations: string[];
+  guidedTours: boolean;
+  audioGuide: boolean;
+  visitDuration: string;
+  vehicleTypes: string[];
+  deliveryCollection: boolean;
+  minDriverAge: string;
+  insuranceIncluded: boolean;
+  gpsAvailable: boolean;
   eventType: string;
   startDate: string;
   endDate: string;
