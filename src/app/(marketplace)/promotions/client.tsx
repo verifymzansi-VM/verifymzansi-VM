@@ -400,7 +400,7 @@ export function PromotionsExplorer() {
         breadcrumbs={[{ label: "Home", href: "/" }, { label: "Tourism & Events" }]}
       >
         <Button asChild size="sm" className="h-11 gap-1">
-          <Link href="/post/create-promotion">
+          <Link href="/post/create-tourism">
             Create Event
             <ArrowRight className="h-4 w-4" />
           </Link>
@@ -572,7 +572,7 @@ export function PromotionsExplorer() {
             </p>
             {activeTab === "events" && (
               <Button asChild variant="outline" size="sm" className="h-11 gap-1">
-                <Link href="/post/create-promotion">
+                <Link href="/post/create-tourism">
                   Create Event
                   <ArrowRight className="h-4 w-4" />
                 </Link>

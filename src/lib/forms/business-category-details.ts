@@ -1,5 +1,12 @@
 import type { BusinessCategory } from "@/types/enums";
 import type { BusinessDetailsFieldConfig } from "./business-type-details";
+import {
+  TOURISM_ACCOMMODATION_TYPES,
+  TOURISM_AMENITIES,
+  TOURISM_CANCELLATION_POLICIES,
+  TOURISM_MEAL_OPTIONS,
+  TOURISM_PRICE_RANGES,
+} from "@/lib/constants/categories";
 
 /**
  * Extra fields that appear on the form when a specific business category is
@@ -117,39 +124,85 @@ export const CATEGORY_DETAIL_FIELDS: Partial<
     {
       name: "star_rating",
       label: "Star rating",
-      kind: "select",
-      options: [
-        { value: "1", label: "1 Star" },
-        { value: "2", label: "2 Stars" },
-        { value: "3", label: "3 Stars" },
-        { value: "4", label: "4 Stars" },
-        { value: "5", label: "5 Stars" },
-      ],
+      kind: "number",
+      min: 1,
+      step: "1",
+      placeholder: "1 – 5",
+      description: "Official grading (1–5 stars).",
     },
     {
       name: "number_of_rooms",
-      label: "Number of rooms",
+      label: "Number of rooms / units",
       kind: "number",
       min: 0,
       step: "1",
-      placeholder: "e.g. 20",
+      placeholder: "e.g. 24",
+    },
+    {
+      name: "accommodation_types",
+      label: "Accommodation types",
+      kind: "list",
+      placeholder: TOURISM_ACCOMMODATION_TYPES.join(", "),
+      description: "Separate types with commas.",
+    },
+    {
+      name: "check_in_time",
+      label: "Check-in time",
+      kind: "text",
+      placeholder: "e.g. 14:00",
+    },
+    {
+      name: "check_out_time",
+      label: "Check-out time",
+      kind: "text",
+      placeholder: "e.g. 10:00",
+    },
+    {
+      name: "price_range",
+      label: "Price range",
+      kind: "select",
+      options: TOURISM_PRICE_RANGES.map((p) => ({ value: p.value, label: p.label })),
+    },
+    {
+      name: "amenities",
+      label: "Amenities",
+      kind: "list",
+      placeholder: TOURISM_AMENITIES.slice(0, 5).join(", ") + ", …",
+      description: "Separate amenities with commas.",
+    },
+    {
+      name: "meal_options",
+      label: "Meal options",
+      kind: "list",
+      placeholder: TOURISM_MEAL_OPTIONS.join(", "),
+      description: "Separate options with commas.",
     },
     {
       name: "languages_spoken",
       label: "Languages spoken",
-      kind: "list",
+      kind: "text",
       placeholder: "e.g. English, Zulu, Afrikaans",
-      description: "Separate languages with commas.",
+    },
+    {
+      name: "cancellation_policy",
+      label: "Cancellation policy",
+      kind: "select",
+      options: TOURISM_CANCELLATION_POLICIES.map((p) => ({ value: p.value, label: p.label })),
     },
     {
       name: "booking_url",
       label: "Booking URL",
       kind: "url",
-      placeholder: "e.g. https://booking.example.com",
+      placeholder: "https://…",
     },
     {
       name: "pets_allowed",
       label: "Pets allowed",
+      kind: "checkbox",
+    },
+    {
+      name: "smoking_allowed",
+      label: "Smoking allowed",
       kind: "checkbox",
     },
   ],

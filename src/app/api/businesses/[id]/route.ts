@@ -48,6 +48,7 @@ const BUSINESS_DETAIL_SELECT = `
 type BusinessOwnerRow = {
   id: string;
   status: string;
+  area?: string | null;
   owner_id?: string | null;
   seller_id?: string | null;
   logo_url?: string | null;
@@ -238,11 +239,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     const data = parsedBody.data;
+    const effectiveArea =
+      existing.area === "PROMOTIONS_EVENTS" ? "PROMOTIONS_EVENTS" : "MZANSI_BUSINESS";
     const { data: activeEntitlement, error: entitlementError } = await supabase
       .from("entitlements")
       .select("tier")
       .eq("user_id", user.id)
-      .eq("area", "MZANSI_BUSINESS")
+      .eq("area", effectiveArea)
       .eq("status", "active")
       .gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: false })
@@ -261,7 +264,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const activeTier = (activeEntitlement?.tier as string) || null;
     const ent =
       hasPaidPlan && activeTier
-        ? getEntitlements(activeTier as PlanTier, "MZANSI_BUSINESS")
+        ? getEntitlements(activeTier as PlanTier, effectiveArea)
         : {
             maxPhotos: FREE_POST_CONFIG.maxPhotos,
             maxVideos: FREE_POST_CONFIG.maxVideos,
@@ -397,7 +400,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         action: "listing_updated",
         targetType: "business",
         targetId: id,
-        area: "MZANSI_BUSINESS",
+        area: effectiveArea,
         metadata: { business_name: data.business_name },
       });
     } catch {

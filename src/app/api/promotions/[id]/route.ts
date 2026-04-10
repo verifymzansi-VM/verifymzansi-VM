@@ -72,6 +72,7 @@ type PromotionOwnerRow = {
     | null;
   social_authorization_version?: string | null;
   social_monetization_acknowledged?: boolean | null;
+  event_details?: Record<string, unknown> | null;
 };
 
 /**
@@ -95,7 +96,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const { data: promotion, error } = await supabase
       .from("promotions")
       .select(
-        "id, owner_id, seller_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, media_width, media_height, focal_x, focal_y, price_cents, price_negotiable, location_province, location_city, location_town, location_address, contact_methods, start_date, end_date, social_distribution_authorized, social_distribution_authorized_at, social_distribution_revoked_at, social_authorizer_name, social_authorizer_role, social_authorizer_relationship, social_authorization_version, social_monetization_acknowledged, boost_until, featured_until, status, view_count, published_at, created_at, updated_at"
+        "id, owner_id, seller_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, media_width, media_height, focal_x, focal_y, price_cents, price_negotiable, location_province, location_city, location_town, location_address, contact_methods, start_date, end_date, social_distribution_authorized, social_distribution_authorized_at, social_distribution_revoked_at, social_authorizer_name, social_authorizer_role, social_authorizer_relationship, social_authorization_version, social_monetization_acknowledged, event_details, boost_until, featured_until, status, view_count, published_at, created_at, updated_at"
       )
       .eq("id", id)
       .maybeSingle();
@@ -213,7 +214,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         .from("promotions")
         .select(
           withOwnerColumn(
-            "id, owner_id, status, title, description, promotion_type, category, category_key, business_id, photos, videos, video_thumbnail, media_width, media_height, focal_x, focal_y, price_cents, price_negotiable, location_province, location_city, location_town, location_address, contact_methods, start_date, end_date, social_distribution_authorized, social_distribution_authorized_at, social_distribution_revoked_at, social_authorizer_name, social_authorizer_role, social_authorizer_relationship, social_authorization_version, social_monetization_acknowledged",
+            "id, owner_id, status, title, description, promotion_type, category, category_key, business_id, photos, videos, video_thumbnail, media_width, media_height, focal_x, focal_y, price_cents, price_negotiable, location_province, location_city, location_town, location_address, contact_methods, start_date, end_date, social_distribution_authorized, social_distribution_authorized_at, social_distribution_revoked_at, social_authorizer_name, social_authorizer_role, social_authorizer_relationship, social_authorization_version, social_monetization_acknowledged, event_details",
             ownerColumn
           )
         )
@@ -323,7 +324,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       (existing.location_address ?? null) !== (data.location_address || null) ||
       JSON.stringify(existing.photos) !== JSON.stringify(data.images) ||
       JSON.stringify(existing.videos) !== JSON.stringify(data.videos) ||
-      (existing.video_thumbnail ?? null) !== (data.video_thumbnail || null);
+      (existing.video_thumbnail ?? null) !== (data.video_thumbnail || null) ||
+      JSON.stringify(existing.event_details ?? null) !== JSON.stringify(data.event_details ?? null);
 
     const updateQuery = applyOwnerFilter(
       supabase
@@ -366,6 +368,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           social_authorization_version: socialAuthorizationWriteResult.social_authorization_version,
           social_monetization_acknowledged:
             socialAuthorizationWriteResult.social_monetization_acknowledged,
+          event_details: data.event_details ?? existing.event_details ?? null,
           ...(contentChanged ? { status: "pending_moderation" } : {}),
         })
         .eq("id", id),

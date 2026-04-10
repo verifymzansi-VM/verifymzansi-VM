@@ -139,7 +139,7 @@ export async function HomePromotionsShowcase() {
               size="sm"
               className="bg-teal-700 hover:bg-teal-800 text-white rounded-full"
             >
-              <Link href="/post/create-promotion" prefetch={false}>
+              <Link href="/post/create-tourism" prefetch={false}>
                 Create Event
                 <ArrowRight className="h-4 w-4 ml-1" />
               </Link>

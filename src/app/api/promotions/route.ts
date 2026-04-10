@@ -397,6 +397,7 @@ export async function POST(request: NextRequest) {
             social_monetization_acknowledged:
               socialAuthorizationWriteResult.social_monetization_acknowledged,
             business_id: data.business_id || null,
+            event_details: data.event_details ?? null,
             status: "pending_moderation",
           },
           ownerColumn,

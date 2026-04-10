@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import {
+  BedDouble,
   Clock,
   CreditCard,
   Facebook,
@@ -14,6 +15,7 @@ import {
   Music2,
   Phone,
   ShieldCheck,
+  Star,
   Store,
   Truck,
   Twitter,
@@ -45,8 +47,15 @@ import {
   PRIMARY_ORDER_CHANNEL_LABELS,
   WALK_IN_POLICY_LABELS,
 } from "@/lib/forms/business-type-details";
-import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
+import {
+  BUSINESS_CATEGORIES,
+  TOURISM_ACCOMMODATION_TYPES,
+  TOURISM_CANCELLATION_POLICIES,
+  TOURISM_PRICE_RANGES,
+  TOURISM_SUBCATEGORIES,
+} from "@/lib/constants/categories";
 import { getCategoryDetailFields } from "@/lib/forms/business-category-details";
+import type { TourismCategoryDetails } from "@/types/tourism-details";
 import type { BusinessDetails } from "@/types/business-details";
 
 const zarCurrency = new Intl.NumberFormat("en-ZA", {
@@ -528,6 +537,196 @@ export function BusinessDetailsCard({
   );
 }
 
+/* ------------------------------------------------------------------ */
+/*  Tourism‑specific details card                                      */
+/* ------------------------------------------------------------------ */
+
+function lookupLabel(
+  list: ReadonlyArray<{ value: string; label: string }>,
+  value: string | undefined
+): string | null {
+  if (!value) return null;
+  return list.find((i) => i.value === value)?.label ?? value.replace(/_/g, " ");
+}
+
+function TourismDetailsCard({ details }: { details: TourismCategoryDetails }) {
+  const hasContent =
+    details.star_rating ||
+    details.number_of_rooms ||
+    details.accommodation_types?.length ||
+    details.check_in_time ||
+    details.price_range ||
+    details.amenities?.length ||
+    details.meal_options?.length ||
+    details.languages_spoken ||
+    details.cancellation_policy ||
+    details.booking_url ||
+    details.pets_allowed ||
+    details.smoking_allowed;
+
+  if (!hasContent) return null;
+
+  const subcategoryLabel = details.subcategory
+    ? TOURISM_SUBCATEGORIES.find((s) => s.value === details.subcategory)?.label
+    : null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <BedDouble className="h-4 w-4 text-muted-foreground" />
+          Tourism &amp; Hospitality Details
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4 text-sm">
+        {subcategoryLabel && (
+          <div className="flex items-start justify-between gap-4">
+            <span className="text-muted-foreground">Type</span>
+            <Badge variant="secondary">{subcategoryLabel}</Badge>
+          </div>
+        )}
+
+        {typeof details.star_rating === "number" && details.star_rating > 0 && (
+          <div className="flex items-start justify-between gap-4">
+            <span className="text-muted-foreground">Rating</span>
+            <span className="flex gap-0.5">
+              {Array.from({ length: details.star_rating }).map((_, i) => (
+                <Star key={i} className="h-4 w-4 fill-amber-400 text-amber-400" />
+              ))}
+            </span>
+          </div>
+        )}
+
+        {typeof details.number_of_rooms === "number" && (
+          <div className="flex items-start justify-between gap-4">
+            <span className="text-muted-foreground">Rooms / Units</span>
+            <span className="font-medium">{details.number_of_rooms}</span>
+          </div>
+        )}
+
+        {details.accommodation_types && details.accommodation_types.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-muted-foreground">Accommodation types</p>
+            <div className="flex flex-wrap gap-2">
+              {details.accommodation_types.map((t) => (
+                <Badge key={t} variant="secondary">
+                  {TOURISM_ACCOMMODATION_TYPES.includes(
+                    t as (typeof TOURISM_ACCOMMODATION_TYPES)[number]
+                  )
+                    ? t
+                    : t}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {(details.check_in_time || details.check_out_time) && (
+          <div className="grid grid-cols-2 gap-4">
+            {details.check_in_time && (
+              <div>
+                <p className="text-muted-foreground">Check-in</p>
+                <p className="font-medium">{details.check_in_time}</p>
+              </div>
+            )}
+            {details.check_out_time && (
+              <div>
+                <p className="text-muted-foreground">Check-out</p>
+                <p className="font-medium">{details.check_out_time}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {details.price_range && (
+          <div className="flex items-start justify-between gap-4">
+            <span className="text-muted-foreground">Price range</span>
+            <span className="font-medium">
+              {lookupLabel(TOURISM_PRICE_RANGES, details.price_range)}
+            </span>
+          </div>
+        )}
+
+        {details.amenities && details.amenities.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-muted-foreground">Amenities</p>
+            <div className="flex flex-wrap gap-2">
+              {details.amenities.map((a) => (
+                <Badge key={a} variant="outline">
+                  {a}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {details.meal_options && details.meal_options.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-muted-foreground">Meal options</p>
+            <div className="flex flex-wrap gap-2">
+              {details.meal_options.map((m) => (
+                <Badge key={m} variant="outline">
+                  {m}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {details.languages_spoken && (
+          <div className="flex items-start justify-between gap-4">
+            <span className="text-muted-foreground">Languages spoken</span>
+            <span className="text-right font-medium">{details.languages_spoken}</span>
+          </div>
+        )}
+
+        {details.cancellation_policy && (
+          <div className="flex items-start justify-between gap-4">
+            <span className="text-muted-foreground">Cancellation</span>
+            <span className="font-medium">
+              {lookupLabel(TOURISM_CANCELLATION_POLICIES, details.cancellation_policy)}
+            </span>
+          </div>
+        )}
+
+        {(details.pets_allowed || details.smoking_allowed) && (
+          <div className="grid grid-cols-2 gap-4">
+            {details.pets_allowed != null && (
+              <div className="flex items-start justify-between gap-4">
+                <span className="text-muted-foreground">Pets</span>
+                <span className="font-medium">
+                  {details.pets_allowed ? "Allowed" : "Not allowed"}
+                </span>
+              </div>
+            )}
+            {details.smoking_allowed != null && (
+              <div className="flex items-start justify-between gap-4">
+                <span className="text-muted-foreground">Smoking</span>
+                <span className="font-medium">
+                  {details.smoking_allowed ? "Allowed" : "Not allowed"}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {details.booking_url && (
+          <Button asChild variant="outline" className="w-full gap-2">
+            <a
+              href={safeExternalHref(details.booking_url)}
+              target="_blank"
+              rel="noopener noreferrer nofollow ugc"
+            >
+              <Globe className="h-4 w-4" />
+              Book Online
+            </a>
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function BusinessDetailContent({
   business,
   trustLevel,
@@ -618,9 +817,11 @@ export function BusinessDetailContent({
               {business.subcategory &&
                 (() => {
                   const catDef = BUSINESS_CATEGORIES.find((c) => c.value === businessCategory);
-                  const subDef = catDef?.subcategories.find(
-                    (s) => s.value === business.subcategory
-                  );
+                  const subDef =
+                    catDef?.subcategories.find((s) => s.value === business.subcategory) ??
+                    (businessCategory === "tourism_hospitality"
+                      ? TOURISM_SUBCATEGORIES.find((s) => s.value === business.subcategory)
+                      : undefined);
                   return subDef ? (
                     <Badge variant="secondary" className="text-xs bg-primary/10 text-primary">
                       {subDef.label}
@@ -691,6 +892,12 @@ export function BusinessDetailContent({
             businessDetails={businessDetails}
             serviceAreas={serviceAreas}
           />
+
+          {businessCategory === "tourism_hospitality" && business.category_details && (
+            <TourismDetailsCard
+              details={business.category_details as unknown as TourismCategoryDetails}
+            />
+          )}
 
           {mallPhotos.length > 0 && (
             <BusinessGallery

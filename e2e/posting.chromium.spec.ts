@@ -131,18 +131,34 @@ async function completeBusinessCreate(page: Page) {
 
 async function completePromotionCreate(page: Page) {
   const promotionTitle = `Playwright Weekend Deal ${RUN_SUFFIX}`;
+  const eventTypeButton = page.getByRole("button", { name: /Event/i }).first();
   const titleField = page.getByLabel(/Event Title|Title/i);
-  await page.goto("/post/create-promotion");
-  await enterPostingForm(page, titleField);
+  await page.goto("/post/create-tourism");
+  await enterPostingForm(page, eventTypeButton);
+  page.once("dialog", (dialog) => dialog.accept());
+  await eventTypeButton.click();
+  if (!(await titleField.isVisible().catch(() => false))) {
+    const discardDraftButton = page.getByRole("button", { name: /Discard draft/i });
+    if (await discardDraftButton.isVisible().catch(() => false)) {
+      await discardDraftButton.click();
+    }
+    page.once("dialog", (dialog) => dialog.accept());
+    await eventTypeButton.click();
+  }
+  await titleField.waitFor({ state: "visible", timeout: 15_000 });
+  await page.getByLabel(/Event Type/i).selectOption({ index: 1 });
   await titleField.fill(promotionTitle);
   await page
     .getByLabel(/Event Details|Description/i)
     .fill("Playwright promotion description with enough detail to satisfy the validation rules.");
   await page.getByRole("button", { name: "Next" }).click();
+  await page.getByLabel(/^Start Date/i).fill("2026-12-15");
+  await page.getByLabel(/^End Date/i).fill("2026-12-16");
+  await page.getByRole("button", { name: "Next" }).click();
   await page.getByLabel(/^Province/i).selectOption("Gauteng");
   await page.getByLabel(/^City(?: \/ Town)?$/i).selectOption("Johannesburg");
   await page.getByRole("button", { name: "Next" }).click();
-  await uploaderFor(page, /^Photos \(max/i).setInputFiles(IMAGE_FIXTURE);
+  await uploaderFor(page, /^Upload photos/i).setInputFiles(IMAGE_FIXTURE);
 
   const responsePromise = page.waitForResponse(
     (response) =>

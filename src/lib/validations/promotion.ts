@@ -144,6 +144,31 @@ export const promotionSchema = z
     end_date: z.string().datetime().optional(),
     business_id: z.string().uuid().optional(),
     socialAuthorization: socialAuthorizationSchema.optional(),
+    /** Structured event details (JSONB) — optional for enriched events */
+    event_details: z
+      .object({
+        event_type: z.string().max(80).optional(),
+        venue_name: z.string().max(200).optional(),
+        venue_capacity: z.number().int().min(0).optional(),
+        ticket_tiers: z
+          .array(
+            z.object({
+              name: z.string().min(1).max(80),
+              price_cents: z.number().int().min(0).nullable(),
+            })
+          )
+          .max(10)
+          .optional(),
+        tickets_url: z.string().url().max(2000).optional().or(z.literal("")),
+        age_restriction: z.string().max(20).optional(),
+        dress_code: z.string().max(300).optional(),
+        lineup: z.string().max(2000).optional(),
+        parking_available: z.boolean().optional(),
+        accessibility: z.array(z.string().max(80)).optional(),
+        food_drinks_available: z.boolean().optional(),
+        bring_your_own: z.string().max(500).optional(),
+      })
+      .optional(),
   })
   .refine(
     (data) => {

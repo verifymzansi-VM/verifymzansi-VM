@@ -81,6 +81,15 @@ const nextConfig = {
       "@radix-ui/react-toast",
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: "/post/create-promotion",
+        destination: "/post/create-tourism",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     // Full CSP + security headers are applied by the Cloudflare Workers proxy
     // (proxy-handler.ts). Keep only cache-specific headers here so live

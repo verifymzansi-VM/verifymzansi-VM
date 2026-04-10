@@ -143,7 +143,7 @@ describe("EventsPage", () => {
     const links = screen.getAllByRole("link", { name: /Create Event/i });
     expect(links).toHaveLength(2);
     for (const link of links) {
-      expect(link).toHaveAttribute("href", "/post/create-promotion?type=event");
+      expect(link).toHaveAttribute("href", "/post/create-tourism?type=event");
     }
     expect(screen.getByText("No upcoming events")).toBeInTheDocument();
   });

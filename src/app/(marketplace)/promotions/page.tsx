@@ -183,7 +183,7 @@ export default async function PromotionsPage() {
         "Discover tourism destinations, accommodations, and events from verified South African businesses.",
       location: "South Africa",
       mediaUrl: "/images/fallbacks/hero-shop.svg",
-      hrefOverride: "/post/create-promotion",
+      hrefOverride: "/post/create-tourism",
       ctaLabelOverride: "Create Event",
       badgeLabelOverride: "Tourism & Events",
     });

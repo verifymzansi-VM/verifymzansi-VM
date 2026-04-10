@@ -19,6 +19,7 @@ describe("create route guards", () => {
     listing: () => import("@/app/post/create-listing/layout"),
     business: () => import("@/app/post/create-business/layout"),
     promotion: () => import("@/app/post/create-promotion/layout"),
+    tourism: () => import("@/app/post/create-tourism/layout"),
   } as const;
 
   beforeEach(() => {
@@ -65,6 +66,7 @@ describe("create route guards", () => {
     ["listing", "/verification?returnUrl=%2Fpost%2Fcreate-listing"],
     ["business", "/verification?returnUrl=%2Fpost%2Fcreate-business"],
     ["promotion", "/verification?returnUrl=%2Fpost%2Fcreate-promotion"],
+    ["tourism", "/verification?returnUrl=%2Fpost%2Fcreate-tourism"],
   ] as const)("redirects unverified users away from %s", async (key, expectedRedirect) => {
     mockServerProfile("pending_review");
 
@@ -74,7 +76,7 @@ describe("create route guards", () => {
     expect(mockRedirect).toHaveBeenCalledWith(expectedRedirect);
   });
 
-  it.each(["listing", "business", "promotion"] as const)(
+  it.each(["listing", "business", "promotion", "tourism"] as const)(
     "allows verified users into %s",
     async (key) => {
       mockServerProfile("verified");
@@ -87,7 +89,7 @@ describe("create route guards", () => {
     }
   );
 
-  it.each(["listing", "business", "promotion"] as const)(
+  it.each(["listing", "business", "promotion", "tourism"] as const)(
     "allows stale verified users into %s when all verification steps are approved",
     async (key) => {
       mockServerProfile("incomplete", [

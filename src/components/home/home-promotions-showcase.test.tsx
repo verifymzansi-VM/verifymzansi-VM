@@ -156,7 +156,7 @@ describe("HomePromotionsShowcase", () => {
     expect(screen.getByText("No events yet.")).toBeTruthy();
     expect(screen.getByRole("link", { name: /Create Event/i })).toHaveAttribute(
       "href",
-      "/post/create-promotion"
+      "/post/create-tourism"
     );
   });
 

@@ -23,7 +23,6 @@ import {
   MapPin,
   Globe,
   ShoppingBag,
-  TreePalm,
   type LucideIcon,
 } from "lucide-react";
 
@@ -705,38 +704,126 @@ export const BUSINESS_CATEGORIES: BusinessCategoryDefinition[] = [
     ],
     serviceSuggestions: [],
   },
-  {
-    value: "tourism_hospitality",
-    label: BUSINESS_CATEGORY_LABELS.tourism_hospitality,
-    icon: TreePalm,
-    description: "Hotels, lodges, guest houses, tour operators, safaris, and travel services.",
-    subcategories: [
-      { value: "hotel_resort", label: "Hotel / Resort" },
-      { value: "guest_house_bnb", label: "Guest House / B&B" },
-      { value: "lodge_game_lodge", label: "Lodge / Game Lodge" },
-      { value: "backpackers_hostel", label: "Backpackers / Hostel" },
-      { value: "self_catering", label: "Self-Catering" },
-      { value: "tour_operator", label: "Tour Operator" },
-      { value: "travel_agency", label: "Travel Agency" },
-      { value: "safari_wildlife", label: "Safari & Wildlife" },
-      { value: "adventure_activities", label: "Adventure Activities" },
-      { value: "cultural_heritage", label: "Cultural & Heritage" },
-      { value: "car_rental_tourism", label: "Car Rental (Tourism)" },
-    ],
-    serviceSuggestions: [
-      "Airport transfers",
-      "Game drives",
-      "Guided tours",
-      "Conference facilities",
-      "Wedding venue",
-      "Spa & wellness",
-      "Swimming pool",
-      "Free Wi-Fi",
-      "Breakfast included",
-      "Pet-friendly",
-    ],
-  },
 ];
+
+/* ── Tourism & Events Constants ──────────────────────────── */
+
+export const TOURISM_SUBCATEGORIES: BusinessSubcategoryOption[] = [
+  { value: "hotel_resort", label: "Hotel / Resort" },
+  { value: "guest_house_bnb", label: "Guest House / B&B" },
+  { value: "lodge_game_lodge", label: "Lodge / Game Lodge" },
+  { value: "backpackers_hostel", label: "Backpackers / Hostel" },
+  { value: "self_catering", label: "Self-Catering / Vacation Rental" },
+  { value: "tour_operator", label: "Tour Operator" },
+  { value: "travel_agency", label: "Travel Agency" },
+  { value: "safari_wildlife", label: "Safari & Wildlife Experience" },
+  { value: "adventure_activities", label: "Adventure Activities" },
+  { value: "cultural_heritage", label: "Cultural & Heritage Site" },
+  { value: "car_rental_tourism", label: "Car Rental (Tourism)" },
+  { value: "campground_caravan", label: "Campground / Caravan Park" },
+  { value: "spa_wellness_retreat", label: "Spa & Wellness Retreat" },
+  { value: "tourist_attraction", label: "Tourist Attraction / Theme Park" },
+];
+
+export const TOURISM_SERVICE_SUGGESTIONS = [
+  "Airport transfers",
+  "Game drives",
+  "Guided tours",
+  "Conference facilities",
+  "Wedding venue",
+  "Spa & wellness",
+  "Swimming pool",
+  "Free Wi-Fi",
+  "Breakfast included",
+  "Pet-friendly",
+] as const;
+
+export const TOURISM_AMENITIES = [
+  "Swimming pool",
+  "Free Wi-Fi",
+  "Parking",
+  "Restaurant on-site",
+  "Bar / Lounge",
+  "Spa",
+  "Gym / Fitness centre",
+  "Laundry service",
+  "Room service",
+  "Conference facilities",
+  "Braai / BBQ area",
+  "Garden",
+  "Airport shuttle",
+  "Game drives",
+  "Guided tours",
+  "Kids activities",
+  "Wheelchair accessible",
+  "Pet-friendly",
+] as const;
+
+export const TOURISM_MEAL_OPTIONS = [
+  "Breakfast included",
+  "Half-board",
+  "Full-board",
+  "Self-catering",
+  "À la carte restaurant",
+] as const;
+
+export const TOURISM_PRICE_RANGES = [
+  { value: "budget", label: "Budget (under R500 / night)" },
+  { value: "midrange", label: "Mid-range (R500 – R1 500 / night)" },
+  { value: "premium", label: "Premium (R1 500 – R3 000 / night)" },
+  { value: "luxury", label: "Luxury (R3 000+ / night)" },
+] as const;
+
+export const TOURISM_CANCELLATION_POLICIES = [
+  { value: "free", label: "Free cancellation" },
+  { value: "flexible", label: "Flexible" },
+  { value: "moderate", label: "Moderate" },
+  { value: "strict", label: "Strict" },
+  { value: "non_refundable", label: "Non-refundable" },
+] as const;
+
+export const TOURISM_ACCOMMODATION_TYPES = [
+  "Single room",
+  "Double room",
+  "Twin room",
+  "Suite",
+  "Family room",
+  "Dormitory",
+  "Self-catering unit",
+  "Tent / Glamping",
+] as const;
+
+export const EVENT_TYPES = [
+  { value: "festival_concert", label: "Festival / Concert" },
+  { value: "conference_seminar", label: "Conference / Seminar" },
+  { value: "market_expo", label: "Market / Expo / Fair" },
+  { value: "sports_event", label: "Sports Event" },
+  { value: "cultural_heritage", label: "Cultural Event / Heritage Day" },
+  { value: "food_wine", label: "Food & Wine Event" },
+  { value: "outdoor_adventure", label: "Outdoor / Adventure" },
+  { value: "workshop_masterclass", label: "Workshop / Masterclass" },
+  { value: "charity_fundraiser", label: "Charity / Fundraiser" },
+  { value: "community_gathering", label: "Community Gathering" },
+  { value: "comedy_theatre", label: "Comedy / Theatre / Show" },
+  { value: "kids_family", label: "Kids / Family Event" },
+  { value: "nightlife_party", label: "Nightlife / Party" },
+] as const;
+
+export const EVENT_AGE_RESTRICTIONS = [
+  { value: "all_ages", label: "All ages" },
+  { value: "12_plus", label: "12+" },
+  { value: "16_plus", label: "16+" },
+  { value: "18_plus", label: "18+" },
+  { value: "21_plus", label: "21+" },
+] as const;
+
+export const EVENT_ACCESSIBILITY_OPTIONS = [
+  "Wheelchair accessible",
+  "Sign language interpreter",
+  "Hearing loop",
+  "Accessible parking",
+  "Accessible restrooms",
+] as const;
 
 export interface BusinessTypeOption {
   value: BusinessType;

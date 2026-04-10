@@ -102,11 +102,72 @@ export interface BusinessDraftData {
   selectedLayout: string;
 }
 
+export interface TourismDraftData {
+  listingType: string;
+  title: string;
+  description: string;
+  subcategory: string;
+  starRating: string;
+  numberOfRooms: string;
+  accommodationTypes: string[];
+  checkInTime: string;
+  checkOutTime: string;
+  priceRange: string;
+  amenities: string[];
+  mealOptions: string[];
+  languagesSpoken: string;
+  cancellationPolicy: string;
+  bookingUrl: string;
+  petsAllowed: boolean;
+  smokingAllowed: boolean;
+  eventType: string;
+  startDate: string;
+  endDate: string;
+  priceZar: string;
+  negotiable: boolean;
+  venueName: string;
+  venueCapacity: string;
+  ticketTiers: Array<{ name: string; price_cents: number | null }>;
+  ticketsUrl: string;
+  ageRestriction: string;
+  dressCode: string;
+  lineup: string;
+  parkingAvailable: boolean;
+  accessibility: string[];
+  foodDrinksAvailable: boolean;
+  bringYourOwn: string;
+  province: string;
+  city: string;
+  locationTown: string;
+  locationAddress: string;
+  contactMethods: string[];
+  phone: string;
+  whatsapp: string;
+  email: string;
+  website: string;
+  hoursMonFri: string;
+  hoursSat: string;
+  hoursSun: string;
+  socialFacebook: string;
+  socialInstagram: string;
+  socialTwitter: string;
+  socialTiktok: string;
+  businessId: string;
+  socialAuthorization: {
+    granted: boolean;
+    authorizerName?: string;
+    authorizerRole?: string;
+    relationship?: SocialAuthorizerRelationship;
+    monetizationAcknowledged?: boolean;
+    acceptedVersion?: string;
+  };
+}
+
 /* ------------------------------------------------------------------ */
 /*  Key helpers – include a user qualifier to prevent cross-user leak  */
 /* ------------------------------------------------------------------ */
 
-export type DraftFlow = "listing" | "promotion" | "business";
+export type DraftFlow = "listing" | "promotion" | "business" | "tourism";
 
 function storageKey(flow: DraftFlow, userId: string): string {
   return `vm-draft:${flow}:${userId}`;

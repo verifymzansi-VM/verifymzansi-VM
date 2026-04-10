@@ -3,12 +3,13 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import { Megaphone, ArrowLeft, Loader2, X, Building2 } from "lucide-react";
+import { Megaphone, ArrowLeft, Loader2, X, Building2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
@@ -26,7 +27,12 @@ import { validatePromotionForm } from "@/lib/forms/promotion-form";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { useToast } from "@/hooks/use-toast";
-import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
+import {
+  BUSINESS_CATEGORIES,
+  EVENT_TYPES,
+  EVENT_AGE_RESTRICTIONS,
+  EVENT_ACCESSIBILITY_OPTIONS,
+} from "@/lib/constants/categories";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
 import { SocialAuthorizationFields } from "@/components/promotions/social-authorization-fields";
 import type { PromotionSocialAuthorizationInput } from "@/lib/promotions/social-authorization";
@@ -79,6 +85,22 @@ export default function EditPromotionPage() {
   const [businessId, setBusinessId] = useState("");
   const [myBusinesses, setMyBusinesses] = useState<{ id: string; business_name: string }[]>([]);
 
+  // Event details
+  const [eventType, setEventType] = useState("");
+  const [venueName, setVenueName] = useState("");
+  const [venueCapacity, setVenueCapacity] = useState("");
+  const [ticketTiers, setTicketTiers] = useState<{ name: string; price_cents: number | null }[]>(
+    []
+  );
+  const [ticketsUrl, setTicketsUrl] = useState("");
+  const [ageRestriction, setAgeRestriction] = useState("");
+  const [dressCode, setDressCode] = useState("");
+  const [lineup, setLineup] = useState("");
+  const [parkingAvailable, setParkingAvailable] = useState(false);
+  const [accessibility, setAccessibility] = useState<string[]>([]);
+  const [foodDrinksAvailable, setFoodDrinksAvailable] = useState(false);
+  const [bringYourOwn, setBringYourOwn] = useState("");
+
   const maxPhotos = usePlanMaxPhotos("PROMOTIONS_EVENTS");
   const maxVideos = usePlanMaxVideos("PROMOTIONS_EVENTS");
   const videoAllowed = usePlanVideoAllowed("PROMOTIONS_EVENTS");
@@ -125,6 +147,22 @@ export default function EditPromotionPage() {
           y: typeof p.focal_y === "number" ? p.focal_y : 0.5,
         });
         setBusinessId(p.business_id || "");
+        // Load event details if present
+        const ed = p.event_details;
+        if (ed && typeof ed === "object") {
+          setEventType(ed.event_type || "");
+          setVenueName(ed.venue_name || "");
+          setVenueCapacity(ed.venue_capacity != null ? String(ed.venue_capacity) : "");
+          setTicketTiers(Array.isArray(ed.ticket_tiers) ? ed.ticket_tiers : []);
+          setTicketsUrl(ed.tickets_url || "");
+          setAgeRestriction(ed.age_restriction || "");
+          setDressCode(ed.dress_code || "");
+          setLineup(ed.lineup || "");
+          setParkingAvailable(!!ed.parking_available);
+          setAccessibility(Array.isArray(ed.accessibility) ? ed.accessibility : []);
+          setFoodDrinksAvailable(!!ed.food_drinks_available);
+          setBringYourOwn(ed.bring_your_own || "");
+        }
         setSocialAuthorization(
           p.socialAuthorization ?? {
             granted: false,
@@ -340,6 +378,20 @@ export default function EditPromotionPage() {
         end_date: endDate ? new Date(endDate).toISOString() : undefined,
         business_id: businessId || undefined,
         socialAuthorization,
+        event_details: {
+          event_type: eventType || undefined,
+          venue_name: venueName || undefined,
+          venue_capacity: venueCapacity ? parseInt(venueCapacity, 10) : undefined,
+          ticket_tiers: ticketTiers.length > 0 ? ticketTiers : undefined,
+          tickets_url: ticketsUrl || undefined,
+          age_restriction: ageRestriction || undefined,
+          dress_code: dressCode || undefined,
+          lineup: lineup || undefined,
+          parking_available: parkingAvailable,
+          accessibility: accessibility.length > 0 ? accessibility : undefined,
+          food_drinks_available: foodDrinksAvailable,
+          bring_your_own: bringYourOwn || undefined,
+        },
       };
 
       const res = await fetch(`/api/promotions/${promotionId}`, {
@@ -568,6 +620,221 @@ export default function EditPromotionPage() {
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* ── Event Details ─────────────────────────── */}
+              <div className="space-y-4 rounded-lg border bg-muted/30 p-4">
+                <p className="text-sm font-medium">Event Details (optional)</p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="event_type">Event Type</Label>
+                    <select
+                      id="event_type"
+                      className={selectClass}
+                      aria-label="Event Type"
+                      value={eventType}
+                      onChange={(e) => setEventType(e.target.value)}
+                    >
+                      <option value="">Select type…</option>
+                      {EVENT_TYPES.map((t) => (
+                        <option key={t.value} value={t.value}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="age_restriction">Age Restriction</Label>
+                    <select
+                      id="age_restriction"
+                      className={selectClass}
+                      aria-label="Age Restriction"
+                      value={ageRestriction}
+                      onChange={(e) => setAgeRestriction(e.target.value)}
+                    >
+                      <option value="">No restriction</option>
+                      {EVENT_AGE_RESTRICTIONS.map((r) => (
+                        <option key={r.value} value={r.value}>
+                          {r.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="venue_name">Venue Name</Label>
+                    <Input
+                      id="venue_name"
+                      value={venueName}
+                      onChange={(e) => setVenueName(e.target.value)}
+                      maxLength={200}
+                      placeholder="e.g. Sun Arena, Pretoria"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="venue_capacity">Venue Capacity</Label>
+                    <Input
+                      id="venue_capacity"
+                      type="number"
+                      min="0"
+                      value={venueCapacity}
+                      onChange={(e) => setVenueCapacity(e.target.value)}
+                      placeholder="e.g. 500"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="dress_code">Dress Code</Label>
+                  <Input
+                    id="dress_code"
+                    value={dressCode}
+                    onChange={(e) => setDressCode(e.target.value)}
+                    maxLength={300}
+                    placeholder="e.g. Smart casual"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="lineup">Lineup / Performers</Label>
+                  <Textarea
+                    id="lineup"
+                    value={lineup}
+                    onChange={(e) => setLineup(e.target.value)}
+                    rows={3}
+                    maxLength={2000}
+                    placeholder="e.g. Artist 1, Artist 2, DJ Name…"
+                  />
+                </div>
+
+                {/* Ticket tiers */}
+                <div className="space-y-2">
+                  <Label>Ticket Tiers</Label>
+                  {ticketTiers.map((tier, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Input
+                        value={tier.name}
+                        onChange={(e) => {
+                          const next = [...ticketTiers];
+                          next[i] = { ...next[i], name: e.target.value };
+                          setTicketTiers(next);
+                        }}
+                        placeholder="Tier name"
+                        className="flex-1"
+                        maxLength={80}
+                      />
+                      <Input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={tier.price_cents != null ? (tier.price_cents / 100).toString() : ""}
+                        onChange={(e) => {
+                          const next = [...ticketTiers];
+                          next[i] = {
+                            ...next[i],
+                            price_cents: e.target.value
+                              ? Math.round(parseFloat(e.target.value) * 100)
+                              : null,
+                          };
+                          setTicketTiers(next);
+                        }}
+                        placeholder="Price (ZAR)"
+                        className="w-28"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setTicketTiers((prev) => prev.filter((_, idx) => idx !== i))}
+                        className="text-muted-foreground hover:text-destructive"
+                        aria-label="Remove tier"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                  {ticketTiers.length < 10 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setTicketTiers((prev) => [...prev, { name: "", price_cents: null }])
+                      }
+                      className="gap-1"
+                    >
+                      <Plus className="h-3 w-3" /> Add Tier
+                    </Button>
+                  )}
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="tickets_url">Tickets URL</Label>
+                  <Input
+                    id="tickets_url"
+                    type="url"
+                    value={ticketsUrl}
+                    onChange={(e) => setTicketsUrl(e.target.value)}
+                    maxLength={2000}
+                    placeholder="https://…"
+                  />
+                </div>
+
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={parkingAvailable}
+                      onChange={(e) => setParkingAvailable(e.target.checked)}
+                      className="rounded"
+                    />
+                    Parking available
+                  </label>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={foodDrinksAvailable}
+                      onChange={(e) => setFoodDrinksAvailable(e.target.checked)}
+                      className="rounded"
+                    />
+                    Food & drinks available
+                  </label>
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Accessibility</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {EVENT_ACCESSIBILITY_OPTIONS.map((opt) => {
+                      const active = accessibility.includes(opt);
+                      return (
+                        <Badge
+                          key={opt}
+                          variant={active ? "default" : "outline"}
+                          className="cursor-pointer"
+                          onClick={() =>
+                            setAccessibility((prev) =>
+                              active ? prev.filter((a) => a !== opt) : [...prev, opt]
+                            )
+                          }
+                        >
+                          {opt}
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="bring_your_own">What to Bring</Label>
+                  <Input
+                    id="bring_your_own"
+                    value={bringYourOwn}
+                    onChange={(e) => setBringYourOwn(e.target.value)}
+                    maxLength={500}
+                    placeholder="e.g. Blankets, chairs, sunscreen"
                   />
                 </div>
               </div>

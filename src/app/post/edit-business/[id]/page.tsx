@@ -34,7 +34,11 @@ import { FocalPointPicker, type FocalPoint } from "@/components/ui/focal-point-p
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { useToast } from "@/hooks/use-toast";
 import { LocationSelector } from "@/components/ui/location-selector";
-import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
+import {
+  BUSINESS_CATEGORIES,
+  BUSINESS_TYPE_OPTIONS,
+  TOURISM_SUBCATEGORIES,
+} from "@/lib/constants/categories";
 import {
   getCategoryDetailFields,
   getDefaultCategoryDetails,
@@ -61,7 +65,12 @@ import type { BusinessDetails } from "@/types/business-details";
 import type { BusinessDetailRecord } from "@/components/business/business-detail-content";
 import { BusinessLayoutRouter } from "@/components/business/layouts/business-layout-router";
 import type { LayoutTemplate } from "@/lib/business/layout-templates";
-import type { BusinessType, BusinessCategory } from "@/types/enums";
+import {
+  BUSINESS_CATEGORY_LABELS,
+  type BusinessType,
+  type BusinessCategory,
+  type MarketplaceArea,
+} from "@/types/enums";
 import {
   OperatingHoursInput,
   formatHoursValue,
@@ -138,6 +147,7 @@ export default function EditBusinessPage() {
   const [paymentMethods, setPaymentMethods] = useState<string[]>([]);
   const [deliveryOptions, setDeliveryOptions] = useState<string[]>([]);
   const [layoutTemplate, setLayoutTemplate] = useState<LayoutTemplate | null>(null);
+  const [listingArea, setListingArea] = useState<MarketplaceArea>("MZANSI_BUSINESS");
 
   // Media — existing URLs
   const [existingLogo, setExistingLogo] = useState("");
@@ -159,8 +169,8 @@ export default function EditBusinessPage() {
   const [removeVideo, setRemoveVideo] = useState(false);
   const [focalPoint, setFocalPoint] = useState<FocalPoint>({ x: 0.5, y: 0.5 });
 
-  const maxPhotos = usePlanMaxPhotos("MZANSI_BUSINESS");
-  const coverVideoAllowed = usePlanCoverVideoAllowed("MZANSI_BUSINESS");
+  const maxPhotos = usePlanMaxPhotos(listingArea);
+  const coverVideoAllowed = usePlanCoverVideoAllowed(listingArea);
   const previewLogoUrl = useMemo(
     () => (newLogoFile.length > 0 ? URL.createObjectURL(newLogoFile[0]) : null),
     [newLogoFile]
@@ -199,6 +209,7 @@ export default function EditBusinessPage() {
         const b = data.business;
 
         setExistingStatus(b.status || null);
+        setListingArea(b.area === "PROMOTIONS_EVENTS" ? "PROMOTIONS_EVENTS" : "MZANSI_BUSINESS");
         setBusinessType(b.business_type || "standalone_shop");
         setBusinessName(b.business_name || "");
         setSlug(b.slug || "");
@@ -784,41 +795,58 @@ export default function EditBusinessPage() {
 
               <div className="space-y-2">
                 <Label>Category</Label>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {BUSINESS_CATEGORIES.map((item) => {
-                    const Icon = item.icon;
-                    const selected = category === item.value;
-                    return (
-                      <button
-                        key={item.value}
-                        type="button"
-                        onClick={() => {
-                          setCategory(item.value);
-                          setSubcategory("");
-                          setCategoryDetails(
-                            getDefaultCategoryDetails(item.value as BusinessCategory)
-                          );
-                        }}
-                        className={cn(
-                          "flex flex-col items-center gap-1 rounded-lg border p-3 text-center text-xs transition-colors hover:bg-accent/50",
-                          selected
-                            ? "border-primary bg-primary/5 ring-1 ring-primary"
-                            : "border-border"
-                        )}
-                      >
-                        <Icon className="h-5 w-5 text-muted-foreground" />
-                        <span className="font-medium leading-tight">{item.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+                {/* If the saved category is not in the picker (e.g. tourism_hospitality
+                    which is now created via /post/create-tourism), show it as a locked badge */}
+                {category && !BUSINESS_CATEGORIES.some((c) => c.value === category) ? (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-sm">
+                      {BUSINESS_CATEGORY_LABELS[
+                        category as keyof typeof BUSINESS_CATEGORY_LABELS
+                      ] ?? category}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">(locked)</span>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {BUSINESS_CATEGORIES.map((item) => {
+                      const Icon = item.icon;
+                      const selected = category === item.value;
+                      return (
+                        <button
+                          key={item.value}
+                          type="button"
+                          onClick={() => {
+                            setCategory(item.value);
+                            setSubcategory("");
+                            setCategoryDetails(
+                              getDefaultCategoryDetails(item.value as BusinessCategory)
+                            );
+                          }}
+                          className={cn(
+                            "flex flex-col items-center gap-1 rounded-lg border p-3 text-center text-xs transition-colors hover:bg-accent/50",
+                            selected
+                              ? "border-primary bg-primary/5 ring-1 ring-primary"
+                              : "border-border"
+                          )}
+                        >
+                          <Icon className="h-5 w-5 text-muted-foreground" />
+                          <span className="font-medium leading-tight">{item.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Subcategory dropdown */}
               {category &&
                 (() => {
                   const catDef = BUSINESS_CATEGORIES.find((c) => c.value === category);
-                  if (!catDef || catDef.subcategories.length === 0) return null;
+                  const subcats =
+                    category === "tourism_hospitality"
+                      ? TOURISM_SUBCATEGORIES
+                      : (catDef?.subcategories ?? []);
+                  if (subcats.length === 0) return null;
                   return (
                     <div className="space-y-2">
                       <Label htmlFor="subcategory">Subcategory</Label>
@@ -830,7 +858,7 @@ export default function EditBusinessPage() {
                         onChange={(e) => setSubcategory(e.target.value)}
                       >
                         <option value="">Select a subcategory (optional)</option>
-                        {catDef.subcategories.map((sub) => (
+                        {subcats.map((sub) => (
                           <option key={sub.value} value={sub.value}>
                             {sub.label}
                           </option>
@@ -849,7 +877,11 @@ export default function EditBusinessPage() {
                     <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
                       <p className="text-sm font-medium">
                         Extra details for{" "}
-                        {BUSINESS_CATEGORIES.find((c) => c.value === category)?.label}
+                        {BUSINESS_CATEGORIES.find((c) => c.value === category)?.label ??
+                          BUSINESS_CATEGORY_LABELS[
+                            category as keyof typeof BUSINESS_CATEGORY_LABELS
+                          ] ??
+                          category}
                       </p>
                       {fields.map((field) => {
                         const val = categoryDetails[field.name];
@@ -916,6 +948,35 @@ export default function EditBusinessPage() {
                                 }
                                 placeholder={field.placeholder}
                               />
+                              {field.description && (
+                                <p className="text-xs text-muted-foreground">{field.description}</p>
+                              )}
+                            </div>
+                          );
+                        }
+                        if (field.kind === "select" && field.options) {
+                          return (
+                            <div key={field.name} className="space-y-1">
+                              <Label htmlFor={`cat-${field.name}`}>{field.label}</Label>
+                              <select
+                                id={`cat-${field.name}`}
+                                className={selectClass}
+                                aria-label={field.label}
+                                value={typeof val === "string" ? val : ""}
+                                onChange={(e) =>
+                                  setCategoryDetails((prev) => ({
+                                    ...prev,
+                                    [field.name]: e.target.value || undefined,
+                                  }))
+                                }
+                              >
+                                <option value="">{field.placeholder ?? "Select…"}</option>
+                                {field.options.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </option>
+                                ))}
+                              </select>
                               {field.description && (
                                 <p className="text-xs text-muted-foreground">{field.description}</p>
                               )}

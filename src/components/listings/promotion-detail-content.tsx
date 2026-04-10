@@ -9,12 +9,17 @@ import {
   CalendarPlus,
   ChevronDown,
   Eye,
-  Phone,
+  Globe,
   MapPin,
   Maximize2,
   MessageCircle,
+  Music2,
+  Phone,
   Play,
+  Ticket,
   Timer,
+  Users,
+  UtensilsCrossed,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -29,9 +34,11 @@ import { cn } from "@/lib/utils";
 import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
 import { type BusinessCategory, type AccountVerificationStatus } from "@/types/enums";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
+import { EVENT_AGE_RESTRICTIONS, EVENT_TYPES } from "@/lib/constants/categories";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import { readAccountVerificationStatus } from "@/lib/account/compat";
 import { ProfileVideoPlayer } from "@/components/ui/profile-video-player";
+import type { EventDetails, TicketTier } from "@/types/tourism-details";
 
 export interface PromotionDetailRecord {
   id: string;
@@ -58,6 +65,7 @@ export interface PromotionDetailRecord {
   featured_until: string | null;
   view_count: number | null;
   created_at: string;
+  event_details?: EventDetails | null;
 }
 
 export interface PromotionAdvertiserRecord {
@@ -598,6 +606,161 @@ export function PromotionDetailContent({
             </div>
           )}
         </div>
+
+        {/* ═══ EVENT DETAILS — venue, tickets, accessibility ═══ */}
+        {promotion.event_details &&
+          (() => {
+            const ed = promotion.event_details!;
+            const eventTypeLabel = EVENT_TYPES.find((t) => t.value === ed.event_type)?.label;
+            const ageLabel = EVENT_AGE_RESTRICTIONS.find(
+              (a) => a.value === ed.age_restriction
+            )?.label;
+            const hasContent =
+              ed.event_type ||
+              ed.venue_name ||
+              ed.venue_capacity ||
+              (ed.ticket_tiers && ed.ticket_tiers.length > 0) ||
+              ed.tickets_url ||
+              ed.age_restriction ||
+              ed.dress_code ||
+              ed.lineup ||
+              ed.parking_available != null ||
+              ed.accessibility?.length ||
+              ed.food_drinks_available != null ||
+              ed.bring_your_own;
+            if (!hasContent) return null;
+            return (
+              <Card>
+                <CardContent className="space-y-4 p-4 text-sm">
+                  <h3 className="flex items-center gap-2 font-semibold">
+                    <Music2 className="h-4 w-4 text-muted-foreground" />
+                    Event Details
+                  </h3>
+
+                  <dl className="grid grid-cols-2 gap-y-2.5">
+                    {eventTypeLabel && (
+                      <>
+                        <dt className="text-muted-foreground">Event type</dt>
+                        <dd>
+                          <Badge variant="secondary">{eventTypeLabel}</Badge>
+                        </dd>
+                      </>
+                    )}
+
+                    {ed.venue_name && (
+                      <>
+                        <dt className="text-muted-foreground">Venue</dt>
+                        <dd className="font-medium">{ed.venue_name}</dd>
+                      </>
+                    )}
+
+                    {typeof ed.venue_capacity === "number" && (
+                      <>
+                        <dt className="flex items-center gap-1 text-muted-foreground">
+                          <Users className="h-3 w-3" /> Capacity
+                        </dt>
+                        <dd className="font-medium">{ed.venue_capacity.toLocaleString("en-ZA")}</dd>
+                      </>
+                    )}
+
+                    {ageLabel && (
+                      <>
+                        <dt className="text-muted-foreground">Age restriction</dt>
+                        <dd className="font-medium">{ageLabel}</dd>
+                      </>
+                    )}
+
+                    {ed.dress_code && (
+                      <>
+                        <dt className="text-muted-foreground">Dress code</dt>
+                        <dd className="font-medium">{ed.dress_code}</dd>
+                      </>
+                    )}
+
+                    {ed.parking_available != null && (
+                      <>
+                        <dt className="text-muted-foreground">Parking</dt>
+                        <dd className="font-medium">
+                          {ed.parking_available ? "Available" : "Not available"}
+                        </dd>
+                      </>
+                    )}
+
+                    {ed.food_drinks_available != null && (
+                      <>
+                        <dt className="flex items-center gap-1 text-muted-foreground">
+                          <UtensilsCrossed className="h-3 w-3" /> Food &amp; drinks
+                        </dt>
+                        <dd className="font-medium">
+                          {ed.food_drinks_available ? "Available" : "Not available"}
+                        </dd>
+                      </>
+                    )}
+                  </dl>
+
+                  {ed.lineup && (
+                    <div className="space-y-1">
+                      <p className="text-muted-foreground">Lineup / Performers</p>
+                      <p className="whitespace-pre-wrap font-medium">{ed.lineup}</p>
+                    </div>
+                  )}
+
+                  {ed.ticket_tiers && ed.ticket_tiers.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="flex items-center gap-1 text-muted-foreground">
+                        <Ticket className="h-3 w-3" /> Tickets
+                      </p>
+                      <div className="divide-y rounded-lg border">
+                        {ed.ticket_tiers.map((tier: TicketTier, i: number) => (
+                          <div key={i} className="flex items-center justify-between px-3 py-2">
+                            <span className="font-medium">{tier.name}</span>
+                            <span className="font-bold">
+                              {tier.price_cents != null && tier.price_cents > 0
+                                ? `R${(tier.price_cents / 100).toFixed(0)}`
+                                : "Free"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {ed.tickets_url && (
+                    <Button asChild variant="outline" className="w-full gap-2">
+                      <a
+                        href={ed.tickets_url}
+                        target="_blank"
+                        rel="noopener noreferrer nofollow ugc"
+                      >
+                        <Globe className="h-4 w-4" />
+                        Buy Tickets
+                      </a>
+                    </Button>
+                  )}
+
+                  {ed.accessibility && ed.accessibility.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-muted-foreground">Accessibility</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {ed.accessibility.map((a) => (
+                          <Badge key={a} variant="outline" className="text-xs">
+                            {a}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {ed.bring_your_own && (
+                    <div className="space-y-1">
+                      <p className="text-muted-foreground">What to bring</p>
+                      <p className="font-medium">{ed.bring_your_own}</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
 
         {/* ═══ LINKED BUSINESS + POSTED — mobile only ═══ */}
         <div className="space-y-3 lg:hidden">

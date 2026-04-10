@@ -50,6 +50,8 @@ type DashboardItem = {
   category?: string | null;
   created_at?: string | null;
   area: MarketplaceArea;
+  /** Which table the item originated from — used for edit/view routing. */
+  source: "listing" | "business" | "promotion";
   view_count?: number | null;
   photos?: string[];
   boost_until?: string | null;
@@ -65,6 +67,7 @@ type BusinessDashboardRow = {
   status: string;
   category?: string | null;
   created_at?: string | null;
+  area?: string | null;
   cover_photo?: string | null;
   logo_url?: string | null;
   gallery_photos?: string[] | null;
@@ -85,19 +88,20 @@ function toDashboardItems(input: unknown): DashboardItem[] {
   return Array.isArray(input) ? (input as DashboardItem[]) : [];
 }
 
-function getEditHref(area: MarketplaceArea, id: string) {
-  switch (area) {
-    case "MZANSI_BUSINESS":
-      return `/post/edit-business/${id}`;
+function getEditHref(item: DashboardItem) {
+  // Tourism businesses live in the businesses table with area PROMOTIONS_EVENTS;
+  // route them to edit-business (not edit-promotion).
+  if (item.source === "business") return `/post/edit-business/${item.id}`;
+  switch (item.area) {
     case "PROMOTIONS_EVENTS":
-      return `/post/edit-promotion/${id}`;
+      return `/post/edit-promotion/${item.id}`;
     case "BUSINESS_ADS":
-      return `/post/edit-business-ad/${id}`;
+      return `/post/edit-business-ad/${item.id}`;
     case "MALL_SHOPS":
-      return `/post/edit-mall-shop/${id}`;
+      return `/post/edit-mall-shop/${item.id}`;
     case "MZANSI_MARKET":
     default:
-      return `/post/edit-listing/${id}`;
+      return `/post/edit-listing/${item.id}`;
   }
 }
 
@@ -109,14 +113,14 @@ function getDisplayPrice(item: DashboardItem) {
   return AREA_LABELS[item.area];
 }
 
-function getViewHref(area: MarketplaceArea, id: string) {
-  switch (area) {
-    case "MZANSI_BUSINESS":
-      return `/mzansi-business/${id}`;
+function getViewHref(item: DashboardItem) {
+  // Tourism businesses are in the businesses table — view on the business detail page.
+  if (item.source === "business") return `/mzansi-business/${item.id}`;
+  switch (item.area) {
     case "PROMOTIONS_EVENTS":
-      return `/promotion/${id}`;
+      return `/promotion/${item.id}`;
     default:
-      return `/listing/${id}`;
+      return `/listing/${item.id}`;
   }
 }
 
@@ -192,7 +196,7 @@ export default async function ListingsPage({
       supabase
         .from("businesses")
         .select(
-          "id, business_name, status, category, created_at, cover_photo, logo_url, gallery_photos, boost_until, featured_until, status_reason"
+          "id, business_name, status, category, created_at, area, cover_photo, logo_url, gallery_photos, boost_until, featured_until, status_reason"
         )
         .order("created_at", { ascending: false }),
       businessOwnerColumn,
@@ -213,6 +217,7 @@ export default async function ListingsPage({
   const items = sortByNewest([
     ...toDashboardItems(listingResponse.data).map((listing) => ({
       ...listing,
+      source: "listing" as const,
       featured_until: listing.featured_until ?? null,
       urgent_until: listing.urgent_until ?? null,
       view_count: listing.view_count ?? null,
@@ -226,7 +231,10 @@ export default async function ListingsPage({
       status: business.status,
       category: business.category,
       created_at: business.created_at,
-      area: "MZANSI_BUSINESS" as const,
+      area: (business.area === "PROMOTIONS_EVENTS"
+        ? "PROMOTIONS_EVENTS"
+        : "MZANSI_BUSINESS") as MarketplaceArea,
+      source: "business" as const,
       photos: [
         business.cover_photo,
         business.logo_url,
@@ -242,6 +250,7 @@ export default async function ListingsPage({
     ...toDashboardItems(promotionResponse.data).map((promotion) => ({
       ...promotion,
       area: "PROMOTIONS_EVENTS" as const,
+      source: "promotion" as const,
       photos: Array.isArray(promotion.photos) ? promotion.photos : [],
       urgent_until: null,
       promotion_type:
@@ -396,7 +405,7 @@ function RejectedListingList({ listings }: { listings: DashboardItem[] }) {
                   className="h-11 w-11"
                   aria-label={`Edit ${listing.title}`}
                 >
-                  <Link href={getEditHref(listing.area, listing.id)}>
+                  <Link href={getEditHref(listing)}>
                     <Pencil className="h-3.5 w-3.5" />
                   </Link>
                 </Button>
@@ -520,7 +529,7 @@ function ListingList({
                   checkCanUrgent(planTiers[listing.area], listing.area).allowed
                 }
               />
-              {listing.area === "MZANSI_BUSINESS" &&
+              {listing.source === "business" &&
                 (listing.status === "active" || listing.status === "live") && (
                   <Button
                     asChild
@@ -529,23 +538,19 @@ function ListingList({
                     className="h-11 w-11"
                     aria-label={`Promote ${listing.title}`}
                   >
-                    <Link href={`/post/create-promotion?business_id=${listing.id}`}>
+                    <Link href={`/post/create-tourism?business_id=${listing.id}`}>
                       <Megaphone className="h-3.5 w-3.5" />
                     </Link>
                   </Button>
                 )}
               <Button asChild variant="ghost" size="sm" className="h-11 gap-1.5 px-3">
-                <Link
-                  href={getViewHref(listing.area, listing.id)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
+                <Link href={getViewHref(listing)} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="h-3.5 w-3.5" />
                   View
                 </Link>
               </Button>
               <Button asChild variant="ghost" size="sm" className="h-11 gap-1.5 px-3">
-                <Link href={getEditHref(listing.area, listing.id)}>
+                <Link href={getEditHref(listing)}>
                   <Pencil className="h-3.5 w-3.5" />
                   Edit
                 </Link>

@@ -44,7 +44,7 @@ import {
   getCategoryDetailFields,
   getDefaultCategoryDetails,
 } from "@/lib/forms/business-category-details";
-import type { BusinessCategory, BusinessType } from "@/types/enums";
+import { BUSINESS_CATEGORY_LABELS, type BusinessCategory, type BusinessType } from "@/types/enums";
 import { cn } from "@/lib/utils";
 import {
   PostFormFooter,
@@ -1342,7 +1342,11 @@ function CreateBusinessContent() {
                           <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
                             <p className="text-sm font-medium">
                               Extra details for{" "}
-                              {BUSINESS_CATEGORIES.find((c) => c.value === category)?.label}
+                              {BUSINESS_CATEGORIES.find((c) => c.value === category)?.label ??
+                                BUSINESS_CATEGORY_LABELS[
+                                  category as keyof typeof BUSINESS_CATEGORY_LABELS
+                                ] ??
+                                category}
                             </p>
                             {fields.map((field) => {
                               const val = categoryDetails[field.name];
@@ -1414,6 +1418,39 @@ function CreateBusinessContent() {
                                       }
                                       placeholder={field.placeholder}
                                     />
+                                    {field.description && (
+                                      <p className="text-xs text-muted-foreground">
+                                        {field.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                );
+                              }
+                              if (field.kind === "select" && field.options) {
+                                return (
+                                  <div key={field.name} className="space-y-1">
+                                    <Label htmlFor={`cat-${field.name}`}>{field.label}</Label>
+                                    <select
+                                      id={`cat-${field.name}`}
+                                      className={SELECT_CLASS}
+                                      aria-label={field.label}
+                                      value={typeof val === "string" ? val : ""}
+                                      onChange={(e) =>
+                                        setCategoryDetails((prev) => ({
+                                          ...prev,
+                                          [field.name]: e.target.value || undefined,
+                                        }))
+                                      }
+                                    >
+                                      <option value="">
+                                        {field.placeholder ?? "Select\u2026"}
+                                      </option>
+                                      {field.options.map((opt) => (
+                                        <option key={opt.value} value={opt.value}>
+                                          {opt.label}
+                                        </option>
+                                      ))}
+                                    </select>
                                     {field.description && (
                                       <p className="text-xs text-muted-foreground">
                                         {field.description}

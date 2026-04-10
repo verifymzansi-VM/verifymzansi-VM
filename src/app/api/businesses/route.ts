@@ -187,11 +187,16 @@ export async function POST(request: NextRequest) {
     }
 
     const data = parsedBody.data;
+
+    // Tourism businesses belong in the PROMOTIONS_EVENTS marketplace area.
+    const effectiveArea: MarketplaceArea =
+      data.category === "tourism_hospitality" ? "PROMOTIONS_EVENTS" : AREA;
+
     const { data: activeEntitlement, error: entitlementError } = await supabase
       .from("entitlements")
       .select("tier")
       .eq("user_id", user.id)
-      .eq("area", AREA)
+      .eq("area", effectiveArea)
       .eq("status", "active")
       .gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: false })
@@ -222,7 +227,7 @@ export async function POST(request: NextRequest) {
 
       const { count } = await countQuery;
 
-      const check = canCreateListing(count ?? 0, tier as PlanTier, AREA);
+      const check = canCreateListing(count ?? 0, tier as PlanTier, effectiveArea);
       if (!check.allowed) {
         return NextResponse.json(
           { error: "Business limit reached", reason: check.reason },
@@ -233,7 +238,7 @@ export async function POST(request: NextRequest) {
 
     const ent =
       hasPaidPlan && tier
-        ? getEntitlements(tier as PlanTier, AREA)
+        ? getEntitlements(tier as PlanTier, effectiveArea)
         : {
             maxPhotos: FREE_POST_CONFIG.maxPhotos,
             maxVideos: FREE_POST_CONFIG.maxVideos,
@@ -273,7 +278,7 @@ export async function POST(request: NextRequest) {
       try {
         freePostClaimed = await claimFreePostSlot(getAdmin(), {
           userId: user.id,
-          area: AREA,
+          area: effectiveArea,
           contentId: freePostContentId,
         });
       } catch (claimError) {
@@ -299,7 +304,7 @@ export async function POST(request: NextRequest) {
 
     const businessPayload = {
       id: freePostContentId,
-      area: AREA,
+      area: effectiveArea,
       business_type: data.business_type,
       business_name: data.business_name,
       slug: data.slug,
@@ -347,7 +352,7 @@ export async function POST(request: NextRequest) {
           try {
             await releaseFreePostSlot(getAdmin(), {
               userId: user.id,
-              area: AREA,
+              area: effectiveArea,
               contentId: freePostContentId,
               reason: "create_failed",
             });
@@ -367,7 +372,7 @@ export async function POST(request: NextRequest) {
         try {
           await releaseFreePostSlot(getAdmin(), {
             userId: user.id,
-            area: AREA,
+            area: effectiveArea,
             contentId: freePostContentId,
             reason: "create_failed",
           });
@@ -392,7 +397,11 @@ export async function POST(request: NextRequest) {
       );
 
       const { count: postInsertCount } = await postCountQuery;
-      const postCheck = canCreateListing((postInsertCount ?? 0) - 1, tier as PlanTier, AREA);
+      const postCheck = canCreateListing(
+        (postInsertCount ?? 0) - 1,
+        tier as PlanTier,
+        effectiveArea
+      );
 
       if (!postCheck.allowed) {
         const { error: rollbackErr } = await getAdmin()
@@ -426,7 +435,7 @@ export async function POST(request: NextRequest) {
         action: "listing_created",
         targetType: "business",
         targetId: business.id,
-        area: "MZANSI_BUSINESS",
+        area: effectiveArea,
         metadata: { business_type: data.business_type, business_name: data.business_name },
       });
     } catch (auditErr) {
@@ -511,7 +520,7 @@ export async function GET(request: NextRequest) {
           .from("businesses")
           .select("category, business_name, description")
           .eq("status", "live")
-          .eq("area", "MZANSI_BUSINESS")
+          .in("area", ["MZANSI_BUSINESS", "PROMOTIONS_EVENTS"])
           .limit(500);
 
         const categoryCounts: Record<string, number> = {};
@@ -660,8 +669,18 @@ export async function GET(request: NextRequest) {
       let query = admin
         .from("businesses")
         .select(selectClause, { count: "exact" })
-        .eq("status", "live")
-        .eq("area", "MZANSI_BUSINESS");
+        .eq("status", "live");
+
+      // When filtering by category (e.g. showroom tourism tab), skip the
+      // area filter so tourism businesses with area=PROMOTIONS_EVENTS are
+      // still returned. When searching, include both areas so tourism
+      // businesses appear in text search results. For general browsing,
+      // scope to MZANSI_BUSINESS only.
+      if (!category && !search) {
+        query = query.eq("area", "MZANSI_BUSINESS");
+      } else if (!category) {
+        query = query.in("area", ["MZANSI_BUSINESS", "PROMOTIONS_EVENTS"]);
+      }
 
       if (businessType) {
         query = query.eq("business_type", businessType);
