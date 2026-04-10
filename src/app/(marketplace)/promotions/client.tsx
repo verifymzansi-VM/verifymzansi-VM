@@ -49,6 +49,8 @@ interface PromotionRow {
   view_count: number;
   focal_x: number | null;
   focal_y: number | null;
+  media_width: number | null;
+  media_height: number | null;
   created_at: string;
 }
 
@@ -95,6 +97,8 @@ interface BusinessRow {
   service_areas: Record<string, unknown> | null;
   focal_x: number | null;
   focal_y: number | null;
+  media_width: number | null;
+  media_height: number | null;
 }
 
 interface BusinessesResponse {
@@ -651,6 +655,8 @@ export function PromotionsExplorer() {
                       serviceAreas={business.service_areas}
                       focalX={business.focal_x}
                       focalY={business.focal_y}
+                      mediaWidth={business.media_width}
+                      mediaHeight={business.media_height}
                     />
                   </div>
                 ))}
@@ -723,6 +729,8 @@ export function PromotionsExplorer() {
                         logoUrl={businessLogo}
                         focalX={promotion.focal_x}
                         focalY={promotion.focal_y}
+                        mediaWidth={promotion.media_width}
+                        mediaHeight={promotion.media_height}
                       />
                     </div>
                   );

@@ -325,6 +325,10 @@ export function UnifiedLayout({
                     }
                     endDate={promo.end_date}
                     logoUrl={business.logo_url}
+                    focalX={promo.focal_x}
+                    focalY={promo.focal_y}
+                    mediaWidth={promo.media_width}
+                    mediaHeight={promo.media_height}
                   />
                 ))}
               </div>

@@ -32,6 +32,8 @@ interface PromotionCardProps {
   videoDuration?: number | null;
   focalX?: number | null;
   focalY?: number | null;
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
 }
 
 /* ── Urgency helper ─────────────────────────────────────────────── */
@@ -144,6 +146,8 @@ export const PromotionCard = memo(function PromotionCard({
   videoDuration,
   focalX,
   focalY,
+  mediaWidth,
+  mediaHeight,
 }: PromotionCardProps) {
   const typePresentation = getStoredPromotionTypePresentation(promotionType);
   const status = getPromotionStatus(featured, boosted, promotionType);
@@ -178,6 +182,8 @@ export const PromotionCard = memo(function PromotionCard({
       videoDuration={videoDuration}
       focalX={focalX}
       focalY={focalY}
+      mediaWidth={mediaWidth}
+      mediaHeight={mediaHeight}
       fallback={
         <div className="flex h-full w-full items-center justify-center text-white/35">
           <Tag className="h-16 w-16" />

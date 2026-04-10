@@ -67,7 +67,7 @@ describe("HomeBusinessShowcase", () => {
     vi.clearAllMocks();
   });
 
-  it("prefers cover imagery over autoplaying business video on the homepage", async () => {
+  it("prefers business video when available on the homepage", async () => {
     vi.mocked(createClient).mockResolvedValue(
       createSupabaseMock([
         {
@@ -97,7 +97,7 @@ describe("HomeBusinessShowcase", () => {
       provinceCode: string;
     };
     expect(props.href).toBe("/mzansi-business/biz-1");
-    expect(props.imageUrl).toBe("https://example.com/photo.jpg");
+    expect(props.imageUrl).toBe("https://example.com/video.mp4");
     expect(props.posterUrl).toBe("https://example.com/thumb.jpg");
     expect(props.logoUrl).toBe("https://example.com/logo.png");
     expect(props.provinceCode).toBe("GP");

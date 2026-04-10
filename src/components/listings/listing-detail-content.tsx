@@ -59,11 +59,17 @@ export interface SimilarListingRow {
   price_negotiable: boolean;
   condition: string | null;
   photos: string[];
+  videos?: string[] | null;
+  video_thumbnail?: string | null;
   logo_url?: string | null;
   location_province: string;
   location_city: string;
   category: string;
   attributes: Record<string, unknown>;
+  focal_x?: number | null;
+  focal_y?: number | null;
+  media_width?: number | null;
+  media_height?: number | null;
   created_at: string;
   boost_until: string | null;
   featured: boolean;
@@ -394,7 +400,8 @@ export function ListingDetailContent({
                   title={item.title}
                   price={item.price_cents ?? 0}
                   negotiable={item.price_negotiable}
-                  imageUrl={item.photos?.[0]}
+                  imageUrl={item.videos?.[0] || item.video_thumbnail || item.photos?.[0]}
+                  posterUrl={item.video_thumbnail || item.photos?.[0] || undefined}
                   logoUrl={item.logo_url}
                   province={item.location_province}
                   city={item.location_city}
@@ -406,6 +413,10 @@ export function ListingDetailContent({
                   ownerName={itemSeller?.display_name}
                   boosted={item.boost_until ? new Date(item.boost_until) > new Date() : false}
                   featured={item.featured}
+                  focalX={item.focal_x ?? null}
+                  focalY={item.focal_y ?? null}
+                  mediaWidth={item.media_width ?? null}
+                  mediaHeight={item.media_height ?? null}
                 />
               );
             })}

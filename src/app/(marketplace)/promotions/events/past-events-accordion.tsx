@@ -14,6 +14,10 @@ interface PastEvent {
   imageUrl?: string;
   posterUrl?: string;
   logoUrl?: string | null;
+  focalX?: number | null;
+  focalY?: number | null;
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
   province: string;
   city: string;
   createdAt: string;
@@ -65,6 +69,10 @@ export function PastEventsAccordion({ events }: { events: PastEvent[] }) {
                 ownerName={event.ownerName}
                 startDate={event.startDate}
                 endDate={event.endDate}
+                focalX={event.focalX}
+                focalY={event.focalY}
+                mediaWidth={event.mediaWidth}
+                mediaHeight={event.mediaHeight}
               />
             </div>
           ))}

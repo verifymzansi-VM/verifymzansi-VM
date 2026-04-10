@@ -15,6 +15,31 @@ import { cn } from "@/lib/utils";
 import type { TrustLevel } from "@/types/enums";
 import type { ReactNode } from "react";
 
+const PORTRAIT_CARD_ASPECT_RATIO = 4 / 5;
+const LANDSCAPE_CARD_ASPECT_RATIO = 16 / 9;
+
+function resolveCardFrame(mediaWidth?: number | null, mediaHeight?: number | null) {
+  if (!mediaWidth || !mediaHeight || mediaWidth <= 0 || mediaHeight <= 0) {
+    return {
+      aspectRatio: PORTRAIT_CARD_ASPECT_RATIO,
+      aspectClassName: "aspect-[4/5]",
+    };
+  }
+
+  const mediaAspectRatio = mediaWidth / mediaHeight;
+  if (mediaAspectRatio >= 1.15) {
+    return {
+      aspectRatio: LANDSCAPE_CARD_ASPECT_RATIO,
+      aspectClassName: "aspect-video",
+    };
+  }
+
+  return {
+    aspectRatio: PORTRAIT_CARD_ASPECT_RATIO,
+    aspectClassName: "aspect-[4/5]",
+  };
+}
+
 interface PosterCardShellProps {
   href: string;
   title: string;
@@ -55,6 +80,10 @@ interface PosterCardShellProps {
   focalX?: number | null;
   /** Focal point Y coordinate (0..1). Controls object-position when cropping. */
   focalY?: number | null;
+  /** Source media width in pixels (if known). Used for adaptive card frame selection. */
+  mediaWidth?: number | null;
+  /** Source media height in pixels (if known). Used for adaptive card frame selection. */
+  mediaHeight?: number | null;
 }
 
 export function PosterCardShell({
@@ -85,23 +114,32 @@ export function PosterCardShell({
   videoDuration,
   focalX,
   focalY,
+  mediaWidth,
+  mediaHeight,
 }: PosterCardShellProps) {
   const normalizedMediaUrl = mediaUrl ? normalizeMediaUrl(mediaUrl) : undefined;
   const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
   const normalizedLogoUrl = logoUrl ? normalizeMediaUrl(logoUrl) : undefined;
   const hasVideo = isVideo ?? isVideoUrl(mediaUrl);
+  const frame = resolveCardFrame(mediaWidth, mediaHeight);
+  const effectiveFitStrategy = hasVideo ? "contain" : fitStrategy;
 
   return (
     <Link href={href} prefetch={false} className={cn("group block h-full", className)}>
       <Card
         className={cn(
-          "h-full flex flex-col overflow-hidden border-transparent bg-warm-100 shadow-[0_4px_16px_-6px_rgba(15,23,42,0.18)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_8px_28px_-8px_rgba(15,23,42,0.28)] rounded-xl",
+          "h-full flex flex-col overflow-hidden border-transparent bg-warm-100 shadow-[0_2px_10px_-6px_rgba(15,23,42,0.16)] transition-all duration-300 hover:-translate-y-px hover:shadow-[0_6px_18px_-10px_rgba(15,23,42,0.22)] rounded-xl",
           accentClassName
         )}
         trustLevel={trustLevel}
       >
-        {/* ── 4:5 video/image thumbnail ──────────────────────────── */}
-        <div className="relative aspect-[4/5] w-full overflow-hidden bg-slate-900 rounded-t-xl">
+        {/* ── Adaptive video/image thumbnail (4:5 or 16:9) ───────── */}
+        <div
+          className={cn(
+            "relative w-full overflow-hidden bg-slate-900 rounded-t-xl",
+            frame.aspectClassName
+          )}
+        >
           {normalizedMediaUrl ? (
             <VideoCardPlayer
               src={normalizedMediaUrl}
@@ -110,10 +148,13 @@ export function PosterCardShell({
               alt={mediaAlt || title}
               sizes={mediaSizes}
               mode="ambient"
-              fitStrategy={fitStrategy}
-              containerAspectRatio={4 / 5}
-              muteControlVisibility={hasVideo ? "always" : "hidden"}
-              mediaClassName="transition-transform duration-700 group-hover:scale-[1.03]"
+              fitStrategy={effectiveFitStrategy}
+              containerAspectRatio={frame.aspectRatio}
+              muteControlVisibility={hasVideo ? "auto" : "hidden"}
+              hoverScale={!hasVideo}
+              mediaClassName={
+                hasVideo ? undefined : "transition-transform duration-700 group-hover:scale-[1.03]"
+              }
               priority={priority}
               focalX={focalX}
               focalY={focalY}

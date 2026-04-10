@@ -68,7 +68,7 @@ export async function HomeMzansiMarketShowcase() {
 
         <AutoScrollRail ariaLabel="Latest on Mzansi Market">
           {items.map((l) => {
-            const displayUrl = l.photos?.[0] || l.video_thumbnail || l.videos?.[0];
+            const displayUrl = l.videos?.[0] || l.video_thumbnail || l.photos?.[0];
             const isBoosted = l.boost_until ? new Date(l.boost_until) > new Date() : false;
             const poster = l.video_thumbnail || l.photos?.[0] || undefined;
             return (
@@ -89,6 +89,8 @@ export async function HomeMzansiMarketShowcase() {
                   priority={false}
                   focalX={l.focal_x as number | null | undefined}
                   focalY={l.focal_y as number | null | undefined}
+                  mediaWidth={l.media_width as number | null | undefined}
+                  mediaHeight={l.media_height as number | null | undefined}
                 />
               </div>
             );

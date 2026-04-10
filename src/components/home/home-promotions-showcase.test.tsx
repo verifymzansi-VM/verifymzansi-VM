@@ -140,7 +140,7 @@ describe("HomePromotionsShowcase", () => {
       featured: boolean;
       logoUrl: string;
     };
-    expect(props.imageUrl).toBe("https://example.com/photo.jpg");
+    expect(props.imageUrl).toBe("https://example.com/video.mp4");
     expect(props.posterUrl).toBe("https://example.com/thumb.jpg");
     expect(props.boosted).toBe(true);
     expect(props.featured).toBe(true);

@@ -31,6 +31,8 @@ interface ListingCardProps {
   videoDuration?: number | null;
   focalX?: number | null;
   focalY?: number | null;
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
 }
 
 function isNew(createdAt: string): boolean {
@@ -81,6 +83,8 @@ export const ListingCard = memo(function ListingCard({
   videoDuration,
   focalX,
   focalY,
+  mediaWidth,
+  mediaHeight,
 }: ListingCardProps) {
   const status = getListingStatus(featured, boosted, urgent, createdAt);
   const priceLabel = price > 0 ? formatZARShort(price) : null;
@@ -107,6 +111,8 @@ export const ListingCard = memo(function ListingCard({
       videoDuration={videoDuration}
       focalX={focalX}
       focalY={focalY}
+      mediaWidth={mediaWidth}
+      mediaHeight={mediaHeight}
     />
   );
 });

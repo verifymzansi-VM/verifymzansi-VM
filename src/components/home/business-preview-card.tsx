@@ -19,6 +19,8 @@ interface BusinessPreviewCardProps {
   priority?: boolean;
   focalX?: number | null;
   focalY?: number | null;
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
 }
 
 export function BusinessPreviewCard({
@@ -35,6 +37,8 @@ export function BusinessPreviewCard({
   priority,
   focalX,
   focalY,
+  mediaWidth,
+  mediaHeight,
 }: BusinessPreviewCardProps) {
   const typeLabel =
     BUSINESS_TYPE_OPTIONS.find((t) => t.value === businessType)?.label || businessType;
@@ -55,6 +59,8 @@ export function BusinessPreviewCard({
       priority={priority}
       focalX={focalX}
       focalY={focalY}
+      mediaWidth={mediaWidth}
+      mediaHeight={mediaHeight}
       fallback={
         <div className="flex h-full w-full items-center justify-center text-brand-blue/35">
           <Store className="h-16 w-16" />

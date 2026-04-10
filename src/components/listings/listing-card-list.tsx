@@ -13,6 +13,18 @@ import { formatZARShort } from "@/lib/utils/format";
 import { getFocalPositionClassName } from "@/lib/utils/media-position-classes";
 import type { TrustLevel } from "@/types/enums";
 
+const PORTRAIT_CARD_ASPECT_RATIO = 4 / 5;
+const LANDSCAPE_CARD_ASPECT_RATIO = 16 / 9;
+
+function resolveCardFrameRatio(mediaWidth?: number | null, mediaHeight?: number | null) {
+  if (!mediaWidth || !mediaHeight || mediaWidth <= 0 || mediaHeight <= 0) {
+    return PORTRAIT_CARD_ASPECT_RATIO;
+  }
+
+  const mediaAspectRatio = mediaWidth / mediaHeight;
+  return mediaAspectRatio >= 1.15 ? LANDSCAPE_CARD_ASPECT_RATIO : PORTRAIT_CARD_ASPECT_RATIO;
+}
+
 interface ListingCardListProps {
   id: string;
   title: string;
@@ -36,6 +48,8 @@ interface ListingCardListProps {
   focalX?: number | null;
   focalY?: number | null;
   videoDuration?: number | null;
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
 }
 
 function isNew(createdAt: string): boolean {
@@ -82,11 +96,14 @@ export const ListingCardList = memo(function ListingCardList({
   focalX,
   focalY,
   videoDuration,
+  mediaWidth,
+  mediaHeight,
 }: ListingCardListProps) {
   const isVideo = isVideoUrl(imageUrl);
   const normalizedImageUrl = imageUrl ? normalizeMediaUrl(imageUrl) : undefined;
   const normalizedLogoUrl = logoUrl ? normalizeMediaUrl(logoUrl) : undefined;
   const status = getListingStatus(featured, boosted, urgent, createdAt);
+  const frameAspectRatio = resolveCardFrameRatio(mediaWidth, mediaHeight);
 
   return (
     <Link href={`/listing/${id}`} className="group block">
@@ -104,8 +121,10 @@ export const ListingCardList = memo(function ListingCardList({
                   alt={title}
                   sizes="160px"
                   mode="ambient"
-                  fitStrategy="cover"
-                  mediaClassName="transition-transform duration-700 group-hover:scale-[1.04]"
+                  fitStrategy="contain"
+                  containerAspectRatio={frameAspectRatio}
+                  muteControlVisibility="auto"
+                  hoverScale={false}
                   focalX={focalX}
                   focalY={focalY}
                 />

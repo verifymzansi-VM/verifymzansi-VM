@@ -57,7 +57,7 @@ const BUSINESS_DETAIL_SELECT_LEGACY = `
 `;
 
 const BUSINESS_PROMOTION_SELECT =
-  "id, title, promotion_type, category, category_key, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, boost_until, featured_until, view_count, start_date, end_date, created_at";
+  "id, title, promotion_type, category, category_key, photos, videos, video_thumbnail, focal_x, focal_y, media_width, media_height, price_cents, price_negotiable, location_province, location_city, boost_until, featured_until, view_count, start_date, end_date, created_at";
 
 function isMissingLayoutTemplateColumnError(
   error: { code?: string | null; message?: string | null } | null

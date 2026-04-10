@@ -37,6 +37,8 @@ type EventRow = {
   video_thumbnail?: string | null;
   focal_x?: number | null;
   focal_y?: number | null;
+  media_width?: number | null;
+  media_height?: number | null;
   price_cents?: number | null;
   price_negotiable?: boolean | null;
   location_province?: string | null;
@@ -89,7 +91,7 @@ export default async function EventsPage() {
     .select(
       withOwnerColumn(
         `id, owner_id, business_id, title, description, promotion_type, category,
-       photos, videos, video_thumbnail, focal_x, focal_y, price_cents, price_negotiable, location_province, location_city,
+       photos, videos, video_thumbnail, focal_x, focal_y, media_width, media_height, price_cents, price_negotiable, location_province, location_city,
        start_date, end_date, boost_until, featured_until, view_count, created_at`,
         promotionOwnerColumn
       )
@@ -109,7 +111,7 @@ export default async function EventsPage() {
     .select(
       withOwnerColumn(
         `id, owner_id, business_id, title, promotion_type,
-       photos, videos, video_thumbnail, focal_x, focal_y, price_cents, price_negotiable, location_province, location_city,
+       photos, videos, video_thumbnail, focal_x, focal_y, media_width, media_height, price_cents, price_negotiable, location_province, location_city,
        start_date, end_date, view_count, created_at`,
         promotionOwnerColumn
       )
@@ -219,8 +221,14 @@ export default async function EventsPage() {
                         price={event.price_cents as number | null}
                         negotiable={event.price_negotiable as boolean}
                         imageUrl={
+                          (event.videos as string[] | null)?.[0] ||
+                          (event.video_thumbnail as string | null) ||
+                          (event.photos as string[] | null)?.[0]
+                        }
+                        posterUrl={
+                          (event.video_thumbnail as string | null) ||
                           (event.photos as string[] | null)?.[0] ||
-                          (event.videos as string[] | null)?.[0]
+                          undefined
                         }
                         province={event.location_province as string}
                         city={event.location_city as string}
@@ -237,6 +245,8 @@ export default async function EventsPage() {
                         logoUrl={businessLogo}
                         focalX={(event.focal_x as number | null | undefined) ?? null}
                         focalY={(event.focal_y as number | null | undefined) ?? null}
+                        mediaWidth={(event.media_width as number | null | undefined) ?? null}
+                        mediaHeight={(event.media_height as number | null | undefined) ?? null}
                       />
                     </div>
                   );
@@ -272,7 +282,7 @@ export default async function EventsPage() {
               title: event.title ?? "Untitled event",
               price: event.price_cents ?? null,
               negotiable: event.price_negotiable as boolean,
-              imageUrl: photos?.[0] || videos?.[0],
+              imageUrl: videos?.[0] || (event.video_thumbnail as string | null) || photos?.[0],
               posterUrl: videos?.[0]
                 ? (event.video_thumbnail as string | null) || photos?.[0] || undefined
                 : undefined,
@@ -283,6 +293,10 @@ export default async function EventsPage() {
               ownerName: accountProfile?.name,
               startDate: event.start_date,
               endDate: event.end_date,
+              focalX: (event.focal_x as number | null | undefined) ?? null,
+              focalY: (event.focal_y as number | null | undefined) ?? null,
+              mediaWidth: (event.media_width as number | null | undefined) ?? null,
+              mediaHeight: (event.media_height as number | null | undefined) ?? null,
               logoUrl: event.business_id
                 ? (businessLogoMap.get(event.business_id as string) ?? null)
                 : null,

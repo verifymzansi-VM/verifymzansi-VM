@@ -98,7 +98,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
     .from("listings")
     .select(
       withOwnerColumn(
-        "id, title, price_cents, price_negotiable, condition, photos, logo_url, location_province, location_city, category, attributes, created_at, boost_until, featured, owner_id",
+        "id, title, price_cents, price_negotiable, condition, photos, videos, video_thumbnail, media_width, media_height, focal_x, focal_y, logo_url, location_province, location_city, category, attributes, created_at, boost_until, featured, owner_id",
         listingOwnerColumn
       )
     )

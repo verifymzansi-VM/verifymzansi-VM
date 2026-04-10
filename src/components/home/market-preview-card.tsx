@@ -15,6 +15,8 @@ interface MarketPreviewCardProps {
   priority?: boolean;
   focalX?: number | null;
   focalY?: number | null;
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
 }
 
 const formatPrice = (price: number) =>
@@ -37,6 +39,8 @@ export function MarketPreviewCard({
   priority,
   focalX,
   focalY,
+  mediaWidth,
+  mediaHeight,
 }: MarketPreviewCardProps) {
   return (
     <PosterCardShell
@@ -54,6 +58,8 @@ export function MarketPreviewCard({
       priority={priority}
       focalX={focalX}
       focalY={focalY}
+      mediaWidth={mediaWidth}
+      mediaHeight={mediaHeight}
     />
   );
 }

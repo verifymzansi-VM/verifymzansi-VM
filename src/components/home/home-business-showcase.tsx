@@ -68,7 +68,7 @@ export async function HomeBusinessShowcase() {
             >
               <BusinessPreviewCard
                 href={`/mzansi-business/${b.id}`}
-                imageUrl={b.cover_photo || b.video_thumbnail || b.cover_video}
+                imageUrl={b.cover_video || b.video_thumbnail || b.cover_photo}
                 posterUrl={b.video_thumbnail || b.cover_photo || undefined}
                 logoUrl={b.logo_url}
                 title={b.business_name}
@@ -80,6 +80,8 @@ export async function HomeBusinessShowcase() {
                 priority={false}
                 focalX={b.focal_x as number | null | undefined}
                 focalY={b.focal_y as number | null | undefined}
+                mediaWidth={b.media_width as number | null | undefined}
+                mediaHeight={b.media_height as number | null | undefined}
               />
             </div>
           ))}

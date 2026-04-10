@@ -103,6 +103,10 @@ export interface BusinessPromotionRecord {
   photos: string[] | null;
   videos: string[] | null;
   video_thumbnail: string | null;
+  focal_x: number | null;
+  focal_y: number | null;
+  media_width: number | null;
+  media_height: number | null;
   price_cents: number | null;
   price_negotiable: boolean;
   location_province: string;
@@ -867,6 +871,10 @@ export function BusinessDetailContent({
                       }
                       endDate={promo.end_date}
                       logoUrl={business.logo_url}
+                      focalX={promo.focal_x}
+                      focalY={promo.focal_y}
+                      mediaWidth={promo.media_width}
+                      mediaHeight={promo.media_height}
                     />
                   ))}
                 </div>

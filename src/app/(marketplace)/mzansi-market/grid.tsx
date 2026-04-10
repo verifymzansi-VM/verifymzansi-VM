@@ -40,6 +40,8 @@ interface ListingRow {
   owner_id: string;
   focal_x: number | null;
   focal_y: number | null;
+  media_width: number | null;
+  media_height: number | null;
 }
 
 interface OwnerRow {
@@ -396,6 +398,8 @@ export function MzansiMarketGrid() {
                   featured={listing.featured}
                   focalX={listing.focal_x}
                   focalY={listing.focal_y}
+                  mediaWidth={listing.media_width}
+                  mediaHeight={listing.media_height}
                 />
               </div>
             );
@@ -441,6 +445,8 @@ export function MzansiMarketGrid() {
                   featured={listing.featured}
                   focalX={listing.focal_x}
                   focalY={listing.focal_y}
+                  mediaWidth={listing.media_width}
+                  mediaHeight={listing.media_height}
                 />
               </div>
             );

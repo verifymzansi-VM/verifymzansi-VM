@@ -25,7 +25,7 @@ export function VideoDurationBadge({ seconds, className }: VideoDurationBadgePro
   return (
     <span
       className={cn(
-        "absolute bottom-1.5 right-1.5 z-[7] rounded px-1 py-0.5 text-[11px] font-medium leading-none text-white bg-black/80",
+        "absolute bottom-1.5 right-1.5 z-[7] rounded-md px-1 py-0.5 text-[10px] font-medium leading-none text-white/92 bg-black/70",
         className
       )}
       aria-label={`Duration: ${formatDuration(seconds)}`}

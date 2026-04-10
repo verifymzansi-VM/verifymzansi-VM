@@ -33,6 +33,8 @@ interface BusinessRow {
   service_areas: Record<string, unknown> | null;
   focal_x: number | null;
   focal_y: number | null;
+  media_width: number | null;
+  media_height: number | null;
 }
 
 interface BusinessesResponse {
@@ -270,6 +272,8 @@ export function MzansiBusinessGrid() {
               serviceAreas={business.service_areas}
               focalX={business.focal_x}
               focalY={business.focal_y}
+              mediaWidth={business.media_width}
+              mediaHeight={business.media_height}
             />
           </div>
         ))}

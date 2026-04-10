@@ -31,6 +31,8 @@ interface PromotionRow {
   view_count: number;
   boost_until: string | null;
   featured_until: string | null;
+  media_width: number | null;
+  media_height: number | null;
   start_date: string | null;
   end_date: string | null;
   created_at: string;
@@ -51,6 +53,8 @@ interface TourismBusinessRow {
   featured_until: string | null;
   focal_x: number | null;
   focal_y: number | null;
+  media_width: number | null;
+  media_height: number | null;
 }
 
 type ShowcaseItem =
@@ -86,7 +90,7 @@ export async function HomePromotionsShowcase() {
   const { data: tourismData } = await supabase
     .from("businesses")
     .select(
-      "id, business_name, business_type, cover_photo, cover_video, video_thumbnail, logo_url, location_province, location_city, boost_until, featured_until, focal_x, focal_y"
+      "id, business_name, business_type, cover_photo, cover_video, video_thumbnail, logo_url, location_province, location_city, boost_until, featured_until, focal_x, focal_y, media_width, media_height"
     )
     .eq("category", "tourism_hospitality")
     .in("status", ["live", "active"])
@@ -176,7 +180,12 @@ export async function HomePromotionsShowcase() {
               {item.kind === "tourism" ? (
                 <BusinessPreviewCard
                   href={`/mzansi-business/${item.data.id}`}
-                  imageUrl={item.data.cover_photo ?? undefined}
+                  imageUrl={
+                    item.data.cover_video ||
+                    item.data.video_thumbnail ||
+                    item.data.cover_photo ||
+                    undefined
+                  }
                   posterUrl={item.data.video_thumbnail ?? undefined}
                   logoUrl={item.data.logo_url ?? undefined}
                   title={item.data.business_name}
@@ -194,6 +203,8 @@ export async function HomePromotionsShowcase() {
                   priority={false}
                   focalX={item.data.focal_x}
                   focalY={item.data.focal_y}
+                  mediaWidth={item.data.media_width}
+                  mediaHeight={item.data.media_height}
                 />
               ) : (
                 <PromotionCard
@@ -202,7 +213,7 @@ export async function HomePromotionsShowcase() {
                   price={item.data.price_cents}
                   negotiable={item.data.price_negotiable}
                   imageUrl={
-                    item.data.photos?.[0] || item.data.video_thumbnail || item.data.videos?.[0]
+                    item.data.videos?.[0] || item.data.video_thumbnail || item.data.photos?.[0]
                   }
                   posterUrl={item.data.video_thumbnail || item.data.photos?.[0] || undefined}
                   categoryLabel={getPromotionCategoryDisplayLabel(
@@ -226,6 +237,8 @@ export async function HomePromotionsShowcase() {
                   endDate={item.data.end_date}
                   logoUrl={item.data.business_id ? logoMap.get(item.data.business_id) : undefined}
                   priority={false}
+                  mediaWidth={item.data.media_width}
+                  mediaHeight={item.data.media_height}
                 />
               )}
             </div>

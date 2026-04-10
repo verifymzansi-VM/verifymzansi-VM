@@ -26,6 +26,8 @@ interface BusinessCardProps {
   videoDuration?: number | null;
   focalX?: number | null;
   focalY?: number | null;
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
 }
 
 function getBusinessStatus(
@@ -96,6 +98,8 @@ export function BusinessCard({
   videoDuration,
   focalX,
   focalY,
+  mediaWidth,
+  mediaHeight,
 }: BusinessCardProps) {
   const displayCover =
     coverVideo ||
@@ -128,6 +132,8 @@ export function BusinessCard({
       videoDuration={videoDuration}
       focalX={focalX}
       focalY={focalY}
+      mediaWidth={mediaWidth}
+      mediaHeight={mediaHeight}
       fallback={
         <div className="flex h-full w-full items-center justify-center text-brand-blue/35">
           <Store className="h-16 w-16" />
