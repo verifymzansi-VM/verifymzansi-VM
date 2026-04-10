@@ -39,6 +39,13 @@ export const CATEGORY_DETAIL_FIELDS: Partial<
       label: "Medical aid accepted",
       kind: "checkbox",
     },
+    {
+      name: "accepted_medical_aids",
+      label: "Accepted medical aids",
+      kind: "text",
+      placeholder: "e.g. Discovery, Momentum, Bonitas",
+      description: "Comma-separated list of medical aids you accept.",
+    },
   ],
 
   automotive_transport: [
@@ -113,11 +120,21 @@ export const CATEGORY_DETAIL_FIELDS: Partial<
       label: "BYOB allowed (bring your own)",
       kind: "checkbox",
     },
+    {
+      name: "halal_certified",
+      label: "Halal certified",
+      kind: "checkbox",
+    },
+    {
+      name: "liquor_license",
+      label: "Liquor license",
+      kind: "checkbox",
+    },
   ],
 
   trade_maintenance: [
     {
-      name: "emergency_available",
+      name: "emergency_callout",
       label: "24/7 or emergency callouts",
       kind: "checkbox",
     },

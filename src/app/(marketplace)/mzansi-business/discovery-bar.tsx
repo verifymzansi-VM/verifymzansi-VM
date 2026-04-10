@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type KeyboardEvent } from "react";
 import { Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,16 @@ export function BusinessDiscoveryBar() {
       searchInputRef.current.value = "";
     }
     resetFilters();
+  };
+
+  const handleKeyboardChipClear = (
+    event: KeyboardEvent<HTMLButtonElement>,
+    onClear: () => void
+  ) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onClear();
+    }
   };
 
   const hasActiveFilters = [
@@ -183,6 +193,7 @@ export function BusinessDiscoveryBar() {
                 aria-label={`Remove query filter ${filters.query}`}
                 disabled={!isInteractive}
                 onClick={clearQueryFilter}
+                onKeyDown={(event) => handleKeyboardChipClear(event, clearQueryFilter)}
               >
                 <X className="h-3 w-3" />
               </button>

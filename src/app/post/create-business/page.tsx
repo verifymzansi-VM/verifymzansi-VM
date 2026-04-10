@@ -245,6 +245,12 @@ function CreateBusinessContent() {
   const [promoVideoFile, setPromoVideoFile] = useState<File[]>([]);
   const [videoThumbnailFile, setVideoThumbnailFile] = useState<File[]>([]);
   const [focalPoint, setFocalPoint] = useState<CropPosition>({ x: 0.5, y: 0.5 });
+  const [yearEstablished, setYearEstablished] = useState("");
+  const [cipcRegistration, setCipcRegistration] = useState("");
+  const [bbbeeLevel, setBbbeeLevel] = useState("");
+  const [languagesSpoken, setLanguagesSpoken] = useState("");
+  const [loadSheddingReady, setLoadSheddingReady] = useState(false);
+  const [numberOfEmployees, setNumberOfEmployees] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -873,6 +879,12 @@ function CreateBusinessContent() {
         media_height: mediaDimensions?.height,
         focal_x: focalPoint.x,
         focal_y: focalPoint.y,
+        year_established: yearEstablished ? Number(yearEstablished) : undefined,
+        cipc_registration: cipcRegistration || undefined,
+        bbbee_level: bbbeeLevel || undefined,
+        languages_spoken: languagesSpoken || undefined,
+        load_shedding_ready: loadSheddingReady || undefined,
+        number_of_employees: numberOfEmployees || undefined,
       };
       const res = await fetch("/api/businesses", {
         method: "POST",
@@ -1567,6 +1579,105 @@ function CreateBusinessContent() {
                           ))}
                         </div>
                       )}
+                    </div>
+
+                    {/* SA market fields */}
+                    <div className="space-y-4 rounded-lg border bg-muted/30 p-4">
+                      <p className="text-sm font-medium">Additional Business Details</p>
+
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="space-y-1">
+                          <Label htmlFor="yearEstablished">Year Established</Label>
+                          <Input
+                            id="yearEstablished"
+                            type="number"
+                            min={1900}
+                            max={new Date().getFullYear()}
+                            value={yearEstablished}
+                            onChange={(e) => setYearEstablished(e.target.value)}
+                            placeholder="e.g. 2018"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label htmlFor="numberOfEmployees">Number of Employees</Label>
+                          <select
+                            id="numberOfEmployees"
+                            aria-label="Number of employees"
+                            className={SELECT_CLASS}
+                            value={numberOfEmployees}
+                            onChange={(e) => setNumberOfEmployees(e.target.value)}
+                          >
+                            <option value="">Select…</option>
+                            <option value="1">1 (Solo)</option>
+                            <option value="2_5">2 – 5</option>
+                            <option value="6_10">6 – 10</option>
+                            <option value="11_50">11 – 50</option>
+                            <option value="51_200">51 – 200</option>
+                            <option value="200_plus">200+</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="space-y-1">
+                          <Label htmlFor="cipcRegistration">CIPC Registration</Label>
+                          <Input
+                            id="cipcRegistration"
+                            value={cipcRegistration}
+                            onChange={(e) => setCipcRegistration(e.target.value)}
+                            placeholder="e.g. 2023/123456/07"
+                            maxLength={30}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Optional. Adds a trust badge to your profile.
+                          </p>
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label htmlFor="bbbeeLevel">B-BBEE Level</Label>
+                          <select
+                            id="bbbeeLevel"
+                            aria-label="B-BBEE level"
+                            className={SELECT_CLASS}
+                            value={bbbeeLevel}
+                            onChange={(e) => setBbbeeLevel(e.target.value)}
+                          >
+                            <option value="">Select…</option>
+                            <option value="level_1">Level 1</option>
+                            <option value="level_2">Level 2</option>
+                            <option value="level_3">Level 3</option>
+                            <option value="level_4">Level 4</option>
+                            <option value="level_5">Level 5</option>
+                            <option value="level_6">Level 6</option>
+                            <option value="level_7">Level 7</option>
+                            <option value="level_8">Level 8</option>
+                            <option value="non_compliant">Non-Compliant</option>
+                            <option value="exempt">Exempt (EME)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <Label htmlFor="languagesSpoken">Languages Spoken</Label>
+                        <Input
+                          id="languagesSpoken"
+                          value={languagesSpoken}
+                          onChange={(e) => setLanguagesSpoken(e.target.value)}
+                          placeholder="e.g. English, isiZulu, Afrikaans"
+                          maxLength={200}
+                        />
+                      </div>
+
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={loadSheddingReady}
+                          onChange={(e) => setLoadSheddingReady(e.target.checked)}
+                          className="rounded"
+                        />
+                        Load-shedding ready (generator / inverter / solar)
+                      </label>
                     </div>
                   </div>
                 )}

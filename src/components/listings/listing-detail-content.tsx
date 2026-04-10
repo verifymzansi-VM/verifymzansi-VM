@@ -225,7 +225,9 @@ export function ListingDetailContent({
                         const label = fieldDefinition?.label ?? key.replace(/_/g, " ");
                         let displayValue: string;
 
-                        if (typeof value === "boolean") {
+                        if (Array.isArray(value)) {
+                          displayValue = value.map((v) => String(v).replace(/_/g, " ")).join(", ");
+                        } else if (typeof value === "boolean") {
                           displayValue = value ? "Yes" : "No";
                         } else if (fieldDefinition?.unit) {
                           displayValue = `${value} ${fieldDefinition.unit}`;

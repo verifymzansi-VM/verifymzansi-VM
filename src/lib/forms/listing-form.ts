@@ -2,7 +2,7 @@ import { CATEGORIES } from "@/lib/constants/categories";
 import type { ListingCategory } from "@/types/enums";
 import { listingSchema } from "@/lib/validations/listing";
 
-type RawListingAttributeValue = string | number | boolean;
+type RawListingAttributeValue = string | number | boolean | string[];
 type RawListingAttributes = Record<string, RawListingAttributeValue>;
 
 const LISTING_BASELINE = {
@@ -22,14 +22,34 @@ function getCategoryDefinition(category: ListingCategory) {
 export function coerceListingAttributes(
   category: ListingCategory,
   rawAttributes: RawListingAttributes
-): Record<string, string | number | boolean> {
+): Record<string, string | number | boolean | string[]> {
   const definition = getCategoryDefinition(category);
   if (!definition) return {};
 
-  const coerced: Record<string, string | number | boolean> = {};
+  const sourceAttributes: RawListingAttributes = {
+    ...rawAttributes,
+    ...(category === "jobs_services" &&
+    typeof rawAttributes.location_type !== "string" &&
+    typeof rawAttributes.remote === "boolean" &&
+    rawAttributes.remote
+      ? { location_type: "remote" }
+      : {}),
+  };
+
+  const coerced: Record<string, string | number | boolean | string[]> = {};
 
   for (const field of definition.attributeFields) {
-    const rawValue = rawAttributes[field.name];
+    const rawValue = sourceAttributes[field.name];
+
+    if (field.type === "checklist") {
+      if (Array.isArray(rawValue)) {
+        const filtered = rawValue.filter((v) => typeof v === "string" && v.trim() !== "");
+        if (filtered.length > 0) {
+          coerced[field.name] = filtered;
+        }
+      }
+      continue;
+    }
 
     if (field.type === "boolean") {
       if (typeof rawValue === "boolean") {

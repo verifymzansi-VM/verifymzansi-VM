@@ -41,7 +41,7 @@ import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
 
 const log = createLogger("EditListingPage");
-const TITLE_MAX = 120;
+const TITLE_MAX = 100;
 const DESC_MAX = 5000;
 
 export default function EditListingPage() {
@@ -52,9 +52,9 @@ export default function EditListingPage() {
   const [price, setPrice] = useState("");
   const [category, setCategory] = useState<ListingCategory | "">("");
   const [condition, setCondition] = useState<ListingCondition | "">("");
-  const [categoryAttributes, setCategoryAttributes] = useState<Record<string, string | boolean>>(
-    {}
-  );
+  const [categoryAttributes, setCategoryAttributes] = useState<
+    Record<string, string | boolean | string[]>
+  >({});
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
   const [town, setTown] = useState("");
@@ -195,7 +195,9 @@ export default function EditListingPage() {
               | undefined) ??
             "") as ListingCondition | ""
         );
-        setCategoryAttributes((data.attributes as Record<string, string | boolean>) || {});
+        setCategoryAttributes(
+          (data.attributes as Record<string, string | boolean | string[]>) || {}
+        );
         setProvince(data.location_province || "");
         setCity(data.location_city || "");
         setTown(
@@ -327,7 +329,7 @@ export default function EditListingPage() {
     clearErrors("contactMethods");
   }
 
-  function handleAttributeChange(name: string, value: string | boolean) {
+  function handleAttributeChange(name: string, value: string | boolean | string[]) {
     setCategoryAttributes((prev) => ({ ...prev, [name]: value }));
     clearErrors(`attributes.${name}`);
   }

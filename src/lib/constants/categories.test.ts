@@ -3,8 +3,8 @@ import { CATEGORIES, getCategory } from "./categories";
 import type { ListingCategory } from "@/types/enums";
 
 describe("categories", () => {
-  it("exports 6 categories", () => {
-    expect(CATEGORIES).toHaveLength(6);
+  it("exports 8 categories", () => {
+    expect(CATEGORIES).toHaveLength(8);
   });
 
   it("every category has required fields", () => {
@@ -25,6 +25,8 @@ describe("categories", () => {
     expect(values).toContain("electronics");
     expect(values).toContain("home_lifestyle");
     expect(values).toContain("jobs_services");
+    expect(values).toContain("farming_agriculture");
+    expect(values).toContain("baby_kids");
   });
 
   it("every attribute field has required props", () => {
@@ -32,7 +34,7 @@ describe("categories", () => {
       for (const field of cat.attributeFields) {
         expect(field.name).toBeTruthy();
         expect(field.label).toBeTruthy();
-        expect(["text", "number", "select", "boolean"]).toContain(field.type);
+        expect(["text", "number", "select", "boolean", "checklist"]).toContain(field.type);
         expect(typeof field.required).toBe("boolean");
       }
     }

@@ -29,7 +29,7 @@ export interface DraftEnvelope<T> {
 export interface ListingDraftData {
   category: string;
   condition: string;
-  categoryAttributes: Record<string, string | boolean>;
+  categoryAttributes: Record<string, string | boolean | string[]>;
   title: string;
   description: string;
   price: string;

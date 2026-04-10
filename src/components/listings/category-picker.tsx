@@ -11,13 +11,38 @@ import type { ListingCategory } from "@/types/enums";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
+
+/* ─── Collapsible field groups by category ──────────────────────── */
+const COLLAPSIBLE_GROUPS: Partial<Record<ListingCategory, { label: string; fields: string[] }[]>> =
+  {
+    property: [
+      {
+        label: "Security & Features",
+        fields: ["security_features", "pool", "garden", "domestic_quarters", "garage"],
+      },
+      {
+        label: "Utilities",
+        fields: ["energy_features", "water_source", "fibre"],
+      },
+    ],
+    vehicles: [
+      {
+        label: "Extras & Features",
+        fields: ["extras"],
+      },
+      {
+        label: "History & Ownership",
+        fields: ["service_history", "number_of_owners", "accident_free"],
+      },
+    ],
+  };
 
 interface CategoryPickerProps {
   value: ListingCategory | "";
   onChange: (category: ListingCategory) => void;
-  attributes: Record<string, string | boolean>;
-  onAttributeChange: (name: string, value: string | boolean) => void;
+  attributes: Record<string, string | boolean | string[]>;
+  onAttributeChange: (name: string, value: string | boolean | string[]) => void;
   errors?: Record<string, string>;
 }
 
@@ -29,6 +54,7 @@ export function CategoryPicker({
   errors = {},
 }: CategoryPickerProps) {
   const [expanded, setExpanded] = useState<ListingCategory | "">(value);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const selectedCategory = CATEGORIES.find((c) => c.value === expanded);
 
   function handleSelect(cat: CategoryDefinition) {
@@ -54,6 +80,22 @@ export function CategoryPicker({
     });
   }
 
+  function isConditionallyVisible(field: AttributeField) {
+    if (!field.dependsOnValue || !field.dependsOn) {
+      return true;
+    }
+
+    const parentValue = attributes[field.dependsOn];
+    if (parentValue === undefined || parentValue === null || parentValue === "") {
+      return false;
+    }
+
+    const allowedValues = Array.isArray(field.dependsOnValue)
+      ? field.dependsOnValue
+      : [field.dependsOnValue];
+    return allowedValues.includes(String(parentValue));
+  }
+
   return (
     <div className="space-y-4">
       <Label>Category *</Label>
@@ -73,7 +115,7 @@ export function CategoryPicker({
               key={cat.value}
               type="button"
               role="radio"
-              aria-checked={isSelected}
+              aria-checked={isSelected ? "true" : "false"}
               onClick={() => handleSelect(cat)}
               className={cn(
                 "relative flex flex-col items-center gap-1.5 rounded-xl border-2 p-3 text-center transition-all duration-200",
@@ -116,24 +158,104 @@ export function CategoryPicker({
             {selectedCategory.label} — Details
           </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {selectedCategory.attributeFields.map((field) => (
-              <AttributeInput
-                key={field.name}
-                field={field}
-                value={attributes[field.name] ?? (field.type === "boolean" ? false : "")}
-                allAttributes={attributes}
-                onChange={(val) => {
-                  onAttributeChange(field.name, val);
-                  // Clear dependent fields when parent changes
-                  if (field.name === "make") {
-                    onAttributeChange("model", "");
+          {/* Smart tip */}
+          {selectedCategory.value === "property" && (
+            <p className="text-xs text-muted-foreground bg-background/60 rounded-md px-2.5 py-1.5">
+              💡 Listings with levy and security info get 40% more enquiries.
+            </p>
+          )}
+          {selectedCategory.value === "vehicles" && (
+            <p className="text-xs text-muted-foreground bg-background/60 rounded-md px-2.5 py-1.5">
+              💡 Buyers filter by service history — fill it in to appear in more searches.
+            </p>
+          )}
+          {selectedCategory.value === "jobs_services" && (
+            <p className="text-xs text-muted-foreground bg-background/60 rounded-md px-2.5 py-1.5">
+              💡 Include salary range to attract 3× more applicants.
+            </p>
+          )}
+
+          {/* Required field legend */}
+          <p className="text-xs text-muted-foreground">
+            Fields marked <span className="font-medium text-foreground">*</span> are required.
+            Optional fields help your listing stand out.
+          </p>
+
+          {(() => {
+            const groups = COLLAPSIBLE_GROUPS[selectedCategory.value as ListingCategory] ?? [];
+            const groupedFieldNames = new Set(groups.flatMap((g) => g.fields));
+            const mainFields = selectedCategory.attributeFields.filter(
+              (f) => !groupedFieldNames.has(f.name) && isConditionallyVisible(f)
+            );
+
+            function renderField(field: AttributeField) {
+              return (
+                <AttributeInput
+                  key={field.name}
+                  field={field}
+                  value={
+                    attributes[field.name] ??
+                    (field.type === "boolean" ? false : field.type === "checklist" ? [] : "")
                   }
-                }}
-                error={errors[`attributes.${field.name}`]}
-              />
-            ))}
-          </div>
+                  allAttributes={attributes}
+                  onChange={(val) => {
+                    onAttributeChange(field.name, val);
+                    if (field.name === "make") {
+                      onAttributeChange("model", "");
+                    }
+                  }}
+                  error={errors[`attributes.${field.name}`]}
+                />
+              );
+            }
+
+            return (
+              <>
+                {mainFields.length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {mainFields.map(renderField)}
+                  </div>
+                )}
+                {groups.map((group) => {
+                  const groupFields = group.fields
+                    .map((name) => selectedCategory.attributeFields.find((f) => f.name === name))
+                    .filter((f): f is AttributeField => !!f && isConditionallyVisible(f));
+                  if (groupFields.length === 0) return null;
+                  const isOpen = expandedGroups.has(group.label);
+                  return (
+                    <div key={group.label} className="rounded-lg border border-border/60">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExpandedGroups((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(group.label)) next.delete(group.label);
+                            else next.add(group.label);
+                            return next;
+                          });
+                        }}
+                        className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                        aria-expanded={isOpen ? "true" : "false"}
+                      >
+                        <span>{group.label}</span>
+                        <ChevronDown
+                          className={cn(
+                            "h-4 w-4 transition-transform duration-200",
+                            isOpen && "rotate-180"
+                          )}
+                        />
+                      </button>
+                      {isOpen && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 px-3 pb-3 animate-in fade-in-0 slide-in-from-top-1 duration-200">
+                          {groupFields.map(renderField)}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
+            );
+          })()}
         </div>
       )}
     </div>
@@ -150,9 +272,9 @@ function AttributeInput({
   error,
 }: {
   field: AttributeField;
-  value: string | boolean;
-  allAttributes: Record<string, string | boolean>;
-  onChange: (value: string | boolean) => void;
+  value: string | boolean | string[];
+  allAttributes: Record<string, string | boolean | string[]>;
+  onChange: (value: string | boolean | string[]) => void;
   error?: string;
 }) {
   const fieldId = `listing-attribute-${field.name}`;
@@ -183,7 +305,7 @@ function AttributeInput({
             onChange={(e) => onChange(e.target.value)}
             required={field.required}
             disabled={!!isDisabled}
-            aria-invalid={!!error}
+            aria-invalid={error ? "true" : "false"}
             className={cn(selectClass, error && "border-destructive")}
           >
             <option value="">
@@ -273,5 +395,53 @@ function AttributeInput({
           {error && <p className="inline-form-error">{error}</p>}
         </div>
       );
+
+    case "checklist": {
+      const options = field.options ?? [];
+      const selected = Array.isArray(value) ? value : [];
+
+      function toggleItem(optionValue: string) {
+        const next = selected.includes(optionValue)
+          ? selected.filter((v) => v !== optionValue)
+          : [...selected, optionValue];
+        onChange(next);
+      }
+
+      return (
+        <div className="space-y-1.5 sm:col-span-2">
+          <Label>
+            {field.label} {field.required && "*"}
+          </Label>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {options.map((opt) => {
+              const optionValue = typeof opt === "string" ? opt : opt.value;
+              const optionLabel = typeof opt === "string" ? opt.replace(/_/g, " ") : opt.label;
+              const isChecked = selected.includes(optionValue);
+
+              return (
+                <label
+                  key={optionValue}
+                  className={cn(
+                    "flex cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all",
+                    isChecked
+                      ? "border-brand-green bg-brand-green/10 text-brand-green"
+                      : "border-input text-muted-foreground hover:border-brand-green/40 hover:bg-muted/50"
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => toggleItem(optionValue)}
+                    className="h-3.5 w-3.5 rounded border-input text-brand-green focus:ring-brand-green"
+                  />
+                  <span className="capitalize">{optionLabel}</span>
+                </label>
+              );
+            })}
+          </div>
+          {error && <p className="inline-form-error">{error}</p>}
+        </div>
+      );
+    }
   }
 }

@@ -10,8 +10,8 @@ export function Footer() {
 
   return (
     <footer className="border-t bg-warm-50 dark:bg-warm-950">
-      <div className="container-page py-4 pb-[calc(env(safe-area-inset-bottom)+6.5rem)] md:pb-4">
-        {/* Mobile nav is h-16 (64px). Bottom padding of 6.5rem (104px) + py-4 (1rem) ensures no overlap */}
+      <div className="container-page py-4 pb-[calc(env(safe-area-inset-bottom)+8rem)] md:pb-4">
+        {/* Mobile nav is h-16 (64px). Extra bottom spacing keeps legal links above nav across mobile browsers. */}
         <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-4 lg:grid-cols-5">
           {/* Brand */}
           <div className="space-y-2">

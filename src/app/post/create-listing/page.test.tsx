@@ -198,7 +198,9 @@ describe("CreateListingPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.change(screen.getByLabelText("Price (ZAR) *"), { target: { value: "1500" } });
+    fireEvent.change(screen.getByLabelText(/(Asking Price|Monthly Rent) \(ZAR\) \*/), {
+      target: { value: "1500" },
+    });
     fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
     fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
@@ -216,7 +218,9 @@ describe("CreateListingPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.change(screen.getByLabelText("Price (ZAR) *"), { target: { value: "1500" } });
+    fireEvent.change(screen.getByLabelText(/(Asking Price|Monthly Rent) \(ZAR\) \*/), {
+      target: { value: "1500" },
+    });
     fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
     fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
@@ -261,7 +265,9 @@ describe("CreateListingPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.change(screen.getByLabelText("Price (ZAR) *"), { target: { value: "1500" } });
+    fireEvent.change(screen.getByLabelText(/(Asking Price|Monthly Rent) \(ZAR\) \*/), {
+      target: { value: "1500" },
+    });
     fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
     fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));

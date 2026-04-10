@@ -200,6 +200,12 @@ function CreateTourismContent() {
   const [minDriverAge, setMinDriverAge] = useState("");
   const [insuranceIncluded, setInsuranceIncluded] = useState(false);
   const [gpsAvailable, setGpsAvailable] = useState(false);
+  /* SA tourism additions */
+  const [tgcsaGrading, setTgcsaGrading] = useState("");
+  const [minimumStayNights, setMinimumStayNights] = useState("");
+  const [childPolicy, setChildPolicy] = useState("");
+  const [seasonalPricing, setSeasonalPricing] = useState(false);
+  const [nearbyAttractions, setNearbyAttractions] = useState("");
   const [hoursMonFri, setHoursMonFri] = useState("");
   const [hoursSat, setHoursSat] = useState("");
   const [hoursSun, setHoursSun] = useState("");
@@ -223,6 +229,11 @@ function CreateTourismContent() {
   const [eventAccessibility, setEventAccessibility] = useState<string[]>([]);
   const [foodDrinksAvailable, setFoodDrinksAvailable] = useState(false);
   const [bringYourOwn, setBringYourOwn] = useState("");
+  /* SA event additions */
+  const [recurring, setRecurring] = useState("");
+  const [rainPolicy, setRainPolicy] = useState("");
+  const [earlyBirdDeadline, setEarlyBirdDeadline] = useState("");
+  const [groupDiscountAvailable, setGroupDiscountAvailable] = useState(false);
   const [socialAuthorization, setSocialAuthorization] = useState<PromotionSocialAuthorizationInput>(
     {
       granted: false,
@@ -377,7 +388,7 @@ function CreateTourismContent() {
       setInsuranceIncluded(false);
       setGpsAvailable(false);
     }
-  }, [subcategory]);  
+  }, [subcategory]);
 
   // Restore draft
   useEffect(() => {
@@ -918,6 +929,13 @@ function CreateTourismContent() {
         if (cancellationPolicy) categoryDetails.cancellation_policy = cancellationPolicy;
         if (bookingUrl) categoryDetails.booking_url = bookingUrl;
 
+        // SA tourism additions
+        if (tgcsaGrading) categoryDetails.tgcsa_grading = tgcsaGrading;
+        if (minimumStayNights) categoryDetails.minimum_stay_nights = Number(minimumStayNights);
+        if (childPolicy) categoryDetails.child_policy = childPolicy;
+        if (seasonalPricing) categoryDetails.seasonal_pricing = seasonalPricing;
+        if (nearbyAttractions) categoryDetails.nearby_attractions = nearbyAttractions;
+
         const operatingHours: Record<string, string> = {};
         if (hoursMonFri) operatingHours.weekday = hoursMonFri;
         if (hoursSat) operatingHours.saturday = hoursSat;
@@ -1001,6 +1019,12 @@ function CreateTourismContent() {
         if (eventAccessibility.length) eventDetails.accessibility = eventAccessibility;
         eventDetails.food_drinks_available = foodDrinksAvailable;
         if (bringYourOwn) eventDetails.bring_your_own = bringYourOwn;
+
+        // SA event additions
+        if (recurring) eventDetails.recurring = recurring;
+        if (rainPolicy) eventDetails.rain_policy = rainPolicy;
+        if (earlyBirdDeadline) eventDetails.early_bird_deadline = earlyBirdDeadline;
+        if (groupDiscountAvailable) eventDetails.group_discount_available = groupDiscountAvailable;
 
         const body = {
           title: title.trim(),
@@ -2030,6 +2054,84 @@ function CreateTourismContent() {
                                 <p className="text-sm text-destructive">{fieldErrors.bookingUrl}</p>
                               )}
                             </div>
+
+                            {/* SA Tourism additions */}
+                            <div className="space-y-4 rounded-lg border bg-muted/30 p-4">
+                              <p className="text-sm font-medium">South African Tourism Details</p>
+                              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <div className="space-y-1">
+                                  <Label htmlFor="tgcsaGrading">TGCSA Grading</Label>
+                                  <select
+                                    id="tgcsaGrading"
+                                    aria-label="TGCSA Grading"
+                                    className="w-full rounded-md border px-3 py-2 text-sm"
+                                    value={tgcsaGrading}
+                                    onChange={(e) => setTgcsaGrading(e.target.value)}
+                                  >
+                                    <option value="">Select…</option>
+                                    <option value="1_star">1 Star</option>
+                                    <option value="2_star">2 Stars</option>
+                                    <option value="3_star">3 Stars</option>
+                                    <option value="4_star">4 Stars</option>
+                                    <option value="5_star">5 Stars</option>
+                                  </select>
+                                  <p className="text-xs text-muted-foreground">
+                                    Tourism Grading Council SA rating.
+                                  </p>
+                                </div>
+
+                                <div className="space-y-1">
+                                  <Label htmlFor="minimumStayNights">Minimum Stay</Label>
+                                  <Input
+                                    id="minimumStayNights"
+                                    type="number"
+                                    min={1}
+                                    value={minimumStayNights}
+                                    onChange={(e) => setMinimumStayNights(e.target.value)}
+                                    placeholder="e.g. 2"
+                                  />
+                                  <p className="text-xs text-muted-foreground">Nights</p>
+                                </div>
+                              </div>
+
+                              <div className="space-y-1">
+                                <Label htmlFor="childPolicy">Child Policy</Label>
+                                <select
+                                  id="childPolicy"
+                                  aria-label="Child policy"
+                                  className="w-full rounded-md border px-3 py-2 text-sm"
+                                  value={childPolicy}
+                                  onChange={(e) => setChildPolicy(e.target.value)}
+                                >
+                                  <option value="">Select…</option>
+                                  <option value="children_welcome">Children Welcome</option>
+                                  <option value="children_over_6">Children Over 6</option>
+                                  <option value="children_over_12">Children Over 12</option>
+                                  <option value="adults_only">Adults Only</option>
+                                </select>
+                              </div>
+
+                              <div className="space-y-1">
+                                <Label htmlFor="nearbyAttractions">Nearby Attractions</Label>
+                                <Input
+                                  id="nearbyAttractions"
+                                  value={nearbyAttractions}
+                                  onChange={(e) => setNearbyAttractions(e.target.value)}
+                                  placeholder="e.g. Kruger National Park, Table Mountain"
+                                  maxLength={500}
+                                />
+                              </div>
+
+                              <label className="flex items-center gap-2 text-sm">
+                                <input
+                                  type="checkbox"
+                                  checked={seasonalPricing}
+                                  onChange={(e) => setSeasonalPricing(e.target.checked)}
+                                  className="rounded border-gray-300"
+                                />
+                                Has peak / off-peak seasonal pricing
+                              </label>
+                            </div>
                           </>
                         )}
                       </>
@@ -2337,6 +2439,69 @@ function CreateTourismContent() {
                             ))}
                           </div>
                         </fieldset>
+
+                        {/* SA Event additions */}
+                        <div className="space-y-4 rounded-lg border bg-muted/30 p-4">
+                          <p className="text-sm font-medium">Event Details (SA)</p>
+                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div className="space-y-1">
+                              <Label htmlFor="recurring">Recurring</Label>
+                              <select
+                                id="recurring"
+                                aria-label="Recurring"
+                                className="w-full rounded-md border px-3 py-2 text-sm"
+                                value={recurring}
+                                onChange={(e) => setRecurring(e.target.value)}
+                              >
+                                <option value="">Select…</option>
+                                <option value="one_off">One-off</option>
+                                <option value="weekly">Weekly</option>
+                                <option value="monthly">Monthly</option>
+                                <option value="annual">Annual</option>
+                              </select>
+                            </div>
+
+                            <div className="space-y-1">
+                              <Label htmlFor="rainPolicy">Rain Policy</Label>
+                              <select
+                                id="rainPolicy"
+                                aria-label="Rain policy"
+                                className="w-full rounded-md border px-3 py-2 text-sm"
+                                value={rainPolicy}
+                                onChange={(e) => setRainPolicy(e.target.value)}
+                              >
+                                <option value="">Select…</option>
+                                <option value="outdoor_rain_or_shine">
+                                  Outdoor — Rain or Shine
+                                </option>
+                                <option value="moved_indoors">Moved Indoors</option>
+                                <option value="postponed">Postponed</option>
+                                <option value="refunded">Refunded</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <Label htmlFor="earlyBirdDeadline">Early Bird Deadline</Label>
+                            <Input
+                              id="earlyBirdDeadline"
+                              value={earlyBirdDeadline}
+                              onChange={(e) => setEarlyBirdDeadline(e.target.value)}
+                              placeholder="e.g. 15 April 2026"
+                              maxLength={30}
+                            />
+                          </div>
+
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={groupDiscountAvailable}
+                              onChange={(e) => setGroupDiscountAvailable(e.target.checked)}
+                              className="rounded border-gray-300"
+                            />
+                            Group discounts available
+                          </label>
+                        </div>
                       </>
                     )}
                   </div>

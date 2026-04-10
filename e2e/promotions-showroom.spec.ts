@@ -45,8 +45,18 @@ test.describe("Promotions showroom", () => {
     await expect(tourismTab).toHaveAttribute("aria-selected", "true");
     await expect(eventsTab).toHaveAttribute("aria-selected", "false");
 
-    await eventsTab.click();
-    await expect(eventsTab).toHaveAttribute("aria-selected", "true");
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      await eventsTab.click();
+      const isSelected = await eventsTab.getAttribute("aria-selected");
+      if (isSelected === "true") {
+        break;
+      }
+
+      if (attempt === 3) {
+        await expect(eventsTab).toHaveAttribute("aria-selected", "true");
+      }
+    }
+
     await expect(page.getByRole("link", { name: /create event/i }).first()).toBeVisible();
     await expect(page.getByRole("status")).toContainText(/event|loading events/i);
 

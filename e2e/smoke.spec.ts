@@ -223,9 +223,13 @@ test.describe("Platform Smoke", () => {
       await clearQuery.focus();
       await page.keyboard.press("Enter");
       await expect(search).toHaveValue("");
+      // Ensure any onBlur/debounced URL sync has a chance to commit.
+      await search.blur();
     }
 
-    await expect(page).not.toHaveURL(/q=coffee/);
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("q"), { timeout: 15_000 })
+      .toBeFalsy();
   });
 
   test("@smoke mobile footer stays above bottom nav and marketplace tabs remain readable", async ({

@@ -14,6 +14,8 @@ const VALID_LISTING_CATEGORIES = new Set<ListingCategory>([
   "electronics",
   "home_lifestyle",
   "jobs_services",
+  "farming_agriculture",
+  "baby_kids",
 ]);
 
 const VALID_LISTING_CONDITIONS = new Set<ListingCondition>([
@@ -140,7 +142,7 @@ export interface MarketFiltersFromParams {
   priceMin?: number;
   priceMax?: number;
   page: number;
-  attributes: Record<string, string | boolean>;
+  attributes: Record<string, string | boolean | string[]>;
 }
 
 export interface BusinessFiltersFromParams {
@@ -156,7 +158,7 @@ export interface BusinessFiltersFromParams {
 export function parseMarketplaceFiltersFromSearchParams(
   searchParams: SearchParamsLike
 ): MarketFiltersFromParams {
-  const attributes: Record<string, string | boolean> = {};
+  const attributes: Record<string, string | boolean | string[]> = {};
 
   searchParams.forEach((rawValue, key) => {
     if (!key.startsWith("attr_")) return;
@@ -164,7 +166,26 @@ export function parseMarketplaceFiltersFromSearchParams(
     const value = normalizeParamValue(rawValue);
     if (!value) return;
 
-    attributes[key.slice(5)] = value === "true" ? true : value === "false" ? false : value;
+    if (value === "true") {
+      attributes[key.slice(5)] = true;
+      return;
+    }
+
+    if (value === "false") {
+      attributes[key.slice(5)] = false;
+      return;
+    }
+
+    if (value.includes(",")) {
+      const items = value
+        .split(",")
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+      attributes[key.slice(5)] = items.length > 0 ? items : value;
+      return;
+    }
+
+    attributes[key.slice(5)] = value;
   });
 
   const sort = normalizeParamValue(searchParams.get("sort"));
@@ -206,7 +227,7 @@ export interface MarketFiltersForUrl {
   sort?: MarketSort;
   priceMin?: number;
   priceMax?: number;
-  attributes?: Record<string, string | boolean | undefined>;
+  attributes?: Record<string, string | boolean | string[] | undefined>;
 }
 
 export interface BusinessFiltersForUrl {
@@ -244,7 +265,11 @@ export function serializeMarketplaceFiltersToSearchParams(
     a.localeCompare(b)
   )) {
     if (value === undefined || value === "") continue;
-    params.set(`attr_${key}`, String(value));
+    if (Array.isArray(value)) {
+      if (value.length > 0) params.set(`attr_${key}`, value.join(","));
+    } else {
+      params.set(`attr_${key}`, String(value));
+    }
   }
 
   if (page > 1) {

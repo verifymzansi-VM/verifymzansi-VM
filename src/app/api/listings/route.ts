@@ -135,7 +135,16 @@ function applyBaseMarketFilters<T>(
   }
 }
 
-function matchesAttributeFilter(attributeValue: unknown, filterValue: string | boolean) {
+function matchesAttributeFilter(attributeValue: unknown, filterValue: string | boolean | string[]) {
+  if (Array.isArray(filterValue)) {
+    if (!Array.isArray(attributeValue)) {
+      return false;
+    }
+
+    const normalizedAttributeValues = attributeValue.map((value) => String(value).toLowerCase());
+    return filterValue.some((value) => normalizedAttributeValues.includes(value.toLowerCase()));
+  }
+
   if (typeof filterValue === "boolean") {
     return attributeValue === filterValue;
   }
@@ -158,12 +167,18 @@ function matchesAttributeFilter(attributeValue: unknown, filterValue: string | b
     return String(attributeValue) === filterValue;
   }
 
+  if (Array.isArray(attributeValue)) {
+    return attributeValue.some(
+      (value) => String(value).toLowerCase() === filterValue.toLowerCase()
+    );
+  }
+
   return String(attributeValue).toLowerCase().includes(filterValue.toLowerCase());
 }
 
 function matchesAttributeFilters(
   attributes: Record<string, unknown> | null | undefined,
-  filters: Record<string, string | boolean>
+  filters: Record<string, string | boolean | string[]>
 ) {
   return Object.entries(filters).every(([key, value]) =>
     matchesAttributeFilter(attributes?.[key], value)

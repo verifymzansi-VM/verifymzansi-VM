@@ -30,6 +30,8 @@ interface PostFormScaffoldProps {
   onRetry?: () => void;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  /** Optional completeness percentage (0-100). Shows a progress bar when provided. */
+  completeness?: number;
 }
 
 export function PostFormScaffold({
@@ -46,6 +48,7 @@ export function PostFormScaffold({
   onRetry,
   children,
   footer,
+  completeness,
 }: PostFormScaffoldProps) {
   const errorRef = useRef<HTMLDivElement>(null);
 
@@ -139,6 +142,28 @@ export function PostFormScaffold({
               </span>
             </p>
           </nav>
+
+          {/* Completeness score */}
+          {completeness != null && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Listing completeness</span>
+                <span className="font-medium">{Math.round(completeness)}%</span>
+              </div>
+              <progress
+                max={100}
+                value={Math.min(Math.max(Math.round(completeness), 0), 100)}
+                className={cn(
+                  "h-2 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:rounded-full [&::-moz-progress-bar]:rounded-full",
+                  completeness >= 80
+                    ? "[&::-webkit-progress-value]:bg-brand-green [&::-moz-progress-bar]:bg-brand-green"
+                    : completeness >= 50
+                      ? "[&::-webkit-progress-value]:bg-amber-500 [&::-moz-progress-bar]:bg-amber-500"
+                      : "[&::-webkit-progress-value]:bg-muted-foreground/40 [&::-moz-progress-bar]:bg-muted-foreground/40"
+                )}
+              />
+            </div>
+          )}
 
           {error && (
             <Alert ref={errorRef} variant="destructive">

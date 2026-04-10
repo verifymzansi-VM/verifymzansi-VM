@@ -27,6 +27,25 @@ export const businessProfileSchema = z.object({
     .optional()
     .or(z.literal("")),
   email: z.string().email().optional().or(z.literal("")),
+  year_established: z.number().int().min(1900).max(new Date().getFullYear()).optional(),
+  cipc_registration: z.string().max(30).optional(),
+  bbbee_level: z
+    .enum([
+      "level_1",
+      "level_2",
+      "level_3",
+      "level_4",
+      "level_5",
+      "level_6",
+      "level_7",
+      "level_8",
+      "non_compliant",
+      "exempt",
+    ])
+    .optional(),
+  languages_spoken: z.string().max(200).optional(),
+  load_shedding_ready: z.boolean().optional(),
+  number_of_employees: z.enum(["1", "2_5", "6_10", "11_50", "51_200", "200_plus"]).optional(),
 });
 
 /** Zod schema for creating a business post (update, case study, offer, hiring). */

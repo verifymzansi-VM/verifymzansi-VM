@@ -42,9 +42,9 @@ function MobileFilterAttribute({
   onChange,
 }: {
   field: AttributeField;
-  value: string | boolean | undefined;
-  allAttributes: Record<string, string | boolean | undefined>;
-  onChange: (value: string | boolean | undefined) => void;
+  value: string | boolean | string[] | undefined;
+  allAttributes: Record<string, string | boolean | string[] | undefined>;
+  onChange: (value: string | boolean | string[] | undefined) => void;
 }) {
   const selectClass =
     "w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";

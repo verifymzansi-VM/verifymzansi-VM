@@ -6,7 +6,7 @@ import { CATEGORIES, type AttributeField } from "@/lib/constants/categories";
 import { getModelsForMake } from "@/lib/constants/sa-vehicles";
 import { cn } from "@/lib/utils";
 
-type AttributeFilterValue = string | boolean | undefined;
+type AttributeFilterValue = string | boolean | string[] | undefined;
 
 interface ListingAttributeFiltersProps {
   category?: string;
@@ -34,7 +34,8 @@ function getFilterableAttributeFields(category?: string) {
         field.type === "select" ||
         field.type === "boolean" ||
         field.type === "number" ||
-        field.type === "text"
+        field.type === "text" ||
+        field.type === "checklist"
     ) ?? []
   );
 }
@@ -228,6 +229,55 @@ function FilterAttributeField({
           />
         </div>
       );
+
+    case "checklist": {
+      const options = field.options ?? [];
+      const selected = Array.isArray(value) ? value : [];
+
+      function toggleFilterItem(optionValue: string) {
+        const next = selected.includes(optionValue)
+          ? selected.filter((v) => v !== optionValue)
+          : [...selected, optionValue];
+        onChange(next.length > 0 ? next : undefined);
+      }
+
+      return (
+        <div className={compact ? "space-y-1" : "space-y-1.5"}>
+          <Label className={labelClassName}>{field.label}</Label>
+          <div className="flex flex-wrap gap-1.5">
+            {options.map((opt) => {
+              const optVal = typeof opt === "string" ? opt : opt.value;
+              const optLabel = typeof opt === "string" ? opt.replace(/_/g, " ") : opt.label;
+              const isChecked = selected.includes(optVal);
+
+              return (
+                <label
+                  key={optVal}
+                  className={cn(
+                    "flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 transition-all",
+                    compact ? "text-[10px]" : "text-xs",
+                    isChecked
+                      ? "border-brand-green bg-brand-green/10 text-brand-green"
+                      : "border-input text-muted-foreground hover:border-brand-green/40"
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => toggleFilterItem(optVal)}
+                    className={cn(
+                      "rounded border-input text-brand-green focus:ring-brand-green",
+                      compact ? "h-3 w-3" : "h-3.5 w-3.5"
+                    )}
+                  />
+                  <span className="capitalize">{optLabel}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
 
     default:
       return null;

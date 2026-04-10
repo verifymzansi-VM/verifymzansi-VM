@@ -73,7 +73,7 @@ export function ListingFilterDrawer() {
     });
   }
 
-  function updateDraftAttribute(name: string, value: string | boolean | undefined) {
+  function updateDraftAttribute(name: string, value: string | boolean | string[] | undefined) {
     setDraftFilters((current) => ({
       ...current,
       attributes: { ...current.attributes, [name]: value },

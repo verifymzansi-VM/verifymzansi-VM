@@ -45,7 +45,9 @@ export type ListingCategory =
   | "auto_parts"
   | "electronics"
   | "home_lifestyle"
-  | "jobs_services";
+  | "jobs_services"
+  | "farming_agriculture"
+  | "baby_kids";
 
 export type ListingCondition = "new" | "like_new" | "good" | "fair" | "for_parts";
 
@@ -232,6 +234,8 @@ export const CATEGORY_LABELS: Record<ListingCategory, string> = {
   electronics: "Electronics & Tech",
   home_lifestyle: "Home & Lifestyle",
   jobs_services: "Jobs, Services & Other",
+  farming_agriculture: "Farming & Agriculture",
+  baby_kids: "Baby & Kids",
 };
 
 export const LISTING_CONDITION_LABELS: Record<ListingCondition, string> = {

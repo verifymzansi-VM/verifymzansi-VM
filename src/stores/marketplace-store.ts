@@ -16,7 +16,7 @@ export interface MarketplaceFilters {
   sort: "newest" | "price_asc" | "price_desc" | "popular";
   query?: string;
   /** Dynamic category-specific attribute filters (matches listing attributes JSON column) */
-  attributes: Record<string, string | boolean | undefined>;
+  attributes: Record<string, string | boolean | string[] | undefined>;
   /** Mzansi Business specific filters */
   businessType?: BusinessType;
   businessCategory?: BusinessCategory;
@@ -48,7 +48,7 @@ interface MarketplaceState {
   ) => void;
   replaceFilters: (filters: Partial<MarketplaceFilters>, page?: number) => void;
   setFilter: <K extends keyof MarketplaceFilters>(key: K, value: MarketplaceFilters[K]) => void;
-  setAttribute: (name: string, value: string | boolean | undefined) => void;
+  setAttribute: (name: string, value: string | boolean | string[] | undefined) => void;
   resetFilters: () => void;
   setPage: (page: number) => void;
   setSearching: (searching: boolean) => void;

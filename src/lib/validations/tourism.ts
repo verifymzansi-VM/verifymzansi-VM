@@ -216,6 +216,14 @@ const tourismCategoryDetailsSchema = z.object({
   min_driver_age: z.number().int().min(16).max(99).optional(),
   insurance_included: z.boolean().optional(),
   gps_available: z.boolean().optional(),
+  /* SA tourism additions */
+  tgcsa_grading: z.enum(["1_star", "2_star", "3_star", "4_star", "5_star"]).optional(),
+  minimum_stay_nights: z.number().int().min(1).optional(),
+  child_policy: z
+    .enum(["children_welcome", "children_over_6", "children_over_12", "adults_only"])
+    .optional(),
+  seasonal_pricing: z.boolean().optional(),
+  nearby_attractions: z.string().max(500).optional(),
 });
 
 export const tourismBusinessSchema = z.object({
@@ -270,6 +278,13 @@ const eventDetailsSchema = z.object({
   accessibility: z.array(z.string().max(80)).optional(),
   food_drinks_available: z.boolean().optional(),
   bring_your_own: z.string().max(500).optional(),
+  /* SA event additions */
+  recurring: z.enum(["one_off", "weekly", "monthly", "annual"]).optional(),
+  rain_policy: z
+    .enum(["outdoor_rain_or_shine", "moved_indoors", "postponed", "refunded"])
+    .optional(),
+  early_bird_deadline: z.string().max(30).optional(),
+  group_discount_available: z.boolean().optional(),
 });
 
 export const eventSchema = z

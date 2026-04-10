@@ -22,6 +22,7 @@ describe("listingSchema", () => {
       category: "property",
       attributes: {
         property_type: "apartment",
+        listing_intent: "sale",
         bedrooms: 2,
         bathrooms: 1,
       },
@@ -51,6 +52,7 @@ describe("listingSchema", () => {
         mileage_km: 35000,
         transmission: "manual",
         fuel_type: "petrol",
+        service_history: "full",
       },
     });
     expect(result.success).toBe(true);
@@ -78,7 +80,7 @@ describe("listingSchema", () => {
     const result = listingSchema.safeParse({
       ...baseFields,
       category: "auto_parts",
-      attributes: { part_type: "brake pads" },
+      attributes: { part_type: "brake pads", part_condition: "new" },
     });
     expect(result.success).toBe(true);
   });
@@ -120,7 +122,7 @@ describe("listingSchema", () => {
     const result = listingSchema.safeParse({
       ...baseFields,
       category: "jobs_services",
-      attributes: { job_type: "full_time" },
+      attributes: { job_type: "full_time", location_type: "on_site" },
     });
     expect(result.success).toBe(true);
   });

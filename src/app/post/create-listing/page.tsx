@@ -5,8 +5,11 @@ import { useRouter } from "next/navigation";
 import {
   Camera,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Eye,
   FileText,
+  Inbox,
   Loader2,
   Mail,
   MapPin,
@@ -41,6 +44,7 @@ import {
   normalizeCreatePostRuntimeError,
 } from "@/app/post/_lib/create-post-errors";
 import { coerceListingAttributes, validateListingAttributes } from "@/lib/forms/listing-form";
+import { CATEGORIES } from "@/lib/constants/categories";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { checkUploadServiceReachable } from "@/lib/utils/upload-preflight";
@@ -55,21 +59,23 @@ const STEPS: PostFormStep[] = [
   { label: "Media", icon: Camera, description: "Photos, video, and final review" },
 ];
 
-const TITLE_MAX = 120;
+const TITLE_MAX = 100;
 const DESC_MAX = 5000;
 
 const CONTACT_OPTIONS = [
   { id: "call", label: "Phone Call", icon: Phone },
   { id: "whatsapp", label: "WhatsApp", icon: MessageCircle },
   { id: "form", label: "Contact Form", icon: Mail },
+  { id: "in_app", label: "In-App Chat", icon: Inbox },
 ] as const;
 
 const FIELD_IDS: Record<string, string> = {
   category: "listing-category-field",
   "attributes.property_type": "listing-attribute-property_type",
+  "attributes.listing_intent": "listing-attribute-listing_intent",
   "attributes.bedrooms": "listing-attribute-bedrooms",
   "attributes.bathrooms": "listing-attribute-bathrooms",
-  "attributes.size_sqm": "listing-attribute-size_sqm",
+  "attributes.floor_size_sqm": "listing-attribute-floor_size_sqm",
   "attributes.parking_spots": "listing-attribute-parking_spots",
   "attributes.furnished": "listing-attribute-furnished",
   "attributes.pets_allowed": "listing-attribute-pets_allowed",
@@ -79,9 +85,11 @@ const FIELD_IDS: Record<string, string> = {
   "attributes.mileage_km": "listing-attribute-mileage_km",
   "attributes.transmission": "listing-attribute-transmission",
   "attributes.fuel_type": "listing-attribute-fuel_type",
+  "attributes.service_history": "listing-attribute-service_history",
   "attributes.body_type": "listing-attribute-body_type",
   "attributes.colour": "listing-attribute-colour",
   "attributes.part_type": "listing-attribute-part_type",
+  "attributes.part_condition": "listing-attribute-part_condition",
   "attributes.compatible_make": "listing-attribute-compatible_make",
   "attributes.compatible_model": "listing-attribute-compatible_model",
   "attributes.oem_or_aftermarket": "listing-attribute-oem_or_aftermarket",
@@ -94,8 +102,9 @@ const FIELD_IDS: Record<string, string> = {
   "attributes.sub_category": "listing-attribute-sub_category",
   "attributes.material": "listing-attribute-material",
   "attributes.job_type": "listing-attribute-job_type",
-  "attributes.remote": "listing-attribute-remote",
-  "attributes.salary_range": "listing-attribute-salary_range",
+  "attributes.location_type": "listing-attribute-location_type",
+  "attributes.farm_category": "listing-attribute-farm_category",
+  "attributes.item_type": "listing-attribute-item_type",
   title: "title",
   description: "description",
   price_zar: "price",
@@ -131,9 +140,9 @@ export default function CreateListingPage() {
   const [negotiable, setNegotiable] = useState(false);
   const [category, setCategory] = useState<ListingCategory | "">("");
   const [condition, setCondition] = useState<ListingCondition | "">("");
-  const [categoryAttributes, setCategoryAttributes] = useState<Record<string, string | boolean>>(
-    {}
-  );
+  const [categoryAttributes, setCategoryAttributes] = useState<
+    Record<string, string | boolean | string[]>
+  >({});
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
   const [town, setTown] = useState("");
@@ -179,6 +188,56 @@ export default function CreateListingPage() {
     () => (videoCoverFile.length > 0 ? URL.createObjectURL(videoCoverFile[0]) : null),
     [videoCoverFile]
   );
+
+  const listingCompleteness = useMemo(() => {
+    const base = [
+      !!title.trim(),
+      !!description.trim(),
+      !!price,
+      !!category,
+      !!province,
+      !!city,
+      photoFiles.length > 0,
+      contactMethods.length > 0,
+    ];
+    const catDef = category ? CATEGORIES.find((c) => c.value === category) : undefined;
+    const attrFields = (catDef?.attributeFields ?? []).filter((field) => {
+      if (!field.dependsOnValue || !field.dependsOn) {
+        return true;
+      }
+
+      const parentValue = categoryAttributes[field.dependsOn];
+      if (parentValue === undefined || parentValue === null || parentValue === "") {
+        return false;
+      }
+
+      const allowedValues = Array.isArray(field.dependsOnValue)
+        ? field.dependsOnValue
+        : [field.dependsOnValue];
+      return allowedValues.includes(String(parentValue));
+    });
+    const attrFilled = attrFields.map((f: { name: string; type: string }) => {
+      const v = categoryAttributes[f.name];
+      if (v === undefined || v === "" || v === false) return false;
+      if (Array.isArray(v) && v.length === 0) return false;
+      return true;
+    });
+    const all = [...base, ...attrFilled];
+    return all.length === 0 ? 0 : Math.round((all.filter(Boolean).length / all.length) * 100);
+  }, [
+    title,
+    description,
+    price,
+    category,
+    province,
+    city,
+    photoFiles,
+    contactMethods,
+    categoryAttributes,
+  ]);
+
+  const isPropertyRentListing =
+    category === "property" && categoryAttributes["listing_intent"] === "rent";
 
   useEffect(
     () => () => {
@@ -381,7 +440,7 @@ export default function CreateListingPage() {
     clearErrors("category");
   }
 
-  function handleAttributeChange(name: string, value: string | boolean) {
+  function handleAttributeChange(name: string, value: string | boolean | string[]) {
     setCategoryAttributes((prev) => ({ ...prev, [name]: value }));
   }
 
@@ -774,6 +833,7 @@ export default function CreateListingPage() {
                 guideDescription="Choose your category, complete the 3 guided steps, and submit your listing for review."
                 steps={STEPS}
                 currentStep={step}
+                completeness={listingCompleteness}
                 error={formError}
                 onRetry={
                   formError && !isSubmitting
@@ -987,7 +1047,9 @@ export default function CreateListingPage() {
                 {step === 1 && (
                   <div className="space-y-5 animate-in fade-in-0 duration-300">
                     <div className="space-y-2">
-                      <Label htmlFor="price">Price (ZAR) *</Label>
+                      <Label htmlFor="price">
+                        {isPropertyRentListing ? "Monthly Rent (ZAR) *" : "Asking Price (ZAR) *"}
+                      </Label>
                       <div className="flex flex-col xs:flex-row gap-3">
                         <div className="relative flex-1">
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">
@@ -1127,6 +1189,57 @@ export default function CreateListingPage() {
                         Your first photo will be the main image on your listing card and search
                         results.
                       </p>
+                      {photoFiles.length > 1 && (
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            Reorder photos. The first image appears on cards.
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {photoFiles.map((file, index) => (
+                              <div
+                                key={`${file.name}-${index}`}
+                                className="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs"
+                              >
+                                <span className="max-w-[100px] truncate font-medium">
+                                  {file.name}
+                                </span>
+                                <button
+                                  type="button"
+                                  disabled={index === 0}
+                                  onClick={() => {
+                                    const reordered = [...photoFiles];
+                                    [reordered[index - 1], reordered[index]] = [
+                                      reordered[index],
+                                      reordered[index - 1],
+                                    ];
+                                    setPhotoFiles(reordered);
+                                  }}
+                                  className="rounded p-0.5 hover:bg-background disabled:opacity-30"
+                                  aria-label="Move photo left"
+                                >
+                                  <ChevronLeft className="h-3 w-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={index === photoFiles.length - 1}
+                                  onClick={() => {
+                                    const reordered = [...photoFiles];
+                                    [reordered[index], reordered[index + 1]] = [
+                                      reordered[index + 1],
+                                      reordered[index],
+                                    ];
+                                    setPhotoFiles(reordered);
+                                  }}
+                                  className="rounded p-0.5 hover:bg-background disabled:opacity-30"
+                                  aria-label="Move photo right"
+                                >
+                                  <ChevronRight className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       {fieldErrors.images && (
                         <p className="inline-form-error">{fieldErrors.images}</p>
                       )}
