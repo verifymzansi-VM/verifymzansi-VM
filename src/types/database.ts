@@ -116,6 +116,7 @@ export interface KycArtifact {
   content_type: string;
   file_size_bytes: number;
   sha256: string | null;
+  phash: string | null;
   provider_ref: string | null;
   purge_after: string | null;
   status: VerificationStatus;
@@ -232,6 +233,11 @@ export interface Listing {
   urgent_until: string | null;
   featured: boolean;
   urgent: boolean;
+  media_width: number | null;
+  media_height: number | null;
+  focal_x: number | null;
+  focal_y: number | null;
+  blurhash: string | null;
   published_at: string | null;
   expires_at: string | null;
   created_at: string;
@@ -270,6 +276,11 @@ export interface Business {
   operating_hours: Record<string, unknown>;
   payment_methods_accepted: string[];
   delivery_options: string[];
+  media_width: number | null;
+  media_height: number | null;
+  focal_x: number | null;
+  focal_y: number | null;
+  blurhash: string | null;
   status: ListingStatus;
   status_reason: string | null;
   entitlement_id: string | null;
@@ -310,6 +321,12 @@ export interface Promotion {
   social_authorizer_relationship: SocialAuthorizerRelationship;
   social_authorization_version: string | null;
   social_monetization_acknowledged: boolean;
+  media_width: number | null;
+  media_height: number | null;
+  focal_x: number | null;
+  focal_y: number | null;
+  blurhash: string | null;
+  event_details: Record<string, unknown> | null;
   status: ListingStatus;
   status_reason: string | null;
   boost_until: string | null;
@@ -384,6 +401,7 @@ export interface ContactEvent {
   target_id: string;
   target_type: string;
   owner_id: string;
+  sender_user_id: string | null;
   member_verified: boolean;
   contact_type: ContactEventType;
   created_at: string;

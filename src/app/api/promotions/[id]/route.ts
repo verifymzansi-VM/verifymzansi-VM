@@ -96,7 +96,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const { data: promotion, error } = await supabase
       .from("promotions")
       .select(
-        "id, owner_id, seller_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, media_width, media_height, focal_x, focal_y, price_cents, price_negotiable, location_province, location_city, location_town, location_address, contact_methods, start_date, end_date, social_distribution_authorized, social_distribution_authorized_at, social_distribution_revoked_at, social_authorizer_name, social_authorizer_role, social_authorizer_relationship, social_authorization_version, social_monetization_acknowledged, event_details, boost_until, featured_until, status, view_count, published_at, created_at, updated_at"
+        "id, owner_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, media_width, media_height, focal_x, focal_y, price_cents, price_negotiable, location_province, location_city, location_town, location_address, contact_methods, start_date, end_date, social_distribution_authorized, social_distribution_authorized_at, social_distribution_revoked_at, social_authorizer_name, social_authorizer_role, social_authorizer_relationship, social_authorization_version, social_monetization_acknowledged, event_details, boost_until, featured_until, status, view_count, published_at, created_at, updated_at"
       )
       .eq("id", id)
       .maybeSingle();
