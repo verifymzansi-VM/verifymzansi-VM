@@ -3,6 +3,7 @@
 import { memo } from "react";
 import { formatZARShort } from "@/lib/utils/format";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
+import type { MediaFitStrategy } from "@/components/ui/video-card-player";
 import type { TrustLevel } from "@/types/enums";
 
 interface ListingCardProps {
@@ -13,6 +14,7 @@ interface ListingCardProps {
   imageUrl?: string;
   posterUrl?: string;
   isVideo?: boolean;
+  fitStrategy?: MediaFitStrategy;
   province: string;
   city: string;
   category: string;
@@ -66,6 +68,7 @@ export const ListingCard = memo(function ListingCard({
   imageUrl,
   posterUrl,
   isVideo,
+  fitStrategy,
   province: _province,
   city,
   createdAt,
@@ -90,6 +93,7 @@ export const ListingCard = memo(function ListingCard({
       mediaUrl={imageUrl}
       posterUrl={posterUrl}
       isVideo={isVideo}
+      fitStrategy={fitStrategy}
       mediaAlt={title}
       location={city || null}
       createdAt={createdAt}

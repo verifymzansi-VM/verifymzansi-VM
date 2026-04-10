@@ -943,6 +943,8 @@ export default function EditListingPage() {
                         price={price ? Math.round(parseFloat(price || "0") * 100) : 0}
                         imageUrl={previewVideos[0] || previewPhotos[0]}
                         posterUrl={previewVideoThumbnail || previewPhotos[0] || undefined}
+                        isVideo={previewVideos.length > 0}
+                        fitStrategy={previewVideos.length > 0 ? "cover" : "smart"}
                         logoUrl={previewLogo}
                         province={province || "Province"}
                         city={city || "City"}

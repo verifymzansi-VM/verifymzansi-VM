@@ -705,6 +705,7 @@ export default function CreateListingPage() {
             imageUrl={cardMediaUrl || undefined}
             posterUrl={cardPosterUrl}
             isVideo={videoFile.length > 0}
+            fitStrategy={videoFile.length > 0 ? "cover" : "smart"}
             logoUrl={logoPreviewUrl}
             province={province || "Province"}
             city={city || "City"}

@@ -23,37 +23,45 @@ interface VideoFrameSelectorProps {
 export function VideoFrameSelector({ file, onFrameSelect, className }: VideoFrameSelectorProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const previewBlobUrlRef = useRef<string | null>(null);
+  const fileKey = `${file.name}:${file.size}:${file.lastModified}`;
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewForKey, setPreviewForKey] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
-  const [hasAutoSelected, setHasAutoSelected] = useState(false);
-
-  // Track file identity to reset state on file change (React-recommended pattern)
-  const [prevFile, setPrevFile] = useState<File | null>(null);
+  const [autoSelectedForKey, setAutoSelectedForKey] = useState<string | null>(null);
   const videoUrl = useMemo(() => URL.createObjectURL(file), [file]);
 
-  if (prevFile !== file) {
-    setPrevFile(file);
-    setPreviewUrl(null);
-    setHasAutoSelected(false);
-  }
+  const revokePreviewBlobUrl = useCallback(() => {
+    if (!previewBlobUrlRef.current) return;
+    URL.revokeObjectURL(previewBlobUrlRef.current);
+    previewBlobUrlRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    revokePreviewBlobUrl();
+  }, [file, revokePreviewBlobUrl]);
 
   // Cleanup object URL
   useEffect(() => {
     return () => URL.revokeObjectURL(videoUrl);
   }, [videoUrl]);
 
+  useEffect(() => {
+    return () => revokePreviewBlobUrl();
+  }, [revokePreviewBlobUrl]);
+
   // Auto-select a frame at 1s (or 10% of duration) once metadata loads
   const handleLoadedMetadata = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
     setDuration(video.duration);
-    if (!hasAutoSelected) {
+    if (autoSelectedForKey !== fileKey) {
       const seekTarget = Math.min(1, video.duration * 0.1);
       video.currentTime = Math.max(0, seekTarget);
     }
-  }, [hasAutoSelected]);
+  }, [autoSelectedForKey, fileKey]);
 
   // Capture the frame when the user seeks or on initial auto-select
   const captureFrame = useCallback(() => {
@@ -69,14 +77,15 @@ export function VideoFrameSelector({ file, onFrameSelect, className }: VideoFram
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     setCurrentTime(video.currentTime);
 
-    // Show preview from canvas
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
-    setPreviewUrl(dataUrl);
-
     // Export as JPEG File
     canvas.toBlob(
       (blob) => {
         if (!blob) return;
+        revokePreviewBlobUrl();
+        const blobUrl = URL.createObjectURL(blob);
+        previewBlobUrlRef.current = blobUrl;
+        setPreviewUrl(blobUrl);
+        setPreviewForKey(fileKey);
         const posterName = file.name.replace(/\.[^.]+$/, "_poster.jpg");
         const posterFile = new File([blob], posterName, { type: "image/jpeg" });
         onFrameSelect(posterFile);
@@ -85,8 +94,8 @@ export function VideoFrameSelector({ file, onFrameSelect, className }: VideoFram
       0.85
     );
 
-    if (!hasAutoSelected) setHasAutoSelected(true);
-  }, [file.name, onFrameSelect, hasAutoSelected]);
+    if (autoSelectedForKey !== fileKey) setAutoSelectedForKey(fileKey);
+  }, [autoSelectedForKey, file.name, fileKey, onFrameSelect, revokePreviewBlobUrl]);
 
   // Handle seeked event (both user-initiated and auto)
   const handleSeeked = useCallback(() => {
@@ -161,7 +170,7 @@ export function VideoFrameSelector({ file, onFrameSelect, className }: VideoFram
       )}
 
       {/* Preview + actions */}
-      {previewUrl && (
+      {previewUrl && previewForKey === fileKey && (
         <div className="flex items-start gap-3">
           {/* 4:5 card preview */}
           <div className="relative w-32 overflow-hidden rounded-lg border border-warm-200 dark:border-warm-700">
