@@ -99,7 +99,6 @@ function FilterAttributeField({
   onChange: (value: AttributeFilterValue) => void;
 }) {
   const compact = density === "sidebar";
-  const fieldId = `filter-${density}-${field.name}`;
   const selectClass = cn(
     "w-full rounded-md border border-input bg-background px-3 py-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
     compact ? "text-xs" : "text-sm"
@@ -119,11 +118,8 @@ function FilterAttributeField({
 
       return (
         <div className={compact ? "space-y-1" : "space-y-1.5"}>
-          <Label htmlFor={fieldId} className={labelClassName}>
-            {field.label}
-          </Label>
+          <Label className={labelClassName}>{field.label}</Label>
           <select
-            id={fieldId}
             aria-label={field.label}
             className={selectClass}
             value={(value as string) || ""}
@@ -151,12 +147,11 @@ function FilterAttributeField({
       if (rangeOptions) {
         return (
           <div className={compact ? "space-y-1" : "space-y-1.5"}>
-            <Label htmlFor={fieldId} className={labelClassName}>
+            <Label className={labelClassName}>
               {field.label}
               {field.unit ? ` (${field.unit})` : ""}
             </Label>
             <select
-              id={fieldId}
               aria-label={field.label}
               className={selectClass}
               value={(value as string) || ""}
@@ -175,12 +170,11 @@ function FilterAttributeField({
 
       return (
         <div className={compact ? "space-y-1" : "space-y-1.5"}>
-          <Label htmlFor={fieldId} className={labelClassName}>
+          <Label className={labelClassName}>
             {field.label}
             {field.unit ? ` (${field.unit})` : ""}
           </Label>
           <Input
-            id={fieldId}
             type="number"
             inputMode="numeric"
             min={0}
@@ -195,9 +189,8 @@ function FilterAttributeField({
 
     case "boolean":
       return (
-        <div className="flex items-center gap-2">
+        <label className="flex items-center gap-2">
           <input
-            id={fieldId}
             type="checkbox"
             aria-label={field.label}
             className={cn(
@@ -207,20 +200,15 @@ function FilterAttributeField({
             checked={(value as boolean) || false}
             onChange={(event) => onChange(event.target.checked ? true : undefined)}
           />
-          <Label htmlFor={fieldId} className={cn("cursor-pointer font-normal", labelClassName)}>
-            {field.label}
-          </Label>
-        </div>
+          <span className={cn("cursor-pointer font-normal", labelClassName)}>{field.label}</span>
+        </label>
       );
 
     case "text":
       return (
         <div className={compact ? "space-y-1" : "space-y-1.5"}>
-          <Label htmlFor={fieldId} className={labelClassName}>
-            {field.label}
-          </Label>
+          <Label className={labelClassName}>{field.label}</Label>
           <Input
-            id={fieldId}
             type="text"
             placeholder={field.placeholder || `Any ${field.label.toLowerCase()}`}
             className={compact ? "h-8 text-xs" : undefined}

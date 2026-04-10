@@ -309,10 +309,49 @@ describe("POST /api/admin/promotions/[id]/moderate", () => {
         userId: "owner-1",
         type: "error",
         title: "Promotion rejected",
-        href: "/dashboard/listings",
+        href: "/dashboard/promotions",
       })
     );
     expect(mockCreateNotification.mock.calls[0][0].message).toContain("Inappropriate content");
+  });
+
+  it("sends a hide notification with the hidden state copy", async () => {
+    const updateIn = vi.fn().mockResolvedValue({ error: null });
+    const updateEq = vi.fn().mockReturnValue({ in: updateIn });
+    const update = vi.fn().mockReturnValue({ eq: updateEq });
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: {
+            id: VALID_UUID,
+            status: "pending_moderation",
+            owner_id: "owner-1",
+            title: "Weekend Sale",
+            published_at: null,
+          },
+        }),
+        update,
+      }),
+    });
+
+    const response = await POST(
+      createRequest({ decision: "hide", reason: "Policy update" }),
+      createParams()
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockCreateNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "owner-1",
+        type: "error",
+        title: "Promotion hidden",
+        href: "/dashboard/promotions",
+      })
+    );
+    expect(mockCreateNotification.mock.calls[0][0].message).toContain("hidden");
   });
 
   it("does not send a notification when approving", async () => {

@@ -64,8 +64,10 @@ export function CategoryPicker({
     // Auto-focus: after selecting a category, focus the first attribute field or fall back to the title input
     requestAnimationFrame(() => {
       if (cat.attributeFields.length > 0) {
-        const firstFieldId = `listing-attribute-${cat.attributeFields[0].name}`;
-        const el = document.getElementById(firstFieldId);
+        const firstFieldName = cat.attributeFields[0].name;
+        const el = document.querySelector<HTMLElement>(
+          `[data-listing-attribute="${firstFieldName}"]`
+        );
         if (el) {
           el.focus();
           el.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -101,11 +103,7 @@ export function CategoryPicker({
       <Label>Category *</Label>
 
       {/* Category Grid */}
-      <div
-        role="radiogroup"
-        aria-label="Category"
-        className="grid grid-cols-2 sm:grid-cols-3 gap-3"
-      >
+      <div aria-label="Category" className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {CATEGORIES.map((cat) => {
           const Icon = cat.icon;
           const isSelected = expanded === cat.value;
@@ -114,8 +112,7 @@ export function CategoryPicker({
             <button
               key={cat.value}
               type="button"
-              role="radio"
-              aria-checked={isSelected ? "true" : "false"}
+              aria-label={cat.label}
               onClick={() => handleSelect(cat)}
               className={cn(
                 "relative flex flex-col items-center gap-1.5 rounded-xl border-2 p-3 text-center transition-all duration-200",
@@ -235,7 +232,6 @@ export function CategoryPicker({
                           });
                         }}
                         className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-                        aria-expanded={isOpen ? "true" : "false"}
                       >
                         <span>{group.label}</span>
                         <ChevronDown
@@ -277,7 +273,6 @@ function AttributeInput({
   onChange: (value: string | boolean | string[]) => void;
   error?: string;
 }) {
-  const fieldId = `listing-attribute-${field.name}`;
   const selectClass =
     "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
@@ -295,17 +290,16 @@ function AttributeInput({
 
       return (
         <div className="space-y-1.5">
-          <Label htmlFor={fieldId}>
+          <Label>
             {field.label} {field.required && "*"}
           </Label>
           <select
-            id={fieldId}
+            data-listing-attribute={field.name}
             aria-label={field.label}
             value={value as string}
             onChange={(e) => onChange(e.target.value)}
             required={field.required}
             disabled={!!isDisabled}
-            aria-invalid={error ? "true" : "false"}
             className={cn(selectClass, error && "border-destructive")}
           >
             <option value="">
@@ -332,13 +326,13 @@ function AttributeInput({
     case "number":
       return (
         <div className="space-y-1.5">
-          <Label htmlFor={fieldId}>
+          <Label>
             {field.label}
             {field.unit ? ` (${field.unit})` : ""}
             {field.required ? " *" : ""}
           </Label>
           <Input
-            id={fieldId}
+            data-listing-attribute={field.name}
             type="number"
             inputMode="numeric"
             min="0"
@@ -346,7 +340,6 @@ function AttributeInput({
             value={value as string}
             onChange={(e) => onChange(e.target.value)}
             required={field.required}
-            aria-invalid={!!error}
             className={cn(error && "border-destructive")}
           />
           {error && <p className="inline-form-error">{error}</p>}
@@ -356,11 +349,11 @@ function AttributeInput({
     case "boolean":
       return (
         <div className="space-y-1">
-          <div className="flex items-center gap-2 self-end pb-1">
+          <label className="flex items-center gap-2 self-end pb-1">
             <input
-              id={fieldId}
               type="checkbox"
               aria-label={field.label}
+              data-listing-attribute={field.name}
               className={cn(
                 "h-4 w-4 rounded border-input text-brand-green focus:ring-brand-green",
                 error && "border-destructive"
@@ -368,10 +361,8 @@ function AttributeInput({
               checked={value as boolean}
               onChange={(e) => onChange(e.target.checked)}
             />
-            <Label htmlFor={fieldId} className="cursor-pointer text-sm font-normal">
-              {field.label}
-            </Label>
-          </div>
+            <span className="cursor-pointer text-sm font-normal">{field.label}</span>
+          </label>
           {error && <p className="inline-form-error">{error}</p>}
         </div>
       );
@@ -380,16 +371,15 @@ function AttributeInput({
     default:
       return (
         <div className="space-y-1.5">
-          <Label htmlFor={fieldId}>
+          <Label>
             {field.label} {field.required && "*"}
           </Label>
           <Input
-            id={fieldId}
+            data-listing-attribute={field.name}
             placeholder={field.placeholder}
             value={value as string}
             onChange={(e) => onChange(e.target.value)}
             required={field.required}
-            aria-invalid={!!error}
             className={cn(error && "border-destructive")}
           />
           {error && <p className="inline-form-error">{error}</p>}

@@ -153,14 +153,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (decision !== "approve") {
       try {
         const shortTitle = (promotion.title ?? "Your promotion").slice(0, 40);
+        const isHidden = decision === "hide";
         await createNotification({
           userId: promotion.owner_id,
           type: "error",
-          title: "Promotion rejected",
+          title: isHidden ? "Promotion hidden" : "Promotion rejected",
           message: reason
-            ? `"${shortTitle}" was rejected: ${reason.slice(0, 80)}`
-            : `"${shortTitle}" needs changes before it can go live.`,
-          href: "/dashboard/listings",
+            ? `"${shortTitle}" was ${isHidden ? "hidden" : "rejected"}: ${reason.slice(0, 80)}`
+            : isHidden
+              ? `"${shortTitle}" has been hidden by moderation.`
+              : `"${shortTitle}" needs changes before it can go live.`,
+          href: "/dashboard/promotions",
         });
       } catch {
         // non-fatal
