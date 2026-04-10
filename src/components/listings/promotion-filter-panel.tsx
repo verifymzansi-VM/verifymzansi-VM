@@ -1,11 +1,10 @@
 "use client";
 
 import { Building2, Calendar, X } from "lucide-react";
-import { useId } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
+import { EVENT_TYPES, TOURISM_SUBCATEGORIES } from "@/lib/constants/categories";
 import { getProvinceNames } from "@/lib/constants/sa-provinces";
 import {
   getPromotionFilterTypeLabel,
@@ -22,6 +21,8 @@ export interface PromotionFilterState {
   query?: string;
   type?: PromotionFilterType;
   category?: BusinessCategory;
+  eventType?: string;
+  subcategory?: string;
   province?: string;
   city?: string;
   businessId?: string;
@@ -30,10 +31,13 @@ export interface PromotionFilterState {
 
 interface PromotionFilterPanelProps {
   filters: PromotionFilterState;
+  activeTab: "tourism" | "events";
   cities: string[];
   businessMap: Map<string, string>;
   onTypeChange: (value: PromotionFilterType | undefined) => void;
   onCategoryChange: (value: BusinessCategory | undefined) => void;
+  onEventTypeChange: (value: string | undefined) => void;
+  onSubcategoryChange: (value: string | undefined) => void;
   onProvinceChange: (value: string | undefined) => void;
   onCityChange: (value: string | undefined) => void;
   onEventStateChange: (value: PromotionEventState | undefined) => void;
@@ -48,10 +52,13 @@ const selectClassName =
 
 export function PromotionFilterPanel({
   filters,
+  activeTab,
   cities,
   businessMap,
   onTypeChange,
-  onCategoryChange,
+  onCategoryChange: _onCategoryChange,
+  onEventTypeChange,
+  onSubcategoryChange,
   onProvinceChange,
   onCityChange,
   onEventStateChange,
@@ -60,12 +67,14 @@ export function PromotionFilterPanel({
   className,
   mode = "desktop",
 }: PromotionFilterPanelProps) {
-  const reactId = useId();
-  const id = (name: string) => `${reactId}-${name}`;
+  const idPrefix = `promotion-filters-${mode}-${activeTab}`;
+  const labelId = (name: string) => `${idPrefix}-${name}-label`;
   const hasActiveFilters = Boolean(
     filters.query ||
     filters.type ||
     filters.category ||
+    filters.eventType ||
+    filters.subcategory ||
     filters.province ||
     filters.city ||
     filters.businessId ||
@@ -87,31 +96,49 @@ export function PromotionFilterPanel({
       </div>
 
       <div className="space-y-4">
-        <div className="space-y-1.5">
-          <Label htmlFor={id("category")}>Category</Label>
-          <select
-            id={id("category")}
-            aria-label="Promotion category"
-            className={selectClassName}
-            value={filters.category || ""}
-            onChange={(event) =>
-              onCategoryChange((event.target.value || undefined) as BusinessCategory | undefined)
-            }
-          >
-            <option value="">All categories</option>
-            {BUSINESS_CATEGORIES.map((category) => (
-              <option key={category.value} value={category.value}>
-                {category.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        {activeTab === "tourism" ? (
+          <div className="space-y-1.5">
+            <Label id={labelId("subcategory")}>Subcategory</Label>
+            <select
+              aria-labelledby={labelId("subcategory")}
+              aria-label="Tourism subcategory"
+              className={selectClassName}
+              value={filters.subcategory || ""}
+              onChange={(event) => onSubcategoryChange(event.target.value || undefined)}
+            >
+              <option value="">All subcategories</option>
+              {TOURISM_SUBCATEGORIES.map((sub) => (
+                <option key={sub.value} value={sub.value}>
+                  {sub.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            <Label id={labelId("event-type")}>Event Type</Label>
+            <select
+              aria-labelledby={labelId("event-type")}
+              aria-label="Event type"
+              className={selectClassName}
+              value={filters.eventType || ""}
+              onChange={(event) => onEventTypeChange(event.target.value || undefined)}
+            >
+              <option value="">All event types</option>
+              {EVENT_TYPES.map((et) => (
+                <option key={et.value} value={et.value}>
+                  {et.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div className={cn("gap-3", mode === "mobile" ? "grid grid-cols-2" : "space-y-4")}>
           <div className="space-y-1.5">
-            <Label htmlFor={id("province")}>Province</Label>
+            <Label id={labelId("province")}>Province</Label>
             <select
-              id={id("province")}
+              aria-labelledby={labelId("province")}
               aria-label="Province"
               className={selectClassName}
               value={filters.province || ""}
@@ -127,9 +154,9 @@ export function PromotionFilterPanel({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor={id("city")}>City</Label>
+            <Label id={labelId("city")}>City</Label>
             <select
-              id={id("city")}
+              aria-labelledby={labelId("city")}
               aria-label="City"
               className={selectClassName}
               value={filters.city || ""}
@@ -146,11 +173,11 @@ export function PromotionFilterPanel({
           </div>
         </div>
 
-        {filters.type === "event" && (
+        {activeTab === "events" && (
           <div className="space-y-1.5">
-            <Label htmlFor={id("event-state")}>Event state</Label>
+            <Label id={labelId("event-state")}>Event state</Label>
             <select
-              id={id("event-state")}
+              aria-labelledby={labelId("event-state")}
               aria-label="Event state"
               className={selectClassName}
               value={filters.eventState || ""}
@@ -201,14 +228,29 @@ export function PromotionFilterPanel({
             </Badge>
           )}
 
-          {filters.category && (
+          {filters.subcategory && (
             <Badge variant="secondary" className="gap-1">
-              {BUSINESS_CATEGORIES.find((category) => category.value === filters.category)?.label}
+              {TOURISM_SUBCATEGORIES.find((s) => s.value === filters.subcategory)?.label ??
+                filters.subcategory}
               <button
                 type="button"
                 className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label="Remove promotion category filter"
-                onClick={() => onCategoryChange(undefined)}
+                aria-label="Remove subcategory filter"
+                onClick={() => onSubcategoryChange(undefined)}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+
+          {filters.eventType && (
+            <Badge variant="secondary" className="gap-1">
+              {EVENT_TYPES.find((et) => et.value === filters.eventType)?.label ?? filters.eventType}
+              <button
+                type="button"
+                className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Remove event type filter"
+                onClick={() => onEventTypeChange(undefined)}
               >
                 <X className="h-3 w-3" />
               </button>

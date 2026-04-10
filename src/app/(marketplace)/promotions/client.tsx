@@ -114,20 +114,6 @@ export function normalizeValue(value: string | null): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
-const TOURISM_SUBCATEGORIES = [
-  { value: "hotel_resort", label: "Hotel / Resort" },
-  { value: "guest_house_bnb", label: "Guest House / B&B" },
-  { value: "lodge_game_lodge", label: "Lodge / Game Lodge" },
-  { value: "backpackers_hostel", label: "Backpackers / Hostel" },
-  { value: "self_catering", label: "Self-Catering" },
-  { value: "tour_operator", label: "Tour Operator" },
-  { value: "travel_agency", label: "Travel Agency" },
-  { value: "safari_wildlife", label: "Safari & Wildlife" },
-  { value: "adventure_activities", label: "Adventure Activities" },
-  { value: "cultural_heritage", label: "Cultural & Heritage" },
-  { value: "car_rental_tourism", label: "Car Rental (Tourism)" },
-] as const;
-
 export function PromotionsExplorer() {
   const router = useRouter();
   const pathname = usePathname();
@@ -172,6 +158,7 @@ export function PromotionsExplorer() {
         | PromotionEventState
         | undefined,
       subcategory: normalizeValue(currentSearchParams.get("subcategory")),
+      eventType: normalizeValue(currentSearchParams.get("event_type")),
       page: Math.max(1, parseInt(currentSearchParams.get("page") || "1", 10)),
     }),
     [currentSearchParams]
@@ -189,7 +176,8 @@ export function PromotionsExplorer() {
         city: filters.city,
         business_id: filters.businessId,
         event_state: filters.eventState,
-        subcategory: (filters as Record<string, unknown>).subcategory as string | undefined,
+        subcategory: filters.subcategory,
+        event_type: filters.eventType,
         page: options?.preservePage ? String(filters.page) : undefined,
         ...updates,
       };
@@ -266,6 +254,13 @@ export function PromotionsExplorer() {
     [updateFilters]
   );
 
+  const handleEventTypeChange = useCallback(
+    (value: string | undefined) => {
+      updateFilters({ event_type: value });
+    },
+    [updateFilters]
+  );
+
   const switchTab = useCallback(
     (tab: ActiveTab) => {
       // Reset filters when switching tabs, but keep location filters
@@ -311,7 +306,7 @@ export function PromotionsExplorer() {
           }
         } else {
           params.set("type", "event");
-          if (filters.category) params.set("category", filters.category);
+          if (filters.eventType) params.set("event_type", filters.eventType);
           if (filters.eventState) params.set("event_state", filters.eventState);
 
           const res = await fetch(`/api/promotions?${params.toString()}`, { cache: "no-store" });
@@ -481,10 +476,13 @@ export function PromotionsExplorer() {
       {/* Mobile filter drawer (FAB visible < lg only) */}
       <PromotionFilterDrawer
         filters={filters}
+        activeTab={activeTab}
         cities={cities}
         businessMap={businessMap}
         onTypeChange={handleTypeChange}
         onCategoryChange={(value) => updateFilters({ category: value })}
+        onSubcategoryChange={handleSubcategoryChange}
+        onEventTypeChange={handleEventTypeChange}
         onProvinceChange={handleProvinceChange}
         onCityChange={(value) => updateFilters({ city: value })}
         onEventStateChange={handleEventStateChange}
@@ -495,58 +493,21 @@ export function PromotionsExplorer() {
       <div className="lg:flex lg:gap-6">
         <aside className="hidden w-72 shrink-0 lg:block">
           <div className="sticky top-24 space-y-4">
-            {activeTab === "tourism" ? (
-              /* ── Tourism sidebar filters ── */
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label
-                    htmlFor="subcategory-filter"
-                    className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-                  >
-                    Subcategory
-                  </label>
-                  <select
-                    id="subcategory-filter"
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    value={filters.subcategory ?? ""}
-                    onChange={(e) => handleSubcategoryChange(e.target.value || undefined)}
-                  >
-                    <option value="">All subcategories</option>
-                    {TOURISM_SUBCATEGORIES.map((sub) => (
-                      <option key={sub.value} value={sub.value}>
-                        {sub.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <PromotionFilterPanel
-                  filters={filters}
-                  cities={cities}
-                  businessMap={businessMap}
-                  onTypeChange={handleTypeChange}
-                  onCategoryChange={(value) => updateFilters({ category: value })}
-                  onProvinceChange={handleProvinceChange}
-                  onCityChange={(value) => updateFilters({ city: value })}
-                  onEventStateChange={handleEventStateChange}
-                  onClearQuery={clearQueryFilter}
-                  onClearAll={clearAllFilters}
-                />
-              </div>
-            ) : (
-              /* ── Events sidebar filters ── */
-              <PromotionFilterPanel
-                filters={filters}
-                cities={cities}
-                businessMap={businessMap}
-                onTypeChange={handleTypeChange}
-                onCategoryChange={(value) => updateFilters({ category: value })}
-                onProvinceChange={handleProvinceChange}
-                onCityChange={(value) => updateFilters({ city: value })}
-                onEventStateChange={handleEventStateChange}
-                onClearQuery={clearQueryFilter}
-                onClearAll={clearAllFilters}
-              />
-            )}
+            <PromotionFilterPanel
+              filters={filters}
+              activeTab={activeTab}
+              cities={cities}
+              businessMap={businessMap}
+              onTypeChange={handleTypeChange}
+              onCategoryChange={(value) => updateFilters({ category: value })}
+              onSubcategoryChange={handleSubcategoryChange}
+              onEventTypeChange={handleEventTypeChange}
+              onProvinceChange={handleProvinceChange}
+              onCityChange={(value) => updateFilters({ city: value })}
+              onEventStateChange={handleEventStateChange}
+              onClearQuery={clearQueryFilter}
+              onClearAll={clearAllFilters}
+            />
           </div>
         </aside>
 

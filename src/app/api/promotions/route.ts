@@ -22,6 +22,7 @@ import {
 } from "@/lib/promotions/type-taxonomy";
 import { normalizeBusinessCategoryParam } from "@/lib/utils/marketplace-query";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
+import { EVENT_TYPES } from "@/lib/constants/categories";
 import { getPromotionSocialAuthorizationWriteResult } from "@/lib/promotions/social-authorization";
 import {
   ACCOUNT_PROFILE_NOT_FOUND_ERROR,
@@ -91,6 +92,7 @@ type PromotionResultRow = {
   focal_y?: number | null;
   published_at?: string | null;
   created_at: string;
+  event_details?: Record<string, unknown> | null;
 };
 
 function normalizeEventStateParam(value: string | null): PromotionEventState | null {
@@ -103,6 +105,10 @@ function normalizeEventStateParam(value: string | null): PromotionEventState | n
 const promotionsQuerySchema = z.object({
   type: optionalTrimmedStringSchema,
   category: optionalTrimmedStringSchema,
+  event_type: optionalTrimmedStringSchema.refine(
+    (v) => !v || EVENT_TYPES.some((t) => t.value === v),
+    { message: "Invalid event_type value" }
+  ),
   province: optionalTrimmedStringSchema,
   city: optionalTrimmedStringSchema,
   q: optionalTrimmedStringSchema,
@@ -569,6 +575,7 @@ export async function GET(request: NextRequest) {
     if (query.event_state && !eventState) {
       return NextResponse.json({ error: "Invalid event_state" }, { status: 400 });
     }
+    const eventTypeFilter = query.event_type ?? undefined;
     const page = query.page;
     const limit = query.limit;
     const offset = (page - 1) * limit;
@@ -610,6 +617,9 @@ export async function GET(request: NextRequest) {
       if (eventState) {
         query = applyEventStateFilter(query, eventState, nowIso);
       }
+      if (eventTypeFilter) {
+        query = query.eq("event_details->>event_type" as never, eventTypeFilter);
+      }
 
       return query
         .order("boost_until", { ascending: false, nullsFirst: false })
@@ -619,11 +629,11 @@ export async function GET(request: NextRequest) {
     };
 
     const primarySelect = withOwnerColumn(
-      "id, owner_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, media_width, media_height, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, view_count, focal_x, focal_y, published_at, created_at",
+      "id, owner_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, media_width, media_height, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, event_details, boost_until, featured_until, view_count, focal_x, focal_y, published_at, created_at",
       ownerColumn
     );
     const fallbackWithoutCategoryKey = withOwnerColumn(
-      "id, owner_id, business_id, title, description, promotion_type, category, photos, videos, video_thumbnail, media_width, media_height, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, view_count, focal_x, focal_y, published_at, created_at",
+      "id, owner_id, business_id, title, description, promotion_type, category, photos, videos, video_thumbnail, media_width, media_height, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, event_details, boost_until, featured_until, view_count, focal_x, focal_y, published_at, created_at",
       ownerColumn
     );
 

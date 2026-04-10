@@ -12,7 +12,7 @@ import {
   getPromotionFilterTypeLabel,
   type PromotionFilterType,
 } from "@/lib/promotions/type-taxonomy";
-import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
+import { EVENT_TYPES, TOURISM_SUBCATEGORIES } from "@/lib/constants/categories";
 import {
   PROMOTION_EVENT_STATE_LABELS,
   type BusinessCategory,
@@ -24,10 +24,13 @@ import { ActiveFilterChips, type FilterChip } from "./active-filter-chips";
 
 interface PromotionFilterDrawerProps {
   filters: PromotionFilterState;
+  activeTab: "tourism" | "events";
   cities: string[];
   businessMap: Map<string, string>;
   onTypeChange: (value: PromotionFilterType | undefined) => void;
   onCategoryChange: (value: BusinessCategory | undefined) => void;
+  onEventTypeChange: (value: string | undefined) => void;
+  onSubcategoryChange: (value: string | undefined) => void;
   onProvinceChange: (value: string | undefined) => void;
   onCityChange: (value: string | undefined) => void;
   onEventStateChange: (value: PromotionEventState | undefined) => void;
@@ -40,6 +43,8 @@ function countActivePromotionFilters(filters: PromotionFilterState): number {
   if (filters.query) count++;
   if (filters.type) count++;
   if (filters.category) count++;
+  if (filters.eventType) count++;
+  if (filters.subcategory) count++;
   if (filters.province) count++;
   if (filters.city) count++;
   if (filters.eventState) count++;
@@ -48,10 +53,13 @@ function countActivePromotionFilters(filters: PromotionFilterState): number {
 
 export function PromotionFilterDrawer({
   filters,
+  activeTab,
   cities,
   businessMap,
   onTypeChange,
   onCategoryChange,
+  onEventTypeChange,
+  onSubcategoryChange,
   onProvinceChange,
   onCityChange,
   onEventStateChange,
@@ -75,13 +83,35 @@ export function PromotionFilterDrawer({
     });
   }
   if (filters.category) {
+    const catValue = filters.category as string;
     const catLabel =
-      BUSINESS_CATEGORIES.find((c) => c.value === filters.category)?.label ||
+      TOURISM_SUBCATEGORIES.find((c) => c.value === catValue)?.label ||
+      EVENT_TYPES.find((c) => c.value === catValue)?.label ||
       String(filters.category).replace(/_/g, " ");
     activeChips.push({
       key: "category",
       label: catLabel,
       onRemove: () => onCategoryChange(undefined),
+    });
+  }
+  if (filters.subcategory) {
+    const subLabel =
+      TOURISM_SUBCATEGORIES.find((s) => s.value === filters.subcategory)?.label ||
+      String(filters.subcategory).replace(/_/g, " ");
+    activeChips.push({
+      key: "subcategory",
+      label: subLabel,
+      onRemove: () => onSubcategoryChange(undefined),
+    });
+  }
+  if (filters.eventType) {
+    const etLabel =
+      EVENT_TYPES.find((et) => et.value === filters.eventType)?.label ||
+      String(filters.eventType).replace(/_/g, " ");
+    activeChips.push({
+      key: "eventType",
+      label: etLabel,
+      onRemove: () => onEventTypeChange(undefined),
     });
   }
   if (filters.province) {
@@ -176,10 +206,13 @@ export function PromotionFilterDrawer({
 
         <PromotionFilterPanel
           filters={filters}
+          activeTab={activeTab}
           cities={cities}
           businessMap={businessMap}
           onTypeChange={onTypeChange}
           onCategoryChange={onCategoryChange}
+          onEventTypeChange={onEventTypeChange}
+          onSubcategoryChange={onSubcategoryChange}
           onProvinceChange={onProvinceChange}
           onCityChange={onCityChange}
           onEventStateChange={onEventStateChange}
