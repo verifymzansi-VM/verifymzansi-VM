@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Camera, MapPin, TreePalm, ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -213,6 +213,7 @@ function CreateTourismContent() {
     restore: restoreDraft,
     discard: discardDraft,
   } = usePostDraftAutosave<TourismDraftData>("tourism", user?.id, !isLoading);
+  const lastAutosaveSignatureRef = useRef<string>("");
 
   const locationValue: LocationValue = {
     province,
@@ -343,7 +344,7 @@ function CreateTourismContent() {
   // Auto-save draft
   useEffect(() => {
     if (!user?.id || isLoading || isSubmitting || submitSucceeded) return;
-    saveDraft(step, {
+    const draftData: TourismDraftData = {
       listingType,
       title,
       description,
@@ -395,7 +396,13 @@ function CreateTourismContent() {
       socialTiktok,
       businessId,
       socialAuthorization,
-    });
+    };
+
+    const autosaveSignature = JSON.stringify({ step, draftData });
+    if (autosaveSignature === lastAutosaveSignatureRef.current) return;
+
+    lastAutosaveSignatureRef.current = autosaveSignature;
+    saveDraft(step, draftData);
     setLastSavedAt(Date.now());
   }, [
     user?.id,
