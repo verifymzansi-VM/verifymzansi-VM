@@ -72,4 +72,45 @@ describe("post-drafts storage", () => {
     expect(loaded).toBeNull();
     expect(localStorage.getItem(key)).toBeNull();
   });
+
+  it("round-trips tourism social authorization draft data", () => {
+    saveDraft("tourism", userId, 3, {
+      listingType: "event",
+      title: "Sample Event",
+      description: "Sample description with enough content",
+      socialAuthorization: {
+        granted: true,
+        authorizerName: "Jane Owner",
+        authorizerRole: "Director",
+        relationship: "owner",
+        monetizationAcknowledged: true,
+        acceptedVersion: "v1",
+      },
+    });
+
+    const loaded = loadDraft<{
+      listingType: string;
+      title: string;
+      description: string;
+      socialAuthorization?: {
+        granted: boolean;
+        authorizerName?: string;
+        authorizerRole?: string;
+        relationship?: string;
+        monetizationAcknowledged?: boolean;
+        acceptedVersion?: string;
+      };
+    }>("tourism", userId);
+
+    expect(loaded).toBeTruthy();
+    expect(loaded?.step).toBe(3);
+    expect(loaded?.data.socialAuthorization).toEqual({
+      granted: true,
+      authorizerName: "Jane Owner",
+      authorizerRole: "Director",
+      relationship: "owner",
+      monetizationAcknowledged: true,
+      acceptedVersion: "v1",
+    });
+  });
 });

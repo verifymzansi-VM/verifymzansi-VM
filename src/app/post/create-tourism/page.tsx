@@ -64,6 +64,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { usePostDraftAutosave } from "@/hooks/use-post-draft-autosave";
 import { validateTourismStep } from "@/lib/forms/tourism-form";
 import type { TourismListingType } from "@/types/tourism-details";
+import type { SocialAuthorizerRelationship } from "@/types/enums";
 import {
   OperatingHoursInput,
   formatHoursValue,
@@ -248,6 +249,18 @@ function CreateTourismContent() {
   const [rainPolicy, setRainPolicy] = useState("");
   const [earlyBirdDeadline, setEarlyBirdDeadline] = useState("");
   const [groupDiscountAvailable, setGroupDiscountAvailable] = useState(false);
+  const [socialAuthorization, setSocialAuthorization] = useState<{
+    granted: boolean;
+    authorizerName?: string;
+    authorizerRole?: string;
+    relationship?: SocialAuthorizerRelationship;
+    monetizationAcknowledged?: boolean;
+    acceptedVersion?: string;
+  }>({
+    granted: false,
+    monetizationAcknowledged: false,
+    acceptedVersion: "v1",
+  });
 
   /* ── Media state ─────────────────────────────────────────── */
   const [logoFiles, setLogoFiles] = useState<File[]>([]);
@@ -484,6 +497,16 @@ function CreateTourismContent() {
     if (d.socialTwitter) setSocialTwitter(d.socialTwitter);
     if (d.socialTiktok) setSocialTiktok(d.socialTiktok);
     if (d.businessId) setBusinessId(d.businessId);
+    if (d.socialAuthorization) {
+      setSocialAuthorization({
+        granted: !!d.socialAuthorization.granted,
+        authorizerName: d.socialAuthorization.authorizerName,
+        authorizerRole: d.socialAuthorization.authorizerRole,
+        relationship: d.socialAuthorization.relationship,
+        monetizationAcknowledged: !!d.socialAuthorization.monetizationAcknowledged,
+        acceptedVersion: d.socialAuthorization.acceptedVersion || "v1",
+      });
+    }
     toast({ title: "Draft restored", description: "Continuing where you left off." });
   }, [user?.id, isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -559,6 +582,7 @@ function CreateTourismContent() {
       socialTwitter,
       socialTiktok,
       businessId,
+      socialAuthorization: listingType === "event" ? socialAuthorization : undefined,
     };
 
     const autosaveSignature = JSON.stringify({ step, draftData });
@@ -642,6 +666,7 @@ function CreateTourismContent() {
     socialTwitter,
     socialTiktok,
     businessId,
+    socialAuthorization,
   ]);
 
   /* ── Helpers ─────────────────────────────────────────────── */
@@ -724,6 +749,7 @@ function CreateTourismContent() {
         venueName,
         venueCapacity,
         ticketsUrl,
+        socialAuthorization,
       },
       photoFiles.length
     );
@@ -1148,6 +1174,11 @@ function CreateTourismContent() {
     setSocialTwitter("");
     setSocialTiktok("");
     setBusinessId("");
+    setSocialAuthorization({
+      granted: false,
+      monetizationAcknowledged: false,
+      acceptedVersion: "v1",
+    });
     setPhotoFiles([]);
     setVideoFiles([]);
     setVideoThumbnailFile([]);
@@ -1197,6 +1228,11 @@ function CreateTourismContent() {
     setEventAccessibility([]);
     setFoodDrinksAvailable(false);
     setBringYourOwn("");
+    setSocialAuthorization({
+      granted: false,
+      monetizationAcknowledged: false,
+      acceptedVersion: "v1",
+    });
   }
 
   function handleListingTypeChange(nextType: TourismListingType) {

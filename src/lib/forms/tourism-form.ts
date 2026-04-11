@@ -1,4 +1,5 @@
 import type { TourismListingType } from "@/types/tourism-details";
+import type { SocialAuthorizerRelationship } from "@/types/enums";
 import { TOURISM_SUBCATEGORY_FIELD_GROUPS } from "@/lib/constants/categories";
 
 /* ── Regex ───────────────────────────────────────────────── */
@@ -72,6 +73,14 @@ export interface TourismFormValues {
   venueName: string;
   venueCapacity: string;
   ticketsUrl: string;
+  socialAuthorization?: {
+    granted: boolean;
+    authorizerName?: string;
+    authorizerRole?: string;
+    relationship?: SocialAuthorizerRelationship;
+    monetizationAcknowledged?: boolean;
+    acceptedVersion?: string;
+  };
 }
 
 /* ── Step 0: Type & Basics ───────────────────────────────── */
