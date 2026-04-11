@@ -199,26 +199,9 @@ export const PLANS: PlanDefinition[] = [
   // Tourism & Events
   {
     area: "PROMOTIONS_EVENTS",
-    tier: "basic",
-    name: "Promotions Basic",
-    priceCents: 3000,
-    billingFrequency: "30_days",
-    features: {
-      maxPromotions: 1,
-      maxPhotos: 10,
-      maxPostsPerMonth: 1,
-      videoAllowed: false,
-      boostAllowed: false,
-      featuredAllowed: false,
-      urgentAllowed: false,
-      coverVideoAllowed: false,
-    },
-  },
-  {
-    area: "PROMOTIONS_EVENTS",
     tier: "starter",
     name: "Promotions Starter",
-    priceCents: 10000,
+    priceCents: 15000,
     billingFrequency: "30_days",
     features: {
       maxPromotions: 5,
@@ -236,7 +219,7 @@ export const PLANS: PlanDefinition[] = [
     area: "PROMOTIONS_EVENTS",
     tier: "growth",
     name: "Promotions Growth",
-    priceCents: 25000,
+    priceCents: 40000,
     billingFrequency: "30_days",
     features: {
       maxPromotions: 15,
@@ -254,7 +237,7 @@ export const PLANS: PlanDefinition[] = [
     area: "PROMOTIONS_EVENTS",
     tier: "pro",
     name: "Promotions Pro",
-    priceCents: 65000,
+    priceCents: 100000,
     billingFrequency: "30_days",
     features: {
       maxPromotions: 45,

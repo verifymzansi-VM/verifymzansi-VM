@@ -15,8 +15,8 @@ import {
 } from "./pricing";
 
 describe("pricing constants", () => {
-  it("defines exactly 17 plans (basic + 5 areas × 3 tiers + 1 extra basic)", () => {
-    expect(PLANS).toHaveLength(17);
+  it("defines exactly 16 plans (5 areas × 3 tiers + 1 extra basic)", () => {
+    expect(PLANS).toHaveLength(16);
   });
 
   it("covers all five marketplace areas", () => {
@@ -100,7 +100,7 @@ describe("getPlansForArea", () => {
   it("returns correct number of plans for each area", () => {
     expect(getPlansForArea("MZANSI_MARKET")).toHaveLength(4);
     expect(getPlansForArea("MZANSI_BUSINESS")).toHaveLength(3);
-    expect(getPlansForArea("PROMOTIONS_EVENTS")).toHaveLength(4);
+    expect(getPlansForArea("PROMOTIONS_EVENTS")).toHaveLength(3);
     expect(getPlansForArea("MALL_SHOPS")).toHaveLength(3);
     expect(getPlansForArea("BUSINESS_ADS")).toHaveLength(3);
   });
