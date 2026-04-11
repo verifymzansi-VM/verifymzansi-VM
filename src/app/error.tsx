@@ -29,22 +29,26 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-4 text-center">
-      <AlertTriangle className="h-8 w-8 text-destructive" />
-      <div className="space-y-1.5">
-        <h1 className="text-xl font-display font-bold">Something went wrong</h1>
-        <p className="text-sm text-muted-foreground max-w-md">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-5 px-4 text-center">
+      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
+        <AlertTriangle className="h-7 w-7 text-destructive" />
+      </div>
+      <div className="space-y-2 max-w-md">
+        <h1 className="text-lg sm:text-xl font-display font-bold">Something went wrong</h1>
+        <p className="text-sm text-muted-foreground">
           An unexpected error occurred. Please try again or return to the homepage.
         </p>
         {error.digest && (
           <p className="text-xs text-muted-foreground">Error reference: {error.digest}</p>
         )}
-        {/* Always show a brief error summary so users can screenshot it for support. */}
-        <p className="text-xs text-muted-foreground/60 max-w-md break-all">
+        <p className="text-xs text-muted-foreground/60 break-all">
           {error.message || "(no message)"}
         </p>
         {debugVisible && (
-          <pre className="mt-2 max-w-md overflow-auto rounded bg-neutral-100 p-2 text-left text-xs text-red-700 dark:bg-neutral-900 dark:text-red-400">
+          <pre
+            className="mt-2 overflow-auto rounded-lg bg-neutral-100 p-3 text-left text-xs text-red-700 dark:bg-neutral-900 dark:text-red-400"
+            aria-label="Error details"
+          >
             {error.message}\n{error.stack ?? "(no stack)"}
           </pre>
         )}

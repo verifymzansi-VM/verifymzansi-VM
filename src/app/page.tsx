@@ -179,7 +179,7 @@ export default async function HomePage() {
                     <Button
                       asChild
                       size="lg"
-                      className="w-full sm:w-auto h-12 px-8 text-base bg-brand-green hover:bg-brand-green-600 text-white transition-all gap-2 rounded-full font-semibold"
+                      className="w-full sm:w-auto h-12 px-8 text-base bg-brand-green hover:bg-brand-green-600 hover:scale-[1.02] hover:-translate-y-0.5 text-white transition-all duration-200 gap-2 rounded-full font-semibold"
                     >
                       <Link href="/advertise" prefetch={false}>
                         Start for Free
@@ -190,7 +190,7 @@ export default async function HomePage() {
                       asChild
                       size="lg"
                       variant="outline"
-                      className="w-full sm:w-auto h-12 px-8 text-base rounded-full border-white/20 bg-white/5 text-white hover:bg-white/10"
+                      className="w-full sm:w-auto h-12 px-8 text-base rounded-full border-white/20 bg-white/5 text-white hover:bg-white/10 hover:scale-[1.02] hover:-translate-y-0.5 transition-all duration-200"
                     >
                       <Link href="/register" prefetch={false}>
                         Create Account

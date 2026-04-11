@@ -25,16 +25,21 @@ export default function AdminError({
           </Link>
         </div>
       </header>
-      <main className="flex-1 flex flex-col items-center justify-center gap-4 px-4 text-center">
-        <ShieldAlert className="h-8 w-8 text-destructive" />
-        <div className="space-y-2">
-          <h1 className="text-xl font-display font-bold">Admin Panel Error</h1>
-          <p className="text-muted-foreground max-w-md">
+      <main className="flex-1 flex flex-col items-center justify-center gap-6 px-4 text-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
+          <ShieldAlert className="h-7 w-7 text-destructive" />
+        </div>
+        <div className="max-w-md space-y-2">
+          <h1 className="text-lg sm:text-xl font-display font-bold">Admin Panel Error</h1>
+          <p className="text-sm text-muted-foreground">
             An error occurred in the admin panel. If this persists, contact the engineering team.
           </p>
           {error.digest && <p className="text-xs text-muted-foreground">Ref: {error.digest}</p>}
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap justify-center gap-3">
+          <Button variant="outline" asChild>
+            <Link href="/">Go Home</Link>
+          </Button>
           <Button variant="outline" onClick={() => (window.location.href = "/admin")}>
             Reload Admin
           </Button>

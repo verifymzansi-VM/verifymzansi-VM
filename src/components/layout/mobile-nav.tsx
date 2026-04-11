@@ -72,7 +72,7 @@ export function MobileNav() {
               onClick={() => triggerHaptic("light")}
               aria-current={isActive ? "page" : undefined}
               className={cn(
-                "relative flex flex-col items-center justify-center gap-0.5 flex-1 py-1 transition-colors",
+                "relative flex flex-col items-center justify-center gap-0.5 flex-1 min-h-[44px] py-2 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                 isActive ? "text-brand-green" : "text-muted-foreground hover:text-foreground"
               )}
             >

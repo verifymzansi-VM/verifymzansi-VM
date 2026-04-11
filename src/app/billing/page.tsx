@@ -7,6 +7,7 @@ import { FREE_POST_CONFIG, getActivePlansByArea } from "@/lib/constants/pricing"
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { BillingPlanGrid } from "@/components/billing/plan-grid";
+import { PageHeader } from "@/components/layout/page-header";
 
 export const metadata = {
   title: "Pricing",
@@ -23,14 +24,12 @@ export default function BillingPage() {
       <Header isAuthenticated />
       <main id="main-content" className="flex-1 bg-background scroll-mt-24">
         <div className="container-page py-4 space-y-4">
-          <div className="text-center max-w-3xl mx-auto space-y-1">
-            <h1 className="text-lg sm:text-xl md:text-2xl font-display font-bold tracking-tight">
-              Simple, transparent pricing
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              All plans include trust badges and verification.
-            </p>
-          </div>
+          <PageHeader
+            centered
+            title="Simple, transparent pricing"
+            description="All plans include trust badges and verification."
+            className="border-0 pb-0"
+          />
 
           {/* Free Post Banner */}
           <div className="max-w-4xl mx-auto">
@@ -47,8 +46,8 @@ export default function BillingPage() {
               </div>
               <Button
                 asChild
-                size="sm"
-                className="h-11 bg-brand-green text-white font-semibold shrink-0 hover:bg-brand-green/90"
+                size="default"
+                className="bg-brand-green text-white font-semibold shrink-0 hover:bg-brand-green/90"
               >
                 <Link href="/post/create">
                   Choose Your Free Post <ArrowRight className="ml-1 h-3 w-3" />

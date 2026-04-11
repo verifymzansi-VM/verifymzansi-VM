@@ -1,17 +1,18 @@
 import Link from "next/link";
-import { Search } from "lucide-react";
+import { ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export default function DashboardNotFound() {
+export default function AdminNotFound() {
   return (
-    <div className="flex flex-col items-center justify-center gap-6 py-16 px-4 text-center">
+    <div className="flex flex-col items-center justify-center gap-6 py-20 px-4 text-center">
       <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
-        <Search className="h-7 w-7 text-muted-foreground" />
+        <ShieldAlert className="h-7 w-7 text-muted-foreground" />
       </div>
       <div className="max-w-md space-y-2">
-        <h1 className="text-lg sm:text-xl font-display font-bold">Page Not Found</h1>
+        <h1 className="text-lg sm:text-xl font-display font-bold">Admin Page Not Found</h1>
         <p className="text-sm text-muted-foreground">
-          This dashboard page doesn&apos;t exist or has been moved.
+          This admin page doesn&apos;t exist or has been moved. Check the sidebar for available
+          pages.
         </p>
       </div>
       <div className="flex flex-wrap justify-center gap-3">
@@ -19,7 +20,7 @@ export default function DashboardNotFound() {
           <Link href="/">Go Home</Link>
         </Button>
         <Button asChild>
-          <Link href="/dashboard">Back to Dashboard</Link>
+          <Link href="/admin">Back to Admin Dashboard</Link>
         </Button>
       </div>
     </div>

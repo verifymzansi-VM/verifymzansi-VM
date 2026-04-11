@@ -38,12 +38,20 @@ export default function GlobalError({
               Error reference: {error.digest}
             </p>
           )}
-          <button
-            onClick={reset}
-            className="rounded-md bg-brand-green px-4 py-2 text-white hover:bg-brand-green/90 transition-colors"
-          >
-            Try again
-          </button>
+          <div className="flex justify-center gap-3">
+            <button
+              onClick={() => (window.location.href = "/")}
+              className="rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            >
+              Go to Homepage
+            </button>
+            <button
+              onClick={reset}
+              className="rounded-md bg-brand-green px-4 py-2 text-sm font-medium text-white hover:bg-brand-green/90 transition-colors"
+            >
+              Try again
+            </button>
+          </div>
         </div>
       </body>
     </html>

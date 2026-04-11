@@ -125,7 +125,14 @@ export function PosterCardShell({
   const effectiveFitStrategy = hasVideo ? "contain" : fitStrategy;
 
   return (
-    <Link href={href} prefetch={false} className={cn("group block h-full", className)}>
+    <Link
+      href={href}
+      prefetch={false}
+      className={cn(
+        "group block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        className
+      )}
+    >
       <Card
         className={cn(
           "h-full flex flex-col overflow-hidden border-transparent bg-warm-100 shadow-[0_2px_10px_-6px_rgba(15,23,42,0.16)] transition-all duration-300 hover:-translate-y-px hover:shadow-[0_6px_18px_-10px_rgba(15,23,42,0.22)] rounded-xl",

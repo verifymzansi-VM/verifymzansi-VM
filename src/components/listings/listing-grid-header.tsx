@@ -43,7 +43,7 @@ export function ListingGridHeader() {
         <div className="flex items-center gap-1.5 text-muted-foreground">
           {isHydrated ? (
             <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center gap-1.5 border-none bg-transparent text-xs font-medium text-foreground outline-none transition-colors hover:text-brand-green">
+              <DropdownMenuTrigger className="flex items-center gap-1.5 rounded-md border-none bg-transparent px-1.5 py-1 text-xs font-medium text-foreground outline-none transition-colors hover:text-brand-green focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                 <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="hidden sm:inline">{currentSortLabel}</span>
                 <span className="sm:hidden">Sort</span>
