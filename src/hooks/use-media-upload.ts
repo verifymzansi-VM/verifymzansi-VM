@@ -224,8 +224,8 @@ function checkQualityWarnings(
     onWarn("Extreme aspect ratio — this media will be significantly letterboxed in cards.");
   }
 
-  if (ratio < 1) {
-    onWarn("Portrait media will be cropped in the 16:9 card. Landscape photos look best.");
+  if (ratio > 1) {
+    onWarn("Landscape media will be cropped in the 9:16 card. Portrait photos/videos look best.");
   }
 }
 

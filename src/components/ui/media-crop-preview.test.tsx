@@ -57,10 +57,10 @@ describe("MediaCropPreview", () => {
     expect(control).toBeInTheDocument();
   });
 
-  it("shows default 16:9 card overlay label", () => {
+  it("shows default 9:16 card overlay label", () => {
     const onChange = vi.fn();
     render(<MediaCropPreview file={makeImageFile()} onChange={onChange} />);
-    expect(screen.getByText("16:9 card")).toBeInTheDocument();
+    expect(screen.getByText("9:16 card")).toBeInTheDocument();
   });
 
   it("shows 4:5 card overlay label when aspectRatio is 4/5", () => {

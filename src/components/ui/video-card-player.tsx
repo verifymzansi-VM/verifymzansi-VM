@@ -16,7 +16,7 @@ import { useVideoFeed } from "@/hooks/use-video-feed";
 import { useGlobalMute } from "@/hooks/use-global-mute";
 
 const DEFAULT_MEDIA_FIT = "object-cover";
-const DEFAULT_CONTAINER_ASPECT_RATIO = 16 / 9;
+const DEFAULT_CONTAINER_ASPECT_RATIO = 9 / 16;
 const SMART_FIT_CROP_THRESHOLD = 0.2;
 
 export type MediaFitStrategy = "cover" | "smart" | "contain";

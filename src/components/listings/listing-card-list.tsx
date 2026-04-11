@@ -13,7 +13,7 @@ import { formatZARShort } from "@/lib/utils/format";
 import { getFocalPositionClassName } from "@/lib/utils/media-position-classes";
 import type { TrustLevel } from "@/types/enums";
 
-const CARD_ASPECT_RATIO = 16 / 9;
+const CARD_ASPECT_RATIO = 9 / 16;
 
 interface ListingCardListProps {
   id: string;

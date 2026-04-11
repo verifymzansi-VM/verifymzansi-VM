@@ -128,7 +128,7 @@ describe("BusinessCard", () => {
       "https://example.com/cover.mp4"
     );
     expect(screen.getByTestId("video-card-player")).toHaveAttribute("data-mode", "ambient");
-    expect(screen.getByTestId("video-card-player")).toHaveAttribute("data-fit-strategy", "contain");
+    expect(screen.getByTestId("video-card-player")).toHaveAttribute("data-fit-strategy", "smart");
     expect(screen.getByTestId("video-card-player")).toHaveAttribute("data-mute-control", "auto");
   });
 

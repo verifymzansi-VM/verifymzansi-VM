@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import type { TrustLevel } from "@/types/enums";
 import type { ReactNode } from "react";
 
-const CARD_FRAME = { aspectRatio: 16 / 9, aspectClassName: "aspect-video" } as const;
+const CARD_FRAME = { aspectRatio: 9 / 16, aspectClassName: "aspect-[9/16]" } as const;
 
 interface PosterCardShellProps {
   href: string;
@@ -117,7 +117,7 @@ export function PosterCardShell({
         )}
         trustLevel={trustLevel}
       >
-        {/* ── 16:9 card thumbnail ───────────────────────────────── */}
+        {/* ── 9:16 card thumbnail ───────────────────────────────── */}
         <div
           className={cn(
             "relative w-full overflow-hidden bg-slate-900 rounded-t-xl",

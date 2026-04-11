@@ -15,7 +15,7 @@ export interface CropPosition {
 interface MediaCropPreviewProps {
   /** Image file to preview. */
   file: File;
-  /** Target aspect ratio for the crop overlay (default: 16/9). */
+  /** Target aspect ratio for the crop overlay (default: 9/16). */
   aspectRatio?: number;
   /** Current crop/focal position. Defaults to centre. */
   value?: CropPosition;
@@ -28,7 +28,7 @@ interface MediaCropPreviewProps {
 /**
  * Interactive crop preview overlay.
  *
- * Shows the full uploaded image with a semi-transparent 16:9 (or custom)
+ * Shows the full uploaded image with a semi-transparent 9:16 (or custom)
  * crop overlay. The user drags/pans the image within the crop window to
  * position what will be visible on their listing card. Under the hood,
  * this stores a focal point (0–1, 0–1) compatible with the FocalPointPicker
@@ -36,7 +36,7 @@ interface MediaCropPreviewProps {
  */
 export function MediaCropPreview({
   file,
-  aspectRatio = 16 / 9,
+  aspectRatio = 9 / 16,
   value = { x: 0.5, y: 0.5 },
   onChange,
   className,
@@ -63,7 +63,7 @@ export function MediaCropPreview({
 
   // Memoize the overlay label
   const overlayLabel = useMemo(() => {
-    if (aspectRatio === 16 / 9) return "16:9 card";
+    if (aspectRatio === 9 / 16) return "9:16 card";
     if (aspectRatio === 4 / 5) return "4:5 card";
     return `${aspectRatio.toFixed(2)} crop`;
   }, [aspectRatio]);
@@ -140,7 +140,7 @@ export function MediaCropPreview({
           }}
         >
           {/* The image with object-position driven by focal point */}
-          <div className="aspect-video">
+          <div className="aspect-[9/16]">
             {imageUrl && (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img

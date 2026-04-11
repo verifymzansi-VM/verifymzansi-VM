@@ -546,7 +546,7 @@ export function PromotionsExplorer() {
           {loading ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6 xl:gap-6">
               {Array.from({ length: 6 }).map((_, index) => (
-                <div key={index} className="aspect-video rounded-xl bg-muted animate-pulse" />
+                <div key={index} className="aspect-[9/16] rounded-xl bg-muted animate-pulse" />
               ))}
             </div>
           ) : error ? (
