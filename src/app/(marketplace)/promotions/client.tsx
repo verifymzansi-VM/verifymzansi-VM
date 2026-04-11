@@ -51,6 +51,7 @@ interface PromotionRow {
   focal_y: number | null;
   media_width: number | null;
   media_height: number | null;
+  logo_url: string | null;
   created_at: string;
 }
 
@@ -687,7 +688,7 @@ export function PromotionsExplorer() {
                         startDate={promotion.start_date}
                         endDate={promotion.end_date}
                         businessName={businessName}
-                        logoUrl={businessLogo}
+                        logoUrl={promotion.logo_url || businessLogo}
                         focalX={promotion.focal_x}
                         focalY={promotion.focal_y}
                         mediaWidth={promotion.media_width}

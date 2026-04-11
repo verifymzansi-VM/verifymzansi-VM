@@ -75,6 +75,13 @@ export const promotionSchema = z
     media_height: z.number().int().positive().optional(),
     focal_x: z.number().min(0).max(1).optional(),
     focal_y: z.number().min(0).max(1).optional(),
+    logo_url: z
+      .string()
+      .url()
+      .refine(isTrustedPlatformMediaUrl, {
+        message: "Logo must be hosted on the VerifyMzansi platform",
+      })
+      .optional(),
     start_date: z.string().datetime().optional(),
     end_date: z.string().datetime().optional(),
     business_id: z.string().uuid().optional(),

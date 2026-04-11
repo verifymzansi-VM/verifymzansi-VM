@@ -91,7 +91,7 @@ export default async function EventsPage() {
     .select(
       withOwnerColumn(
         `id, owner_id, business_id, title, description, promotion_type, category,
-       photos, videos, video_thumbnail, focal_x, focal_y, media_width, media_height, price_cents, price_negotiable, location_province, location_city,
+       photos, videos, video_thumbnail, focal_x, focal_y, media_width, media_height, logo_url, price_cents, price_negotiable, location_province, location_city,
        start_date, end_date, boost_until, featured_until, view_count, created_at`,
         promotionOwnerColumn
       )
@@ -111,7 +111,7 @@ export default async function EventsPage() {
     .select(
       withOwnerColumn(
         `id, owner_id, business_id, title, promotion_type,
-       photos, videos, video_thumbnail, focal_x, focal_y, media_width, media_height, price_cents, price_negotiable, location_province, location_city,
+       photos, videos, video_thumbnail, focal_x, focal_y, media_width, media_height, logo_url, price_cents, price_negotiable, location_province, location_city,
        start_date, end_date, view_count, created_at`,
         promotionOwnerColumn
       )
@@ -242,7 +242,10 @@ export default async function EventsPage() {
                         startDate={event.start_date as string | null}
                         endDate={event.end_date as string | null}
                         businessName={businessName}
-                        logoUrl={businessLogo}
+                        logoUrl={
+                          ((event as Record<string, unknown>).logo_url as string | undefined) ||
+                          businessLogo
+                        }
                         focalX={(event.focal_x as number | null | undefined) ?? null}
                         focalY={(event.focal_y as number | null | undefined) ?? null}
                         mediaWidth={(event.media_width as number | null | undefined) ?? null}

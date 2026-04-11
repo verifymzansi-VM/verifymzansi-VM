@@ -65,6 +65,7 @@ export interface PromotionDetailRecord {
   featured_until: string | null;
   view_count: number | null;
   created_at: string;
+  logo_url?: string | null;
   event_details?: EventDetails | null;
 }
 
@@ -342,6 +343,19 @@ export function PromotionDetailContent({
                   </Badge>
                 )}
               </div>
+
+              {/* Logo overlay */}
+              {(promotion.logo_url || linkedBusiness?.logo_url) && (
+                <div className="absolute bottom-3 left-3 h-10 w-10 overflow-hidden rounded-lg border border-white/20 bg-white shadow-md sm:h-12 sm:w-12">
+                  <Image
+                    src={normalizeMediaUrl((promotion.logo_url ?? linkedBusiness?.logo_url)!)}
+                    alt={`${promotion.title} logo`}
+                    width={48}
+                    height={48}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}

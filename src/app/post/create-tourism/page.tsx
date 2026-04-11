@@ -888,11 +888,11 @@ function CreateTourismContent() {
               return json.urls?.[0] as string | undefined;
             })()
           : Promise.resolve(undefined as string | undefined),
-        // Logo (tourism business only)
-        listingType === "tourism_business" && logoFiles.length > 0
+        // Logo
+        logoFiles.length > 0
           ? (async () => {
               const fd = new FormData();
-              fd.append("area", "business_logo");
+              fd.append("area", listingType === "tourism_business" ? "business_logo" : "promotion");
               fd.append("files", logoFiles[0]);
               const res = await fetchWithRetry("/api/media/upload", {
                 method: "POST",
@@ -1082,6 +1082,7 @@ function CreateTourismContent() {
           images: imageUrls,
           videos: videoUrls,
           video_thumbnail: uploadedVideoThumbnailUrl,
+          logo_url: uploadedLogoUrl || undefined,
           media_width: mediaDimensions?.width,
           media_height: mediaDimensions?.height,
           focal_x: focalPoint.x,
@@ -1345,6 +1346,7 @@ function CreateTourismContent() {
       photos: photoPreviewUrls,
       videos: previewVideoUrls.length > 0 ? previewVideoUrls : null,
       video_thumbnail: videoThumbnailUrl,
+      logo_url: logoPreviewUrl || null,
       price_cents: priceCents,
       price_negotiable: negotiable,
       location_province: province || "Province",
@@ -1381,6 +1383,7 @@ function CreateTourismContent() {
             negotiable={negotiable}
             imageUrl={cardMediaUrl || undefined}
             posterUrl={cardPosterUrl}
+            logoUrl={logoPreviewUrl || undefined}
             province={province || "Province"}
             city={city || "City"}
             promotionType="event"
@@ -2933,19 +2936,19 @@ function CreateTourismContent() {
                 {/* ── Step 3: Media & Review ── */}
                 {step === 3 && (
                   <div className="space-y-5 animate-in fade-in-0 duration-300">
-                    {/* Logo (tourism business only) */}
-                    {listingType === "tourism_business" && (
-                      <div className="space-y-2">
-                        <Label>Business Logo</Label>
-                        <MediaUpload
-                          label="Upload logo"
-                          maxFiles={1}
-                          files={logoFiles}
-                          onChange={setLogoFiles}
-                          accept="image/*"
-                        />
-                      </div>
-                    )}
+                    {/* Logo */}
+                    <div className="space-y-2">
+                      <Label>
+                        {listingType === "tourism_business" ? "Business Logo" : "Event Logo"}
+                      </Label>
+                      <MediaUpload
+                        label="Upload logo"
+                        maxFiles={1}
+                        files={logoFiles}
+                        onChange={setLogoFiles}
+                        accept="image/*"
+                      />
+                    </div>
 
                     {/* Photos */}
                     <div className="space-y-2">
@@ -3032,57 +3035,56 @@ function CreateTourismContent() {
                       </div>
                     )}
 
-                    {/* Visual placement preview (tourism business only) */}
-                    {listingType === "tourism_business" &&
-                      (photoPreviewUrls.length > 0 || logoPreviewUrl) && (
-                        <div className="rounded-xl border border-dashed border-brand-green/20 bg-brand-green/5 p-4 space-y-2">
-                          <p className="text-xs font-medium text-muted-foreground">
-                            How your logo and cover will appear:
-                          </p>
-                          <div className="relative rounded-lg overflow-hidden border bg-muted">
-                            <div className="aspect-[4/1] bg-gradient-to-r from-brand-green/30 to-brand-green/10 flex items-center justify-center">
-                              {photoPreviewUrls[0] ? (
-                                /* eslint-disable-next-line @next/next/no-img-element */
-                                <img
-                                  src={photoPreviewUrls[0]}
-                                  alt="Cover preview"
-                                  className="w-full h-full object-cover"
-                                  width={600}
-                                  height={150}
-                                />
-                              ) : (
-                                <span className="text-xs text-muted-foreground">
-                                  Cover photo area
-                                </span>
-                              )}
-                            </div>
-                            <div className="absolute bottom-2 left-4 h-12 w-12 rounded-lg bg-white dark:bg-warm-900 p-1 shadow-md border overflow-hidden">
-                              {logoPreviewUrl ? (
-                                /* eslint-disable-next-line @next/next/no-img-element */
-                                <img
-                                  src={logoPreviewUrl}
-                                  alt="Logo preview"
-                                  className="w-full h-full object-contain rounded-md"
-                                  width={48}
-                                  height={48}
-                                />
-                              ) : (
-                                <div className="w-full h-full rounded-md bg-muted flex items-center justify-center">
-                                  <TreePalm className="h-5 w-5 text-muted-foreground" />
-                                </div>
-                              )}
-                            </div>
+                    {/* Visual placement preview */}
+                    {(photoPreviewUrls.length > 0 || logoPreviewUrl) && (
+                      <div className="rounded-xl border border-dashed border-brand-green/20 bg-brand-green/5 p-4 space-y-2">
+                        <p className="text-xs font-medium text-muted-foreground">
+                          How your logo and cover will appear:
+                        </p>
+                        <div className="relative rounded-lg overflow-hidden border bg-muted">
+                          <div className="aspect-[4/1] bg-gradient-to-r from-brand-green/30 to-brand-green/10 flex items-center justify-center">
+                            {photoPreviewUrls[0] ? (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img
+                                src={photoPreviewUrls[0]}
+                                alt="Cover preview"
+                                className="w-full h-full object-cover"
+                                width={600}
+                                height={150}
+                              />
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                Cover photo area
+                              </span>
+                            )}
                           </div>
-                          <div className="flex gap-4 text-[10px] text-muted-foreground">
-                            <span>
-                              ← <strong>Logo</strong> (small square icon)
-                            </span>
-                            <span>
-                              ↑ <strong>Cover</strong> (wide banner behind logo)
-                            </span>
+                          <div className="absolute bottom-2 left-4 h-12 w-12 rounded-lg bg-white dark:bg-warm-900 p-1 shadow-md border overflow-hidden">
+                            {logoPreviewUrl ? (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img
+                                src={logoPreviewUrl}
+                                alt="Logo preview"
+                                className="w-full h-full object-contain rounded-md"
+                                width={48}
+                                height={48}
+                              />
+                            ) : (
+                              <div className="w-full h-full rounded-md bg-muted flex items-center justify-center">
+                                <TreePalm className="h-5 w-5 text-muted-foreground" />
+                              </div>
+                            )}
                           </div>
                         </div>
-                      )}
+                        <div className="flex gap-4 text-[10px] text-muted-foreground">
+                          <span>
+                            ← <strong>Logo</strong> (small square icon)
+                          </span>
+                          <span>
+                            ↑ <strong>Cover</strong> (wide banner behind logo)
+                          </span>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Video */}
                     {videoAllowed && (

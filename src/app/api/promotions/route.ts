@@ -381,6 +381,7 @@ export async function POST(request: NextRequest) {
             start_date: data.start_date || null,
             end_date: data.end_date || null,
             business_id: data.business_id || null,
+            logo_url: data.logo_url || null,
             event_details: data.event_details ?? null,
             status: "pending_moderation",
           },
@@ -592,11 +593,11 @@ export async function GET(request: NextRequest) {
     };
 
     const primarySelect = withOwnerColumn(
-      "id, owner_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, media_width, media_height, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, event_details, boost_until, featured_until, view_count, focal_x, focal_y, published_at, created_at",
+      "id, owner_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, media_width, media_height, logo_url, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, event_details, boost_until, featured_until, view_count, focal_x, focal_y, published_at, created_at",
       ownerColumn
     );
     const fallbackWithoutCategoryKey = withOwnerColumn(
-      "id, owner_id, business_id, title, description, promotion_type, category, photos, videos, video_thumbnail, media_width, media_height, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, event_details, boost_until, featured_until, view_count, focal_x, focal_y, published_at, created_at",
+      "id, owner_id, business_id, title, description, promotion_type, category, photos, videos, video_thumbnail, media_width, media_height, logo_url, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, event_details, boost_until, featured_until, view_count, focal_x, focal_y, published_at, created_at",
       ownerColumn
     );
 

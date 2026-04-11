@@ -74,6 +74,12 @@ export default function EditPromotionPage() {
   const [newVideoFiles, setNewVideoFiles] = useState<File[]>([]);
   const [focalPoint, setFocalPoint] = useState({ x: 0.5, y: 0.5 });
 
+  // Logo
+  const [existingLogoUrl, setExistingLogoUrl] = useState("");
+  const [newLogoFile, setNewLogoFile] = useState<File[]>([]);
+  const [logoBlobUrl, setLogoBlobUrl] = useState<string | null>(null);
+  const logoPreviewUrl = logoBlobUrl || existingLogoUrl || null;
+
   // Link to Business
   const [businessId, setBusinessId] = useState("");
   const [myBusinesses, setMyBusinesses] = useState<{ id: string; business_name: string }[]>([]);
@@ -140,6 +146,7 @@ export default function EditPromotionPage() {
           y: typeof p.focal_y === "number" ? p.focal_y : 0.5,
         });
         setBusinessId(p.business_id || "");
+        setExistingLogoUrl(p.logo_url || "");
         // Load event details if present
         const ed = p.event_details;
         if (ed && typeof ed === "object") {
@@ -192,6 +199,15 @@ export default function EditPromotionPage() {
     },
     [previewVideoUrls]
   );
+
+  useEffect(() => {
+    if (newLogoFile[0]) {
+      const url = URL.createObjectURL(newLogoFile[0]);
+      setLogoBlobUrl(url);
+      return () => URL.revokeObjectURL(url);
+    }
+    setLogoBlobUrl(null);
+  }, [newLogoFile]);
 
   function toggleContact(method: string) {
     setContactMethods((prev) =>
@@ -326,6 +342,24 @@ export default function EditPromotionPage() {
         compressedVideoFileRef ?? newVideoFiles[0] ?? newPhotoFiles[0] ?? null;
       const mediaDimensions = primaryMediaFile ? await readMediaDimensions(primaryMediaFile) : null;
 
+      // Upload logo if a new one was selected
+      let uploadedLogoUrl: string | undefined;
+      if (newLogoFile[0]) {
+        const logoData = new FormData();
+        logoData.append("area", "promotion");
+        logoData.append("files", newLogoFile[0]);
+        const logoRes = await fetchWithRetry("/api/media/upload", {
+          method: "POST",
+          headers: withCsrfHeaders(),
+          body: logoData,
+        });
+        if (!logoRes.ok) {
+          throw new Error(await readUploadError(logoRes, "Failed to upload logo"));
+        }
+        const logoJson = await logoRes.json();
+        uploadedLogoUrl = (logoJson.urls as string[])?.[0];
+      }
+
       setSubmitProgress("Saving promotion...");
 
       const body = {
@@ -341,6 +375,7 @@ export default function EditPromotionPage() {
         location_town: locationTown || undefined,
         location_address: locationAddress || undefined,
         contact_methods: contactMethods,
+        logo_url: uploadedLogoUrl || existingLogoUrl || undefined,
         images: allImages,
         videos: allVideos,
         video_thumbnail: videoThumbnail || undefined,
@@ -889,6 +924,36 @@ export default function EditPromotionPage() {
                 disabled={!videoAllowed}
               />
 
+              {/* Event logo */}
+              <div className="space-y-2">
+                <Label>Event Logo (optional)</Label>
+                {existingLogoUrl && newLogoFile.length === 0 && (
+                  <div className="relative group w-16 h-16 rounded-lg overflow-hidden border">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={normalizeMediaUrl(existingLogoUrl)}
+                      alt="Current logo"
+                      className="w-full h-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setExistingLogoUrl("")}
+                      className="absolute top-0.5 right-0.5 bg-black/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                      aria-label="Remove logo"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
+                <MediaUpload
+                  label="Upload Logo"
+                  maxFiles={1}
+                  files={newLogoFile}
+                  onChange={setNewLogoFile}
+                  accept="image/*"
+                />
+              </div>
+
               <div className="rounded-xl border border-dashed border-brand-green/30 bg-brand-green/5 p-4">
                 <div className="mb-3 text-sm font-medium text-muted-foreground">
                   Promotion preview
@@ -906,6 +971,7 @@ export default function EditPromotionPage() {
                     photos: previewImages,
                     videos: previewVideos,
                     video_thumbnail: videoThumbnail || null,
+                    logo_url: logoPreviewUrl,
                     price_cents: priceZar ? Math.round(parseFloat(priceZar || "0") * 100) : null,
                     price_negotiable: negotiable,
                     location_province: province || "South Africa",

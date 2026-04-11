@@ -44,7 +44,7 @@ export default async function AdminModerationPage() {
       admin
         .from("promotions")
         .select(
-          "id, title, status, created_at, category, owner_id, description, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, promotion_type"
+          "id, title, status, created_at, category, owner_id, description, photos, videos, video_thumbnail, logo_url, price_cents, price_negotiable, location_province, location_city, contact_methods, promotion_type"
         )
         .eq("status", "pending_moderation")
         .order("created_at", { ascending: true })

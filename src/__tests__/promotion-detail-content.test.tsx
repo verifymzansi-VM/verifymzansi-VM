@@ -207,4 +207,87 @@ describe("PromotionDetailContent", () => {
       images.some((img) => img.getAttribute("src") === "https://example.com/photo-2.jpg")
     ).toBe(true);
   });
+
+  it("renders logo overlay when promotion has logo_url", () => {
+    const { container } = render(
+      <PromotionDetailContent
+        promotion={{
+          id: "promo-logo",
+          owner_id: "seller-1",
+          business_id: null,
+          title: "Logo Event",
+          description: "An event with its own logo.",
+          promotion_type: "event",
+          category: "Live Music",
+          category_key: "events_entertainment",
+          photos: ["https://example.com/photo-1.jpg"],
+          videos: [],
+          video_thumbnail: null,
+          logo_url: "https://example.com/event-logo.png",
+          price_cents: null,
+          price_negotiable: false,
+          location_province: "Gauteng",
+          location_city: "Johannesburg",
+          location_town: null,
+          location_address: null,
+          contact_methods: [],
+          start_date: "2099-06-01T00:00:00.000Z",
+          end_date: "2099-06-02T00:00:00.000Z",
+          boost_until: null,
+          featured_until: null,
+          view_count: 0,
+          created_at: "2026-04-10T00:00:00.000Z",
+        }}
+        advertiserProfile={null}
+        linkedBusiness={null}
+      />
+    );
+
+    const logoImg = container.querySelector('img[alt="Logo Event logo"]');
+    expect(logoImg).toBeTruthy();
+    expect(logoImg?.getAttribute("src")).toBe("https://example.com/event-logo.png");
+  });
+
+  it("falls back to linked business logo when promotion has no logo_url", () => {
+    const { container } = render(
+      <PromotionDetailContent
+        promotion={{
+          id: "promo-biz-logo",
+          owner_id: "seller-1",
+          business_id: "biz-1",
+          title: "Business Linked Event",
+          description: "This event uses the linked business logo.",
+          promotion_type: "event",
+          category: "Live Music",
+          category_key: "events_entertainment",
+          photos: ["https://example.com/photo-1.jpg"],
+          videos: [],
+          video_thumbnail: null,
+          price_cents: null,
+          price_negotiable: false,
+          location_province: "Gauteng",
+          location_city: "Johannesburg",
+          location_town: null,
+          location_address: null,
+          contact_methods: [],
+          start_date: "2099-06-01T00:00:00.000Z",
+          end_date: "2099-06-02T00:00:00.000Z",
+          boost_until: null,
+          featured_until: null,
+          view_count: 0,
+          created_at: "2026-04-10T00:00:00.000Z",
+        }}
+        advertiserProfile={null}
+        linkedBusiness={{
+          id: "biz-1",
+          business_name: "Test Business",
+          logo_url: "https://example.com/business-logo.png",
+        }}
+      />
+    );
+
+    const logoImg = container.querySelector('img[alt="Business Linked Event logo"]');
+    expect(logoImg).toBeTruthy();
+    expect(logoImg?.getAttribute("src")).toBe("https://example.com/business-logo.png");
+  });
 });

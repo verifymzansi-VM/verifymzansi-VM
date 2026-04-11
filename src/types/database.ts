@@ -326,6 +326,7 @@ export interface Promotion {
   focal_x: number | null;
   focal_y: number | null;
   blurhash: string | null;
+  logo_url: string | null;
   event_details: Record<string, unknown> | null;
   status: ListingStatus;
   status_reason: string | null;
