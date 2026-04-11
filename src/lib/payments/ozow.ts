@@ -407,7 +407,8 @@ export async function createOzowHostedPayment(
         baseUrlHost,
       });
     }
-    const token = await getOzowAccessToken("payment");
+    const paymentScope = env("OZOW_PAYMENT_OAUTH_SCOPE") || "payment";
+    const token = await getOzowAccessToken(paymentScope);
 
     const requestBody = {
       siteCode,

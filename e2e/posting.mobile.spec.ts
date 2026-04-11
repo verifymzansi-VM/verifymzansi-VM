@@ -1,5 +1,5 @@
 import path from "node:path";
-import { test, type Page } from "@playwright/test";
+import { test, type Locator, type Page } from "@playwright/test";
 import { POSTING_MOBILE_STATE } from "./auth-state";
 
 const IMAGE_FIXTURE = path.join(process.cwd(), "src", "app", "icon.png");
@@ -19,10 +19,7 @@ function uploaderFor(page: Page, label: RegExp) {
     .first();
 }
 
-async function enterPostingForm(
-  page: Page,
-  firstField: ReturnType<Page["getByRole"]> | ReturnType<Page["getByLabel"]>
-) {
+async function enterPostingForm(page: Page, firstField: Locator) {
   const startPostingButton = page.getByRole("button", {
     name: /Start Posting|Use Your Free Post/i,
   });
@@ -37,6 +34,13 @@ async function enterPostingForm(
   }
 
   await firstField.waitFor({ state: "visible", timeout: 15_000 });
+}
+
+function electronicsCategoryLocator(page: Page): Locator {
+  return page
+    .getByRole("button", { name: /Electronics\s*&\s*Tech/i })
+    .or(page.getByRole("radio", { name: /Electronics\s*&\s*Tech/i }))
+    .first();
 }
 
 async function completeSubmission(page: Page, dashboardPath: RegExp, headingName: string | RegExp) {
@@ -63,13 +67,13 @@ async function completeSubmission(page: Page, dashboardPath: RegExp, headingName
 
 async function completeMobileListingCreate(page: Page) {
   const listingTitle = `Mobile Chrome Listing ${RUN_SUFFIX}`;
-  const categoryOption = page.getByRole("radio", { name: /Electronics & Tech/i });
+  const categoryOption = electronicsCategoryLocator(page);
 
   await page.goto("/post/create-listing");
   await enterPostingForm(page, categoryOption);
   await categoryOption.click();
-  await page.getByLabel(/Device Type/i).selectOption("Smartphone");
-  await page.getByLabel(/Brand/i).fill("Samsung");
+  await page.locator('[data-listing-attribute="device_type"]').selectOption("Smartphone");
+  await page.locator('[data-listing-attribute="brand"]').fill("Samsung");
   await page.getByLabel(/^Title \*$/).fill(listingTitle);
   await page
     .getByLabel(/^Description \*$/)
