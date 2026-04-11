@@ -15,30 +15,7 @@ import { cn } from "@/lib/utils";
 import type { TrustLevel } from "@/types/enums";
 import type { ReactNode } from "react";
 
-const PORTRAIT_CARD_ASPECT_RATIO = 4 / 5;
-const LANDSCAPE_CARD_ASPECT_RATIO = 16 / 9;
-
-function resolveCardFrame(mediaWidth?: number | null, mediaHeight?: number | null) {
-  if (!mediaWidth || !mediaHeight || mediaWidth <= 0 || mediaHeight <= 0) {
-    return {
-      aspectRatio: PORTRAIT_CARD_ASPECT_RATIO,
-      aspectClassName: "aspect-[4/5]",
-    };
-  }
-
-  const mediaAspectRatio = mediaWidth / mediaHeight;
-  if (mediaAspectRatio >= 1.15) {
-    return {
-      aspectRatio: LANDSCAPE_CARD_ASPECT_RATIO,
-      aspectClassName: "aspect-video",
-    };
-  }
-
-  return {
-    aspectRatio: PORTRAIT_CARD_ASPECT_RATIO,
-    aspectClassName: "aspect-[4/5]",
-  };
-}
+const CARD_FRAME = { aspectRatio: 16 / 9, aspectClassName: "aspect-video" } as const;
 
 interface PosterCardShellProps {
   href: string;
@@ -114,15 +91,15 @@ export function PosterCardShell({
   videoDuration,
   focalX,
   focalY,
-  mediaWidth,
-  mediaHeight,
+  mediaWidth: _mediaWidth,
+  mediaHeight: _mediaHeight,
 }: PosterCardShellProps) {
   const normalizedMediaUrl = mediaUrl ? normalizeMediaUrl(mediaUrl) : undefined;
   const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
   const normalizedLogoUrl = logoUrl ? normalizeMediaUrl(logoUrl) : undefined;
   const hasVideo = isVideo ?? isVideoUrl(mediaUrl);
-  const frame = resolveCardFrame(mediaWidth, mediaHeight);
-  const effectiveFitStrategy = hasVideo ? "contain" : fitStrategy;
+  const frame = CARD_FRAME;
+  const effectiveFitStrategy = fitStrategy;
 
   return (
     <Link
@@ -140,7 +117,7 @@ export function PosterCardShell({
         )}
         trustLevel={trustLevel}
       >
-        {/* ── Adaptive video/image thumbnail (4:5 or 16:9) ───────── */}
+        {/* ── 16:9 card thumbnail ───────────────────────────────── */}
         <div
           className={cn(
             "relative w-full overflow-hidden bg-slate-900 rounded-t-xl",

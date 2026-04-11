@@ -284,7 +284,7 @@ export function MediaUpload({
           {previews.map((item, idx) => (
             <div
               key={`${item.file.name}-${idx}`}
-              className="relative group aspect-[4/5] rounded-lg overflow-hidden border bg-muted"
+              className="relative group aspect-video rounded-lg overflow-hidden border bg-muted"
             >
               {item.isVideo ? (
                 <div className="relative w-full h-full">
@@ -387,11 +387,7 @@ export function MediaUpload({
             {remaining} of {maxFiles} remaining
           </p>
           <p className="text-[10px] text-muted-foreground/70 mt-1.5">
-            {accept?.startsWith("video/")
-              ? "Best: 1080×1920 (portrait) or 1920×1080 (landscape)"
-              : accept?.startsWith("image/")
-                ? "Best: 1080×1350 (portrait) or 1920×1080 (landscape)"
-                : "Best: 1080×1350 images · 1080×1920 videos (portrait recommended)"}
+            Recommended: 1280×720 or wider (16:9 landscape)
           </p>
 
           <input

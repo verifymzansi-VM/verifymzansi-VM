@@ -223,6 +223,10 @@ function checkQualityWarnings(
   if (ratio > 3 || ratio < 1 / 4) {
     onWarn("Extreme aspect ratio — this media will be significantly letterboxed in cards.");
   }
+
+  if (ratio < 1) {
+    onWarn("Portrait media will be cropped in the 16:9 card. Landscape photos look best.");
+  }
 }
 
 /** Types eligible for client-side WebP conversion (JPEG excluded — savings minimal for photos). */

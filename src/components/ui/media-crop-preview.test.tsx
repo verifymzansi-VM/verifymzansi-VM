@@ -57,16 +57,16 @@ describe("MediaCropPreview", () => {
     expect(control).toBeInTheDocument();
   });
 
-  it("shows default 4:5 card overlay label", () => {
+  it("shows default 16:9 card overlay label", () => {
     const onChange = vi.fn();
     render(<MediaCropPreview file={makeImageFile()} onChange={onChange} />);
-    expect(screen.getByText("4:5 card")).toBeInTheDocument();
+    expect(screen.getByText("16:9 card")).toBeInTheDocument();
   });
 
-  it("shows 16:9 hero overlay label when aspectRatio is 16/9", () => {
+  it("shows 4:5 card overlay label when aspectRatio is 4/5", () => {
     const onChange = vi.fn();
-    render(<MediaCropPreview file={makeImageFile()} aspectRatio={16 / 9} onChange={onChange} />);
-    expect(screen.getByText("16:9 hero")).toBeInTheDocument();
+    render(<MediaCropPreview file={makeImageFile()} aspectRatio={4 / 5} onChange={onChange} />);
+    expect(screen.getByText("4:5 card")).toBeInTheDocument();
   });
 
   it("keeps the drag control discoverable by accessible name", () => {

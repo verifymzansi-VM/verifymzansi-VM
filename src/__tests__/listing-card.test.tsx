@@ -219,7 +219,7 @@ describe("ListingCard", () => {
     expect(videoPlayer).toHaveAttribute("data-src", blobUrl);
     expect(videoPlayer).toHaveAttribute("data-is-video", "true");
     expect(videoPlayer).toHaveAttribute("data-mode", "ambient");
-    expect(videoPlayer).toHaveAttribute("data-fit-strategy", "contain");
+    expect(videoPlayer).toHaveAttribute("data-fit-strategy", "smart");
     expect(videoPlayer).toHaveAttribute("data-mute-control", "auto");
     expect(screen.queryByAltText("Test Listing")).toBeNull();
   });

@@ -117,7 +117,7 @@ export async function HomeCategoryShowcase() {
           {categories.map((cat) => (
             <div
               key={cat.title}
-              className="min-w-[280px] max-w-[400px] sm:min-w-[360px] sm:max-w-[420px]"
+              className="min-w-[340px] max-w-[480px] sm:min-w-[380px] sm:max-w-[480px]"
             >
               <CategoryCard category={cat} />
             </div>
@@ -137,7 +137,7 @@ function CategoryCard({ category }: { category: CategoryInfo }) {
       className="group block w-full rounded-2xl overflow-hidden border border-warm-200 dark:border-warm-700 bg-white dark:bg-warm-900 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
     >
       {/* Thumbnail */}
-      <div className="relative aspect-[4/5] overflow-hidden bg-warm-100 dark:bg-warm-800">
+      <div className="relative aspect-video overflow-hidden bg-warm-100 dark:bg-warm-800">
         {category.thumbnailUrl ? (
           <Image
             src={category.thumbnailUrl}

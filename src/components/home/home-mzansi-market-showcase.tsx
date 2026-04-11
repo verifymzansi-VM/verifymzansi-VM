@@ -74,7 +74,7 @@ export async function HomeMzansiMarketShowcase() {
             return (
               <div
                 key={l.id}
-                className="min-w-[300px] max-w-[380px] sm:min-w-[340px] sm:max-w-[380px] h-full"
+                className="min-w-[340px] max-w-[480px] sm:min-w-[380px] sm:max-w-[480px] h-full"
               >
                 <MarketPreviewCard
                   href={`/listing/${l.id}`}

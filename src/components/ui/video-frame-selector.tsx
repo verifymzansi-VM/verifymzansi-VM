@@ -18,7 +18,7 @@ interface VideoFrameSelectorProps {
  *
  * Displays a video timeline bar that the user can scrub to pick
  * a poster frame. The selected frame is captured as a JPEG File
- * via canvas, and a 4:5 card preview is rendered alongside.
+ * via canvas, and a 16:9 card preview is rendered alongside.
  */
 export function VideoFrameSelector({ file, onFrameSelect, className }: VideoFrameSelectorProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -172,9 +172,9 @@ export function VideoFrameSelector({ file, onFrameSelect, className }: VideoFram
       {/* Preview + actions */}
       {previewUrl && previewForKey === fileKey && (
         <div className="flex items-start gap-3">
-          {/* 4:5 card preview */}
+          {/* 16:9 card preview */}
           <div className="relative w-32 overflow-hidden rounded-lg border border-warm-200 dark:border-warm-700">
-            <div className="aspect-[4/5]">
+            <div className="aspect-video">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={previewUrl}

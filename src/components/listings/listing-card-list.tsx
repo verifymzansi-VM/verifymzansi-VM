@@ -13,17 +13,7 @@ import { formatZARShort } from "@/lib/utils/format";
 import { getFocalPositionClassName } from "@/lib/utils/media-position-classes";
 import type { TrustLevel } from "@/types/enums";
 
-const PORTRAIT_CARD_ASPECT_RATIO = 4 / 5;
-const LANDSCAPE_CARD_ASPECT_RATIO = 16 / 9;
-
-function resolveCardFrameRatio(mediaWidth?: number | null, mediaHeight?: number | null) {
-  if (!mediaWidth || !mediaHeight || mediaWidth <= 0 || mediaHeight <= 0) {
-    return PORTRAIT_CARD_ASPECT_RATIO;
-  }
-
-  const mediaAspectRatio = mediaWidth / mediaHeight;
-  return mediaAspectRatio >= 1.15 ? LANDSCAPE_CARD_ASPECT_RATIO : PORTRAIT_CARD_ASPECT_RATIO;
-}
+const CARD_ASPECT_RATIO = 16 / 9;
 
 interface ListingCardListProps {
   id: string;
@@ -96,14 +86,14 @@ export const ListingCardList = memo(function ListingCardList({
   focalX,
   focalY,
   videoDuration,
-  mediaWidth,
-  mediaHeight,
+  mediaWidth: _mediaWidth,
+  mediaHeight: _mediaHeight,
 }: ListingCardListProps) {
   const isVideo = isVideoUrl(imageUrl);
   const normalizedImageUrl = imageUrl ? normalizeMediaUrl(imageUrl) : undefined;
   const normalizedLogoUrl = logoUrl ? normalizeMediaUrl(logoUrl) : undefined;
   const status = getListingStatus(featured, boosted, urgent, createdAt);
-  const frameAspectRatio = resolveCardFrameRatio(mediaWidth, mediaHeight);
+  const frameAspectRatio = CARD_ASPECT_RATIO;
 
   return (
     <Link href={`/listing/${id}`} className="group block">

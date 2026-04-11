@@ -17,7 +17,7 @@ export function MarketplacePreviewsSkeleton() {
             {Array.from({ length: 3 }).map((_, cardIdx) => (
               <div key={cardIdx} className="space-y-2">
                 {/* Thumbnail */}
-                <div className="aspect-[4/5] rounded-lg bg-warm-200 dark:bg-warm-700 animate-pulse" />
+                <div className="aspect-video rounded-lg bg-warm-200 dark:bg-warm-700 animate-pulse" />
                 {/* Title */}
                 <div className="h-4 w-3/4 rounded bg-warm-200 dark:bg-warm-700 animate-pulse" />
                 {/* Location */}

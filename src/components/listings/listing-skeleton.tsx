@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 export function ListingCardSkeleton() {
   return (
     <Card className="overflow-hidden rounded-[1.75rem]">
-      <div className="relative aspect-[4/5] w-full">
+      <div className="relative aspect-video w-full">
         <Skeleton className="h-full w-full" />
         <div className="absolute inset-x-0 bottom-0 space-y-2 p-4">
           <Skeleton className="h-5 w-24 bg-white/30" />

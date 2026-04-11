@@ -103,7 +103,7 @@ export function FocalPointPicker({
         }}
       >
         {/* Full image */}
-        <div className="relative aspect-[4/5]">
+        <div className="relative aspect-video">
           <Image
             src={src}
             alt={alt}
