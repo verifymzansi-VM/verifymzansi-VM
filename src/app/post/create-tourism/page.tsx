@@ -2,7 +2,15 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Camera, MapPin, TreePalm, ClipboardList } from "lucide-react";
+import {
+  Camera,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardList,
+  Eye,
+  MapPin,
+  TreePalm,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -56,8 +64,6 @@ import { useAuth } from "@/hooks/use-auth";
 import { usePostDraftAutosave } from "@/hooks/use-post-draft-autosave";
 import { validateTourismStep } from "@/lib/forms/tourism-form";
 import type { TourismListingType } from "@/types/tourism-details";
-import type { PromotionSocialAuthorizationInput } from "@/lib/promotions/social-authorization";
-import { SocialAuthorizationFields } from "@/components/promotions/social-authorization-fields";
 import {
   OperatingHoursInput,
   formatHoursValue,
@@ -69,6 +75,14 @@ import { checkUploadServiceReachable } from "@/lib/utils/upload-preflight";
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
 import { getDefaultEventDates } from "@/lib/post-drafts/defaults";
 import type { TourismDraftData } from "@/lib/post-drafts/storage";
+import { BusinessLayoutRouter } from "@/components/business/layouts/business-layout-router";
+import type { BusinessDetailRecord } from "@/components/business/business-detail-content";
+import { PromotionCard } from "@/components/listings/promotion-card";
+import {
+  PromotionDetailContent,
+  type PromotionDetailRecord,
+  type PromotionAdvertiserRecord,
+} from "@/components/listings/promotion-detail-content";
 
 const SELECT_CLASS =
   "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm";
@@ -234,11 +248,6 @@ function CreateTourismContent() {
   const [rainPolicy, setRainPolicy] = useState("");
   const [earlyBirdDeadline, setEarlyBirdDeadline] = useState("");
   const [groupDiscountAvailable, setGroupDiscountAvailable] = useState(false);
-  const [socialAuthorization, setSocialAuthorization] = useState<PromotionSocialAuthorizationInput>(
-    {
-      granted: false,
-    }
-  );
 
   /* ── Media state ─────────────────────────────────────────── */
   const [logoFiles, setLogoFiles] = useState<File[]>([]);
@@ -301,6 +310,16 @@ function CreateTourismContent() {
       if (videoThumbnailUrl) URL.revokeObjectURL(videoThumbnailUrl);
     },
     [videoThumbnailUrl]
+  );
+  const logoPreviewUrl = useMemo(
+    () => (logoFiles.length > 0 ? URL.createObjectURL(logoFiles[0]) : null),
+    [logoFiles]
+  );
+  useEffect(
+    () => () => {
+      if (logoPreviewUrl) URL.revokeObjectURL(logoPreviewUrl);
+    },
+    [logoPreviewUrl]
   );
 
   // Pre-fill location from profile
@@ -465,7 +484,6 @@ function CreateTourismContent() {
     if (d.socialTwitter) setSocialTwitter(d.socialTwitter);
     if (d.socialTiktok) setSocialTiktok(d.socialTiktok);
     if (d.businessId) setBusinessId(d.businessId);
-    if (d.socialAuthorization) setSocialAuthorization(d.socialAuthorization);
     toast({ title: "Draft restored", description: "Continuing where you left off." });
   }, [user?.id, isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -541,7 +559,6 @@ function CreateTourismContent() {
       socialTwitter,
       socialTiktok,
       businessId,
-      socialAuthorization,
     };
 
     const autosaveSignature = JSON.stringify({ step, draftData });
@@ -625,7 +642,6 @@ function CreateTourismContent() {
     socialTwitter,
     socialTiktok,
     businessId,
-    socialAuthorization,
   ]);
 
   /* ── Helpers ─────────────────────────────────────────────── */
@@ -708,7 +724,6 @@ function CreateTourismContent() {
         venueName,
         venueCapacity,
         ticketsUrl,
-        socialAuthorization: targetStep === 3 ? socialAuthorization : { granted: false },
       },
       photoFiles.length
     );
@@ -1048,7 +1063,6 @@ function CreateTourismContent() {
           start_date: startDate ? new Date(startDate).toISOString() : undefined,
           end_date: endDate ? new Date(endDate).toISOString() : undefined,
           business_id: businessId || undefined,
-          socialAuthorization,
           event_details: Object.keys(eventDetails).length > 0 ? eventDetails : undefined,
         };
 
@@ -1139,7 +1153,6 @@ function CreateTourismContent() {
     setVideoThumbnailFile([]);
     setLogoFiles([]);
     setFocalPoint({ x: 0.5, y: 0.5 });
-    setSocialAuthorization({ granted: false });
     setFieldErrors({});
     setFormError(null);
     setLastSavedAt(null);
@@ -1184,7 +1197,6 @@ function CreateTourismContent() {
     setEventAccessibility([]);
     setFoodDrinksAvailable(false);
     setBringYourOwn("");
-    setSocialAuthorization({ granted: false });
   }
 
   function handleListingTypeChange(nextType: TourismListingType) {
@@ -1200,6 +1212,159 @@ function CreateTourismContent() {
     }
     setListingType(nextType);
     clearErrors("listingType");
+  }
+
+  function renderPreview() {
+    if (listingType === "tourism_business") {
+      if (photoFiles.length === 0 && videoFiles.length === 0 && logoFiles.length === 0) {
+        return null;
+      }
+    } else if (photoFiles.length === 0 && videoFiles.length === 0) {
+      return null;
+    }
+
+    if (listingType === "tourism_business") {
+      const socialLinks = Object.fromEntries(
+        Object.entries({
+          facebook: socialFacebook,
+          instagram: socialInstagram,
+          twitter: socialTwitter,
+          tiktok: socialTiktok,
+        }).filter(([, v]) => v.trim().length > 0)
+      );
+      const operatingHours: Record<string, string> = {};
+      if (hoursMonFri) operatingHours.weekday = hoursMonFri;
+      if (hoursSat) operatingHours.saturday = hoursSat;
+      if (hoursSun) operatingHours.sunday = hoursSun;
+
+      const previewBusiness: BusinessDetailRecord = {
+        id: "preview-tourism",
+        owner_id: "preview-owner",
+        business_name: title || "Your tourism listing",
+        description: description || "Your description will appear here.",
+        status: "preview",
+        business_type: "standalone_shop",
+        category: "tourism_hospitality",
+        subcategory: subcategory || null,
+        category_details: null,
+        cover_photo: photoPreviewUrls[0] || null,
+        logo_url: logoPreviewUrl,
+        cover_video: previewVideoUrls[0] || null,
+        video_thumbnail: videoThumbnailUrl,
+        gallery_photos: photoPreviewUrls,
+        social_links: Object.keys(socialLinks).length > 0 ? socialLinks : null,
+        operating_hours: Object.keys(operatingHours).length > 0 ? operatingHours : null,
+        services_offered: null,
+        payment_methods_accepted: null,
+        delivery_options: null,
+        service_areas: null,
+        location_city: city || null,
+        location_province: province || null,
+        location_town: locationTown || null,
+        location_address: locationAddress || null,
+        phone: phone || null,
+        whatsapp: whatsapp || null,
+        email: email || null,
+        website: website || null,
+        store_number: null,
+        map_directions: null,
+        business_details: null,
+        layout_template: null,
+      };
+
+      return (
+        <div className="rounded-xl border border-dashed border-brand-green/30 bg-brand-green/5 p-4">
+          <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <Eye className="h-4 w-4" />
+            Listing preview
+          </div>
+          <BusinessLayoutRouter
+            business={previewBusiness}
+            trustLevel={null}
+            ownerProfile={{ display_name: "You" }}
+            promotions={[]}
+            showPromotions={false}
+            showPublicActions={false}
+          />
+        </div>
+      );
+    }
+
+    // Event preview
+    const numericPrice = priceZar ? parseFloat(priceZar) : NaN;
+    const priceCents =
+      !Number.isNaN(numericPrice) && numericPrice > 0 ? Math.round(numericPrice * 100) : null;
+    const cardMediaUrl = previewVideoUrls[0] || photoPreviewUrls[0];
+    const cardPosterUrl = videoThumbnailUrl || photoPreviewUrls[0] || undefined;
+
+    const previewPromotion: PromotionDetailRecord = {
+      id: "preview-event",
+      owner_id: "preview-owner",
+      business_id: businessId || null,
+      title: title || "Your event title",
+      description: description || "Your event description will appear here.",
+      promotion_type: "event",
+      category: null,
+      category_key: "tourism_hospitality",
+      photos: photoPreviewUrls,
+      videos: previewVideoUrls.length > 0 ? previewVideoUrls : null,
+      video_thumbnail: videoThumbnailUrl,
+      price_cents: priceCents,
+      price_negotiable: negotiable,
+      location_province: province || "Province",
+      location_city: city || "City",
+      location_town: locationTown || null,
+      location_address: locationAddress || null,
+      contact_methods: contactMethods,
+      start_date: startDate ? new Date(startDate).toISOString() : null,
+      end_date: endDate ? new Date(endDate).toISOString() : null,
+      boost_until: null,
+      featured_until: null,
+      view_count: null,
+      created_at: new Date().toISOString(),
+    };
+
+    const previewAdvertiser: PromotionAdvertiserRecord = {
+      display_name: "You",
+      phone: null,
+      masked_phone_public: null,
+    };
+
+    return (
+      <div className="rounded-xl border border-dashed border-brand-green/30 bg-brand-green/5 p-4">
+        <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+          <Eye className="h-4 w-4" />
+          Event preview
+        </div>
+
+        <div className="mb-4 max-w-[264px]">
+          <PromotionCard
+            id="preview-event"
+            title={title || "Your event title"}
+            price={priceCents}
+            negotiable={negotiable}
+            imageUrl={cardMediaUrl || undefined}
+            posterUrl={cardPosterUrl}
+            province={province || "Province"}
+            city={city || "City"}
+            promotionType="event"
+            createdAt={new Date().toISOString()}
+            startDate={startDate || null}
+            endDate={endDate || null}
+            focalX={focalPoint.x}
+            focalY={focalPoint.y}
+          />
+        </div>
+
+        <PromotionDetailContent
+          promotion={previewPromotion}
+          advertiserProfile={previewAdvertiser}
+          linkedBusiness={null}
+          showContactActions={false}
+          showContactSummary={false}
+        />
+      </div>
+    );
   }
 
   /* ── Render ──────────────────────────────────────────────── */
@@ -2762,6 +2927,57 @@ function CreateTourismContent() {
                         }}
                         accept="image/*"
                       />
+                      {photoFiles.length > 1 && (
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            Reorder photos. The first image appears as the cover.
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {photoFiles.map((file, index) => (
+                              <div
+                                key={`${file.name}-${index}`}
+                                className="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs"
+                              >
+                                <span className="max-w-[100px] truncate font-medium">
+                                  {file.name}
+                                </span>
+                                <button
+                                  type="button"
+                                  disabled={index === 0}
+                                  onClick={() => {
+                                    const reordered = [...photoFiles];
+                                    [reordered[index - 1], reordered[index]] = [
+                                      reordered[index],
+                                      reordered[index - 1],
+                                    ];
+                                    setPhotoFiles(reordered);
+                                  }}
+                                  className="rounded p-0.5 hover:bg-background disabled:opacity-30"
+                                  aria-label="Move photo left"
+                                >
+                                  <ChevronLeft className="h-3 w-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={index === photoFiles.length - 1}
+                                  onClick={() => {
+                                    const reordered = [...photoFiles];
+                                    [reordered[index], reordered[index + 1]] = [
+                                      reordered[index + 1],
+                                      reordered[index],
+                                    ];
+                                    setPhotoFiles(reordered);
+                                  }}
+                                  className="rounded p-0.5 hover:bg-background disabled:opacity-30"
+                                  aria-label="Move photo right"
+                                >
+                                  <ChevronRight className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       {fieldErrors.images && (
                         <p className="text-sm text-destructive">{fieldErrors.images}</p>
                       )}
@@ -2779,6 +2995,58 @@ function CreateTourismContent() {
                         />
                       </div>
                     )}
+
+                    {/* Visual placement preview (tourism business only) */}
+                    {listingType === "tourism_business" &&
+                      (photoPreviewUrls.length > 0 || logoPreviewUrl) && (
+                        <div className="rounded-xl border border-dashed border-brand-green/20 bg-brand-green/5 p-4 space-y-2">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            How your logo and cover will appear:
+                          </p>
+                          <div className="relative rounded-lg overflow-hidden border bg-muted">
+                            <div className="aspect-[4/1] bg-gradient-to-r from-brand-green/30 to-brand-green/10 flex items-center justify-center">
+                              {photoPreviewUrls[0] ? (
+                                /* eslint-disable-next-line @next/next/no-img-element */
+                                <img
+                                  src={photoPreviewUrls[0]}
+                                  alt="Cover preview"
+                                  className="w-full h-full object-cover"
+                                  width={600}
+                                  height={150}
+                                />
+                              ) : (
+                                <span className="text-xs text-muted-foreground">
+                                  Cover photo area
+                                </span>
+                              )}
+                            </div>
+                            <div className="absolute bottom-2 left-4 h-12 w-12 rounded-lg bg-white dark:bg-warm-900 p-1 shadow-md border overflow-hidden">
+                              {logoPreviewUrl ? (
+                                /* eslint-disable-next-line @next/next/no-img-element */
+                                <img
+                                  src={logoPreviewUrl}
+                                  alt="Logo preview"
+                                  className="w-full h-full object-contain rounded-md"
+                                  width={48}
+                                  height={48}
+                                />
+                              ) : (
+                                <div className="w-full h-full rounded-md bg-muted flex items-center justify-center">
+                                  <TreePalm className="h-5 w-5 text-muted-foreground" />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex gap-4 text-[10px] text-muted-foreground">
+                            <span>
+                              ← <strong>Logo</strong> (small square icon)
+                            </span>
+                            <span>
+                              ↑ <strong>Cover</strong> (wide banner behind logo)
+                            </span>
+                          </div>
+                        </div>
+                      )}
 
                     {/* Video */}
                     {videoAllowed && (
@@ -2814,23 +3082,7 @@ function CreateTourismContent() {
                       </div>
                     )}
 
-                    {/* Social authorization (event only) */}
-                    {listingType === "event" && (
-                      <SocialAuthorizationFields
-                        value={socialAuthorization}
-                        onChange={(next) => {
-                          setSocialAuthorization(next);
-                          clearErrors(
-                            "socialAuthorization.authorizerName",
-                            "socialAuthorization.authorizerRole",
-                            "socialAuthorization.relationship",
-                            "socialAuthorization.monetizationAcknowledged",
-                            "socialAuthorization.acceptedVersion"
-                          );
-                        }}
-                        errors={fieldErrors}
-                      />
-                    )}
+                    {renderPreview()}
                   </div>
                 )}
               </PostFormScaffold>
