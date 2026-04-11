@@ -73,6 +73,7 @@ type BusinessDashboardRow = {
   gallery_photos?: string[] | null;
   boost_until?: string | null;
   featured_until?: string | null;
+  urgent_until?: string | null;
   status_reason?: string | null;
 };
 
@@ -196,7 +197,7 @@ export default async function ListingsPage({
       supabase
         .from("businesses")
         .select(
-          "id, business_name, status, category, created_at, area, cover_photo, logo_url, gallery_photos, boost_until, featured_until, status_reason"
+          "id, business_name, status, category, created_at, area, cover_photo, logo_url, gallery_photos, boost_until, featured_until, urgent_until, status_reason"
         )
         .order("created_at", { ascending: false }),
       businessOwnerColumn,
@@ -206,7 +207,7 @@ export default async function ListingsPage({
       supabase
         .from("promotions")
         .select(
-          "id, title, status, price_cents, category, created_at, photos, view_count, boost_until, featured_until, status_reason, promotion_type"
+          "id, title, status, price_cents, category, created_at, photos, view_count, boost_until, featured_until, urgent_until, status_reason, promotion_type"
         )
         .order("created_at", { ascending: false }),
       promotionOwnerColumn,
@@ -245,14 +246,14 @@ export default async function ListingsPage({
       status_reason: business.status_reason,
       price_cents: null,
       view_count: null,
-      urgent_until: null,
+      urgent_until: business.urgent_until ?? null,
     })),
     ...toDashboardItems(promotionResponse.data).map((promotion) => ({
       ...promotion,
       area: "PROMOTIONS_EVENTS" as const,
       source: "promotion" as const,
       photos: Array.isArray(promotion.photos) ? promotion.photos : [],
-      urgent_until: null,
+      urgent_until: ((promotion as Record<string, unknown>).urgent_until as string | null) ?? null,
       promotion_type:
         ((promotion as Record<string, unknown>).promotion_type as string | null) ?? null,
     })),
@@ -507,6 +508,14 @@ function ListingList({
                   (listing.status === "active" || listing.status === "live") &&
                   checkCanBoost(planTiers[listing.area], listing.area).allowed
                 }
+                itemTypeLabel={listing.source}
+                boostApiPath={
+                  listing.source === "business"
+                    ? `/api/businesses/${listing.id}/boost`
+                    : listing.source === "promotion"
+                      ? `/api/promotions/${listing.id}/boost`
+                      : undefined
+                }
               />
               <FeaturedButton
                 listingId={listing.id}
@@ -517,6 +526,14 @@ function ListingList({
                   (listing.status === "active" || listing.status === "live") &&
                   checkCanFeatured(planTiers[listing.area], listing.area).allowed
                 }
+                itemTypeLabel={listing.source}
+                featuredApiPath={
+                  listing.source === "business"
+                    ? `/api/businesses/${listing.id}/featured`
+                    : listing.source === "promotion"
+                      ? `/api/promotions/${listing.id}/featured`
+                      : undefined
+                }
               />
               <UrgentButton
                 listingId={listing.id}
@@ -524,9 +541,16 @@ function ListingList({
                   listing.urgent_until ? new Date(listing.urgent_until) > new Date() : false
                 }
                 canMarkUrgent={
-                  listing.area === "MZANSI_MARKET" &&
                   (listing.status === "active" || listing.status === "live") &&
                   checkCanUrgent(planTiers[listing.area], listing.area).allowed
+                }
+                itemTypeLabel={listing.source}
+                urgentApiPath={
+                  listing.source === "business"
+                    ? `/api/businesses/${listing.id}/urgent`
+                    : listing.source === "promotion"
+                      ? `/api/promotions/${listing.id}/urgent`
+                      : undefined
                 }
               />
               {listing.source === "business" &&

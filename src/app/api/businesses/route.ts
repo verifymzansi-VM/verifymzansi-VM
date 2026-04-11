@@ -216,23 +216,28 @@ export async function POST(request: NextRequest) {
     const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
 
     if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
-      const countQuery = applyOwnerFilter(
-        supabase
-          .from("businesses")
-          .select("id", { count: "exact", head: true })
-          .neq("status", "rejected"),
-        ownerColumn,
-        user.id
-      );
+      // Paid plan — atomic business-count guard to prevent TOCTOU race
+      const ent0 = getEntitlements(tier as PlanTier, effectiveArea);
 
-      const { count } = await countQuery;
+      if (ent0.maxAllowed !== -1) {
+        const { data: underLimit, error: rpcError } = await getAdmin().rpc("check_business_limit", {
+          p_user_id: user.id,
+          p_area: effectiveArea,
+          p_max_allowed: ent0.maxAllowed,
+        });
 
-      const check = canCreateListing(count ?? 0, tier as PlanTier, effectiveArea);
-      if (!check.allowed) {
-        return NextResponse.json(
-          { error: "Business limit reached", reason: check.reason },
-          { status: 403 }
-        );
+        if (rpcError) {
+          log.error("check_business_limit RPC failed", { error: rpcError.message });
+          return NextResponse.json({ error: "Unable to verify business limit" }, { status: 500 });
+        }
+
+        if (!underLimit) {
+          const check = canCreateListing(ent0.maxAllowed, tier as PlanTier, effectiveArea);
+          return NextResponse.json(
+            { error: "Business limit reached", reason: check.reason },
+            { status: 403 }
+          );
+        }
       }
     }
 
@@ -245,7 +250,7 @@ export async function POST(request: NextRequest) {
             videoAllowed: FREE_POST_CONFIG.videoAllowed,
             coverVideoAllowed: false,
           };
-    const coverVideoAllowed = ent.coverVideoAllowed || ent.videoAllowed;
+    const coverVideoAllowed = ent.coverVideoAllowed;
 
     if ((data.gallery_photos?.length ?? 0) > ent.maxPhotos) {
       return NextResponse.json(
@@ -384,47 +389,6 @@ export async function POST(request: NextRequest) {
         }
       }
       return NextResponse.json({ error: "Failed to create business" }, { status: 500 });
-    }
-
-    if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
-      const postCountQuery = applyOwnerFilter(
-        supabase
-          .from("businesses")
-          .select("id", { count: "exact", head: true })
-          .neq("status", "rejected"),
-        ownerColumn,
-        user.id
-      );
-
-      const { count: postInsertCount } = await postCountQuery;
-      const postCheck = canCreateListing(
-        (postInsertCount ?? 0) - 1,
-        tier as PlanTier,
-        effectiveArea
-      );
-
-      if (!postCheck.allowed) {
-        const { error: rollbackErr } = await getAdmin()
-          .from("businesses")
-          .delete()
-          .eq("id", business.id);
-        if (rollbackErr) {
-          log.error("Failed to roll back business — orphaned record", {
-            businessId: business.id,
-            userId: user.id,
-            error: rollbackErr.message,
-          });
-        }
-        log.warn("Rolled back business due to concurrent limit breach", {
-          businessId: business.id,
-          userId: user.id,
-          count: postInsertCount,
-        });
-        return NextResponse.json(
-          { error: "Business limit reached", reason: postCheck.reason },
-          { status: 403 }
-        );
-      }
     }
 
     // Audit (best-effort)

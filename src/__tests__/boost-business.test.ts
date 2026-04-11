@@ -127,6 +127,7 @@ function setupHappyPath() {
     id: VALID_UUID,
     business_name: "Test Business",
     status: "live",
+    area: "MZANSI_BUSINESS",
     owner_id: USER_ID,
     boost_until: null,
   });
@@ -202,44 +203,18 @@ describe("POST /api/businesses/[id]/boost", () => {
     expect((await res.json()).error).toBe("Business not found");
   });
 
-  it("accepts legacy seller_id ownership when businesses still use the old column", async () => {
-    mockAuth({ id: USER_ID });
-    mockClientFrom.mockImplementation((table: string) => {
-      if (table === "businesses") {
-        return {
-          select: vi.fn((fields: string) => {
-            if (fields === "id, owner_id") {
-              return {
-                limit: vi.fn().mockResolvedValue({
-                  error: {
-                    code: "42703",
-                    message: "column businesses.owner_id does not exist",
-                  },
-                }),
-              };
-            }
-            if (fields === "id, seller_id") {
-              return {
-                limit: vi.fn().mockResolvedValue({ error: null }),
-              };
-            }
-            return {
-              eq: vi.fn().mockReturnThis(),
-              maybeSingle: vi.fn().mockResolvedValue({
-                data: {
-                  id: VALID_UUID,
-                  business_name: "Legacy Business",
-                  status: "live",
-                  seller_id: USER_ID,
-                  boost_until: null,
-                },
-              }),
-            };
-          }),
-        };
-      }
+  it("uses the business area for entitlement and checkout", async () => {
+    const { getActivePlanTierForArea } = await import("@/lib/services/plan-tier");
+    const { canBoost } = await import("@/lib/services/entitlements");
 
-      throw new Error(`Unexpected client table ${table}`);
+    mockAuth({ id: USER_ID });
+    mockBusinessRow({
+      id: VALID_UUID,
+      business_name: "Tourism Business",
+      status: "live",
+      area: "PROMOTIONS_EVENTS",
+      owner_id: USER_ID,
+      boost_until: null,
     });
     mockAdmin({
       account_profiles: {
@@ -252,6 +227,11 @@ describe("POST /api/businesses/[id]/boost", () => {
 
     expect(res.status).toBe(200);
     expect((await res.json()).paymentId).toBe("payment-1");
+    expect(vi.mocked(getActivePlanTierForArea)).toHaveBeenCalledWith(USER_ID, "PROMOTIONS_EVENTS");
+    expect(vi.mocked(canBoost)).toHaveBeenCalledWith("growth", "PROMOTIONS_EVENTS");
+    expect(mockCreateHostedCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({ area: "PROMOTIONS_EVENTS" })
+    );
   });
 
   it("returns 400 when business is not live", async () => {
@@ -260,6 +240,7 @@ describe("POST /api/businesses/[id]/boost", () => {
       id: VALID_UUID,
       business_name: "Draft Business",
       status: "draft",
+      area: "MZANSI_BUSINESS",
       owner_id: USER_ID,
       boost_until: null,
     });
@@ -281,6 +262,7 @@ describe("POST /api/businesses/[id]/boost", () => {
       id: VALID_UUID,
       business_name: "Boosted Business",
       status: "live",
+      area: "MZANSI_BUSINESS",
       owner_id: USER_ID,
       boost_until: futureDate,
     });
@@ -311,6 +293,7 @@ describe("POST /api/businesses/[id]/boost", () => {
       id: VALID_UUID,
       business_name: "Test Business",
       status: "live",
+      area: "MZANSI_BUSINESS",
       owner_id: USER_ID,
       boost_until: null,
     });

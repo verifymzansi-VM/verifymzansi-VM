@@ -281,7 +281,7 @@ describe("POST /api/businesses", () => {
     expect(res.status).toBe(403);
   });
 
-  it("allows Mzansi Business cover video uploads on the starter plan", async () => {
+  it("rejects Mzansi Business cover video uploads on the starter plan", async () => {
     const insertSpy = vi.fn().mockReturnValue({
       select: () => ({
         single: vi.fn().mockResolvedValue({ data: { id: "business-2" }, error: null }),
@@ -289,6 +289,7 @@ describe("POST /api/businesses", () => {
     });
 
     mockCreateAdminClient.mockReturnValue({
+      rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
       from: vi.fn((table: string) => {
         if (table === "account_profiles") {
           return {
@@ -335,19 +336,9 @@ describe("POST /api/businesses", () => {
         cover_video: "https://media.verifymzansi.com/business/cover-video.mp4",
       })
     );
-    expect(res.status).toBe(201);
-    expect(insertSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        cover_video: "https://media.verifymzansi.com/business/cover-video.mp4",
-      })
-    );
-    expect(mockCreateNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: USER_ID,
-        title: "Business profile submitted",
-        href: "/dashboard/businesses",
-      })
-    );
+    expect(res.status).toBe(422);
+    const body = await res.json();
+    expect(body.error).toMatch(/cover video/i);
   });
 
   it("returns 409 when the requested slug is already in use", async () => {
@@ -400,6 +391,7 @@ describe("POST /api/businesses", () => {
     });
 
     mockCreateAdminClient.mockReturnValue({
+      rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
       from: vi.fn((table: string) => {
         if (table === "account_profiles") {
           return {
@@ -717,6 +709,7 @@ describe("POST /api/businesses", () => {
     const singleSpy = vi.fn().mockResolvedValue({ data: { id: "business-1" }, error: null });
 
     mockCreateAdminClient.mockReturnValue({
+      rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
       from: vi.fn((table: string) => {
         if (table === "account_profiles") {
           return {
@@ -861,6 +854,7 @@ describe("POST /api/businesses", () => {
     });
 
     mockCreateAdminClient.mockReturnValue({
+      rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
       from: vi.fn((table: string) => {
         if (table === "account_profiles") {
           return {
@@ -922,7 +916,7 @@ describe("POST /api/businesses", () => {
     expect(insertSpy).toHaveBeenCalled();
   });
 
-  it("writes seller_id when businesses still use the legacy owner column", async () => {
+  it("writes owner_id when creating businesses", async () => {
     const insertSpy = vi.fn().mockReturnValue({
       select: () => ({
         single: vi.fn().mockResolvedValue({ data: { id: "business-1" }, error: null }),
@@ -968,16 +962,6 @@ describe("POST /api/businesses", () => {
             select: vi.fn((fields: string) => {
               if (fields === "id, owner_id") {
                 return {
-                  limit: vi.fn().mockResolvedValue({
-                    error: {
-                      code: "42703",
-                      message: "column businesses.owner_id does not exist",
-                    },
-                  }),
-                };
-              }
-              if (fields === "id, seller_id") {
-                return {
                   limit: vi.fn().mockResolvedValue({ error: null }),
                 };
               }
@@ -1007,10 +991,9 @@ describe("POST /api/businesses", () => {
     expect(res.status).toBe(201);
     expect(insertSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        seller_id: USER_ID,
+        owner_id: USER_ID,
       })
     );
-    expect(insertSpy).not.toHaveBeenCalledWith(expect.objectContaining({ owner_id: USER_ID }));
   });
 });
 
@@ -1395,23 +1378,13 @@ describe("GET /api/businesses", () => {
     expect(json.businesses[0].email).toBeUndefined();
   });
 
-  it("falls back to seller_id and normalizes business responses back to owner_id", async () => {
+  it("returns owner_id for business responses", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
         if (table === "businesses") {
           return {
             select: vi.fn((fields: string) => {
               if (fields === "id, owner_id") {
-                return {
-                  limit: vi.fn().mockResolvedValue({
-                    error: {
-                      code: "42703",
-                      message: "column businesses.owner_id does not exist",
-                    },
-                  }),
-                };
-              }
-              if (fields === "id, seller_id") {
                 return {
                   limit: vi.fn().mockResolvedValue({ error: null }),
                 };
@@ -1424,7 +1397,7 @@ describe("GET /api/businesses", () => {
                   data: [
                     {
                       id: "business-1",
-                      seller_id: USER_ID,
+                      owner_id: USER_ID,
                       business_name: "Nomsa Fashion",
                       description: "A valid business profile description.",
                     },
@@ -1455,7 +1428,6 @@ describe("GET /api/businesses", () => {
     expect(json.businesses[0]).toMatchObject({
       id: "business-1",
       owner_id: USER_ID,
-      seller_id: USER_ID,
     });
   });
 

@@ -4,6 +4,7 @@ import { Zap } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 interface BoostButtonProps {
   listingId: string;
@@ -60,6 +61,7 @@ export function BoostButton({
       const apiPath = boostApiPath || `/api/listings/${listingId}/boost`;
       const res = await fetch(apiPath, {
         method: "POST",
+        headers: withCsrfHeaders(),
       });
       const data = await res.json();
 

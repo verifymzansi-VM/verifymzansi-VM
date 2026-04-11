@@ -4,6 +4,7 @@ import { Star } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 interface FeaturedButtonProps {
   listingId: string;
@@ -59,6 +60,7 @@ export function FeaturedButton({
       const apiPath = featuredApiPath || `/api/listings/${listingId}/featured`;
       const res = await fetch(apiPath, {
         method: "POST",
+        headers: withCsrfHeaders(),
       });
       const data = await res.json();
 

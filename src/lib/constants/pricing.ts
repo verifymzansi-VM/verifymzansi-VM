@@ -94,7 +94,7 @@ export const PLANS: PlanDefinition[] = [
     priceCents: 10000,
     billingFrequency: "30_days",
     features: {
-      maxListings: 5,
+      maxListings: 3,
       maxPhotos: 10,
       maxPostsPerMonth: 5,
       videoAllowed: true,
@@ -112,7 +112,7 @@ export const PLANS: PlanDefinition[] = [
     priceCents: 25000,
     billingFrequency: "30_days",
     features: {
-      maxListings: 15,
+      maxListings: 9,
       maxPhotos: 10,
       maxPostsPerMonth: 15,
       videoAllowed: true,
@@ -130,7 +130,7 @@ export const PLANS: PlanDefinition[] = [
     priceCents: 65000,
     billingFrequency: "30_days",
     features: {
-      maxListings: 45, // 3x growth (15 * 3)
+      maxListings: 27, // 3x growth (9 * 3)
       maxPhotos: 10,
       maxPostsPerMonth: 45, // 3x growth (15 * 3)
       videoAllowed: true,
@@ -204,7 +204,7 @@ export const PLANS: PlanDefinition[] = [
     priceCents: 15000,
     billingFrequency: "30_days",
     features: {
-      maxPromotions: 5,
+      maxPromotions: 1,
       maxPhotos: 10,
       maxPostsPerMonth: 5,
       videoAllowed: true,
@@ -222,7 +222,7 @@ export const PLANS: PlanDefinition[] = [
     priceCents: 40000,
     billingFrequency: "30_days",
     features: {
-      maxPromotions: 15,
+      maxPromotions: 3,
       maxPhotos: 10,
       maxPostsPerMonth: 15,
       videoAllowed: true,
@@ -240,7 +240,7 @@ export const PLANS: PlanDefinition[] = [
     priceCents: 100000,
     billingFrequency: "30_days",
     features: {
-      maxPromotions: 45,
+      maxPromotions: 9,
       maxPhotos: 10,
       maxPostsPerMonth: 45,
       videoAllowed: true,
@@ -453,7 +453,6 @@ export function getPlanFeatureItems(
   if (features.maxPromotions !== undefined) push(`${features.maxPromotions} promotions`);
 
   push(`${features.maxPhotos} photos per post`);
-  push(`${features.maxPostsPerMonth} posts / 30 days`);
   push(
     features.maxVideos !== undefined
       ? `${features.maxVideos} video tour${features.maxVideos === 1 ? "" : "s"}`

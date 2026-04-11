@@ -735,7 +735,7 @@ describe("POST /api/promotions", () => {
     });
   });
 
-  it("rejects video uploads when the active plan disallows them", async () => {
+  it("rejects video uploads exceeding the plan video limit", async () => {
     mockAuth({ id: USER_ID });
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
@@ -758,7 +758,7 @@ describe("POST /api/promotions", () => {
             gt: vi.fn().mockReturnThis(),
             order: vi.fn().mockReturnThis(),
             limit: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn().mockResolvedValue({ data: { tier: "basic" } }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { tier: "starter" } }),
           };
         }
         if (table === "promotions") {
@@ -777,12 +777,18 @@ describe("POST /api/promotions", () => {
     });
     const req = createRequest("http://localhost:3000/api/promotions", {
       method: "POST",
-      body: { ...VALID_BODY, videos: ["https://media.verifymzansi.com/promo.mp4"] },
+      body: {
+        ...VALID_BODY,
+        videos: [
+          "https://media.verifymzansi.com/promo1.mp4",
+          "https://media.verifymzansi.com/promo2.mp4",
+        ],
+      },
     });
     const res = await POST(req);
     expect(res.status).toBe(422);
     await expect(res.json()).resolves.toMatchObject({
-      error: "Video upload is not available on your current plan.",
+      error: "Maximum 1 videos allowed on your plan",
     });
   });
 

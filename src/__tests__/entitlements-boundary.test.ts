@@ -24,7 +24,13 @@ import type { PlanTier, MarketplaceArea } from "@/types/enums";
 
 // ── Plan matrix ───────────────────────────────────────────────
 
-const AREAS: MarketplaceArea[] = ["MZANSI_MARKET", "MALL_SHOPS", "BUSINESS_ADS"];
+const AREAS: MarketplaceArea[] = [
+  "MZANSI_MARKET",
+  "MZANSI_BUSINESS",
+  "PROMOTIONS_EVENTS",
+  "MALL_SHOPS",
+  "BUSINESS_ADS",
+];
 const TIERS: PlanTier[] = ["basic", "starter", "growth", "pro"];
 
 /** Expected addon flags per tier (consistent across all areas) */

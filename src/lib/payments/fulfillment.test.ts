@@ -329,4 +329,100 @@ describe("fulfillPayment invoice creation", () => {
       })
     ).rejects.toThrow("Payment pay-no-user has no user_id");
   });
+
+  it("fulfils featured_business by setting featured_until on the business", async () => {
+    const mock = createMockAdminClient();
+
+    await fulfillPayment(mock.client as never, {
+      id: "pay-feat-biz",
+      user_id: "user-1",
+      area: "MZANSI_BUSINESS",
+      amount_cents: 2500,
+      status: "processing",
+      provider: "ozow",
+      provider_payment_id: "ozow-feat-biz",
+      provider_reference: "pay-feat-biz",
+      provider_data: {
+        metadata: {
+          type: "featured_business",
+          business_id: "biz-1",
+          feature_days: 7,
+        },
+      },
+      created_at: "2026-03-26T10:00:00.000Z",
+    });
+
+    expect(mock.spies.from).toHaveBeenCalledWith("businesses");
+    expect(vi.mocked(logAuditEvent)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "business_featured",
+        targetType: "business",
+        targetId: "biz-1",
+      })
+    );
+  });
+
+  it("fulfils urgent_business by setting urgent_until on the business", async () => {
+    const mock = createMockAdminClient();
+
+    await fulfillPayment(mock.client as never, {
+      id: "pay-urg-biz",
+      user_id: "user-1",
+      area: "MZANSI_BUSINESS",
+      amount_cents: 1000,
+      status: "processing",
+      provider: "ozow",
+      provider_payment_id: "ozow-urg-biz",
+      provider_reference: "pay-urg-biz",
+      provider_data: {
+        metadata: {
+          type: "urgent_business",
+          business_id: "biz-2",
+          urgent_days: 7,
+        },
+      },
+      created_at: "2026-03-26T10:00:00.000Z",
+    });
+
+    expect(mock.spies.from).toHaveBeenCalledWith("businesses");
+    expect(vi.mocked(logAuditEvent)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "business_urgent",
+        targetType: "business",
+        targetId: "biz-2",
+      })
+    );
+  });
+
+  it("fulfils urgent_promotion by setting urgent_until on the promotion", async () => {
+    const mock = createMockAdminClient();
+
+    await fulfillPayment(mock.client as never, {
+      id: "pay-urg-promo",
+      user_id: "user-1",
+      area: "PROMOTIONS_EVENTS",
+      amount_cents: 1000,
+      status: "processing",
+      provider: "ozow",
+      provider_payment_id: "ozow-urg-promo",
+      provider_reference: "pay-urg-promo",
+      provider_data: {
+        metadata: {
+          type: "urgent_promotion",
+          promotion_id: "promo-1",
+          urgent_days: 7,
+        },
+      },
+      created_at: "2026-03-26T10:00:00.000Z",
+    });
+
+    expect(mock.spies.from).toHaveBeenCalledWith("promotions");
+    expect(vi.mocked(logAuditEvent)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "promotion_urgent",
+        targetType: "promotion",
+        targetId: "promo-1",
+      })
+    );
+  });
 });

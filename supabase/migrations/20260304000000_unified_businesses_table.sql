@@ -37,7 +37,7 @@ ALTER TYPE marketplace_area ADD VALUE IF NOT EXISTS 'MZANSI_BUSINESS';
 
 CREATE TABLE businesses (
   id                       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  seller_id                UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  owner_id                 UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   area                     marketplace_area NOT NULL DEFAULT 'MZANSI_BUSINESS',
   business_type            business_type NOT NULL,
   business_name            TEXT NOT NULL CHECK (char_length(business_name) BETWEEN 2 AND 100),
@@ -89,7 +89,7 @@ CREATE TABLE businesses (
 );
 -- ── 4. Indexes ──────────────────────────────────────────────
 
-CREATE INDEX idx_businesses_seller        ON businesses(seller_id);
+CREATE INDEX idx_businesses_owner         ON businesses(owner_id);
 CREATE INDEX idx_businesses_status        ON businesses(status);
 CREATE INDEX idx_businesses_category      ON businesses(category);
 CREATE INDEX idx_businesses_type          ON businesses(business_type);
@@ -127,19 +127,19 @@ CREATE TRIGGER set_updated_at
 ALTER TABLE businesses ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Public reads live businesses"
   ON businesses FOR SELECT
-  USING (status = 'live' OR auth.uid() = seller_id);
+  USING (status = 'live' OR auth.uid() = owner_id);
 CREATE POLICY "Staff reads all businesses"
   ON businesses FOR SELECT
   USING (public.has_any_role(ARRAY['moderator', 'admin']));
 CREATE POLICY "Owner creates business"
   ON businesses FOR INSERT
-  WITH CHECK (auth.uid() = seller_id);
+  WITH CHECK (auth.uid() = owner_id);
 CREATE POLICY "Owner or moderator updates business"
   ON businesses FOR UPDATE
-  USING (auth.uid() = seller_id OR public.has_any_role(ARRAY['moderator', 'admin']));
+  USING (auth.uid() = owner_id OR public.has_any_role(ARRAY['moderator', 'admin']));
 CREATE POLICY "Owner or admin deletes business"
   ON businesses FOR DELETE
-  USING (auth.uid() = seller_id OR public.has_role('admin'));
+  USING (auth.uid() = owner_id OR public.has_role('admin'));
 -- ── 8. Add business_id to promotions ────────────────────────
 
 ALTER TABLE promotions
@@ -149,7 +149,7 @@ CREATE INDEX idx_promotions_business
 -- ── 9. Data migration: storefronts → businesses ─────────────
 
 INSERT INTO businesses (
-  id, seller_id, area, business_type, business_name, description,
+  id, owner_id, area, business_type, business_name, description,
   category, logo_url, cover_photo, cover_video, video_thumbnail,
   location_province, location_city, store_number, mall_id,
   map_directions, phone, whatsapp, email, social_links,
@@ -199,7 +199,7 @@ FROM storefronts s;
 -- ── 10. Data migration: business_profiles → businesses ──────
 
 INSERT INTO businesses (
-  id, seller_id, area, business_type, business_name, description,
+  id, owner_id, area, business_type, business_name, description,
   category, logo_url, cover_photo, cover_video, video_thumbnail,
   location_province, location_city,
   phone, whatsapp, email, website, social_links,

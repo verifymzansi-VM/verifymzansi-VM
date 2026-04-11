@@ -152,9 +152,10 @@ describe("FeaturedButton redirect", () => {
     fireEvent.click(button);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(`/api/promotions/${LISTING_ID}/featured`, {
-        method: "POST",
-      });
+      expect(global.fetch).toHaveBeenCalledWith(
+        `/api/promotions/${LISTING_ID}/featured`,
+        expect.objectContaining({ method: "POST" })
+      );
     });
   });
 });
@@ -210,9 +211,10 @@ describe("BoostButton redirect", () => {
     fireEvent.click(button);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(`/api/promotions/${LISTING_ID}/boost`, {
-        method: "POST",
-      });
+      expect(global.fetch).toHaveBeenCalledWith(
+        `/api/promotions/${LISTING_ID}/boost`,
+        expect.objectContaining({ method: "POST" })
+      );
     });
   });
 });
@@ -225,7 +227,7 @@ describe("UrgentButton redirect", () => {
 
     render(<UrgentButton listingId={LISTING_ID} isUrgent={false} canMarkUrgent={true} />);
 
-    const button = screen.getByTitle(/Mark as urgent/i);
+    const button = screen.getByTitle(/Mark this listing as urgent/i);
     fireEvent.click(button);
 
     await waitFor(() => {
@@ -241,7 +243,7 @@ describe("UrgentButton redirect", () => {
 
     render(<UrgentButton listingId={LISTING_ID} isUrgent={false} canMarkUrgent={true} />);
 
-    const button = screen.getByTitle(/Mark as urgent/i);
+    const button = screen.getByTitle(/Mark this listing as urgent/i);
     fireEvent.click(button);
 
     await waitFor(() => {
@@ -301,7 +303,7 @@ describe("UrgentButton network failure", () => {
     mockFetchNetworkFailure();
 
     render(<UrgentButton listingId={LISTING_ID} isUrgent={false} canMarkUrgent={true} />);
-    fireEvent.click(screen.getByTitle(/Mark as urgent/i));
+    fireEvent.click(screen.getByTitle(/Mark this listing as urgent/i));
 
     await waitFor(() => {
       expect(mockToast).toHaveBeenCalledWith(
@@ -460,7 +462,7 @@ describe("UrgentButton loading state", () => {
     const deferred = mockFetchDeferred();
 
     render(<UrgentButton listingId={LISTING_ID} isUrgent={false} canMarkUrgent={true} />);
-    const btn = screen.getByTitle(/Mark as urgent/i);
+    const btn = screen.getByTitle(/Mark this listing as urgent/i);
     expect(btn).not.toBeDisabled();
 
     fireEvent.click(btn);

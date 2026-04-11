@@ -25,14 +25,14 @@ describe("entitlements service", () => {
   describe("getEntitlements", () => {
     it("returns starter tier entitlements", () => {
       const ent = getEntitlements("starter", "MZANSI_MARKET");
-      expect(ent.maxAllowed).toBe(5);
+      expect(ent.maxAllowed).toBe(3);
       expect(ent.videoAllowed).toBe(true);
       expect(ent.boostAllowed).toBe(false);
     });
 
-    it("returns pro tier entitlements capped at 45 listings", () => {
+    it("returns pro tier entitlements capped at 27 listings", () => {
       const ent = getEntitlements("pro", "MZANSI_MARKET");
-      expect(ent.maxAllowed).toBe(45);
+      expect(ent.maxAllowed).toBe(27);
       expect(ent.videoAllowed).toBe(true);
       expect(ent.boostAllowed).toBe(true);
       expect(ent.featuredAllowed).toBe(true);
@@ -58,20 +58,20 @@ describe("entitlements service", () => {
     });
 
     it("blocks when at limit", () => {
-      const result = canCreateListing(5, "starter", "MZANSI_MARKET");
+      const result = canCreateListing(3, "starter", "MZANSI_MARKET");
       expect(result.allowed).toBe(false);
-      expect(result.reason).toContain("5 live listings");
+      expect(result.reason).toContain("3 live listings");
     });
 
     it("allows for pro under limit", () => {
-      const result = canCreateListing(40, "pro", "MZANSI_MARKET");
+      const result = canCreateListing(20, "pro", "MZANSI_MARKET");
       expect(result.allowed).toBe(true);
     });
 
     it("blocks for pro at limit", () => {
-      const result = canCreateListing(45, "pro", "MZANSI_MARKET");
+      const result = canCreateListing(27, "pro", "MZANSI_MARKET");
       expect(result.allowed).toBe(false);
-      expect(result.reason).toContain("45 live listings");
+      expect(result.reason).toContain("27 live listings");
     });
   });
 

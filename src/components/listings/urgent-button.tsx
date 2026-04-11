@@ -4,14 +4,24 @@ import { AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 interface UrgentButtonProps {
   listingId: string;
   isUrgent: boolean;
   canMarkUrgent: boolean;
+  itemTypeLabel?: string;
+  /** Override the API endpoint for urgent. Defaults to `/api/listings/${listingId}/urgent` */
+  urgentApiPath?: string;
 }
 
-export function UrgentButton({ listingId, isUrgent, canMarkUrgent }: UrgentButtonProps) {
+export function UrgentButton({
+  listingId,
+  isUrgent,
+  canMarkUrgent,
+  itemTypeLabel = "listing",
+  urgentApiPath,
+}: UrgentButtonProps) {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -37,8 +47,8 @@ export function UrgentButton({ listingId, isUrgent, canMarkUrgent }: UrgentButto
         size="icon"
         className="h-9 w-9"
         disabled
-        title="Upgrade to Pro to mark listings as urgent"
-        aria-label="Upgrade to Pro to mark listings as urgent"
+        title={`Upgrade to Pro to mark this ${itemTypeLabel} as urgent`}
+        aria-label={`Upgrade to Pro to mark this ${itemTypeLabel} as urgent`}
       >
         <AlertTriangle className="h-3.5 w-3.5 text-muted-foreground" />
       </Button>
@@ -48,8 +58,10 @@ export function UrgentButton({ listingId, isUrgent, canMarkUrgent }: UrgentButto
   async function handleUrgent() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/listings/${listingId}/urgent`, {
+      const apiPath = urgentApiPath || `/api/listings/${listingId}/urgent`;
+      const res = await fetch(apiPath, {
         method: "POST",
+        headers: withCsrfHeaders(),
       });
       const data = await res.json();
 
@@ -83,8 +95,8 @@ export function UrgentButton({ listingId, isUrgent, canMarkUrgent }: UrgentButto
       className="h-9 w-9 transition-colors hover:text-red-500"
       onClick={handleUrgent}
       disabled={loading}
-      title="Mark as urgent (R10 for 7 days)"
-      aria-label="Mark as urgent"
+      title={`Mark this ${itemTypeLabel} as urgent (R10 for 7 days)`}
+      aria-label={`Mark this ${itemTypeLabel} as urgent`}
     >
       <AlertTriangle className={`h-3.5 w-3.5 ${loading ? "animate-pulse" : ""}`} />
     </Button>

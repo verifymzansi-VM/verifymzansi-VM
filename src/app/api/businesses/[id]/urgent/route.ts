@@ -1,9 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { canBoost } from "@/lib/services/entitlements";
+import { canUrgent } from "@/lib/services/entitlements";
 import { logAuditEvent } from "@/lib/services/audit";
-import { ADDON_PRICES, BOOST_DURATION_DAYS } from "@/lib/constants/pricing";
+import { ADDON_PRICES, URGENT_DURATION_DAYS } from "@/lib/constants/pricing";
 import { createLogger } from "@/lib/utils/logger";
 import { env } from "@/lib/config/env";
 import { createHostedCheckout } from "@/lib/payments/checkout";
@@ -24,8 +24,8 @@ import { parseAndValidateRouteParams } from "@/lib/utils/api";
 import { uuidSchema } from "@/lib/validations/shared";
 import { z } from "zod";
 
-const log = createLogger("BoostBusiness");
-const businessBoostParamsSchema = z.object({
+const log = createLogger("UrgentBusiness");
+const businessUrgentParamsSchema = z.object({
   id: uuidSchema,
 });
 type BusinessCheckoutRow = {
@@ -33,14 +33,14 @@ type BusinessCheckoutRow = {
   business_name: string;
   status: string;
   area: string;
-  boost_until?: string | null;
+  urgent_until?: string | null;
   owner_id?: string | null;
 };
 
 /**
- * POST /api/businesses/[id]/boost
+ * POST /api/businesses/[id]/urgent
  *
- * Create an Ozow checkout session to boost a business.
+ * Create an Ozow checkout session to mark a business as urgent.
  */
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -50,7 +50,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     const csrfBlock = enforceCsrfToken(_request, log);
     if (csrfBlock) return csrfBlock;
 
-    const parsedParams = parseAndValidateRouteParams(await params, businessBoostParamsSchema, {
+    const parsedParams = parseAndValidateRouteParams(await params, businessUrgentParamsSchema, {
       validationErrorMessage: "Invalid business ID",
       includeValidationDetails: false,
     });
@@ -68,7 +68,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const rl = checkLocalRateLimit(user.id, "business:boost");
+    const rl = checkLocalRateLimit(user.id, "business:urgent");
     if (rl.limited) {
       return NextResponse.json(
         { error: "Too many requests" },
@@ -101,7 +101,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       supabase
         .from("businesses")
         .select(
-          withOwnerColumn("id, business_name, status, area, owner_id, boost_until", ownerColumn)
+          withOwnerColumn("id, business_name, status, area, owner_id, urgent_until", ownerColumn)
         )
         .eq("id", businessId),
       ownerColumn,
@@ -121,11 +121,17 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     }
 
     if (business.status !== "live") {
-      return NextResponse.json({ error: "Only live businesses can be boosted" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Only live businesses can be marked urgent" },
+        { status: 400 }
+      );
     }
 
-    if (business.boost_until && new Date(business.boost_until) > new Date()) {
-      return NextResponse.json({ error: "This business is already boosted" }, { status: 400 });
+    if (business.urgent_until && new Date(business.urgent_until) > new Date()) {
+      return NextResponse.json(
+        { error: "This business is already marked urgent" },
+        { status: 400 }
+      );
     }
 
     // ── Prevent duplicate in-flight payments ─────────────────
@@ -134,7 +140,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       .select("id")
       .eq("user_id", user.id)
       .in("status", ["pending", "processing"])
-      .contains("provider_data", { type: "boost_business", business_id: businessId })
+      .contains("provider_data", { type: "urgent_business", business_id: businessId })
       .maybeSingle();
 
     if (pendingError) {
@@ -147,17 +153,17 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
     if (pendingPmt) {
       return NextResponse.json(
-        { error: "A boost payment is already in progress for this business" },
+        { error: "An urgent payment is already in progress for this business" },
         { status: 409 }
       );
     }
 
     const area = business.area as MarketplaceArea;
     const tier = await getActivePlanTierForArea(user.id, area);
-    const boostCheck = canBoost(tier, area);
+    const urgentCheck = canUrgent(tier, area);
 
-    if (!boostCheck.allowed) {
-      return NextResponse.json({ error: boostCheck.reason }, { status: 403 });
+    if (!urgentCheck.allowed) {
+      return NextResponse.json({ error: urgentCheck.reason }, { status: 403 });
     }
 
     const appUrl = env("NEXT_PUBLIC_APP_URL") || "https://verifymzansi.com";
@@ -165,15 +171,15 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       admin: admin as never,
       userId: user.id,
       area,
-      amountCents: ADDON_PRICES.boost,
-      itemName: `Boost: ${business.business_name}`.slice(0, 100),
-      itemDescription: `${BOOST_DURATION_DAYS}-day business boost`,
+      amountCents: ADDON_PRICES.urgent,
+      itemName: `Urgent: ${business.business_name}`.slice(0, 100),
+      itemDescription: `${URGENT_DURATION_DAYS}-day urgent badge`,
       returnUrl: `${appUrl}/billing/success?payment=__PAYMENT_ID__`,
       cancelUrl: `${appUrl}/billing/cancel?payment=__PAYMENT_ID__`,
       providerData: {
-        type: "boost_business",
+        type: "urgent_business",
         business_id: businessId,
-        boost_days: BOOST_DURATION_DAYS,
+        urgent_days: URGENT_DURATION_DAYS,
       },
     });
 
@@ -181,14 +187,14 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       await logAuditEvent({
         actorId: user.id,
         actorRole: "member",
-        action: "business_boosted",
+        action: "business_urgent",
         targetType: "business",
         targetId: businessId,
         area,
         metadata: {
           paymentId,
-          amount: ADDON_PRICES.boost / 100,
-          boostDays: BOOST_DURATION_DAYS,
+          amount: ADDON_PRICES.urgent / 100,
+          urgentDays: URGENT_DURATION_DAYS,
           status: "checkout_initiated",
         },
       });
@@ -205,6 +211,6 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       error: err instanceof Error ? err.message : "Unknown error",
       stack: err instanceof Error ? err.stack : undefined,
     });
-    return NextResponse.json({ error: "Failed to create boost checkout" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to create urgent checkout" }, { status: 500 });
   }
 }

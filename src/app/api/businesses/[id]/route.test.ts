@@ -151,7 +151,7 @@ describe("PATCH /api/businesses/[id]", () => {
     );
   });
 
-  it("allows starter-tier Mzansi Business updates to keep a cover video", async () => {
+  it("rejects starter-tier Mzansi Business cover video updates", async () => {
     const updateSpy = vi.fn().mockReturnThis();
     const eqSpy = vi.fn().mockReturnThis();
 
@@ -238,12 +238,10 @@ describe("PATCH /api/businesses/[id]", () => {
       { params: Promise.resolve({ id: BUSINESS_ID }) }
     );
 
-    expect(res.status).toBe(200);
-    expect(updateSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        cover_video: "https://media.verifymzansi.com/business/cover-video.mp4",
-      })
-    );
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Cover video is not available on your current plan.",
+    });
   });
 
   it("returns 400 when the business id param is malformed", async () => {
@@ -426,12 +424,8 @@ describe("GET /api/businesses/[id]", () => {
     vi.clearAllMocks();
   });
 
-  it("loads a business without querying the removed seller_id column", async () => {
+  it("loads a business with owner_id ownership fields", async () => {
     const businessSelectSpy = vi.fn((fields: string) => {
-      if (fields.includes("seller_id")) {
-        throw new Error("seller_id should not be selected for businesses");
-      }
-
       if (fields === "id, owner_id") {
         return {
           limit: vi.fn().mockResolvedValue({ error: null }),

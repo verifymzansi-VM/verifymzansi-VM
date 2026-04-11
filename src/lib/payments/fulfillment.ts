@@ -422,4 +422,76 @@ export async function fulfillPayment(
       metadata: { paymentId: payment.id, featureDays, featuredUntil },
     });
   }
+
+  if (meta.type === "featured_business" && typeof meta.business_id === "string") {
+    const featureDays =
+      typeof meta.feature_days === "number" && meta.feature_days > 0
+        ? meta.feature_days
+        : FEATURED_DURATION_DAYS;
+    const featuredUntil = new Date(baseTime + featureDays * 24 * 60 * 60 * 1000).toISOString();
+    const { error } = await supabase
+      .from("businesses")
+      .update({ featured_until: featuredUntil })
+      .eq("id", meta.business_id)
+      .eq(businessesOwnerCol, payment.user_id);
+    if (error) {
+      throw new Error(`Business featured update failed: ${error.message}`);
+    }
+    await logAuditEvent({
+      actorId: payment.user_id || SYSTEM_ACTOR_ID,
+      actorRole: "member",
+      action: "business_featured",
+      targetType: "business",
+      targetId: meta.business_id,
+      metadata: { paymentId: payment.id, featureDays, featuredUntil },
+    });
+  }
+
+  if (meta.type === "urgent_business" && typeof meta.business_id === "string") {
+    const urgentDays =
+      typeof meta.urgent_days === "number" && meta.urgent_days > 0
+        ? meta.urgent_days
+        : URGENT_DURATION_DAYS;
+    const urgentUntil = new Date(baseTime + urgentDays * 24 * 60 * 60 * 1000).toISOString();
+    const { error } = await supabase
+      .from("businesses")
+      .update({ urgent_until: urgentUntil })
+      .eq("id", meta.business_id)
+      .eq(businessesOwnerCol, payment.user_id);
+    if (error) {
+      throw new Error(`Business urgent update failed: ${error.message}`);
+    }
+    await logAuditEvent({
+      actorId: payment.user_id || SYSTEM_ACTOR_ID,
+      actorRole: "member",
+      action: "business_urgent",
+      targetType: "business",
+      targetId: meta.business_id,
+      metadata: { paymentId: payment.id, urgentDays, urgentUntil },
+    });
+  }
+
+  if (meta.type === "urgent_promotion" && typeof meta.promotion_id === "string") {
+    const urgentDays =
+      typeof meta.urgent_days === "number" && meta.urgent_days > 0
+        ? meta.urgent_days
+        : URGENT_DURATION_DAYS;
+    const urgentUntil = new Date(baseTime + urgentDays * 24 * 60 * 60 * 1000).toISOString();
+    const { error } = await supabase
+      .from("promotions")
+      .update({ urgent_until: urgentUntil })
+      .eq("id", meta.promotion_id)
+      .eq(promotionsOwnerCol, payment.user_id);
+    if (error) {
+      throw new Error(`Promotion urgent update failed: ${error.message}`);
+    }
+    await logAuditEvent({
+      actorId: payment.user_id || SYSTEM_ACTOR_ID,
+      actorRole: "member",
+      action: "promotion_urgent",
+      targetType: "promotion",
+      targetId: meta.promotion_id,
+      metadata: { paymentId: payment.id, urgentDays, urgentUntil },
+    });
+  }
 }

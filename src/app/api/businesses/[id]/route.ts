@@ -50,7 +50,6 @@ type BusinessOwnerRow = {
   status: string;
   area?: string | null;
   owner_id?: string | null;
-  seller_id?: string | null;
   logo_url?: string | null;
   cover_photo?: string | null;
   cover_video?: string | null;
@@ -144,7 +143,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       });
 
     // Strip owner identifiers from public response (POPIA data minimization)
-    const { owner_id: _oid, seller_id: _sid, ...publicBusiness } = normalizedBusiness;
+    const { owner_id: _oid, ...publicBusiness } = normalizedBusiness;
 
     // M3: Redact contact fields for unauthenticated requests to prevent
     // email/phone harvesting. Authenticated users can see full details.
@@ -271,7 +270,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             videoAllowed: FREE_POST_CONFIG.videoAllowed,
             coverVideoAllowed: false,
           };
-    const coverVideoAllowed = ent.coverVideoAllowed || ent.videoAllowed;
+    const coverVideoAllowed = ent.coverVideoAllowed;
 
     if ((data.gallery_photos?.length ?? 0) > ent.maxPhotos) {
       return NextResponse.json(
