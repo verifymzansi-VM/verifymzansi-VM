@@ -228,7 +228,6 @@ describe("CreatePromotionPage", () => {
         startDate: "2099-06-01",
         endDate: "2099-06-08",
         businessId: "",
-        socialAuthorization: { granted: false },
         ...overrides,
       };
       localStorage.setItem(

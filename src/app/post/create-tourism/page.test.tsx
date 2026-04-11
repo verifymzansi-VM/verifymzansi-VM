@@ -75,10 +75,6 @@ vi.mock("@/components/ui/media-crop-preview", () => ({
   MediaCropPreview: () => <div>Media Crop Preview</div>,
 }));
 
-vi.mock("@/components/promotions/social-authorization-fields", () => ({
-  SocialAuthorizationFields: () => <div>Social Authorization</div>,
-}));
-
 vi.mock("@/components/ui/operating-hours-input", () => ({
   OperatingHoursInput: () => <div>Hours Input</div>,
   formatHoursValue: () => "",

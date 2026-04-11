@@ -82,7 +82,6 @@ export type SocialAuthorizerRelationship =
   | "owner"
   | "business_representative"
   | "agency_or_marketing_partner";
-export type SocialAuthorizationStatus = "authorized" | "not_authorized" | "revoked";
 
 export const PROMOTION_TYPE_LABELS: Record<PromotionType, string> = {
   product: "Promotions",
@@ -96,12 +95,6 @@ export const PROMOTION_EVENT_STATE_LABELS: Record<PromotionEventState, string> =
   upcoming: "Upcoming",
   ongoing: "Ongoing",
   ended: "Ended",
-};
-
-export const SOCIAL_AUTHORIZER_RELATIONSHIP_LABELS: Record<SocialAuthorizerRelationship, string> = {
-  owner: "Owner",
-  business_representative: "Business Representative",
-  agency_or_marketing_partner: "Agency or Marketing Partner",
 };
 
 export type ContactMethod = "call" | "whatsapp" | "form" | "in_app";

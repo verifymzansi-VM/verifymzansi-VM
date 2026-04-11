@@ -34,8 +34,6 @@ import { validatePromotionForm } from "@/lib/forms/promotion-form";
 import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
 import { getDefaultEventDates } from "@/lib/post-drafts/defaults";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
-import { SocialAuthorizationFields } from "@/components/promotions/social-authorization-fields";
-import type { PromotionSocialAuthorizationInput } from "@/lib/promotions/social-authorization";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { checkUploadServiceReachable } from "@/lib/utils/upload-preflight";
@@ -61,11 +59,6 @@ const FIELD_IDS: Record<string, string> = {
   end_date: "end_date",
   images: "promotion-images",
   videos: "promotion-videos",
-  "socialAuthorization.authorizerName": "social-authorizer-name",
-  "socialAuthorization.authorizerRole": "social-authorizer-role",
-  "socialAuthorization.relationship": "social-authorizer-relationship",
-  "socialAuthorization.monetizationAcknowledged": "social-monetization-acknowledged",
-  "socialAuthorization.acceptedVersion": "social-authorization-version",
 };
 
 export default function CreatePromotionPage() {
@@ -112,11 +105,6 @@ function CreatePromotionContent() {
   const [videoFiles, setVideoFiles] = useState<File[]>([]);
   const [videoThumbnailFile, setVideoThumbnailFile] = useState<File[]>([]);
   const [focalPoint, setFocalPoint] = useState({ x: 0.5, y: 0.5 });
-  const [socialAuthorization, setSocialAuthorization] = useState<PromotionSocialAuthorizationInput>(
-    {
-      granted: false,
-    }
-  );
   const rawBusinessId = searchParams.get("business_id") || "";
   const [businessId, setBusinessId] = useState(
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawBusinessId)
@@ -228,11 +216,6 @@ function CreatePromotionContent() {
     setStartDate(restoredData.startDate ?? "");
     setEndDate(restoredData.endDate ?? "");
     setBusinessId(restoredData.businessId ?? (searchParams.get("business_id") || ""));
-    setSocialAuthorization(
-      restoredData.socialAuthorization && typeof restoredData.socialAuthorization === "object"
-        ? restoredData.socialAuthorization
-        : { granted: false }
-    );
     setLastSavedAt(restored.savedAt ?? null);
     toast({
       title: "Draft restored",
@@ -271,7 +254,6 @@ function CreatePromotionContent() {
       startDate,
       endDate,
       businessId,
-      socialAuthorization,
     });
     setLastSavedAt(Date.now());
   }, [
@@ -296,7 +278,6 @@ function CreatePromotionContent() {
     startDate,
     endDate,
     businessId,
-    socialAuthorization,
   ]);
 
   function clearErrors(...keys: string[]) {
@@ -335,17 +316,6 @@ function CreatePromotionContent() {
     clearErrors("contact_methods");
   }
 
-  function handleSocialAuthorizationChange(nextValue: PromotionSocialAuthorizationInput) {
-    setSocialAuthorization(nextValue);
-    clearErrors(
-      "socialAuthorization.authorizerName",
-      "socialAuthorization.authorizerRole",
-      "socialAuthorization.relationship",
-      "socialAuthorization.monetizationAcknowledged",
-      "socialAuthorization.acceptedVersion"
-    );
-  }
-
   function validateStep(targetStep: number) {
     const errors: Record<string, string> = {};
     const promotionValidationErrors = validatePromotionForm({
@@ -353,7 +323,6 @@ function CreatePromotionContent() {
       startDate,
       endDate,
       contactMethods,
-      socialAuthorization: targetStep === 2 ? socialAuthorization : { granted: false },
     });
     if (targetStep === 0) {
       if (!title.trim()) errors.title = "Enter an event title.";
@@ -545,7 +514,6 @@ function CreatePromotionContent() {
         start_date: startDate ? new Date(startDate).toISOString() : undefined,
         end_date: endDate ? new Date(endDate).toISOString() : undefined,
         business_id: businessId || undefined,
-        socialAuthorization,
       };
 
       const res = await fetch("/api/promotions", {
@@ -597,7 +565,6 @@ function CreatePromotionContent() {
     setVideoFiles([]);
     setVideoThumbnailFile([]);
     setFocalPoint({ x: 0.5, y: 0.5 });
-    setSocialAuthorization({ granted: false });
     setFieldErrors({});
     setFormError(null);
     setLastSavedAt(null);
@@ -967,12 +934,6 @@ function CreatePromotionContent() {
                         accept="image/*"
                       />
                     )}
-
-                    <SocialAuthorizationFields
-                      value={socialAuthorization}
-                      onChange={handleSocialAuthorizationChange}
-                      errors={fieldErrors}
-                    />
 
                     <div className="rounded-xl border border-dashed border-brand-green/30 bg-brand-green/5 p-4 text-sm">
                       <div className="mb-3 flex items-center gap-2 font-medium text-muted-foreground">

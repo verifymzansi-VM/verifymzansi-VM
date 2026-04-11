@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { priceSchema } from "./shared";
 import { isTrustedPlatformMediaUrl } from "@/lib/utils/media-url";
-import { SOCIAL_AUTHORIZATION_VERSION } from "@/lib/promotions/social-authorization";
 
 /* ── Allowed-value lists ─────────────────────────────────── */
 
@@ -70,12 +69,6 @@ const VISIT_DURATION_VALUES = [
   "full_day",
 ] as const;
 
-const SOCIAL_AUTHORIZER_RELATIONSHIP_VALUES = [
-  "owner",
-  "business_representative",
-  "agency_or_marketing_partner",
-] as const;
-
 /* ── Reusable fragments ──────────────────────────────────── */
 
 const trustedUrlArray = (max: number) =>
@@ -86,55 +79,6 @@ const trustedUrlArray = (max: number) =>
       })
     )
     .max(max);
-
-const socialAuthorizationSchema = z
-  .object({
-    granted: z.boolean(),
-    authorizerName: z.string().trim().max(100).optional(),
-    authorizerRole: z.string().trim().max(100).optional(),
-    relationship: z.enum(SOCIAL_AUTHORIZER_RELATIONSHIP_VALUES).optional(),
-    monetizationAcknowledged: z.boolean().optional(),
-    acceptedVersion: z.string().max(30).optional(),
-  })
-  .superRefine((value, ctx) => {
-    if (!value.granted) return;
-
-    if (!value.authorizerName) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["authorizerName"],
-        message: "Authorizer name is required when social distribution is authorized.",
-      });
-    }
-    if (!value.authorizerRole) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["authorizerRole"],
-        message: "Authorizer role is required when social distribution is authorized.",
-      });
-    }
-    if (!value.relationship) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["relationship"],
-        message: "Relationship is required when social distribution is authorized.",
-      });
-    }
-    if (value.monetizationAcknowledged !== true) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["monetizationAcknowledged"],
-        message: "Monetization acknowledgement is required when social distribution is authorized.",
-      });
-    }
-    if (value.acceptedVersion !== SOCIAL_AUTHORIZATION_VERSION) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["acceptedVersion"],
-        message: "You must accept the current social authorization terms.",
-      });
-    }
-  });
 
 /* ── Shared fields (both tourism business & event) ───────── */
 
@@ -296,7 +240,6 @@ export const eventSchema = z
     start_date: z.string().datetime({ message: "Start date is required" }),
     end_date: z.string().datetime().optional(),
     event_details: eventDetailsSchema,
-    socialAuthorization: socialAuthorizationSchema.optional(),
   })
   .refine(
     (data) => {

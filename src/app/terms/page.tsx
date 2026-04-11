@@ -59,10 +59,6 @@ export default function TermsPage() {
       title: "6. Promotion & Distribution Rights",
       content: [
         "When you create a promotion, advertisement, event, or campaign on VerifyMzansi, you confirm that you own it or are authorised to market it.",
-        "If you authorize VerifyMzansi social distribution for a promotion, you grant VerifyMzansi a non-exclusive license to publish, adapt, and distribute that promotion on VerifyMzansi-owned social channels.",
-        "• Only authorize external social distribution when you have the rights to do so",
-        "• VerifyMzansi-owned channel or post monetization belongs to VerifyMzansi unless a separate written agreement says otherwise",
-        "• No revenue share or compensation is implied unless both parties agree to it in writing",
       ],
     },
     {

@@ -6,8 +6,6 @@
  * File objects are intentionally excluded — only text/choice data is persisted.
  */
 
-import type { SocialAuthorizerRelationship } from "@/types/enums";
-
 const STORAGE_VERSION = 1;
 const DRAFT_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
 
@@ -57,14 +55,6 @@ export interface PromotionDraftData {
   startDate: string;
   endDate: string;
   businessId: string;
-  socialAuthorization: {
-    granted: boolean;
-    authorizerName?: string;
-    authorizerRole?: string;
-    relationship?: SocialAuthorizerRelationship;
-    monetizationAcknowledged?: boolean;
-    acceptedVersion?: string;
-  };
 }
 
 export interface BusinessDraftData {
@@ -172,14 +162,6 @@ export interface TourismDraftData {
   socialTwitter: string;
   socialTiktok: string;
   businessId: string;
-  socialAuthorization: {
-    granted: boolean;
-    authorizerName?: string;
-    authorizerRole?: string;
-    relationship?: SocialAuthorizerRelationship;
-    monetizationAcknowledged?: boolean;
-    acceptedVersion?: string;
-  };
 }
 
 /* ------------------------------------------------------------------ */

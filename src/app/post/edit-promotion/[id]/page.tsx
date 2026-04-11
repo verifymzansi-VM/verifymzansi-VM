@@ -34,8 +34,6 @@ import {
   EVENT_ACCESSIBILITY_OPTIONS,
 } from "@/lib/constants/categories";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
-import { SocialAuthorizationFields } from "@/components/promotions/social-authorization-fields";
-import type { PromotionSocialAuthorizationInput } from "@/lib/promotions/social-authorization";
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
 const selectClass =
   "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-shadow sm:h-10 sm:text-sm";
@@ -75,11 +73,6 @@ export default function EditPromotionPage() {
   const [newPhotoFiles, setNewPhotoFiles] = useState<File[]>([]);
   const [newVideoFiles, setNewVideoFiles] = useState<File[]>([]);
   const [focalPoint, setFocalPoint] = useState({ x: 0.5, y: 0.5 });
-  const [socialAuthorization, setSocialAuthorization] = useState<PromotionSocialAuthorizationInput>(
-    {
-      granted: false,
-    }
-  );
 
   // Link to Business
   const [businessId, setBusinessId] = useState("");
@@ -163,11 +156,6 @@ export default function EditPromotionPage() {
           setFoodDrinksAvailable(!!ed.food_drinks_available);
           setBringYourOwn(ed.bring_your_own || "");
         }
-        setSocialAuthorization(
-          p.socialAuthorization ?? {
-            granted: false,
-          }
-        );
       } catch {
         setError("Failed to load promotion");
       } finally {
@@ -216,19 +204,6 @@ export default function EditPromotionPage() {
     setExistingImages((prev) => prev.filter((_, i) => i !== index));
   }
 
-  function handleSocialAuthorizationChange(nextValue: PromotionSocialAuthorizationInput) {
-    setSocialAuthorization(nextValue);
-    setFieldErrors((current) => {
-      const next = { ...current };
-      delete next["socialAuthorization.authorizerName"];
-      delete next["socialAuthorization.authorizerRole"];
-      delete next["socialAuthorization.relationship"];
-      delete next["socialAuthorization.monetizationAcknowledged"];
-      delete next["socialAuthorization.acceptedVersion"];
-      return next;
-    });
-  }
-
   async function handleSubmit() {
     setIsSubmitting(true);
     setSubmitProgress("Uploading media...");
@@ -241,7 +216,6 @@ export default function EditPromotionPage() {
         startDate,
         endDate,
         contactMethods,
-        socialAuthorization,
       });
       const totalVideoCount = existingVideos.length + newVideoFiles.length;
       if (existingImages.length + newPhotoFiles.length > maxPhotos) {
@@ -377,7 +351,6 @@ export default function EditPromotionPage() {
         start_date: startDate ? new Date(startDate).toISOString() : undefined,
         end_date: endDate ? new Date(endDate).toISOString() : undefined,
         business_id: businessId || undefined,
-        socialAuthorization,
         event_details: {
           event_type: eventType || undefined,
           venue_name: venueName || undefined,
@@ -914,12 +887,6 @@ export default function EditPromotionPage() {
                 onChange={setNewVideoFiles}
                 accept="video/*"
                 disabled={!videoAllowed}
-              />
-
-              <SocialAuthorizationFields
-                value={socialAuthorization}
-                onChange={handleSocialAuthorizationChange}
-                errors={fieldErrors}
               />
 
               <div className="rounded-xl border border-dashed border-brand-green/30 bg-brand-green/5 p-4">

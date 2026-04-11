@@ -2,10 +2,6 @@ import { z } from "zod";
 import { priceSchema } from "./shared";
 import type { BusinessCategory } from "@/types/enums";
 import { isTrustedPlatformMediaUrl } from "@/lib/utils/media-url";
-import {
-  SOCIAL_AUTHORIZATION_VERSION,
-  type PromotionSocialAuthorizationInput,
-} from "@/lib/promotions/social-authorization";
 
 const BUSINESS_CATEGORY_VALUES = [
   "fashion_accessories",
@@ -22,67 +18,6 @@ const BUSINESS_CATEGORY_VALUES = [
   "tourism_hospitality",
   "general_other",
 ] as const satisfies readonly BusinessCategory[];
-
-const SOCIAL_AUTHORIZER_RELATIONSHIP_VALUES = [
-  "owner",
-  "business_representative",
-  "agency_or_marketing_partner",
-] as const;
-
-const socialAuthorizationSchema = z
-  .object({
-    granted: z.boolean(),
-    authorizerName: z.string().trim().max(100).optional(),
-    authorizerRole: z.string().trim().max(100).optional(),
-    relationship: z.enum(SOCIAL_AUTHORIZER_RELATIONSHIP_VALUES).optional(),
-    monetizationAcknowledged: z.boolean().optional(),
-    acceptedVersion: z.string().max(30).optional(),
-  })
-  .superRefine((value, ctx) => {
-    if (!value.granted) {
-      return;
-    }
-
-    if (!value.authorizerName) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["authorizerName"],
-        message: "Authorizer name is required when social distribution is authorized.",
-      });
-    }
-
-    if (!value.authorizerRole) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["authorizerRole"],
-        message: "Authorizer role is required when social distribution is authorized.",
-      });
-    }
-
-    if (!value.relationship) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["relationship"],
-        message: "Relationship is required when social distribution is authorized.",
-      });
-    }
-
-    if (value.monetizationAcknowledged !== true) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["monetizationAcknowledged"],
-        message: "Monetization acknowledgement is required when social distribution is authorized.",
-      });
-    }
-
-    if (value.acceptedVersion !== SOCIAL_AUTHORIZATION_VERSION) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["acceptedVersion"],
-        message: "You must accept the current social authorization terms.",
-      });
-    }
-  });
 
 /**
  * Zod schema for standalone promotion / advertisement creation and editing.
@@ -143,7 +78,6 @@ export const promotionSchema = z
     start_date: z.string().datetime().optional(),
     end_date: z.string().datetime().optional(),
     business_id: z.string().uuid().optional(),
-    socialAuthorization: socialAuthorizationSchema.optional(),
     /** Structured event details (JSONB) — optional for enriched events */
     event_details: z
       .object({
@@ -182,4 +116,3 @@ export const promotionSchema = z
 
 /** Inferred input type for {@link promotionSchema}. */
 export type PromotionInput = z.infer<typeof promotionSchema>;
-export type PromotionSocialAuthorizationPayload = PromotionSocialAuthorizationInput;

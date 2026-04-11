@@ -1,8 +1,3 @@
-import {
-  SOCIAL_AUTHORIZATION_VERSION,
-  type PromotionSocialAuthorizationInput,
-} from "@/lib/promotions/social-authorization";
-import { SOCIAL_AUTHORIZER_RELATIONSHIP_LABELS } from "@/types/enums";
 import type { TourismListingType } from "@/types/tourism-details";
 import { TOURISM_SUBCATEGORY_FIELD_GROUPS } from "@/lib/constants/categories";
 
@@ -77,7 +72,6 @@ export interface TourismFormValues {
   venueName: string;
   venueCapacity: string;
   ticketsUrl: string;
-  socialAuthorization?: PromotionSocialAuthorizationInput;
 }
 
 /* ── Step 0: Type & Basics ───────────────────────────────── */
@@ -240,29 +234,6 @@ function validateStep2(v: TourismFormValues, errors: Record<string, string>) {
 function validateStep3(v: TourismFormValues, errors: Record<string, string>, imageCount: number) {
   if (imageCount < 1) {
     errors.images = "Upload at least 1 photo.";
-  }
-
-  if (v.listingType === "event" && v.socialAuthorization?.granted) {
-    if (!v.socialAuthorization.authorizerName?.trim()) {
-      errors["socialAuthorization.authorizerName"] = "Enter the authorizer's full name.";
-    }
-    if (!v.socialAuthorization.authorizerRole?.trim()) {
-      errors["socialAuthorization.authorizerRole"] = "Enter the authorizer's role or title.";
-    }
-    if (
-      !v.socialAuthorization.relationship ||
-      !(v.socialAuthorization.relationship in SOCIAL_AUTHORIZER_RELATIONSHIP_LABELS)
-    ) {
-      errors["socialAuthorization.relationship"] = "Select the authorizer relationship.";
-    }
-    if (!v.socialAuthorization.monetizationAcknowledged) {
-      errors["socialAuthorization.monetizationAcknowledged"] =
-        "You must acknowledge the monetization policy.";
-    }
-    if (v.socialAuthorization.acceptedVersion !== SOCIAL_AUTHORIZATION_VERSION) {
-      errors["socialAuthorization.acceptedVersion"] =
-        "You must accept the current authorization terms.";
-    }
   }
 }
 
