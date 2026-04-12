@@ -33,6 +33,7 @@ import { usePostDraftAutosave } from "@/hooks/use-post-draft-autosave";
 import { MediaUpload } from "@/components/ui/media-upload";
 import { VideoFrameSelector } from "@/components/ui/video-frame-selector";
 import { MediaCropPreview, type CropPosition } from "@/components/ui/media-crop-preview";
+import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
 import {
   PlanGate,
   usePlanCoverVideoAllowed,
@@ -253,6 +254,12 @@ function CreateBusinessContent() {
   const [numberOfEmployees, setNumberOfEmployees] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
+  const [uploadStatuses, setUploadStatuses] = useState<Record<string, UploadSlotStatus>>({
+    logo: "idle",
+    photos: "idle",
+    video: "idle",
+    saving: "idle",
+  });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitSucceeded, setSubmitSucceeded] = useState(false);
@@ -734,6 +741,15 @@ function CreateBusinessContent() {
     clearErrors();
     setIsSubmitting(true);
     setSubmitProgress("Checking upload service...");
+    setUploadStatuses({
+      logo: logoFile.length > 0 ? "uploading" : "skipped",
+      photos:
+        galleryFiles.length > 0 || coverFile.length > 0 || mallPhotoFiles.length > 0
+          ? "uploading"
+          : "skipped",
+      video: promoVideoFile.length > 0 ? "uploading" : "skipped",
+      saving: "idle",
+    });
     try {
       const csrfToken = await ensureCsrfTokenReady();
       if (!csrfToken) {
@@ -756,6 +772,9 @@ function CreateBusinessContent() {
           files: logoFile,
           area: "business_logo",
           field: "logo_url",
+        }).then((urls) => {
+          if (logoFile.length > 0) setUploadStatuses((c) => ({ ...c, logo: "done" }));
+          return urls;
         }),
         uploadRequiredBusinessMedia({
           files: coverFile,
@@ -776,9 +795,13 @@ function CreateBusinessContent() {
           ? uploadRequiredBusinessVideo({
               file: promoVideoFile[0],
               area: "business_cover",
+            }).then((url) => {
+              setUploadStatuses((c) => ({ ...c, video: "done" }));
+              return url;
             })
           : Promise.resolve(null),
       ]);
+      setUploadStatuses((c) => ({ ...c, photos: "done" }));
       const finalCoverPhoto = coverUrls[0] || null;
       const finalCoverVideo = videoUrl;
       let finalVideoThumbnail: string | null = null;
@@ -792,6 +815,7 @@ function CreateBusinessContent() {
       }
 
       setSubmitProgress("Saving business...");
+      setUploadStatuses((c) => ({ ...c, saving: "uploading" }));
 
       const socialLinks: Record<string, string> = {};
       if (socialFacebook) socialLinks.facebook = socialFacebook;
@@ -901,6 +925,7 @@ function CreateBusinessContent() {
         focusFirstError(normalized.fieldErrors, targetStep);
         return;
       }
+      setUploadStatuses((c) => ({ ...c, saving: "done" }));
       toast({ title: "Business submitted for review.", variant: "success" });
       setSubmitSucceeded(true);
       discardDraft();
@@ -919,6 +944,7 @@ function CreateBusinessContent() {
     } finally {
       setIsSubmitting(false);
       setSubmitProgress(null);
+      setUploadStatuses({ logo: "idle", photos: "idle", video: "idle", saving: "idle" });
     }
   }
 
@@ -1101,6 +1127,41 @@ function CreateBusinessContent() {
                         </button>
                       </div>
                     )}
+
+                    <UploadProgressPanel
+                      visible={isSubmitting}
+                      slots={[
+                        {
+                          key: "logo",
+                          label: "Uploading logo...",
+                          doneLabel: "Logo uploaded",
+                          status: logoFile.length > 0 ? uploadStatuses.logo : "skipped",
+                        },
+                        {
+                          key: "photos",
+                          label: "Uploading photos...",
+                          doneLabel: "Photos uploaded",
+                          status:
+                            galleryFiles.length > 0 ||
+                            coverFile.length > 0 ||
+                            mallPhotoFiles.length > 0
+                              ? uploadStatuses.photos
+                              : "skipped",
+                        },
+                        {
+                          key: "video",
+                          label: "Uploading video...",
+                          doneLabel: "Video uploaded",
+                          status: promoVideoFile.length > 0 ? uploadStatuses.video : "skipped",
+                        },
+                        {
+                          key: "saving",
+                          label: "Saving business...",
+                          doneLabel: "Business saved",
+                          status: uploadStatuses.saving,
+                        },
+                      ]}
+                    />
 
                     <PostFormFooter
                       currentStep={step}

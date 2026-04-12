@@ -30,6 +30,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 import { MediaUpload } from "@/components/ui/media-upload";
+import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
 import { FocalPointPicker, type FocalPoint } from "@/components/ui/focal-point-picker";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { useToast } from "@/hooks/use-toast";
@@ -99,6 +100,12 @@ export default function EditBusinessPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
+  const [uploadStatuses, setUploadStatuses] = useState<Record<string, UploadSlotStatus>>({
+    logo: "idle",
+    photos: "idle",
+    video: "idle",
+    saving: "idle",
+  });
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [existingStatus, setExistingStatus] = useState<string | null>(null);
@@ -375,6 +382,15 @@ export default function EditBusinessPage() {
   async function handleSubmit() {
     setIsSubmitting(true);
     setSubmitProgress("Uploading media...");
+    setUploadStatuses({
+      logo: newLogoFile.length > 0 ? "uploading" : "skipped",
+      photos:
+        newCoverFile.length > 0 || newGalleryFiles.length > 0 || newMallPhotoFiles.length > 0
+          ? "uploading"
+          : "skipped",
+      video: newPromoVideoFile.length > 0 ? "uploading" : "skipped",
+      saving: "idle",
+    });
     setError(null);
     clearErrors();
 
@@ -416,6 +432,9 @@ export default function EditBusinessPage() {
             files: newLogoFile,
             area: "business_logo",
             field: "logo_url",
+          }).then((urls) => {
+            if (newLogoFile.length > 0) setUploadStatuses((c) => ({ ...c, logo: "done" }));
+            return urls;
           }),
           uploadRequiredBusinessMedia({
             files: newCoverFile,
@@ -442,6 +461,9 @@ export default function EditBusinessPage() {
               ? uploadRequiredBusinessVideo({
                   file: newPromoVideoFile[0],
                   area: "business_cover",
+                }).then((url) => {
+                  setUploadStatuses((c) => ({ ...c, video: "done" }));
+                  return url;
                 })
               : Promise.resolve(null),
           uploadRequiredBusinessMedia({
@@ -450,6 +472,10 @@ export default function EditBusinessPage() {
             field: "video_thumbnail",
           }),
         ]);
+
+      if (newCoverFile.length > 0 || newGalleryFiles.length > 0 || newMallPhotoFiles.length > 0) {
+        setUploadStatuses((c) => ({ ...c, photos: "done" }));
+      }
 
       let finalLogoUrl = existingLogo;
       if (logoUrls[0]) finalLogoUrl = logoUrls[0];
@@ -485,6 +511,7 @@ export default function EditBusinessPage() {
       }
 
       setSubmitProgress("Saving business...");
+      setUploadStatuses((c) => ({ ...c, saving: "uploading" }));
 
       // Build social links
       const socialLinks: Record<string, string> = {};
@@ -598,6 +625,7 @@ export default function EditBusinessPage() {
           existingStatus === "live" ? "Updated and resubmitted for review" : "Business updated!",
         variant: "success",
       });
+      setUploadStatuses((c) => ({ ...c, saving: "done" }));
       router.push("/dashboard/listings?area=MZANSI_BUSINESS&updated=business");
     } catch (error: unknown) {
       const uploadFailure = getBusinessMediaUploadErrorState(error);
@@ -611,6 +639,7 @@ export default function EditBusinessPage() {
     } finally {
       setIsSubmitting(false);
       setSubmitProgress(null);
+      setUploadStatuses({ logo: "idle", photos: "idle", video: "idle", saving: "idle" });
     }
   }
 
@@ -1677,6 +1706,41 @@ export default function EditBusinessPage() {
               </div>
 
               {/* Actions */}
+              <UploadProgressPanel
+                visible={isSubmitting}
+                slots={[
+                  {
+                    key: "logo",
+                    label: "Uploading logo...",
+                    doneLabel: "Logo uploaded",
+                    status: newLogoFile.length > 0 ? uploadStatuses.logo : "skipped",
+                  },
+                  {
+                    key: "photos",
+                    label: "Uploading photos...",
+                    doneLabel: "Photos uploaded",
+                    status:
+                      newCoverFile.length > 0 ||
+                      newGalleryFiles.length > 0 ||
+                      newMallPhotoFiles.length > 0
+                        ? uploadStatuses.photos
+                        : "skipped",
+                  },
+                  {
+                    key: "video",
+                    label: "Uploading video...",
+                    doneLabel: "Video uploaded",
+                    status: newPromoVideoFile.length > 0 ? uploadStatuses.video : "skipped",
+                  },
+                  {
+                    key: "saving",
+                    label: "Saving business...",
+                    doneLabel: "Business saved",
+                    status: uploadStatuses.saving,
+                  },
+                ]}
+              />
+
               <div className="flex justify-between pt-4">
                 <Button variant="outline" asChild className="h-11 gap-1">
                   <Link href="/dashboard/businesses">

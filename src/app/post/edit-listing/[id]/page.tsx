@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
 import { CategoryPicker } from "@/components/listings/category-picker";
 import { MediaUpload } from "@/components/ui/media-upload";
+import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
 import { FocalPointPicker, type FocalPoint } from "@/components/ui/focal-point-picker";
 import {
   usePlanMaxPhotos,
@@ -64,6 +65,12 @@ export default function EditListingPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
+  const [uploadStatuses, setUploadStatuses] = useState<Record<string, UploadSlotStatus>>({
+    logo: "idle",
+    photos: "idle",
+    video: "idle",
+    saving: "idle",
+  });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -416,6 +423,12 @@ export default function EditListingPage() {
     clearErrors();
     setIsSubmitting(true);
     setSubmitProgress("Uploading media...");
+    setUploadStatuses({
+      logo: newLogoFile.length > 0 ? "uploading" : "skipped",
+      photos: newPhotoFiles.length > 0 ? "uploading" : "skipped",
+      video: newVideoFile.length > 0 ? "uploading" : "skipped",
+      saving: "idle",
+    });
     try {
       const csrfToken = await ensureCsrfTokenReady();
       if (!csrfToken) {
@@ -431,8 +444,14 @@ export default function EditListingPage() {
       // Upload photos, video, and video cover in parallel
       let compressedVideoFileRef: File | null = null;
       const [newLogoUrls, newPhotoUrls, newVideoUrl, newCoverUrls] = await Promise.all([
-        uploadMedia(newLogoFile, "listing_logo"),
-        uploadMedia(newPhotoFiles, "listing"),
+        uploadMedia(newLogoFile, "listing_logo").then((urls) => {
+          if (newLogoFile.length > 0) setUploadStatuses((c) => ({ ...c, logo: "done" }));
+          return urls;
+        }),
+        uploadMedia(newPhotoFiles, "listing").then((urls) => {
+          if (newPhotoFiles.length > 0) setUploadStatuses((c) => ({ ...c, photos: "done" }));
+          return urls;
+        }),
         newVideoFile.length > 0
           ? (async () => {
               setSubmitProgress("Compressing video...");
@@ -460,6 +479,7 @@ export default function EditListingPage() {
                 body: file,
               });
               if (!putRes.ok) throw new Error(`Failed to upload video (HTTP ${putRes.status})`);
+              setUploadStatuses((c) => ({ ...c, video: "done" }));
               return publicUrl as string;
             })()
           : Promise.resolve(null as string | null),
@@ -480,6 +500,7 @@ export default function EditListingPage() {
       const mediaDimensions = primaryMediaFile ? await readMediaDimensions(primaryMediaFile) : null;
 
       setSubmitProgress("Saving listing...");
+      setUploadStatuses((c) => ({ ...c, saving: "uploading" }));
 
       // Submit via server-side API route for full validation & ownership check
       const res = await fetch(`/api/listings/${id}`, {
@@ -529,12 +550,14 @@ export default function EditListingPage() {
           existingStatus === "live" ? "Updated and resubmitted for review" : "Listing updated!",
         variant: "success",
       });
+      setUploadStatuses((c) => ({ ...c, saving: "done" }));
       router.push("/dashboard/listings");
     } catch (error: unknown) {
       setFormError(normalizeCreatePostRuntimeError(error, "Something went wrong."));
     } finally {
       setIsSubmitting(false);
       setSubmitProgress(null);
+      setUploadStatuses({ logo: "idle", photos: "idle", video: "idle", saving: "idle" });
     }
   }
 
@@ -993,6 +1016,36 @@ export default function EditListingPage() {
                       photoCount={previewPhotos.length}
                     />
                   </div>
+
+                  <UploadProgressPanel
+                    visible={isSubmitting}
+                    slots={[
+                      {
+                        key: "logo",
+                        label: "Uploading logo...",
+                        doneLabel: "Logo uploaded",
+                        status: newLogoFile.length > 0 ? uploadStatuses.logo : "skipped",
+                      },
+                      {
+                        key: "photos",
+                        label: "Uploading photos...",
+                        doneLabel: "Photos uploaded",
+                        status: newPhotoFiles.length > 0 ? uploadStatuses.photos : "skipped",
+                      },
+                      {
+                        key: "video",
+                        label: "Uploading video...",
+                        doneLabel: "Video uploaded",
+                        status: newVideoFile.length > 0 ? uploadStatuses.video : "skipped",
+                      },
+                      {
+                        key: "saving",
+                        label: "Saving listing...",
+                        doneLabel: "Listing saved",
+                        status: uploadStatuses.saving,
+                      },
+                    ]}
+                  />
 
                   <div className="flex gap-3">
                     <Button

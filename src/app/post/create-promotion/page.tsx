@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { MediaUpload } from "@/components/ui/media-upload";
+import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
 import {
   PlanGate,
   usePlanMaxPhotos,
@@ -83,6 +84,11 @@ function CreatePromotionContent() {
   const [step, setStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
+  const [uploadStatuses, setUploadStatuses] = useState<Record<string, UploadSlotStatus>>({
+    photos: "idle",
+    videos: "idle",
+    saving: "idle",
+  });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitSucceeded, setSubmitSucceeded] = useState(false);
@@ -367,6 +373,11 @@ function CreatePromotionContent() {
     clearErrors();
     setIsSubmitting(true);
     setSubmitProgress("Checking upload service...");
+    setUploadStatuses({
+      photos: photoFiles.length > 0 ? "uploading" : "skipped",
+      videos: videoFiles.length > 0 ? "uploading" : "skipped",
+      saving: "idle",
+    });
 
     try {
       const csrfToken = await ensureCsrfTokenReady();
@@ -420,6 +431,7 @@ function CreatePromotionContent() {
                 throw new Error(await readUploadError(uploadRes, "Failed to upload photos"));
               }
               const uploadJson = await uploadRes.json();
+              setUploadStatuses((c) => ({ ...c, photos: "done" }));
               return (uploadJson.urls || []) as string[];
             })()
           : Promise.resolve([] as string[]),
@@ -437,7 +449,7 @@ function CreatePromotionContent() {
               }
               compressedVideoFileRef = compressed[0] ?? null;
               setSubmitProgress("Uploading media...");
-              return Promise.all(
+              const urls = await Promise.all(
                 compressed.map(async (file) => {
                   const urlRes = await fetchWithRetry("/api/media/upload-url", {
                     method: "POST",
@@ -466,6 +478,8 @@ function CreatePromotionContent() {
                   return publicUrl as string;
                 })
               );
+              setUploadStatuses((c) => ({ ...c, videos: "done" }));
+              return urls;
             })()
           : Promise.resolve([] as string[]),
 
@@ -488,6 +502,7 @@ function CreatePromotionContent() {
       ]);
 
       setSubmitProgress("Saving promotion...");
+      setUploadStatuses((c) => ({ ...c, saving: "uploading" }));
       const primaryMediaFile = compressedVideoFileRef ?? videoFiles[0] ?? photoFiles[0] ?? null;
       const mediaDimensions = primaryMediaFile ? await readMediaDimensions(primaryMediaFile) : null;
 
@@ -533,6 +548,7 @@ function CreatePromotionContent() {
 
       toast({ title: "Promotion submitted for review.", variant: "success" });
       setSubmitSucceeded(true);
+      setUploadStatuses((c) => ({ ...c, saving: "done" }));
       discardDraft();
       router.push("/dashboard/listings?area=PROMOTIONS_EVENTS&created=promotion");
     } catch (error: unknown) {
@@ -540,6 +556,7 @@ function CreatePromotionContent() {
     } finally {
       setIsSubmitting(false);
       setSubmitProgress(null);
+      setUploadStatuses({ photos: "idle", videos: "idle", saving: "idle" });
     }
   }
 
@@ -620,6 +637,30 @@ function CreatePromotionContent() {
                         </button>
                       </div>
                     )}
+
+                    <UploadProgressPanel
+                      visible={isSubmitting}
+                      slots={[
+                        {
+                          key: "photos",
+                          label: "Uploading photos...",
+                          doneLabel: "Photos uploaded",
+                          status: photoFiles.length > 0 ? uploadStatuses.photos : "skipped",
+                        },
+                        {
+                          key: "videos",
+                          label: "Uploading video...",
+                          doneLabel: "Video uploaded",
+                          status: videoFiles.length > 0 ? uploadStatuses.videos : "skipped",
+                        },
+                        {
+                          key: "saving",
+                          label: "Saving promotion...",
+                          doneLabel: "Promotion saved",
+                          status: uploadStatuses.saving,
+                        },
+                      ]}
+                    />
 
                     <PostFormFooter
                       currentStep={step}

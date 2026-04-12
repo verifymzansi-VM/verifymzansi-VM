@@ -14,6 +14,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 import { MediaUpload } from "@/components/ui/media-upload";
+import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
 import { LocationSelector } from "@/components/ui/location-selector";
 import { type BusinessCategory, type PromotionType } from "@/types/enums";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
@@ -47,6 +48,12 @@ export default function EditPromotionPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
+  const [uploadStatuses, setUploadStatuses] = useState<Record<string, UploadSlotStatus>>({
+    logo: "idle",
+    photos: "idle",
+    videos: "idle",
+    saving: "idle",
+  });
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -223,6 +230,12 @@ export default function EditPromotionPage() {
   async function handleSubmit() {
     setIsSubmitting(true);
     setSubmitProgress("Uploading media...");
+    setUploadStatuses({
+      logo: newLogoFile.length > 0 ? "uploading" : "skipped",
+      photos: newPhotoFiles.length > 0 ? "uploading" : "skipped",
+      videos: newVideoFiles.length > 0 ? "uploading" : "skipped",
+      saving: "idle",
+    });
     setError(null);
     setFieldErrors({});
 
@@ -286,6 +299,7 @@ export default function EditPromotionPage() {
                 throw new Error(await readUploadError(uploadRes, "Failed to upload photos"));
               }
               const uploadJson = await uploadRes.json();
+              setUploadStatuses((c) => ({ ...c, photos: "done" }));
               return (uploadJson.urls || []) as string[];
             })()
           : Promise.resolve([] as string[]),
@@ -303,7 +317,7 @@ export default function EditPromotionPage() {
               }
               compressedVideoFileRef = compressed[0] ?? null;
               setSubmitProgress("Uploading media...");
-              return Promise.all(
+              const result = await Promise.all(
                 compressed.map(async (file) => {
                   const urlRes = await fetchWithRetry("/api/media/upload-url", {
                     method: "POST",
@@ -332,6 +346,8 @@ export default function EditPromotionPage() {
                   return publicUrl as string;
                 })
               );
+              setUploadStatuses((c) => ({ ...c, videos: "done" }));
+              return result;
             })()
           : Promise.resolve([] as string[]),
       ]);
@@ -358,9 +374,11 @@ export default function EditPromotionPage() {
         }
         const logoJson = await logoRes.json();
         uploadedLogoUrl = (logoJson.urls as string[])?.[0];
+        setUploadStatuses((c) => ({ ...c, logo: "done" }));
       }
 
       setSubmitProgress("Saving promotion...");
+      setUploadStatuses((c) => ({ ...c, saving: "uploading" }));
 
       const body = {
         title,
@@ -419,12 +437,14 @@ export default function EditPromotionPage() {
       }
 
       toast({ title: "Promotion updated!", variant: "success" });
+      setUploadStatuses((c) => ({ ...c, saving: "done" }));
       router.push("/dashboard/listings?area=PROMOTIONS_EVENTS&updated=promotion");
     } catch (error: unknown) {
       setError(normalizeCreatePostRuntimeError(error, "Something went wrong. Please try again."));
     } finally {
       setIsSubmitting(false);
       setSubmitProgress(null);
+      setUploadStatuses({ logo: "idle", photos: "idle", videos: "idle", saving: "idle" });
     }
   }
 
@@ -1024,6 +1044,36 @@ export default function EditPromotionPage() {
                             : null}
                   </p>
                 )}
+              <UploadProgressPanel
+                visible={isSubmitting}
+                slots={[
+                  {
+                    key: "logo",
+                    label: "Uploading logo...",
+                    doneLabel: "Logo uploaded",
+                    status: newLogoFile.length > 0 ? uploadStatuses.logo : "skipped",
+                  },
+                  {
+                    key: "photos",
+                    label: "Uploading photos...",
+                    doneLabel: "Photos uploaded",
+                    status: newPhotoFiles.length > 0 ? uploadStatuses.photos : "skipped",
+                  },
+                  {
+                    key: "videos",
+                    label: "Uploading video...",
+                    doneLabel: "Video uploaded",
+                    status: newVideoFiles.length > 0 ? uploadStatuses.videos : "skipped",
+                  },
+                  {
+                    key: "saving",
+                    label: "Saving promotion...",
+                    doneLabel: "Promotion saved",
+                    status: uploadStatuses.saving,
+                  },
+                ]}
+              />
+
               <div className="flex justify-between">
                 <Button variant="outline" asChild className="h-11 gap-1">
                   <Link href="/dashboard/promotions">

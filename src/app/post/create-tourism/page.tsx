@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { MediaUpload } from "@/components/ui/media-upload";
+import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
 import { VideoFrameSelector } from "@/components/ui/video-frame-selector";
 import { MediaCropPreview, type CropPosition } from "@/components/ui/media-crop-preview";
 import {
@@ -152,6 +153,12 @@ function CreateTourismContent() {
   const [step, setStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
+  const [uploadStatuses, setUploadStatuses] = useState<Record<string, UploadSlotStatus>>({
+    logo: "idle",
+    photos: "idle",
+    videos: "idle",
+    saving: "idle",
+  });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitSucceeded, setSubmitSucceeded] = useState(false);
@@ -786,6 +793,12 @@ function CreateTourismContent() {
     clearErrors();
     setIsSubmitting(true);
     setSubmitProgress("Checking upload service...");
+    setUploadStatuses({
+      logo: logoFiles.length > 0 ? "uploading" : "skipped",
+      photos: photoFiles.length > 0 ? "uploading" : "skipped",
+      videos: videoFiles.length > 0 ? "uploading" : "skipped",
+      saving: "idle",
+    });
 
     try {
       const csrfToken = await ensureCsrfTokenReady();
@@ -832,6 +845,7 @@ function CreateTourismContent() {
               });
               if (!res.ok) throw new Error(await readUploadError(res, "Failed to upload photos"));
               const json = await res.json();
+              setUploadStatuses((c) => ({ ...c, photos: "done" }));
               return (json.urls || []) as string[];
             })()
           : Promise.resolve([] as string[]),
@@ -844,7 +858,7 @@ function CreateTourismContent() {
               for (const f of videoFiles) compressed.push(await compressVideoForUpload(f));
               compressedVideoFileRef = compressed[0] ?? null;
               setSubmitProgress("Uploading media...");
-              return Promise.all(
+              const result = await Promise.all(
                 compressed.map(async (file) => {
                   const urlRes = await fetchWithRetry("/api/media/upload-url", {
                     method: "POST",
@@ -870,6 +884,8 @@ function CreateTourismContent() {
                   return publicUrl as string;
                 })
               );
+              setUploadStatuses((c) => ({ ...c, videos: "done" }));
+              return result;
             })()
           : Promise.resolve([] as string[]),
         // Video thumbnail
@@ -901,6 +917,7 @@ function CreateTourismContent() {
               });
               if (!res.ok) return undefined;
               const json = await res.json();
+              setUploadStatuses((c) => ({ ...c, logo: "done" }));
               return json.urls?.[0] as string | undefined;
             })()
           : Promise.resolve(undefined as string | undefined),
@@ -911,6 +928,7 @@ function CreateTourismContent() {
 
       if (listingType === "tourism_business") {
         setSubmitProgress("Saving tourism business...");
+        setUploadStatuses((c) => ({ ...c, saving: "uploading" }));
 
         const categoryDetails: Record<string, unknown> = {};
         if (subcategory) categoryDetails.subcategory = subcategory;
@@ -1046,6 +1064,7 @@ function CreateTourismContent() {
       } else {
         /* ── Event submission ── */
         setSubmitProgress("Saving event...");
+        setUploadStatuses((c) => ({ ...c, saving: "uploading" }));
 
         const eventDetails: Record<string, unknown> = {};
         if (eventType) eventDetails.event_type = eventType;
@@ -1112,6 +1131,7 @@ function CreateTourismContent() {
       }
 
       setSubmitSucceeded(true);
+      setUploadStatuses((c) => ({ ...c, saving: "done" }));
       discardDraft();
       router.push("/dashboard/listings?area=PROMOTIONS_EVENTS&created=tourism");
     } catch (error: unknown) {
@@ -1119,6 +1139,7 @@ function CreateTourismContent() {
     } finally {
       setIsSubmitting(false);
       setSubmitProgress(null);
+      setUploadStatuses({ logo: "idle", photos: "idle", videos: "idle", saving: "idle" });
     }
   }
 
@@ -1460,6 +1481,36 @@ function CreateTourismContent() {
                         </button>
                       </div>
                     )}
+                    <UploadProgressPanel
+                      visible={isSubmitting}
+                      slots={[
+                        {
+                          key: "logo",
+                          label: "Uploading logo...",
+                          doneLabel: "Logo uploaded",
+                          status: logoFiles.length > 0 ? uploadStatuses.logo : "skipped",
+                        },
+                        {
+                          key: "photos",
+                          label: "Uploading photos...",
+                          doneLabel: "Photos uploaded",
+                          status: photoFiles.length > 0 ? uploadStatuses.photos : "skipped",
+                        },
+                        {
+                          key: "videos",
+                          label: "Uploading video...",
+                          doneLabel: "Video uploaded",
+                          status: videoFiles.length > 0 ? uploadStatuses.videos : "skipped",
+                        },
+                        {
+                          key: "saving",
+                          label: "Saving listing...",
+                          doneLabel: "Listing saved",
+                          status: uploadStatuses.saving,
+                        },
+                      ]}
+                    />
+
                     <PostFormFooter
                       currentStep={step}
                       totalSteps={STEPS.length}

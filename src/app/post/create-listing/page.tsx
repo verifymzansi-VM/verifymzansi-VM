@@ -4,13 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Camera,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Eye,
   FileText,
   Inbox,
-  Loader2,
   Mail,
   MapPin,
   MessageCircle,
@@ -28,6 +26,7 @@ import { CategoryPicker } from "@/components/listings/category-picker";
 import { MediaUpload } from "@/components/ui/media-upload";
 import { VideoFrameSelector } from "@/components/ui/video-frame-selector";
 import { MediaCropPreview, type CropPosition } from "@/components/ui/media-crop-preview";
+import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
 import { PlanGate, usePlanMaxPhotos, usePlanVideoAllowed } from "@/components/billing/plan-gate";
 import { LocationSelector, type LocationValue } from "@/components/ui/location-selector";
 import type { ListingCategory, ListingCondition } from "@/types/enums";
@@ -114,8 +113,6 @@ const FIELD_IDS: Record<string, string> = {
   images: "listing-images",
   videos: "listing-video",
 };
-
-type UploadSlotStatus = "idle" | "uploading" | "done" | "skipped";
 
 interface UploadStatuses {
   logo: UploadSlotStatus;
@@ -860,57 +857,35 @@ export default function CreateListingPage() {
                     )}
 
                     {isSubmitting && (
-                      <div className="space-y-1.5 border-t pt-3 text-sm text-muted-foreground">
-                        {logoFile.length > 0 && (
-                          <div className="flex items-center gap-2">
-                            {uploadStatuses.logo === "uploading" ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-green" />
-                            ) : (
-                              <CheckCircle2 className="h-3.5 w-3.5 text-brand-green" />
-                            )}
-                            {uploadStatuses.logo === "done" ? "Logo uploaded" : "Uploading logo..."}
-                          </div>
-                        )}
-
-                        {photoFiles.length > 0 && (
-                          <div className="flex items-center gap-2">
-                            {uploadStatuses.photos === "uploading" ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-green" />
-                            ) : (
-                              <CheckCircle2 className="h-3.5 w-3.5 text-brand-green" />
-                            )}
-                            {uploadStatuses.photos === "done"
-                              ? "Photos uploaded"
-                              : "Uploading photos..."}
-                          </div>
-                        )}
-
-                        {videoFile.length > 0 && (
-                          <div className="flex items-center gap-2">
-                            {uploadStatuses.video === "uploading" ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-green" />
-                            ) : (
-                              <CheckCircle2 className="h-3.5 w-3.5 text-brand-green" />
-                            )}
-                            {uploadStatuses.video === "done"
-                              ? "Video uploaded"
-                              : "Uploading video..."}
-                          </div>
-                        )}
-
-                        {uploadStatuses.saving !== "idle" && (
-                          <div className="flex items-center gap-2">
-                            {uploadStatuses.saving === "uploading" ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-green" />
-                            ) : (
-                              <CheckCircle2 className="h-3.5 w-3.5 text-brand-green" />
-                            )}
-                            {uploadStatuses.saving === "done"
-                              ? "Listing saved"
-                              : "Saving listing..."}
-                          </div>
-                        )}
-                      </div>
+                      <UploadProgressPanel
+                        visible={isSubmitting}
+                        slots={[
+                          {
+                            key: "logo",
+                            label: "Uploading logo...",
+                            doneLabel: "Logo uploaded",
+                            status: logoFile.length > 0 ? uploadStatuses.logo : "skipped",
+                          },
+                          {
+                            key: "photos",
+                            label: "Uploading photos...",
+                            doneLabel: "Photos uploaded",
+                            status: photoFiles.length > 0 ? uploadStatuses.photos : "skipped",
+                          },
+                          {
+                            key: "video",
+                            label: "Uploading video...",
+                            doneLabel: "Video uploaded",
+                            status: videoFile.length > 0 ? uploadStatuses.video : "skipped",
+                          },
+                          {
+                            key: "saving",
+                            label: "Saving listing...",
+                            doneLabel: "Listing saved",
+                            status: uploadStatuses.saving,
+                          },
+                        ]}
+                      />
                     )}
 
                     <PostFormFooter
