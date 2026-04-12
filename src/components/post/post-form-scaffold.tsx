@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { CheckCircle2, Loader2, type LucideIcon } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, type LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,12 @@ interface PostFormScaffoldProps {
   steps: readonly PostFormStep[];
   currentStep: number;
   error?: string | null;
+  /** Per-field error messages to list inside the error alert. */
+  fieldErrors?: Record<string, string>;
+  /** Label like "Step 1 \u2014 Details" shown in the error alert heading. */
+  errorStepLabel?: string;
+  /** Per-step boolean: true if that step currently has validation errors. */
+  stepHasErrors?: boolean[];
   onRetry?: () => void;
   children: React.ReactNode;
   footer?: React.ReactNode;
@@ -45,6 +51,9 @@ export function PostFormScaffold({
   steps,
   currentStep,
   error,
+  fieldErrors,
+  errorStepLabel,
+  stepHasErrors,
   onRetry,
   children,
   footer,
@@ -85,6 +94,7 @@ export function PostFormScaffold({
                 const Icon = step.icon;
                 const isCompleted = index < currentStep;
                 const isCurrent = index === currentStep;
+                const hasError = stepHasErrors?.[index] ?? false;
 
                 return (
                   <li
@@ -94,24 +104,34 @@ export function PostFormScaffold({
                     <div
                       className={cn(
                         "flex min-w-0 items-center gap-2 text-sm",
-                        isCurrent && "text-foreground",
-                        isCompleted && "text-brand-green",
-                        !isCurrent && !isCompleted && "text-muted-foreground"
+                        hasError && "text-destructive",
+                        !hasError && isCurrent && "text-foreground",
+                        !hasError && isCompleted && "text-brand-green",
+                        !hasError && !isCurrent && !isCompleted && "text-muted-foreground"
                       )}
                       aria-current={isCurrent ? "step" : undefined}
                     >
                       <div
                         className={cn(
-                          "flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border-2 transition-all duration-300",
-                          isCurrent &&
+                          "relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border-2 transition-all duration-300",
+                          hasError && "border-destructive bg-destructive/10 text-destructive",
+                          !hasError &&
+                            isCurrent &&
                             "border-brand-green bg-brand-green text-white shadow-lg shadow-brand-green/20",
-                          isCompleted && "border-brand-green bg-brand-green/10 text-brand-green",
-                          !isCurrent &&
+                          !hasError &&
+                            isCompleted &&
+                            "border-brand-green bg-brand-green/10 text-brand-green",
+                          !hasError &&
+                            !isCurrent &&
                             !isCompleted &&
                             "border-muted-foreground/30 text-muted-foreground"
                         )}
                       >
-                        <Icon className="h-4 w-4" />
+                        {hasError ? (
+                          <AlertCircle className="h-4 w-4" />
+                        ) : (
+                          <Icon className="h-4 w-4" />
+                        )}
                       </div>
                       <div className="hidden min-w-0 sm:block">
                         <p className="truncate text-xs font-semibold">{step.label}</p>
@@ -168,8 +188,19 @@ export function PostFormScaffold({
           {error && (
             <Alert ref={errorRef} variant="destructive">
               <div>
-                <AlertTitle>Please review this form</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
+                <AlertTitle>
+                  {errorStepLabel ? `Please review ${errorStepLabel}` : "Please review this form"}
+                </AlertTitle>
+                <AlertDescription>
+                  <p>{error}</p>
+                  {fieldErrors && Object.keys(fieldErrors).length > 0 && (
+                    <ul className="mt-2 list-disc pl-4 space-y-0.5 text-[13px]">
+                      {Object.values(fieldErrors).map((msg, i) => (
+                        <li key={i}>{msg}</li>
+                      ))}
+                    </ul>
+                  )}
+                </AlertDescription>
                 {onRetry && (
                   <Button
                     type="button"

@@ -43,6 +43,26 @@ async function enterPostingForm(page: Page, firstField: Locator) {
   await firstField.waitFor({ state: "visible", timeout: 15_000 });
 }
 
+async function discardDraftIfPresent(page: Page) {
+  const discardDraftButton = page.getByRole("button", { name: /Discard draft/i });
+  if (await discardDraftButton.isVisible().catch(() => false)) {
+    page.once("dialog", (dialog) => dialog.accept());
+    await discardDraftButton.click();
+  }
+}
+
+async function expectFirstStepValidationGate(page: Page, route: string, firstField: Locator) {
+  await page.goto(route);
+  await enterPostingForm(page, firstField);
+  await discardDraftIfPresent(page);
+
+  await page.getByRole("button", { name: "Next" }).click();
+
+  await expect(page.getByText(/Please review Step 1/i).first()).toBeVisible();
+  await expect(page.getByText(/Please fix\s+\d+\s+field/i).first()).toBeVisible();
+  await expect(page.getByText(/Step 1 of/i).first()).toBeVisible();
+}
+
 async function completeListingCreate(page: Page) {
   const categoryOption = electronicsCategoryLocator(page);
   await page.goto("/post/create-listing");
@@ -191,6 +211,31 @@ test.describe("Posting flows in Chromium", () => {
   });
 
   test.setTimeout(120_000);
+
+  test("blocks moving past Step 1 when required fields are missing", async ({ page }) => {
+    await expectFirstStepValidationGate(
+      page,
+      "/post/create-listing",
+      electronicsCategoryLocator(page)
+    );
+
+    const businessTypeLabel = page
+      .locator("label")
+      .filter({ hasText: /Standalone Shop|Own Premises/i });
+    await expectFirstStepValidationGate(page, "/post/create-business", businessTypeLabel);
+
+    await expectFirstStepValidationGate(
+      page,
+      "/post/create-promotion",
+      page.getByRole("button", { name: "Next" })
+    );
+
+    await expectFirstStepValidationGate(
+      page,
+      "/post/create-tourism",
+      page.locator("#listing-type-group")
+    );
+  });
 
   test("creates, edits, and publicly exposes a market listing", async ({ page }) => {
     const listingId = await completeListingCreate(page);

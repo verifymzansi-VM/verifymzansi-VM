@@ -114,6 +114,57 @@ const FIELD_IDS: Record<string, string> = {
   videos: "listing-video",
 };
 
+const LISTING_FIELD_KEY_ALIASES: Record<string, string> = {
+  contact_methods: "contactMethods",
+  location_province: "province",
+  location_city: "city",
+};
+
+function getFieldId(key: string | undefined): string | undefined {
+  if (!key) return undefined;
+  const normalizedKey = LISTING_FIELD_KEY_ALIASES[key] ?? key;
+  return FIELD_IDS[normalizedKey];
+}
+
+function normalizeListingFieldErrors(errors: Record<string, string>): Record<string, string> {
+  const normalized: Record<string, string> = {};
+  for (const [key, message] of Object.entries(errors)) {
+    const normalizedKey = LISTING_FIELD_KEY_ALIASES[key] ?? key;
+    if (!normalized[normalizedKey]) {
+      normalized[normalizedKey] = message;
+    }
+  }
+  return normalized;
+}
+
+function getStepForFieldKey(key: string): number {
+  const normalizedKey = LISTING_FIELD_KEY_ALIASES[key] ?? key;
+
+  if (normalizedKey === "images" || normalizedKey === "videos") {
+    return 2;
+  }
+
+  if (
+    normalizedKey === "price_zar" ||
+    normalizedKey === "province" ||
+    normalizedKey === "city" ||
+    normalizedKey === "contactMethods"
+  ) {
+    return 1;
+  }
+
+  return 0;
+}
+
+function getStepForServerErrors(errors: Record<string, string>): number {
+  const keys = Object.keys(errors);
+  if (keys.length === 0) {
+    return 0;
+  }
+
+  return keys.reduce((targetStep, key) => Math.min(targetStep, getStepForFieldKey(key)), 2);
+}
+
 interface UploadStatuses {
   logo: UploadSlotStatus;
   photos: UploadSlotStatus;
@@ -365,15 +416,16 @@ export default function CreateListingPage() {
     });
   }
 
-  function focusFirstError(errors: Record<string, string>) {
+  function focusFirstError(errors: Record<string, string>, targetStep = step) {
     const orderByStep = [
       ["category", "title", "description"],
       ["price_zar", "province", "city", "contactMethods"],
       ["images", "videos"],
-    ][step];
+    ][targetStep];
 
-    const firstKey = orderByStep.find((key) => errors[key]) ?? Object.keys(errors)[0];
-    const targetId = FIELD_IDS[firstKey];
+    const firstKey = orderByStep?.find((key) => errors[key]) ?? Object.keys(errors)[0];
+    if (!firstKey) return;
+    const targetId = getFieldId(firstKey);
 
     if (!targetId) return;
 
@@ -462,12 +514,19 @@ export default function CreateListingPage() {
   }
 
   function goNext() {
-    const errors = validateStep(step);
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors((current) => ({ ...current, ...errors }));
-      setFormError("Please fix the highlighted fields.");
-      focusFirstError(errors);
-      return;
+    // Validate all steps up to and including the current step
+    for (let i = 0; i <= step; i++) {
+      const errors = validateStep(i);
+      if (Object.keys(errors).length > 0) {
+        if (i !== step) setStep(i);
+        setFieldErrors((current) => ({ ...current, ...errors }));
+        const count = Object.keys(errors).length;
+        setFormError(
+          `Please fix ${count} field${count > 1 ? "s" : ""} on Step ${i + 1} \u2014 ${STEPS[i].label}.`
+        );
+        focusFirstError(errors, i);
+        return;
+      }
     }
 
     clearErrors();
@@ -495,8 +554,11 @@ export default function CreateListingPage() {
     if (firstInvalidStep !== -1) {
       setStep(firstInvalidStep);
       setFieldErrors(stepErrors[firstInvalidStep]);
-      setFormError("Please fix the highlighted fields.");
-      requestAnimationFrame(() => focusFirstError(stepErrors[firstInvalidStep]));
+      const count = Object.keys(stepErrors[firstInvalidStep]).length;
+      setFormError(
+        `Please fix ${count} field${count > 1 ? "s" : ""} on Step ${firstInvalidStep + 1} \u2014 ${STEPS[firstInvalidStep].label}.`
+      );
+      requestAnimationFrame(() => focusFirstError(stepErrors[firstInvalidStep], firstInvalidStep));
       return;
     }
 
@@ -686,9 +748,21 @@ export default function CreateListingPage() {
       if (!res.ok) {
         const payload = await res.json().catch(() => null);
         const normalized = normalizeCreatePostError(payload, "Failed to create listing.");
-        setFieldErrors(normalized.fieldErrors);
-        setFormError(normalized.formError);
-        focusFirstError(normalized.fieldErrors);
+        const normalizedFieldErrors = normalizeListingFieldErrors(normalized.fieldErrors);
+        const targetStep = getStepForServerErrors(normalizedFieldErrors);
+        const count = Object.keys(normalizedFieldErrors).length;
+        if (count > 0) {
+          setStep(targetStep);
+        }
+        setFieldErrors(normalizedFieldErrors);
+        setFormError(
+          count > 0
+            ? `Please fix ${count} field${count > 1 ? "s" : ""} on Step ${targetStep + 1} \u2014 ${STEPS[targetStep].label}.`
+            : normalized.formError
+        );
+        if (count > 0) {
+          focusFirstError(normalizedFieldErrors, targetStep);
+        }
         return;
       }
 
@@ -832,6 +906,11 @@ export default function CreateListingPage() {
                 currentStep={step}
                 completeness={listingCompleteness}
                 error={formError}
+                fieldErrors={fieldErrors}
+                errorStepLabel={
+                  formError ? `Step ${step + 1} \u2014 ${STEPS[step].label}` : undefined
+                }
+                stepHasErrors={STEPS.map((_, i) => Object.keys(validateStep(i)).length > 0)}
                 onRetry={
                   formError && !isSubmitting
                     ? () => handleSubmit(new Event("submit") as unknown as React.FormEvent)

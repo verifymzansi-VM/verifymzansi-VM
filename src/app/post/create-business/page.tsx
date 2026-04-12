@@ -133,7 +133,8 @@ const STEP_SOCIAL_FIELDS = [
   "socialTiktok",
 ] as const;
 
-function getFieldId(key: string): string | undefined {
+function getFieldId(key: string | undefined): string | undefined {
+  if (!key) return undefined;
   if (FIELD_IDS[key]) return FIELD_IDS[key];
   if (key.startsWith("business_details.")) {
     return `business-detail-${key.split(".")[1]}`;
@@ -582,7 +583,8 @@ function CreateBusinessContent() {
       ["location_province", "location_city", ...STEP_CONTACT_FIELDS],
       ["gallery_photos", "cover_video", ...STEP_SOCIAL_FIELDS],
     ][targetStep];
-    const firstKey = orderByStep.find((key) => errors[key]) ?? Object.keys(errors)[0];
+    const firstKey = orderByStep?.find((key) => errors[key]) ?? Object.keys(errors)[0];
+    if (!firstKey) return;
     const targetId = getFieldId(firstKey);
     if (!targetId) return;
     requestAnimationFrame(() => {
@@ -707,12 +709,19 @@ function CreateBusinessContent() {
   }
 
   function goNext() {
-    const errors = validateStep(step);
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors((current) => ({ ...current, ...errors }));
-      setFormError("Please fix the highlighted fields.");
-      focusFirstError(errors);
-      return;
+    // Validate all steps up to and including the current step
+    for (let i = 0; i <= step; i++) {
+      const errors = validateStep(i);
+      if (Object.keys(errors).length > 0) {
+        if (i !== step) setStep(i);
+        setFieldErrors((current) => ({ ...current, ...errors }));
+        const count = Object.keys(errors).length;
+        setFormError(
+          `Please fix ${count} field${count > 1 ? "s" : ""} on Step ${i + 1} \u2014 ${STEPS[i].label}.`
+        );
+        focusFirstError(errors, i);
+        return;
+      }
     }
     clearErrors();
     const next = Math.min(step + 1, STEPS.length - 1);
@@ -734,7 +743,10 @@ function CreateBusinessContent() {
     if (firstInvalidStep !== -1) {
       setStep(firstInvalidStep);
       setFieldErrors(stepErrors[firstInvalidStep]);
-      setFormError("Please fix the highlighted fields.");
+      const count = Object.keys(stepErrors[firstInvalidStep]).length;
+      setFormError(
+        `Please fix ${count} field${count > 1 ? "s" : ""} on Step ${firstInvalidStep + 1} \u2014 ${STEPS[firstInvalidStep].label}.`
+      );
       focusFirstError(stepErrors[firstInvalidStep], firstInvalidStep);
       return;
     }
@@ -1104,6 +1116,11 @@ function CreateBusinessContent() {
                 steps={STEPS}
                 currentStep={step}
                 error={formError}
+                fieldErrors={fieldErrors}
+                errorStepLabel={
+                  formError ? `Step ${step + 1} \u2014 ${STEPS[step].label}` : undefined
+                }
+                stepHasErrors={STEPS.map((_, i) => Object.keys(validateStep(i)).length > 0)}
                 onRetry={
                   formError && !isSubmitting
                     ? () => handleSubmit(new Event("submit") as unknown as React.FormEvent)

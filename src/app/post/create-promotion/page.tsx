@@ -62,6 +62,34 @@ const FIELD_IDS: Record<string, string> = {
   videos: "promotion-videos",
 };
 
+function getStepForFieldKey(key: string): number {
+  if (key === "images" || key === "videos") {
+    return 2;
+  }
+
+  if (
+    key === "price_zar" ||
+    key === "province" ||
+    key === "city" ||
+    key === "contact_methods" ||
+    key === "start_date" ||
+    key === "end_date"
+  ) {
+    return 1;
+  }
+
+  return 0;
+}
+
+function getStepForServerErrors(errors: Record<string, string>): number {
+  const keys = Object.keys(errors);
+  if (keys.length === 0) {
+    return 0;
+  }
+
+  return keys.reduce((targetStep, key) => Math.min(targetStep, getStepForFieldKey(key)), 2);
+}
+
 export default function CreatePromotionPage() {
   return (
     <Suspense
@@ -305,7 +333,8 @@ function CreatePromotionContent() {
       ["province", "city", "contact_methods"],
       ["images", "videos"],
     ][targetStep];
-    const firstKey = orderByStep.find((key) => errors[key]) ?? Object.keys(errors)[0];
+    const firstKey = orderByStep?.find((key) => errors[key]) ?? Object.keys(errors)[0];
+    if (!firstKey) return;
     const targetId = FIELD_IDS[firstKey];
     if (!targetId) return;
     requestAnimationFrame(() => {
@@ -365,7 +394,10 @@ function CreatePromotionContent() {
     if (firstInvalidStep !== -1) {
       setStep(firstInvalidStep);
       setFieldErrors(stepErrors[firstInvalidStep]);
-      setFormError("Please fix the highlighted fields.");
+      const count = Object.keys(stepErrors[firstInvalidStep]).length;
+      setFormError(
+        `Please fix ${count} field${count > 1 ? "s" : ""} on Step ${firstInvalidStep + 1} \u2014 ${STEPS[firstInvalidStep].label}.`
+      );
       focusFirstError(stepErrors[firstInvalidStep], firstInvalidStep);
       return;
     }
@@ -540,9 +572,20 @@ function CreatePromotionContent() {
 
       if (!res.ok) {
         const normalized = normalizeCreatePostError(payload, "Failed to create promotion.");
+        const targetStep = getStepForServerErrors(normalized.fieldErrors);
+        const count = Object.keys(normalized.fieldErrors).length;
+        if (count > 0) {
+          setStep(targetStep);
+        }
         setFieldErrors(normalized.fieldErrors);
-        setFormError(normalized.formError);
-        focusFirstError(normalized.fieldErrors);
+        setFormError(
+          count > 0
+            ? `Please fix ${count} field${count > 1 ? "s" : ""} on Step ${targetStep + 1} \u2014 ${STEPS[targetStep].label}.`
+            : normalized.formError
+        );
+        if (count > 0) {
+          focusFirstError(normalized.fieldErrors, targetStep);
+        }
         return;
       }
 
@@ -614,6 +657,11 @@ function CreatePromotionContent() {
                 steps={STEPS}
                 currentStep={step}
                 error={formError}
+                fieldErrors={fieldErrors}
+                errorStepLabel={
+                  formError ? `Step ${step + 1} \u2014 ${STEPS[step].label}` : undefined
+                }
+                stepHasErrors={STEPS.map((_, i) => Object.keys(validateStep(i)).length > 0)}
                 onRetry={
                   formError && !isSubmitting
                     ? () => handleSubmit(new Event("submit") as unknown as React.FormEvent)
@@ -679,12 +727,19 @@ function CreatePromotionContent() {
                         });
                       }}
                       onNext={() => {
-                        const errors = validateStep(step);
-                        if (Object.keys(errors).length > 0) {
-                          setFieldErrors((current) => ({ ...current, ...errors }));
-                          setFormError("Please fix the highlighted fields.");
-                          focusFirstError(errors);
-                          return;
+                        // Validate all steps up to and including the current step
+                        for (let i = 0; i <= step; i++) {
+                          const errors = validateStep(i);
+                          if (Object.keys(errors).length > 0) {
+                            if (i !== step) setStep(i);
+                            setFieldErrors((current) => ({ ...current, ...errors }));
+                            const count = Object.keys(errors).length;
+                            setFormError(
+                              `Please fix ${count} field${count > 1 ? "s" : ""} on Step ${i + 1} \u2014 ${STEPS[i].label}.`
+                            );
+                            focusFirstError(errors, i);
+                            return;
+                          }
                         }
                         clearErrors();
                         const next = Math.min(step + 1, STEPS.length - 1);
@@ -707,6 +762,7 @@ function CreatePromotionContent() {
               >
                 {step === 0 && (
                   <div className="space-y-5 animate-in fade-in-0 duration-300">
+                    <p className="text-xs text-muted-foreground">Fields marked * are required.</p>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <Label htmlFor="title">Event Title *</Label>
@@ -721,10 +777,15 @@ function CreatePromotionContent() {
                         }}
                         placeholder="e.g. Saturday Night Market in Soweto"
                         maxLength={120}
+                        aria-required="true"
+                        aria-invalid={!!fieldErrors.title}
+                        aria-describedby={fieldErrors.title ? "promotion-title-error" : undefined}
                         className={cn(fieldErrors.title && "border-destructive")}
                       />
                       {fieldErrors.title && (
-                        <p className="inline-form-error">{fieldErrors.title}</p>
+                        <p id="promotion-title-error" className="inline-form-error">
+                          {fieldErrors.title}
+                        </p>
                       )}
                     </div>
 
@@ -745,10 +806,17 @@ function CreatePromotionContent() {
                         rows={5}
                         maxLength={5000}
                         placeholder="Tell people what the event is, who it is for, and what they should expect."
+                        aria-required="true"
+                        aria-invalid={!!fieldErrors.description}
+                        aria-describedby={
+                          fieldErrors.description ? "promotion-description-error" : undefined
+                        }
                         className={cn(fieldErrors.description && "border-destructive")}
                       />
                       {fieldErrors.description && (
-                        <p className="inline-form-error">{fieldErrors.description}</p>
+                        <p id="promotion-description-error" className="inline-form-error">
+                          {fieldErrors.description}
+                        </p>
                       )}
                     </div>
 
@@ -810,6 +878,7 @@ function CreatePromotionContent() {
 
                 {step === 1 && (
                   <div className="space-y-5 animate-in fade-in-0 duration-300">
+                    <p className="text-xs text-muted-foreground">Fields marked * are required.</p>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label htmlFor="price">Ticket / Entry Price (optional)</Label>
@@ -863,7 +932,7 @@ function CreatePromotionContent() {
                       tabIndex={-1}
                       className="space-y-3 rounded-lg"
                     >
-                      <Label>Contact Methods *</Label>
+                      <Label htmlFor="promotion-contact-methods">Contact Methods *</Label>
                       <div className="flex flex-wrap gap-3">
                         {(["call", "whatsapp", "form"] as const).map((method) => (
                           <label
@@ -928,6 +997,7 @@ function CreatePromotionContent() {
 
                 {step === 2 && (
                   <div className="space-y-5 animate-in fade-in-0 duration-300">
+                    <p className="text-xs text-muted-foreground">Fields marked * are required.</p>
                     <div id="promotion-images" tabIndex={-1} className="space-y-2 rounded-lg">
                       <MediaUpload
                         label={`Photos (max ${maxPhotos})`}

@@ -129,6 +129,91 @@ const FIELD_IDS: Record<string, string> = {
   videos: "tourism-videos",
 };
 
+const FIELD_KEY_ALIASES: Record<string, string> = {
+  listing_type: "listingType",
+  event_type: "eventType",
+  venue_capacity: "venueCapacity",
+  booking_url: "bookingUrl",
+  tickets_url: "ticketsUrl",
+  price_zar: "priceZar",
+  start_date: "startDate",
+  end_date: "endDate",
+  contact_methods: "contactMethods",
+  location_province: "province",
+  location_city: "city",
+  social_facebook: "socialFacebook",
+  social_instagram: "socialInstagram",
+  social_twitter: "socialTwitter",
+  social_tiktok: "socialTiktok",
+};
+
+function normalizeTourismFieldErrors(errors: Record<string, string>): Record<string, string> {
+  const normalized: Record<string, string> = {};
+  for (const [key, message] of Object.entries(errors)) {
+    const normalizedKey = FIELD_KEY_ALIASES[key] ?? key;
+    if (!normalized[normalizedKey]) {
+      normalized[normalizedKey] = message;
+    }
+  }
+  return normalized;
+}
+
+function getFieldId(key: string | undefined): string | undefined {
+  if (!key) return undefined;
+  const normalizedKey = FIELD_KEY_ALIASES[key] ?? key;
+  return FIELD_IDS[normalizedKey];
+}
+
+function getStepForFieldKey(key: string): number {
+  const normalizedKey = FIELD_KEY_ALIASES[key] ?? key;
+
+  if (normalizedKey === "images" || normalizedKey === "videos") {
+    return 3;
+  }
+
+  if (
+    normalizedKey === "province" ||
+    normalizedKey === "city" ||
+    normalizedKey === "contactMethods" ||
+    normalizedKey === "phone" ||
+    normalizedKey === "whatsapp" ||
+    normalizedKey === "email" ||
+    normalizedKey === "website" ||
+    normalizedKey === "socialFacebook" ||
+    normalizedKey === "socialInstagram" ||
+    normalizedKey === "socialTwitter" ||
+    normalizedKey === "socialTiktok"
+  ) {
+    return 2;
+  }
+
+  if (
+    normalizedKey === "subcategory" ||
+    normalizedKey === "eventType" ||
+    normalizedKey === "starRating" ||
+    normalizedKey === "numberOfRooms" ||
+    normalizedKey === "bookingUrl" ||
+    normalizedKey === "startDate" ||
+    normalizedKey === "endDate" ||
+    normalizedKey === "priceZar" ||
+    normalizedKey === "venueCapacity" ||
+    normalizedKey === "ticketsUrl"
+  ) {
+    return 1;
+  }
+
+  return 0;
+}
+
+function getStepForServerErrors(errors: Record<string, string>): number {
+  const keys = Object.keys(errors);
+  if (keys.length === 0) {
+    return 0;
+  }
+
+  return keys.reduce((targetStep, key) => Math.min(targetStep, getStepForFieldKey(key)), 3);
+}
+
 export default function CreateTourismPage() {
   return (
     <Suspense
@@ -691,9 +776,38 @@ function CreateTourismContent() {
     });
   }
 
-  function focusFirstError(errors: Record<string, string>, _targetStep = step) {
-    const firstKey = Object.keys(errors)[0];
-    const targetId = FIELD_IDS[firstKey];
+  function focusFirstError(errors: Record<string, string>, targetStep = step) {
+    const orderByStep = [
+      ["listingType", "title", "description", "subcategory", "eventType"],
+      [
+        "subcategory",
+        "eventType",
+        "starRating",
+        "numberOfRooms",
+        "bookingUrl",
+        "startDate",
+        "endDate",
+        "priceZar",
+        "venueCapacity",
+        "ticketsUrl",
+      ],
+      [
+        "province",
+        "city",
+        "contactMethods",
+        "phone",
+        "whatsapp",
+        "email",
+        "website",
+        "socialFacebook",
+        "socialInstagram",
+        "socialTwitter",
+        "socialTiktok",
+      ],
+      ["images", "videos"],
+    ][targetStep];
+    const firstKey = orderByStep?.find((key) => errors[key]) ?? Object.keys(errors)[0];
+    const targetId = getFieldId(firstKey);
     if (!targetId) return;
     requestAnimationFrame(() => {
       const el = document.getElementById(targetId);
@@ -785,7 +899,10 @@ function CreateTourismContent() {
     if (firstInvalidStep !== -1) {
       setStep(firstInvalidStep);
       setFieldErrors(stepErrors[firstInvalidStep]);
-      setFormError("Please fix the highlighted fields.");
+      const count = Object.keys(stepErrors[firstInvalidStep]).length;
+      setFormError(
+        `Please fix ${count} field${count > 1 ? "s" : ""} on Step ${firstInvalidStep + 1} \u2014 ${STEPS[firstInvalidStep].label}.`
+      );
       focusFirstError(stepErrors[firstInvalidStep], firstInvalidStep);
       return;
     }
@@ -1054,9 +1171,21 @@ function CreateTourismContent() {
 
         if (!res.ok) {
           const normalized = normalizeCreatePostError(payload, "Failed to create tourism listing.");
-          setFieldErrors(normalized.fieldErrors);
-          setFormError(normalized.formError);
-          focusFirstError(normalized.fieldErrors);
+          const normalizedFieldErrors = normalizeTourismFieldErrors(normalized.fieldErrors);
+          const targetStep = getStepForServerErrors(normalizedFieldErrors);
+          const count = Object.keys(normalizedFieldErrors).length;
+          if (count > 0) {
+            setStep(targetStep);
+          }
+          setFieldErrors(normalizedFieldErrors);
+          setFormError(
+            count > 0
+              ? `Please fix ${count} field${count > 1 ? "s" : ""} on Step ${targetStep + 1} \u2014 ${STEPS[targetStep].label}.`
+              : normalized.formError
+          );
+          if (count > 0) {
+            focusFirstError(normalizedFieldErrors, targetStep);
+          }
           return;
         }
 
@@ -1121,9 +1250,21 @@ function CreateTourismContent() {
 
         if (!res.ok) {
           const normalized = normalizeCreatePostError(payload, "Failed to create event.");
-          setFieldErrors(normalized.fieldErrors);
-          setFormError(normalized.formError);
-          focusFirstError(normalized.fieldErrors);
+          const normalizedFieldErrors = normalizeTourismFieldErrors(normalized.fieldErrors);
+          const targetStep = getStepForServerErrors(normalizedFieldErrors);
+          const count = Object.keys(normalizedFieldErrors).length;
+          if (count > 0) {
+            setStep(targetStep);
+          }
+          setFieldErrors(normalizedFieldErrors);
+          setFormError(
+            count > 0
+              ? `Please fix ${count} field${count > 1 ? "s" : ""} on Step ${targetStep + 1} \u2014 ${STEPS[targetStep].label}.`
+              : normalized.formError
+          );
+          if (count > 0) {
+            focusFirstError(normalizedFieldErrors, targetStep);
+          }
           return;
         }
 
@@ -1458,6 +1599,11 @@ function CreateTourismContent() {
                 steps={STEPS}
                 currentStep={step}
                 error={formError}
+                fieldErrors={fieldErrors}
+                errorStepLabel={
+                  formError ? `Step ${step + 1} \u2014 ${STEPS[step].label}` : undefined
+                }
+                stepHasErrors={STEPS.map((_, i) => Object.keys(validateStep(i)).length > 0)}
                 onRetry={
                   formError && !isSubmitting
                     ? () => handleSubmit(new Event("submit") as unknown as React.FormEvent)
@@ -1524,12 +1670,20 @@ function CreateTourismContent() {
                         });
                       }}
                       onNext={() => {
-                        const errors = validateStep(step);
-                        if (Object.keys(errors).length > 0) {
-                          setFieldErrors((c) => ({ ...c, ...errors }));
-                          setFormError("Please fix the highlighted fields.");
-                          focusFirstError(errors);
-                          return;
+                        for (let i = 0; i <= step; i++) {
+                          const errors = validateStep(i);
+                          if (Object.keys(errors).length > 0) {
+                            if (i !== step) {
+                              setStep(i);
+                            }
+                            setFieldErrors((c) => ({ ...c, ...errors }));
+                            const count = Object.keys(errors).length;
+                            setFormError(
+                              `Please fix ${count} field${count > 1 ? "s" : ""} on Step ${i + 1} \u2014 ${STEPS[i].label}.`
+                            );
+                            focusFirstError(errors, i);
+                            return;
+                          }
                         }
                         clearErrors();
                         setStep((s) => Math.min(s + 1, STEPS.length - 1));
@@ -1549,6 +1703,7 @@ function CreateTourismContent() {
                 {/* ── Step 0: Type & Basics ── */}
                 {step === 0 && (
                   <div className="space-y-5 animate-in fade-in-0 duration-300">
+                    <p className="text-xs text-muted-foreground">Fields marked * are required.</p>
                     {/* Listing type selector */}
                     <fieldset id="listing-type-group">
                       <legend className="mb-3 text-sm font-medium">What are you listing? *</legend>
@@ -1699,6 +1854,7 @@ function CreateTourismContent() {
                 {/* ── Step 1: Details ── */}
                 {step === 1 && (
                   <div className="space-y-5 animate-in fade-in-0 duration-300">
+                    <p className="text-xs text-muted-foreground">Fields marked * are required.</p>
                     {listingType === "tourism_business" ? (
                       <>
                         {!fieldGroup && (
@@ -2765,6 +2921,7 @@ function CreateTourismContent() {
                 {/* ── Step 2: Location & Contact ── */}
                 {step === 2 && (
                   <div className="space-y-5 animate-in fade-in-0 duration-300">
+                    <p className="text-xs text-muted-foreground">Fields marked * are required.</p>
                     <LocationSelector
                       value={locationValue}
                       onChange={(v: LocationValue) => {
@@ -2987,6 +3144,7 @@ function CreateTourismContent() {
                 {/* ── Step 3: Media & Review ── */}
                 {step === 3 && (
                   <div className="space-y-5 animate-in fade-in-0 duration-300">
+                    <p className="text-xs text-muted-foreground">Fields marked * are required.</p>
                     {/* Logo */}
                     <div className="space-y-2">
                       <Label>
