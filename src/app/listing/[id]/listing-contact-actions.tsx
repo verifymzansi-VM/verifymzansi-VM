@@ -15,6 +15,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 /* ─────────────────────────────────────────────────────────── */
 
@@ -92,7 +93,7 @@ export function ListingContactActions({
     try {
       const res = await fetch("/api/contact", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           listingId,
           message: message.trim(),
@@ -157,7 +158,7 @@ export function ListingContactActions({
     try {
       const res = await fetch("/api/reports", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           targetType: "listing",
           targetId: listingId,

@@ -11,6 +11,7 @@ import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/li
 import { sanitizeUserMessage } from "@/lib/utils/sanitize-html";
 
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 
 const log = createLogger("Reports");
 
@@ -21,6 +22,9 @@ export async function POST(request: NextRequest) {
   try {
     const sameOriginFailure = enforceSameOriginMutation(request, log);
     if (sameOriginFailure) return sameOriginFailure;
+
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     const parsedBody = await parseAndValidateJsonRequest(request, reportSchema, {
       invalidJsonMessage: "Invalid JSON payload",

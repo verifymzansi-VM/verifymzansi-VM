@@ -566,6 +566,10 @@ export async function POST(request: NextRequest) {
         userId: user.id,
         stepType,
       });
+      return jsonError(
+        { error: "Failed to finalize upload — please retry", code: "supersede_failed" },
+        { status: 500 }
+      );
     }
 
     // ── Phone linked to flagged/rejected account signal ──────

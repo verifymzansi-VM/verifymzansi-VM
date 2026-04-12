@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
       .eq("user_id", user.id)
       .eq("area", plan.area)
       .eq("type", "subscription")
-      .eq("status", "active")
+      .in("status", ["active", "pending_verification"])
       .gt("expires_at", new Date().toISOString())
       .maybeSingle();
 

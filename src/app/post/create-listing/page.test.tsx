@@ -184,7 +184,7 @@ describe("CreateListingPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    expect(screen.getByText("Select a category.")).toBeInTheDocument();
+    expect(screen.getAllByText("Select a category.").length).toBeGreaterThan(0);
     expect(mockToast).not.toHaveBeenCalled();
   });
 
@@ -373,7 +373,7 @@ describe("CreateListingPage", () => {
 
       fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-      expect(screen.getByText("Select a category.")).toBeInTheDocument();
+      expect(screen.getAllByText("Select a category.").length).toBeGreaterThan(0);
     });
   });
 });

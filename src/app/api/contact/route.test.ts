@@ -53,6 +53,10 @@ vi.mock("@/lib/utils/mutation-origin", () => ({
   enforceSameOriginMutation: vi.fn().mockReturnValue(null),
 }));
 
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: vi.fn(() => null),
+}));
+
 import { POST } from "./route";
 
 function createMockRequest(body: Record<string, unknown>) {

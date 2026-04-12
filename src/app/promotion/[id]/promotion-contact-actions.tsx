@@ -15,6 +15,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 interface PromotionContactActionsProps {
   promotionId: string;
@@ -79,7 +80,7 @@ export function PromotionContactActions({
     try {
       const res = await fetch("/api/contact", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           promotionId,
           message: message.trim(),
@@ -136,7 +137,7 @@ export function PromotionContactActions({
     try {
       const res = await fetch("/api/reports", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           targetType: "promotion",
           targetId: promotionId,

@@ -127,9 +127,9 @@ describe("BusinessCard", () => {
       "data-src",
       "https://example.com/cover.mp4"
     );
-    expect(screen.getByTestId("video-card-player")).toHaveAttribute("data-mode", "ambient");
+    expect(screen.getByTestId("video-card-player")).toHaveAttribute("data-mode", "hover");
     expect(screen.getByTestId("video-card-player")).toHaveAttribute("data-fit-strategy", "smart");
-    expect(screen.getByTestId("video-card-player")).toHaveAttribute("data-mute-control", "auto");
+    expect(screen.getByTestId("video-card-player")).toHaveAttribute("data-mute-control", "always");
   });
 
   it("links directly to the business detail page", () => {

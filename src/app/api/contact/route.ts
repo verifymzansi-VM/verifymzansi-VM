@@ -17,6 +17,7 @@ import { createNotification } from "@/lib/notifications";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { sanitizeUserMessage } from "@/lib/utils/sanitize-html";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { sendContactFormNotification } from "@/lib/services/email";
 import { logAuditEvent } from "@/lib/services/audit";
 
@@ -44,6 +45,9 @@ export async function POST(request: NextRequest) {
   try {
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) return originBlock;
+
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     const parsedBody = await parseAndValidateJsonRequest(request, contactAccountHolderSchema, {
       invalidJsonMessage: "Invalid JSON payload",

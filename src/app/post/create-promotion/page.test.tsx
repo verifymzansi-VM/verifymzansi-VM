@@ -165,7 +165,7 @@ describe("CreatePromotionPage", () => {
     completeStepOne();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    expect(screen.getByText("Select a province.")).toBeInTheDocument();
+    expect(screen.getAllByText("Select a province.").length).toBeGreaterThan(0);
   });
 
   it("shows the optional video thumbnail field only after video upload", async () => {

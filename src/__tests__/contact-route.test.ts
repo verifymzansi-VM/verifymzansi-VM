@@ -20,6 +20,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 vi.mock("@/lib/utils/turnstile", () => ({
   verifyTurnstileToken: vi.fn().mockResolvedValue({ success: true }),
 }));
+vi.mock("@/lib/utils/csrf", () => ({ enforceCsrfToken: vi.fn(() => null) }));
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }));

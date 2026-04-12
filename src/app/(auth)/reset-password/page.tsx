@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { resetPasswordSchema, type ResetPasswordInput } from "@/lib/validations/auth";
 import { useToast } from "@/hooks/use-toast";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 export default function ResetPasswordPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -57,7 +58,7 @@ export default function ResetPasswordPage() {
     try {
       const res = await fetch("/api/auth/reset-password", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           password: data.password,
           confirmPassword: data.confirmPassword,

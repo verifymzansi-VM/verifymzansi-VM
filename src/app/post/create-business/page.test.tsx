@@ -219,8 +219,8 @@ describe("CreateBusinessPage", () => {
     fillCoreBusinessFields();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    expect(await screen.findByText("Street address is required.")).toBeInTheDocument();
-    expect(await screen.findByText("Suburb is required.")).toBeInTheDocument();
+    expect((await screen.findAllByText("Street address is required.")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("Suburb is required.")).length).toBeGreaterThan(0);
 
     await selectBusinessType(/Online Only/i);
 
@@ -242,7 +242,9 @@ describe("CreateBusinessPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    expect(screen.getByText("Store number is required for mall stores.")).toBeInTheDocument();
+    expect(screen.getAllByText("Store number is required for mall stores.").length).toBeGreaterThan(
+      0
+    );
     expect(screen.getByText(/Step 1 of 3/i)).toBeInTheDocument();
   });
 
@@ -256,7 +258,7 @@ describe("CreateBusinessPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    expect(screen.getByText("Mall name is required.")).toBeInTheDocument();
+    expect(screen.getAllByText("Mall name is required.").length).toBeGreaterThan(0);
   });
 
   it("requires service areas for mobile services on step 1", async () => {
@@ -270,7 +272,7 @@ describe("CreateBusinessPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    expect(screen.getByText("Add at least one service area.")).toBeInTheDocument();
+    expect(screen.getAllByText("Add at least one service area.").length).toBeGreaterThan(0);
     expect(screen.getByText(/Step 1 of 3/i)).toBeInTheDocument();
   });
 
@@ -347,7 +349,7 @@ describe("CreateBusinessPage", () => {
     expect(screen.getByText("Business logo (optional)")).toBeInTheDocument();
     expect(screen.getByText("Cover photo (optional)")).toBeInTheDocument();
     expect(screen.getByText(/Profile photos \(up to 5\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/Promo video \(optional\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Video \(optional\)/i)).toBeInTheDocument();
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
@@ -450,13 +452,13 @@ describe("CreateBusinessPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
     expect(
-      await screen.findByText("Business logo upload failed. Retry the selected image.")
-    ).toBeInTheDocument();
+      (await screen.findAllByText("Business logo upload failed. Retry the selected image.")).length
+    ).toBeGreaterThan(0);
     expect(
-      screen.getByText(
+      screen.getAllByText(
         "Selected business media could not be uploaded. Retry the highlighted files and try again."
-      )
-    ).toBeInTheDocument();
+      ).length
+    ).toBeGreaterThan(0);
     expect(global.fetch).toHaveBeenCalledTimes(1);
     expect(mockPush).not.toHaveBeenCalled();
   });
@@ -481,10 +483,12 @@ describe("CreateBusinessPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
     expect(
-      await screen.findByText(
-        "One or more profile photos failed to upload. Retry the selected files."
-      )
-    ).toBeInTheDocument();
+      (
+        await screen.findAllByText(
+          "One or more profile photos failed to upload. Retry the selected files."
+        )
+      ).length
+    ).toBeGreaterThan(0);
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -503,12 +507,12 @@ describe("CreateBusinessPage", () => {
     await completeStandaloneStepOne();
     completeLocationStep();
 
-    fireEvent.click(screen.getByRole("button", { name: /Promo video \(optional\)/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Video \(optional\)/i }));
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
     expect(
-      await screen.findByText("Promo video upload failed. Retry the selected file.")
-    ).toBeInTheDocument();
+      (await screen.findAllByText("Promo video upload failed. Retry the selected file.")).length
+    ).toBeGreaterThan(0);
     expect(global.fetch).toHaveBeenCalledTimes(2);
     expect(mockPush).not.toHaveBeenCalled();
   });
@@ -548,8 +552,8 @@ describe("CreateBusinessPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
-    expect(screen.getByText("Enter a valid Facebook URL.")).toBeInTheDocument();
-    expect(screen.getByText("Please fix the highlighted fields.")).toBeInTheDocument();
+    expect(screen.getAllByText("Enter a valid Facebook URL.").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Please fix 1 field/i)).toBeInTheDocument();
     expect(global.fetch).not.toHaveBeenCalled();
     expect(screen.getByText(/Step 3 of 3/i)).toBeInTheDocument();
   });
@@ -581,7 +585,9 @@ describe("CreateBusinessPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
-    expect(await screen.findByText("This URL slug is already taken.")).toBeInTheDocument();
+    expect((await screen.findAllByText("This URL slug is already taken.")).length).toBeGreaterThan(
+      0
+    );
     expect(screen.getByText("Choose a different URL slug for this business.")).toBeInTheDocument();
     expect(mockPush).not.toHaveBeenCalled();
   });

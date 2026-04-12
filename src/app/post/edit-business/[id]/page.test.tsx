@@ -419,12 +419,12 @@ describe("EditBusinessPage", () => {
       expect(screen.getByDisplayValue("Noordwyk")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /Promo \/ Intro Video \(1 max\)/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Video \(1 max\)/i }));
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
 
     expect(
-      await screen.findByText("Promo video upload failed. Retry the selected file.")
-    ).toBeInTheDocument();
+      (await screen.findAllByText("Promo video upload failed. Retry the selected file.")).length
+    ).toBeGreaterThan(0);
     expect(global.fetch).toHaveBeenCalledTimes(3);
     expect(mockPush).not.toHaveBeenCalled();
   });

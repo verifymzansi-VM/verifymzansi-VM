@@ -11,6 +11,7 @@ const { mockCreateClient, mockCreateAdminClient, mockVerifyTurnstile } = vi.hois
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/utils/turnstile", () => ({ verifyTurnstileToken: mockVerifyTurnstile }));
+vi.mock("@/lib/utils/csrf", () => ({ enforceCsrfToken: vi.fn(() => null) }));
 vi.mock("@/lib/utils/enum-compat", () => ({
   mapLegacyReportValues: vi.fn(
     ({ reason, targetType }: { reason: string; targetType: string }) => ({

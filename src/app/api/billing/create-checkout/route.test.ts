@@ -182,6 +182,7 @@ describe("POST /api/billing/create-checkout", () => {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
+          in: vi.fn().mockReturnThis(),
           gt: vi.fn().mockReturnThis(),
           maybeSingle: vi.fn().mockResolvedValue({ data: null }),
         };
@@ -326,6 +327,7 @@ describe("POST /api/billing/create-checkout", () => {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
+          in: vi.fn().mockReturnThis(),
           gt: vi.fn().mockReturnThis(),
           maybeSingle: vi.fn().mockResolvedValue({ data: null }), // No active entitlement
         };
@@ -408,6 +410,7 @@ describe("POST /api/billing/create-checkout", () => {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
+          in: vi.fn().mockReturnThis(),
           gt: vi.fn().mockReturnThis(),
           maybeSingle: vi.fn().mockResolvedValue({ data: null }),
         };
@@ -547,6 +550,7 @@ describe("POST /api/billing/create-checkout", () => {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
+          in: vi.fn().mockReturnThis(),
           gt: vi.fn().mockReturnThis(),
           maybeSingle: vi.fn().mockResolvedValue({ data: { id: "ent-active" } }),
         };
@@ -589,6 +593,7 @@ describe("POST /api/billing/create-checkout", () => {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
+          in: vi.fn().mockReturnThis(),
           gt: vi.fn().mockReturnThis(),
           maybeSingle: vi.fn().mockResolvedValue({ data: null }),
         };
@@ -668,6 +673,7 @@ describe("POST /api/billing/create-checkout", () => {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
+          in: vi.fn().mockReturnThis(),
           gt: vi.fn().mockReturnThis(),
           maybeSingle: vi.fn().mockResolvedValue({
             data: null,
@@ -714,6 +720,7 @@ describe("POST /api/billing/create-checkout", () => {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
+          in: vi.fn().mockReturnThis(),
           gt: vi.fn().mockReturnThis(),
           maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
         };

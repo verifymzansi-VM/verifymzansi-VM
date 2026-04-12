@@ -186,8 +186,8 @@ describe("PromotionCard", () => {
 
     const videoPlayer = screen.getByTestId("video-card-player");
     expect(videoPlayer).toHaveAttribute("data-src", "https://example.com/promo.mp4");
-    expect(videoPlayer).toHaveAttribute("data-mode", "ambient");
+    expect(videoPlayer).toHaveAttribute("data-mode", "hover");
     expect(videoPlayer).toHaveAttribute("data-fit-strategy", "smart");
-    expect(videoPlayer).toHaveAttribute("data-mute-control", "auto");
+    expect(videoPlayer).toHaveAttribute("data-mute-control", "always");
   });
 });

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 import {
   Dialog,
   DialogContent,
@@ -76,7 +77,7 @@ export function ReportDialog({
     try {
       const res = await fetch("/api/reports", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           targetType,
           targetId,

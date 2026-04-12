@@ -71,10 +71,15 @@ export async function GET(request: NextRequest) {
 
     const { unread: unreadOnly, limit, countOnly } = parsedQuery.data;
 
-    const { count: unreadCount } = await supabase
+    const { count: unreadCount, error: countError } = await supabase
       .from("leads")
       .select("id", { count: "exact", head: true })
       .eq("status", "new");
+
+    if (countError) {
+      log.error("Failed to count unread leads", { error: countError.message, userId: user.id });
+      return NextResponse.json({ error: "Failed to count leads" }, { status: 500 });
+    }
 
     if (countOnly) {
       return NextResponse.json({ unreadCount: unreadCount || 0, leads: [] });

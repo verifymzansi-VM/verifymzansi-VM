@@ -32,6 +32,10 @@ vi.mock("@/lib/utils/mutation-origin", () => ({
   enforceSameOriginMutation: mockEnforceSameOriginMutation,
 }));
 
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: vi.fn(() => null),
+}));
+
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => mockLogger,
 }));
