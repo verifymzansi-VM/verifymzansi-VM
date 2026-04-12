@@ -193,7 +193,7 @@ export default async function EventsPage() {
                 </Badge>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6 xl:gap-6">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-5 xl:gap-6">
                 {group.events.map((event, index) => {
                   const accountProfile = accountProfileMap.get(readOwnerId(event) as string);
                   const businessName = event.business_id

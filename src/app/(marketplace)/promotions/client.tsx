@@ -544,8 +544,8 @@ export function PromotionsExplorer() {
 
           {/* ── Grid / Loading / Error / Empty ── */}
           {loading ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6 xl:gap-6">
-              {Array.from({ length: 6 }).map((_, index) => (
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-5 xl:gap-6">
+              {Array.from({ length: 8 }).map((_, index) => (
                 <div key={index} className="aspect-[9/16] rounded-xl bg-muted animate-pulse" />
               ))}
             </div>
@@ -591,7 +591,7 @@ export function PromotionsExplorer() {
                 id="tab-panel-tourism"
                 role="tabpanel"
                 aria-labelledby="tab-tourism"
-                className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6 xl:gap-6"
+                className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-5 xl:gap-6"
               >
                 {tourismBusinesses.map((business, index) => (
                   <div
@@ -643,7 +643,7 @@ export function PromotionsExplorer() {
                 id="tab-panel-events"
                 role="tabpanel"
                 aria-labelledby="tab-events"
-                className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6 xl:gap-6"
+                className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-5 xl:gap-6"
               >
                 {promotions.map((promotion, index) => {
                   const accountProfile = accountProfileMap.get(promotion.owner_id);

@@ -50,7 +50,7 @@ export function PastEventsAccordion({ events }: { events: PastEvent[] }) {
       </button>
 
       {isOpen && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-5 xl:gap-6 animate-in fade-in slide-in-from-top-2 duration-300">
           {events.map((event) => (
             <div key={event.id} className="opacity-60 hover:opacity-80 transition-opacity">
               <PromotionCard

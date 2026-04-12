@@ -34,8 +34,8 @@ export default function MarketplaceLoading() {
         </div>
 
         {/* Grid skeleton */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Array.from({ length: 6 }).map((_, i) => (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-5 xl:gap-6">
+          {Array.from({ length: 8 }).map((_, i) => (
             <div
               key={i}
               className="rounded-xl border border-warm-200 dark:border-warm-700 p-3 space-y-3"
