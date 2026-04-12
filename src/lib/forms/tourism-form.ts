@@ -28,6 +28,8 @@ export interface TourismFormValues {
   description: string;
   province: string;
   city: string;
+  locationAddress?: string;
+  locationTown?: string;
   contactMethods: string[];
 
   /* tourism business */
@@ -202,6 +204,15 @@ function validateStep1Event(v: TourismFormValues, errors: Record<string, string>
 function validateStep2(v: TourismFormValues, errors: Record<string, string>) {
   if (!v.province) errors.province = "Province is required.";
   if (!v.city) errors.city = "City is required.";
+
+  if (v.listingType === "tourism_business") {
+    if (!v.locationAddress?.trim()) {
+      errors.locationAddress = "Street address is required for tourism businesses.";
+    }
+    if (!v.locationTown?.trim()) {
+      errors.locationTown = "Suburb / town is required for tourism businesses.";
+    }
+  }
 
   if (v.contactMethods.length === 0) {
     errors.contactMethods = "Choose at least one contact method.";

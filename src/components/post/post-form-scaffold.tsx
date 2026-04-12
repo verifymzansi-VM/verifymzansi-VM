@@ -29,6 +29,8 @@ interface PostFormScaffoldProps {
   error?: string | null;
   /** Per-field error messages to list inside the error alert. */
   fieldErrors?: Record<string, string>;
+  /** Human-readable labels keyed by field name, used to prefix error messages. */
+  fieldLabels?: Record<string, string>;
   /** Label like "Step 1 \u2014 Details" shown in the error alert heading. */
   errorStepLabel?: string;
   /** Per-step boolean: true if that step currently has validation errors. */
@@ -52,6 +54,7 @@ export function PostFormScaffold({
   currentStep,
   error,
   fieldErrors,
+  fieldLabels,
   errorStepLabel,
   stepHasErrors,
   onRetry,
@@ -195,9 +198,20 @@ export function PostFormScaffold({
                   <p>{error}</p>
                   {fieldErrors && Object.keys(fieldErrors).length > 0 && (
                     <ul className="mt-2 list-disc pl-4 space-y-0.5 text-[13px]">
-                      {Object.values(fieldErrors).map((msg, i) => (
-                        <li key={i}>{msg}</li>
-                      ))}
+                      {Object.entries(fieldErrors).map(([key, msg], i) => {
+                        const label = fieldLabels?.[key];
+                        return (
+                          <li key={i}>
+                            {label ? (
+                              <>
+                                <strong>{label}:</strong> {msg}
+                              </>
+                            ) : (
+                              msg
+                            )}
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                 </AlertDescription>

@@ -120,6 +120,19 @@ const LISTING_FIELD_KEY_ALIASES: Record<string, string> = {
   location_city: "city",
 };
 
+/** Human-readable labels for each form field key, used in the error alert. */
+const LISTING_FIELD_LABELS: Record<string, string> = {
+  category: "Category",
+  title: "Title",
+  description: "Description",
+  price_zar: "Price",
+  province: "Province",
+  city: "City",
+  contactMethods: "Contact methods",
+  images: "Photos",
+  videos: "Videos",
+};
+
 function getFieldId(key: string | undefined): string | undefined {
   if (!key) return undefined;
   const normalizedKey = LISTING_FIELD_KEY_ALIASES[key] ?? key;
@@ -463,6 +476,18 @@ export default function CreateListingPage() {
       }
       if (!province) errors.province = "Select a province.";
       if (!city) errors.city = "Select a city.";
+      if (province.trim().length > 50) {
+        errors.province = "Province must be 50 characters or fewer.";
+      }
+      if (city.trim().length > 80) {
+        errors.city = "City must be 80 characters or fewer.";
+      }
+      if (town.trim().length > 120) {
+        errors.town = "Town / suburb must be 120 characters or fewer.";
+      }
+      if (address.trim().length > 300) {
+        errors.address = "Address must be 300 characters or fewer.";
+      }
       if (contactMethods.length === 0) {
         errors.contactMethods = "Choose at least one contact method.";
       }
@@ -747,6 +772,55 @@ export default function CreateListingPage() {
 
       if (!res.ok) {
         const payload = await res.json().catch(() => null);
+
+        // Phone-gate: server returns redirectUrl for phone verification
+        if (
+          res.status === 403 &&
+          payload &&
+          typeof payload === "object" &&
+          typeof (payload as Record<string, unknown>).redirectUrl === "string"
+        ) {
+          router.push((payload as Record<string, unknown>).redirectUrl as string);
+          return;
+        }
+
+        // Plan-limit: show a descriptive upgrade message
+        if (
+          res.status === 403 &&
+          payload &&
+          typeof payload === "object" &&
+          typeof (payload as Record<string, unknown>).reason === "string"
+        ) {
+          setFormError((payload as Record<string, unknown>).reason as string);
+          return;
+        }
+
+        if (
+          res.status === 422 &&
+          payload &&
+          typeof payload === "object" &&
+          typeof (payload as Record<string, unknown>).error === "string"
+        ) {
+          const message = ((payload as Record<string, unknown>).error as string).trim();
+          const lower = message.toLowerCase();
+          if (lower.includes("photo")) {
+            const errors = { images: message };
+            setStep(2);
+            setFieldErrors(errors);
+            setFormError(`Please fix 1 field on Step 3 — ${STEPS[2].label}.`);
+            focusFirstError(errors, 2);
+            return;
+          }
+          if (lower.includes("video")) {
+            const errors = { videos: message };
+            setStep(2);
+            setFieldErrors(errors);
+            setFormError(`Please fix 1 field on Step 3 — ${STEPS[2].label}.`);
+            focusFirstError(errors, 2);
+            return;
+          }
+        }
+
         const normalized = normalizeCreatePostError(payload, "Failed to create listing.");
         const normalizedFieldErrors = normalizeListingFieldErrors(normalized.fieldErrors);
         const targetStep = getStepForServerErrors(normalizedFieldErrors);
@@ -907,6 +981,7 @@ export default function CreateListingPage() {
                 completeness={listingCompleteness}
                 error={formError}
                 fieldErrors={fieldErrors}
+                fieldLabels={LISTING_FIELD_LABELS}
                 errorStepLabel={
                   formError ? `Step ${step + 1} \u2014 ${STEPS[step].label}` : undefined
                 }

@@ -62,6 +62,20 @@ const FIELD_IDS: Record<string, string> = {
   videos: "promotion-videos",
 };
 
+/** Human-readable labels for each form field key, used in the error alert. */
+const PROMOTION_FIELD_LABELS: Record<string, string> = {
+  title: "Title",
+  description: "Description",
+  price_zar: "Price",
+  province: "Province",
+  city: "City",
+  contact_methods: "Contact methods",
+  start_date: "Start date",
+  end_date: "End date",
+  images: "Photos",
+  videos: "Videos",
+};
+
 function getStepForFieldKey(key: string): number {
   if (key === "images" || key === "videos") {
     return 2;
@@ -571,6 +585,56 @@ function CreatePromotionContent() {
       const payload = await res.json().catch(() => null);
 
       if (!res.ok) {
+        // Phone-gate: server returns redirectUrl for phone verification
+        if (
+          res.status === 403 &&
+          payload &&
+          typeof payload === "object" &&
+          typeof (payload as Record<string, unknown>).redirectUrl === "string"
+        ) {
+          router.push((payload as Record<string, unknown>).redirectUrl as string);
+          return;
+        }
+
+        // Plan-limit: show a descriptive upgrade message
+        if (
+          res.status === 403 &&
+          payload &&
+          typeof payload === "object" &&
+          typeof (payload as Record<string, unknown>).reason === "string"
+        ) {
+          setFormError((payload as Record<string, unknown>).reason as string);
+          return;
+        }
+
+        // Plan/media safety-net: map server-side media limits to field errors
+        // so users see the exact field that needs adjustment.
+        if (
+          res.status === 422 &&
+          payload &&
+          typeof payload === "object" &&
+          typeof (payload as Record<string, unknown>).error === "string"
+        ) {
+          const message = ((payload as Record<string, unknown>).error as string).trim();
+          const lower = message.toLowerCase();
+          if (lower.includes("photo")) {
+            const errors = { images: message };
+            setStep(2);
+            setFieldErrors(errors);
+            setFormError(`Please fix 1 field on Step 3 - ${STEPS[2].label}.`);
+            focusFirstError(errors, 2);
+            return;
+          }
+          if (lower.includes("video")) {
+            const errors = { videos: message };
+            setStep(2);
+            setFieldErrors(errors);
+            setFormError(`Please fix 1 field on Step 3 - ${STEPS[2].label}.`);
+            focusFirstError(errors, 2);
+            return;
+          }
+        }
+
         const normalized = normalizeCreatePostError(payload, "Failed to create promotion.");
         const targetStep = getStepForServerErrors(normalized.fieldErrors);
         const count = Object.keys(normalized.fieldErrors).length;
@@ -658,6 +722,7 @@ function CreatePromotionContent() {
                 currentStep={step}
                 error={formError}
                 fieldErrors={fieldErrors}
+                fieldLabels={PROMOTION_FIELD_LABELS}
                 errorStepLabel={
                   formError ? `Step ${step + 1} \u2014 ${STEPS[step].label}` : undefined
                 }

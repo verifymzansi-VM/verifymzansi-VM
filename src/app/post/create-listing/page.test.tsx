@@ -302,6 +302,209 @@ describe("CreateListingPage", () => {
     expect(mockPush).toHaveBeenCalledWith("/dashboard/listings");
   });
 
+  it("maps API 422 photo-limit errors to listing media field errors", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/media/upload") {
+          return {
+            ok: true,
+            json: async () => ({ urls: ["https://media.verifymzansi.com/listings/photo.jpg"] }),
+          };
+        }
+
+        if (input === "/api/listings") {
+          return {
+            ok: false,
+            status: 422,
+            json: async () => ({ error: "Maximum 5 photos allowed on your plan" }),
+          };
+        }
+
+        return {
+          ok: true,
+          json: async () => ({ success: true }),
+        };
+      }
+    );
+
+    render(<CreateListingPage />);
+
+    fireEvent.click(screen.getByText("Select Electronics"));
+    fireEvent.change(screen.getByLabelText("Title *"), { target: { value: "Used iPhone 15" } });
+    fireEvent.change(screen.getByLabelText("Description *"), {
+      target: { value: "A clean listing description with enough detail to continue." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText(/(Asking Price|Monthly Rent) \(ZAR\) \*/), {
+      target: { value: "1500" },
+    });
+    fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Photos (max 5)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Maximum 5 photos allowed on your plan").length).toBeGreaterThan(
+        0
+      );
+      expect(screen.getByText(/Please fix 1 field on Step 3/i)).toBeInTheDocument();
+    });
+  });
+
+  it("maps API 422 video-limit errors to listing media field errors", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/media/upload") {
+          return {
+            ok: true,
+            json: async () => ({ urls: ["https://media.verifymzansi.com/listings/photo.jpg"] }),
+          };
+        }
+
+        if (input === "/api/listings") {
+          return {
+            ok: false,
+            status: 422,
+            json: async () => ({ error: "Video upload is not available on your current plan." }),
+          };
+        }
+
+        return {
+          ok: true,
+          json: async () => ({ success: true }),
+        };
+      }
+    );
+
+    render(<CreateListingPage />);
+
+    fireEvent.click(screen.getByText("Select Electronics"));
+    fireEvent.change(screen.getByLabelText("Title *"), { target: { value: "Used iPhone 15" } });
+    fireEvent.change(screen.getByLabelText("Description *"), {
+      target: { value: "A clean listing description with enough detail to continue." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText(/(Asking Price|Monthly Rent) \(ZAR\) \*/), {
+      target: { value: "1500" },
+    });
+    fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Photos (max 5)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByText("Video upload is not available on your current plan.").length
+      ).toBeGreaterThan(0);
+      expect(screen.getByText(/Please fix 1 field on Step 3/i)).toBeInTheDocument();
+    });
+  });
+
+  it("redirects to complete profile when API returns phone-gate 403 redirectUrl", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/media/upload") {
+          return {
+            ok: true,
+            json: async () => ({ urls: ["https://media.verifymzansi.com/listings/photo.jpg"] }),
+          };
+        }
+
+        if (input === "/api/listings") {
+          return {
+            ok: false,
+            status: 403,
+            json: async () => ({ redirectUrl: "/dashboard/complete-profile" }),
+          };
+        }
+
+        return {
+          ok: true,
+          json: async () => ({ success: true }),
+        };
+      }
+    );
+
+    render(<CreateListingPage />);
+
+    fireEvent.click(screen.getByText("Select Electronics"));
+    fireEvent.change(screen.getByLabelText("Title *"), { target: { value: "Used iPhone 15" } });
+    fireEvent.change(screen.getByLabelText("Description *"), {
+      target: { value: "A clean listing description with enough detail to continue." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText(/(Asking Price|Monthly Rent) \(ZAR\) \*/), {
+      target: { value: "1500" },
+    });
+    fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Photos (max 5)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith("/dashboard/complete-profile");
+    });
+  });
+
+  it("shows plan-limit reason when API returns 403 reason", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/media/upload") {
+          return {
+            ok: true,
+            json: async () => ({ urls: ["https://media.verifymzansi.com/listings/photo.jpg"] }),
+          };
+        }
+
+        if (input === "/api/listings") {
+          return {
+            ok: false,
+            status: 403,
+            json: async () => ({ reason: "You reached your plan posting limit." }),
+          };
+        }
+
+        return {
+          ok: true,
+          json: async () => ({ success: true }),
+        };
+      }
+    );
+
+    render(<CreateListingPage />);
+
+    fireEvent.click(screen.getByText("Select Electronics"));
+    fireEvent.change(screen.getByLabelText("Title *"), { target: { value: "Used iPhone 15" } });
+    fireEvent.change(screen.getByLabelText("Description *"), {
+      target: { value: "A clean listing description with enough detail to continue." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText(/(Asking Price|Monthly Rent) \(ZAR\) \*/), {
+      target: { value: "1500" },
+    });
+    fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Photos (max 5)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("You reached your plan posting limit.")).toBeInTheDocument();
+    });
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
   describe("draft restore and discard", () => {
     const DRAFT_USER_ID = "user-draft-listing-123";
 

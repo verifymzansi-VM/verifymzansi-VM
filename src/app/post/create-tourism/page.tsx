@@ -124,6 +124,8 @@ const FIELD_IDS: Record<string, string> = {
   whatsapp: "whatsapp",
   email: "email",
   website: "website",
+  locationAddress: "locationAddress",
+  locationTown: "locationTown",
   images: "tourism-images",
   videos: "tourism-videos",
 };
@@ -140,10 +142,48 @@ const FIELD_KEY_ALIASES: Record<string, string> = {
   contact_methods: "contactMethods",
   location_province: "province",
   location_city: "city",
+  location_town: "locationTown",
+  location_address: "locationAddress",
   social_facebook: "socialFacebook",
   social_instagram: "socialInstagram",
   social_twitter: "socialTwitter",
   social_tiktok: "socialTiktok",
+  "business_details.street_address": "locationAddress",
+  "business_details.suburb": "locationTown",
+};
+
+/** Human-readable labels for each form field key, used in the error alert. */
+const FIELD_LABELS: Record<string, string> = {
+  listingType: "Listing type",
+  title: "Title",
+  description: "Description",
+  subcategory: "Subcategory",
+  province: "Province",
+  city: "City",
+  locationAddress: "Street address",
+  locationTown: "Suburb / town",
+  contactMethods: "Contact methods",
+  phone: "Phone",
+  whatsapp: "WhatsApp",
+  email: "Email",
+  website: "Website",
+  socialFacebook: "Facebook",
+  socialInstagram: "Instagram",
+  socialTwitter: "X / Twitter",
+  socialTiktok: "TikTok",
+  images: "Photos",
+  videos: "Videos",
+  eventType: "Event type",
+  startDate: "Start date",
+  endDate: "End date",
+  priceZar: "Price",
+  venueName: "Venue name",
+  venueCapacity: "Venue capacity",
+  ticketsUrl: "Tickets URL",
+  bookingUrl: "Booking URL",
+  starRating: "Star rating",
+  numberOfRooms: "Number of rooms",
+  socialAuthorization: "Content authorization",
 };
 
 function normalizeTourismFieldErrors(errors: Record<string, string>): Record<string, string> {
@@ -181,7 +221,9 @@ function getStepForFieldKey(key: string): number {
     normalizedKey === "socialFacebook" ||
     normalizedKey === "socialInstagram" ||
     normalizedKey === "socialTwitter" ||
-    normalizedKey === "socialTiktok"
+    normalizedKey === "socialTiktok" ||
+    normalizedKey === "locationAddress" ||
+    normalizedKey === "locationTown"
   ) {
     return 2;
   }
@@ -869,6 +911,8 @@ function CreateTourismContent() {
         venueCapacity,
         ticketsUrl,
         socialAuthorization,
+        locationAddress,
+        locationTown,
       },
       photoFiles.length
     );
@@ -1158,6 +1202,11 @@ function CreateTourismContent() {
           services_offered: [],
           category_details: categoryDetails,
           contact_methods: contactMethods,
+          business_details: {
+            type: "standalone_shop" as const,
+            street_address: locationAddress || "",
+            suburb: locationTown || "",
+          },
         };
 
         const res = await fetch("/api/businesses", {
@@ -1168,6 +1217,54 @@ function CreateTourismContent() {
         const payload = await res.json().catch(() => null);
 
         if (!res.ok) {
+          // Phone-gate: server returns redirectUrl for phone verification
+          if (
+            res.status === 403 &&
+            payload &&
+            typeof payload === "object" &&
+            typeof (payload as Record<string, unknown>).redirectUrl === "string"
+          ) {
+            router.push((payload as Record<string, unknown>).redirectUrl as string);
+            return;
+          }
+
+          // Plan-limit: show a descriptive upgrade message
+          if (
+            res.status === 403 &&
+            payload &&
+            typeof payload === "object" &&
+            typeof (payload as Record<string, unknown>).reason === "string"
+          ) {
+            setFormError((payload as Record<string, unknown>).reason as string);
+            return;
+          }
+
+          if (
+            res.status === 422 &&
+            payload &&
+            typeof payload === "object" &&
+            typeof (payload as Record<string, unknown>).error === "string"
+          ) {
+            const message = ((payload as Record<string, unknown>).error as string).trim();
+            const lower = message.toLowerCase();
+            if (lower.includes("photo")) {
+              const errors = { images: message };
+              setStep(3);
+              setFieldErrors(errors);
+              setFormError(`Please fix 1 field on Step 4 — ${STEPS[3].label}.`);
+              focusFirstError(errors, 3);
+              return;
+            }
+            if (lower.includes("video")) {
+              const errors = { videos: message };
+              setStep(3);
+              setFieldErrors(errors);
+              setFormError(`Please fix 1 field on Step 4 — ${STEPS[3].label}.`);
+              focusFirstError(errors, 3);
+              return;
+            }
+          }
+
           const normalized = normalizeCreatePostError(payload, "Failed to create tourism listing.");
           const normalizedFieldErrors = normalizeTourismFieldErrors(normalized.fieldErrors);
           const targetStep = getStepForServerErrors(normalizedFieldErrors);
@@ -1247,6 +1344,54 @@ function CreateTourismContent() {
         const payload = await res.json().catch(() => null);
 
         if (!res.ok) {
+          // Phone-gate: server returns redirectUrl for phone verification
+          if (
+            res.status === 403 &&
+            payload &&
+            typeof payload === "object" &&
+            typeof (payload as Record<string, unknown>).redirectUrl === "string"
+          ) {
+            router.push((payload as Record<string, unknown>).redirectUrl as string);
+            return;
+          }
+
+          // Plan-limit: show a descriptive upgrade message
+          if (
+            res.status === 403 &&
+            payload &&
+            typeof payload === "object" &&
+            typeof (payload as Record<string, unknown>).reason === "string"
+          ) {
+            setFormError((payload as Record<string, unknown>).reason as string);
+            return;
+          }
+
+          if (
+            res.status === 422 &&
+            payload &&
+            typeof payload === "object" &&
+            typeof (payload as Record<string, unknown>).error === "string"
+          ) {
+            const message = ((payload as Record<string, unknown>).error as string).trim();
+            const lower = message.toLowerCase();
+            if (lower.includes("photo")) {
+              const errors = { images: message };
+              setStep(3);
+              setFieldErrors(errors);
+              setFormError(`Please fix 1 field on Step 4 — ${STEPS[3].label}.`);
+              focusFirstError(errors, 3);
+              return;
+            }
+            if (lower.includes("video")) {
+              const errors = { videos: message };
+              setStep(3);
+              setFieldErrors(errors);
+              setFormError(`Please fix 1 field on Step 4 — ${STEPS[3].label}.`);
+              focusFirstError(errors, 3);
+              return;
+            }
+          }
+
           const normalized = normalizeCreatePostError(payload, "Failed to create event.");
           const normalizedFieldErrors = normalizeTourismFieldErrors(normalized.fieldErrors);
           const targetStep = getStepForServerErrors(normalizedFieldErrors);
@@ -1465,7 +1610,11 @@ function CreateTourismContent() {
         website: website || null,
         store_number: null,
         map_directions: null,
-        business_details: null,
+        business_details: {
+          type: "standalone_shop" as const,
+          street_address: locationAddress || "",
+          suburb: locationTown || "",
+        },
         layout_template: null,
       };
 
@@ -1598,6 +1747,7 @@ function CreateTourismContent() {
                 currentStep={step}
                 error={formError}
                 fieldErrors={fieldErrors}
+                fieldLabels={FIELD_LABELS}
                 errorStepLabel={
                   formError ? `Step ${step + 1} \u2014 ${STEPS[step].label}` : undefined
                 }

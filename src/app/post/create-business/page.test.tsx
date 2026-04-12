@@ -588,7 +588,91 @@ describe("CreateBusinessPage", () => {
     expect((await screen.findAllByText("This URL slug is already taken.")).length).toBeGreaterThan(
       0
     );
-    expect(screen.getByText("Choose a different URL slug for this business.")).toBeInTheDocument();
+    expect(screen.getByText(/Please fix 1 field on Step 1/i)).toBeInTheDocument();
+    expect(screen.getByText(/Step 1 of 3/i)).toBeInTheDocument();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("maps API 422 photo-limit errors to business media field errors", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: false,
+      status: 422,
+      json: async () => ({ error: "Maximum 5 gallery photos allowed on your plan" }),
+    });
+
+    render(<CreateBusinessPage />);
+
+    await completeStandaloneStepOne();
+    completeLocationStep();
+
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    expect(
+      (await screen.findAllByText("Maximum 5 gallery photos allowed on your plan")).length
+    ).toBeGreaterThan(0);
+    expect(screen.getByText(/Please fix 1 field on Step 3/i)).toBeInTheDocument();
+    expect(screen.getByText(/Step 3 of 3/i)).toBeInTheDocument();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("maps API 422 video-limit errors to business media field errors", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: false,
+      status: 422,
+      json: async () => ({ error: "Video upload is not available on your current plan." }),
+    });
+
+    render(<CreateBusinessPage />);
+
+    await completeStandaloneStepOne();
+    completeLocationStep();
+
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    expect(
+      (await screen.findAllByText("Video upload is not available on your current plan.")).length
+    ).toBeGreaterThan(0);
+    expect(screen.getByText(/Please fix 1 field on Step 3/i)).toBeInTheDocument();
+    expect(screen.getByText(/Step 3 of 3/i)).toBeInTheDocument();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("redirects to complete profile when API returns phone-gate 403 redirectUrl", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({ redirectUrl: "/dashboard/complete-profile" }),
+    });
+
+    render(<CreateBusinessPage />);
+
+    await completeStandaloneStepOne();
+    completeLocationStep();
+
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith("/dashboard/complete-profile");
+    });
+  });
+
+  it("shows plan-limit reason when API returns 403 reason", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({ reason: "You reached your plan posting limit." }),
+    });
+
+    render(<CreateBusinessPage />);
+
+    await completeStandaloneStepOne();
+    completeLocationStep();
+
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText("You reached your plan posting limit.")).toBeInTheDocument();
+    });
     expect(mockPush).not.toHaveBeenCalled();
   });
 

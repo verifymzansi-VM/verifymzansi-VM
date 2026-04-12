@@ -1,6 +1,7 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import CreateTourismPage from "./page";
+import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -35,6 +36,34 @@ vi.mock("@/components/layout/footer", () => ({
   Footer: () => <footer>Footer</footer>,
 }));
 
+vi.mock("@/contexts/video-playback-context", () => ({
+  useVideoPlaybackManager: () => ({
+    register: vi.fn(),
+    unregister: vi.fn(),
+    updateVisibility: vi.fn(),
+    requestPriority: vi.fn(),
+    releasePriority: vi.fn(),
+    claimExclusive: vi.fn(),
+    releaseExclusive: vi.fn(),
+  }),
+}));
+
+vi.mock("@/components/business/layouts/business-layout-router", () => ({
+  BusinessLayoutRouter: ({ business }: { business: { business_name?: string } }) => (
+    <div>Business Preview: {business.business_name ?? "preview"}</div>
+  ),
+}));
+
+vi.mock("@/components/listings/promotion-card", () => ({
+  PromotionCard: () => <div>Promotion Card Preview</div>,
+}));
+
+vi.mock("@/components/listings/promotion-detail-content", () => ({
+  PromotionDetailContent: ({ promotion }: { promotion: { title?: string } }) => (
+    <div>Promotion Preview: {promotion.title ?? "preview"}</div>
+  ),
+}));
+
 vi.mock("@/components/billing/plan-gate", () => ({
   PlanGate: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   usePlanMaxPhotos: () => 10,
@@ -46,24 +75,104 @@ vi.mock("@/components/post/post-form-scaffold", () => ({
   PostFormScaffold: ({
     children,
     footer,
+    error,
   }: {
     children: React.ReactNode;
     footer?: React.ReactNode;
+    error?: string | null;
   }) => (
     <div>
+      {error ? <div>{error}</div> : null}
       {children}
       {footer}
     </div>
   ),
-  PostFormFooter: () => null,
+  PostFormFooter: ({
+    currentStep,
+    totalSteps,
+    onBack,
+    onNext,
+  }: {
+    currentStep: number;
+    totalSteps: number;
+    onBack?: () => void;
+    onNext?: () => void;
+  }) => (
+    <div>
+      <button type="button" onClick={onBack}>
+        Back
+      </button>
+      {currentStep === totalSteps - 1 ? (
+        <button type="submit">Submit for review</button>
+      ) : (
+        <button type="button" onClick={onNext}>
+          Next
+        </button>
+      )}
+    </div>
+  ),
 }));
 
 vi.mock("@/components/ui/location-selector", () => ({
-  LocationSelector: () => <div>Location Selector</div>,
+  LocationSelector: ({
+    value,
+    onChange,
+  }: {
+    value: { province: string; city: string; town?: string; address?: string };
+    onChange: (value: { province: string; city: string; town?: string; address?: string }) => void;
+  }) => (
+    <div>
+      <label>
+        Province
+        <input
+          aria-label="Province"
+          value={value.province}
+          onChange={(e) => onChange({ ...value, province: e.target.value })}
+        />
+      </label>
+      <label>
+        City
+        <input
+          aria-label="City"
+          value={value.city}
+          onChange={(e) => onChange({ ...value, city: e.target.value })}
+        />
+      </label>
+      <label>
+        Town
+        <input
+          aria-label="Town"
+          value={value.town ?? ""}
+          onChange={(e) => onChange({ ...value, town: e.target.value })}
+        />
+      </label>
+      <label>
+        Street address
+        <input
+          aria-label="Street address"
+          value={value.address ?? ""}
+          onChange={(e) => onChange({ ...value, address: e.target.value })}
+        />
+      </label>
+    </div>
+  ),
 }));
 
 vi.mock("@/components/ui/media-upload", () => ({
-  MediaUpload: () => <div>Media Upload</div>,
+  MediaUpload: ({ label, onChange }: { label: string; onChange?: (files: File[]) => void }) => (
+    <button
+      type="button"
+      onClick={() =>
+        onChange?.([
+          new File(["mock"], label.toLowerCase().includes("video") ? "clip.mp4" : "photo.png", {
+            type: label.toLowerCase().includes("video") ? "video/mp4" : "image/png",
+          }),
+        ])
+      }
+    >
+      Add media for {label}
+    </button>
+  ),
 }));
 
 vi.mock("@/components/ui/video-frame-selector", () => ({
@@ -104,6 +213,12 @@ vi.mock("@/lib/post-drafts/defaults", () => ({
 describe("CreateTourismPage type switch behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    global.URL.createObjectURL = vi.fn(() => "blob:tourism-preview");
+    global.URL.revokeObjectURL = vi.fn();
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "ok" }),
+    }) as unknown as typeof fetch;
     vi.stubGlobal(
       "confirm",
       vi.fn(() => true)
@@ -147,5 +262,265 @@ describe("CreateTourismPage type switch behavior", () => {
 
     expect(screen.getByLabelText("Business Name *")).toBeInTheDocument();
     expect(screen.queryByLabelText("Event Title *")).not.toBeInTheDocument();
+  });
+
+  it("maps event API 422 photo-limit errors to the media step", async () => {
+    (fetchWithRetry as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        urls: ["https://media.verifymzansi.com/tourism/photo.jpg"],
+        errors: [],
+      }),
+    });
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/promotions") {
+          return {
+            ok: false,
+            status: 422,
+            json: async () => ({ error: "Maximum 10 photos allowed on your plan" }),
+          };
+        }
+
+        return {
+          ok: true,
+          json: async () => ({ id: "ok" }),
+        };
+      }
+    );
+
+    render(<CreateTourismPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Event/ }));
+    fireEvent.change(screen.getByLabelText("Event Title *"), {
+      target: { value: "Soweto Food Festival" },
+    });
+    fireEvent.change(screen.getByLabelText("Description *"), {
+      target: { value: "A detailed event description with enough content to pass validation." },
+    });
+    fireEvent.change(screen.getByLabelText("Event Type"), {
+      target: { value: "festival_concert" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText("Start Date *"), {
+      target: { value: "2099-12-01" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText("Province"), {
+      target: { value: "Gauteng" },
+    });
+    fireEvent.change(screen.getByLabelText("City"), {
+      target: { value: "Johannesburg" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Maximum 10 photos allowed on your plan").length).toBeGreaterThan(
+        0
+      );
+      expect(screen.getByText(/Please fix 1 field on Step 4/i)).toBeInTheDocument();
+    });
+  });
+
+  it("maps event API 422 video-limit errors to the media step", async () => {
+    (fetchWithRetry as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        urls: ["https://media.verifymzansi.com/tourism/photo.jpg"],
+        errors: [],
+      }),
+    });
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/promotions") {
+          return {
+            ok: false,
+            status: 422,
+            json: async () => ({ error: "Video upload is not available on your current plan." }),
+          };
+        }
+
+        return {
+          ok: true,
+          json: async () => ({ id: "ok" }),
+        };
+      }
+    );
+
+    render(<CreateTourismPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Event/ }));
+    fireEvent.change(screen.getByLabelText("Event Title *"), {
+      target: { value: "Soweto Food Festival" },
+    });
+    fireEvent.change(screen.getByLabelText("Description *"), {
+      target: { value: "A detailed event description with enough content to pass validation." },
+    });
+    fireEvent.change(screen.getByLabelText("Event Type"), {
+      target: { value: "festival_concert" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText("Start Date *"), {
+      target: { value: "2099-12-01" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText("Province"), {
+      target: { value: "Gauteng" },
+    });
+    fireEvent.change(screen.getByLabelText("City"), {
+      target: { value: "Johannesburg" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByText("Video upload is not available on your current plan.").length
+      ).toBeGreaterThan(0);
+      expect(screen.getByText(/Please fix 1 field on Step 4/i)).toBeInTheDocument();
+    });
+  });
+
+  it("maps tourism business API 422 photo-limit errors to the media step", async () => {
+    (fetchWithRetry as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        urls: ["https://media.verifymzansi.com/tourism/photo.jpg"],
+        errors: [],
+      }),
+    });
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/businesses") {
+          return {
+            ok: false,
+            status: 422,
+            json: async () => ({ error: "Maximum 10 gallery photos allowed on your plan" }),
+          };
+        }
+
+        return {
+          ok: true,
+          json: async () => ({ id: "ok" }),
+        };
+      }
+    );
+
+    render(<CreateTourismPage />);
+
+    fireEvent.change(screen.getByLabelText("Business Name *"), {
+      target: { value: "Kruger Sunset Lodge" },
+    });
+    fireEvent.change(screen.getByLabelText("Description *"), {
+      target: {
+        value: "A detailed tourism business description with enough content to pass validation.",
+      },
+    });
+    fireEvent.change(screen.getByLabelText("Tourism Category"), {
+      target: { value: "hotel_resort" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText("Province"), {
+      target: { value: "Gauteng" },
+    });
+    fireEvent.change(screen.getByLabelText("City"), {
+      target: { value: "Johannesburg" },
+    });
+    fireEvent.change(screen.getByLabelText("Street address"), {
+      target: { value: "24 Vilakazi Street" },
+    });
+    fireEvent.change(screen.getByLabelText("Town"), {
+      target: { value: "Orlando West" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByText("Maximum 10 gallery photos allowed on your plan").length
+      ).toBeGreaterThan(0);
+      expect(screen.getByText(/Please fix 1 field on Step 4/i)).toBeInTheDocument();
+    });
+  });
+
+  it("maps tourism business API 422 video-limit errors to the media step", async () => {
+    (fetchWithRetry as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        urls: ["https://media.verifymzansi.com/tourism/photo.jpg"],
+        errors: [],
+      }),
+    });
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/businesses") {
+          return {
+            ok: false,
+            status: 422,
+            json: async () => ({ error: "Video upload is not available on your current plan." }),
+          };
+        }
+
+        return {
+          ok: true,
+          json: async () => ({ id: "ok" }),
+        };
+      }
+    );
+
+    render(<CreateTourismPage />);
+
+    fireEvent.change(screen.getByLabelText("Business Name *"), {
+      target: { value: "Kruger Sunset Lodge" },
+    });
+    fireEvent.change(screen.getByLabelText("Description *"), {
+      target: {
+        value: "A detailed tourism business description with enough content to pass validation.",
+      },
+    });
+    fireEvent.change(screen.getByLabelText("Tourism Category"), {
+      target: { value: "hotel_resort" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText("Province"), {
+      target: { value: "Gauteng" },
+    });
+    fireEvent.change(screen.getByLabelText("City"), {
+      target: { value: "Johannesburg" },
+    });
+    fireEvent.change(screen.getByLabelText("Street address"), {
+      target: { value: "24 Vilakazi Street" },
+    });
+    fireEvent.change(screen.getByLabelText("Town"), {
+      target: { value: "Orlando West" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByText("Video upload is not available on your current plan.").length
+      ).toBeGreaterThan(0);
+      expect(screen.getByText(/Please fix 1 field on Step 4/i)).toBeInTheDocument();
+    });
   });
 });

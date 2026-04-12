@@ -208,6 +208,237 @@ describe("CreatePromotionPage", () => {
     expect(screen.getByText("Phone Call")).toBeInTheDocument();
   });
 
+  it("maps API 422 photo-limit errors to the photos field on submit", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/csrf") {
+          return {
+            ok: true,
+            json: async () => ({ token: "a".repeat(64) }),
+          };
+        }
+
+        if (input === "/api/businesses?mine=true&limit=50") {
+          return {
+            ok: true,
+            json: async () => ({ businesses: [] }),
+          };
+        }
+
+        if (input === "/api/media/upload") {
+          return {
+            ok: true,
+            json: async () => ({ urls: ["https://media.verifymzansi.com/promotions/photo.jpg"] }),
+          };
+        }
+
+        if (input === "/api/promotions") {
+          return {
+            ok: false,
+            status: 422,
+            json: async () => ({ error: "Maximum 5 photos allowed on your plan" }),
+          };
+        }
+
+        return {
+          ok: true,
+          json: async () => ({}),
+        };
+      }
+    );
+
+    render(<CreatePromotionPage />);
+
+    completeStepOne();
+    fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText(/^City$/i), {
+      target: { value: "Johannesburg" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Add media for Photos/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Maximum 5 photos allowed on your plan").length).toBeGreaterThan(
+        0
+      );
+      expect(screen.getByText(/Please fix 1 field on Step 3/i)).toBeInTheDocument();
+    });
+  });
+
+  it("maps API 422 video-limit errors to the videos field on submit", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/csrf") {
+          return {
+            ok: true,
+            json: async () => ({ token: "a".repeat(64) }),
+          };
+        }
+
+        if (input === "/api/businesses?mine=true&limit=50") {
+          return {
+            ok: true,
+            json: async () => ({ businesses: [] }),
+          };
+        }
+
+        if (input === "/api/media/upload") {
+          return {
+            ok: true,
+            json: async () => ({ urls: ["https://media.verifymzansi.com/promotions/photo.jpg"] }),
+          };
+        }
+
+        if (input === "/api/promotions") {
+          return {
+            ok: false,
+            status: 422,
+            json: async () => ({ error: "Video upload is not available on your current plan." }),
+          };
+        }
+
+        return {
+          ok: true,
+          json: async () => ({}),
+        };
+      }
+    );
+
+    render(<CreatePromotionPage />);
+
+    completeStepOne();
+    fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText(/^City$/i), {
+      target: { value: "Johannesburg" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Add media for Photos/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByText("Video upload is not available on your current plan.").length
+      ).toBeGreaterThan(0);
+      expect(screen.getByText(/Please fix 1 field on Step 3/i)).toBeInTheDocument();
+    });
+  });
+
+  it("redirects to complete profile when API returns phone-gate 403 redirectUrl", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/csrf") {
+          return {
+            ok: true,
+            json: async () => ({ token: "a".repeat(64) }),
+          };
+        }
+
+        if (input === "/api/businesses?mine=true&limit=50") {
+          return {
+            ok: true,
+            json: async () => ({ businesses: [] }),
+          };
+        }
+
+        if (input === "/api/media/upload") {
+          return {
+            ok: true,
+            json: async () => ({ urls: ["https://media.verifymzansi.com/promotions/photo.jpg"] }),
+          };
+        }
+
+        if (input === "/api/promotions") {
+          return {
+            ok: false,
+            status: 403,
+            json: async () => ({ redirectUrl: "/dashboard/complete-profile" }),
+          };
+        }
+
+        return {
+          ok: true,
+          json: async () => ({}),
+        };
+      }
+    );
+
+    render(<CreatePromotionPage />);
+
+    completeStepOne();
+    fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText(/^City$/i), {
+      target: { value: "Johannesburg" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Add media for Photos/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith("/dashboard/complete-profile");
+    });
+  });
+
+  it("shows plan-limit reason when API returns 403 reason", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/csrf") {
+          return {
+            ok: true,
+            json: async () => ({ token: "a".repeat(64) }),
+          };
+        }
+
+        if (input === "/api/businesses?mine=true&limit=50") {
+          return {
+            ok: true,
+            json: async () => ({ businesses: [] }),
+          };
+        }
+
+        if (input === "/api/media/upload") {
+          return {
+            ok: true,
+            json: async () => ({ urls: ["https://media.verifymzansi.com/promotions/photo.jpg"] }),
+          };
+        }
+
+        if (input === "/api/promotions") {
+          return {
+            ok: false,
+            status: 403,
+            json: async () => ({ reason: "You reached your plan posting limit." }),
+          };
+        }
+
+        return {
+          ok: true,
+          json: async () => ({}),
+        };
+      }
+    );
+
+    render(<CreatePromotionPage />);
+
+    completeStepOne();
+    fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText(/^City$/i), {
+      target: { value: "Johannesburg" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Add media for Photos/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText("You reached your plan posting limit.")).toBeInTheDocument();
+    });
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
   describe("draft restore", () => {
     const DRAFT_USER_ID = "user-draft-promo-123";
 

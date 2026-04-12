@@ -129,6 +129,41 @@ const STEP_SOCIAL_FIELDS = [
   "socialTiktok",
 ] as const;
 
+/** Human-readable labels for each form field key, used in the error alert. */
+const BUSINESS_FIELD_LABELS: Record<string, string> = {
+  business_type: "Business type",
+  business_name: "Business name",
+  slug: "URL slug",
+  category: "Category",
+  location_province: "Province",
+  location_city: "City",
+  store_number: "Store number",
+  service_areas: "Service areas",
+  map_directions: "Map / directions",
+  phone: "Phone",
+  whatsapp: "WhatsApp",
+  email: "Email",
+  website: "Website",
+  socialFacebook: "Facebook",
+  socialInstagram: "Instagram",
+  socialTwitter: "X / Twitter",
+  socialTiktok: "TikTok",
+  logo_url: "Logo",
+  cover_photo: "Cover photo",
+  gallery_photos: "Gallery photos",
+  cover_video: "Cover video",
+  video_thumbnail: "Video thumbnail",
+  "business_details.mall_name": "Mall name",
+  "business_details.street_address": "Street address",
+  "business_details.suburb": "Suburb",
+  "business_details.service_suburb": "Service suburb",
+  "business_details.primary_order_channel": "Primary order channel",
+  "business_details.order_url": "Order URL",
+  "business_details.market_name": "Market name",
+  "business_details.trading_days": "Trading days",
+  "business_details.trading_hours": "Trading hours",
+};
+
 function getFieldId(key: string | undefined): string | undefined {
   if (!key) return undefined;
   if (FIELD_IDS[key]) return FIELD_IDS[key];
@@ -925,12 +960,69 @@ function CreateBusinessContent() {
       });
       const payload = await res.json().catch(() => null);
       if (!res.ok) {
+        // Phone-gate: server returns redirectUrl for phone verification
+        if (
+          res.status === 403 &&
+          payload &&
+          typeof payload === "object" &&
+          typeof (payload as Record<string, unknown>).redirectUrl === "string"
+        ) {
+          router.push((payload as Record<string, unknown>).redirectUrl as string);
+          return;
+        }
+
+        // Plan-limit: show a descriptive upgrade message
+        if (
+          res.status === 403 &&
+          payload &&
+          typeof payload === "object" &&
+          typeof (payload as Record<string, unknown>).reason === "string"
+        ) {
+          setFormError((payload as Record<string, unknown>).reason as string);
+          return;
+        }
+
+        if (
+          res.status === 422 &&
+          payload &&
+          typeof payload === "object" &&
+          typeof (payload as Record<string, unknown>).error === "string"
+        ) {
+          const message = ((payload as Record<string, unknown>).error as string).trim();
+          const lower = message.toLowerCase();
+          if (lower.includes("photo")) {
+            const errors = { gallery_photos: message };
+            setStep(2);
+            setFieldErrors(errors);
+            setFormError(`Please fix 1 field on Step 3 — ${STEPS[2].label}.`);
+            focusFirstError(errors, 2);
+            return;
+          }
+          if (lower.includes("video")) {
+            const errors = { cover_video: message };
+            setStep(2);
+            setFieldErrors(errors);
+            setFormError(`Please fix 1 field on Step 3 — ${STEPS[2].label}.`);
+            focusFirstError(errors, 2);
+            return;
+          }
+        }
+
         const normalized = normalizeCreatePostError(payload, "Failed to create business.");
         const targetStep = getStepForServerErrors(normalized.fieldErrors);
-        setStep(targetStep);
+        const count = Object.keys(normalized.fieldErrors).length;
+        if (count > 0) {
+          setStep(targetStep);
+        }
         setFieldErrors(normalized.fieldErrors);
-        setFormError(normalized.formError);
-        focusFirstError(normalized.fieldErrors, targetStep);
+        setFormError(
+          count > 0
+            ? `Please fix ${count} field${count > 1 ? "s" : ""} on Step ${targetStep + 1} - ${STEPS[targetStep].label}.`
+            : normalized.formError
+        );
+        if (count > 0) {
+          focusFirstError(normalized.fieldErrors, targetStep);
+        }
         return;
       }
       setUploadStatuses((c) => ({ ...c, saving: "done" }));
@@ -1113,6 +1205,7 @@ function CreateBusinessContent() {
                 currentStep={step}
                 error={formError}
                 fieldErrors={fieldErrors}
+                fieldLabels={BUSINESS_FIELD_LABELS}
                 errorStepLabel={
                   formError ? `Step ${step + 1} \u2014 ${STEPS[step].label}` : undefined
                 }

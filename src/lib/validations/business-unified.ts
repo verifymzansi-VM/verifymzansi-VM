@@ -265,12 +265,24 @@ export const businessSchema = z
       market_stall: ["market_name", "trading_days", "trading_hours"],
     };
 
+    const fieldLabels: Record<string, string> = {
+      mall_name: "Mall name is required.",
+      street_address: "Street address is required.",
+      suburb: "Suburb is required.",
+      service_suburb: "Service suburb is required.",
+      primary_order_channel: "Primary order channel is required.",
+      order_url: "Order URL is required.",
+      market_name: "Market name is required.",
+      trading_days: "Trading days are required.",
+      trading_hours: "Trading hours are required.",
+    };
+
     const missingFields = requiredDetailFields[data.business_type];
     if (missingFields && !data.business_details) {
       for (const field of missingFields) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "This field is required.",
+          message: fieldLabels[field] ?? `${field} is required.`,
           path: ["business_details", field],
         });
       }
