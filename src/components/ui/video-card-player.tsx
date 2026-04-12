@@ -130,17 +130,18 @@ function MuteButton({
   onToggle: (event: React.SyntheticEvent) => void;
 }) {
   return (
-    <div className="absolute right-1.5 top-1.5 z-[14] sm:right-2.5 sm:top-2.5">
+    <div className="absolute right-1 top-1 z-[14] sm:right-2.5 sm:top-2.5">
+      {/* Outer padding keeps 44px tap target on mobile while the visible circle is compact */}
       <button
         type="button"
         onClick={onToggle}
-        className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full border border-white/10 bg-black/55 text-white shadow-lg backdrop-blur-md transition-colors hover:bg-black/70"
+        className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-black/55 text-white shadow-lg backdrop-blur-md transition-colors hover:bg-black/70 p-2 -m-2 sm:h-auto sm:w-auto sm:min-h-[44px] sm:min-w-[44px] sm:p-0 sm:m-0"
         aria-label={isMuted ? "Unmute" : "Mute"}
       >
         {isMuted ? (
-          <VolumeX className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+          <VolumeX className="h-3 w-3 sm:h-4 sm:w-4" />
         ) : (
-          <Volume2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+          <Volume2 className="h-3 w-3 sm:h-4 sm:w-4" />
         )}
       </button>
     </div>

@@ -131,10 +131,10 @@ export function PosterCardShell({
               posterUrl={normalizedPosterUrl}
               alt={mediaAlt || title}
               sizes={mediaSizes}
-              mode="ambient"
+              mode="hover"
               fitStrategy={effectiveFitStrategy}
               containerAspectRatio={frame.aspectRatio}
-              muteControlVisibility={hasVideo ? "auto" : "hidden"}
+              muteControlVisibility={hasVideo ? "always" : "hidden"}
               hoverScale={!hasVideo}
               mediaClassName={
                 hasVideo ? undefined : "transition-transform duration-700 group-hover:scale-[1.03]"

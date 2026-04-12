@@ -2,8 +2,10 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AutoScrollRail } from "./auto-scroll-rail";
 
-const matchMediaMock = vi.fn().mockImplementation(() => ({
-  matches: false,
+const HOVER_QUERY = "(hover: hover) and (pointer: fine)";
+
+const matchMediaMock = vi.fn().mockImplementation((query: string) => ({
+  matches: query === HOVER_QUERY, // desktop by default: hover=true, reduced-motion=false
   addEventListener: vi.fn(),
   removeEventListener: vi.fn(),
 }));
@@ -99,8 +101,8 @@ describe("AutoScrollRail", () => {
   });
 
   it("skips auto-advance when reduced motion is enabled", () => {
-    matchMediaMock.mockImplementation(() => ({
-      matches: true,
+    matchMediaMock.mockImplementation((_query: string) => ({
+      matches: true, // both hover and reduced-motion return true
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
     }));
@@ -113,6 +115,29 @@ describe("AutoScrollRail", () => {
     );
 
     const rail = screen.getByLabelText("Reduced motion rail") as HTMLDivElement;
+    mockRailLayout(rail, 0);
+    const scrollToSpy = vi.spyOn(rail, "scrollTo").mockImplementation(() => undefined);
+
+    vi.advanceTimersByTime(1000);
+
+    expect(scrollToSpy).not.toHaveBeenCalled();
+  });
+
+  it("skips auto-advance on touch-only devices", () => {
+    matchMediaMock.mockImplementation((query: string) => ({
+      matches: query === HOVER_QUERY ? false : false, // touch device: no hover, no reduced-motion
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+
+    render(
+      <AutoScrollRail ariaLabel="Touch rail" intervalMs={1000}>
+        <div>First</div>
+        <div>Second</div>
+      </AutoScrollRail>
+    );
+
+    const rail = screen.getByLabelText("Touch rail") as HTMLDivElement;
     mockRailLayout(rail, 0);
     const scrollToSpy = vi.spyOn(rail, "scrollTo").mockImplementation(() => undefined);
 

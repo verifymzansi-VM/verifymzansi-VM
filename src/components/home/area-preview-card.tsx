@@ -77,9 +77,10 @@ export function AreaPreviewCard({
               posterUrl={posterUrl || imageUrl}
               alt={title}
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-              mode="ambient"
+              mode="hover"
               fitStrategy="smart"
               containerAspectRatio={4 / 3}
+              muteControlVisibility="always"
               focalX={focalX}
               focalY={focalY}
             />

@@ -47,8 +47,19 @@ export function AutoScrollRail({
   const pausedRef = useRef(false);
   const [isVisible, setIsVisible] = useState(false);
   const [paused, setPaused] = useState(false);
+  const [canHover, setCanHover] = useState(false);
   const generatedLabel = useId();
   const railLabel = ariaLabel || `horizontal-rail-${generatedLabel}`;
+
+  // Detect hover-capable (desktop) devices — auto-scroll only runs on desktop.
+  // Touch-only devices rely on native swipe via snap-scroll.
+  useEffect(() => {
+    const mql = window.matchMedia("(hover: hover) and (pointer: fine)");
+    const update = () => setCanHover(mql.matches);
+    update();
+    mql.addEventListener("change", update);
+    return () => mql.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -78,7 +89,7 @@ export function AutoScrollRail({
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    if (items.length <= 1 || reducedMotion || paused || !isVisible) return;
+    if (items.length <= 1 || reducedMotion || paused || !isVisible || !canHover) return;
 
     const id = window.setInterval(() => {
       if (pausedRef.current) return;
@@ -101,7 +112,7 @@ export function AutoScrollRail({
     }, intervalMs);
 
     return () => window.clearInterval(id);
-  }, [intervalMs, isVisible, items.length, paused, reducedMotion]);
+  }, [canHover, intervalMs, isVisible, items.length, paused, reducedMotion]);
 
   useEffect(() => {
     const container = containerRef.current;

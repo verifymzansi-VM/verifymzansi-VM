@@ -59,6 +59,6 @@ describe("AreaPreviewCard", () => {
     const player = screen.getByTestId("video-card-player");
     expect(player).toHaveAttribute("data-src", "https://example.com/preview.mp4");
     expect(player).toHaveAttribute("data-poster", "https://example.com/preview.jpg");
-    expect(player).toHaveAttribute("data-mode", "ambient");
+    expect(player).toHaveAttribute("data-mode", "hover");
   });
 });

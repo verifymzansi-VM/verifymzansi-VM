@@ -167,6 +167,15 @@ async function assertVisibleCardVideoAutoplays(page: Page) {
   const firstVideo = videos.first();
   await firstVideo.scrollIntoViewIfNeeded();
 
+  // Desktop cards use hover-to-play mode — hover over the card container to
+  // trigger playback. The video is inside a parent card wrapper.
+  const cardContainer = firstVideo
+    .locator("xpath=ancestor::div[contains(@class,'relative')]")
+    .first();
+  await cardContainer.hover({ timeout: 5_000 }).catch(() => {
+    // Hover may fail on mobile viewports — feed mode auto-plays on scroll instead.
+  });
+
   await expect
     .poll(
       async () =>
