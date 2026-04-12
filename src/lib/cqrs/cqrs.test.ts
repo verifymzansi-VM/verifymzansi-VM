@@ -67,7 +67,7 @@ describe("CQRS module", () => {
 
     it("handles non-Error throws in command handler", async () => {
       registerCommand("test.throws-string", async () => {
-        throw "string error";  
+        throw "string error";
       });
 
       const result = await executeCommand(
@@ -130,7 +130,7 @@ describe("CQRS module", () => {
 
     it("handles non-Error throws in query handler", async () => {
       registerQuery("test.query-throws-obj", async () => {
-        throw 42;  
+        throw 42;
       });
 
       const result = await executeQuery("test.query-throws-obj", {});
