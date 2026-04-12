@@ -93,6 +93,18 @@ export class StubKycProvider implements IKycProvider {
         }),
       ]);
       return result;
+    } catch (err) {
+      // On timeout or unexpected provider error, route to manual review
+      // instead of propagating an unrecoverable error to the user.
+      log.error("KYC provider error, falling back to manual review", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return {
+        status: "needs_manual_review",
+        reason: "Provider timeout or error — routed to manual review queue.",
+        providerReference: `fallback_${crypto.randomUUID()}`,
+        scores: NULL_SCORES,
+      };
     } finally {
       clearTimeout(timer);
     }

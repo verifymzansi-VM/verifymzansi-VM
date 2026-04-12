@@ -453,4 +453,79 @@ describe("POST /api/admin/flagging/action", () => {
       error: "Failed to record enforcement action",
     });
   });
+
+  it("rejects CSRF-invalid moderation requests before DB access", async () => {
+    mockEnforceCsrfToken.mockReturnValue(
+      new Response(JSON.stringify({ error: "CSRF token missing or invalid" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const res = await POST(
+      createRequest({
+        reportId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        action: "hide",
+      })
+    );
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({ error: expect.stringContaining("CSRF") });
+    expect(mockCreateAdminClient).not.toHaveBeenCalled();
+  });
+
+  it("returns 401 when no user is authenticated", async () => {
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
+      },
+    });
+
+    const res = await POST(
+      createRequest({
+        reportId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        action: "hide",
+      })
+    );
+
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 400 when report lookup returns null (not found)", async () => {
+    const reportsEq = vi.fn().mockReturnValue({
+      single: vi.fn().mockResolvedValue({
+        data: null,
+        error: { message: "Row not found", code: "PGRST116" },
+      }),
+    });
+
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: "mod-1", app_metadata: { role: "moderator" } } },
+        }),
+      },
+    });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "reports") {
+          return {
+            select: vi.fn().mockReturnValue({ eq: reportsEq }),
+          };
+        }
+        throw new Error(`Unexpected table ${table}`);
+      }),
+      auth: { admin: { getUserById: mockGetUserById } },
+      rpc: vi.fn().mockResolvedValue({ error: null }),
+    });
+
+    const res = await POST(
+      createRequest({
+        reportId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        action: "hide",
+      })
+    );
+
+    expect(res.status).toBeGreaterThanOrEqual(400);
+  });
 });

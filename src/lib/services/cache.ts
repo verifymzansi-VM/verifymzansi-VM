@@ -8,6 +8,10 @@
  * Write path: fetcher result → memory + Workers Cache (parallel)
  */
 
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("Cache");
+
 interface CacheEntry<T> {
   data: T;
   expiresAt: number;
@@ -161,7 +165,12 @@ export async function cacheable<T>(
     evictIfNeeded();
 
     // Write-through to Workers Cache (non-blocking, best-effort)
-    edgeCachePut(key, data, ttlMs).catch(() => {});
+    edgeCachePut(key, data, ttlMs).catch((err) => {
+      log.warn("Edge cache write failed", {
+        key,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
 
     return data;
   })()

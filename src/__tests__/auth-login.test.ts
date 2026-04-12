@@ -9,6 +9,11 @@ const {
   mockCheckRateLimit,
   mockGetClientRateLimitIdentity,
   mockCreateAdminClient,
+  mockCheckAccountLockout,
+  mockCheckDistributedLockout,
+  mockRecordFailedLogin,
+  mockRecordDistributedFailedLogin,
+  mockEnforceSameOriginMutation,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockVerifyTurnstile: vi.fn(),
@@ -19,6 +24,11 @@ const {
     ip: "127.0.0.1",
   }),
   mockCreateAdminClient: vi.fn(),
+  mockCheckAccountLockout: vi.fn().mockReturnValue({ locked: false }),
+  mockCheckDistributedLockout: vi.fn().mockResolvedValue({ locked: false }),
+  mockRecordFailedLogin: vi.fn(),
+  mockRecordDistributedFailedLogin: vi.fn().mockResolvedValue(undefined),
+  mockEnforceSameOriginMutation: vi.fn().mockReturnValue(null),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
@@ -33,6 +43,16 @@ vi.mock("@/lib/utils/turnstile", async () => {
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: mockCheckRateLimit,
   getClientRateLimitIdentity: mockGetClientRateLimitIdentity,
+}));
+vi.mock("@/lib/utils/account-lockout", () => ({
+  checkAccountLockout: mockCheckAccountLockout,
+  recordFailedLogin: mockRecordFailedLogin,
+  clearLockout: vi.fn(),
+  checkDistributedLockout: mockCheckDistributedLockout,
+  recordDistributedFailedLogin: mockRecordDistributedFailedLogin,
+}));
+vi.mock("@/lib/utils/mutation-origin", () => ({
+  enforceSameOriginMutation: mockEnforceSameOriginMutation,
 }));
 vi.mock("@/lib/utils/api", async () => {
   const actual = await vi.importActual<typeof ApiModule>("@/lib/utils/api");
@@ -122,6 +142,9 @@ describe("POST /api/auth/login", () => {
       source: "x-forwarded-for",
       ip: "127.0.0.1",
     });
+    mockCheckAccountLockout.mockReturnValue({ locked: false });
+    mockCheckDistributedLockout.mockResolvedValue({ locked: false });
+    mockEnforceSameOriginMutation.mockReturnValue(null);
   });
 
   afterEach(() => {
@@ -259,5 +282,138 @@ describe("POST /api/auth/login", () => {
 
     expect(res.status).toBe(503);
     expect(mockVerifyTurnstile).not.toHaveBeenCalled();
+  });
+
+  it("returns 429 when rate limited", async () => {
+    mockCheckRateLimit.mockResolvedValue({ limited: true, retryAfter: 30 });
+
+    const res = await POST(
+      createRequest({
+        email: "test@example.com",
+        password: "validPass123",
+        turnstileToken: "tok",
+      })
+    );
+
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("30");
+  });
+
+  it("returns 429 when account is locked out", async () => {
+    mockCheckAccountLockout.mockReturnValue({ locked: true, retryAfter: 3600 });
+
+    const res = await POST(
+      createRequest({
+        email: "locked@example.com",
+        password: "validPass123",
+        turnstileToken: "tok",
+      })
+    );
+
+    expect(res.status).toBe(429);
+    const body = await res.json();
+    expect(body.error).toMatch(/Account temporarily locked/);
+  });
+
+  it("returns 429 when distributed lockout is active", async () => {
+    mockCheckDistributedLockout.mockResolvedValue({ locked: true, retryAfter: 1800 });
+
+    const res = await POST(
+      createRequest({
+        email: "dist-locked@example.com",
+        password: "validPass123",
+        turnstileToken: "tok",
+      })
+    );
+
+    expect(res.status).toBe(429);
+    const body = await res.json();
+    expect(body.error).toMatch(/Account temporarily locked/);
+  });
+
+  it("records failed login on invalid credentials", async () => {
+    mockAuth({
+      data: { user: null, session: null },
+      error: { message: "Invalid login credentials", status: 400 },
+    });
+
+    await POST(
+      createRequest({
+        email: "bad@test.com",
+        password: "wrong",
+        turnstileToken: "tok",
+      })
+    );
+
+    expect(mockRecordFailedLogin).toHaveBeenCalledWith("bad@test.com");
+    expect(mockRecordDistributedFailedLogin).toHaveBeenCalledWith("bad@test.com");
+  });
+
+  it("blocks suspended accounts at pre-session check with generic 401", async () => {
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { account_status: "suspended", user_id: "user-susp" },
+            }),
+          }),
+        }),
+      }),
+    });
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        signInWithPassword: vi.fn(),
+        getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
+      },
+    });
+
+    const res = await POST(
+      createRequest({
+        email: "suspended@test.com",
+        password: "validPass123",
+        turnstileToken: "tok",
+      })
+    );
+
+    expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toEqual({ error: "Invalid email or password" });
+  });
+
+  it("blocks cross-origin mutation requests", async () => {
+    mockEnforceSameOriginMutation.mockReturnValue(
+      new Response(JSON.stringify({ error: "Cross-origin request blocked" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const res = await POST(
+      createRequest({
+        email: "test@example.com",
+        password: "validPass123",
+        turnstileToken: "tok",
+      })
+    );
+
+    expect(res.status).toBe(403);
+    expect(mockCreateClient).not.toHaveBeenCalled();
+  });
+
+  it("returns 503 with Retry-After on degraded rate limiter", async () => {
+    mockCheckRateLimit.mockResolvedValue({ limited: true, degraded: true, retryAfter: 60 });
+
+    const res = await POST(
+      createRequest({
+        email: "test@example.com",
+        password: "validPass123",
+        turnstileToken: "tok",
+      })
+    );
+
+    expect(res.status).toBe(503);
+    expect(res.headers.get("Retry-After")).toBe("60");
+    const body = await res.json();
+    expect(body.error).toMatch(/temporarily unavailable/);
   });
 });

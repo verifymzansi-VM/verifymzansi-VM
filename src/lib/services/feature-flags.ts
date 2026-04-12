@@ -109,6 +109,11 @@ export async function isFeatureEnabled(key: string, context?: FlagContext): Prom
       .single();
 
     if (error || !data) {
+      log.warn(`Flag "${key}" query returned no data`, {
+        error: error?.message ?? "no row",
+      });
+      // Prefer stale cached value over hardcoded false
+      if (cached) return evaluateFlag(cached.value, key, context);
       const fallback: FlagRow = {
         enabled: false,
         mode: "off",

@@ -239,6 +239,8 @@ export function enforceCsrfToken(
 
   log?.warn("Rejected request with invalid CSRF token", {
     path: request.nextUrl?.pathname ?? new URL(request.url).pathname,
+    method: request.headers.get("x-forwarded-method") || "(unknown)",
+    url: request.url,
     hasCookie: Boolean(cookieToken),
     hasHeader: Boolean(headerToken),
     cookieValid,

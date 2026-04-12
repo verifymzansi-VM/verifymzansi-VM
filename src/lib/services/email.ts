@@ -58,8 +58,26 @@ interface SendEmailResult {
   error?: string;
 }
 
+/** Maximum number of retry attempts for transient Resend failures. */
+const EMAIL_MAX_RETRIES = 2;
+/** Base delay in ms for exponential back-off between retries. */
+const EMAIL_BASE_DELAY_MS = 1_000;
+/** Timeout for each Resend API call. */
+const EMAIL_TIMEOUT_MS = 10_000;
+
+function isRetryableEmailError(error: unknown): boolean {
+  if (error instanceof Error && error.name === "AbortError") return true;
+  if (error instanceof TypeError) return true; // network failure
+  return false;
+}
+
+function isRetryableStatusMessage(message: string | undefined): boolean {
+  if (!message) return false;
+  return /rate.?limit|429|5\d{2}/i.test(message);
+}
+
 /**
- * Send a generic email via Resend
+ * Send a generic email via Resend with retry + timeout.
  */
 async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
   if (process.env.NODE_ENV === "development") {
@@ -70,35 +88,63 @@ async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
     };
   }
 
-  try {
-    const result = await getResend().emails.send({
-      from: FROM_EMAIL,
-      to: params.to,
-      subject: params.subject,
-      html: params.html,
-      text: params.text,
-      replyTo: REPLY_TO,
-    });
+  let lastError: string | undefined;
 
-    if (result.error) {
-      log.error("Resend error", { error: result.error });
+  for (let attempt = 0; attempt <= EMAIL_MAX_RETRIES; attempt++) {
+    try {
+      const sendPromise = getResend().emails.send({
+        from: FROM_EMAIL,
+        to: params.to,
+        subject: params.subject,
+        html: params.html,
+        text: params.text,
+        replyTo: REPLY_TO,
+      });
+      const result = await Promise.race([
+        sendPromise,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Email send timed out")), EMAIL_TIMEOUT_MS)
+        ),
+      ]);
+
+      if (result.error) {
+        lastError = result.error.message;
+        if (isRetryableStatusMessage(result.error.message) && attempt < EMAIL_MAX_RETRIES) {
+          const backoff = EMAIL_BASE_DELAY_MS * Math.pow(2, attempt);
+          log.warn("Resend transient error, retrying", {
+            attempt: attempt + 1,
+            error: result.error.message,
+            nextDelayMs: backoff,
+          });
+          await new Promise((r) => setTimeout(r, backoff));
+          continue;
+        }
+        log.error("Resend error", { error: result.error });
+        return { success: false, error: result.error.message };
+      }
+
       return {
-        success: false,
-        error: result.error.message,
+        success: true,
+        messageId: result.data?.id,
       };
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : "Email sending failed";
+      if (isRetryableEmailError(error) && attempt < EMAIL_MAX_RETRIES) {
+        const backoff = EMAIL_BASE_DELAY_MS * Math.pow(2, attempt);
+        log.warn("Email send error, retrying", {
+          attempt: attempt + 1,
+          error: lastError,
+          nextDelayMs: backoff,
+        });
+        await new Promise((r) => setTimeout(r, backoff));
+        continue;
+      }
+      log.error("Send error", { error: lastError });
+      return { success: false, error: lastError };
     }
-
-    return {
-      success: true,
-      messageId: result.data?.id,
-    };
-  } catch (error) {
-    log.error("Send error", { error: error instanceof Error ? error.message : "unknown error" });
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Email sending failed",
-    };
   }
+
+  return { success: false, error: lastError ?? "Email sending failed after retries" };
 }
 
 /**

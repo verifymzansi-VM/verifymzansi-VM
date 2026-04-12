@@ -535,6 +535,7 @@ export async function createOzowHostedPayment(
 export function verifyOzowWebhookSignature(body: string, headers: Pick<Headers, "get">): boolean {
   const secret = env("OZOW_WEBHOOK_SECRET");
   if (!secret) {
+    log.error("OZOW_WEBHOOK_SECRET is not configured — all webhooks will be rejected");
     return false;
   }
 

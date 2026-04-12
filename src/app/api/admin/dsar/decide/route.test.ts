@@ -36,6 +36,8 @@ vi.mock("@/lib/auth/admin-access", () => ({
   verifyCapabilityFromDb: vi.fn(async () => true),
 }));
 
+import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
+
 vi.mock("@/lib/auth/roles", () => ({
   getRoleFromUser: vi.fn(() => "admin"),
 }));
@@ -131,5 +133,145 @@ describe("POST /api/admin/dsar/decide", () => {
         targetId: requestId,
       })
     );
+  });
+
+  it("rejects CSRF-invalid requests before auth", async () => {
+    mockEnforceCsrfToken.mockReturnValue(
+      new Response(JSON.stringify({ error: "CSRF token invalid" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const response = await POST(
+      createMockRequest({
+        requestId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        decision: "approve",
+      })
+    );
+
+    expect(response.status).toBe(403);
+  });
+
+  it("returns 401 when no user is authenticated", async () => {
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
+      },
+    });
+
+    const response = await POST(
+      createMockRequest({
+        requestId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        decision: "approve",
+      })
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({ error: "Unauthorized" });
+  });
+
+  it("returns 403 when user lacks dsar:manage capability", async () => {
+    vi.mocked(verifyCapabilityFromDb).mockResolvedValueOnce(false);
+
+    const response = await POST(
+      createMockRequest({
+        requestId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        decision: "approve",
+      })
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({ error: "Forbidden" });
+  });
+
+  it("returns 429 when rate limited", async () => {
+    mockCheckLocalRateLimit.mockReturnValue({ limited: true, retryAfter: 60 });
+
+    const response = await POST(
+      createMockRequest({
+        requestId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        decision: "approve",
+      })
+    );
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Retry-After")).toBe("60");
+  });
+
+  it("sets status to 'rejected' for reject decisions", async () => {
+    const requestId = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
+
+    const response = await POST(
+      createMockRequest({
+        requestId,
+        decision: "reject",
+        notes: "Insufficient basis for the request",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ status: "rejected" });
+    expect(mockLogAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "dsar_rejected",
+        targetId: requestId,
+      })
+    );
+  });
+
+  it("returns 409 when request is already processed", async () => {
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              select: vi.fn().mockResolvedValue({ data: [], error: null }),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    const response = await POST(
+      createMockRequest({
+        requestId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        decision: "approve",
+      })
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Request not found or already processed",
+    });
+  });
+
+  it("returns 500 on DB error", async () => {
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              select: vi.fn().mockResolvedValue({
+                data: null,
+                error: { message: "connection refused" },
+              }),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    const response = await POST(
+      createMockRequest({
+        requestId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        decision: "approve",
+      })
+    );
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Failed to update DSAR request",
+    });
   });
 });
