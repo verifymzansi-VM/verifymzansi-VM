@@ -40,7 +40,6 @@ vi.mock("@/components/billing/plan-gate", () => ({
   usePlanMaxPhotos: () => 10,
   usePlanMaxVideos: () => 3,
   usePlanVideoAllowed: () => true,
-  usePlanCoverVideoAllowed: () => true,
 }));
 
 vi.mock("@/components/post/post-form-scaffold", () => ({

@@ -123,9 +123,9 @@ function planFeatureList(plan: PlanDefinition): { text: string; enabled: boolean
   rows.push({ text: "Featured placement", enabled: f.featuredAllowed });
   if (f.videoAllowed) {
     const vCount = (f as Record<string, unknown>).maxVideos as number | undefined;
-    rows.push({ text: `${vCount ?? 1} video tour${(vCount ?? 1) > 1 ? "s" : ""}`, enabled: true });
+    rows.push({ text: `${vCount ?? 1} video${(vCount ?? 1) > 1 ? "s" : ""}`, enabled: true });
   } else {
-    rows.push({ text: "Video tours", enabled: false });
+    rows.push({ text: "Videos", enabled: false });
   }
   return rows;
 }
@@ -777,7 +777,6 @@ interface PlanEntitlementInfo {
   maxPhotos: number;
   maxVideos: number;
   videoAllowed: boolean;
-  coverVideoAllowed: boolean;
 }
 
 const ENTITLEMENT_CACHE_TTL = 30_000; // 30 s
@@ -798,7 +797,6 @@ function fetchSharedEntitlements(area: MarketplaceArea): Promise<PlanEntitlement
         maxPhotos: FREE_POST_CONFIG.maxPhotos,
         maxVideos: FREE_POST_CONFIG.maxVideos,
         videoAllowed: false,
-        coverVideoAllowed: false,
       };
     }
 
@@ -823,7 +821,6 @@ function fetchSharedEntitlements(area: MarketplaceArea): Promise<PlanEntitlement
         maxPhotos: ent.maxPhotos,
         maxVideos: ent.maxVideos,
         videoAllowed: ent.videoAllowed,
-        coverVideoAllowed: ent.coverVideoAllowed,
       };
     }
 
@@ -832,7 +829,6 @@ function fetchSharedEntitlements(area: MarketplaceArea): Promise<PlanEntitlement
         maxPhotos: FREE_POST_CONFIG.maxPhotos,
         maxVideos: FREE_POST_CONFIG.maxVideos,
         videoAllowed: FREE_POST_CONFIG.videoAllowed,
-        coverVideoAllowed: false,
       };
     }
 
@@ -842,7 +838,6 @@ function fetchSharedEntitlements(area: MarketplaceArea): Promise<PlanEntitlement
       maxPhotos: FREE_POST_CONFIG.maxPhotos,
       maxVideos: freePostUsage.available ? FREE_POST_CONFIG.maxVideos : 0,
       videoAllowed: freePostUsage.available,
-      coverVideoAllowed: false,
     };
   })();
 
@@ -855,7 +850,6 @@ function usePlanEntitlements(area: MarketplaceArea): PlanEntitlementInfo {
     maxPhotos: FREE_POST_CONFIG.maxPhotos,
     maxVideos: isPlaywrightTestMode() ? FREE_POST_CONFIG.maxVideos : FREE_POST_CONFIG.maxVideos,
     videoAllowed: isPlaywrightTestMode() ? FREE_POST_CONFIG.videoAllowed : false,
-    coverVideoAllowed: false,
   }));
 
   useEffect(() => {
@@ -891,12 +885,4 @@ export function usePlanVideoAllowed(area: MarketplaceArea): boolean {
    ───────────────────────────────────────────────────────────── */
 export function usePlanMaxVideos(area: MarketplaceArea): number {
   return usePlanEntitlements(area).maxVideos;
-}
-
-export function usePlanCoverVideoAllowed(area: MarketplaceArea): boolean {
-  const entitlements = usePlanEntitlements(area);
-  // Unified Mzansi Business uses its normal video allowance for the cover slot.
-  return area === "MZANSI_BUSINESS"
-    ? entitlements.videoAllowed || entitlements.coverVideoAllowed
-    : entitlements.coverVideoAllowed;
 }

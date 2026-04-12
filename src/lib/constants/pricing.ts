@@ -59,7 +59,6 @@ export interface PlanDefinition {
     boostAllowed: boolean;
     featuredAllowed: boolean;
     urgentAllowed: boolean;
-    coverVideoAllowed: boolean;
   };
 }
 
@@ -84,7 +83,6 @@ export const PLANS: PlanDefinition[] = [
       boostAllowed: false,
       featuredAllowed: false,
       urgentAllowed: false,
-      coverVideoAllowed: false,
     },
   },
   {
@@ -102,7 +100,6 @@ export const PLANS: PlanDefinition[] = [
       boostAllowed: false,
       featuredAllowed: false,
       urgentAllowed: false,
-      coverVideoAllowed: false,
     },
   },
   {
@@ -120,7 +117,6 @@ export const PLANS: PlanDefinition[] = [
       boostAllowed: true,
       featuredAllowed: false,
       urgentAllowed: false,
-      coverVideoAllowed: false,
     },
   },
   {
@@ -138,7 +134,6 @@ export const PLANS: PlanDefinition[] = [
       boostAllowed: true,
       featuredAllowed: true,
       urgentAllowed: true,
-      coverVideoAllowed: false,
     },
   },
   // Mzansi Business (unified — replaces Mall Shops + Business Ads)
@@ -157,7 +152,6 @@ export const PLANS: PlanDefinition[] = [
       boostAllowed: false,
       featuredAllowed: false,
       urgentAllowed: false,
-      coverVideoAllowed: false,
     },
   },
   {
@@ -175,7 +169,6 @@ export const PLANS: PlanDefinition[] = [
       boostAllowed: true,
       featuredAllowed: false,
       urgentAllowed: false,
-      coverVideoAllowed: true,
     },
   },
   {
@@ -193,7 +186,6 @@ export const PLANS: PlanDefinition[] = [
       boostAllowed: true,
       featuredAllowed: true,
       urgentAllowed: true,
-      coverVideoAllowed: true,
     },
   },
   // Tourism & Events
@@ -212,7 +204,6 @@ export const PLANS: PlanDefinition[] = [
       boostAllowed: false,
       featuredAllowed: false,
       urgentAllowed: false,
-      coverVideoAllowed: false,
     },
   },
   {
@@ -230,7 +221,6 @@ export const PLANS: PlanDefinition[] = [
       boostAllowed: true,
       featuredAllowed: false,
       urgentAllowed: false,
-      coverVideoAllowed: false,
     },
   },
   {
@@ -248,7 +238,6 @@ export const PLANS: PlanDefinition[] = [
       boostAllowed: true,
       featuredAllowed: true,
       urgentAllowed: true,
-      coverVideoAllowed: false,
     },
   },
   /**
@@ -271,7 +260,6 @@ export const PLANS: PlanDefinition[] = [
       boostAllowed: false,
       featuredAllowed: false,
       urgentAllowed: false,
-      coverVideoAllowed: false,
     },
   },
   {
@@ -289,7 +277,6 @@ export const PLANS: PlanDefinition[] = [
       boostAllowed: true,
       featuredAllowed: false,
       urgentAllowed: false,
-      coverVideoAllowed: true,
     },
   },
   {
@@ -307,7 +294,6 @@ export const PLANS: PlanDefinition[] = [
       boostAllowed: true,
       featuredAllowed: true,
       urgentAllowed: true,
-      coverVideoAllowed: true,
     },
   },
   /**
@@ -330,7 +316,6 @@ export const PLANS: PlanDefinition[] = [
       boostAllowed: false,
       featuredAllowed: false,
       urgentAllowed: false,
-      coverVideoAllowed: false,
     },
   },
   {
@@ -348,7 +333,6 @@ export const PLANS: PlanDefinition[] = [
       boostAllowed: true,
       featuredAllowed: false,
       urgentAllowed: false,
-      coverVideoAllowed: true,
     },
   },
   {
@@ -366,7 +350,6 @@ export const PLANS: PlanDefinition[] = [
       boostAllowed: true,
       featuredAllowed: true,
       urgentAllowed: true,
-      coverVideoAllowed: true,
     },
   },
 ];
@@ -455,14 +438,13 @@ export function getPlanFeatureItems(
   push(`${features.maxPhotos} photos per post`);
   push(
     features.maxVideos !== undefined
-      ? `${features.maxVideos} video tour${features.maxVideos === 1 ? "" : "s"}`
-      : "Video uploads",
+      ? `${features.maxVideos} video${features.maxVideos === 1 ? "" : "s"}`
+      : "Videos",
     features.videoAllowed
   );
   push("Boost listings", features.boostAllowed);
   push("Featured placement", features.featuredAllowed);
   push("Urgent badge", features.urgentAllowed);
-  push("Cover video", features.coverVideoAllowed);
 
   return items;
 }

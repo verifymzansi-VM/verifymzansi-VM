@@ -26,7 +26,6 @@ import {
   usePlanMaxPhotos,
   usePlanMaxVideos,
   usePlanVideoAllowed,
-  usePlanCoverVideoAllowed,
 } from "@/components/billing/plan-gate";
 import { LocationSelector, type LocationValue } from "@/components/ui/location-selector";
 import {
@@ -378,7 +377,6 @@ function CreateTourismContent() {
   const maxPhotos = usePlanMaxPhotos("PROMOTIONS_EVENTS");
   const maxVideos = usePlanMaxVideos("PROMOTIONS_EVENTS");
   const videoAllowed = usePlanVideoAllowed("PROMOTIONS_EVENTS");
-  const _coverVideoAllowed = usePlanCoverVideoAllowed("PROMOTIONS_EVENTS");
 
   /* ── Init effects ────────────────────────────────────────── */
   useEffect(() => {

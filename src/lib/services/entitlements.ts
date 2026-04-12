@@ -18,7 +18,6 @@ export interface Entitlements {
   boostAllowed: boolean;
   featuredAllowed: boolean;
   urgentAllowed: boolean;
-  coverVideoAllowed: boolean;
 }
 
 const FREE_ENTITLEMENTS: Entitlements = {
@@ -30,7 +29,6 @@ const FREE_ENTITLEMENTS: Entitlements = {
   boostAllowed: false,
   featuredAllowed: false,
   urgentAllowed: false,
-  coverVideoAllowed: false,
 };
 
 /**
@@ -84,7 +82,6 @@ export function getEntitlements(tier: PlanTier, area: MarketplaceArea): Entitlem
     boostAllowed: plan.features.boostAllowed,
     featuredAllowed: plan.features.featuredAllowed,
     urgentAllowed: plan.features.urgentAllowed,
-    coverVideoAllowed: plan.features.coverVideoAllowed,
   };
 }
 

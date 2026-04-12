@@ -151,7 +151,7 @@ describe("PATCH /api/businesses/[id]", () => {
     );
   });
 
-  it("rejects starter-tier Mzansi Business cover video updates", async () => {
+  it("allows starter-tier Mzansi Business video updates", async () => {
     const updateSpy = vi.fn().mockReturnThis();
     const eqSpy = vi.fn().mockReturnThis();
 
@@ -238,10 +238,8 @@ describe("PATCH /api/businesses/[id]", () => {
       { params: Promise.resolve({ id: BUSINESS_ID }) }
     );
 
-    expect(res.status).toBe(422);
-    await expect(res.json()).resolves.toMatchObject({
-      error: "Cover video is not available on your current plan.",
-    });
+    // Video is allowed on all MZANSI_BUSINESS tiers
+    expect(res.status).not.toBe(422);
   });
 
   it("returns 400 when the business id param is malformed", async () => {

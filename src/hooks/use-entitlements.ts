@@ -13,7 +13,6 @@ const DEFAULT_ENTITLEMENTS: Entitlements = {
   boostAllowed: false,
   featuredAllowed: false,
   urgentAllowed: false,
-  coverVideoAllowed: false,
 };
 
 /**

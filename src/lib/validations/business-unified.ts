@@ -181,7 +181,7 @@ export const businessSchema = z
     // Media
     logo_url: mediaUrlField("Logo"),
     cover_photo: mediaUrlField("Cover photo"),
-    cover_video: mediaUrlField("Cover video"),
+    cover_video: mediaUrlField("Video"),
     video_thumbnail: mediaUrlField("Video thumbnail"),
     gallery_photos: z
       .array(

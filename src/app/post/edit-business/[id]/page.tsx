@@ -45,7 +45,7 @@ import {
   getDefaultCategoryDetails,
 } from "@/lib/forms/business-category-details";
 import { cn } from "@/lib/utils";
-import { usePlanCoverVideoAllowed, usePlanMaxPhotos } from "@/components/billing/plan-gate";
+import { usePlanVideoAllowed, usePlanMaxPhotos } from "@/components/billing/plan-gate";
 import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-errors";
 import {
   getBusinessMediaUploadErrorState,
@@ -177,7 +177,7 @@ export default function EditBusinessPage() {
   const [focalPoint, setFocalPoint] = useState<FocalPoint>({ x: 0.5, y: 0.5 });
 
   const maxPhotos = usePlanMaxPhotos(listingArea);
-  const coverVideoAllowed = usePlanCoverVideoAllowed(listingArea);
+  const videoAllowed = usePlanVideoAllowed(listingArea);
   const previewLogoUrl = useMemo(
     () => (newLogoFile.length > 0 ? URL.createObjectURL(newLogoFile[0]) : null),
     [newLogoFile]
@@ -414,8 +414,8 @@ export default function EditBusinessPage() {
       if (newGalleryFiles.length > maxPhotos) {
         validationErrors.gallery_photos = `You can upload up to ${maxPhotos} profile photos on this plan.`;
       }
-      if (newPromoVideoFile.length > 0 && !coverVideoAllowed) {
-        validationErrors.cover_video = "Cover video is not available on your current plan.";
+      if (newPromoVideoFile.length > 0 && !videoAllowed) {
+        validationErrors.cover_video = "Video is not available on your current plan.";
       }
       if (Object.keys(validationErrors).length > 0) {
         setFieldErrors(validationErrors);
@@ -1566,8 +1566,8 @@ export default function EditBusinessPage() {
                   <MediaUpload
                     label={
                       removeVideo || !existingCoverVideo
-                        ? `Promo / Intro Video (1 max)${!coverVideoAllowed ? " — Upgrade to unlock" : ""}`
-                        : "Replace Promo Video"
+                        ? `Video (1 max)${!videoAllowed ? " — Upgrade to unlock" : ""}`
+                        : "Replace Video"
                     }
                     maxFiles={1}
                     files={newPromoVideoFile}
@@ -1577,7 +1577,7 @@ export default function EditBusinessPage() {
                       clearErrors("cover_video", "video_thumbnail");
                     }}
                     accept="video/*"
-                    disabled={!coverVideoAllowed}
+                    disabled={!videoAllowed}
                   />
                   <p className="text-xs text-muted-foreground flex items-center gap-1">
                     <Film className="h-3 w-3" />

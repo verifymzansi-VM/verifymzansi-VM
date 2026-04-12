@@ -114,7 +114,7 @@ describe("BusinessCard", () => {
     );
   });
 
-  it("uses the shared smart-fit video player when cover video is available", () => {
+  it("uses the shared smart-fit video player when video is available", () => {
     render(
       <BusinessCard
         {...defaultProps}

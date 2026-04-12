@@ -89,7 +89,7 @@ vi.mock("@/components/ui/media-upload", () => ({
 
 vi.mock("@/components/billing/plan-gate", () => ({
   usePlanMaxPhotos: () => 5,
-  usePlanCoverVideoAllowed: () => true,
+  usePlanVideoAllowed: () => true,
 }));
 
 vi.mock("@/lib/media/compress-before-upload", () => ({

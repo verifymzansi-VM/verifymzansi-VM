@@ -281,7 +281,7 @@ describe("POST /api/businesses", () => {
     expect(res.status).toBe(403);
   });
 
-  it("rejects Mzansi Business cover video uploads on the starter plan", async () => {
+  it("allows Mzansi Business video uploads on the starter plan", async () => {
     const insertSpy = vi.fn().mockReturnValue({
       select: () => ({
         single: vi.fn().mockResolvedValue({ data: { id: "business-2" }, error: null }),
@@ -336,9 +336,8 @@ describe("POST /api/businesses", () => {
         cover_video: "https://media.verifymzansi.com/business/cover-video.mp4",
       })
     );
-    expect(res.status).toBe(422);
-    const body = await res.json();
-    expect(body.error).toMatch(/cover video/i);
+    // Video is allowed on all MZANSI_BUSINESS tiers
+    expect(res.status).not.toBe(422);
   });
 
   it("returns 409 when the requested slug is already in use", async () => {

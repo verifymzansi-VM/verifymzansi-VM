@@ -34,11 +34,7 @@ import { MediaUpload } from "@/components/ui/media-upload";
 import { VideoFrameSelector } from "@/components/ui/video-frame-selector";
 import { MediaCropPreview, type CropPosition } from "@/components/ui/media-crop-preview";
 import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
-import {
-  PlanGate,
-  usePlanCoverVideoAllowed,
-  usePlanMaxPhotos,
-} from "@/components/billing/plan-gate";
+import { PlanGate, usePlanVideoAllowed, usePlanMaxPhotos } from "@/components/billing/plan-gate";
 import { LocationSelector, type LocationValue } from "@/components/ui/location-selector";
 import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
 import {
@@ -278,7 +274,7 @@ function CreateBusinessContent() {
     address: locationAddress,
   };
   const maxPhotos = usePlanMaxPhotos("MZANSI_BUSINESS");
-  const coverVideoAllowed = usePlanCoverVideoAllowed("MZANSI_BUSINESS");
+  const videoAllowed = usePlanVideoAllowed("MZANSI_BUSINESS");
   const [layoutTemplate, setLayoutTemplate] = useState<LayoutTemplate | null>(null);
 
   useEffect(() => {
@@ -681,8 +677,8 @@ function CreateBusinessContent() {
       if (galleryFiles.length > maxPhotos) {
         errors.gallery_photos = `You can upload up to ${maxPhotos} profile photos on this plan.`;
       }
-      if (promoVideoFile.length > 0 && !coverVideoAllowed) {
-        errors.cover_video = "Cover video is not available on your current plan.";
+      if (promoVideoFile.length > 0 && !videoAllowed) {
+        errors.cover_video = "Video is not available on your current plan.";
       }
       for (const key of STEP_SOCIAL_FIELDS) {
         if (businessValidationErrors[key]) {
@@ -2161,7 +2157,7 @@ function CreateBusinessContent() {
 
                     <div id="business-cover-video" className="space-y-2 rounded-lg">
                       <MediaUpload
-                        label={`Promo video (optional)${!coverVideoAllowed ? " — Upgrade to unlock" : ""}`}
+                        label={`Video (optional)${!videoAllowed ? " — Upgrade to unlock" : ""}`}
                         maxFiles={1}
                         files={promoVideoFile}
                         onChange={(files) => {
@@ -2170,7 +2166,7 @@ function CreateBusinessContent() {
                           clearErrors("cover_video", "video_thumbnail");
                         }}
                         accept="video/*"
-                        disabled={!coverVideoAllowed}
+                        disabled={!videoAllowed}
                       />
                       <p className="flex items-center gap-1 text-xs text-muted-foreground">
                         <Film className="h-3 w-3" />A short intro video works best. Keep it focused

@@ -268,9 +268,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             maxPhotos: FREE_POST_CONFIG.maxPhotos,
             maxVideos: FREE_POST_CONFIG.maxVideos,
             videoAllowed: FREE_POST_CONFIG.videoAllowed,
-            coverVideoAllowed: false,
           };
-    const coverVideoAllowed = ent.coverVideoAllowed;
 
     if ((data.gallery_photos?.length ?? 0) > ent.maxPhotos) {
       return NextResponse.json(
@@ -279,9 +277,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       );
     }
 
-    if (data.cover_video && !coverVideoAllowed) {
+    if (data.cover_video && !ent.videoAllowed) {
       return NextResponse.json(
-        { error: "Cover video is not available on your current plan." },
+        { error: "Video is not available on your current plan." },
         { status: 422 }
       );
     }

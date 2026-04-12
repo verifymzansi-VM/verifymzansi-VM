@@ -137,7 +137,6 @@ describe("Active-area pricing parity", () => {
       expect(entitlements.boostAllowed).toBe(plan.features.boostAllowed);
       expect(entitlements.featuredAllowed).toBe(plan.features.featuredAllowed);
       expect(entitlements.urgentAllowed).toBe(plan.features.urgentAllowed);
-      expect(entitlements.coverVideoAllowed).toBe(plan.features.coverVideoAllowed);
     }
 
     if (dbPlans.length === 0) {
