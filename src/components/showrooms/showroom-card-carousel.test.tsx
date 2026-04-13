@@ -12,13 +12,15 @@ vi.mock("@/components/listings/poster-card-shell", () => ({
     title,
     description,
     videoMode,
+    mediaUrl,
   }: {
     href: string;
     title: string;
     description?: string;
     videoMode?: string;
+    mediaUrl?: string;
   }) => (
-    <a href={href} data-testid="poster-card" data-video-mode={videoMode}>
+    <a href={href} data-testid="poster-card" data-video-mode={videoMode} data-media-url={mediaUrl}>
       <span>{title}</span>
       {description && <span>{description}</span>}
     </a>
@@ -156,5 +158,44 @@ describe("ShowroomCardCarousel", () => {
     // The invisible placeholder has no videoMode, real cards do
     const ambientCards = cards.filter((c) => c.getAttribute("data-video-mode") === "ambient");
     expect(ambientCards.length).toBe(1);
+  });
+
+  it("keeps playable video source on center card only", () => {
+    const videoItems: CarouselItem[] = [
+      {
+        id: "v1",
+        type: "listing",
+        href: "/listing/v1",
+        title: "Center Video",
+        mediaUrl: "https://cdn.example.com/center.mp4",
+      },
+      {
+        id: "v2",
+        type: "listing",
+        href: "/listing/v2",
+        title: "Side Video No Poster",
+        mediaUrl: "https://cdn.example.com/side.mp4",
+      },
+      {
+        id: "v3",
+        type: "listing",
+        href: "/listing/v3",
+        title: "Side Video With Poster",
+        mediaUrl: "https://cdn.example.com/side2.mp4",
+        posterUrl: "https://cdn.example.com/side2.jpg",
+      },
+    ];
+
+    render(<ShowroomCardCarousel items={videoItems} />);
+    const cards = screen.getAllByTestId("poster-card");
+    const realCards = cards.slice(1); // skip invisible placeholder card
+
+    const center = realCards.find((c) => c.getAttribute("data-video-mode") === "ambient");
+    expect(center?.getAttribute("data-media-url")).toBe("https://cdn.example.com/center.mp4");
+
+    const sideCards = realCards.filter((c) => c.getAttribute("data-video-mode") !== "ambient");
+    expect(sideCards).toHaveLength(2);
+    expect(sideCards[0].getAttribute("data-media-url")).toBe("/images/fallbacks/hero-shop.svg");
+    expect(sideCards[1].getAttribute("data-media-url")).toBe("https://cdn.example.com/side2.jpg");
   });
 });

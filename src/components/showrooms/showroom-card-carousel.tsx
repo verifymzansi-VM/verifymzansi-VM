@@ -59,8 +59,11 @@ const VIDEO_FALLBACK_MS = 45_000;
 const DEFAULT_PAUSE_MS = 20_000;
 const SWIPE_THRESHOLD = 50;
 const VELOCITY_THRESHOLD = 0.4; // px/ms — fast flick triggers swipe below distance threshold
+const FAST_FLICK_THRESHOLD = 1.2; // px/ms — fast enough to skip 2 cards
 const DRAG_CLICK_THRESHOLD = 5; // px — movement above this counts as a drag (suppresses click)
 const VISIBILITY_THRESHOLD = 0.25;
+const EDGE_DAMPING = 0.3; // resistance factor when dragging past first/last card
+const SPRING_BACK_MS = 350; // duration for drag-x to spring back to 0 after release
 const SA_FLAG_SRC = "/images/South African flag with confetti burst.png";
 
 const CARD_W = "w-[52vw] sm:w-[40vw] lg:w-[280px] xl:w-[320px]";
@@ -128,6 +131,7 @@ export function ShowroomCardCarousel({
   const dragStartTimeRef = useRef(0);
   const didDragRef = useRef(false);
   const coverflowRef = useRef<HTMLDivElement | null>(null);
+  const springBackRafRef = useRef<number | null>(null);
 
   const count = items.length;
 
@@ -156,9 +160,50 @@ export function ShowroomCardCarousel({
     }, pauseOnInteractionMs);
   }, [pauseOnInteractionMs]);
 
+  /* ── Spring-back helper (animate --drag-x → 0) ─────────── */
+
+  const springBackDragX = useCallback(() => {
+    const el = coverflowRef.current;
+    if (!el) return;
+    // Use CSS transition on the pseudo-property via a wrapper element trick:
+    // Animate from current --drag-x to 0 over SPRING_BACK_MS.
+    const current = parseFloat(getComputedStyle(el).getPropertyValue("--drag-x")) || 0;
+    if (Math.abs(current) < 1) {
+      el.style.setProperty("--drag-x", "0px");
+      return;
+    }
+    const start = performance.now();
+    const from = current;
+    // Easing function matching cubic-bezier(0.22, 1, 0.36, 1)
+    const ease = (t: number) => {
+      // Approximation of cubic-bezier(0.22, 1, 0.36, 1) — strong ease-out with slight overshoot feel
+      return 1 - Math.pow(1 - t, 3);
+    };
+    const animate = (now: number) => {
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / SPRING_BACK_MS, 1);
+      const value = from * (1 - ease(progress));
+      el.style.setProperty("--drag-x", `${value}px`);
+      if (progress < 1) {
+        springBackRafRef.current = requestAnimationFrame(animate);
+      } else {
+        el.style.setProperty("--drag-x", "0px");
+        springBackRafRef.current = null;
+      }
+    };
+    if (springBackRafRef.current !== null) cancelAnimationFrame(springBackRafRef.current);
+    springBackRafRef.current = requestAnimationFrame(animate);
+  }, []);
+
   /* ── Pointer drag (unified mouse + touch) ──────────────── */
 
   const handlePointerDown = useCallback((e: ReactPointerEvent) => {
+    // Cancel any ongoing spring-back
+    if (springBackRafRef.current !== null) {
+      cancelAnimationFrame(springBackRafRef.current);
+      springBackRafRef.current = null;
+    }
+    coverflowRef.current?.style.setProperty("--drag-x", "0px");
     dragStartXRef.current = e.clientX;
     dragStartTimeRef.current = Date.now();
     didDragRef.current = false;
@@ -173,13 +218,19 @@ export function ShowroomCardCarousel({
   const handlePointerMove = useCallback(
     (e: ReactPointerEvent) => {
       if (!isDragging) return;
-      const delta = e.clientX - dragStartXRef.current;
+      let delta = e.clientX - dragStartXRef.current;
       if (Math.abs(delta) > DRAG_CLICK_THRESHOLD) {
         didDragRef.current = true;
       }
+      // Edge resistance: dampen drag when at first or last card
+      const atStart = activeIndex === 0 && delta > 0;
+      const atEnd = activeIndex === count - 1 && delta < 0;
+      if (atStart || atEnd) {
+        delta *= EDGE_DAMPING;
+      }
       coverflowRef.current?.style.setProperty("--drag-x", `${delta}px`);
     },
-    [isDragging]
+    [isDragging, activeIndex, count]
   );
 
   const handlePointerUp = useCallback(
@@ -190,21 +241,36 @@ export function ShowroomCardCarousel({
       } catch {
         /* noop */
       }
-      const delta = e.clientX - dragStartXRef.current;
+      const rawDelta = e.clientX - dragStartXRef.current;
       const elapsed = Math.max(Date.now() - dragStartTimeRef.current, 1);
-      const velocity = Math.abs(delta) / elapsed;
+      const absVelocity = Math.abs(rawDelta) / elapsed; // px/ms
+
+      // Account for edge damping — if the user was at an edge, the raw delta
+      // overstates intent because visual displacement was dampened.
+      const atEdge =
+        (activeIndex === 0 && rawDelta > 0) || (activeIndex === count - 1 && rawDelta < 0);
+      const effectiveDelta = atEdge ? rawDelta * EDGE_DAMPING : rawDelta;
+      const effectiveVelocity = atEdge ? absVelocity * EDGE_DAMPING : absVelocity;
 
       setIsDragging(false);
-      coverflowRef.current?.style.setProperty("--drag-x", "0px");
 
-      const shouldSwipe = Math.abs(delta) >= SWIPE_THRESHOLD || velocity >= VELOCITY_THRESHOLD;
+      const shouldSwipe =
+        Math.abs(effectiveDelta) >= SWIPE_THRESHOLD || effectiveVelocity >= VELOCITY_THRESHOLD;
+
       if (shouldSwipe) {
+        // Determine how many cards to advance (1 or 2 based on velocity)
+        const cardCount = effectiveVelocity >= FAST_FLICK_THRESHOLD ? 2 : 1;
+        const direction = effectiveDelta > 0 ? -1 : 1; // positive delta = swipe right = go prev
         pauseAutoSwipe();
-        if (delta > 0) prev();
-        else next();
+        // Animate --drag-x back to 0 smoothly while CSS transitions handle card positions
+        springBackDragX();
+        goTo(activeIndex + direction * cardCount);
+      } else {
+        // Not enough movement — spring back
+        springBackDragX();
       }
     },
-    [isDragging, next, prev, pauseAutoSwipe]
+    [isDragging, activeIndex, count, pauseAutoSwipe, goTo, springBackDragX]
   );
 
   const handleClickCapture = useCallback((e: React.MouseEvent) => {
@@ -292,6 +358,7 @@ export function ShowroomCardCarousel({
   useEffect(() => {
     return () => {
       if (pauseTimeoutRef.current) clearTimeout(pauseTimeoutRef.current);
+      if (springBackRafRef.current !== null) cancelAnimationFrame(springBackRafRef.current);
     };
   }, []);
 
@@ -314,11 +381,11 @@ export function ShowroomCardCarousel({
 
     const byOffset: Record<number, string> = {
       [-3]: "translate-x-[calc(-50%-100%)] scale-[0.68] opacity-0 z-0 pointer-events-none",
-      [-2]: "translate-x-[calc(-50%-100%+var(--drag-x,0px))] scale-[0.72] opacity-[0.60] z-10 lg:blur-[1px]",
-      [-1]: "translate-x-[calc(-50%-55%+var(--drag-x,0px))] scale-[0.85] opacity-[0.88] z-20",
+      [-2]: "translate-x-[calc(-50%-100%+var(--drag-x,0px))] scale-[0.72] opacity-100 z-10",
+      [-1]: "translate-x-[calc(-50%-55%+var(--drag-x,0px))] scale-[0.85] opacity-100 z-20",
       0: "translate-x-[calc(-50%+var(--drag-x,0px))] scale-100 opacity-100 z-30 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.35)]",
-      1: "translate-x-[calc(-50%+55%+var(--drag-x,0px))] scale-[0.85] opacity-[0.88] z-20",
-      2: "translate-x-[calc(-50%+100%+var(--drag-x,0px))] scale-[0.72] opacity-[0.60] z-10 lg:blur-[1px]",
+      1: "translate-x-[calc(-50%+55%+var(--drag-x,0px))] scale-[0.85] opacity-100 z-20",
+      2: "translate-x-[calc(-50%+100%+var(--drag-x,0px))] scale-[0.72] opacity-100 z-10",
       3: "translate-x-[calc(-50%+100%)] scale-[0.68] opacity-0 z-0 pointer-events-none",
     };
 
@@ -359,7 +426,7 @@ export function ShowroomCardCarousel({
       <div
         ref={coverflowRef}
         className={cn(
-          "relative mx-auto overflow-hidden select-none touch-pan-y",
+          "relative mx-auto overflow-x-clip overflow-y-visible select-none touch-pan-y pb-6",
           isDragging ? "cursor-grabbing" : "cursor-grab"
         )}
         onPointerDown={handlePointerDown}
@@ -387,6 +454,10 @@ export function ShowroomCardCarousel({
         {items.map((item, i) => {
           const offset = signedOffset(i);
           if (Math.abs(offset) > 3) return null;
+          const sideMediaFallback =
+            item.posterUrl ??
+            (isVideoUrl(item.mediaUrl) ? "/images/fallbacks/hero-shop.svg" : item.mediaUrl);
+          const cardMediaUrl = offset === 0 ? item.mediaUrl : sideMediaFallback;
 
           return (
             <div
@@ -401,7 +472,7 @@ export function ShowroomCardCarousel({
                 title={item.title}
                 description={item.description}
                 location={item.location}
-                mediaUrl={item.mediaUrl}
+                mediaUrl={cardMediaUrl}
                 posterUrl={item.posterUrl}
                 logoUrl={item.logoUrl}
                 eyebrow={item.eyebrow}
@@ -413,7 +484,7 @@ export function ShowroomCardCarousel({
                 mediaWidth={item.mediaWidth}
                 mediaHeight={item.mediaHeight}
                 priority={offset === 0}
-                videoMode={offset === 0 ? "ambient" : "hover"}
+                videoMode={offset === 0 ? "ambient" : undefined}
                 onVideoEnded={offset === 0 ? handleVideoEnded : undefined}
               />
             </div>
