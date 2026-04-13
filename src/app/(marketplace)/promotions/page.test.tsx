@@ -7,8 +7,8 @@ const { mockCreateClient, mockCookies } = vi.hoisted(() => ({
   mockCookies: vi.fn(),
 }));
 
-const { showroomSpy } = vi.hoisted(() => ({
-  showroomSpy: vi.fn(),
+const { carouselSpy } = vi.hoisted(() => ({
+  carouselSpy: vi.fn(),
 }));
 
 vi.mock("next/headers", () => ({
@@ -19,13 +19,14 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: mockCreateClient,
 }));
 
-vi.mock("@/components/showrooms/showroom-with-side-cards", () => ({
-  ShowroomWithSideCards: (props: {
-    slides: Array<{ id: string; type: string }>;
-    sideCardItems: Array<{ id: string; imageUrl: string }>;
+vi.mock("@/components/showrooms/showroom-card-carousel", () => ({
+  ShowroomCardCarousel: (props: {
+    items: Array<{ id: string; type: string }>;
+    emptyTitle?: string;
+    emptyDescription?: string;
   }) => {
-    showroomSpy(props);
-    return <div data-testid="showroom-with-side-cards" />;
+    carouselSpy(props);
+    return <div data-testid="showroom-card-carousel" />;
   },
 }));
 
@@ -78,14 +79,10 @@ function createQueryResult<T>(data: T) {
 function createSupabaseClient({
   businesses,
   promotions,
-  sideCardPromotions = [],
 }: {
   businesses: unknown[];
   promotions: unknown[];
-  sideCardPromotions?: unknown[];
 }) {
-  let promotionsCallCount = 0;
-
   return {
     from: (table: string) => {
       if (table === "businesses") {
@@ -93,8 +90,7 @@ function createSupabaseClient({
       }
 
       if (table === "promotions") {
-        promotionsCallCount += 1;
-        return createQueryResult(promotionsCallCount === 1 ? promotions : sideCardPromotions);
+        return createQueryResult(promotions);
       }
 
       throw new Error(`Unexpected table ${table}`);
@@ -152,15 +148,15 @@ describe("PromotionsPage", () => {
 
     render(await PromotionsPage());
 
-    expect(screen.getByTestId("showroom-with-side-cards")).toBeInTheDocument();
-    expect(showroomSpy).toHaveBeenCalledWith(
+    expect(screen.getByTestId("showroom-card-carousel")).toBeInTheDocument();
+    expect(carouselSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        slides: expect.arrayContaining([
+        items: expect.arrayContaining([
           expect.objectContaining({ id: "event-1", type: "promotion" }),
         ]),
       })
     );
-    expect(showroomSpy.mock.calls[0]?.[0].slides).toHaveLength(5);
+    expect(carouselSpy.mock.calls[0]?.[0].items).toHaveLength(5);
   });
 
   it("overfetches before filtering so valid tourism slides survive placeholder rows", async () => {
@@ -204,15 +200,15 @@ describe("PromotionsPage", () => {
 
     render(await PromotionsPage());
 
-    expect(showroomSpy).toHaveBeenCalledWith(
+    expect(carouselSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        slides: expect.arrayContaining([
+        items: expect.arrayContaining([
           expect.objectContaining({ id: "business-6", type: "business" }),
           expect.objectContaining({ id: "business-7", type: "business" }),
         ]),
       })
     );
-    expect(showroomSpy.mock.calls[0]?.[0].slides).not.toEqual(
+    expect(carouselSpy.mock.calls[0]?.[0].items).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ id: "tourism-events-empty" })])
     );
   });

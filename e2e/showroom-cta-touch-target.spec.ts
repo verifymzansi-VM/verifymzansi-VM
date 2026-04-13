@@ -30,18 +30,14 @@ test.describe("Marketplace showroom CTA touch targets", () => {
       await page.locator("body").waitFor({ state: "visible" });
       await page.waitForLoadState("networkidle").catch(() => {});
 
-      const showroomSection = page.locator("section").first();
+      const showroomSection = page.locator("section[aria-roledescription='carousel']").first();
       await expect(showroomSection).toBeVisible();
 
-      const showroomCta = showroomSection
-        .getByRole("link", {
-          name: /view listing|view business|visit shop|view event|list your business|create event/i,
-        })
-        .first();
+      const showroomCard = showroomSection.getByRole("link").first();
 
-      await expect(showroomCta).toBeVisible();
+      await expect(showroomCard).toBeVisible();
 
-      const box = await showroomCta.boundingBox();
+      const box = await showroomCard.boundingBox();
       expect(box).not.toBeNull();
       expect(box!.height).toBeGreaterThanOrEqual(44);
     });

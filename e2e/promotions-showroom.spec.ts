@@ -31,11 +31,9 @@ test.describe("Promotions showroom", () => {
     });
     await page.waitForLoadState("networkidle").catch(() => {});
 
-    const showroomSection = page.locator("section").first();
+    const showroomSection = page.locator("section[aria-roledescription='carousel']").first();
     await expect(showroomSection).toBeVisible();
-    await expect(
-      showroomSection.getByRole("link", { name: /view business|view event|create event/i }).first()
-    ).toBeVisible();
+    await expect(showroomSection.getByRole("link").first()).toBeVisible();
 
     const tablist = page.getByRole("tablist", { name: "Tourism & Events sections" });
     await expect(tablist).toBeVisible();

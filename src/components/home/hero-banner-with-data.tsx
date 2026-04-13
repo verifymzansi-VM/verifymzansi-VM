@@ -1,10 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
-import { HeroBanner } from "./hero-banner";
 import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
-import { SHOWROOM_LAYOUT_CLASSES } from "@/components/showrooms/showroom-layout-classes";
-import { ShowroomSideCard, type SideCardItem } from "@/components/showrooms/showroom-side-card";
-import { normalizeMediaUrl } from "@/lib/utils/media-url";
-import { BRANDED_SIDE_CARD_FALLBACKS } from "@/components/showrooms/side-card-fallbacks";
+import { ShowroomCardCarousel } from "@/components/showrooms/showroom-card-carousel";
+import {
+  listingToCarouselItem,
+  businessToCarouselItem,
+  promotionToCarouselItem,
+} from "@/components/showrooms/carousel-item-transforms";
 
 function isValidHttpUrl(value: string): boolean {
   try {
@@ -77,51 +78,18 @@ export async function HeroBannerWithData() {
       .slice(0, 3);
   }
 
-  // Extract side-card items from promotions that have cover photos
-  const sideCardItems: SideCardItem[] = (latestPromotions || []).flatMap((p) => {
-    const promo = p as { id: string; photos?: string[] | null };
-    const photo = promo.photos?.[0];
-    if (!photo) return [];
-    const imageUrl = normalizeMediaUrl(photo);
-    return imageUrl ? [{ id: promo.id, imageUrl }] : [];
-  });
-
-  // Last resort: branded promotional banners when no promotions have photos
-  if (sideCardItems.length === 0) {
-    sideCardItems.push(...BRANDED_SIDE_CARD_FALLBACKS);
-  }
-
-  const hasEnoughItems = sideCardItems.length >= 1;
-  const leftItems = sideCardItems;
-  const rightItems = sideCardItems;
-
-  const heroBannerNode = (
-    <HeroBanner
-      topBusinesses={topBusinesses || []}
-      latestListings={latestListings || []}
-      latestPromotions={latestPromotions || []}
-    />
-  );
-
-  if (!hasEnoughItems) {
-    return heroBannerNode;
-  }
+  // Build mixed carousel items from all three content types
+  const carouselItems = [
+    ...(topBusinesses || []).map((b) => businessToCarouselItem(b)),
+    ...(latestListings || []).map((l) => listingToCarouselItem(l)),
+    ...(latestPromotions || []).map((p) => promotionToCarouselItem(p)),
+  ];
 
   return (
-    <section className="w-full">
-      <div className={SHOWROOM_LAYOUT_CLASSES.container}>
-        <div className={SHOWROOM_LAYOUT_CLASSES.side}>
-          <div className="h-full">
-            <ShowroomSideCard items={leftItems} initialDelayMs={0} />
-          </div>
-        </div>
-        <div className={SHOWROOM_LAYOUT_CLASSES.center}>{heroBannerNode}</div>
-        <div className={SHOWROOM_LAYOUT_CLASSES.side}>
-          <div className="h-full">
-            <ShowroomSideCard items={rightItems} initialDelayMs={3000} />
-          </div>
-        </div>
-      </div>
-    </section>
+    <ShowroomCardCarousel
+      items={carouselItems}
+      emptyTitle="Welcome to VerifyMzansi"
+      emptyDescription="Explore verified businesses, listings, and events across South Africa."
+    />
   );
 }

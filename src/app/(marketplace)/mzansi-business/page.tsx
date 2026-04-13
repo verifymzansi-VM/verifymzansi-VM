@@ -1,7 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
-import { type ShowroomSlide } from "@/components/showrooms/showroom-hero";
-import { ShowroomWithSideCards } from "@/components/showrooms/showroom-with-side-cards";
-import { type SideCardItem } from "@/components/showrooms/showroom-side-card";
+import { ShowroomCardCarousel } from "@/components/showrooms/showroom-card-carousel";
+import {
+  businessToCarouselItem,
+  type CarouselItem,
+} from "@/components/showrooms/carousel-item-transforms";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
 import { PageHeader } from "@/components/layout";
@@ -9,8 +11,7 @@ import { TrustStrip } from "@/components/layout/trust-strip";
 import { MzansiBusinessGrid } from "./grid";
 import { MzansiBusinessFilterSync } from "./filter-sync";
 import { ListingGridSkeleton } from "@/components/listings/listing-skeleton";
-import { getOwnerColumn, withOwnerColumn } from "@/lib/account/compat";
-import { normalizeMediaUrl } from "@/lib/utils/media-url";
+
 import { BusinessDiscoveryBar } from "./discovery-bar";
 import { BusinessFilterDrawer } from "@/components/listings/business-filter-drawer";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,7 +20,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 import { shouldHidePlaywrightFixtureRowWhenEnabled } from "@/components/home/playwright-fixture-filter";
-import { BRANDED_SIDE_CARD_FALLBACKS } from "@/components/showrooms/side-card-fallbacks";
+
 import {
   PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
   shouldHidePlaywrightFixtures,
@@ -37,22 +38,12 @@ export const metadata = {
 /** Revalidate every 60 seconds (ISR) */
 export const revalidate = 60;
 
-type PromotionSideCardRow = {
-  id: string;
-  title?: string | null;
-  photos?: string[] | null;
-  owner_id?: string | null;
-  seller_id?: string | null;
-};
-
 export default async function MzansiBusinessPage() {
   const cookieStore = await cookies();
   const hideFixtures = shouldHidePlaywrightFixtures(
     cookieStore.get(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
   );
   const supabase = await createClient();
-  const promotionOwnerColumn = await getOwnerColumn(supabase, "promotions");
-  const now = new Date().toISOString();
 
   // Fetch top businesses for showroom hero
   const { data: topBusinesses } = await supabase
@@ -71,60 +62,20 @@ export default async function MzansiBusinessPage() {
     )
     .slice(0, 5);
 
-  const slides: ShowroomSlide[] =
+  const carouselItems: CarouselItem[] =
     visibleTopBusinesses.length > 0
-      ? visibleTopBusinesses.map((b) => ({
-          type: "business",
-          id: b.id,
-          title: b.business_name,
-          description: b.description || "Verified South African business.",
-          location: b.location_city || b.location_province || "South Africa",
-          mediaUrl: normalizeMediaUrl(
-            b.cover_video || b.cover_photo || "/images/fallbacks/hero-business.svg"
-          ),
-          posterUrl: b.video_thumbnail
-            ? normalizeMediaUrl(b.video_thumbnail)
-            : b.cover_photo
-              ? normalizeMediaUrl(b.cover_photo)
-              : undefined,
-        }))
+      ? visibleTopBusinesses.map((b) => businessToCarouselItem(b))
       : [
           {
             id: "mzansi-business-empty",
             type: "business",
+            href: "/post/create-business",
             title: "Mzansi Business",
             description: "Discover verified South African businesses and services.",
             location: "South Africa",
             mediaUrl: "/images/fallbacks/hero-shop.svg",
-            hrefOverride: "/post/create-business",
-            ctaLabelOverride: "List Your Business",
-            badgeLabelOverride: "Mzansi Business",
           },
         ];
-
-  // Fetch live promotions & events for desktop side cards
-  const { data: sideCardPromos } = await supabase
-    .from("promotions")
-    .select(withOwnerColumn("id, title, photos, owner_id", promotionOwnerColumn))
-    .eq("status", "live")
-    .or(`end_date.is.null,end_date.gte.${now}`)
-    .order("boost_until", { ascending: false, nullsFirst: false })
-    .order("featured_until", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false })
-    .limit(10);
-
-  const sideCardItems: SideCardItem[] = (
-    (sideCardPromos ?? []) as unknown as PromotionSideCardRow[]
-  )
-    .filter((promotion) => !shouldHidePlaywrightFixtureRowWhenEnabled(promotion, hideFixtures))
-    .filter((promotion) => !isPlaceholderMarketplaceContent(promotion.title))
-    .filter((p) => p.photos && p.photos.length > 0)
-    .map((p) => ({ id: p.id, imageUrl: normalizeMediaUrl(p.photos![0]) }));
-
-  // Last resort: branded promotional banners when no promotions have photos
-  if (sideCardItems.length === 0) {
-    sideCardItems.push(...BRANDED_SIDE_CARD_FALLBACKS);
-  }
 
   return (
     <div className="space-y-0">
@@ -132,12 +83,11 @@ export default async function MzansiBusinessPage() {
         <MzansiBusinessFilterSync />
       </Suspense>
 
-      {/* ── Dynamic Showroom Hero with side ad cards ─────────────── */}
-      <ShowroomWithSideCards
-        slides={slides}
-        fallbackTitle="Mzansi Business"
-        fallbackDescription="Discover verified South African businesses and services."
-        sideCardItems={sideCardItems}
+      {/* ── Card Carousel Showroom ─────────────── */}
+      <ShowroomCardCarousel
+        items={carouselItems}
+        emptyTitle="Mzansi Business"
+        emptyDescription="Discover verified South African businesses and services."
       />
 
       <TrustStrip variant="blue" />

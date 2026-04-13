@@ -2,9 +2,8 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
-import { type ShowroomSlide } from "@/components/showrooms/showroom-hero";
-import { ShowroomWithSideCards } from "@/components/showrooms/showroom-with-side-cards";
-import { type SideCardItem } from "@/components/showrooms/showroom-side-card";
+import { ShowroomCardCarousel } from "@/components/showrooms/showroom-card-carousel";
+import { listingToCarouselItem } from "@/components/showrooms/carousel-item-transforms";
 import { PageHeader } from "@/components/layout";
 import { TrustStrip } from "@/components/layout/trust-strip";
 import { ListingFilterSidebar } from "@/components/listings/listing-filter-sidebar";
@@ -12,14 +11,11 @@ import { ListingFilterDrawer } from "@/components/listings/listing-filter-drawer
 import { ListingGridHeader } from "@/components/listings/listing-grid-header";
 import { MzansiMarketGrid } from "./grid";
 import { MarketplaceUrlFilterSync } from "./url-filter-sync";
-import { getOwnerColumn, withOwnerColumn } from "@/lib/account/compat";
-import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 import { shouldHidePlaywrightFixtureRowWhenEnabled } from "@/components/home/playwright-fixture-filter";
-import { BRANDED_SIDE_CARD_FALLBACKS } from "@/components/showrooms/side-card-fallbacks";
 import {
   PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
   shouldHidePlaywrightFixtures,
@@ -39,22 +35,12 @@ export const metadata: Metadata = {
 /** Revalidate marketplace data every 60 seconds (ISR) */
 export const revalidate = 60;
 
-type PromotionSideCardRow = {
-  id: string;
-  title?: string | null;
-  photos?: string[] | null;
-  owner_id?: string | null;
-  seller_id?: string | null;
-};
-
 export default async function MzansiMarketPage() {
   const cookieStore = await cookies();
   const hideFixtures = shouldHidePlaywrightFixtures(
     cookieStore.get(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
   );
   const supabase = await createClient();
-  const promotionOwnerColumn = await getOwnerColumn(supabase, "promotions");
-  const now = new Date().toISOString();
 
   const { data: listings } = await supabase
     .from("listings")
@@ -66,55 +52,11 @@ export default async function MzansiMarketPage() {
     .order("created_at", { ascending: false })
     .limit(10);
 
-  const slides: ShowroomSlide[] = (listings ?? [])
+  const carouselItems = (listings ?? [])
     .filter((listing) => !shouldHidePlaywrightFixtureRowWhenEnabled(listing, hideFixtures))
     .filter((listing) => !isPlaceholderMarketplaceContent(listing.title, listing.description))
     .slice(0, 5)
-    .map((l) => ({
-      type: "listing",
-      id: l.id,
-      title: l.title,
-      description: l.description || "Exclusive verified listing.",
-      location: l.location_city || l.location_province || "South Africa",
-      mediaUrl: normalizeMediaUrl(
-        l.videos && l.videos.length > 0
-          ? l.videos[0]
-          : l.photos && l.photos.length > 0
-            ? l.photos[0]
-            : "/images/fallbacks/hero-listing.svg"
-      ),
-      posterUrl: l.video_thumbnail
-        ? normalizeMediaUrl(l.video_thumbnail)
-        : l.photos && l.photos.length > 0
-          ? normalizeMediaUrl(l.photos[0])
-          : undefined,
-      price: l.price_cents ? l.price_cents / 100 : null,
-      promotions: [],
-    }));
-
-  // Fetch live promotions & events for desktop side cards
-  const { data: sideCardPromos } = await supabase
-    .from("promotions")
-    .select(withOwnerColumn("id, title, photos, owner_id", promotionOwnerColumn))
-    .eq("status", "live")
-    .or(`end_date.is.null,end_date.gte.${now}`)
-    .order("boost_until", { ascending: false, nullsFirst: false })
-    .order("featured_until", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false })
-    .limit(10);
-
-  const sideCardItems: SideCardItem[] = (
-    (sideCardPromos ?? []) as unknown as PromotionSideCardRow[]
-  )
-    .filter((promotion) => !shouldHidePlaywrightFixtureRowWhenEnabled(promotion, hideFixtures))
-    .filter((promotion) => !isPlaceholderMarketplaceContent(promotion.title))
-    .filter((p) => p.photos && p.photos.length > 0)
-    .map((p) => ({ id: p.id, imageUrl: normalizeMediaUrl(p.photos![0]) }));
-
-  // Last resort: branded promotional banners when no promotions have photos
-  if (sideCardItems.length === 0) {
-    sideCardItems.push(...BRANDED_SIDE_CARD_FALLBACKS);
-  }
+    .map((l) => listingToCarouselItem(l));
 
   return (
     <div className="space-y-0">
@@ -122,12 +64,11 @@ export default async function MzansiMarketPage() {
         <MarketplaceUrlFilterSync />
       </Suspense>
 
-      {/* ── Dynamic Showroom Hero with side ad cards ─────────────── */}
-      <ShowroomWithSideCards
-        slides={slides}
-        fallbackTitle="Mzansi Market Showroom"
-        fallbackDescription="Browse classified ads from identity-verified members."
-        sideCardItems={sideCardItems}
+      {/* ── Card Carousel Showroom ─────────────── */}
+      <ShowroomCardCarousel
+        items={carouselItems}
+        emptyTitle="Mzansi Market"
+        emptyDescription="Browse classified ads from identity-verified members."
       />
 
       <TrustStrip variant="green" />
