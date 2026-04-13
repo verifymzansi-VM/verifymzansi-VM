@@ -129,6 +129,34 @@ describe("useVideoHover", () => {
     expect(manager.requestPriority).not.toHaveBeenCalled();
   });
 
+  it("pauses and reports zero visibility when the video leaves the viewport", () => {
+    const manager = {
+      register: vi.fn(),
+      unregister: vi.fn(),
+      updateVisibility: vi.fn(),
+      requestPriority: vi.fn(),
+      releasePriority: vi.fn(),
+      claimExclusive: vi.fn(),
+      releaseExclusive: vi.fn(),
+    };
+    useReducedMotionMock.mockReturnValue(false);
+    useVideoPlaybackManagerMock.mockReturnValue(manager);
+
+    const { getByTestId } = render(<Harness src="/media/clip.mp4" />);
+    const video = getByTestId("video") as HTMLVideoElement;
+    const pauseSpy = vi.spyOn(video, "pause").mockImplementation(() => undefined);
+
+    act(() => {
+      intersectionCallback?.(
+        [createIntersectionEntry(video, { isIntersecting: false, intersectionRatio: 0 })],
+        {} as IntersectionObserver
+      );
+    });
+
+    expect(pauseSpy).toHaveBeenCalled();
+    expect(manager.updateVisibility).toHaveBeenCalledWith(video, 0);
+  });
+
   it("no-ops registration when video source is not provided", () => {
     const manager = {
       register: vi.fn(),
