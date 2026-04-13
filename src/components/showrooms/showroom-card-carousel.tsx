@@ -59,8 +59,9 @@ const VIDEO_FALLBACK_MS = 45_000;
 const DEFAULT_PAUSE_MS = 20_000;
 const SWIPE_THRESHOLD = 50;
 const VELOCITY_THRESHOLD = 0.4; // px/ms — fast flick triggers swipe below distance threshold
-const FAST_FLICK_THRESHOLD = 1.2; // px/ms — fast enough to skip 2 cards
-const DRAG_CLICK_THRESHOLD = 5; // px — movement above this counts as a drag (suppresses click)
+const MIN_VELOCITY_DISTANCE = 14; // px — require minimal travel before velocity-only swipe
+const DRAG_CLICK_THRESHOLD = 8; // px — movement above this counts as a drag (suppresses click)
+const CLICK_SUPPRESSION_MS = 220;
 const VISIBILITY_THRESHOLD = 0.25;
 const SPRING_BACK_MS = 350; // duration for drag-x to spring back to 0 after release
 const SA_FLAG_SRC = "/images/South African flag with confetti burst.png";
@@ -138,6 +139,7 @@ export function ShowroomCardCarousel({
   const dragStartXRef = useRef(0);
   const dragStartTimeRef = useRef(0);
   const didDragRef = useRef(false);
+  const suppressClickUntilRef = useRef(0);
   const coverflowRef = useRef<HTMLDivElement | null>(null);
   const springBackRafRef = useRef<number | null>(null);
 
@@ -218,6 +220,7 @@ export function ShowroomCardCarousel({
     dragStartXRef.current = e.clientX;
     dragStartTimeRef.current = Date.now();
     didDragRef.current = false;
+    suppressClickUntilRef.current = 0;
     setIsDragging(true);
     try {
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -247,36 +250,58 @@ export function ShowroomCardCarousel({
         /* noop */
       }
       const rawDelta = e.clientX - dragStartXRef.current;
+      const absDistance = Math.abs(rawDelta);
       const elapsed = Math.max(Date.now() - dragStartTimeRef.current, 1);
-      const absVelocity = Math.abs(rawDelta) / elapsed; // px/ms
+      const absVelocity = absDistance / elapsed; // px/ms
 
       setIsDragging(false);
 
       const shouldSwipe =
-        Math.abs(rawDelta) >= SWIPE_THRESHOLD || absVelocity >= VELOCITY_THRESHOLD;
+        absDistance >= SWIPE_THRESHOLD ||
+        (absDistance >= MIN_VELOCITY_DISTANCE && absVelocity >= VELOCITY_THRESHOLD);
 
       if (shouldSwipe) {
-        // Determine how many cards to advance (1 or 2 based on velocity)
-        const cardCount = absVelocity >= FAST_FLICK_THRESHOLD ? 2 : 1;
         const direction = rawDelta > 0 ? 1 : -1; // positive delta = swipe right = go next
         pauseAutoSwipe();
         // Animate --drag-x back to 0 smoothly while CSS transitions handle card positions
         springBackDragX();
-        goTo(activeIndex + direction * cardCount);
+        goTo(activeIndex + direction);
       } else {
         // Not enough movement — spring back
         springBackDragX();
+      }
+
+      if (didDragRef.current) {
+        suppressClickUntilRef.current = Date.now() + CLICK_SUPPRESSION_MS;
       }
     },
     [isDragging, activeIndex, pauseAutoSwipe, goTo, springBackDragX]
   );
 
+  const handlePointerCancel = useCallback(
+    (e: ReactPointerEvent) => {
+      if (!isDragging) return;
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {
+        /* noop */
+      }
+      setIsDragging(false);
+      springBackDragX();
+      if (didDragRef.current) {
+        suppressClickUntilRef.current = Date.now() + CLICK_SUPPRESSION_MS;
+      }
+    },
+    [isDragging, springBackDragX]
+  );
+
   const handleClickCapture = useCallback((e: React.MouseEvent) => {
-    if (didDragRef.current) {
+    if (Date.now() < suppressClickUntilRef.current) {
       e.preventDefault();
       e.stopPropagation();
-      didDragRef.current = false;
+      return;
     }
+    didDragRef.current = false;
   }, []);
 
   /* ── Keyboard ──────────────────────────────────────────── */
@@ -433,7 +458,7 @@ export function ShowroomCardCarousel({
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
         onClickCapture={handleClickCapture}
         onKeyDown={handleKeyDown}
         tabIndex={0}
