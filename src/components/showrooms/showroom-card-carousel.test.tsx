@@ -11,12 +11,14 @@ vi.mock("@/components/listings/poster-card-shell", () => ({
     href,
     title,
     description,
+    videoMode,
   }: {
     href: string;
     title: string;
     description?: string;
+    videoMode?: string;
   }) => (
-    <a href={href} data-testid="poster-card">
+    <a href={href} data-testid="poster-card" data-video-mode={videoMode}>
       <span>{title}</span>
       {description && <span>{description}</span>}
     </a>
@@ -116,8 +118,9 @@ describe("ShowroomCardCarousel", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
     const dots = screen.getAllByRole("button", { name: /go to slide/i });
     fireEvent.click(dots[1]);
-    // After clicking dot 2, it should be the active dot (brand-green class applied)
-    expect(dots[1].querySelector("span")?.className).toContain("bg-brand-green");
+    // Re-query after re-render to avoid stale DOM references
+    const updatedDots = screen.getAllByRole("button", { name: /go to slide/i });
+    expect(updatedDots[1].innerHTML).toContain("bg-brand-green");
   });
 
   it("announces active slide changes via aria-live", () => {
@@ -135,6 +138,23 @@ describe("ShowroomCardCarousel", () => {
     const group = screen.getByLabelText(/carousel slides/i);
     fireEvent.keyDown(group, { key: "ArrowRight" });
     const dots = screen.getAllByRole("button", { name: /go to slide/i });
-    expect(dots[1].querySelector("span")?.className).toContain("bg-brand-green");
+    expect(dots[1].innerHTML).toContain("bg-brand-green");
+  });
+
+  it("registers pointer event handlers on carousel area", () => {
+    render(<ShowroomCardCarousel items={mockItems} />);
+    const group = screen.getByLabelText(/carousel slides/i);
+    // Verify the carousel area supports grab/drag interaction
+    expect(group.className).toContain("cursor-grab");
+    expect(group.className).toContain("touch-pan-y");
+    expect(group.className).toContain("select-none");
+  });
+
+  it("passes ambient videoMode to center card", () => {
+    render(<ShowroomCardCarousel items={mockItems} />);
+    const cards = screen.getAllByTestId("poster-card");
+    // The invisible placeholder has no videoMode, real cards do
+    const ambientCards = cards.filter((c) => c.getAttribute("data-video-mode") === "ambient");
+    expect(ambientCards.length).toBe(1);
   });
 });

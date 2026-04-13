@@ -5,9 +5,10 @@ import {
   useEffect,
   useCallback,
   useRef,
-  type TouchEvent,
+  type PointerEvent as ReactPointerEvent,
   type KeyboardEvent,
 } from "react";
+import Image from "next/image";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
 import { cn } from "@/lib/utils";
@@ -49,10 +50,53 @@ export interface ShowroomCardCarouselProps {
 
 /* ── Constants ─────────────────────────────────────────────── */
 
-const DEFAULT_AUTO_SWIPE_MS = 5000;
-const DEFAULT_PAUSE_MS = 7000;
+const DEFAULT_AUTO_SWIPE_MS = 15_000;
+const DEFAULT_PAUSE_MS = 20_000;
 const SWIPE_THRESHOLD = 50;
+const VELOCITY_THRESHOLD = 0.4; // px/ms — fast flick triggers swipe below distance threshold
+const DRAG_CLICK_THRESHOLD = 5; // px — movement above this counts as a drag (suppresses click)
 const VISIBILITY_THRESHOLD = 0.25;
+const SA_FLAG_SRC = "/images/South African flag with confetti burst.png";
+
+const CARD_W = "w-[52vw] sm:w-[40vw] lg:w-[280px] xl:w-[320px]";
+
+/* ── SA flag section wrapper ───────────────────────────────── */
+
+function SectionShell({
+  children,
+  sectionRef,
+  sectionClassName,
+  extraClassName,
+}: {
+  children: React.ReactNode;
+  sectionRef?: React.Ref<HTMLDivElement>;
+  sectionClassName: string;
+  extraClassName?: string;
+}) {
+  return (
+    <section
+      ref={sectionRef}
+      className={cn("relative w-full overflow-hidden", sectionClassName, extraClassName)}
+      aria-roledescription="carousel"
+      aria-label="Showroom carousel"
+    >
+      {/* SA flag background */}
+      <div className="absolute inset-0 z-0" aria-hidden="true">
+        <Image
+          src={SA_FLAG_SRC}
+          alt=""
+          fill
+          className="object-cover"
+          quality={60}
+          sizes="100vw"
+          priority={false}
+        />
+      </div>
+      {/* Content above the flag */}
+      <div className="relative z-10">{children}</div>
+    </section>
+  );
+}
 
 /* ── Component ─────────────────────────────────────────────── */
 
@@ -67,10 +111,17 @@ export function ShowroomCardCarousel({
   const [activeIndex, setActiveIndex] = useState(0);
   const reducedMotion = useReducedMotion();
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const touchStartX = useRef(0);
   const pausedRef = useRef(false);
   const pauseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isVisible, setIsVisible] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+
+  /* ── Drag / pointer state ──────────────────────────────── */
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartXRef = useRef(0);
+  const dragStartTimeRef = useRef(0);
+  const didDragRef = useRef(false);
+  const coverflowRef = useRef<HTMLDivElement | null>(null);
 
   const count = items.length;
 
@@ -91,28 +142,72 @@ export function ShowroomCardCarousel({
 
   const pauseAutoSwipe = useCallback(() => {
     pausedRef.current = true;
+    setIsPaused(true);
     if (pauseTimeoutRef.current) clearTimeout(pauseTimeoutRef.current);
     pauseTimeoutRef.current = setTimeout(() => {
       pausedRef.current = false;
+      setIsPaused(false);
     }, pauseOnInteractionMs);
   }, [pauseOnInteractionMs]);
 
-  /* ── Touch swipe ───────────────────────────────────────── */
+  /* ── Pointer drag (unified mouse + touch) ──────────────── */
 
-  const handleTouchStart = useCallback((e: TouchEvent) => {
-    touchStartX.current = e.changedTouches[0].clientX;
+  const handlePointerDown = useCallback((e: ReactPointerEvent) => {
+    dragStartXRef.current = e.clientX;
+    dragStartTimeRef.current = Date.now();
+    didDragRef.current = false;
+    setIsDragging(true);
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      /* noop */
+    }
   }, []);
 
-  const handleTouchEnd = useCallback(
-    (e: TouchEvent) => {
-      const delta = e.changedTouches[0].clientX - touchStartX.current;
-      if (Math.abs(delta) < SWIPE_THRESHOLD) return;
-      pauseAutoSwipe();
-      if (delta > 0) prev();
-      else next();
+  const handlePointerMove = useCallback(
+    (e: ReactPointerEvent) => {
+      if (!isDragging) return;
+      const delta = e.clientX - dragStartXRef.current;
+      if (Math.abs(delta) > DRAG_CLICK_THRESHOLD) {
+        didDragRef.current = true;
+      }
+      coverflowRef.current?.style.setProperty("--drag-x", `${delta}px`);
     },
-    [next, prev, pauseAutoSwipe]
+    [isDragging]
   );
+
+  const handlePointerUp = useCallback(
+    (e: ReactPointerEvent) => {
+      if (!isDragging) return;
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {
+        /* noop */
+      }
+      const delta = e.clientX - dragStartXRef.current;
+      const elapsed = Math.max(Date.now() - dragStartTimeRef.current, 1);
+      const velocity = Math.abs(delta) / elapsed;
+
+      setIsDragging(false);
+      coverflowRef.current?.style.setProperty("--drag-x", "0px");
+
+      const shouldSwipe = Math.abs(delta) >= SWIPE_THRESHOLD || velocity >= VELOCITY_THRESHOLD;
+      if (shouldSwipe) {
+        pauseAutoSwipe();
+        if (delta > 0) prev();
+        else next();
+      }
+    },
+    [isDragging, next, prev, pauseAutoSwipe]
+  );
+
+  const handleClickCapture = useCallback((e: React.MouseEvent) => {
+    if (didDragRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      didDragRef.current = false;
+    }
+  }, []);
 
   /* ── Keyboard ──────────────────────────────────────────── */
 
@@ -170,7 +265,6 @@ export function ShowroomCardCarousel({
 
   /* ── Render helpers ────────────────────────────────────── */
 
-  /** Compute the shortest signed offset from `activeIndex` to `i` on a circular track. */
   function signedOffset(i: number): number {
     const raw = i - activeIndex;
     if (count <= 1) return 0;
@@ -181,39 +275,33 @@ export function ShowroomCardCarousel({
   }
 
   function cardClass(offset: number): string {
-    const transitionClass = reducedMotion
-      ? "transition-none"
-      : "transition-all duration-500 ease-[cubic-bezier(0.25,0.1,0.25,1)]";
+    const transitionClass =
+      reducedMotion || isDragging
+        ? "transition-none"
+        : "transition-all duration-600 ease-[cubic-bezier(0.22,1,0.36,1)]";
 
     const byOffset: Record<number, string> = {
       [-3]: "translate-x-[calc(-50%-100%)] scale-[0.68] opacity-0 z-0 pointer-events-none",
-      [-2]: "translate-x-[calc(-50%-100%)] scale-[0.68] opacity-[0.55] z-10",
-      [-1]: "translate-x-[calc(-50%-55%)] scale-[0.82] opacity-[0.85] z-20",
-      0: "-translate-x-1/2 scale-100 opacity-100 z-30",
-      1: "translate-x-[calc(-50%+55%)] scale-[0.82] opacity-[0.85] z-20",
-      2: "translate-x-[calc(-50%+100%)] scale-[0.68] opacity-[0.55] z-10",
+      [-2]: "translate-x-[calc(-50%-100%+var(--drag-x,0px))] scale-[0.72] opacity-[0.60] z-10 lg:blur-[1px]",
+      [-1]: "translate-x-[calc(-50%-55%+var(--drag-x,0px))] scale-[0.85] opacity-[0.88] z-20",
+      0: "translate-x-[calc(-50%+var(--drag-x,0px))] scale-100 opacity-100 z-30 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.35)]",
+      1: "translate-x-[calc(-50%+55%+var(--drag-x,0px))] scale-[0.85] opacity-[0.88] z-20",
+      2: "translate-x-[calc(-50%+100%+var(--drag-x,0px))] scale-[0.72] opacity-[0.60] z-10 lg:blur-[1px]",
       3: "translate-x-[calc(-50%+100%)] scale-[0.68] opacity-0 z-0 pointer-events-none",
     };
 
     const preset = byOffset[offset] ?? byOffset[Math.sign(offset) * 3] ?? byOffset[0];
 
-    return cn("absolute left-1/2 top-0", transitionClass, preset);
+    return cn("absolute left-1/2 top-0 will-change-transform", transitionClass, preset);
   }
 
   /* ── Empty state ───────────────────────────────────────── */
 
   if (count === 0) {
     return (
-      <section
-        className={cn(
-          "w-full bg-gradient-to-b from-warm-950 via-warm-900 to-warm-950 py-8 sm:py-10 lg:py-12 dark:from-black dark:via-warm-950 dark:to-black",
-          className
-        )}
-        aria-roledescription="carousel"
-        aria-label="Showroom carousel"
-      >
+      <SectionShell sectionClassName="py-8 sm:py-10 lg:py-14 xl:py-16" extraClassName={className}>
         <div className="container-page flex items-center justify-center">
-          <div className="w-[52vw] sm:w-[40vw] lg:w-[252px] xl:w-[288px]">
+          <div className={CARD_W}>
             <PosterCardShell
               href="#"
               title={emptyTitle}
@@ -223,36 +311,36 @@ export function ShowroomCardCarousel({
             />
           </div>
         </div>
-      </section>
+      </SectionShell>
     );
   }
 
   /* ── Main render ───────────────────────────────────────── */
 
   return (
-    <section
-      ref={containerRef}
-      className={cn(
-        "w-full bg-gradient-to-b from-warm-950 via-warm-900 to-warm-950 py-6 sm:py-8 lg:py-10 dark:from-black dark:via-warm-950 dark:to-black",
-        className
-      )}
-      aria-roledescription="carousel"
-      aria-label="Showroom carousel"
+    <SectionShell
+      sectionRef={containerRef}
+      sectionClassName="py-6 sm:py-8 lg:py-14 xl:py-16"
+      extraClassName={className}
     >
       {/* Card coverflow area */}
       <div
-        className="relative mx-auto overflow-hidden"
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
+        ref={coverflowRef}
+        className={cn(
+          "relative mx-auto overflow-hidden select-none touch-pan-y",
+          isDragging ? "cursor-grabbing" : "cursor-grab"
+        )}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onClickCapture={handleClickCapture}
         onKeyDown={handleKeyDown}
         tabIndex={0}
         aria-label="Carousel slides"
       >
-        {/* Height-establishing invisible card (defines container height from center card) */}
-        <div
-          className="invisible w-[52vw] sm:w-[40vw] lg:w-[252px] xl:w-[288px] mx-auto"
-          aria-hidden="true"
-        >
+        {/* Height-establishing invisible card */}
+        <div className={cn("invisible mx-auto", CARD_W)} aria-hidden="true">
           <PosterCardShell
             href="#"
             title="Verified Marketplace Listing Placeholder"
@@ -271,7 +359,7 @@ export function ShowroomCardCarousel({
           return (
             <div
               key={item.id}
-              className={cn("w-[52vw] sm:w-[40vw] lg:w-[252px] xl:w-[288px]", cardClass(offset))}
+              className={cn(CARD_W, cardClass(offset))}
               role="group"
               aria-roledescription="slide"
               aria-label={`${i + 1} of ${count}`}
@@ -293,13 +381,14 @@ export function ShowroomCardCarousel({
                 mediaWidth={item.mediaWidth}
                 mediaHeight={item.mediaHeight}
                 priority={offset === 0}
+                videoMode={offset === 0 ? "ambient" : "hover"}
               />
             </div>
           );
         })}
       </div>
 
-      {/* Navigation dots */}
+      {/* Navigation dots with progress indicator */}
       {count > 1 && (
         <div
           className="mt-4 flex items-center justify-center gap-1.5"
@@ -317,24 +406,39 @@ export function ShowroomCardCarousel({
               aria-label={`Go to slide ${i + 1}`}
               className="inline-flex h-8 w-8 items-center justify-center rounded-full"
             >
-              <span
-                className={cn(
-                  "rounded-full transition-all duration-300",
-                  i === activeIndex
-                    ? "h-1.5 w-5 bg-brand-green-400 sm:h-2 sm:w-6"
-                    : "h-1.5 w-1.5 bg-white/50 hover:bg-white/90 sm:h-2 sm:w-2"
-                )}
-              />
+              {i === activeIndex ? (
+                <span className="relative h-2 w-6 overflow-hidden rounded-full bg-white/25">
+                  <span
+                    key={activeIndex}
+                    className={cn(
+                      "absolute inset-y-0 left-0 rounded-full bg-brand-green-400",
+                      reducedMotion || isPaused
+                        ? "w-full"
+                        : `animate-[progress-fill_${autoSwipeMs}ms_linear_forwards]`
+                    )}
+                  />
+                </span>
+              ) : (
+                <span className="h-1.5 w-1.5 rounded-full bg-white/50 transition-all duration-300 hover:bg-white/90 sm:h-2 sm:w-2" />
+              )}
             </button>
           ))}
         </div>
       )}
+
+      {/* Progress fill keyframes (injected once) */}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `@keyframes progress-fill{from{width:0%}to{width:100%}}`,
+        }}
+      />
+
       {/* Screen-reader live announcer */}
       {count > 1 && (
         <div className="sr-only" aria-live="polite" aria-atomic="true">
           {`Slide ${activeIndex + 1} of ${count}`}
         </div>
       )}
-    </section>
+    </SectionShell>
   );
 }

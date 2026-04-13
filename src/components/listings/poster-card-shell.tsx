@@ -61,6 +61,8 @@ interface PosterCardShellProps {
   mediaWidth?: number | null;
   /** Source media height in pixels (if known). Used for adaptive card frame selection. */
   mediaHeight?: number | null;
+  /** Override the default video playback mode ("hover") for this card. */
+  videoMode?: "hover" | "ambient" | "interactive";
 }
 
 export function PosterCardShell({
@@ -93,6 +95,7 @@ export function PosterCardShell({
   focalY,
   mediaWidth: _mediaWidth,
   mediaHeight: _mediaHeight,
+  videoMode,
 }: PosterCardShellProps) {
   const normalizedMediaUrl = mediaUrl ? normalizeMediaUrl(mediaUrl) : undefined;
   const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
@@ -131,7 +134,7 @@ export function PosterCardShell({
               posterUrl={normalizedPosterUrl}
               alt={mediaAlt || title}
               sizes={mediaSizes}
-              mode="hover"
+              mode={videoMode ?? "hover"}
               fitStrategy={effectiveFitStrategy}
               containerAspectRatio={frame.aspectRatio}
               muteControlVisibility={hasVideo ? "always" : "hidden"}
