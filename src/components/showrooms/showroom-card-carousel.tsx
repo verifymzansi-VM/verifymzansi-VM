@@ -62,7 +62,6 @@ const VELOCITY_THRESHOLD = 0.4; // px/ms — fast flick triggers swipe below dis
 const FAST_FLICK_THRESHOLD = 1.2; // px/ms — fast enough to skip 2 cards
 const DRAG_CLICK_THRESHOLD = 5; // px — movement above this counts as a drag (suppresses click)
 const VISIBILITY_THRESHOLD = 0.25;
-const EDGE_DAMPING = 0.3; // resistance factor when dragging past first/last card
 const SPRING_BACK_MS = 350; // duration for drag-x to spring back to 0 after release
 const SA_FLAG_SRC = "/images/South African flag with confetti burst.png";
 
@@ -218,19 +217,13 @@ export function ShowroomCardCarousel({
   const handlePointerMove = useCallback(
     (e: ReactPointerEvent) => {
       if (!isDragging) return;
-      let delta = e.clientX - dragStartXRef.current;
+      const delta = e.clientX - dragStartXRef.current;
       if (Math.abs(delta) > DRAG_CLICK_THRESHOLD) {
         didDragRef.current = true;
       }
-      // Edge resistance: dampen drag when at first or last card
-      const atStart = activeIndex === 0 && delta > 0;
-      const atEnd = activeIndex === count - 1 && delta < 0;
-      if (atStart || atEnd) {
-        delta *= EDGE_DAMPING;
-      }
       coverflowRef.current?.style.setProperty("--drag-x", `${delta}px`);
     },
-    [isDragging, activeIndex, count]
+    [isDragging]
   );
 
   const handlePointerUp = useCallback(
@@ -244,13 +237,8 @@ export function ShowroomCardCarousel({
       const rawDelta = e.clientX - dragStartXRef.current;
       const elapsed = Math.max(Date.now() - dragStartTimeRef.current, 1);
       const absVelocity = Math.abs(rawDelta) / elapsed; // px/ms
-
-      // Account for edge damping — if the user was at an edge, the raw delta
-      // overstates intent because visual displacement was dampened.
-      const atEdge =
-        (activeIndex === 0 && rawDelta > 0) || (activeIndex === count - 1 && rawDelta < 0);
-      const effectiveDelta = atEdge ? rawDelta * EDGE_DAMPING : rawDelta;
-      const effectiveVelocity = atEdge ? absVelocity * EDGE_DAMPING : absVelocity;
+      const effectiveDelta = rawDelta;
+      const effectiveVelocity = absVelocity;
 
       setIsDragging(false);
 
@@ -260,7 +248,7 @@ export function ShowroomCardCarousel({
       if (shouldSwipe) {
         // Determine how many cards to advance (1 or 2 based on velocity)
         const cardCount = effectiveVelocity >= FAST_FLICK_THRESHOLD ? 2 : 1;
-        const direction = effectiveDelta > 0 ? -1 : 1; // positive delta = swipe right = go prev
+        const direction = effectiveDelta > 0 ? 1 : -1; // positive delta = swipe right = move to right-adjacent card
         pauseAutoSwipe();
         // Animate --drag-x back to 0 smoothly while CSS transitions handle card positions
         springBackDragX();
@@ -270,7 +258,7 @@ export function ShowroomCardCarousel({
         springBackDragX();
       }
     },
-    [isDragging, activeIndex, count, pauseAutoSwipe, goTo, springBackDragX]
+    [isDragging, activeIndex, pauseAutoSwipe, goTo, springBackDragX]
   );
 
   const handleClickCapture = useCallback((e: React.MouseEvent) => {
@@ -457,7 +445,8 @@ export function ShowroomCardCarousel({
           const sideMediaFallback =
             item.posterUrl ??
             (isVideoUrl(item.mediaUrl) ? "/images/fallbacks/hero-shop.svg" : item.mediaUrl);
-          const cardMediaUrl = offset === 0 ? item.mediaUrl : sideMediaFallback;
+          const showCardControls = Math.abs(offset) <= 2;
+          const cardMediaUrl = showCardControls ? item.mediaUrl : sideMediaFallback;
 
           return (
             <div
@@ -494,9 +483,9 @@ export function ShowroomCardCarousel({
                 mediaWidth={item.mediaWidth}
                 mediaHeight={item.mediaHeight}
                 priority={offset === 0}
-                videoMode={offset === 0 ? "ambient" : undefined}
+                videoMode={showCardControls ? "ambient" : undefined}
                 onVideoEnded={offset === 0 ? handleVideoEnded : undefined}
-                showPlaybackControl={offset === 0}
+                showPlaybackControl={showCardControls}
               />
             </div>
           );
