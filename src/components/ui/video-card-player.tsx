@@ -123,19 +123,30 @@ function SmartFitBackdrop({
 }
 
 function MuteButton({
-  isMuted,
-  onToggle,
+  videoRef,
+  showMuteControl,
 }: {
-  isMuted: boolean;
-  onToggle: (event: React.SyntheticEvent) => void;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
+  showMuteControl: boolean;
 }) {
+  const { isMuted, toggleMute } = useGlobalMute(videoRef);
+
+  if (!showMuteControl) return null;
+
   return (
     <div className="absolute right-1 top-1 z-[14] sm:right-2.5 sm:top-2.5">
       {/* Outer padding keeps 44px tap target on mobile while the visible circle is compact */}
       <button
         type="button"
-        onClick={onToggle}
-        className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-black/55 text-white shadow-lg backdrop-blur-md transition-colors hover:bg-black/70 p-2 -m-2 sm:h-auto sm:w-auto sm:min-h-[44px] sm:min-w-[44px] sm:p-0 sm:m-0"
+        onPointerDown={(e) => {
+          e.preventDefault(); // Prevents selection and mobile zoom delays
+        }}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleMute();
+        }}
+        className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-black/55 text-white shadow-lg backdrop-blur-md transition-colors hover:bg-black/70 p-2 -m-2 sm:h-auto sm:w-auto sm:min-h-[44px] sm:min-w-[44px] sm:p-0 sm:m-0 select-none touch-manipulation"
         aria-label={isMuted ? "Unmute" : "Mute"}
       >
         {isMuted ? (
@@ -401,7 +412,6 @@ function VideoCardPlayerInner({
     isVideo && deferVideoLoadUntilPlay && !hasActivatedPlayback ? undefined : normalizedSrc;
   const shouldAutoplay = !isPlaybackPaused;
   const { videoRef, reducedMotion } = useVideoVisibility(managedVideoSrc, shouldAutoplay);
-  const { isMuted, toggleMute: globalToggleMute } = useGlobalMute(videoRef);
   const [videoReady, setVideoReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -524,15 +534,6 @@ function VideoCardPlayerInner({
       }
     },
     [handleVideoClick]
-  );
-
-  const toggleMute = useCallback(
-    (e: React.SyntheticEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      globalToggleMute();
-    },
-    [globalToggleMute]
   );
 
   const togglePlayback = useCallback(
@@ -719,7 +720,7 @@ function VideoCardPlayerInner({
           data-media-fit={usesSmartFit ? "smart" : "cover"}
         />
 
-        {showMuteControl ? <MuteButton isMuted={isMuted} onToggle={toggleMute} /> : null}
+        <MuteButton videoRef={videoRef} showMuteControl={showMuteControl} />
         {hasError && showPlaybackToggle ? (
           <div
             role="button"
@@ -834,7 +835,7 @@ function VideoCardPlayerInner({
         </div>
       )}
 
-      {showMuteControl ? <MuteButton isMuted={isMuted} onToggle={toggleMute} /> : null}
+      <MuteButton videoRef={videoRef} showMuteControl={showMuteControl} />
 
       {reducedMotion && !hasError && (
         <div
@@ -919,7 +920,6 @@ function HoverVideoPlayer({
     normalizedPoster?.startsWith("blob:") || normalizedPoster?.startsWith("data:");
 
   const { videoRef, containerRef, reducedMotion, isHovering } = useVideoHover(normalizedSrc);
-  const { isMuted, toggleMute: globalToggleMute } = useGlobalMute(videoRef);
   const [videoReady, setVideoReady] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [posterError, setPosterError] = useState(false);
@@ -996,15 +996,6 @@ function HoverVideoPlayer({
       setMediaAspectRatio(image.naturalWidth / image.naturalHeight);
     }
   }, []);
-
-  const toggleMute = useCallback(
-    (e: React.SyntheticEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      globalToggleMute();
-    },
-    [globalToggleMute]
-  );
 
   if (!normalizedSrc) {
     if (!normalizedPoster || posterError) {
@@ -1101,7 +1092,7 @@ function HoverVideoPlayer({
         data-media-fit={usesSmartFit ? "smart" : "cover"}
       />
 
-      {showMuteControl ? <MuteButton isMuted={isMuted} onToggle={toggleMute} /> : null}
+      <MuteButton videoRef={videoRef} showMuteControl={showMuteControl} />
 
       {/* YouTube-style red progress bar during hover playback */}
       {isHovering && videoReady && !hasError && !reducedMotion ? (
@@ -1191,7 +1182,6 @@ function FeedVideoPlayer({
     normalizedPoster?.startsWith("blob:") || normalizedPoster?.startsWith("data:");
 
   const { videoRef, isPlaying, togglePlayback, reducedMotion } = useVideoFeed(normalizedSrc);
-  const { isMuted, toggleMute: globalToggleMute } = useGlobalMute(videoRef);
   const [videoReady, setVideoReady] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [posterError, setPosterError] = useState(false);
@@ -1258,15 +1248,6 @@ function FeedVideoPlayer({
       setMediaAspectRatio(image.naturalWidth / image.naturalHeight);
     }
   }, []);
-
-  const toggleMute = useCallback(
-    (e: React.SyntheticEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      globalToggleMute();
-    },
-    [globalToggleMute]
-  );
 
   const handleTap = useCallback(
     (e: React.MouseEvent | React.TouchEvent) => {
@@ -1419,7 +1400,7 @@ function FeedVideoPlayer({
         <FeedTapIndicator key={tapIndicator.key} action={tapIndicator.action} />
       ) : null}
 
-      {showMuteControl ? <MuteButton isMuted={isMuted} onToggle={toggleMute} /> : null}
+      <MuteButton videoRef={videoRef} showMuteControl={showMuteControl} />
     </div>
   );
 }

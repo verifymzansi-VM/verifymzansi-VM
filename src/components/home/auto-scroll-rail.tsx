@@ -51,6 +51,11 @@ export function AutoScrollRail({
   const generatedLabel = useId();
   const railLabel = ariaLabel || `horizontal-rail-${generatedLabel}`;
 
+  const isDragging = useRef(false);
+  const startX = useRef(0);
+  const scrollLeftStr = useRef(0);
+  const dragMoved = useRef(false);
+
   // Detect hover-capable (desktop) devices — auto-scroll only runs on desktop.
   // Touch-only devices rely on native swipe via snap-scroll.
   useEffect(() => {
@@ -149,16 +154,73 @@ export function AutoScrollRail({
     };
   }, [pauseAfterInteractionMs]);
 
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== "mouse" || e.button !== 0) return;
+
+    const container = containerRef.current;
+    if (!container) return;
+
+    isDragging.current = true;
+    startX.current = e.pageX - container.offsetLeft;
+    scrollLeftStr.current = container.scrollLeft;
+    dragMoved.current = false;
+
+    container.style.scrollBehavior = "auto";
+    container.style.scrollSnapType = "none";
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging.current) return;
+    e.preventDefault();
+
+    const container = containerRef.current;
+    if (!container) return;
+
+    const x = e.pageX - container.offsetLeft;
+    const diff = x - startX.current;
+
+    if (Math.abs(diff) > 5) {
+      dragMoved.current = true;
+    }
+
+    container.scrollLeft = scrollLeftStr.current - diff * 2;
+  };
+
+  const handlePointerUpOrLeave = () => {
+    if (!isDragging.current) return;
+    isDragging.current = false;
+
+    const container = containerRef.current;
+    if (!container) return;
+
+    container.style.scrollBehavior = "";
+    container.style.scrollSnapType = "";
+  };
+
+  const handleClickCapture = (e: React.MouseEvent) => {
+    if (dragMoved.current) {
+      e.stopPropagation();
+      e.preventDefault();
+      // Reset drag flag shortly after to allow subsequent clicks
+      setTimeout(() => (dragMoved.current = false), 0);
+    }
+  };
+
   return (
     <div className="relative">
       <div
         ref={containerRef}
         aria-label={railLabel}
         className={cn(
-          "flex overflow-x-auto snap-x snap-mandatory gap-3 pb-2 scrollbar-hide -mx-4 px-4 sm:-mx-0 sm:px-0 sm:gap-4",
+          "flex overflow-x-auto snap-x snap-mandatory gap-3 pb-2 scrollbar-hide -mx-4 px-4 sm:-mx-0 sm:px-0 sm:gap-4 select-none",
           className
         )}
         tabIndex={0}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUpOrLeave}
+        onPointerLeave={handlePointerUpOrLeave}
+        onClickCapture={handleClickCapture}
       >
         {items.map((item, index) => (
           <div key={index} className={cn("snap-start shrink-0", itemClassName)}>
