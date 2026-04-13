@@ -398,7 +398,10 @@ export function ShowroomCardCarousel({
 
   if (count === 0) {
     return (
-      <SectionShell sectionClassName="py-8 sm:py-10 lg:py-14 xl:py-16" extraClassName={className}>
+      <SectionShell
+        sectionClassName="py-8 sm:py-10 lg:pt-4 lg:pb-14 xl:pt-4 xl:pb-16"
+        extraClassName={className}
+      >
         <div className="container-page flex items-center justify-center">
           <div className={CARD_W}>
             <PosterCardShell
@@ -419,7 +422,7 @@ export function ShowroomCardCarousel({
   return (
     <SectionShell
       sectionRef={containerRef}
-      sectionClassName="py-5 sm:py-7 lg:py-12 xl:py-14"
+      sectionClassName="py-5 sm:py-7 lg:pt-4 lg:pb-12 xl:pt-4 xl:pb-14"
       extraClassName={className}
     >
       {/* Card coverflow area */}
