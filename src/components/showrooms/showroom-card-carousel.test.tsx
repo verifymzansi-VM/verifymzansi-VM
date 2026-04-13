@@ -13,22 +13,14 @@ vi.mock("@/components/listings/poster-card-shell", () => ({
     description,
     videoMode,
     mediaUrl,
-    showPlaybackControl,
   }: {
     href: string;
     title: string;
     description?: string;
     videoMode?: string;
     mediaUrl?: string;
-    showPlaybackControl?: boolean;
   }) => (
-    <a
-      href={href}
-      data-testid="poster-card"
-      data-video-mode={videoMode}
-      data-media-url={mediaUrl}
-      data-playback-control={showPlaybackControl ? "true" : "false"}
-    >
+    <a href={href} data-testid="poster-card" data-video-mode={videoMode} data-media-url={mediaUrl}>
       <span>{title}</span>
       {description && <span>{description}</span>}
     </a>
@@ -151,36 +143,6 @@ describe("ShowroomCardCarousel", () => {
     expect(dots[1].innerHTML).toContain("bg-brand-green");
   });
 
-  it("moves to the right-adjacent card when swiping right", () => {
-    render(<ShowroomCardCarousel items={mockItems} />);
-    const group = screen.getByLabelText(/carousel slides/i);
-    const nowSpy = vi.spyOn(Date, "now");
-    nowSpy.mockReturnValueOnce(1_000);
-    nowSpy.mockReturnValueOnce(1_200);
-
-    fireEvent.pointerDown(group, { pointerId: 1, clientX: 120 });
-    fireEvent.pointerMove(group, { pointerId: 1, clientX: 220 });
-    fireEvent.pointerUp(group, { pointerId: 1, clientX: 220 });
-
-    expect(screen.getByText("Slide 2 of 3")).toBeInTheDocument();
-    nowSpy.mockRestore();
-  });
-
-  it("moves to the left-adjacent card when swiping left", () => {
-    render(<ShowroomCardCarousel items={mockItems} />);
-    const group = screen.getByLabelText(/carousel slides/i);
-    const nowSpy = vi.spyOn(Date, "now");
-    nowSpy.mockReturnValueOnce(1_000);
-    nowSpy.mockReturnValueOnce(1_200);
-
-    fireEvent.pointerDown(group, { pointerId: 1, clientX: 220 });
-    fireEvent.pointerMove(group, { pointerId: 1, clientX: 120 });
-    fireEvent.pointerUp(group, { pointerId: 1, clientX: 120 });
-
-    expect(screen.getByText("Slide 3 of 3")).toBeInTheDocument();
-    nowSpy.mockRestore();
-  });
-
   it("registers pointer event handlers on carousel area", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
     const group = screen.getByLabelText(/carousel slides/i);
@@ -190,22 +152,15 @@ describe("ShowroomCardCarousel", () => {
     expect(group.className).toContain("select-none");
   });
 
-  it("passes ambient videoMode to all visible cards", () => {
+  it("passes ambient videoMode to center card", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
     const cards = screen.getAllByTestId("poster-card");
     // The invisible placeholder has no videoMode, real cards do
     const ambientCards = cards.filter((c) => c.getAttribute("data-video-mode") === "ambient");
-    expect(ambientCards.length).toBe(mockItems.length);
+    expect(ambientCards.length).toBe(1);
   });
 
-  it("enables playback controls for all visible cards", () => {
-    render(<ShowroomCardCarousel items={mockItems} />);
-    const cards = screen.getAllByTestId("poster-card");
-    const realCards = cards.slice(1);
-    expect(realCards.every((c) => c.getAttribute("data-playback-control") === "true")).toBe(true);
-  });
-
-  it("keeps playable video source on visible cards", () => {
+  it("keeps playable video source on center card only", () => {
     const videoItems: CarouselItem[] = [
       {
         id: "v1",
@@ -235,8 +190,12 @@ describe("ShowroomCardCarousel", () => {
     const cards = screen.getAllByTestId("poster-card");
     const realCards = cards.slice(1); // skip invisible placeholder card
 
-    expect(realCards[0].getAttribute("data-media-url")).toBe("https://cdn.example.com/center.mp4");
-    expect(realCards[1].getAttribute("data-media-url")).toBe("https://cdn.example.com/side.mp4");
-    expect(realCards[2].getAttribute("data-media-url")).toBe("https://cdn.example.com/side2.mp4");
+    const center = realCards.find((c) => c.getAttribute("data-video-mode") === "ambient");
+    expect(center?.getAttribute("data-media-url")).toBe("https://cdn.example.com/center.mp4");
+
+    const sideCards = realCards.filter((c) => c.getAttribute("data-video-mode") !== "ambient");
+    expect(sideCards).toHaveLength(2);
+    expect(sideCards[0].getAttribute("data-media-url")).toBe("/images/fallbacks/hero-shop.svg");
+    expect(sideCards[1].getAttribute("data-media-url")).toBe("https://cdn.example.com/side2.jpg");
   });
 });

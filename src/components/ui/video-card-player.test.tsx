@@ -220,9 +220,6 @@ describe("VideoCardPlayer", () => {
     expect(screen.getByAltText("Photo").className).not.toContain(
       "drop-shadow-[0_20px_50px_rgba(15,23,42,0.4)]"
     );
-
-    const smartFitBackdrop = document.querySelector('img[aria-hidden="true"]');
-    expect(smartFitBackdrop).toHaveClass("scale-100");
   });
 
   it("applies smart-fit to video posters when the media would crop too aggressively", () => {

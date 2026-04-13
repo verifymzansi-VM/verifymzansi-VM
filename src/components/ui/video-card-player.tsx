@@ -112,7 +112,7 @@ function SmartFitBackdrop({
         alt=""
         aria-hidden="true"
         fill
-        className="absolute inset-0 scale-100 object-cover blur-2xl brightness-90 dark:brightness-110 saturate-150"
+        className="absolute inset-0 scale-110 object-cover blur-2xl brightness-90 dark:brightness-110 saturate-150"
         sizes={sizes}
         priority={priority}
         unoptimized={useUnoptimized ? true : undefined}
