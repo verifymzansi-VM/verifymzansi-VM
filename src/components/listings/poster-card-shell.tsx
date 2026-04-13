@@ -63,6 +63,8 @@ interface PosterCardShellProps {
   mediaHeight?: number | null;
   /** Override the default video playback mode ("hover") for this card. */
   videoMode?: "hover" | "ambient" | "interactive";
+  /** Called when an active video finishes playing (carousel auto-advance). */
+  onVideoEnded?: () => void;
 }
 
 export function PosterCardShell({
@@ -96,6 +98,7 @@ export function PosterCardShell({
   mediaWidth: _mediaWidth,
   mediaHeight: _mediaHeight,
   videoMode,
+  onVideoEnded,
 }: PosterCardShellProps) {
   const normalizedMediaUrl = mediaUrl ? normalizeMediaUrl(mediaUrl) : undefined;
   const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
@@ -145,6 +148,7 @@ export function PosterCardShell({
               priority={priority}
               focalX={focalX}
               focalY={focalY}
+              onEnded={onVideoEnded}
             />
           ) : fallback ? (
             <div className="absolute inset-0 skeleton-shimmer">{fallback}</div>

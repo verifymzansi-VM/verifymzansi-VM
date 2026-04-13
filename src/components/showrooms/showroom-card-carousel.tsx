@@ -11,6 +11,7 @@ import {
 import Image from "next/image";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
+import { isVideoUrl } from "@/components/ui/video-card-player";
 import { cn } from "@/lib/utils";
 import type { TrustLevel } from "@/types/enums";
 
@@ -39,7 +40,10 @@ export interface CarouselItem {
 
 export interface ShowroomCardCarouselProps {
   items: CarouselItem[];
-  autoSwipeMs?: number;
+  /** How long image-only cards stay visible (default: 8 000 ms). */
+  imageDisplayMs?: number;
+  /** Safety timeout for video cards in case the video fails to load (default: 45 000 ms). */
+  videoFallbackMs?: number;
   pauseOnInteractionMs?: number;
   className?: string;
   /** Fallback title when items is empty */
@@ -50,7 +54,8 @@ export interface ShowroomCardCarouselProps {
 
 /* ── Constants ─────────────────────────────────────────────── */
 
-const DEFAULT_AUTO_SWIPE_MS = 15_000;
+const IMAGE_DISPLAY_MS = 8_000;
+const VIDEO_FALLBACK_MS = 45_000;
 const DEFAULT_PAUSE_MS = 20_000;
 const SWIPE_THRESHOLD = 50;
 const VELOCITY_THRESHOLD = 0.4; // px/ms — fast flick triggers swipe below distance threshold
@@ -102,7 +107,8 @@ function SectionShell({
 
 export function ShowroomCardCarousel({
   items,
-  autoSwipeMs = DEFAULT_AUTO_SWIPE_MS,
+  imageDisplayMs = IMAGE_DISPLAY_MS,
+  videoFallbackMs = VIDEO_FALLBACK_MS,
   pauseOnInteractionMs = DEFAULT_PAUSE_MS,
   className,
   emptyTitle = "Welcome to VerifyMzansi",
@@ -247,13 +253,39 @@ export function ShowroomCardCarousel({
     nextRef.current = next;
   }, [next]);
 
+  const videoEndedRef = useRef(false);
+
+  const handleVideoEnded = useCallback(() => {
+    videoEndedRef.current = true;
+    nextRef.current();
+  }, []);
+
+  const activeIsVideo = isVideoUrl(items[activeIndex]?.mediaUrl);
+
+  useEffect(() => {
+    videoEndedRef.current = false;
+  }, [activeIndex]);
+
   useEffect(() => {
     if (count <= 1 || reducedMotion || !isVisible) return;
-    const id = setInterval(() => {
-      if (!pausedRef.current) nextRef.current();
-    }, autoSwipeMs);
-    return () => clearInterval(id);
-  }, [autoSwipeMs, count, isVisible, reducedMotion]);
+
+    // For video cards, set a safety fallback timeout only.
+    // The primary advance is triggered by the video's onEnded callback.
+    const delayMs = activeIsVideo ? videoFallbackMs : imageDisplayMs;
+
+    const id = setTimeout(() => {
+      if (!pausedRef.current && !videoEndedRef.current) nextRef.current();
+    }, delayMs);
+    return () => clearTimeout(id);
+  }, [
+    activeIndex,
+    activeIsVideo,
+    imageDisplayMs,
+    videoFallbackMs,
+    count,
+    isVisible,
+    reducedMotion,
+  ]);
 
   /* ── Cleanup ───────────────────────────────────────────── */
 
@@ -382,6 +414,7 @@ export function ShowroomCardCarousel({
                 mediaHeight={item.mediaHeight}
                 priority={offset === 0}
                 videoMode={offset === 0 ? "ambient" : "hover"}
+                onVideoEnded={offset === 0 ? handleVideoEnded : undefined}
               />
             </div>
           );
@@ -414,7 +447,9 @@ export function ShowroomCardCarousel({
                       "absolute inset-y-0 left-0 rounded-full bg-brand-green-400",
                       reducedMotion || isPaused
                         ? "w-full"
-                        : `animate-[progress-fill_${autoSwipeMs}ms_linear_forwards]`
+                        : activeIsVideo
+                          ? "w-full"
+                          : `animate-[progress-fill_${imageDisplayMs}ms_linear_forwards]`
                     )}
                   />
                 </span>

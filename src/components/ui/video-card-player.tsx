@@ -191,6 +191,8 @@ export interface VideoCardPlayerProps {
   deferVideoLoadUntilPlay?: boolean;
   /** Notifies callers when the ambient playback control changes state. */
   onPlaybackStateChange?: (isPlaying: boolean) => void;
+  /** Called when the video reaches the end (only fires when loop is disabled). */
+  onEnded?: () => void;
   /** Horizontal focal point (0–1, left to right). */
   focalX?: number | null;
   /** Vertical focal point (0–1, top to bottom). */
@@ -219,6 +221,7 @@ export function VideoCardPlayer({
   showPlaybackControl = false,
   deferVideoLoadUntilPlay = false,
   onPlaybackStateChange,
+  onEnded,
   focalX,
   focalY,
 }: VideoCardPlayerProps) {
@@ -281,6 +284,7 @@ export function VideoCardPlayer({
         muteControlVisibility={muteControlVisibility}
         focalX={focalX}
         focalY={focalY}
+        onEnded={onEnded}
       />
     );
   }
@@ -306,6 +310,7 @@ export function VideoCardPlayer({
       showPlaybackControl={showPlaybackControl}
       deferVideoLoadUntilPlay={deferVideoLoadUntilPlay}
       onPlaybackStateChange={onPlaybackStateChange}
+      onEnded={onEnded}
       focalX={focalX}
       focalY={focalY}
     />
@@ -351,6 +356,7 @@ interface VideoCardPlayerInnerProps {
   showPlaybackControl: boolean;
   deferVideoLoadUntilPlay: boolean;
   onPlaybackStateChange?: (isPlaying: boolean) => void;
+  onEnded?: () => void;
   focalX?: number | null;
   focalY?: number | null;
 }
@@ -374,6 +380,7 @@ function VideoCardPlayerInner({
   showPlaybackControl,
   deferVideoLoadUntilPlay,
   onPlaybackStateChange,
+  onEnded,
   focalX,
   focalY,
 }: VideoCardPlayerInnerProps) {
@@ -442,18 +449,21 @@ function VideoCardPlayerInner({
         setMediaAspectRatio(el.videoWidth / el.videoHeight);
       }
     };
+    const onEndedNative = () => onEnded?.();
 
     el.addEventListener("playing", onPlaying);
     el.addEventListener("play", onPlay);
     el.addEventListener("pause", onPause);
     el.addEventListener("loadedmetadata", onLoadedMetadata);
+    el.addEventListener("ended", onEndedNative);
     return () => {
       el.removeEventListener("playing", onPlaying);
       el.removeEventListener("play", onPlay);
       el.removeEventListener("pause", onPause);
       el.removeEventListener("loadedmetadata", onLoadedMetadata);
+      el.removeEventListener("ended", onEndedNative);
     };
-  }, [videoRef]);
+  }, [videoRef, onEnded]);
 
   // Sync external pause/play events (e.g. global manager arbitration) back to
   // the showroom's isActiveVideoPaused state so the slide timer pauses properly.
@@ -692,7 +702,7 @@ function VideoCardPlayerInner({
         <video
           ref={videoRef}
           preload="none"
-          loop
+          loop={!onEnded}
           muted
           playsInline
           aria-label={alt ? `${alt} video` : "Video preview"}
@@ -1157,6 +1167,7 @@ interface FeedVideoPlayerProps {
   muteControlVisibility: MuteControlVisibility;
   focalX?: number | null;
   focalY?: number | null;
+  onEnded?: () => void;
 }
 
 function FeedVideoPlayer({
@@ -1174,6 +1185,7 @@ function FeedVideoPlayer({
   muteControlVisibility,
   focalX,
   focalY,
+  onEnded,
 }: FeedVideoPlayerProps) {
   const posterNeedsUnoptimized =
     normalizedPoster?.startsWith("blob:") || normalizedPoster?.startsWith("data:");
@@ -1220,13 +1232,17 @@ function FeedVideoPlayer({
       }
     };
 
+    const onEndedNative = () => onEnded?.();
+
     el.addEventListener("playing", onPlaying);
     el.addEventListener("loadedmetadata", onLoadedMetadata);
+    el.addEventListener("ended", onEndedNative);
     return () => {
       el.removeEventListener("playing", onPlaying);
       el.removeEventListener("loadedmetadata", onLoadedMetadata);
+      el.removeEventListener("ended", onEndedNative);
     };
-  }, [videoRef]);
+  }, [videoRef, onEnded]);
 
   const handleError = useCallback(() => {
     setHasError(true);
@@ -1332,7 +1348,7 @@ function FeedVideoPlayer({
       <video
         ref={videoRef}
         preload="none"
-        loop
+        loop={!onEnded}
         muted
         playsInline
         aria-label={alt ? `${alt} video` : "Video preview"}
