@@ -59,7 +59,6 @@ const VIDEO_FALLBACK_MS = 45_000;
 const DEFAULT_PAUSE_MS = 20_000;
 const SWIPE_THRESHOLD = 50;
 const VELOCITY_THRESHOLD = 0.4; // px/ms — fast flick triggers swipe below distance threshold
-const FAST_FLICK_THRESHOLD = 1.2; // px/ms — fast enough to skip 2 cards
 const DRAG_CLICK_THRESHOLD = 5; // px — movement above this counts as a drag (suppresses click)
 const VISIBILITY_THRESHOLD = 0.25;
 const EDGE_DAMPING = 0.3; // resistance factor when dragging past first/last card
@@ -84,7 +83,11 @@ function SectionShell({
   return (
     <section
       ref={sectionRef}
-      className={cn("relative w-full overflow-hidden", sectionClassName, extraClassName)}
+      className={cn(
+        "relative w-full overflow-hidden bg-zinc-950",
+        sectionClassName,
+        extraClassName
+      )}
       aria-roledescription="carousel"
       aria-label="Showroom carousel"
     >
@@ -94,7 +97,7 @@ function SectionShell({
           src={SA_FLAG_SRC}
           alt=""
           fill
-          className="object-cover"
+          className="object-cover scale-[0.9]"
           quality={60}
           sizes="100vw"
           priority={false}
@@ -258,8 +261,7 @@ export function ShowroomCardCarousel({
         Math.abs(effectiveDelta) >= SWIPE_THRESHOLD || effectiveVelocity >= VELOCITY_THRESHOLD;
 
       if (shouldSwipe) {
-        // Determine how many cards to advance (1 or 2 based on velocity)
-        const cardCount = effectiveVelocity >= FAST_FLICK_THRESHOLD ? 2 : 1;
+        const cardCount = 1;
         const direction = effectiveDelta > 0 ? -1 : 1; // positive delta = swipe right = go prev
         pauseAutoSwipe();
         // Animate --drag-x back to 0 smoothly while CSS transitions handle card positions
@@ -485,6 +487,7 @@ export function ShowroomCardCarousel({
                 mediaHeight={item.mediaHeight}
                 priority={offset === 0}
                 videoMode={offset === 0 ? "ambient" : undefined}
+                showPlaybackControl={offset === 0}
                 onVideoEnded={offset === 0 ? handleVideoEnded : undefined}
               />
             </div>
