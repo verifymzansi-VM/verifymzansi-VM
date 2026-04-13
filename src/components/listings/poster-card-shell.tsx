@@ -65,6 +65,8 @@ interface PosterCardShellProps {
   videoMode?: "hover" | "ambient" | "interactive";
   /** Called when an active video finishes playing (carousel auto-advance). */
   onVideoEnded?: () => void;
+  /** Show play/pause toggle on ambient video cards (e.g. showroom center card). */
+  showPlaybackControl?: boolean;
 }
 
 export function PosterCardShell({
@@ -99,6 +101,7 @@ export function PosterCardShell({
   mediaHeight: _mediaHeight,
   videoMode,
   onVideoEnded,
+  showPlaybackControl = false,
 }: PosterCardShellProps) {
   const normalizedMediaUrl = mediaUrl ? normalizeMediaUrl(mediaUrl) : undefined;
   const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
@@ -149,6 +152,7 @@ export function PosterCardShell({
               focalX={focalX}
               focalY={focalY}
               onEnded={onVideoEnded}
+              showPlaybackControl={showPlaybackControl}
             />
           ) : fallback ? (
             <div className="absolute inset-0 skeleton-shimmer">{fallback}</div>

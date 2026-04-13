@@ -419,7 +419,7 @@ export function ShowroomCardCarousel({
   return (
     <SectionShell
       sectionRef={containerRef}
-      sectionClassName="py-6 sm:py-8 lg:py-14 xl:py-16"
+      sectionClassName="py-5 sm:py-7 lg:py-12 xl:py-14"
       extraClassName={className}
     >
       {/* Card coverflow area */}
@@ -466,6 +466,16 @@ export function ShowroomCardCarousel({
               role="group"
               aria-roledescription="slide"
               aria-label={`${i + 1} of ${count}`}
+              {...(offset !== 0
+                ? {
+                    onClickCapture: (e: React.MouseEvent) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      pauseAutoSwipe();
+                      goTo(i);
+                    },
+                  }
+                : undefined)}
             >
               <PosterCardShell
                 href={item.href}
@@ -486,6 +496,7 @@ export function ShowroomCardCarousel({
                 priority={offset === 0}
                 videoMode={offset === 0 ? "ambient" : undefined}
                 onVideoEnded={offset === 0 ? handleVideoEnded : undefined}
+                showPlaybackControl={offset === 0}
               />
             </div>
           );
