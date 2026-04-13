@@ -1,8 +1,11 @@
 import { spawnSync } from "node:child_process";
+import { mkdirSync } from "node:fs";
+import path from "node:path";
 
 function runVitest(lane: string) {
   const args = ["exec", "vitest", "run"];
   if (lane === "coverage-core") {
+    mkdirSync(path.join(process.cwd(), "coverage", ".tmp"), { recursive: true });
     args.push("--coverage");
   }
   const forwardedArgs = process.argv.slice(3);

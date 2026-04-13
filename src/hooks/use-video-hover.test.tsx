@@ -16,6 +16,22 @@ vi.mock("@/contexts/video-playback-context", () => ({
 describe("useVideoHover", () => {
   let intersectionCallback: IntersectionObserverCallback | null = null;
 
+  function createIntersectionEntry(
+    target: Element,
+    overrides: Partial<IntersectionObserverEntry> = {}
+  ): IntersectionObserverEntry {
+    return {
+      boundingClientRect: target.getBoundingClientRect(),
+      intersectionRatio: 1,
+      intersectionRect: target.getBoundingClientRect(),
+      isIntersecting: true,
+      rootBounds: null,
+      target,
+      time: 0,
+      ...overrides,
+    };
+  }
+
   function Harness({ src }: { src?: string }) {
     const { videoRef, containerRef } = useVideoHover(src);
     return (
@@ -65,16 +81,7 @@ describe("useVideoHover", () => {
     expect(manager.register).toHaveBeenCalledWith(video);
 
     act(() => {
-      intersectionCallback?.(
-        [
-          {
-            isIntersecting: true,
-            intersectionRatio: 1,
-            target: video,
-          } as IntersectionObserverEntry,
-        ],
-        {} as IntersectionObserver
-      );
+      intersectionCallback?.([createIntersectionEntry(video)], {} as IntersectionObserver);
     });
 
     expect(video.src).toContain("/media/clip.mp4");

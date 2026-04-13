@@ -17,10 +17,17 @@ const mockCreateImageData = vi.fn(() => ({
   data: { set: vi.fn() },
 }));
 const mockToDataURL = vi.fn(() => "data:image/png;base64,abc123");
-const mockGetContext = vi.fn(() => ({
+type MockCanvasContext = {
+  createImageData: typeof mockCreateImageData;
+  putImageData: typeof mockPutImageData;
+};
+
+const buildMockContext = (): MockCanvasContext => ({
   createImageData: mockCreateImageData,
   putImageData: mockPutImageData,
-}));
+});
+
+const mockGetContext = vi.fn<() => MockCanvasContext | null>(() => buildMockContext());
 
 const mockCanvas = {
   width: 0,
@@ -39,10 +46,7 @@ describe("useBlurHash", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockToDataURL.mockReturnValue("data:image/png;base64,abc123");
-    mockGetContext.mockReturnValue({
-      createImageData: mockCreateImageData,
-      putImageData: mockPutImageData,
-    });
+    mockGetContext.mockReturnValue(buildMockContext());
   });
 
   it("returns empty string for null hash", () => {
