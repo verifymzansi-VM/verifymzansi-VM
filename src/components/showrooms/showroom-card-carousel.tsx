@@ -67,15 +67,6 @@ const SA_FLAG_SRC = "/images/South African flag with confetti burst.png";
 
 const CARD_W = "w-[52vw] sm:w-[40vw] lg:w-[280px] xl:w-[320px]";
 
-function shouldIgnoreDragStart(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  return Boolean(
-    target.closest(
-      "button, [role='button'], input, textarea, select, option, label, [data-carousel-no-drag='true']"
-    )
-  );
-}
-
 /* ── SA flag section wrapper ───────────────────────────────── */
 
 function SectionShell({
@@ -206,9 +197,6 @@ export function ShowroomCardCarousel({
   /* ── Pointer drag (unified mouse + touch) ──────────────── */
 
   const handlePointerDown = useCallback((e: ReactPointerEvent) => {
-    if (shouldIgnoreDragStart(e.target)) {
-      return;
-    }
     // Cancel any ongoing spring-back
     if (springBackRafRef.current !== null) {
       cancelAnimationFrame(springBackRafRef.current);
@@ -258,7 +246,7 @@ export function ShowroomCardCarousel({
       if (shouldSwipe) {
         // Determine how many cards to advance (1 or 2 based on velocity)
         const cardCount = absVelocity >= FAST_FLICK_THRESHOLD ? 2 : 1;
-        const direction = rawDelta > 0 ? 1 : -1; // positive delta = swipe right = go next
+        const direction = rawDelta > 0 ? -1 : 1; // positive delta = swipe right = go prev
         pauseAutoSwipe();
         // Animate --drag-x back to 0 smoothly while CSS transitions handle card positions
         springBackDragX();
