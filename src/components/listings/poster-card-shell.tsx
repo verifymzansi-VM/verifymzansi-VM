@@ -63,8 +63,6 @@ interface PosterCardShellProps {
   mediaHeight?: number | null;
   /** Override the default video playback mode ("hover") for this card. */
   videoMode?: "hover" | "ambient" | "interactive";
-  /** Show a play/pause toggle on ambient video cards (e.g. active carousel card). */
-  showPlaybackControl?: boolean;
   /** Called when an active video finishes playing (carousel auto-advance). */
   onVideoEnded?: () => void;
 }
@@ -100,7 +98,6 @@ export function PosterCardShell({
   mediaWidth: _mediaWidth,
   mediaHeight: _mediaHeight,
   videoMode,
-  showPlaybackControl = false,
   onVideoEnded,
 }: PosterCardShellProps) {
   const normalizedMediaUrl = mediaUrl ? normalizeMediaUrl(mediaUrl) : undefined;
@@ -144,7 +141,6 @@ export function PosterCardShell({
               fitStrategy={effectiveFitStrategy}
               containerAspectRatio={frame.aspectRatio}
               muteControlVisibility={hasVideo ? "always" : "hidden"}
-              showPlaybackControl={hasVideo ? showPlaybackControl : false}
               hoverScale={!hasVideo}
               mediaClassName={
                 hasVideo ? undefined : "transition-transform duration-700 group-hover:scale-[1.03]"
