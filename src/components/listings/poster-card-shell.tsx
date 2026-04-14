@@ -122,6 +122,7 @@ export function PosterCardShell({
   const effectiveFitStrategy = fitStrategy;
   const isHeroVariant = cardVariant === "hero";
   const isShowcaseVariant = cardVariant === "showcase";
+  const disableNativeDrag = isHeroVariant;
   const rootRadiusClassName = isHeroVariant ? "rounded-[28px]" : "rounded-xl";
   const mediaRadiusClassName = isHeroVariant ? "rounded-t-[28px]" : "rounded-t-xl";
   const contentPaddingClassName = isHeroVariant
@@ -153,6 +154,11 @@ export function PosterCardShell({
     rootRadiusClassName,
     className
   );
+  const handleNativeDragStart = (event: React.DragEvent<HTMLElement>) => {
+    if (disableNativeDrag) {
+      event.preventDefault();
+    }
+  };
   const cardClassName = cn(
     "relative h-full flex flex-col overflow-hidden border-transparent transition-all duration-300",
     isHeroVariant
@@ -303,6 +309,9 @@ export function PosterCardShell({
         <Link
           href={href}
           prefetch={false}
+          data-carousel-link={disableNativeDrag ? "true" : undefined}
+          draggable={disableNativeDrag ? false : undefined}
+          onDragStart={handleNativeDragStart}
           className={cn(
             "block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
             isHeroVariant ? "rounded-b-[28px]" : "rounded-b-xl"
@@ -319,6 +328,9 @@ export function PosterCardShell({
           href={href}
           prefetch={false}
           aria-label={`Open ${title}`}
+          data-carousel-link={disableNativeDrag ? "true" : undefined}
+          draggable={disableNativeDrag ? false : undefined}
+          onDragStart={handleNativeDragStart}
           className={cn(
             "absolute inset-0 z-[4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
             rootRadiusClassName
@@ -335,7 +347,14 @@ export function PosterCardShell({
   }
 
   return (
-    <Link href={href} prefetch={false} className={wrapperClassName}>
+    <Link
+      href={href}
+      prefetch={false}
+      data-carousel-link={disableNativeDrag ? "true" : undefined}
+      draggable={disableNativeDrag ? false : undefined}
+      onDragStart={handleNativeDragStart}
+      className={wrapperClassName}
+    >
       {cardInner}
     </Link>
   );

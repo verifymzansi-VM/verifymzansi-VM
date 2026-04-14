@@ -198,6 +198,28 @@ describe("ShowroomCardCarousel", () => {
     expect(dots[2].innerHTML).toContain("bg-brand-green");
   });
 
+  it("supports drag gestures that begin on the nested active card link surface", () => {
+    render(<ShowroomCardCarousel items={mockItems} />);
+    const activeLink = screen.getByRole("link", { name: "Open Test Listing" });
+
+    fireEvent.pointerDown(activeLink, { clientX: 240, pointerId: 1 });
+    fireEvent.pointerMove(activeLink, { clientX: 120, pointerId: 1 });
+    fireEvent.pointerUp(activeLink, { clientX: 120, pointerId: 1 });
+
+    expect(screen.getByText("Slide 2 of 3")).toBeInTheDocument();
+  });
+
+  it("treats side-card drags as carousel rotation instead of a recenter click", () => {
+    render(<ShowroomCardCarousel items={mockItems} />);
+    const sideLink = screen.getByRole("link", { name: "Open Test Business" });
+
+    fireEvent.pointerDown(sideLink, { clientX: 120, pointerId: 1 });
+    fireEvent.pointerMove(sideLink, { clientX: 250, pointerId: 1 });
+    fireEvent.pointerUp(sideLink, { clientX: 250, pointerId: 1 });
+
+    expect(screen.getByText("Slide 3 of 3")).toBeInTheDocument();
+  });
+
   it("passes ambient videoMode to center card", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
     const cards = screen.getAllByTestId("poster-card");

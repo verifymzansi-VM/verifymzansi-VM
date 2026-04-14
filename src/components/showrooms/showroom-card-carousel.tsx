@@ -63,6 +63,7 @@ const VELOCITY_THRESHOLD = 0.4; // px/ms — fast flick triggers swipe below dis
 const DRAG_CLICK_THRESHOLD = 12; // px — tolerate small finger jitter so taps still open the active card
 const VISIBILITY_THRESHOLD = 0.25;
 const SPRING_BACK_MS = 350; // duration for drag-x to spring back to 0 after release
+const DRAG_SUPPRESSION_RESET_MS = 160;
 const SA_FLAG_SRC = "/images/South%20African%20flag%20with%20confetti%20burst.png";
 
 const CARD_W =
@@ -134,6 +135,9 @@ export function ShowroomCardCarousel({
   const dragStartXRef = useRef(0);
   const dragStartTimeRef = useRef(0);
   const didDragRef = useRef(false);
+  const activePointerIdRef = useRef<number | null>(null);
+  const activeInputModeRef = useRef<"pointer" | "mouse" | null>(null);
+  const dragResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const coverflowRef = useRef<HTMLDivElement | null>(null);
   const springBackRafRef = useRef<number | null>(null);
 
@@ -199,61 +203,149 @@ export function ShowroomCardCarousel({
     springBackRafRef.current = requestAnimationFrame(animate);
   }, []);
 
-  /* ── Pointer drag (unified mouse + touch) ──────────────── */
-
-  const handlePointerDown = useCallback((e: ReactPointerEvent) => {
-    const target = e.target as HTMLElement | null;
-    if (target?.closest('[data-carousel-control="true"]')) {
-      return;
+  const releasePointerCapture = useCallback((element: HTMLElement | null, pointerId: number) => {
+    try {
+      if (element?.hasPointerCapture(pointerId)) {
+        element.releasePointerCapture(pointerId);
+      }
+    } catch {
+      /* noop */
     }
-    // Cancel any ongoing spring-back
-    if (springBackRafRef.current !== null) {
-      cancelAnimationFrame(springBackRafRef.current);
-      springBackRafRef.current = null;
-    }
-    coverflowRef.current?.style.setProperty("--drag-x", "0px");
-    dragStartXRef.current = e.clientX;
-    dragStartTimeRef.current = Date.now();
-    didDragRef.current = false;
-    setIsDragging(true);
   }, []);
 
-  const handlePointerMove = useCallback(
-    (e: ReactPointerEvent) => {
-      if (!isDragging) return;
-      const delta = e.clientX - dragStartXRef.current;
-      if (Math.abs(delta) > DRAG_CLICK_THRESHOLD) {
-        if (!didDragRef.current) {
-          didDragRef.current = true;
-          try {
-            if (!(e.currentTarget as HTMLElement).hasPointerCapture(e.pointerId)) {
-              (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-            }
-          } catch {
-            /* noop */
-          }
-        }
-      }
-      coverflowRef.current?.style.setProperty("--drag-x", `${delta}px`);
-    },
-    [isDragging]
-  );
+  const queueDragReset = useCallback(() => {
+    if (dragResetTimeoutRef.current) clearTimeout(dragResetTimeoutRef.current);
+    dragResetTimeoutRef.current = setTimeout(() => {
+      didDragRef.current = false;
+      const carouselLinks = coverflowRef.current?.querySelectorAll<HTMLElement>(
+        '[data-carousel-link="true"]'
+      );
+      carouselLinks?.forEach((link) => {
+        link.style.pointerEvents = "";
+      });
+      dragResetTimeoutRef.current = null;
+    }, DRAG_SUPPRESSION_RESET_MS);
+  }, []);
 
-  const handlePointerUp = useCallback(
-    (e: ReactPointerEvent) => {
-      if (!isDragging) return;
+  const setCarouselLinkInteractivity = useCallback((enabled: boolean) => {
+    const carouselLinks = coverflowRef.current?.querySelectorAll<HTMLElement>(
+      '[data-carousel-link="true"]'
+    );
+    carouselLinks?.forEach((link) => {
+      link.style.pointerEvents = enabled ? "" : "none";
+    });
+  }, []);
+
+  /* ── Pointer drag (unified mouse + touch) ──────────────── */
+
+  const handlePointerDown = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('[data-carousel-control="true"]')) {
+        return;
+      }
+
+      if (dragResetTimeoutRef.current) {
+        clearTimeout(dragResetTimeoutRef.current);
+        dragResetTimeoutRef.current = null;
+      }
+
+      if (activeInputModeRef.current !== null) {
+        return;
+      }
+
+      // Cancel any ongoing spring-back before the next drag begins.
+      if (springBackRafRef.current !== null) {
+        cancelAnimationFrame(springBackRafRef.current);
+        springBackRafRef.current = null;
+      }
+
+      activePointerIdRef.current = e.pointerId;
+      activeInputModeRef.current = "pointer";
+      coverflowRef.current?.style.setProperty("--drag-x", "0px");
+      dragStartXRef.current = e.clientX;
+      dragStartTimeRef.current = Date.now();
+      didDragRef.current = false;
+      setCarouselLinkInteractivity(true);
+      pauseAutoSwipe();
+      setIsDragging(true);
+
       try {
-        if ((e.currentTarget as HTMLElement).hasPointerCapture(e.pointerId)) {
-          (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+        if (!e.currentTarget.hasPointerCapture(e.pointerId)) {
+          e.currentTarget.setPointerCapture(e.pointerId);
         }
       } catch {
         /* noop */
       }
-      const rawDelta = e.clientX - dragStartXRef.current;
+    },
+    [pauseAutoSwipe, setCarouselLinkInteractivity]
+  );
+
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('[data-carousel-control="true"]') || e.button !== 0) {
+        return;
+      }
+
+      if (dragResetTimeoutRef.current) {
+        clearTimeout(dragResetTimeoutRef.current);
+        dragResetTimeoutRef.current = null;
+      }
+
+      if (activeInputModeRef.current !== null) {
+        return;
+      }
+
+      if (springBackRafRef.current !== null) {
+        cancelAnimationFrame(springBackRafRef.current);
+        springBackRafRef.current = null;
+      }
+
+      activePointerIdRef.current = null;
+      activeInputModeRef.current = "mouse";
+      coverflowRef.current?.style.setProperty("--drag-x", "0px");
+      dragStartXRef.current = e.clientX;
+      dragStartTimeRef.current = Date.now();
+      didDragRef.current = false;
+      setCarouselLinkInteractivity(true);
+      pauseAutoSwipe();
+      setIsDragging(true);
+    },
+    [pauseAutoSwipe, setCarouselLinkInteractivity]
+  );
+
+  const clearActiveDrag = useCallback(
+    (
+      currentTarget: HTMLElement | null,
+      pointerId?: number,
+      options?: {
+        preserveDragFlag?: boolean;
+      }
+    ) => {
+      const activeMode = activeInputModeRef.current;
+      activeInputModeRef.current = null;
+      activePointerIdRef.current = null;
+      if (activeMode === "pointer" && typeof pointerId === "number") {
+        releasePointerCapture(currentTarget, pointerId);
+      }
+      setIsDragging(false);
+      if (!options?.preserveDragFlag) {
+        didDragRef.current = false;
+        setCarouselLinkInteractivity(true);
+      }
+    },
+    [releasePointerCapture, setCarouselLinkInteractivity]
+  );
+
+  const completeDrag = useCallback(
+    (clientX: number, pointerId?: number) => {
+      const rawDelta = clientX - dragStartXRef.current;
       const elapsed = Math.max(Date.now() - dragStartTimeRef.current, 1);
       const absVelocity = Math.abs(rawDelta) / elapsed; // px/ms
+      const shouldSuppressClick = didDragRef.current;
 
-      setIsDragging(false);
+      clearActiveDrag(coverflowRef.current, pointerId, { preserveDragFlag: shouldSuppressClick });
 
       const shouldSwipe =
         Math.abs(rawDelta) >= SWIPE_THRESHOLD || absVelocity >= VELOCITY_THRESHOLD;
@@ -269,17 +361,165 @@ export function ShowroomCardCarousel({
         // Not enough movement — spring back
         springBackDragX();
       }
+
+      if (shouldSuppressClick) {
+        queueDragReset();
+      }
     },
-    [isDragging, activeIndex, pauseAutoSwipe, goTo, springBackDragX]
+    [clearActiveDrag, activeIndex, pauseAutoSwipe, goTo, queueDragReset, springBackDragX]
   );
 
-  const handleClickCapture = useCallback((e: React.MouseEvent) => {
-    if (didDragRef.current) {
-      e.preventDefault();
-      e.stopPropagation();
+  const cancelDrag = useCallback(
+    (pointerId?: number) => {
+      const shouldSuppressClick = didDragRef.current;
+      clearActiveDrag(coverflowRef.current, pointerId, { preserveDragFlag: shouldSuppressClick });
+      springBackDragX();
+      if (shouldSuppressClick) {
+        queueDragReset();
+      }
+    },
+    [clearActiveDrag, queueDragReset, springBackDragX]
+  );
+
+  useEffect(() => {
+    const handleWindowPointerMove = (event: PointerEvent) => {
+      if (
+        activeInputModeRef.current !== "pointer" ||
+        activePointerIdRef.current !== event.pointerId
+      ) {
+        return;
+      }
+      const delta = event.clientX - dragStartXRef.current;
+      if (Math.abs(delta) > DRAG_CLICK_THRESHOLD) {
+        if (!didDragRef.current) {
+          setCarouselLinkInteractivity(false);
+        }
+        didDragRef.current = true;
+      }
+      coverflowRef.current?.style.setProperty("--drag-x", `${delta}px`);
+    };
+
+    const handleWindowPointerUp = (event: PointerEvent) => {
+      if (
+        activeInputModeRef.current !== "pointer" ||
+        activePointerIdRef.current !== event.pointerId
+      ) {
+        return;
+      }
+      completeDrag(event.clientX, event.pointerId);
+    };
+
+    const handleWindowPointerCancel = (event: PointerEvent) => {
+      if (
+        activeInputModeRef.current !== "pointer" ||
+        activePointerIdRef.current !== event.pointerId
+      ) {
+        return;
+      }
+      cancelDrag(event.pointerId);
+    };
+
+    const handleWindowMouseMove = (event: MouseEvent) => {
+      if (activeInputModeRef.current !== "mouse") return;
+      const delta = event.clientX - dragStartXRef.current;
+      if (Math.abs(delta) > DRAG_CLICK_THRESHOLD) {
+        if (!didDragRef.current) {
+          setCarouselLinkInteractivity(false);
+        }
+        didDragRef.current = true;
+      }
+      coverflowRef.current?.style.setProperty("--drag-x", `${delta}px`);
+    };
+
+    const handleWindowMouseUp = (event: MouseEvent) => {
+      if (activeInputModeRef.current !== "mouse") return;
+      completeDrag(event.clientX);
+    };
+
+    window.addEventListener("pointermove", handleWindowPointerMove);
+    window.addEventListener("pointerup", handleWindowPointerUp);
+    window.addEventListener("pointercancel", handleWindowPointerCancel);
+    window.addEventListener("mousemove", handleWindowMouseMove);
+    window.addEventListener("mouseup", handleWindowMouseUp);
+
+    return () => {
+      window.removeEventListener("pointermove", handleWindowPointerMove);
+      window.removeEventListener("pointerup", handleWindowPointerUp);
+      window.removeEventListener("pointercancel", handleWindowPointerCancel);
+      window.removeEventListener("mousemove", handleWindowMouseMove);
+      window.removeEventListener("mouseup", handleWindowMouseUp);
+    };
+  }, [cancelDrag, completeDrag, setCarouselLinkInteractivity]);
+
+  const handlePointerCancel = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (activeInputModeRef.current !== "pointer" || activePointerIdRef.current !== e.pointerId) {
+        return;
+      }
+      cancelDrag(e.pointerId);
+    },
+    [cancelDrag]
+  );
+
+  const handleLostPointerCapture = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (activeInputModeRef.current !== "pointer" || activePointerIdRef.current !== e.pointerId) {
+        return;
+      }
+      const shouldSuppressClick = didDragRef.current;
+      activeInputModeRef.current = null;
+      activePointerIdRef.current = null;
+      setIsDragging(false);
+      springBackDragX();
+      if (!shouldSuppressClick) {
+        didDragRef.current = false;
+        return;
+      }
+      queueDragReset();
+    },
+    [queueDragReset, springBackDragX]
+  );
+
+  const handleClickCapture = useCallback(
+    (e: React.MouseEvent) => {
+      if (didDragRef.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (dragResetTimeoutRef.current) {
+          clearTimeout(dragResetTimeoutRef.current);
+          dragResetTimeoutRef.current = null;
+        }
+        didDragRef.current = false;
+        setCarouselLinkInteractivity(true);
+      }
+    },
+    [setCarouselLinkInteractivity]
+  );
+
+  useEffect(() => {
+    const el = coverflowRef.current;
+    if (!el) return;
+
+    const handleNativeClickCapture = (event: MouseEvent) => {
+      if (!didDragRef.current) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (dragResetTimeoutRef.current) {
+        clearTimeout(dragResetTimeoutRef.current);
+        dragResetTimeoutRef.current = null;
+      }
+
       didDragRef.current = false;
-    }
-  }, []);
+      setCarouselLinkInteractivity(true);
+    };
+
+    el.addEventListener("click", handleNativeClickCapture, true);
+    return () => {
+      el.removeEventListener("click", handleNativeClickCapture, true);
+    };
+  }, [setCarouselLinkInteractivity]);
 
   /* ── Keyboard ──────────────────────────────────────────── */
 
@@ -358,6 +598,7 @@ export function ShowroomCardCarousel({
   useEffect(() => {
     return () => {
       if (pauseTimeoutRef.current) clearTimeout(pauseTimeoutRef.current);
+      if (dragResetTimeoutRef.current) clearTimeout(dragResetTimeoutRef.current);
       if (springBackRafRef.current !== null) cancelAnimationFrame(springBackRafRef.current);
     };
   }, []);
@@ -430,9 +671,12 @@ export function ShowroomCardCarousel({
           isDragging ? "cursor-grabbing" : "cursor-grab"
         )}
         onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
+        onMouseDown={handleMouseDown}
+        onPointerCancel={handlePointerCancel}
+        onLostPointerCapture={handleLostPointerCapture}
+        onDragStartCapture={(e) => {
+          e.preventDefault();
+        }}
         onClickCapture={handleClickCapture}
         onKeyDown={handleKeyDown}
         tabIndex={0}

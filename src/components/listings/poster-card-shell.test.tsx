@@ -50,4 +50,17 @@ describe("PosterCardShell", () => {
     expect(outerLinks).toHaveLength(1);
     expect(screen.getByTestId("video-player").closest("a")).toBeNull();
   });
+
+  it("disables native drag on hero card links used by the showroom", () => {
+    render(
+      <PosterCardShell
+        href="/listing/hero"
+        title="Hero image"
+        mediaUrl="https://example.com/poster.jpg"
+        cardVariant="hero"
+      />
+    );
+
+    expect(screen.getByRole("link", { name: /hero image/i })).toHaveAttribute("draggable", "false");
+  });
 });
