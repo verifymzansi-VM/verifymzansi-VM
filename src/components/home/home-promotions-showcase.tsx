@@ -80,7 +80,9 @@ export async function HomePromotionsShowcase() {
     "id, title, price_cents, price_negotiable, photos, videos, video_thumbnail, category, category_key, location_province, location_city, promotion_type, view_count, boost_until, featured_until, media_width, media_height, start_date, end_date, created_at, business_id"
   ).limit(8);
 
-  const promotions = ((eventData || []) as PromotionRow[])
+  const eventRows = (eventData || []) as unknown as PromotionRow[];
+
+  const promotions = eventRows
     .filter((promotion) => !shouldHidePlaywrightFixtureRowWhenEnabled(promotion, hideFixtures))
     .filter((promotion) => !isPlaceholderMarketplaceContent(promotion.title))
     .slice(0, 4);
@@ -90,7 +92,9 @@ export async function HomePromotionsShowcase() {
     "id, business_name, business_type, cover_photo, cover_video, video_thumbnail, logo_url, location_province, location_city, boost_until, featured_until, focal_x, focal_y, media_width, media_height"
   ).limit(8);
 
-  const tourismBusinesses = ((tourismData || []) as TourismBusinessRow[])
+  const tourismRows = (tourismData || []) as unknown as TourismBusinessRow[];
+
+  const tourismBusinesses = tourismRows
     .filter((b) => !shouldHidePlaywrightFixtureRowWhenEnabled(b, hideFixtures))
     .filter((b) => !isPlaceholderMarketplaceContent(b.business_name))
     .slice(0, 4);
