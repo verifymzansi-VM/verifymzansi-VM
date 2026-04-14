@@ -117,20 +117,20 @@ vi.mock("@/contexts/video-playback-context", () => ({
 describe("CreatePromotionPage", () => {
   const mockPush = vi.fn();
   const mockToast = vi.fn();
+  const fetchMock = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
-    (useRouter as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ push: mockPush });
-    (useToast as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ toast: mockToast });
-    (useSearchParams as unknown as ReturnType<typeof vi.fn>).mockReturnValue(new URLSearchParams());
-    (fetchWithRetry as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      (input: RequestInfo | URL) => (global.fetch as unknown as ReturnType<typeof vi.fn>)(input)
-    );
-    global.fetch = vi.fn().mockResolvedValue({
+    vi.mocked(useRouter).mockReturnValue({ push: mockPush } as ReturnType<typeof useRouter>);
+    vi.mocked(useToast).mockReturnValue({ toast: mockToast });
+    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams());
+    vi.mocked(fetchWithRetry).mockImplementation((input: RequestInfo | URL) => fetch(input));
+    fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({ businesses: [] }),
-    }) as unknown as typeof fetch;
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
   });
 
   function completeStepOne() {
@@ -221,43 +221,41 @@ describe("CreatePromotionPage", () => {
   });
 
   it("maps API 422 photo-limit errors to the photos field on submit", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL) => {
-        if (input === "/api/csrf") {
-          return {
-            ok: true,
-            json: async () => ({ token: "a".repeat(64) }),
-          };
-        }
-
-        if (input === "/api/businesses?mine=true&limit=50") {
-          return {
-            ok: true,
-            json: async () => ({ businesses: [] }),
-          };
-        }
-
-        if (input === "/api/media/upload") {
-          return {
-            ok: true,
-            json: async () => ({ urls: ["https://media.verifymzansi.com/promotions/photo.jpg"] }),
-          };
-        }
-
-        if (input === "/api/promotions") {
-          return {
-            ok: false,
-            status: 422,
-            json: async () => ({ error: "Maximum 5 photos allowed on your plan" }),
-          };
-        }
-
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      if (input === "/api/csrf") {
         return {
           ok: true,
-          json: async () => ({}),
+          json: async () => ({ token: "a".repeat(64) }),
         };
       }
-    );
+
+      if (input === "/api/businesses?mine=true&limit=50") {
+        return {
+          ok: true,
+          json: async () => ({ businesses: [] }),
+        };
+      }
+
+      if (input === "/api/media/upload") {
+        return {
+          ok: true,
+          json: async () => ({ urls: ["https://media.verifymzansi.com/promotions/photo.jpg"] }),
+        };
+      }
+
+      if (input === "/api/promotions") {
+        return {
+          ok: false,
+          status: 422,
+          json: async () => ({ error: "Maximum 5 photos allowed on your plan" }),
+        };
+      }
+
+      return {
+        ok: true,
+        json: async () => ({}),
+      };
+    });
 
     render(<CreatePromotionPage />);
 
@@ -280,43 +278,41 @@ describe("CreatePromotionPage", () => {
   });
 
   it("maps API 422 video-limit errors to the videos field on submit", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL) => {
-        if (input === "/api/csrf") {
-          return {
-            ok: true,
-            json: async () => ({ token: "a".repeat(64) }),
-          };
-        }
-
-        if (input === "/api/businesses?mine=true&limit=50") {
-          return {
-            ok: true,
-            json: async () => ({ businesses: [] }),
-          };
-        }
-
-        if (input === "/api/media/upload") {
-          return {
-            ok: true,
-            json: async () => ({ urls: ["https://media.verifymzansi.com/promotions/photo.jpg"] }),
-          };
-        }
-
-        if (input === "/api/promotions") {
-          return {
-            ok: false,
-            status: 422,
-            json: async () => ({ error: "Video upload is not available on your current plan." }),
-          };
-        }
-
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      if (input === "/api/csrf") {
         return {
           ok: true,
-          json: async () => ({}),
+          json: async () => ({ token: "a".repeat(64) }),
         };
       }
-    );
+
+      if (input === "/api/businesses?mine=true&limit=50") {
+        return {
+          ok: true,
+          json: async () => ({ businesses: [] }),
+        };
+      }
+
+      if (input === "/api/media/upload") {
+        return {
+          ok: true,
+          json: async () => ({ urls: ["https://media.verifymzansi.com/promotions/photo.jpg"] }),
+        };
+      }
+
+      if (input === "/api/promotions") {
+        return {
+          ok: false,
+          status: 422,
+          json: async () => ({ error: "Video upload is not available on your current plan." }),
+        };
+      }
+
+      return {
+        ok: true,
+        json: async () => ({}),
+      };
+    });
 
     render(<CreatePromotionPage />);
 
@@ -339,39 +335,37 @@ describe("CreatePromotionPage", () => {
   });
 
   it("blocks submit when photo upload returns partial success", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL) => {
-        if (input === "/api/csrf") {
-          return {
-            ok: true,
-            json: async () => ({ token: "a".repeat(64) }),
-          };
-        }
-
-        if (input === "/api/businesses?mine=true&limit=50") {
-          return {
-            ok: true,
-            json: async () => ({ businesses: [] }),
-          };
-        }
-
-        if (input === "/api/media/upload") {
-          return {
-            ok: true,
-            status: 207,
-            json: async () => ({
-              urls: ["https://media.verifymzansi.com/promotions/photo.jpg"],
-              errors: ['"photo-2.jpg": upload failed'],
-            }),
-          };
-        }
-
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      if (input === "/api/csrf") {
         return {
           ok: true,
-          json: async () => ({}),
+          json: async () => ({ token: "a".repeat(64) }),
         };
       }
-    );
+
+      if (input === "/api/businesses?mine=true&limit=50") {
+        return {
+          ok: true,
+          json: async () => ({ businesses: [] }),
+        };
+      }
+
+      if (input === "/api/media/upload") {
+        return {
+          ok: true,
+          status: 207,
+          json: async () => ({
+            urls: ["https://media.verifymzansi.com/promotions/photo.jpg"],
+            errors: ['"photo-2.jpg": upload failed'],
+          }),
+        };
+      }
+
+      return {
+        ok: true,
+        json: async () => ({}),
+      };
+    });
 
     render(<CreatePromotionPage />);
 
@@ -400,56 +394,52 @@ describe("CreatePromotionPage", () => {
   });
 
   it("allows video-only submit", async () => {
-    (fetchWithRetry as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL) => {
-        if (input === "/api/media/upload-url") {
-          return {
-            ok: true,
-            json: async () => ({
-              uploadUrl: "https://upload.example.com/promo-video",
-              publicUrl: "https://media.verifymzansi.com/promotions/video.mp4",
-            }),
-          };
-        }
-
-        if (input === "https://upload.example.com/promo-video") {
-          return { ok: true, status: 200, json: async () => ({}) };
-        }
-
-        return (global.fetch as unknown as ReturnType<typeof vi.fn>)(input);
-      }
-    );
-
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL) => {
-        if (input === "/api/csrf") {
-          return {
-            ok: true,
-            json: async () => ({ token: "a".repeat(64) }),
-          };
-        }
-
-        if (input === "/api/businesses?mine=true&limit=50") {
-          return {
-            ok: true,
-            json: async () => ({ businesses: [] }),
-          };
-        }
-
-        if (input === "/api/promotions") {
-          return {
-            ok: true,
-            status: 201,
-            json: async () => ({ success: true, promotion: { id: "promo-1" } }),
-          };
-        }
-
+    vi.mocked(fetchWithRetry).mockImplementation(async (input: RequestInfo | URL) => {
+      if (input === "/api/media/upload-url") {
         return {
           ok: true,
-          json: async () => ({}),
+          json: async () => ({
+            uploadUrl: "https://upload.example.com/promo-video",
+            publicUrl: "https://media.verifymzansi.com/promotions/video.mp4",
+          }),
         };
       }
-    );
+
+      if (input === "https://upload.example.com/promo-video") {
+        return { ok: true, status: 200, json: async () => ({}) };
+      }
+
+      return fetch(input);
+    });
+
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      if (input === "/api/csrf") {
+        return {
+          ok: true,
+          json: async () => ({ token: "a".repeat(64) }),
+        };
+      }
+
+      if (input === "/api/businesses?mine=true&limit=50") {
+        return {
+          ok: true,
+          json: async () => ({ businesses: [] }),
+        };
+      }
+
+      if (input === "/api/promotions") {
+        return {
+          ok: true,
+          status: 201,
+          json: async () => ({ success: true, promotion: { id: "promo-1" } }),
+        };
+      }
+
+      return {
+        ok: true,
+        json: async () => ({}),
+      };
+    });
 
     render(<CreatePromotionPage />);
 
@@ -477,43 +467,41 @@ describe("CreatePromotionPage", () => {
   });
 
   it("redirects to complete profile when API returns phone-gate 403 redirectUrl", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL) => {
-        if (input === "/api/csrf") {
-          return {
-            ok: true,
-            json: async () => ({ token: "a".repeat(64) }),
-          };
-        }
-
-        if (input === "/api/businesses?mine=true&limit=50") {
-          return {
-            ok: true,
-            json: async () => ({ businesses: [] }),
-          };
-        }
-
-        if (input === "/api/media/upload") {
-          return {
-            ok: true,
-            json: async () => ({ urls: ["https://media.verifymzansi.com/promotions/photo.jpg"] }),
-          };
-        }
-
-        if (input === "/api/promotions") {
-          return {
-            ok: false,
-            status: 403,
-            json: async () => ({ redirectUrl: "/dashboard/complete-profile" }),
-          };
-        }
-
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      if (input === "/api/csrf") {
         return {
           ok: true,
-          json: async () => ({}),
+          json: async () => ({ token: "a".repeat(64) }),
         };
       }
-    );
+
+      if (input === "/api/businesses?mine=true&limit=50") {
+        return {
+          ok: true,
+          json: async () => ({ businesses: [] }),
+        };
+      }
+
+      if (input === "/api/media/upload") {
+        return {
+          ok: true,
+          json: async () => ({ urls: ["https://media.verifymzansi.com/promotions/photo.jpg"] }),
+        };
+      }
+
+      if (input === "/api/promotions") {
+        return {
+          ok: false,
+          status: 403,
+          json: async () => ({ redirectUrl: "/dashboard/complete-profile" }),
+        };
+      }
+
+      return {
+        ok: true,
+        json: async () => ({}),
+      };
+    });
 
     render(<CreatePromotionPage />);
 
@@ -533,43 +521,41 @@ describe("CreatePromotionPage", () => {
   });
 
   it("shows plan-limit reason when API returns 403 reason", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL) => {
-        if (input === "/api/csrf") {
-          return {
-            ok: true,
-            json: async () => ({ token: "a".repeat(64) }),
-          };
-        }
-
-        if (input === "/api/businesses?mine=true&limit=50") {
-          return {
-            ok: true,
-            json: async () => ({ businesses: [] }),
-          };
-        }
-
-        if (input === "/api/media/upload") {
-          return {
-            ok: true,
-            json: async () => ({ urls: ["https://media.verifymzansi.com/promotions/photo.jpg"] }),
-          };
-        }
-
-        if (input === "/api/promotions") {
-          return {
-            ok: false,
-            status: 403,
-            json: async () => ({ reason: "You reached your plan posting limit." }),
-          };
-        }
-
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      if (input === "/api/csrf") {
         return {
           ok: true,
-          json: async () => ({}),
+          json: async () => ({ token: "a".repeat(64) }),
         };
       }
-    );
+
+      if (input === "/api/businesses?mine=true&limit=50") {
+        return {
+          ok: true,
+          json: async () => ({ businesses: [] }),
+        };
+      }
+
+      if (input === "/api/media/upload") {
+        return {
+          ok: true,
+          json: async () => ({ urls: ["https://media.verifymzansi.com/promotions/photo.jpg"] }),
+        };
+      }
+
+      if (input === "/api/promotions") {
+        return {
+          ok: false,
+          status: 403,
+          json: async () => ({ reason: "You reached your plan posting limit." }),
+        };
+      }
+
+      return {
+        ok: true,
+        json: async () => ({}),
+      };
+    });
 
     render(<CreatePromotionPage />);
 
