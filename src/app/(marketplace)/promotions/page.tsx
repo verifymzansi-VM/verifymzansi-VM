@@ -39,6 +39,24 @@ export const revalidate = 60;
 
 const CAROUSEL_ITEM_LIMIT = 5;
 
+type TourismBusinessCarouselRow = {
+  id: string;
+  business_name: string;
+  description?: string | null;
+  cover_photo?: string | null;
+  cover_video?: string | null;
+  video_thumbnail?: string | null;
+  logo_url?: string | null;
+  location_city?: string | null;
+  location_province?: string | null;
+  focal_x?: number | null;
+  focal_y?: number | null;
+  media_width?: number | null;
+  media_height?: number | null;
+  boost_until?: string | null;
+  featured_until?: string | null;
+};
+
 function buildBalancedCarouselItems(
   tourismItems: CarouselItem[],
   eventItems: CarouselItem[]
@@ -90,7 +108,7 @@ export default async function PromotionsPage() {
   ).limit(10);
 
   // ── Build carousel items (tourism businesses + events) ──
-  const tourismItems: CarouselItem[] = (tourismBusinesses ?? [])
+  const tourismItems: CarouselItem[] = ((tourismBusinesses ?? []) as TourismBusinessCarouselRow[])
     .filter((b) => !shouldHidePlaywrightFixtureRowWhenEnabled(b, hideFixtures))
     .filter((b) => !isPlaceholderMarketplaceContent(b.business_name, b.description))
     .map((b) => businessToCarouselItem(b, `/mzansi-business/${b.id}`));
