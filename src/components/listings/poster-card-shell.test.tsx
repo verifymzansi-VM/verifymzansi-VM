@@ -32,7 +32,7 @@ vi.mock("@/components/ui/video-duration-badge", () => ({
 }));
 
 describe("PosterCardShell", () => {
-  it("keeps hero playback controls outside of the card-level link", () => {
+  it("keeps hero playback controls outside of the full-card link overlay", () => {
     const { container } = render(
       <PosterCardShell
         href="/listing/abc"
@@ -41,12 +41,13 @@ describe("PosterCardShell", () => {
         posterUrl="https://example.com/poster.jpg"
         showPlaybackControl
         cardVariant="hero"
+        makeEntireCardClickable
       />
     );
 
+    expect(screen.getByRole("link", { name: "Open Hero video" })).toBeInTheDocument();
     const outerLinks = container.querySelectorAll('a[href="/listing/abc"]');
     expect(outerLinks).toHaveLength(1);
-    expect(outerLinks[0]).toContainElement(screen.getByText("Hero video"));
     expect(screen.getByTestId("video-player").closest("a")).toBeNull();
   });
 });

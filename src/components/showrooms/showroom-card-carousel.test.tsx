@@ -13,17 +13,37 @@ vi.mock("@/components/listings/poster-card-shell", () => ({
     description,
     videoMode,
     mediaUrl,
+    showPlaybackControl,
+    makeEntireCardClickable,
   }: {
     href: string;
     title: string;
     description?: string;
     videoMode?: string;
     mediaUrl?: string;
+    showPlaybackControl?: boolean;
+    makeEntireCardClickable?: boolean;
   }) => (
-    <a href={href} data-testid="poster-card" data-video-mode={videoMode} data-media-url={mediaUrl}>
-      <span>{title}</span>
+    <div data-testid="poster-card" data-video-mode={videoMode} data-media-url={mediaUrl}>
+      <div data-testid={`poster-card-surface-${title}`}>{title}</div>
       {description && <span>{description}</span>}
-    </a>
+      {showPlaybackControl ? (
+        <>
+          <button type="button" data-carousel-control="true">
+            Playback
+          </button>
+          {makeEntireCardClickable ? (
+            <a href={href} aria-label={`Open ${title}`}>
+              Open {title}
+            </a>
+          ) : (
+            <a href={href}>Open {title}</a>
+          )}
+        </>
+      ) : (
+        <a href={href}>Open {title}</a>
+      )}
+    </div>
   ),
 }));
 
@@ -223,5 +243,41 @@ describe("ShowroomCardCarousel", () => {
     expect(sideCards).toHaveLength(2);
     expect(sideCards[0].getAttribute("data-media-url")).toBe("/images/fallbacks/hero-shop.svg");
     expect(sideCards[1].getAttribute("data-media-url")).toBe("https://cdn.example.com/side2.jpg");
+  });
+
+  it("shows mobile return and skip controls", () => {
+    render(<ShowroomCardCarousel items={mockItems} />);
+    expect(screen.getByRole("button", { name: /return to previous card/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /skip to next card/i })).toBeInTheDocument();
+  });
+
+  it("uses the mobile skip control to advance", () => {
+    render(<ShowroomCardCarousel items={mockItems} />);
+    fireEvent.click(screen.getByRole("button", { name: /skip to next card/i }));
+    expect(screen.getByText("Slide 2 of 3")).toBeInTheDocument();
+  });
+
+  it("uses the mobile return control to go back", () => {
+    render(<ShowroomCardCarousel items={mockItems} />);
+    fireEvent.click(screen.getByRole("button", { name: /return to previous card/i }));
+    expect(screen.getByText("Slide 3 of 3")).toBeInTheDocument();
+  });
+
+  it("renders an active card link to the detail page", () => {
+    render(<ShowroomCardCarousel items={mockItems} />);
+    const activeLink = screen.getByRole("link", { name: "Open Test Listing" });
+    expect(activeLink).toHaveAttribute("href", "/listing/1");
+  });
+
+  it("recenters a side card before navigation instead of opening it immediately", () => {
+    render(<ShowroomCardCarousel items={mockItems} />);
+    fireEvent.click(screen.getByText("Open Test Business"));
+    expect(screen.getByText("Slide 2 of 3")).toBeInTheDocument();
+  });
+
+  it("does not navigate when playback controls are tapped", () => {
+    render(<ShowroomCardCarousel items={mockItems} />);
+    fireEvent.click(screen.getByRole("button", { name: "Playback" }));
+    expect(screen.getByText("Slide 1 of 3")).toBeInTheDocument();
   });
 });

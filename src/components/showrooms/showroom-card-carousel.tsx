@@ -9,6 +9,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import Image from "next/image";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
 import { isVideoUrl } from "@/components/ui/video-card-player";
@@ -59,12 +60,13 @@ const VIDEO_FALLBACK_MS = 45_000;
 const DEFAULT_PAUSE_MS = 20_000;
 const SWIPE_THRESHOLD = 50;
 const VELOCITY_THRESHOLD = 0.4; // px/ms — fast flick triggers swipe below distance threshold
-const DRAG_CLICK_THRESHOLD = 5; // px — movement above this counts as a drag (suppresses click)
+const DRAG_CLICK_THRESHOLD = 12; // px — tolerate small finger jitter so taps still open the active card
 const VISIBILITY_THRESHOLD = 0.25;
 const SPRING_BACK_MS = 350; // duration for drag-x to spring back to 0 after release
 const SA_FLAG_SRC = "/images/South%20African%20flag%20with%20confetti%20burst.png";
 
-const CARD_W = "w-[48vw] sm:w-[34vw] md:w-[30vw] lg:w-[360px] xl:w-[400px]";
+const CARD_W =
+  "w-[62vw] max-w-[250px] sm:w-[34vw] md:w-[30vw] lg:w-[360px] lg:max-w-none xl:w-[400px]";
 
 /* ── SA flag section wrapper ───────────────────────────────── */
 
@@ -214,11 +216,6 @@ export function ShowroomCardCarousel({
     dragStartTimeRef.current = Date.now();
     didDragRef.current = false;
     setIsDragging(true);
-    try {
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    } catch {
-      /* noop */
-    }
   }, []);
 
   const handlePointerMove = useCallback(
@@ -226,7 +223,16 @@ export function ShowroomCardCarousel({
       if (!isDragging) return;
       const delta = e.clientX - dragStartXRef.current;
       if (Math.abs(delta) > DRAG_CLICK_THRESHOLD) {
-        didDragRef.current = true;
+        if (!didDragRef.current) {
+          didDragRef.current = true;
+          try {
+            if (!(e.currentTarget as HTMLElement).hasPointerCapture(e.pointerId)) {
+              (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+            }
+          } catch {
+            /* noop */
+          }
+        }
       }
       coverflowRef.current?.style.setProperty("--drag-x", `${delta}px`);
     },
@@ -237,7 +243,9 @@ export function ShowroomCardCarousel({
     (e: ReactPointerEvent) => {
       if (!isDragging) return;
       try {
-        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+        if ((e.currentTarget as HTMLElement).hasPointerCapture(e.pointerId)) {
+          (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+        }
       } catch {
         /* noop */
       }
@@ -370,13 +378,13 @@ export function ShowroomCardCarousel({
       reducedMotion || isDragging ? "transition-none" : "transition-all duration-600";
 
     const byOffset: Record<number, string> = {
-      [-3]: "translate-x-[calc(-50%-82%)] scale-[0.7] opacity-0 blur-[1px] z-0 pointer-events-none",
-      [-2]: "translate-x-[calc(-50%-56%+var(--drag-x,0px))] scale-[0.76] opacity-55 saturate-[0.88] blur-[0.6px] z-10",
-      [-1]: "translate-x-[calc(-50%-31%+var(--drag-x,0px))] scale-[0.88] opacity-82 saturate-[0.94] z-20",
+      [-3]: "translate-x-[calc(-50%-92%)] scale-[0.68] opacity-0 blur-[1px] z-0 pointer-events-none",
+      [-2]: "translate-x-[calc(-50%-63%+var(--drag-x,0px))] scale-[0.76] opacity-55 saturate-[0.88] blur-[0.6px] z-10",
+      [-1]: "translate-x-[calc(-50%-36%+var(--drag-x,0px))] scale-[0.88] opacity-82 saturate-[0.94] z-20",
       0: "translate-x-[calc(-50%+var(--drag-x,0px))] scale-100 opacity-100 z-30 shadow-[0_40px_120px_-48px_rgba(15,23,42,0.85)]",
-      1: "translate-x-[calc(-50%+31%+var(--drag-x,0px))] scale-[0.88] opacity-82 saturate-[0.94] z-20",
-      2: "translate-x-[calc(-50%+56%+var(--drag-x,0px))] scale-[0.76] opacity-55 saturate-[0.88] blur-[0.6px] z-10",
-      3: "translate-x-[calc(-50%+82%)] scale-[0.7] opacity-0 blur-[1px] z-0 pointer-events-none",
+      1: "translate-x-[calc(-50%+36%+var(--drag-x,0px))] scale-[0.88] opacity-82 saturate-[0.94] z-20",
+      2: "translate-x-[calc(-50%+63%+var(--drag-x,0px))] scale-[0.76] opacity-55 saturate-[0.88] blur-[0.6px] z-10",
+      3: "translate-x-[calc(-50%+92%)] scale-[0.68] opacity-0 blur-[1px] z-0 pointer-events-none",
     };
 
     const preset = byOffset[offset] ?? byOffset[Math.sign(offset) * 3] ?? byOffset[0];
@@ -496,6 +504,7 @@ export function ShowroomCardCarousel({
                 videoMode={offset === 0 ? "ambient" : undefined}
                 onVideoEnded={offset === 0 ? handleVideoEnded : undefined}
                 showPlaybackControl={offset === 0}
+                makeEntireCardClickable={offset === 0}
                 cardVariant="hero"
                 mediaControlVariant={offset === 0 ? "hero" : "default"}
               />
@@ -503,6 +512,40 @@ export function ShowroomCardCarousel({
           );
         })}
       </div>
+
+      {count > 1 ? (
+        <div
+          className="mt-4 flex items-center justify-center gap-3 sm:hidden"
+          aria-label="Mobile showroom controls"
+        >
+          <button
+            type="button"
+            data-carousel-control="true"
+            onClick={() => {
+              pauseAutoSwipe();
+              prev();
+            }}
+            aria-label="Return to previous card"
+            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/35 bg-white/90 px-4 text-sm font-semibold text-slate-900 shadow-[0_18px_44px_-30px_rgba(15,23,42,0.55)] backdrop-blur transition hover:bg-white"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            <span>Return</span>
+          </button>
+          <button
+            type="button"
+            data-carousel-control="true"
+            onClick={() => {
+              pauseAutoSwipe();
+              next();
+            }}
+            aria-label="Skip to next card"
+            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-brand-green-300/70 bg-brand-green-400/95 px-4 text-sm font-semibold text-brand-green-950 shadow-[0_18px_44px_-30px_rgba(21,128,61,0.7)] backdrop-blur transition hover:bg-brand-green-300"
+          >
+            <span>Skip</span>
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      ) : null}
 
       {/* Navigation dots with progress indicator */}
       {count > 1 && (

@@ -73,6 +73,8 @@ interface PosterCardShellProps {
   cardVariant?: PosterCardVariant;
   /** Optional hero-specific chrome for media controls. */
   mediaControlVariant?: MediaControlVariant;
+  /** Makes the entire card surface clickable even when playback controls are shown. */
+  makeEntireCardClickable?: boolean;
 }
 
 export function PosterCardShell({
@@ -110,6 +112,7 @@ export function PosterCardShell({
   showPlaybackControl = false,
   cardVariant = "default",
   mediaControlVariant = "default",
+  makeEntireCardClickable = false,
 }: PosterCardShellProps) {
   const normalizedMediaUrl = mediaUrl ? normalizeMediaUrl(mediaUrl) : undefined;
   const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
@@ -151,7 +154,7 @@ export function PosterCardShell({
     className
   );
   const cardClassName = cn(
-    "h-full flex flex-col overflow-hidden border-transparent transition-all duration-300",
+    "relative h-full flex flex-col overflow-hidden border-transparent transition-all duration-300",
     isHeroVariant
       ? "border border-white/55 bg-white/95 shadow-[0_30px_80px_-38px_rgba(15,23,42,0.55)] backdrop-blur-xl hover:-translate-y-0.5 hover:shadow-[0_36px_95px_-42px_rgba(15,23,42,0.62)]"
       : isShowcaseVariant
@@ -296,7 +299,7 @@ export function PosterCardShell({
       </div>
 
       {/* ── YouTube-style metadata row beneath thumbnail ────────── */}
-      {showPlaybackControl ? (
+      {showPlaybackControl && !makeEntireCardClickable ? (
         <Link
           href={href}
           prefetch={false}
@@ -310,6 +313,20 @@ export function PosterCardShell({
       ) : (
         metadataBody
       )}
+
+      {showPlaybackControl && makeEntireCardClickable ? (
+        <Link
+          href={href}
+          prefetch={false}
+          aria-label={`Open ${title}`}
+          className={cn(
+            "absolute inset-0 z-[4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            rootRadiusClassName
+          )}
+        >
+          <span className="sr-only">{`Open ${title}`}</span>
+        </Link>
+      ) : null}
     </Card>
   );
 
