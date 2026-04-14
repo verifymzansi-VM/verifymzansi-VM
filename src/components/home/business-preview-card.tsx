@@ -56,6 +56,7 @@ export function BusinessPreviewCard({
       statusLabel={null}
       statusClassName={undefined}
       accentClassName="hover:border-brand-blue/55"
+      cardVariant="showcase"
       priority={priority}
       focalX={focalX}
       focalY={focalY}

@@ -6,6 +6,7 @@ import { PromotionCard } from "@/components/listings/promotion-card";
 import { BusinessPreviewCard } from "@/components/home/business-preview-card";
 import { createClient } from "@/lib/supabase/server";
 import { AutoScrollRail } from "./auto-scroll-rail";
+import { HomeShowcaseShell } from "./home-showcase-shell";
 import type { BusinessCategory, BusinessType, PromotionType } from "@/types/enums";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
@@ -123,128 +124,123 @@ export async function HomePromotionsShowcase() {
 
   if (items.length === 0) {
     return (
-      <section className="py-4 sm:py-6 bg-gradient-to-b from-teal-50/30 to-white dark:from-teal-950/10 dark:to-warm-950">
-        <div className="container-page space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <TreePalm className="h-6 w-6 text-teal-500" />
-              <h2 className="font-display text-xl sm:text-2xl font-bold">Tourism & Events</h2>
+      <HomeShowcaseShell
+        badge="Tourism & Events"
+        title="Tourism & Events"
+        description="Destinations, stays, and live experiences across South Africa."
+        href="/promotions"
+        ctaLabel="View All"
+        tone="teal"
+        icon={<TreePalm className="h-3.5 w-3.5" />}
+      >
+        <div className="rounded-[1.5rem] border border-dashed border-slate-300/70 bg-white/70 p-8 text-center shadow-inner dark:border-white/10 dark:bg-white/[0.03]">
+          <div className="mx-auto flex max-w-sm flex-col items-center gap-3">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-teal-500/10 text-teal-600 dark:bg-teal-500/15 dark:text-teal-200">
+              <TreePalm className="h-7 w-7" />
             </div>
-          </div>
-          <div className="rounded-2xl border border-dashed border-warm-300 dark:border-warm-700 bg-warm-50 dark:bg-warm-900 p-8 text-center space-y-3">
-            <TreePalm className="h-10 w-10 text-teal-400/50 mx-auto" />
-            <p className="text-muted-foreground text-sm">No events yet.</p>
+            <p className="font-medium text-slate-900 dark:text-white">No events yet.</p>
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              Create the first tourism or event showcase and it will appear here.
+            </p>
             <Button
               asChild
               size="sm"
-              className="bg-teal-700 hover:bg-teal-800 text-white rounded-full"
+              className="rounded-full bg-teal-700 px-5 text-white hover:bg-teal-800"
             >
               <Link href="/post/create-tourism" prefetch={false}>
                 Create Event
-                <ArrowRight className="h-4 w-4 ml-1" />
+                <ArrowRight className="ml-1 h-4 w-4" />
               </Link>
             </Button>
           </div>
         </div>
-      </section>
+      </HomeShowcaseShell>
     );
   }
 
   return (
-    <section className="py-4 sm:py-6 bg-gradient-to-b from-teal-50/30 to-white dark:from-teal-950/10 dark:to-warm-950">
-      <div className="container-page space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <TreePalm className="h-6 w-6 text-teal-500" />
-            <h2 className="font-display text-xl sm:text-2xl font-bold">Tourism & Events</h2>
-          </div>
-          <Button
-            asChild
-            variant="ghost"
-            size="sm"
-            className="gap-1 text-teal-600 hover:text-teal-700"
+    <HomeShowcaseShell
+      badge="Tourism & Events"
+      title="Tourism & Events"
+      description="Destinations, stays, and live experiences across South Africa presented in the same hero-led visual language."
+      href="/promotions"
+      ctaLabel="View All"
+      tone="teal"
+      icon={<TreePalm className="h-3.5 w-3.5" />}
+    >
+      <AutoScrollRail ariaLabel="Tourism and events">
+        {items.map((item) => (
+          <div
+            key={item.kind === "tourism" ? `t-${item.data.id}` : `e-${item.data.id}`}
+            className="h-full min-w-[210px] max-w-[272px] sm:min-w-[228px] sm:max-w-[296px] lg:min-w-[248px] lg:max-w-[320px]"
           >
-            <Link href="/promotions" prefetch={false}>
-              View All
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
-        </div>
-
-        <AutoScrollRail ariaLabel="Tourism and events">
-          {items.map((item) => (
-            <div
-              key={item.kind === "tourism" ? `t-${item.data.id}` : `e-${item.data.id}`}
-              className="min-w-[200px] max-w-[260px] sm:min-w-[220px] sm:max-w-[280px] h-full"
-            >
-              {item.kind === "tourism" ? (
-                <BusinessPreviewCard
-                  href={`/mzansi-business/${item.data.id}`}
-                  imageUrl={
-                    item.data.cover_video ||
-                    item.data.video_thumbnail ||
-                    item.data.cover_photo ||
-                    undefined
-                  }
-                  posterUrl={item.data.video_thumbnail ?? undefined}
-                  logoUrl={item.data.logo_url ?? undefined}
-                  title={item.data.business_name}
-                  businessType={item.data.business_type as BusinessType}
-                  city={item.data.location_city}
-                  provinceCode={item.data.location_province}
-                  boosted={
-                    item.data.boost_until ? new Date(item.data.boost_until) > new Date(now) : false
-                  }
-                  featured={
-                    item.data.featured_until
-                      ? new Date(item.data.featured_until) > new Date(now)
-                      : false
-                  }
-                  priority={false}
-                  focalX={item.data.focal_x}
-                  focalY={item.data.focal_y}
-                  mediaWidth={item.data.media_width}
-                  mediaHeight={item.data.media_height}
-                />
-              ) : (
-                <PromotionCard
-                  id={item.data.id}
-                  title={item.data.title}
-                  price={item.data.price_cents}
-                  negotiable={item.data.price_negotiable}
-                  imageUrl={
-                    item.data.videos?.[0] || item.data.video_thumbnail || item.data.photos?.[0]
-                  }
-                  posterUrl={item.data.video_thumbnail || item.data.photos?.[0] || undefined}
-                  categoryLabel={getPromotionCategoryDisplayLabel(
-                    item.data.category_key,
-                    item.data.category
-                  )}
-                  province={item.data.location_province}
-                  city={item.data.location_city}
-                  promotionType={item.data.promotion_type as PromotionType}
-                  createdAt={item.data.created_at}
-                  viewCount={item.data.view_count}
-                  boosted={
-                    item.data.boost_until ? new Date(item.data.boost_until) > new Date(now) : false
-                  }
-                  featured={
-                    item.data.featured_until
-                      ? new Date(item.data.featured_until) > new Date(now)
-                      : false
-                  }
-                  startDate={item.data.start_date}
-                  endDate={item.data.end_date}
-                  logoUrl={item.data.business_id ? logoMap.get(item.data.business_id) : undefined}
-                  priority={false}
-                  mediaWidth={item.data.media_width}
-                  mediaHeight={item.data.media_height}
-                />
-              )}
-            </div>
-          ))}
-        </AutoScrollRail>
-      </div>
-    </section>
+            {item.kind === "tourism" ? (
+              <BusinessPreviewCard
+                href={`/mzansi-business/${item.data.id}`}
+                imageUrl={
+                  item.data.cover_video ||
+                  item.data.video_thumbnail ||
+                  item.data.cover_photo ||
+                  undefined
+                }
+                posterUrl={item.data.video_thumbnail ?? undefined}
+                logoUrl={item.data.logo_url ?? undefined}
+                title={item.data.business_name}
+                businessType={item.data.business_type as BusinessType}
+                city={item.data.location_city}
+                provinceCode={item.data.location_province}
+                boosted={
+                  item.data.boost_until ? new Date(item.data.boost_until) > new Date(now) : false
+                }
+                featured={
+                  item.data.featured_until
+                    ? new Date(item.data.featured_until) > new Date(now)
+                    : false
+                }
+                priority={false}
+                focalX={item.data.focal_x}
+                focalY={item.data.focal_y}
+                mediaWidth={item.data.media_width}
+                mediaHeight={item.data.media_height}
+              />
+            ) : (
+              <PromotionCard
+                id={item.data.id}
+                title={item.data.title}
+                price={item.data.price_cents}
+                negotiable={item.data.price_negotiable}
+                imageUrl={
+                  item.data.videos?.[0] || item.data.video_thumbnail || item.data.photos?.[0]
+                }
+                posterUrl={item.data.video_thumbnail || item.data.photos?.[0] || undefined}
+                categoryLabel={getPromotionCategoryDisplayLabel(
+                  item.data.category_key,
+                  item.data.category
+                )}
+                province={item.data.location_province}
+                city={item.data.location_city}
+                promotionType={item.data.promotion_type as PromotionType}
+                createdAt={item.data.created_at}
+                viewCount={item.data.view_count}
+                boosted={
+                  item.data.boost_until ? new Date(item.data.boost_until) > new Date(now) : false
+                }
+                featured={
+                  item.data.featured_until
+                    ? new Date(item.data.featured_until) > new Date(now)
+                    : false
+                }
+                startDate={item.data.start_date}
+                endDate={item.data.end_date}
+                logoUrl={item.data.business_id ? logoMap.get(item.data.business_id) : undefined}
+                priority={false}
+                mediaWidth={item.data.media_width}
+                mediaHeight={item.data.media_height}
+              />
+            )}
+          </div>
+        ))}
+      </AutoScrollRail>
+    </HomeShowcaseShell>
   );
 }

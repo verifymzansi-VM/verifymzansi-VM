@@ -152,6 +152,32 @@ describe("ShowroomCardCarousel", () => {
     expect(group.className).toContain("select-none");
   });
 
+  it("swipes left to the next card in sequence", () => {
+    render(<ShowroomCardCarousel items={mockItems} />);
+    const group = screen.getByLabelText(/carousel slides/i);
+
+    fireEvent.pointerDown(group, { clientX: 240, pointerId: 1 });
+    fireEvent.pointerMove(group, { clientX: 120, pointerId: 1 });
+    fireEvent.pointerUp(group, { clientX: 120, pointerId: 1 });
+
+    expect(screen.getByText("Slide 2 of 3")).toBeInTheDocument();
+    const dots = screen.getAllByRole("button", { name: /go to slide/i });
+    expect(dots[1].innerHTML).toContain("bg-brand-green");
+  });
+
+  it("swipes right to the previous card in sequence", () => {
+    render(<ShowroomCardCarousel items={mockItems} />);
+    const group = screen.getByLabelText(/carousel slides/i);
+
+    fireEvent.pointerDown(group, { clientX: 120, pointerId: 1 });
+    fireEvent.pointerMove(group, { clientX: 250, pointerId: 1 });
+    fireEvent.pointerUp(group, { clientX: 250, pointerId: 1 });
+
+    expect(screen.getByText("Slide 3 of 3")).toBeInTheDocument();
+    const dots = screen.getAllByRole("button", { name: /go to slide/i });
+    expect(dots[2].innerHTML).toContain("bg-brand-green");
+  });
+
   it("passes ambient videoMode to center card", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
     const cards = screen.getAllByTestId("poster-card");

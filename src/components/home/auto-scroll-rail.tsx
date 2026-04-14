@@ -212,7 +212,7 @@ export function AutoScrollRail({
         ref={containerRef}
         aria-label={railLabel}
         className={cn(
-          "flex overflow-x-auto snap-x snap-mandatory gap-3 pb-2 scrollbar-hide -mx-4 px-4 sm:-mx-0 sm:px-0 sm:gap-4 select-none",
+          "flex overflow-x-auto snap-x snap-mandatory gap-3 pb-3 scrollbar-hide -mx-2 px-2 sm:-mx-1 sm:px-1 lg:-mx-2 lg:px-2 sm:gap-4 lg:gap-5 select-none",
           className
         )}
         tabIndex={0}
@@ -230,7 +230,11 @@ export function AutoScrollRail({
       </div>
       {/* Trailing fade to hint more content is scrollable */}
       <div
-        className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-l from-background to-transparent sm:hidden"
+        className="pointer-events-none absolute left-0 top-0 h-full w-10 bg-gradient-to-r from-white/95 via-white/60 to-transparent dark:from-slate-950/95 dark:via-slate-950/60"
+        aria-hidden="true"
+      />
+      <div
+        className="pointer-events-none absolute right-0 top-0 h-full w-10 bg-gradient-to-l from-white/95 via-white/60 to-transparent dark:from-slate-950/95 dark:via-slate-950/60"
         aria-hidden="true"
       />
     </div>

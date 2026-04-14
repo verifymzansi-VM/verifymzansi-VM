@@ -12,6 +12,24 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
 
+vi.mock("next/link", () => ({
+  default: ({
+    children,
+    href,
+    prefetch: _prefetch,
+    ...props
+  }: {
+    children: React.ReactNode;
+    href: string;
+    prefetch?: boolean;
+    [key: string]: unknown;
+  }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
+
 vi.mock("next/headers", () => ({
   cookies: vi.fn().mockResolvedValue({
     get: vi.fn(),

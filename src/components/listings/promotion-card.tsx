@@ -177,6 +177,7 @@ export const PromotionCard = memo(function PromotionCard({
       statusClassName={status?.className}
       statusVariant="ribbon"
       accentClassName={typePresentation.cardAccentClassName}
+      cardVariant="showcase"
       trustLevel={ownerTrustLevel}
       priority={priority}
       videoDuration={videoDuration}

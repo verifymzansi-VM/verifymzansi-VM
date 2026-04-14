@@ -108,147 +108,169 @@ export default async function HomePage() {
           <HeroBannerWithData />
         </Suspense>
 
-        {/* ═══ Marketplace Showcase ═══ */}
-        <Suspense fallback={<MarketplacePreviewsSkeleton />}>
-          <HomeMzansiMarketShowcase />
-        </Suspense>
+        <div className="relative overflow-hidden bg-[radial-gradient(circle_at_top,rgba(247,250,252,0.95),rgba(255,255,255,1)_35%,rgba(244,246,248,1)_100%)] dark:bg-[radial-gradient(circle_at_top,rgba(10,14,20,0.98),rgba(6,9,13,1)_38%,rgba(3,5,8,1)_100%)]">
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-black/[0.04] to-transparent dark:from-white/[0.02]"
+            aria-hidden="true"
+          />
 
-        <Suspense fallback={<MarketplacePreviewsSkeleton />}>
-          <HomeBusinessShowcase />
-        </Suspense>
+          {/* ═══ Marketplace Showcase ═══ */}
+          <Suspense fallback={<MarketplacePreviewsSkeleton />}>
+            <HomeMzansiMarketShowcase />
+          </Suspense>
 
-        <Suspense fallback={<MarketplacePreviewsSkeleton />}>
-          <HomePromotionsShowcase />
-        </Suspense>
+          <Suspense fallback={<MarketplacePreviewsSkeleton />}>
+            <HomeBusinessShowcase />
+          </Suspense>
 
-        {/* ═══ Onboarding Guide Section ═══ */}
-        <section className="py-4 sm:py-6 relative overflow-hidden bg-warm-950 dark:bg-black">
-          <div className="container-page relative z-10">
-            <div className="bg-gradient-to-br from-warm-900/50 to-warm-950/80 backdrop-blur-xl border border-white/10 rounded-2xl p-5 sm:p-6 lg:p-8 shadow-2xl overflow-hidden relative">
-              <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:gap-8 relative z-10">
-                <div className="space-y-5">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-brand-green-300 text-xs font-medium">
-                    <span className="h-2 w-2 rounded-full bg-brand-green-400" />
-                    Get Started
-                  </div>
+          <Suspense fallback={<MarketplacePreviewsSkeleton />}>
+            <HomePromotionsShowcase />
+          </Suspense>
 
-                  <div className="space-y-3">
-                    <h2 className="font-display text-2xl sm:text-4xl font-bold tracking-tight text-white leading-[1.1]">
-                      Mzansi&apos;s Proudly Trusted Market.
-                    </h2>
+          {/* ═══ Onboarding Guide Section ═══ */}
+          <section className="relative py-4 sm:py-5 lg:py-6">
+            <div className="container-page">
+              <div className="relative overflow-hidden rounded-[2rem] border border-slate-200/80 bg-[linear-gradient(145deg,rgba(255,255,255,0.98),rgba(248,250,252,0.96))] shadow-[0_28px_90px_-56px_rgba(15,23,42,0.5)] backdrop-blur-xl dark:border-white/10 dark:bg-[linear-gradient(145deg,rgba(8,11,16,0.96),rgba(6,9,14,0.98))]">
+                <div
+                  className="pointer-events-none absolute -right-12 top-0 h-48 w-48 rounded-full bg-brand-green/15 blur-3xl"
+                  aria-hidden="true"
+                />
+                <div className="relative grid gap-6 px-4 py-5 sm:px-6 sm:py-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:gap-8 lg:px-8 lg:py-7">
+                  <div className="space-y-5">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-brand-green/15 bg-brand-green/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-green-800 shadow-sm dark:border-brand-green/20 dark:bg-brand-green/15 dark:text-brand-green-100">
+                      <span className="h-2 w-2 rounded-full bg-brand-green-500" />
+                      Get Started
+                    </div>
 
-                    <p className="text-warm-100 text-base sm:text-lg max-w-2xl">
-                      Verified sellers post with photos and videos. Request promotion across our
-                      social media channels.
-                    </p>
-                  </div>
+                    <div className="space-y-3">
+                      <h2 className="font-display text-2xl font-bold leading-[1.05] tracking-tight text-slate-950 dark:text-white sm:text-4xl">
+                        Mzansi&apos;s Proudly Trusted Market.
+                      </h2>
 
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5">
-                    <p className="text-sm font-semibold uppercase tracking-[0.16em] text-warm-300">
-                      How it works
-                    </p>
-                    <ol className="mt-4 space-y-3">
-                      {[
-                        {
-                          title: "Create your profile",
-                          detail: "Set up an account for your business, brand, or selling goals.",
-                        },
-                        {
-                          title: "Complete verification",
-                          detail: "Verify with phone, ID, and location to build customer trust.",
-                        },
-                        {
-                          title: "Choose your channel",
-                          detail: "Products, business profiles, or promotions — one platform.",
-                        },
-                      ].map((step, index) => (
-                        <li key={step.title} className="flex items-start gap-3 text-warm-100">
-                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-green/15 text-sm font-semibold text-brand-green-300">
-                            {index + 1}
-                          </span>
-                          <div className="pt-1">
-                            <span className="text-sm sm:text-base font-medium">{step.title}</span>
-                            <p className="text-xs sm:text-sm text-warm-300 mt-0.5">{step.detail}</p>
-                          </div>
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
+                      <p className="max-w-2xl text-base text-slate-600 dark:text-slate-300 sm:text-lg">
+                        Verified sellers post with photos and videos. Request promotion across our
+                        social media channels.
+                      </p>
+                    </div>
 
-                  <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-                    <Button
-                      asChild
-                      size="lg"
-                      className="w-full sm:w-auto h-12 px-8 text-base bg-brand-green hover:bg-brand-green-600 hover:scale-[1.02] hover:-translate-y-0.5 text-white transition-all duration-200 gap-2 rounded-full font-semibold"
-                    >
-                      <Link href="/advertise" prefetch={false}>
-                        Start for Free
-                        <ArrowRight className="h-5 w-5" />
-                      </Link>
-                    </Button>
-                    <Button
-                      asChild
-                      size="lg"
-                      variant="outline"
-                      className="w-full sm:w-auto h-12 px-8 text-base rounded-full border-white/20 bg-white/5 text-white hover:bg-white/10 hover:scale-[1.02] hover:-translate-y-0.5 transition-all duration-200"
-                    >
-                      <Link href="/register" prefetch={false}>
-                        Create Account
-                      </Link>
-                    </Button>
-                  </div>
-
-                  <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-                    <Link
-                      href="/advertise"
-                      prefetch={false}
-                      className="inline-flex items-center gap-2 text-sm font-medium text-brand-green-300 transition-colors hover:text-brand-green-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-warm-950 rounded-full"
-                    >
-                      Advertise
-                      <ArrowRight className="h-4 w-4" />
-                    </Link>
-                    <Link
-                      href="/pricing"
-                      prefetch={false}
-                      className="inline-flex items-center gap-2 text-sm font-medium text-warm-100 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-warm-950 rounded-full"
-                    >
-                      Pricing
-                      <ArrowRight className="h-4 w-4" />
-                    </Link>
-                  </div>
-                </div>
-
-                <div className="grid w-full max-w-xl gap-3 self-start justify-self-center">
-                  {onboardingDestinations.map(
-                    ({ title, description, href, icon: Icon, accentClass, iconBgClass }) => (
-                      <Link
-                        key={title}
-                        href={href}
-                        prefetch={false}
-                        className="group rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5 transition-all duration-200 hover:border-white/20 hover:bg-white/10 hover:-translate-y-0.5"
-                      >
-                        <div className="flex items-start gap-4">
-                          <div
-                            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${iconBgClass} ${accentClass}`}
+                    <div className="rounded-[1.5rem] border border-slate-200/80 bg-white/80 p-4 shadow-inner dark:border-white/10 dark:bg-white/[0.03] sm:p-5">
+                      <p className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                        How it works
+                      </p>
+                      <ol className="mt-4 space-y-3">
+                        {[
+                          {
+                            title: "Create your profile",
+                            detail: "Set up an account for your business, brand, or selling goals.",
+                          },
+                          {
+                            title: "Complete verification",
+                            detail: "Verify with phone, ID, and location to build customer trust.",
+                          },
+                          {
+                            title: "Choose your channel",
+                            detail: "Products, business profiles, or promotions — one platform.",
+                          },
+                        ].map((step, index) => (
+                          <li
+                            key={step.title}
+                            className="flex items-start gap-3 text-slate-700 dark:text-slate-200"
                           >
-                            <Icon className="h-5 w-5" />
-                          </div>
-                          <div className="min-w-0 space-y-2">
-                            <div className="flex items-center justify-between gap-3">
-                              <p className="text-base font-semibold text-white">{title}</p>
-                              <ArrowRight className="h-4 w-4 shrink-0 text-warm-400 transition-transform group-hover:translate-x-1" />
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-green/12 text-sm font-semibold text-brand-green-700 dark:bg-brand-green/15 dark:text-brand-green-200">
+                              {index + 1}
+                            </span>
+                            <div className="pt-1">
+                              <span className="text-sm font-semibold sm:text-base">
+                                {step.title}
+                              </span>
+                              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 sm:text-sm">
+                                {step.detail}
+                              </p>
                             </div>
-                            <p className="text-sm leading-6 text-warm-200">{description}</p>
-                          </div>
-                        </div>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+
+                    <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+                      <Button
+                        asChild
+                        size="lg"
+                        className="h-12 w-full gap-2 rounded-full bg-brand-green px-8 text-base font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-brand-green-600 sm:w-auto"
+                      >
+                        <Link href="/advertise" prefetch={false}>
+                          Start for Free
+                          <ArrowRight className="h-5 w-5" />
+                        </Link>
+                      </Button>
+                      <Button
+                        asChild
+                        size="lg"
+                        variant="outline"
+                        className="h-12 w-full rounded-full border-slate-300/80 bg-white/90 px-8 text-base text-slate-700 transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-white dark:border-white/15 dark:bg-white/[0.04] dark:text-white dark:hover:bg-white/[0.08] sm:w-auto"
+                      >
+                        <Link href="/register" prefetch={false}>
+                          Create Account
+                        </Link>
+                      </Button>
+                    </div>
+
+                    <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+                      <Link
+                        href="/advertise"
+                        prefetch={false}
+                        className="inline-flex items-center gap-2 rounded-full text-sm font-medium text-brand-green transition-colors hover:text-brand-green-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:hover:text-brand-green-300 dark:focus-visible:ring-white/25 dark:focus-visible:ring-offset-slate-950"
+                      >
+                        Advertise
+                        <ArrowRight className="h-4 w-4" />
                       </Link>
-                    )
-                  )}
+                      <Link
+                        href="/pricing"
+                        prefetch={false}
+                        className="inline-flex items-center gap-2 rounded-full text-sm font-medium text-slate-700 transition-colors hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:text-slate-200 dark:hover:text-white dark:focus-visible:ring-white/25 dark:focus-visible:ring-offset-slate-950"
+                      >
+                        Pricing
+                        <ArrowRight className="h-4 w-4" />
+                      </Link>
+                    </div>
+                  </div>
+
+                  <div className="grid w-full max-w-xl gap-3 self-start justify-self-center">
+                    {onboardingDestinations.map(
+                      ({ title, description, href, icon: Icon, accentClass, iconBgClass }) => (
+                        <Link
+                          key={title}
+                          href={href}
+                          prefetch={false}
+                          className="group rounded-[1.5rem] border border-slate-200/80 bg-white/88 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white hover:shadow-[0_20px_40px_-28px_rgba(15,23,42,0.4)] dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-white/15 dark:hover:bg-white/[0.05]"
+                        >
+                          <div className="flex items-start gap-4">
+                            <div
+                              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${iconBgClass} ${accentClass}`}
+                            >
+                              <Icon className="h-5 w-5" />
+                            </div>
+                            <div className="min-w-0 space-y-2">
+                              <div className="flex items-center justify-between gap-3">
+                                <p className="text-base font-semibold text-slate-950 dark:text-white">
+                                  {title}
+                                </p>
+                                <ArrowRight className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-hover:translate-x-1 dark:text-slate-500" />
+                              </div>
+                              <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">
+                                {description}
+                              </p>
+                            </div>
+                          </div>
+                        </Link>
+                      )
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
+        </div>
       </main>
 
       <Footer />

@@ -54,6 +54,7 @@ export function MarketPreviewCard({
       statusLabel={null}
       statusClassName="bg-brand-blue/95 text-white border border-white/10"
       accentClassName="hover:border-brand-green/55"
+      cardVariant="showcase"
       logoUrl={logoUrl}
       priority={priority}
       focalX={focalX}

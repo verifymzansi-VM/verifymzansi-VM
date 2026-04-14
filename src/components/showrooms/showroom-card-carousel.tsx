@@ -59,13 +59,12 @@ const VIDEO_FALLBACK_MS = 45_000;
 const DEFAULT_PAUSE_MS = 20_000;
 const SWIPE_THRESHOLD = 50;
 const VELOCITY_THRESHOLD = 0.4; // px/ms — fast flick triggers swipe below distance threshold
-const FAST_FLICK_THRESHOLD = 1.2; // px/ms — fast enough to skip 2 cards
 const DRAG_CLICK_THRESHOLD = 5; // px — movement above this counts as a drag (suppresses click)
 const VISIBILITY_THRESHOLD = 0.25;
 const SPRING_BACK_MS = 350; // duration for drag-x to spring back to 0 after release
-const SA_FLAG_SRC = "/images/South African flag with confetti burst.png";
+const SA_FLAG_SRC = "/images/South%20African%20flag%20with%20confetti%20burst.png";
 
-const CARD_W = "w-[52vw] sm:w-[40vw] lg:w-[280px] xl:w-[320px]";
+const CARD_W = "w-[48vw] sm:w-[34vw] md:w-[30vw] lg:w-[360px] xl:w-[400px]";
 
 /* ── SA flag section wrapper ───────────────────────────────── */
 
@@ -89,16 +88,20 @@ function SectionShell({
     >
       {/* SA flag background */}
       <div className="absolute inset-0 z-0" aria-hidden="true">
-        <Image
-          src={SA_FLAG_SRC}
-          alt=""
-          fill
-          className="object-cover"
-          quality={60}
-          sizes="100vw"
-          priority={false}
-        />
+        <Image src={SA_FLAG_SRC} alt="" fill className="object-cover" sizes="100vw" priority />
       </div>
+      <div
+        className="absolute inset-0 z-[1] bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.82),transparent_28%),linear-gradient(180deg,rgba(6,12,22,0.18),rgba(6,12,22,0.04)_24%,rgba(6,12,22,0.26)_100%)]"
+        aria-hidden="true"
+      />
+      <div
+        className="absolute inset-y-0 left-0 z-[1] w-[28%] bg-gradient-to-r from-black/22 via-black/6 to-transparent"
+        aria-hidden="true"
+      />
+      <div
+        className="absolute inset-y-0 right-0 z-[1] w-[28%] bg-gradient-to-l from-black/20 via-black/4 to-transparent"
+        aria-hidden="true"
+      />
       {/* Content above the flag */}
       <div className="relative z-10">{children}</div>
     </section>
@@ -197,6 +200,10 @@ export function ShowroomCardCarousel({
   /* ── Pointer drag (unified mouse + touch) ──────────────── */
 
   const handlePointerDown = useCallback((e: ReactPointerEvent) => {
+    const target = e.target as HTMLElement | null;
+    if (target?.closest('[data-carousel-control="true"]')) {
+      return;
+    }
     // Cancel any ongoing spring-back
     if (springBackRafRef.current !== null) {
       cancelAnimationFrame(springBackRafRef.current);
@@ -244,13 +251,12 @@ export function ShowroomCardCarousel({
         Math.abs(rawDelta) >= SWIPE_THRESHOLD || absVelocity >= VELOCITY_THRESHOLD;
 
       if (shouldSwipe) {
-        // Determine how many cards to advance (1 or 2 based on velocity)
-        const cardCount = absVelocity >= FAST_FLICK_THRESHOLD ? 2 : 1;
+        // Advance one card per swipe so users always move through the displayed sequence.
         const direction = rawDelta > 0 ? -1 : 1; // positive delta = swipe right = go prev
         pauseAutoSwipe();
         // Animate --drag-x back to 0 smoothly while CSS transitions handle card positions
         springBackDragX();
-        goTo(activeIndex + direction * cardCount);
+        goTo(activeIndex + direction);
       } else {
         // Not enough movement — spring back
         springBackDragX();
@@ -361,18 +367,16 @@ export function ShowroomCardCarousel({
 
   function cardClass(offset: number): string {
     const transitionClass =
-      reducedMotion || isDragging
-        ? "transition-none"
-        : "transition-all duration-600 ease-[cubic-bezier(0.22,1,0.36,1)]";
+      reducedMotion || isDragging ? "transition-none" : "transition-all duration-600";
 
     const byOffset: Record<number, string> = {
-      [-3]: "translate-x-[calc(-50%-100%)] scale-[0.68] opacity-0 z-0 pointer-events-none",
-      [-2]: "translate-x-[calc(-50%-100%+var(--drag-x,0px))] scale-[0.72] opacity-100 z-10",
-      [-1]: "translate-x-[calc(-50%-55%+var(--drag-x,0px))] scale-[0.85] opacity-100 z-20",
-      0: "translate-x-[calc(-50%+var(--drag-x,0px))] scale-100 opacity-100 z-30 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.35)]",
-      1: "translate-x-[calc(-50%+55%+var(--drag-x,0px))] scale-[0.85] opacity-100 z-20",
-      2: "translate-x-[calc(-50%+100%+var(--drag-x,0px))] scale-[0.72] opacity-100 z-10",
-      3: "translate-x-[calc(-50%+100%)] scale-[0.68] opacity-0 z-0 pointer-events-none",
+      [-3]: "translate-x-[calc(-50%-82%)] scale-[0.7] opacity-0 blur-[1px] z-0 pointer-events-none",
+      [-2]: "translate-x-[calc(-50%-56%+var(--drag-x,0px))] scale-[0.76] opacity-55 saturate-[0.88] blur-[0.6px] z-10",
+      [-1]: "translate-x-[calc(-50%-31%+var(--drag-x,0px))] scale-[0.88] opacity-82 saturate-[0.94] z-20",
+      0: "translate-x-[calc(-50%+var(--drag-x,0px))] scale-100 opacity-100 z-30 shadow-[0_40px_120px_-48px_rgba(15,23,42,0.85)]",
+      1: "translate-x-[calc(-50%+31%+var(--drag-x,0px))] scale-[0.88] opacity-82 saturate-[0.94] z-20",
+      2: "translate-x-[calc(-50%+56%+var(--drag-x,0px))] scale-[0.76] opacity-55 saturate-[0.88] blur-[0.6px] z-10",
+      3: "translate-x-[calc(-50%+82%)] scale-[0.7] opacity-0 blur-[1px] z-0 pointer-events-none",
     };
 
     const preset = byOffset[offset] ?? byOffset[Math.sign(offset) * 3] ?? byOffset[0];
@@ -384,10 +388,7 @@ export function ShowroomCardCarousel({
 
   if (count === 0) {
     return (
-      <SectionShell
-        sectionClassName="py-8 sm:py-10 lg:pt-0 lg:pb-14 xl:pt-0 xl:pb-16"
-        extraClassName={className}
-      >
+      <SectionShell sectionClassName="py-10 sm:py-12 lg:py-14" extraClassName={className}>
         <div className="container-page flex items-center justify-center">
           <div className={CARD_W}>
             <PosterCardShell
@@ -396,6 +397,8 @@ export function ShowroomCardCarousel({
               description={emptyDescription}
               location="South Africa"
               mediaUrl="/images/fallbacks/hero-shop.svg"
+              cardVariant="hero"
+              mediaControlVariant="hero"
             />
           </div>
         </div>
@@ -408,14 +411,14 @@ export function ShowroomCardCarousel({
   return (
     <SectionShell
       sectionRef={containerRef}
-      sectionClassName="py-5 sm:py-7 lg:pt-0 lg:pb-12 xl:pt-0 xl:pb-14"
+      sectionClassName="py-10 sm:py-12 lg:py-14"
       extraClassName={className}
     >
       {/* Card coverflow area */}
       <div
         ref={coverflowRef}
         className={cn(
-          "relative mx-auto overflow-x-clip overflow-y-visible select-none touch-pan-y pb-6",
+          "relative mx-auto max-w-[1600px] overflow-x-clip overflow-y-visible select-none touch-pan-y pb-7",
           isDragging ? "cursor-grabbing" : "cursor-grab"
         )}
         onPointerDown={handlePointerDown}
@@ -436,6 +439,8 @@ export function ShowroomCardCarousel({
             location="South Africa"
             eyebrow="R 0"
             mediaUrl="/images/fallbacks/hero-shop.svg"
+            cardVariant="hero"
+            mediaControlVariant="hero"
           />
         </div>
 
@@ -452,6 +457,11 @@ export function ShowroomCardCarousel({
             <div
               key={item.id}
               className={cn(CARD_W, cardClass(offset))}
+              style={
+                reducedMotion || isDragging
+                  ? undefined
+                  : { transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }
+              }
               role="group"
               aria-roledescription="slide"
               aria-label={`${i + 1} of ${count}`}
@@ -486,6 +496,8 @@ export function ShowroomCardCarousel({
                 videoMode={offset === 0 ? "ambient" : undefined}
                 onVideoEnded={offset === 0 ? handleVideoEnded : undefined}
                 showPlaybackControl={offset === 0}
+                cardVariant="hero"
+                mediaControlVariant={offset === 0 ? "hero" : "default"}
               />
             </div>
           );
@@ -495,7 +507,7 @@ export function ShowroomCardCarousel({
       {/* Navigation dots with progress indicator */}
       {count > 1 && (
         <div
-          className="mt-4 flex items-center justify-center gap-1.5"
+          className="mt-3 flex items-center justify-center gap-1.5"
           role="group"
           aria-label="Slide controls"
         >

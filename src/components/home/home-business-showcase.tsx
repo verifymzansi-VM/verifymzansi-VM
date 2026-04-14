@@ -1,9 +1,8 @@
-import Link from "next/link";
 import { cookies } from "next/headers";
-import { ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { BusinessPreviewCard } from "./business-preview-card";
 import { AutoScrollRail } from "./auto-scroll-rail";
+import { HomeShowcaseShell } from "./home-showcase-shell";
 import { SA_PROVINCES } from "@/lib/constants/sa-provinces";
 import type { BusinessType } from "@/types/enums";
 import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
@@ -41,52 +40,40 @@ export async function HomeBusinessShowcase() {
   if (items.length === 0) return null;
 
   return (
-    <section className="py-4 sm:py-6 bg-gradient-to-b from-blue-50/30 to-white dark:from-blue-950/20 dark:to-transparent">
-      <div className="container-page space-y-4 sm:space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-          <div className="space-y-1">
-            <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl text-blue-900 dark:text-blue-100">
-              Mzansi Business
-            </h2>
-            <p className="text-muted-foreground text-sm sm:text-base max-w-2xl">
-              Trusted local businesses, verified.
-            </p>
+    <HomeShowcaseShell
+      badge="Mzansi Business"
+      title="Mzansi Business"
+      description="Trusted local businesses, verified and presented with the same polished rhythm as the hero showcase."
+      href="/mzansi-business"
+      ctaLabel="View All Businesses"
+      tone="blue"
+    >
+      <AutoScrollRail ariaLabel="Mzansi Business">
+        {items.map((b) => (
+          <div
+            key={b.id}
+            className="h-full min-w-[210px] max-w-[272px] sm:min-w-[228px] sm:max-w-[296px] lg:min-w-[248px] lg:max-w-[320px]"
+          >
+            <BusinessPreviewCard
+              href={`/mzansi-business/${b.id}`}
+              imageUrl={b.cover_video || b.video_thumbnail || b.cover_photo}
+              posterUrl={b.video_thumbnail || b.cover_photo || undefined}
+              logoUrl={b.logo_url}
+              title={b.business_name}
+              businessType={(b.business_type || "general_store") as BusinessType}
+              city={b.location_city ?? "South Africa"}
+              provinceCode={provinceCode(b.location_province ?? "ZA")}
+              boosted={b.boost_until ? new Date(b.boost_until) > new Date() : false}
+              featured={b.featured_until ? new Date(b.featured_until) > new Date() : false}
+              priority={false}
+              focalX={b.focal_x as number | null | undefined}
+              focalY={b.focal_y as number | null | undefined}
+              mediaWidth={b.media_width as number | null | undefined}
+              mediaHeight={b.media_height as number | null | undefined}
+            />
           </div>
-          <Link href="/mzansi-business" prefetch={false} className="shrink-0">
-            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-blue hover:text-brand-blue/80 transition-colors">
-              View All Businesses
-              <ArrowRight className="h-4 w-4" />
-            </span>
-          </Link>
-        </div>
-
-        <AutoScrollRail ariaLabel="Mzansi Business">
-          {items.map((b) => (
-            <div
-              key={b.id}
-              className="min-w-[200px] max-w-[260px] sm:min-w-[220px] sm:max-w-[280px] h-full"
-            >
-              <BusinessPreviewCard
-                href={`/mzansi-business/${b.id}`}
-                imageUrl={b.cover_video || b.video_thumbnail || b.cover_photo}
-                posterUrl={b.video_thumbnail || b.cover_photo || undefined}
-                logoUrl={b.logo_url}
-                title={b.business_name}
-                businessType={(b.business_type || "general_store") as BusinessType}
-                city={b.location_city ?? "South Africa"}
-                provinceCode={provinceCode(b.location_province ?? "ZA")}
-                boosted={b.boost_until ? new Date(b.boost_until) > new Date() : false}
-                featured={b.featured_until ? new Date(b.featured_until) > new Date() : false}
-                priority={false}
-                focalX={b.focal_x as number | null | undefined}
-                focalY={b.focal_y as number | null | undefined}
-                mediaWidth={b.media_width as number | null | undefined}
-                mediaHeight={b.media_height as number | null | undefined}
-              />
-            </div>
-          ))}
-        </AutoScrollRail>
-      </div>
-    </section>
+        ))}
+      </AutoScrollRail>
+    </HomeShowcaseShell>
   );
 }

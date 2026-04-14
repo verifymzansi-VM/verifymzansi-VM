@@ -21,6 +21,7 @@ const SMART_FIT_CROP_THRESHOLD = 0.2;
 
 export type MediaFitStrategy = "cover" | "smart" | "contain";
 export type MuteControlVisibility = "auto" | "always" | "hidden";
+export type MediaControlVariant = "default" | "hero";
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -125,9 +126,11 @@ function SmartFitBackdrop({
 function MuteButton({
   videoRef,
   showMuteControl,
+  controlVariant = "default",
 }: {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   showMuteControl: boolean;
+  controlVariant?: MediaControlVariant;
 }) {
   const { isMuted, toggleMute } = useGlobalMute(videoRef);
 
@@ -138,6 +141,7 @@ function MuteButton({
       {/* Outer padding keeps 44px tap target on mobile while the visible circle is compact */}
       <button
         type="button"
+        data-carousel-control="true"
         onPointerDown={(e) => {
           e.preventDefault(); // Prevents selection and mobile zoom delays
         }}
@@ -146,13 +150,22 @@ function MuteButton({
           e.stopPropagation();
           toggleMute();
         }}
-        className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-black/55 text-white shadow-lg backdrop-blur-md transition-colors hover:bg-black/70 p-2 -m-2 sm:h-auto sm:w-auto sm:min-h-[44px] sm:min-w-[44px] sm:p-0 sm:m-0 select-none touch-manipulation"
+        className={cn(
+          "flex items-center justify-center rounded-full text-white shadow-lg backdrop-blur-md transition-colors select-none touch-manipulation",
+          controlVariant === "hero"
+            ? "border border-white/25 bg-black/48 ring-1 ring-white/10 hover:bg-black/58 h-9 w-9 p-0 sm:min-h-[46px] sm:min-w-[46px]"
+            : "border border-white/10 bg-black/55 hover:bg-black/70 h-7 w-7 p-2 -m-2 sm:h-auto sm:w-auto sm:min-h-[44px] sm:min-w-[44px] sm:p-0 sm:m-0"
+        )}
         aria-label={isMuted ? "Unmute" : "Mute"}
       >
         {isMuted ? (
-          <VolumeX className="h-3 w-3 sm:h-4 sm:w-4" />
+          <VolumeX
+            className={cn(controlVariant === "hero" ? "h-4 w-4" : "h-3 w-3 sm:h-4 sm:w-4")}
+          />
         ) : (
-          <Volume2 className="h-3 w-3 sm:h-4 sm:w-4" />
+          <Volume2
+            className={cn(controlVariant === "hero" ? "h-4 w-4" : "h-3 w-3 sm:h-4 sm:w-4")}
+          />
         )}
       </button>
     </div>
@@ -198,6 +211,8 @@ export interface VideoCardPlayerProps {
   muteControlVisibility?: MuteControlVisibility;
   /** Shows a persistent play/pause toggle for ambient video previews. */
   showPlaybackControl?: boolean;
+  /** Optional visual treatment for the mute/audio control. */
+  controlVariant?: MediaControlVariant;
   /** Keeps ambient videos poster-only until the user explicitly starts playback. */
   deferVideoLoadUntilPlay?: boolean;
   /** Notifies callers when the ambient playback control changes state. */
@@ -230,6 +245,7 @@ export function VideoCardPlayer({
   containerAspectRatio = DEFAULT_CONTAINER_ASPECT_RATIO,
   muteControlVisibility = "auto",
   showPlaybackControl = false,
+  controlVariant = "default",
   deferVideoLoadUntilPlay = false,
   onPlaybackStateChange,
   onEnded,
@@ -319,6 +335,7 @@ export function VideoCardPlayer({
       containerAspectRatio={containerAspectRatio}
       muteControlVisibility={muteControlVisibility}
       showPlaybackControl={showPlaybackControl}
+      controlVariant={controlVariant}
       deferVideoLoadUntilPlay={deferVideoLoadUntilPlay}
       onPlaybackStateChange={onPlaybackStateChange}
       onEnded={onEnded}
@@ -365,6 +382,7 @@ interface VideoCardPlayerInnerProps {
   containerAspectRatio: number;
   muteControlVisibility: MuteControlVisibility;
   showPlaybackControl: boolean;
+  controlVariant: MediaControlVariant;
   deferVideoLoadUntilPlay: boolean;
   onPlaybackStateChange?: (isPlaying: boolean) => void;
   onEnded?: () => void;
@@ -389,6 +407,7 @@ function VideoCardPlayerInner({
   containerAspectRatio,
   muteControlVisibility,
   showPlaybackControl,
+  controlVariant,
   deferVideoLoadUntilPlay,
   onPlaybackStateChange,
   onEnded,
@@ -720,11 +739,16 @@ function VideoCardPlayerInner({
           data-media-fit={usesSmartFit ? "smart" : "cover"}
         />
 
-        <MuteButton videoRef={videoRef} showMuteControl={showMuteControl} />
+        <MuteButton
+          videoRef={videoRef}
+          showMuteControl={showMuteControl}
+          controlVariant={controlVariant}
+        />
         {hasError && showPlaybackToggle ? (
           <div
             role="button"
             tabIndex={0}
+            data-carousel-control="true"
             className="absolute inset-0 z-20 flex cursor-pointer flex-col items-center justify-center gap-2 bg-black/40 backdrop-blur-sm"
             onClick={handleRetry}
             onKeyDown={(e) => {
@@ -737,10 +761,10 @@ function VideoCardPlayerInner({
           </div>
         ) : showPlaybackToggle ? (
           <>
-            <div
-              role="button"
-              tabIndex={0}
-              className="absolute inset-0 z-[8] cursor-pointer"
+            <button
+              type="button"
+              data-carousel-control="true"
+              className="absolute bottom-3 left-1/2 z-[12] inline-flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/20 bg-black/52 px-3 py-2 text-xs font-medium text-white shadow-lg backdrop-blur-md transition-colors hover:bg-black/62 sm:bottom-4"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -757,7 +781,14 @@ function VideoCardPlayerInner({
                 }
               }}
               aria-label={isPlaybackPaused ? "Play video" : "Pause video"}
-            />
+            >
+              {isPlaybackPaused ? (
+                <Play className="h-3.5 w-3.5 fill-white" />
+              ) : (
+                <Pause className="h-3.5 w-3.5 fill-white" />
+              )}
+              <span>{isPlaybackPaused ? "Play" : "Pause"}</span>
+            </button>
             {tapIndicator ? (
               <FeedTapIndicator key={tapIndicator.key} action={tapIndicator.action} />
             ) : null}
