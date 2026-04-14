@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import React, { useEffect } from "react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 const {
@@ -89,11 +89,13 @@ vi.mock("@/components/ui/turnstile-widget", () => {
   const MockTurnstileWidget = ({
     onSuccess,
     onError,
+    onLoad,
     onUnavailable,
     retryToken,
   }: {
     onSuccess?: (token: string) => void;
     onError?: (message: string) => void;
+    onLoad?: () => void;
     onUnavailable?: (message: string) => void;
     retryToken?: number;
   }) => {
@@ -110,6 +112,9 @@ vi.mock("@/components/ui/turnstile-widget", () => {
       <div data-testid="mock-turnstile-widget" data-retry-token={String(retryToken ?? 0)}>
         <button type="button" onClick={() => onSuccess?.(`token-${retryToken ?? 0}`)}>
           Trigger Turnstile Success
+        </button>
+        <button type="button" onClick={() => onLoad?.()}>
+          Trigger Turnstile Load
         </button>
         <button type="button" onClick={() => onError?.("mock error")}>
           Trigger Turnstile Error
@@ -154,6 +159,10 @@ describe("auth page Turnstile retry behavior", () => {
     turnstileLifecycle.retryTokens = [];
     vi.stubGlobal("fetch", vi.fn());
     window.history.replaceState({}, "", "/login");
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("retries Turnstile on the login page without remounting the widget", async () => {
@@ -219,6 +228,18 @@ describe("auth page Turnstile retry behavior", () => {
     expect(mockTurnstileRetry).toHaveBeenCalledTimes(1);
   });
 
+  it("does not show a login load failure once the Turnstile widget reports ready", async () => {
+    vi.useFakeTimers();
+    render(<LoginPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Trigger Turnstile Load" }));
+
+    await vi.advanceTimersByTimeAsync(25_000);
+
+    expect(screen.queryByText(/security check failed to load/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /retry/i })).not.toBeInTheDocument();
+  });
+
   it("surfaces the domain authorization message on login and keeps submit blocked", async () => {
     render(<LoginPage />);
 
@@ -278,6 +299,19 @@ describe("auth page Turnstile retry behavior", () => {
 
     expect(await screen.findByText(/domain is not authorized/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /create account/i })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /retry/i })).not.toBeInTheDocument();
+  });
+
+  it("does not show a register load failure once the Turnstile widget reports ready", async () => {
+    vi.useFakeTimers();
+    window.history.replaceState({}, "", "/register");
+    render(<RegisterPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Trigger Turnstile Load" }));
+
+    await vi.advanceTimersByTimeAsync(25_000);
+
+    expect(screen.queryByText(/security check failed to load/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /retry/i })).not.toBeInTheDocument();
   });
 

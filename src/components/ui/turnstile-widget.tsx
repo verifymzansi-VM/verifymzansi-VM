@@ -10,7 +10,6 @@ import {
 import {
   TURNSTILE_SCRIPT_MAX_RETRIES,
   TURNSTILE_SCRIPT_RETRY_BASE_DELAY_MS,
-  TURNSTILE_WIDGET_RENDER_TIMEOUT_MS,
 } from "@/lib/turnstile-constants";
 import { shouldBypassTurnstileInNonProduction } from "@/lib/turnstile-mode";
 import { useHydrated } from "@/hooks/use-hydrated";
@@ -147,7 +146,6 @@ export function TurnstileWidget({
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
   const renderAttemptRef = useRef(0);
-  const renderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unavailableReportedRef = useRef(false);
   const bypassReportedRef = useRef(false);
   const errorCountRef = useRef(0);
@@ -191,15 +189,7 @@ export function TurnstileWidget({
     return window.location.hostname || "unknown";
   }, []);
 
-  const clearRenderTimeout = useCallback(() => {
-    if (renderTimeoutRef.current !== null) {
-      clearTimeout(renderTimeoutRef.current);
-      renderTimeoutRef.current = null;
-    }
-  }, []);
-
   const cleanupWidget = useCallback(() => {
-    clearRenderTimeout();
     if (
       widgetIdRef.current !== null &&
       typeof window !== "undefined" &&
@@ -218,14 +208,14 @@ export function TurnstileWidget({
     if (containerRef.current) {
       containerRef.current.innerHTML = "";
     }
-  }, [clearRenderTimeout]);
+  }, []);
 
   const markUnavailable = useCallback(
     (
       message = TURNSTILE_UNAVAILABLE_MESSAGE,
       details?: {
         errorCode?: string;
-        source?: "error-callback" | "render-timeout" | "script-load";
+        source?: "error-callback" | "script-load";
       }
     ) => {
       cleanupWidget();
@@ -311,15 +301,12 @@ export function TurnstileWidget({
       theme,
       size,
       callback: (token: string) => {
-        clearRenderTimeout();
         onSuccessRef.current(token);
       },
       "expired-callback": () => {
-        clearRenderTimeout();
         onExpireRef.current?.();
       },
       "error-callback": (err: string) => {
-        clearRenderTimeout();
         errorCountRef.current += 1;
 
         const turnstileErrorCode = extractTurnstileErrorCode(err) ?? "";
@@ -357,27 +344,11 @@ export function TurnstileWidget({
         onErrorRef.current?.(err);
       },
     });
-
-    // If Turnstile never fires any callback (e.g. headless browsers), stop
-    // retrying and surface the shared unavailable state instead.
-    renderTimeoutRef.current = setTimeout(() => {
-      renderTimeoutRef.current = null;
-      if (renderAttemptRef.current === attemptId) {
-        log.warn("Turnstile render timed out", {
-          timeoutMs: TURNSTILE_WIDGET_RENDER_TIMEOUT_MS,
-          attemptId,
-          hostname: getCurrentHostname(),
-          siteKey,
-        });
-        markUnavailable(TURNSTILE_UNAVAILABLE_MESSAGE, { source: "render-timeout" });
-      }
-    }, TURNSTILE_WIDGET_RENDER_TIMEOUT_MS);
   }, [
     siteKey,
     theme,
     size,
     cleanupWidget,
-    clearRenderTimeout,
     getCurrentHostname,
     markUnavailable,
     onErrorRef,

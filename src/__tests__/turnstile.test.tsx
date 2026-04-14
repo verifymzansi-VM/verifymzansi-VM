@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
 import { act, render, waitFor } from "@testing-library/react";
 
@@ -121,6 +121,22 @@ describe("TurnstileWidget", () => {
     expect(onError).toHaveBeenCalledTimes(1);
   });
 
+  it("does not mark Turnstile unavailable when the widget loads without an immediate token", async () => {
+    vi.useFakeTimers();
+    const onUnavailable = vi.fn();
+
+    render(<TurnstileWidget onSuccess={vi.fn()} onUnavailable={onUnavailable} />);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+      vi.advanceTimersByTime(25_000);
+    });
+
+    expect(mockTurnstileRender).toHaveBeenCalled();
+    expect(onUnavailable).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
   it("escalates repeated terminal Cloudflare widget errors into unavailable state", async () => {
     const onUnavailable = vi.fn();
     const onError = vi.fn();
@@ -207,5 +223,9 @@ describe("TurnstileWidget", () => {
       expect(mockTurnstileRender).toHaveBeenCalledTimes(2);
     });
     expect(mockTurnstileRemove).toHaveBeenCalledTimes(1);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 });

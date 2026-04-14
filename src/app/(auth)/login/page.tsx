@@ -145,10 +145,11 @@ export default function LoginPage() {
   const handleTurnstileLoad = useCallback(() => {
     setTurnstileUnavailableMessage(null);
     setTurnstileError(false);
-    // Don't set turnstileLoaded or clear the timeout here — only
-    // handleTurnstileSuccess should do that once a real token arrives.
-    // This ensures the 15 s safety timeout still fires when the script
-    // loads but the challenge iframe never renders (e.g. headless CI).
+    setTurnstileLoaded(true);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    // Treat the widget as ready once Turnstile mounts. The token may still
+    // arrive later or require user interaction, but the CAPTCHA itself is no
+    // longer "failed to load" at that point.
   }, []);
 
   const handleTurnstileError = useCallback(() => {
