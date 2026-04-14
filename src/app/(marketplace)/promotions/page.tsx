@@ -108,7 +108,9 @@ export default async function PromotionsPage() {
   ).limit(10);
 
   // ── Build carousel items (tourism businesses + events) ──
-  const tourismItems: CarouselItem[] = ((tourismBusinesses ?? []) as TourismBusinessCarouselRow[])
+  const tourismRows = (tourismBusinesses ?? []) as unknown as TourismBusinessCarouselRow[];
+
+  const tourismItems: CarouselItem[] = tourismRows
     .filter((b) => !shouldHidePlaywrightFixtureRowWhenEnabled(b, hideFixtures))
     .filter((b) => !isPlaceholderMarketplaceContent(b.business_name, b.description))
     .map((b) => businessToCarouselItem(b, `/mzansi-business/${b.id}`));
