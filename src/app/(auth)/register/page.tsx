@@ -15,7 +15,11 @@ import { TurnstileWidget } from "@/components/ui/turnstile-widget";
 import { GoogleOAuthButton } from "@/components/ui/google-oauth-button";
 import { registerSchema, type RegisterInput } from "@/lib/validations/auth";
 import { useToast } from "@/hooks/use-toast";
-import { TURNSTILE_UNAVAILABLE_MESSAGE, getTurnstileClientState } from "@/lib/turnstile-client";
+import {
+  TURNSTILE_DOMAIN_MISCONFIGURED_MESSAGE,
+  TURNSTILE_UNAVAILABLE_MESSAGE,
+  getTurnstileClientState,
+} from "@/lib/turnstile-client";
 import { TURNSTILE_AUTH_PAGE_LOAD_TIMEOUT_MS } from "@/lib/turnstile-constants";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { useHydrated } from "@/hooks/use-hydrated";
@@ -29,8 +33,8 @@ export default function RegisterPage() {
   const [turnstileError, setTurnstileError] = useState<string | null>(null);
   const [turnstileLoaded, setTurnstileLoaded] = useState(false);
   const [turnstileRetryToken, setTurnstileRetryToken] = useState(0);
-  const [captchaUnavailable, setCaptchaUnavailable] = useState(
-    getTurnstileClientState().mode === "unavailable"
+  const [turnstileUnavailableMessage, setTurnstileUnavailableMessage] = useState<string | null>(
+    getTurnstileClientState().mode === "unavailable" ? TURNSTILE_UNAVAILABLE_MESSAGE : null
   );
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInteractive = useHydrated();
@@ -65,6 +69,10 @@ export default function RegisterPage() {
 
   // Turnstile widget load timeout — show error if it doesn't load in 15s.
   const turnstileState = getTurnstileClientState();
+  const captchaUnavailable = Boolean(turnstileUnavailableMessage);
+  const canRetryUnavailableCaptcha =
+    turnstileState.mode === "configured" &&
+    turnstileUnavailableMessage !== TURNSTILE_DOMAIN_MISCONFIGURED_MESSAGE;
   const skipTurnstileTimeout = turnstileState.mode !== "configured" || captchaUnavailable;
 
   const resetTurnstileChallenge = useCallback(() => {
@@ -78,7 +86,7 @@ export default function RegisterPage() {
 
     setTurnstileError(null);
     setTurnstileLoaded(false);
-    setCaptchaUnavailable(false);
+    setTurnstileUnavailableMessage(null);
     setValue("turnstileToken", "", { shouldValidate: false });
     TurnstileWidget.retry();
     setTurnstileRetryToken((value) => value + 1);
@@ -98,7 +106,7 @@ export default function RegisterPage() {
 
   const handleTurnstileSuccess = useCallback(
     (token: string) => {
-      setCaptchaUnavailable(false);
+      setTurnstileUnavailableMessage(null);
       setTurnstileError(null);
       setTurnstileLoaded(true);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -108,7 +116,7 @@ export default function RegisterPage() {
   );
 
   const handleTurnstileLoad = useCallback(() => {
-    setCaptchaUnavailable(false);
+    setTurnstileUnavailableMessage(null);
     setTurnstileError(null);
     // Don't set turnstileLoaded or clear the timeout here — only
     // handleTurnstileSuccess should do that once a real token arrives.
@@ -118,7 +126,7 @@ export default function RegisterPage() {
 
   const handleTurnstileError = useCallback(() => {
     log.warn("Register Turnstile reported error callback");
-    setCaptchaUnavailable(false);
+    setTurnstileUnavailableMessage(null);
     setTurnstileError("Security check failed to load. Please try again.");
     setTurnstileLoaded(false);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -126,17 +134,21 @@ export default function RegisterPage() {
   }, [setValue]);
 
   const handleTurnstileExpire = useCallback(() => {
+    setTurnstileUnavailableMessage(null);
     setTurnstileError("Security check expired. Please verify again.");
     setValue("turnstileToken", "", { shouldValidate: true });
   }, [setValue]);
 
-  const handleTurnstileUnavailable = useCallback(() => {
-    log.warn("Register Turnstile reported unavailable state");
-    setCaptchaUnavailable(true);
-    setTurnstileLoaded(false);
-    setTurnstileError(TURNSTILE_UNAVAILABLE_MESSAGE);
-    setValue("turnstileToken", "", { shouldValidate: false });
-  }, [setValue]);
+  const handleTurnstileUnavailable = useCallback(
+    (message?: string) => {
+      log.warn("Register Turnstile reported unavailable state");
+      setTurnstileUnavailableMessage(message || TURNSTILE_UNAVAILABLE_MESSAGE);
+      setTurnstileLoaded(false);
+      setTurnstileError(message || TURNSTILE_UNAVAILABLE_MESSAGE);
+      setValue("turnstileToken", "", { shouldValidate: false });
+    },
+    [setValue]
+  );
 
   const handleRetry = useCallback(() => {
     resetTurnstileChallenge();
@@ -422,7 +434,7 @@ export default function RegisterPage() {
         {turnstileError && (
           <div className="flex items-center gap-2">
             <p className="inline-form-error">{turnstileError}</p>
-            {!captchaUnavailable && (
+            {!captchaUnavailable || canRetryUnavailableCaptcha ? (
               <button
                 type="button"
                 onClick={handleRetry}
@@ -431,7 +443,7 @@ export default function RegisterPage() {
                 <RefreshCw className="h-3 w-3" />
                 Retry
               </button>
-            )}
+            ) : null}
           </div>
         )}
         {errors.turnstileToken && !turnstileError && (

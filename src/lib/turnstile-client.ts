@@ -9,6 +9,8 @@ export interface TurnstileClientState {
 
 export const TURNSTILE_UNAVAILABLE_MESSAGE =
   "Security verification is temporarily unavailable. Please try again later.";
+export const TURNSTILE_DOMAIN_MISCONFIGURED_MESSAGE =
+  "Security verification is unavailable on this page because the domain is not authorized. Please try again later.";
 
 export function getTurnstileClientState(
   config: PublicRuntimeConfig = getPublicRuntimeConfig()

@@ -74,6 +74,8 @@ vi.mock("@/components/ui/google-oauth-button", () => ({
 }));
 
 vi.mock("@/lib/turnstile-client", () => ({
+  TURNSTILE_DOMAIN_MISCONFIGURED_MESSAGE:
+    "Security verification is unavailable on this page because the domain is not authorized. Please try again later.",
   TURNSTILE_UNAVAILABLE_MESSAGE:
     "Security verification is temporarily unavailable. Please try again later.",
   getTurnstileClientState: () => ({ mode: "configured", siteKey: "test-site-key" }),
@@ -114,6 +116,16 @@ vi.mock("@/components/ui/turnstile-widget", () => {
         </button>
         <button type="button" onClick={() => onUnavailable?.("mock unavailable")}>
           Trigger Turnstile Unavailable
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onUnavailable?.(
+              "Security verification is unavailable on this page because the domain is not authorized. Please try again later."
+            )
+          }
+        >
+          Trigger Turnstile Domain Misconfiguration
         </button>
       </div>
     );
@@ -196,9 +208,7 @@ describe("auth page Turnstile retry behavior", () => {
     fireEvent.click(screen.getByRole("button", { name: "Trigger Turnstile Unavailable" }));
 
     const retryButton = await screen.findByRole("button", { name: /retry/i });
-    expect(
-      screen.getByText(/security verification is temporarily unavailable/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/mock unavailable/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /sign in/i })).toBeDisabled();
 
     fireEvent.click(retryButton);
@@ -207,6 +217,18 @@ describe("auth page Turnstile retry behavior", () => {
       expect(screen.getByTestId("mock-turnstile-widget")).toHaveAttribute("data-retry-token", "1");
     });
     expect(mockTurnstileRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("surfaces the domain authorization message on login and keeps submit blocked", async () => {
+    render(<LoginPage />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Trigger Turnstile Domain Misconfiguration" })
+    );
+
+    expect(await screen.findByText(/domain is not authorized/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /sign in/i })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /retry/i })).not.toBeInTheDocument();
   });
 
   it("resets the login Turnstile challenge after a failed submit", async () => {
@@ -244,6 +266,19 @@ describe("auth page Turnstile retry behavior", () => {
 
     expect(await screen.findByRole("button", { name: /retry/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /create account/i })).toBeDisabled();
+  });
+
+  it("surfaces the domain authorization message on register and keeps submit blocked", async () => {
+    window.history.replaceState({}, "", "/register");
+    render(<RegisterPage />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Trigger Turnstile Domain Misconfiguration" })
+    );
+
+    expect(await screen.findByText(/domain is not authorized/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /create account/i })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /retry/i })).not.toBeInTheDocument();
   });
 
   it("resets the register Turnstile challenge after a failed submit", async () => {

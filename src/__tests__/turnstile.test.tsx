@@ -50,6 +50,8 @@ vi.mock("@/components/ui/button", () => ({
   ),
 }));
 
+const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
 const { TurnstileWidget } = await import("@/components/ui/turnstile-widget");
 
 describe("TurnstileWidget", () => {
@@ -142,7 +144,31 @@ describe("TurnstileWidget", () => {
     await waitFor(() => {
       expect(onUnavailable).toHaveBeenCalledTimes(1);
     });
+    expect(onUnavailable).toHaveBeenCalledWith(
+      "Security verification is unavailable on this page because the domain is not authorized. Please try again later."
+    );
     expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it("logs the hostname when repeated 110200 errors mark Turnstile unavailable", async () => {
+    render(<TurnstileWidget onSuccess={vi.fn()} onUnavailable={vi.fn()} onError={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(mockTurnstileRender).toHaveBeenCalled();
+    });
+
+    const [, options] = mockTurnstileRender.mock.calls[0] as unknown as [
+      HTMLElement,
+      { "error-callback": (error: string) => void },
+    ];
+
+    await act(async () => {
+      options["error-callback"]("Cloudflare Turnstile Error: 110200");
+      options["error-callback"]("Cloudflare Turnstile Error: 110200");
+    });
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('"hostname":"localhost"'));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('"errorCode":"110200"'));
   });
 
   it("does not recreate the widget when parent callbacks change", async () => {

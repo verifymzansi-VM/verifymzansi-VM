@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getPublicRuntimeConfig } from "@/lib/public-runtime-config";
-import { TURNSTILE_UNAVAILABLE_MESSAGE, getTurnstileClientState } from "@/lib/turnstile-client";
+import {
+  TURNSTILE_DOMAIN_MISCONFIGURED_MESSAGE,
+  TURNSTILE_UNAVAILABLE_MESSAGE,
+  getTurnstileClientState,
+} from "@/lib/turnstile-client";
 import {
   TURNSTILE_SCRIPT_MAX_RETRIES,
   TURNSTILE_SCRIPT_RETRY_BASE_DELAY_MS,
@@ -179,6 +183,14 @@ export function TurnstileWidget({
     terminalErrorCountRef.current = 0;
   }, [retryToken]);
 
+  const getCurrentHostname = useCallback(() => {
+    if (typeof window === "undefined") {
+      return "unknown";
+    }
+
+    return window.location.hostname || "unknown";
+  }, []);
+
   const clearRenderTimeout = useCallback(() => {
     if (renderTimeoutRef.current !== null) {
       clearTimeout(renderTimeoutRef.current);
@@ -209,13 +221,23 @@ export function TurnstileWidget({
   }, [clearRenderTimeout]);
 
   const markUnavailable = useCallback(
-    (message = TURNSTILE_UNAVAILABLE_MESSAGE) => {
+    (
+      message = TURNSTILE_UNAVAILABLE_MESSAGE,
+      details?: {
+        errorCode?: string;
+        source?: "error-callback" | "render-timeout" | "script-load";
+      }
+    ) => {
       cleanupWidget();
       setUnavailableRetryToken(retryToken);
 
       log.warn("Marking Turnstile as unavailable", {
         reason: message,
         retryToken,
+        hostname: getCurrentHostname(),
+        siteKey,
+        errorCode: details?.errorCode,
+        source: details?.source,
       });
 
       if (!unavailableReportedRef.current) {
@@ -223,7 +245,7 @@ export function TurnstileWidget({
         onUnavailableRef.current?.(message);
       }
     },
-    [cleanupWidget, onUnavailableRef, retryToken]
+    [cleanupWidget, getCurrentHostname, onUnavailableRef, retryToken, siteKey]
   );
 
   const renderWidget = useCallback(async () => {
@@ -250,9 +272,7 @@ export function TurnstileWidget({
         });
 
         if (attempt >= TURNSTILE_SCRIPT_MAX_RETRIES) {
-          markUnavailable(
-            "Security verification is temporarily unavailable. Please try again later."
-          );
+          markUnavailable(TURNSTILE_UNAVAILABLE_MESSAGE, { source: "script-load" });
           return;
         }
 
@@ -310,13 +330,18 @@ export function TurnstileWidget({
           isTerminalError,
           errorCount: errorCountRef.current,
           terminalErrorCount: terminalErrorCountRef.current,
+          hostname: getCurrentHostname(),
+          siteKey,
         });
 
         if (isTerminalError) {
           terminalErrorCountRef.current += 1;
 
           if (terminalErrorCountRef.current >= 2) {
-            markUnavailable();
+            markUnavailable(TURNSTILE_DOMAIN_MISCONFIGURED_MESSAGE, {
+              errorCode: turnstileErrorCode,
+              source: "error-callback",
+            });
             return;
           }
 
@@ -341,8 +366,10 @@ export function TurnstileWidget({
         log.warn("Turnstile render timed out", {
           timeoutMs: TURNSTILE_WIDGET_RENDER_TIMEOUT_MS,
           attemptId,
+          hostname: getCurrentHostname(),
+          siteKey,
         });
-        markUnavailable();
+        markUnavailable(TURNSTILE_UNAVAILABLE_MESSAGE, { source: "render-timeout" });
       }
     }, TURNSTILE_WIDGET_RENDER_TIMEOUT_MS);
   }, [
@@ -351,6 +378,7 @@ export function TurnstileWidget({
     size,
     cleanupWidget,
     clearRenderTimeout,
+    getCurrentHostname,
     markUnavailable,
     onErrorRef,
     onExpireRef,

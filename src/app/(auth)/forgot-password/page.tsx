@@ -10,7 +10,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
-import { TURNSTILE_UNAVAILABLE_MESSAGE, getTurnstileClientState } from "@/lib/turnstile-client";
+import {
+  TURNSTILE_DOMAIN_MISCONFIGURED_MESSAGE,
+  TURNSTILE_UNAVAILABLE_MESSAGE,
+  getTurnstileClientState,
+} from "@/lib/turnstile-client";
 import { forgotPasswordSchema, type ForgotPasswordInput } from "@/lib/validations/auth";
 import { useToast } from "@/hooks/use-toast";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
@@ -20,8 +24,8 @@ export default function ForgotPasswordPage() {
   const [turnstileError, setTurnstileError] = useState(false);
   const [turnstileLoaded, setTurnstileLoaded] = useState(false);
   const [turnstileRetryToken, setTurnstileRetryToken] = useState(0);
-  const [captchaUnavailable, setCaptchaUnavailable] = useState(
-    getTurnstileClientState().mode === "unavailable"
+  const [turnstileUnavailableMessage, setTurnstileUnavailableMessage] = useState<string | null>(
+    getTurnstileClientState().mode === "unavailable" ? TURNSTILE_UNAVAILABLE_MESSAGE : null
   );
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { toast } = useToast();
@@ -41,7 +45,10 @@ export default function ForgotPasswordPage() {
 
   // Turnstile widget load timeout
   const turnstileState = getTurnstileClientState();
-  const canRetryUnavailableCaptcha = turnstileState.mode === "configured";
+  const captchaUnavailable = Boolean(turnstileUnavailableMessage);
+  const canRetryUnavailableCaptcha =
+    turnstileState.mode === "configured" &&
+    turnstileUnavailableMessage !== TURNSTILE_DOMAIN_MISCONFIGURED_MESSAGE;
   const skipTurnstileTimeout = turnstileState.mode !== "configured" || captchaUnavailable;
 
   useEffect(() => {
@@ -57,7 +64,7 @@ export default function ForgotPasswordPage() {
 
   const handleTurnstileSuccess = useCallback(
     (token: string) => {
-      setCaptchaUnavailable(false);
+      setTurnstileUnavailableMessage(null);
       setTurnstileError(false);
       setTurnstileLoaded(true);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -67,28 +74,31 @@ export default function ForgotPasswordPage() {
   );
 
   const handleTurnstileLoad = useCallback(() => {
-    setCaptchaUnavailable(false);
+    setTurnstileUnavailableMessage(null);
     setTurnstileLoaded(true);
     setTurnstileError(false);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
   }, []);
 
   const handleTurnstileError = useCallback(() => {
-    setCaptchaUnavailable(false);
+    setTurnstileUnavailableMessage(null);
     setTurnstileError(true);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     setValue("turnstileToken", "turnstile-unavailable", { shouldValidate: true });
   }, [setValue]);
 
-  const handleTurnstileUnavailable = useCallback(() => {
-    setCaptchaUnavailable(true);
-    setTurnstileLoaded(false);
-    setTurnstileError(false);
-    setValue("turnstileToken", "", { shouldValidate: false });
-  }, [setValue]);
+  const handleTurnstileUnavailable = useCallback(
+    (message?: string) => {
+      setTurnstileUnavailableMessage(message || TURNSTILE_UNAVAILABLE_MESSAGE);
+      setTurnstileLoaded(false);
+      setTurnstileError(false);
+      setValue("turnstileToken", "", { shouldValidate: false });
+    },
+    [setValue]
+  );
 
   const handleRetry = useCallback(() => {
-    setCaptchaUnavailable(false);
+    setTurnstileUnavailableMessage(null);
     setTurnstileError(false);
     setTurnstileLoaded(false);
     setValue("turnstileToken", "", { shouldValidate: false });
@@ -205,7 +215,7 @@ export default function ForgotPasswordPage() {
         )}
         {captchaUnavailable && (
           <div className="flex items-center gap-2">
-            <p className="inline-form-error">{TURNSTILE_UNAVAILABLE_MESSAGE}</p>
+            <p className="inline-form-error">{turnstileUnavailableMessage}</p>
             {canRetryUnavailableCaptcha && (
               <button
                 type="button"

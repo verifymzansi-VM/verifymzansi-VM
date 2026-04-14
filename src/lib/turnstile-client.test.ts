@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { TURNSTILE_UNAVAILABLE_MESSAGE, getTurnstileClientState } from "@/lib/turnstile-client";
+import {
+  TURNSTILE_DOMAIN_MISCONFIGURED_MESSAGE,
+  TURNSTILE_UNAVAILABLE_MESSAGE,
+  getTurnstileClientState,
+} from "@/lib/turnstile-client";
 
 describe("turnstile client state", () => {
   afterEach(() => {
@@ -55,5 +59,9 @@ describe("turnstile client state", () => {
       siteKey: "",
     });
     expect(TURNSTILE_UNAVAILABLE_MESSAGE).toContain("temporarily unavailable");
+  });
+
+  it("exposes a dedicated message for unauthorized Turnstile domains", () => {
+    expect(TURNSTILE_DOMAIN_MISCONFIGURED_MESSAGE).toContain("domain is not authorized");
   });
 });

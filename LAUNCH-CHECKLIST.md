@@ -51,6 +51,12 @@ Failure triage map:
 - `pnpm cloudflare:posture` warning/failure: inspect edge posture findings
   (HSTS, DNSSEC DS, `www` hostname routing, `/api/health` status, HTTP protocol)
   and close high-risk warnings before launch sign-off.
+- Turnstile auth outage or red "temporarily unavailable" banner on auth pages:
+  verify the production Turnstile widget's Hostname Management allowlist
+  includes `verifymzansi.com` and `www.verifymzansi.com`, then confirm the
+  published `NEXT_PUBLIC_TURNSTILE_SITE_KEY` and server-side
+  `TURNSTILE_SECRET_KEY` belong to the same widget before retrying release
+  validation.
 - `pnpm cloudflare:posture:strict` failure: treat as launch blocker for
   runtime-critical checks (health and HSTS).
 - `pnpm cloudflare:posture:strict:zone` failure: resolve zone-governance checks
@@ -96,6 +102,14 @@ Failing any of the above should block deploy.
 
 If `RATE_LIMITER_API_KEY` is set, `OTP_RATE_LIMITER_URL` must also be set.
 
+Turnstile release gate:
+
+- Confirm the Turnstile widget for `NEXT_PUBLIC_TURNSTILE_SITE_KEY` explicitly
+  authorizes `verifymzansi.com` and `www.verifymzansi.com`
+- Confirm the deployed `TURNSTILE_SECRET_KEY` was generated for that same widget
+- Do not authorize localhost, staging sandboxes, or arbitrary preview hostnames
+  on the production widget
+
 `ENABLE_DEV_KYC_WEBHOOK_BYPASS` is local-development-only and must never be set
 outside explicit localhost development. Production startup validation now treats
 it the same as other dev bypass flags.
@@ -122,6 +136,8 @@ it the same as other dev bypass flags.
 - Confirm Africa's Talking sender approval is complete for the live sender ID.
 - Confirm Resend domain verification is complete for the production sender
   domain.
+- Confirm `/login`, `/register`, and `/forgot-password` render a live Turnstile
+  challenge on production without the domain-authorization error state.
 - Confirm the shared rate-limiter worker is healthy. Verification upload,
   session start, GPS location, manual location, OTP, and billing checkout now
   fail closed with `503` when shared abuse protection is unavailable.
