@@ -14,6 +14,8 @@ interface AutoScrollRailProps {
   intervalMs?: number;
   pauseAfterInteractionMs?: number;
   ariaLabel?: string;
+  showEdgeFades?: boolean;
+  flushEdges?: boolean;
 }
 
 function getScrollStep(container: HTMLDivElement): number {
@@ -39,6 +41,8 @@ export function AutoScrollRail({
   intervalMs = DEFAULT_INTERVAL_MS,
   pauseAfterInteractionMs = DEFAULT_PAUSE_MS,
   ariaLabel,
+  showEdgeFades = true,
+  flushEdges = false,
 }: AutoScrollRailProps) {
   const items = useMemo(() => Children.toArray(children), [children]);
   const reducedMotion = useReducedMotion();
@@ -212,7 +216,8 @@ export function AutoScrollRail({
         ref={containerRef}
         aria-label={railLabel}
         className={cn(
-          "flex overflow-x-auto snap-x snap-mandatory gap-3 pb-3 scrollbar-hide -mx-2 px-2 sm:-mx-1 sm:px-1 lg:-mx-2 lg:px-2 sm:gap-4 lg:gap-5 select-none",
+          "flex overflow-x-auto snap-x snap-mandatory gap-3 pb-3 scrollbar-hide sm:gap-4 lg:gap-5 select-none",
+          flushEdges ? "mx-0 px-0" : "-mx-2 px-2 sm:-mx-1 sm:px-1 lg:-mx-2 lg:px-2",
           className
         )}
         tabIndex={0}
@@ -228,15 +233,20 @@ export function AutoScrollRail({
           </div>
         ))}
       </div>
-      {/* Trailing fade to hint more content is scrollable */}
-      <div
-        className="pointer-events-none absolute left-0 top-0 h-full w-10 bg-gradient-to-r from-white/95 via-white/60 to-transparent dark:from-slate-950/95 dark:via-slate-950/60"
-        aria-hidden="true"
-      />
-      <div
-        className="pointer-events-none absolute right-0 top-0 h-full w-10 bg-gradient-to-l from-white/95 via-white/60 to-transparent dark:from-slate-950/95 dark:via-slate-950/60"
-        aria-hidden="true"
-      />
+      {showEdgeFades ? (
+        <>
+          <div
+            className="pointer-events-none absolute left-0 top-0 h-full w-10 bg-gradient-to-r from-white/95 via-white/60 to-transparent dark:from-slate-950/95 dark:via-slate-950/60"
+            aria-hidden="true"
+            data-testid="auto-scroll-rail-fade-left"
+          />
+          <div
+            className="pointer-events-none absolute right-0 top-0 h-full w-10 bg-gradient-to-l from-white/95 via-white/60 to-transparent dark:from-slate-950/95 dark:via-slate-950/60"
+            aria-hidden="true"
+            data-testid="auto-scroll-rail-fade-right"
+          />
+        </>
+      ) : null}
     </div>
   );
 }

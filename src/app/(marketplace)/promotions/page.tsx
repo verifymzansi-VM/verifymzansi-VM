@@ -14,6 +14,10 @@ import { TrustStrip } from "@/components/layout/trust-strip";
 import { getOwnerColumn, withOwnerColumn } from "@/lib/account/compat";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 import { shouldHidePlaywrightFixtureRowWhenEnabled } from "@/components/home/playwright-fixture-filter";
+import {
+  buildPublicEventPromotionsQuery,
+  buildPublicTourismBusinessesQuery,
+} from "@/lib/promotions/public-tourism-events";
 
 import {
   PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
@@ -73,31 +77,17 @@ export default async function PromotionsPage() {
   const now = new Date().toISOString();
 
   // ── Fetch top tourism businesses for showroom hero ──
-  const { data: tourismBusinesses } = await supabase
-    .from("businesses")
-    .select("*")
-    .eq("status", "live")
-    .eq("category", "tourism_hospitality")
-    .order("boost_until", { ascending: false, nullsFirst: false })
-    .order("featured_until", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false })
-    .limit(10);
+  const { data: tourismBusinesses } = await buildPublicTourismBusinessesQuery(supabase).limit(10);
 
   // ── Fetch top events for showroom hero ──
-  const { data: topEvents } = await supabase
-    .from("promotions")
-    .select(
-      withOwnerColumn(
-        "id, title, description, videos, photos, video_thumbnail, price_cents, location_province, location_city, promotion_type, boost_until, featured_until, business_id",
-        promotionOwnerColumn
-      )
+  const { data: topEvents } = await buildPublicEventPromotionsQuery(
+    supabase,
+    now,
+    withOwnerColumn(
+      "id, title, description, videos, photos, video_thumbnail, price_cents, location_province, location_city, promotion_type, boost_until, featured_until, business_id",
+      promotionOwnerColumn
     )
-    .eq("status", "live")
-    .or(`end_date.is.null,end_date.gte.${now}`)
-    .order("boost_until", { ascending: false, nullsFirst: false })
-    .order("featured_until", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false })
-    .limit(10);
+  ).limit(10);
 
   // ── Build carousel items (tourism businesses + events) ──
   const tourismItems: CarouselItem[] = (tourismBusinesses ?? [])

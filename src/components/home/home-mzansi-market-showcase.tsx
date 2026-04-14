@@ -54,7 +54,7 @@ export async function HomeMzansiMarketShowcase() {
       ctaLabel="View All Listings"
       tone="green"
     >
-      <AutoScrollRail ariaLabel="Latest on Mzansi Market">
+      <AutoScrollRail ariaLabel="Latest on Mzansi Market" showEdgeFades={false} flushEdges>
         {items.map((l) => {
           const displayUrl = l.videos?.[0] || l.video_thumbnail || l.photos?.[0];
           const isBoosted = l.boost_until ? new Date(l.boost_until) > new Date() : false;

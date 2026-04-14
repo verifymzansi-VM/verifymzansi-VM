@@ -145,4 +145,30 @@ describe("AutoScrollRail", () => {
 
     expect(scrollToSpy).not.toHaveBeenCalled();
   });
+
+  it("hides edge fades when disabled", () => {
+    render(
+      <AutoScrollRail ariaLabel="Fade-free rail" showEdgeFades={false}>
+        <div>First</div>
+        <div>Second</div>
+      </AutoScrollRail>
+    );
+
+    expect(screen.queryByTestId("auto-scroll-rail-fade-left")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("auto-scroll-rail-fade-right")).not.toBeInTheDocument();
+  });
+
+  it("removes edge padding when flushEdges is enabled", () => {
+    render(
+      <AutoScrollRail ariaLabel="Flush rail" flushEdges>
+        <div>First</div>
+        <div>Second</div>
+      </AutoScrollRail>
+    );
+
+    const rail = screen.getByLabelText("Flush rail");
+    expect(rail.className).toContain("mx-0");
+    expect(rail.className).toContain("px-0");
+    expect(rail.className).not.toContain("-mx-2");
+  });
 });

@@ -48,7 +48,7 @@ export async function HomeBusinessShowcase() {
       ctaLabel="View All Businesses"
       tone="blue"
     >
-      <AutoScrollRail ariaLabel="Mzansi Business">
+      <AutoScrollRail ariaLabel="Mzansi Business" showEdgeFades={false} flushEdges>
         {items.map((b) => (
           <div
             key={b.id}

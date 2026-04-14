@@ -9,6 +9,10 @@ import { AutoScrollRail } from "./auto-scroll-rail";
 import { HomeShowcaseShell } from "./home-showcase-shell";
 import type { BusinessCategory, BusinessType, PromotionType } from "@/types/enums";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
+import {
+  buildPublicEventPromotionsQuery,
+  buildPublicTourismBusinessesQuery,
+} from "@/lib/promotions/public-tourism-events";
 import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
 import { shouldHidePlaywrightFixtureRowWhenEnabled } from "./playwright-fixture-filter";
 import {
@@ -70,35 +74,21 @@ export async function HomePromotionsShowcase() {
   const supabase = await createClient();
   const now = new Date().toISOString();
 
-  // Fetch events
-  const { data: eventData } = await supabase
-    .from("promotions")
-    .select("*")
-    .eq("status", "live")
-    .eq("promotion_type", "event")
-    .or(`end_date.is.null,end_date.gte.${now}`)
-    .order("boost_until", { ascending: false, nullsFirst: false })
-    .order("featured_until", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false })
-    .limit(8);
+  const { data: eventData } = await buildPublicEventPromotionsQuery(
+    supabase,
+    now,
+    "id, title, price_cents, price_negotiable, photos, videos, video_thumbnail, category, category_key, location_province, location_city, promotion_type, view_count, boost_until, featured_until, media_width, media_height, start_date, end_date, created_at, business_id"
+  ).limit(8);
 
   const promotions = ((eventData || []) as PromotionRow[])
     .filter((promotion) => !shouldHidePlaywrightFixtureRowWhenEnabled(promotion, hideFixtures))
     .filter((promotion) => !isPlaceholderMarketplaceContent(promotion.title))
     .slice(0, 4);
 
-  // Fetch tourism businesses
-  const { data: tourismData } = await supabase
-    .from("businesses")
-    .select(
-      "id, business_name, business_type, cover_photo, cover_video, video_thumbnail, logo_url, location_province, location_city, boost_until, featured_until, focal_x, focal_y, media_width, media_height"
-    )
-    .eq("category", "tourism_hospitality")
-    .in("status", ["live", "active"])
-    .order("boost_until", { ascending: false, nullsFirst: false })
-    .order("featured_until", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false })
-    .limit(8);
+  const { data: tourismData } = await buildPublicTourismBusinessesQuery(
+    supabase,
+    "id, business_name, business_type, cover_photo, cover_video, video_thumbnail, logo_url, location_province, location_city, boost_until, featured_until, focal_x, focal_y, media_width, media_height"
+  ).limit(8);
 
   const tourismBusinesses = ((tourismData || []) as TourismBusinessRow[])
     .filter((b) => !shouldHidePlaywrightFixtureRowWhenEnabled(b, hideFixtures))
@@ -168,7 +158,7 @@ export async function HomePromotionsShowcase() {
       tone="teal"
       icon={<TreePalm className="h-3.5 w-3.5" />}
     >
-      <AutoScrollRail ariaLabel="Tourism and events">
+      <AutoScrollRail ariaLabel="Tourism and events" showEdgeFades={false} flushEdges>
         {items.map((item) => (
           <div
             key={item.kind === "tourism" ? `t-${item.data.id}` : `e-${item.data.id}`}
