@@ -28,6 +28,11 @@ import {
   normalizeCreatePostError,
   normalizeCreatePostRuntimeError,
 } from "@/app/post/_lib/create-post-errors";
+import {
+  getPromotionMediaUploadErrorState,
+  uploadPromotionVideoFiles,
+  uploadRequiredPromotionMedia,
+} from "@/app/post/_lib/promotion-media-upload";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { usePostDraftAutosave } from "@/hooks/use-post-draft-autosave";
@@ -36,7 +41,6 @@ import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
 import { getDefaultEventDates } from "@/lib/post-drafts/defaults";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
-import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { checkUploadServiceReachable } from "@/lib/utils/upload-preflight";
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
 import type { PromotionDraftData } from "@/lib/post-drafts/storage";
@@ -60,6 +64,7 @@ const FIELD_IDS: Record<string, string> = {
   end_date: "end_date",
   images: "promotion-images",
   videos: "promotion-videos",
+  video_thumbnail: "promotion-video-thumbnail",
 };
 
 /** Human-readable labels for each form field key, used in the error alert. */
@@ -388,7 +393,9 @@ function CreatePromotionContent() {
       Object.assign(errors, promotionValidationErrors);
     }
     if (targetStep === 2) {
-      if (photoFiles.length === 0) errors.images = "Upload at least one photo.";
+      if (photoFiles.length === 0 && videoFiles.length === 0) {
+        errors.images = "Upload at least one photo or video.";
+      }
       if (photoFiles.length > maxPhotos) {
         errors.images = `You can upload up to ${maxPhotos} photos on this plan.`;
       }
@@ -440,117 +447,41 @@ function CreatePromotionContent() {
       }
       setSubmitProgress("Uploading media...");
 
-      const readUploadError = async (response: Response, fallback: string): Promise<string> => {
-        const payload = (await response.json().catch(() => null)) as {
-          error?: unknown;
-          code?: unknown;
-          traceId?: unknown;
-        } | null;
-        const payloadError =
-          payload && typeof payload.error === "string" ? payload.error.trim() : "";
-        const traceId =
-          payload && typeof payload.traceId === "string" ? payload.traceId.trim() : "";
-        if (payloadError && traceId) {
-          return `${payloadError} (trace: ${traceId})`;
-        }
-        if (payloadError) {
-          return payloadError;
-        }
-        return `${fallback} (HTTP ${response.status})`;
-      };
+      const primaryMediaFile = videoFiles[0] ?? photoFiles[0] ?? null;
+      const mediaDimensionsPromise = primaryMediaFile
+        ? readMediaDimensions(primaryMediaFile)
+        : Promise.resolve(null);
 
-      // Upload photos, videos, and video thumbnail in parallel
-      let compressedVideoFileRef: File | null = null;
       const [imageUrls, videoUrls, uploadedVideoThumbnailUrl] = await Promise.all([
-        // Photos via server proxy (small files)
-        photoFiles.length > 0
-          ? (async () => {
-              const uploadData = new FormData();
-              uploadData.append("area", "promotion");
-              photoFiles.forEach((file) => uploadData.append("files", file));
-              const uploadRes = await fetchWithRetry("/api/media/upload", {
-                method: "POST",
-                headers: withCsrfHeaders(),
-                body: uploadData,
-              });
-              if (!uploadRes.ok) {
-                throw new Error(await readUploadError(uploadRes, "Failed to upload photos"));
-              }
-              const uploadJson = await uploadRes.json();
-              setUploadStatuses((c) => ({ ...c, photos: "done" }));
-              return (uploadJson.urls || []) as string[];
-            })()
-          : Promise.resolve([] as string[]),
-
-        // Videos via presigned URL (direct to R2, avoids proxying large files)
-        videoFiles.length > 0
-          ? (async () => {
-              setSubmitProgress("Compressing video...");
-              const { compressVideoForUpload } = await import("@/lib/media/compress-before-upload");
-              // Compress sequentially — parallel would spawn multiple ~25 MB FFmpeg
-              // WASM instances and risk OOM on mobile devices.
-              const compressed: File[] = [];
-              for (const f of videoFiles) {
-                compressed.push(await compressVideoForUpload(f));
-              }
-              compressedVideoFileRef = compressed[0] ?? null;
-              setSubmitProgress("Uploading media...");
-              const urls = await Promise.all(
-                compressed.map(async (file) => {
-                  const urlRes = await fetchWithRetry("/api/media/upload-url", {
-                    method: "POST",
-                    headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-                    body: JSON.stringify({
-                      filename: file.name,
-                      contentType: file.type,
-                      size: file.size,
-                      area: "promotion",
-                    }),
-                  });
-                  if (!urlRes.ok) {
-                    throw new Error(
-                      await readUploadError(urlRes, "Failed to get video upload URL")
-                    );
-                  }
-                  const { uploadUrl, publicUrl } = await urlRes.json();
-                  const putRes = await fetchWithRetry(uploadUrl, {
-                    method: "PUT",
-                    headers: { "Content-Type": file.type },
-                    body: file,
-                  });
-                  if (!putRes.ok) {
-                    throw new Error(`Failed to upload video (HTTP ${putRes.status})`);
-                  }
-                  return publicUrl as string;
-                })
-              );
-              setUploadStatuses((c) => ({ ...c, videos: "done" }));
-              return urls;
-            })()
-          : Promise.resolve([] as string[]),
-
-        // Video thumbnail via server proxy
-        videoThumbnailFile.length > 0
-          ? (async () => {
-              const uploadData = new FormData();
-              uploadData.append("area", "promotion");
-              uploadData.append("files", videoThumbnailFile[0]);
-              const uploadRes = await fetchWithRetry("/api/media/upload", {
-                method: "POST",
-                headers: withCsrfHeaders(),
-                body: uploadData,
-              });
-              if (!uploadRes.ok) return undefined;
-              const uploadJson = await uploadRes.json();
-              return uploadJson.urls?.[0] as string | undefined;
-            })()
-          : Promise.resolve(undefined as string | undefined),
+        uploadRequiredPromotionMedia({
+          files: photoFiles,
+          area: "promotion",
+          field: "images",
+        }).then((urls) => {
+          if (photoFiles.length > 0) {
+            setUploadStatuses((current) => ({ ...current, photos: "done" }));
+          }
+          return urls;
+        }),
+        uploadPromotionVideoFiles({
+          files: videoFiles,
+          area: "promotion",
+        }).then((urls) => {
+          if (videoFiles.length > 0) {
+            setUploadStatuses((current) => ({ ...current, videos: "done" }));
+          }
+          return urls;
+        }),
+        uploadRequiredPromotionMedia({
+          files: videoThumbnailFile,
+          area: "promotion",
+          field: "video_thumbnail",
+        }).then((urls) => urls[0]),
       ]);
 
       setSubmitProgress("Saving promotion...");
       setUploadStatuses((c) => ({ ...c, saving: "uploading" }));
-      const primaryMediaFile = compressedVideoFileRef ?? videoFiles[0] ?? photoFiles[0] ?? null;
-      const mediaDimensions = primaryMediaFile ? await readMediaDimensions(primaryMediaFile) : null;
+      const mediaDimensions = await mediaDimensionsPromise;
 
       const body = {
         title: title.trim(),
@@ -659,6 +590,22 @@ function CreatePromotionContent() {
       discardDraft();
       router.push("/dashboard/listings?area=PROMOTIONS_EVENTS&created=promotion");
     } catch (error: unknown) {
+      const uploadFailure = getPromotionMediaUploadErrorState(error);
+      if (uploadFailure) {
+        setStep(2);
+        setFieldErrors((current) => ({ ...current, ...uploadFailure.fieldErrors }));
+        setFormError(uploadFailure.formError);
+        const fieldKey = Object.keys(uploadFailure.fieldErrors)[0];
+        if (fieldKey) {
+          const targetId = FIELD_IDS[fieldKey];
+          const target = targetId ? document.getElementById(targetId) : null;
+          if (target instanceof HTMLElement) {
+            target.focus();
+          }
+        }
+        return;
+      }
+
       setFormError(normalizeCreatePostRuntimeError(error, "Something went wrong."));
     } finally {
       setIsSubmitting(false);
@@ -1102,13 +1049,25 @@ function CreatePromotionContent() {
                     </div>
 
                     {videoFiles.length > 0 && (
-                      <MediaUpload
-                        label="Video thumbnail (optional)"
-                        maxFiles={1}
-                        files={videoThumbnailFile}
-                        onChange={setVideoThumbnailFile}
-                        accept="image/*"
-                      />
+                      <div
+                        id="promotion-video-thumbnail"
+                        tabIndex={-1}
+                        className="space-y-2 rounded-lg"
+                      >
+                        <MediaUpload
+                          label="Video thumbnail (optional)"
+                          maxFiles={1}
+                          files={videoThumbnailFile}
+                          onChange={(files) => {
+                            setVideoThumbnailFile(files);
+                            clearErrors("video_thumbnail");
+                          }}
+                          accept="image/*"
+                        />
+                        {fieldErrors.video_thumbnail && (
+                          <p className="inline-form-error">{fieldErrors.video_thumbnail}</p>
+                        )}
+                      </div>
                     )}
 
                     <div className="rounded-xl border border-dashed border-brand-green/30 bg-brand-green/5 p-4 text-sm">

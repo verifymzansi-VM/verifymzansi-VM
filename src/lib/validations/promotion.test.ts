@@ -100,9 +100,18 @@ describe("promotionSchema", () => {
   });
 
   // Images validation
-  it("rejects empty images array", () => {
+  it("rejects submissions without any photos or videos", () => {
     const result = promotionSchema.safeParse({ ...VALID_INPUT, images: [] });
     expect(result.success).toBe(false);
+  });
+
+  it("accepts video-only submissions", () => {
+    const result = promotionSchema.safeParse({
+      ...VALID_INPUT,
+      images: [],
+      videos: [VALID_VIDEO],
+    });
+    expect(result.success).toBe(true);
   });
 
   it("rejects more than 10 images", () => {

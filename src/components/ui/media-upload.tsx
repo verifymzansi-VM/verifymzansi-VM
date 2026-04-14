@@ -14,7 +14,7 @@ const IMAGE_TYPES = [
   "image/heic",
   "image/heif",
 ];
-const VIDEO_TYPES = ["video/mp4", "video/webm"];
+const VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
 /** HEIC/HEIF are accepted by the file-picker but converted client-side to JPEG before upload. */
 const HEIC_TYPES = new Set(["image/heic", "image/heif"]);
 const ALL_ACCEPT = [...IMAGE_TYPES, ...VIDEO_TYPES].join(",");
@@ -32,6 +32,7 @@ const MIME_TO_EXT: Record<string, string> = {
   "image/heif": ".heif",
   "video/mp4": ".mp4",
   "video/webm": ".webm",
+  "video/quicktime": ".mov",
 };
 
 /**
@@ -156,14 +157,14 @@ export function MediaUpload({
         } else if (accept && accept.startsWith("video/") && !VIDEO_TYPES.includes(file.type)) {
           toast({
             title: "Unsupported file type",
-            description: `"${file.name}" is not supported. Use MP4 or WebM videos up to 50 MB.`,
+            description: `"${file.name}" is not supported. Use MP4, WebM, or MOV videos up to 50 MB.`,
             variant: "destructive",
           });
           continue;
         } else if (!accept && ![...IMAGE_TYPES, ...VIDEO_TYPES].includes(file.type)) {
           toast({
             title: "Unsupported file type",
-            description: `"${file.name}" is not supported. Use JPG, PNG, WebP, GIF, or AVIF images, or MP4 or WebM videos.`,
+            description: `"${file.name}" is not supported. Use JPG, PNG, WebP, GIF, or AVIF images, or MP4, WebM, or MOV videos.`,
             variant: "destructive",
           });
           continue;

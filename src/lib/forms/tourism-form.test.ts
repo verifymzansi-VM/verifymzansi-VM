@@ -64,4 +64,60 @@ describe("validateTourismStep socialAuthorization compatibility", () => {
 
     expect(errors).toEqual({});
   });
+
+  it("allows video-only media on the event media step", () => {
+    const errors = validateTourismStep(
+      3,
+      {
+        listingType: "event",
+        title: "Cape Town Weekend Market",
+        description: "Family-friendly weekend market with local food, crafts, and live music.",
+        province: "Western Cape",
+        city: "Cape Town",
+        contactMethods: ["call"],
+        subcategory: "",
+        starRating: "",
+        numberOfRooms: "",
+        bookingUrl: "",
+        languagesSpoken: "",
+        phone: "",
+        whatsapp: "",
+        email: "",
+        website: "",
+        socialFacebook: "",
+        socialInstagram: "",
+        socialTwitter: "",
+        socialTiktok: "",
+        treatmentTypes: [],
+        activityTypes: [],
+        tourDuration: "",
+        maxGroupSize: "",
+        difficultyLevel: "",
+        equipmentProvided: false,
+        whatsIncluded: "",
+        tourismAgeRestriction: "",
+        servicesOffered: [],
+        tourismSpecializations: [],
+        guidedTours: false,
+        audioGuide: false,
+        visitDuration: "",
+        vehicleTypes: [],
+        deliveryCollection: false,
+        minDriverAge: "",
+        insuranceIncluded: false,
+        gpsAvailable: false,
+        eventType: "festival",
+        startDate: "2026-05-01",
+        endDate: "2026-05-02",
+        priceZar: "",
+        venueName: "Green Point",
+        venueCapacity: "",
+        ticketsUrl: "",
+      },
+      0,
+      1
+    );
+
+    expect(errors).toEqual({});
+  });
 });

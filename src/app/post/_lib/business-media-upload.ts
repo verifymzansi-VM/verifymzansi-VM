@@ -1,6 +1,7 @@
 import { createLogger } from "@/lib/utils/logger";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
+import { VideoTranscodeError, compressVideoForUpload } from "@/lib/media/compress-before-upload";
 import type { UploadArea } from "@/types/enums";
 
 const log = createLogger("BusinessMediaUpload");
@@ -53,8 +54,8 @@ function getPayloadError(payload: UploadResponse | null): string | null {
 export class BusinessMediaUploadError extends Error {
   readonly field: BusinessMediaField;
 
-  constructor(field: BusinessMediaField) {
-    super(FIELD_MESSAGES[field]);
+  constructor(field: BusinessMediaField, message?: string) {
+    super(message ?? FIELD_MESSAGES[field]);
     this.name = "BusinessMediaUploadError";
     this.field = field;
   }
@@ -132,9 +133,15 @@ export async function uploadRequiredBusinessVideo({
   file: File;
   area: UploadArea;
 }): Promise<string> {
-  // Compress before upload — falls back to original on failure
-  const { compressVideoForUpload } = await import("@/lib/media/compress-before-upload");
-  const compressed = await compressVideoForUpload(file);
+  let compressed: File;
+  try {
+    compressed = await compressVideoForUpload(file, { requireCompatibleOutput: true });
+  } catch (error) {
+    if (error instanceof VideoTranscodeError) {
+      throw new BusinessMediaUploadError("cover_video", error.message);
+    }
+    throw error;
+  }
 
   const urlResponse = await fetchWithRetry("/api/media/upload-url", {
     method: "POST",

@@ -4,6 +4,7 @@ import CreateBusinessPage from "./page";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
+import { checkUploadServiceReachable } from "@/lib/utils/upload-preflight";
 
 type MockAuthState = {
   user: { id: string; email?: string | null } | null;
@@ -490,6 +491,43 @@ describe("CreateBusinessPage", () => {
       ).length
     ).toBeGreaterThan(0);
     expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts uploads without waiting for the preflight check to finish", async () => {
+    (checkUploadServiceReachable as unknown as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+      new Promise(() => undefined)
+    );
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/media/upload") {
+          return jsonResponse({
+            urls: ["https://media.verifymzansi.com/media/business_logo/user/logo.png"],
+            errors: [],
+          });
+        }
+
+        if (input === "/api/businesses") {
+          return jsonResponse({ success: true, business: { id: "biz-1" } }, { status: 201 });
+        }
+
+        return jsonResponse({});
+      }
+    );
+
+    render(<CreateBusinessPage />);
+
+    await completeStandaloneStepOne();
+    completeLocationStep();
+
+    fireEvent.click(screen.getByRole("button", { name: /Business logo \(optional\)/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/media/upload",
+        expect.objectContaining({ method: "POST" })
+      );
+    });
   });
 
   it("blocks submission when a selected promo video upload fails", async () => {

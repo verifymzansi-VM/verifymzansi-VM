@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import CreatePromotionPage from "./page";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
+import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 
 type MockAuthState = {
   user: { id: string; email?: string | null } | null;
@@ -28,8 +29,16 @@ vi.mock("@/hooks/use-auth", () => ({
   useAuth: useAuthMock,
 }));
 
+vi.mock("@/lib/utils/fetch-retry", () => ({
+  fetchWithRetry: vi.fn(),
+}));
+
 vi.mock("@/lib/utils/upload-preflight", () => ({
   checkUploadServiceReachable: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@/lib/media/compress-before-upload", () => ({
+  compressVideoForUpload: vi.fn(async (file: File) => file),
 }));
 
 vi.mock("next/link", () => ({
@@ -115,6 +124,9 @@ describe("CreatePromotionPage", () => {
     (useRouter as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ push: mockPush });
     (useToast as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ toast: mockToast });
     (useSearchParams as unknown as ReturnType<typeof vi.fn>).mockReturnValue(new URLSearchParams());
+    (fetchWithRetry as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      (input: RequestInfo | URL) => (global.fetch as unknown as ReturnType<typeof vi.fn>)(input)
+    );
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ businesses: [] }),
@@ -323,6 +335,144 @@ describe("CreatePromotionPage", () => {
         screen.getAllByText("Video upload is not available on your current plan.").length
       ).toBeGreaterThan(0);
       expect(screen.getByText(/Please fix 1 field on Step 3/i)).toBeInTheDocument();
+    });
+  });
+
+  it("blocks submit when photo upload returns partial success", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/csrf") {
+          return {
+            ok: true,
+            json: async () => ({ token: "a".repeat(64) }),
+          };
+        }
+
+        if (input === "/api/businesses?mine=true&limit=50") {
+          return {
+            ok: true,
+            json: async () => ({ businesses: [] }),
+          };
+        }
+
+        if (input === "/api/media/upload") {
+          return {
+            ok: true,
+            status: 207,
+            json: async () => ({
+              urls: ["https://media.verifymzansi.com/promotions/photo.jpg"],
+              errors: ['"photo-2.jpg": upload failed'],
+            }),
+          };
+        }
+
+        return {
+          ok: true,
+          json: async () => ({}),
+        };
+      }
+    );
+
+    render(<CreatePromotionPage />);
+
+    completeStepOne();
+    fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText(/^City$/i), {
+      target: { value: "Johannesburg" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Add media for Photos/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByText("One or more photos failed to upload. Retry the selected files.").length
+      ).toBeGreaterThan(0);
+      expect(
+        screen.getAllByText(
+          "Selected media could not be uploaded. Retry the highlighted files and try again."
+        ).length
+      ).toBeGreaterThan(0);
+    });
+
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("allows video-only submit", async () => {
+    (fetchWithRetry as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/media/upload-url") {
+          return {
+            ok: true,
+            json: async () => ({
+              uploadUrl: "https://upload.example.com/promo-video",
+              publicUrl: "https://media.verifymzansi.com/promotions/video.mp4",
+            }),
+          };
+        }
+
+        if (input === "https://upload.example.com/promo-video") {
+          return { ok: true, status: 200, json: async () => ({}) };
+        }
+
+        return (global.fetch as unknown as ReturnType<typeof vi.fn>)(input);
+      }
+    );
+
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/csrf") {
+          return {
+            ok: true,
+            json: async () => ({ token: "a".repeat(64) }),
+          };
+        }
+
+        if (input === "/api/businesses?mine=true&limit=50") {
+          return {
+            ok: true,
+            json: async () => ({ businesses: [] }),
+          };
+        }
+
+        if (input === "/api/promotions") {
+          return {
+            ok: true,
+            status: 201,
+            json: async () => ({ success: true, promotion: { id: "promo-1" } }),
+          };
+        }
+
+        return {
+          ok: true,
+          json: async () => ({}),
+        };
+      }
+    );
+
+    render(<CreatePromotionPage />);
+
+    completeStepOne();
+    fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText(/^City$/i), {
+      target: { value: "Johannesburg" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Add media for Videos/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/promotions",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining(
+            '"videos":["https://media.verifymzansi.com/promotions/video.mp4"]'
+          ),
+        })
+      );
     });
   });
 

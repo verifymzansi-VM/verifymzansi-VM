@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { compressVideoForUpload } from "@/lib/media/compress-before-upload";
+import { compressVideoForUpload, VideoTranscodeError } from "@/lib/media/compress-before-upload";
 
 const compressVideo = vi.fn();
 
@@ -26,5 +26,14 @@ describe("compressVideoForUpload", () => {
     const result = await compressVideoForUpload(original);
 
     expect(result).toBe(original);
+  });
+
+  it("throws when quicktime input still resolves to quicktime for required-compatible uploads", async () => {
+    const original = new File(["original"], "clip.mov", { type: "video/quicktime" });
+    compressVideo.mockResolvedValueOnce({ file: original });
+
+    await expect(
+      compressVideoForUpload(original, { requireCompatibleOutput: true })
+    ).rejects.toBeInstanceOf(VideoTranscodeError);
   });
 });

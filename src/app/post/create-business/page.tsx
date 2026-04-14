@@ -800,15 +800,15 @@ function CreateBusinessContent() {
         return;
       }
 
-      // Best-effort preflight — never block the form on a health check.
-      // The actual upload will produce a specific, actionable error if the
-      // service is truly unreachable.
-      try {
-        await checkUploadServiceReachable();
-      } catch {
-        // logged inside checkUploadServiceReachable; continue to real upload
-      }
+      // Best-effort preflight — run it in the background so submit latency
+      // stays bounded by the actual media work, not the health-check retry loop.
+      void checkUploadServiceReachable().catch(() => undefined);
       setSubmitProgress("Uploading media...");
+
+      const primaryMediaFile = promoVideoFile[0] ?? coverFile[0] ?? null;
+      const mediaDimensionsPromise = primaryMediaFile
+        ? readMediaDimensions(primaryMediaFile)
+        : Promise.resolve(null);
 
       const [logoUrls, coverUrls, galleryUrls, mallPhotoUrls, videoUrl] = await Promise.all([
         uploadRequiredBusinessMedia({
@@ -908,8 +908,7 @@ function CreateBusinessContent() {
             ? sanitizeBusinessDetailsForSubmission(normalizedBusinessDetails, deliveryAvailable)
             : undefined;
       const normalizedDeliveryOptions = getNormalizedDeliveryOptions(deliveryAvailable);
-      const primaryMediaFile = promoVideoFile[0] ?? coverFile[0] ?? null;
-      const mediaDimensions = primaryMediaFile ? await readMediaDimensions(primaryMediaFile) : null;
+      const mediaDimensions = await mediaDimensionsPromise;
       const body = {
         business_name: businessName.trim(),
         slug: (slug || generateSlug(businessName)).trim(),

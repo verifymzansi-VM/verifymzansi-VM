@@ -2,6 +2,11 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import CreateTourismPage from "./page";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
+import { compressVideoForUpload, VideoTranscodeError } from "@/lib/media/compress-before-upload";
+
+const { mediaFilesByLabel } = vi.hoisted(() => ({
+  mediaFilesByLabel: new Map<string, File[]>(),
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -162,17 +167,29 @@ vi.mock("@/components/ui/media-upload", () => ({
   MediaUpload: ({ label, onChange }: { label: string; onChange?: (files: File[]) => void }) => (
     <button
       type="button"
-      onClick={() =>
-        onChange?.([
+      onClick={() => {
+        const configuredFiles = mediaFilesByLabel.get(label);
+        const files = configuredFiles ?? [
           new File(["mock"], label.toLowerCase().includes("video") ? "clip.mp4" : "photo.png", {
             type: label.toLowerCase().includes("video") ? "video/mp4" : "image/png",
           }),
-        ])
-      }
+        ];
+        onChange?.(files);
+      }}
     >
       Add media for {label}
     </button>
   ),
+}));
+
+vi.mock("@/lib/media/compress-before-upload", () => ({
+  compressVideoForUpload: vi.fn(async (file: File) => file),
+  VideoTranscodeError: class VideoTranscodeError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = "VideoTranscodeError";
+    }
+  },
 }));
 
 vi.mock("@/components/ui/video-frame-selector", () => ({
@@ -213,6 +230,7 @@ vi.mock("@/lib/post-drafts/defaults", () => ({
 describe("CreateTourismPage type switch behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mediaFilesByLabel.clear();
     global.URL.createObjectURL = vi.fn(() => "blob:tourism-preview");
     global.URL.revokeObjectURL = vi.fn();
     global.fetch = vi.fn().mockResolvedValue({
@@ -522,5 +540,200 @@ describe("CreateTourismPage type switch behavior", () => {
       ).toBeGreaterThan(0);
       expect(screen.getByText(/Please fix 1 field on Step 4/i)).toBeInTheDocument();
     });
+  });
+
+  it("allows event submit with video only", async () => {
+    mediaFilesByLabel.set("Upload video", [new File(["video"], "clip.mp4", { type: "video/mp4" })]);
+
+    (fetchWithRetry as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/media/upload-url") {
+          return {
+            ok: true,
+            json: async () => ({
+              uploadUrl: "https://upload.example.com/promo-video",
+              publicUrl: "https://media.verifymzansi.com/promotion/video.mp4",
+            }),
+          };
+        }
+        if (input === "https://upload.example.com/promo-video") {
+          return { ok: true, status: 200, json: async () => ({}) };
+        }
+
+        throw new Error(`Unexpected fetchWithRetry call: ${String(input)}`);
+      }
+    );
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/promotions") {
+          return {
+            ok: true,
+            status: 201,
+            json: async () => ({ success: true, promotion: { id: "promo-1" } }),
+          };
+        }
+
+        return {
+          ok: true,
+          json: async () => ({ id: "ok" }),
+        };
+      }
+    );
+
+    render(<CreateTourismPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Event/ }));
+    fireEvent.change(screen.getByLabelText("Event Title *"), {
+      target: { value: "Soweto Food Festival" },
+    });
+    fireEvent.change(screen.getByLabelText("Description *"), {
+      target: { value: "A detailed event description with enough content to pass validation." },
+    });
+    fireEvent.change(screen.getByLabelText("Event Type"), {
+      target: { value: "festival_concert" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText("Start Date *"), {
+      target: { value: "2099-12-01" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText("Province"), {
+      target: { value: "Gauteng" },
+    });
+    fireEvent.change(screen.getByLabelText("City"), {
+      target: { value: "Johannesburg" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Add media for Upload video/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/promotions",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining(
+            '"videos":["https://media.verifymzansi.com/promotion/video.mp4"]'
+          ),
+        })
+      );
+    });
+
+    const promotionCall = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([input]) => input === "/api/promotions"
+    );
+    expect(promotionCall).toBeTruthy();
+    const requestBody = JSON.parse(String(promotionCall?.[1]?.body ?? "{}")) as {
+      images?: string[];
+      videos?: string[];
+    };
+    expect(requestBody.images).toEqual([]);
+    expect(requestBody.videos).toEqual(["https://media.verifymzansi.com/promotion/video.mp4"]);
+  });
+
+  it("blocks event submit when photo upload returns partial success", async () => {
+    (fetchWithRetry as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 207,
+      json: async () => ({
+        urls: ["https://media.verifymzansi.com/tourism/photo.jpg"],
+        errors: ['"photo-2.jpg": upload failed'],
+      }),
+    });
+
+    render(<CreateTourismPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Event/ }));
+    fireEvent.change(screen.getByLabelText("Event Title *"), {
+      target: { value: "Soweto Food Festival" },
+    });
+    fireEvent.change(screen.getByLabelText("Description *"), {
+      target: { value: "A detailed event description with enough content to pass validation." },
+    });
+    fireEvent.change(screen.getByLabelText("Event Type"), {
+      target: { value: "festival_concert" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText("Start Date *"), {
+      target: { value: "2099-12-01" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText("Province"), {
+      target: { value: "Gauteng" },
+    });
+    fireEvent.change(screen.getByLabelText("City"), {
+      target: { value: "Johannesburg" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByText("One or more photos failed to upload. Retry the selected files.").length
+      ).toBeGreaterThan(0);
+      expect(
+        screen.getAllByText(
+          "Selected media could not be uploaded. Retry the highlighted files and try again."
+        ).length
+      ).toBeGreaterThan(0);
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("surfaces a direct video error when MOV transcode fails", async () => {
+    mediaFilesByLabel.set("Upload video", [
+      new File(["video"], "clip.mov", { type: "video/quicktime" }),
+    ]);
+    (compressVideoForUpload as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new VideoTranscodeError(
+        "This MOV video could not be converted to MP4. Export it as MP4 and try again."
+      )
+    );
+
+    render(<CreateTourismPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Event/ }));
+    fireEvent.change(screen.getByLabelText("Event Title *"), {
+      target: { value: "Soweto Food Festival" },
+    });
+    fireEvent.change(screen.getByLabelText("Description *"), {
+      target: { value: "A detailed event description with enough content to pass validation." },
+    });
+    fireEvent.change(screen.getByLabelText("Event Type"), {
+      target: { value: "festival_concert" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText("Start Date *"), {
+      target: { value: "2099-12-01" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText("Province"), {
+      target: { value: "Gauteng" },
+    });
+    fireEvent.change(screen.getByLabelText("City"), {
+      target: { value: "Johannesburg" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Add media for Upload video/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByText(
+          "This MOV video could not be converted to MP4. Export it as MP4 and try again."
+        ).length
+      ).toBeGreaterThan(0);
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 });

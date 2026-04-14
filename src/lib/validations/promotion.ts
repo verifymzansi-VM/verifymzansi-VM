@@ -53,7 +53,6 @@ export const promotionSchema = z
           message: "Images must be hosted on the VerifyMzansi platform",
         })
       )
-      .min(1, "At least 1 image is required")
       .max(10, "Maximum 10 images"),
     videos: z
       .array(
@@ -110,6 +109,10 @@ export const promotionSchema = z
         bring_your_own: z.string().max(500).optional(),
       })
       .optional(),
+  })
+  .refine((data) => data.images.length > 0 || data.videos.length > 0, {
+    message: "Add at least 1 photo or video",
+    path: ["images"],
   })
   .refine(
     (data) => {

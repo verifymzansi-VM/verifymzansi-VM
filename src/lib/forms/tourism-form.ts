@@ -251,7 +251,19 @@ function validateStep2(v: TourismFormValues, errors: Record<string, string>) {
 
 /* ── Step 3: Media & Review ──────────────────────────────── */
 
-function validateStep3(v: TourismFormValues, errors: Record<string, string>, imageCount: number) {
+function validateStep3(
+  v: TourismFormValues,
+  errors: Record<string, string>,
+  imageCount: number,
+  videoCount: number
+) {
+  if (v.listingType === "event") {
+    if (imageCount < 1 && videoCount < 1) {
+      errors.images = "Upload at least 1 photo or video.";
+    }
+    return;
+  }
+
   if (imageCount < 1) {
     errors.images = "Upload at least 1 photo.";
   }
@@ -267,7 +279,8 @@ export function validateTourismStep(
   step: number,
   values: TourismFormValues,
   /** Number of uploaded images (checked on step 3) */
-  imageCount = 0
+  imageCount = 0,
+  videoCount = 0
 ): Record<string, string> {
   const errors: Record<string, string> = {};
 
@@ -286,7 +299,7 @@ export function validateTourismStep(
       validateStep2(values, errors);
       break;
     case 3:
-      validateStep3(values, errors, imageCount);
+      validateStep3(values, errors, imageCount, videoCount);
       break;
   }
 

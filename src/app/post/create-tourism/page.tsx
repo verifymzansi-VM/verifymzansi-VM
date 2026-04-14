@@ -59,6 +59,11 @@ import {
   normalizeCreatePostError,
   normalizeCreatePostRuntimeError,
 } from "@/app/post/_lib/create-post-errors";
+import {
+  getPromotionMediaUploadErrorState,
+  uploadPromotionVideoFiles,
+  uploadRequiredPromotionMedia,
+} from "@/app/post/_lib/promotion-media-upload";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { usePostDraftAutosave } from "@/hooks/use-post-draft-autosave";
@@ -71,7 +76,6 @@ import {
   parseHoursValue,
 } from "@/components/ui/operating-hours-input";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
-import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { checkUploadServiceReachable } from "@/lib/utils/upload-preflight";
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
 import { getDefaultEventDates } from "@/lib/post-drafts/defaults";
@@ -126,8 +130,10 @@ const FIELD_IDS: Record<string, string> = {
   website: "website",
   locationAddress: "locationAddress",
   locationTown: "locationTown",
+  logo_url: "tourism-logo",
   images: "tourism-images",
   videos: "tourism-videos",
+  video_thumbnail: "tourism-video-thumbnail",
 };
 
 const FIELD_KEY_ALIASES: Record<string, string> = {
@@ -914,7 +920,8 @@ function CreateTourismContent() {
         locationAddress,
         locationTown,
       },
-      photoFiles.length
+      photoFiles.length,
+      videoFiles.length
     );
 
     // Plan-based media limits
@@ -973,117 +980,50 @@ function CreateTourismContent() {
 
       setSubmitProgress("Uploading media...");
 
-      const readUploadError = async (response: Response, fallback: string): Promise<string> => {
-        const payload = (await response.json().catch(() => null)) as {
-          error?: unknown;
-          traceId?: unknown;
-        } | null;
-        const payloadError =
-          payload && typeof payload.error === "string" ? payload.error.trim() : "";
-        const traceId =
-          payload && typeof payload.traceId === "string" ? payload.traceId.trim() : "";
-        if (payloadError && traceId) return `${payloadError} (trace: ${traceId})`;
-        if (payloadError) return payloadError;
-        return `${fallback} (HTTP ${response.status})`;
-      };
-
       const uploadArea = listingType === "tourism_business" ? "business" : "promotion";
+      const primaryMediaFile = videoFiles[0] ?? photoFiles[0] ?? null;
+      const mediaDimensionsPromise = primaryMediaFile
+        ? readMediaDimensions(primaryMediaFile)
+        : Promise.resolve(null);
 
-      let compressedVideoFileRef: File | null = null;
       const [imageUrls, videoUrls, uploadedVideoThumbnailUrl, uploadedLogoUrl] = await Promise.all([
-        // Photos
-        photoFiles.length > 0
-          ? (async () => {
-              const fd = new FormData();
-              fd.append("area", uploadArea);
-              photoFiles.forEach((f) => fd.append("files", f));
-              const res = await fetchWithRetry("/api/media/upload", {
-                method: "POST",
-                headers: withCsrfHeaders(),
-                body: fd,
-              });
-              if (!res.ok) throw new Error(await readUploadError(res, "Failed to upload photos"));
-              const json = await res.json();
-              setUploadStatuses((c) => ({ ...c, photos: "done" }));
-              return (json.urls || []) as string[];
-            })()
-          : Promise.resolve([] as string[]),
-        // Videos
-        videoFiles.length > 0
-          ? (async () => {
-              setSubmitProgress("Compressing video...");
-              const { compressVideoForUpload } = await import("@/lib/media/compress-before-upload");
-              const compressed: File[] = [];
-              for (const f of videoFiles) compressed.push(await compressVideoForUpload(f));
-              compressedVideoFileRef = compressed[0] ?? null;
-              setSubmitProgress("Uploading media...");
-              const result = await Promise.all(
-                compressed.map(async (file) => {
-                  const urlRes = await fetchWithRetry("/api/media/upload-url", {
-                    method: "POST",
-                    headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-                    body: JSON.stringify({
-                      filename: file.name,
-                      contentType: file.type,
-                      size: file.size,
-                      area: uploadArea,
-                    }),
-                  });
-                  if (!urlRes.ok)
-                    throw new Error(
-                      await readUploadError(urlRes, "Failed to get video upload URL")
-                    );
-                  const { uploadUrl, publicUrl } = await urlRes.json();
-                  const putRes = await fetchWithRetry(uploadUrl, {
-                    method: "PUT",
-                    headers: { "Content-Type": file.type },
-                    body: file,
-                  });
-                  if (!putRes.ok) throw new Error(`Failed to upload video (HTTP ${putRes.status})`);
-                  return publicUrl as string;
-                })
-              );
-              setUploadStatuses((c) => ({ ...c, videos: "done" }));
-              return result;
-            })()
-          : Promise.resolve([] as string[]),
-        // Video thumbnail
-        videoThumbnailFile.length > 0
-          ? (async () => {
-              const fd = new FormData();
-              fd.append("area", uploadArea);
-              fd.append("files", videoThumbnailFile[0]);
-              const res = await fetchWithRetry("/api/media/upload", {
-                method: "POST",
-                headers: withCsrfHeaders(),
-                body: fd,
-              });
-              if (!res.ok) return undefined;
-              const json = await res.json();
-              return json.urls?.[0] as string | undefined;
-            })()
-          : Promise.resolve(undefined as string | undefined),
-        // Logo
-        logoFiles.length > 0
-          ? (async () => {
-              const fd = new FormData();
-              fd.append("area", listingType === "tourism_business" ? "business_logo" : "promotion");
-              fd.append("files", logoFiles[0]);
-              const res = await fetchWithRetry("/api/media/upload", {
-                method: "POST",
-                headers: withCsrfHeaders(),
-                body: fd,
-              });
-              if (!res.ok) return undefined;
-              const json = await res.json();
-              setUploadStatuses((c) => ({ ...c, logo: "done" }));
-              return json.urls?.[0] as string | undefined;
-            })()
-          : Promise.resolve(undefined as string | undefined),
+        uploadRequiredPromotionMedia({
+          files: photoFiles,
+          area: uploadArea,
+          field: "images",
+        }).then((urls) => {
+          if (photoFiles.length > 0) {
+            setUploadStatuses((current) => ({ ...current, photos: "done" }));
+          }
+          return urls;
+        }),
+        uploadPromotionVideoFiles({
+          files: videoFiles,
+          area: uploadArea,
+        }).then((urls) => {
+          if (videoFiles.length > 0) {
+            setUploadStatuses((current) => ({ ...current, videos: "done" }));
+          }
+          return urls;
+        }),
+        uploadRequiredPromotionMedia({
+          files: videoThumbnailFile,
+          area: uploadArea,
+          field: "video_thumbnail",
+        }).then((urls) => urls[0]),
+        uploadRequiredPromotionMedia({
+          files: logoFiles,
+          area: listingType === "tourism_business" ? "business_logo" : "promotion",
+          field: "logo_url",
+        }).then((urls) => {
+          if (logoFiles.length > 0) {
+            setUploadStatuses((current) => ({ ...current, logo: "done" }));
+          }
+          return urls[0];
+        }),
       ]);
 
-      const primaryMediaFile = compressedVideoFileRef ?? videoFiles[0] ?? photoFiles[0] ?? null;
-      const mediaDimensions = primaryMediaFile ? await readMediaDimensions(primaryMediaFile) : null;
+      const mediaDimensions = await mediaDimensionsPromise;
 
       if (listingType === "tourism_business") {
         setSubmitProgress("Saving tourism business...");
@@ -1419,6 +1359,16 @@ function CreateTourismContent() {
       discardDraft();
       router.push("/dashboard/listings?area=PROMOTIONS_EVENTS&created=tourism");
     } catch (error: unknown) {
+      const uploadFailure = getPromotionMediaUploadErrorState(error);
+      if (uploadFailure) {
+        const normalizedFieldErrors = normalizeTourismFieldErrors(uploadFailure.fieldErrors);
+        setStep(3);
+        setFieldErrors((current) => ({ ...current, ...normalizedFieldErrors }));
+        setFormError(uploadFailure.formError);
+        focusFirstError(normalizedFieldErrors, 3);
+        return;
+      }
+
       setFormError(normalizeCreatePostRuntimeError(error, "Something went wrong."));
     } finally {
       setIsSubmitting(false);
@@ -3302,9 +3252,15 @@ function CreateTourismContent() {
                         label="Upload logo"
                         maxFiles={1}
                         files={logoFiles}
-                        onChange={setLogoFiles}
+                        onChange={(files) => {
+                          setLogoFiles(files);
+                          clearErrors("logo_url");
+                        }}
                         accept="image/*"
                       />
+                      {fieldErrors.logo_url && (
+                        <p className="text-sm text-destructive">{fieldErrors.logo_url}</p>
+                      )}
                     </div>
 
                     {/* Photos */}
@@ -3468,12 +3424,22 @@ function CreateTourismContent() {
 
                     {/* Video thumbnail */}
                     {videoFiles.length > 0 && (
-                      <div className="space-y-2">
+                      <div
+                        id="tourism-video-thumbnail"
+                        tabIndex={-1}
+                        className="space-y-2 rounded-lg"
+                      >
                         <Label>Video Thumbnail</Label>
                         <VideoFrameSelector
                           file={videoFiles[0]}
-                          onFrameSelect={(f) => setVideoThumbnailFile(f ? [f] : [])}
+                          onFrameSelect={(f) => {
+                            setVideoThumbnailFile(f ? [f] : []);
+                            clearErrors("video_thumbnail");
+                          }}
                         />
+                        {fieldErrors.video_thumbnail && (
+                          <p className="text-sm text-destructive">{fieldErrors.video_thumbnail}</p>
+                        )}
                       </div>
                     )}
 
