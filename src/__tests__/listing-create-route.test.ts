@@ -18,8 +18,13 @@ const { mockHasPhoneNumber } = vi.hoisted(() => ({
   mockHasPhoneNumber: vi.fn(),
 }));
 
-const { mockCreateNotification, mockShouldSendOwnerLifecycleNotifications } = vi.hoisted(() => ({
+const {
+  mockCreateNotification,
+  mockNotifyStaffForAdminEvent,
+  mockShouldSendOwnerLifecycleNotifications,
+} = vi.hoisted(() => ({
   mockCreateNotification: vi.fn().mockResolvedValue(true),
+  mockNotifyStaffForAdminEvent: vi.fn().mockResolvedValue(true),
   mockShouldSendOwnerLifecycleNotifications: vi.fn().mockReturnValue(true),
 }));
 
@@ -38,6 +43,7 @@ vi.mock("@/lib/utils/csrf", () => ({ enforceCsrfToken: mockEnforceCsrfToken }));
 vi.mock("@/lib/account/require-phone", () => ({ hasPhoneNumber: mockHasPhoneNumber }));
 vi.mock("@/lib/notifications", () => ({
   createNotification: mockCreateNotification,
+  notifyStaffForAdminEvent: mockNotifyStaffForAdminEvent,
   shouldSendOwnerLifecycleNotifications: mockShouldSendOwnerLifecycleNotifications,
 }));
 
@@ -489,6 +495,13 @@ describe("POST /api/listings", () => {
         href: "/dashboard/listings",
       })
     );
+    expect(mockNotifyStaffForAdminEvent).toHaveBeenCalledWith({
+      capability: "queue:view",
+      title: "New listing submission",
+      message: '"Apple iPhone 15 Pro" is waiting in the moderation queue.',
+      href: "/admin/moderation",
+      excludeUserId: USER_ID,
+    });
   });
 
   it("returns a free-post limit error when the claim rpc reports no remaining slots", async () => {

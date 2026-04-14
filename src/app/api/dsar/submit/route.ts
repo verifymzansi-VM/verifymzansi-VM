@@ -10,6 +10,7 @@ import { createLogger } from "@/lib/utils/logger";
 import { maskIdNumber } from "@/lib/utils/mask";
 import { getClientIp, checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { notifyStaffForAdminEvent } from "@/lib/notifications";
 import { sanitizeUserMessage } from "@/lib/utils/sanitize-html";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
@@ -161,6 +162,14 @@ export async function POST(request: NextRequest) {
         requestId: dsarRecord.id,
         error: emailError instanceof Error ? emailError.message : "unknown error",
       });
+    });
+
+    void notifyStaffForAdminEvent({
+      capability: "dsar:manage",
+      title: "New data request submitted",
+      message: `${type.replace(/_/g, " ")} request ${reference} is ready for review.`,
+      href: "/admin/dsar",
+      excludeUserId: user.id,
     });
 
     return NextResponse.json({

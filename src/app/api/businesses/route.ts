@@ -45,7 +45,11 @@ import {
   PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
   shouldHidePlaywrightFixtures,
 } from "@/lib/supabase/playwright-visual-fixtures";
-import { createNotification, shouldSendOwnerLifecycleNotifications } from "@/lib/notifications";
+import {
+  createNotification,
+  notifyStaffForAdminEvent,
+  shouldSendOwnerLifecycleNotifications,
+} from "@/lib/notifications";
 import { claimFreePostSlot, releaseFreePostSlot } from "@/lib/billing/free-posts";
 
 const log = createLogger("BusinessesCRUD");
@@ -415,6 +419,14 @@ export async function POST(request: NextRequest) {
         href: "/dashboard/businesses",
       });
     }
+
+    void notifyStaffForAdminEvent({
+      capability: "queue:view",
+      title: "New business submission",
+      message: `\"${data.business_name}\" is waiting in the moderation queue.`,
+      href: "/admin/businesses",
+      excludeUserId: user.id,
+    });
 
     return NextResponse.json({ success: true, business: { id: business.id } }, { status: 201 });
   } catch (err) {

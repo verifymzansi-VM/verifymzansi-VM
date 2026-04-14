@@ -15,7 +15,11 @@ import {
   type PromotionType,
 } from "@/types/enums";
 import { inferPromotionCategoryKey } from "@/lib/utils/promotion-category";
-import { createNotification, shouldSendOwnerLifecycleNotifications } from "@/lib/notifications";
+import {
+  createNotification,
+  notifyStaffForAdminEvent,
+  shouldSendOwnerLifecycleNotifications,
+} from "@/lib/notifications";
 import {
   getStoredPromotionTypesForFilter,
   parsePromotionFilterType,
@@ -480,6 +484,14 @@ export async function POST(request: NextRequest) {
         href: "/dashboard/promotions",
       });
     }
+
+    void notifyStaffForAdminEvent({
+      capability: "queue:view",
+      title: "New tourism or event submission",
+      message: `\"${data.title}\" is waiting in the moderation queue.`,
+      href: "/admin/promotions-events",
+      excludeUserId: user.id,
+    });
 
     return NextResponse.json({ success: true, promotion: { id: promotion.id } }, { status: 201 });
   } catch (err) {

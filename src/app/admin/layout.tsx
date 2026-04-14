@@ -1,4 +1,7 @@
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
+import { AdminLiveNotifier } from "@/components/admin/admin-live-notifier";
+import { AdminRealtimeRefresh } from "@/components/admin/admin-realtime-refresh";
+import { NotificationBell } from "@/components/notification-bell";
 import { BrandLogo } from "@/components/shared/brand-logo";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -30,7 +33,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     const { redirect } = await import("next/navigation");
     redirect(!user ? "/login" : "/dashboard");
   }
-  const role = getRoleFromUser(user) || "viewer";
+  const staffUser = user!;
+  const role = getRoleFromUser(staffUser) || "viewer";
   const staffRole = asStaffRole(role);
   const workspaceLabel = staffRole ? (WORKSPACE_LABELS[staffRole] ?? "Admin") : "Admin";
 
@@ -55,15 +59,21 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
       {/* Admin specific minimalist top-nav instead of public Header */}
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-14 items-center">
+        <div className="container flex h-14 items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <BrandLogo size="sm" />
             <span className="rounded-full border border-border px-2.5 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
               {workspaceLabel}
             </span>
           </div>
+          <div className="flex items-center gap-2">
+            <NotificationBell userId={staffUser.id} />
+          </div>
         </div>
       </header>
+
+      <AdminLiveNotifier userId={staffUser.id} />
+      <AdminRealtimeRefresh />
 
       <div className="flex flex-1">
         <AdminSidebar

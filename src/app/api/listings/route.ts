@@ -44,7 +44,11 @@ import {
   PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
   shouldHidePlaywrightFixtures,
 } from "@/lib/supabase/playwright-visual-fixtures";
-import { createNotification, shouldSendOwnerLifecycleNotifications } from "@/lib/notifications";
+import {
+  createNotification,
+  notifyStaffForAdminEvent,
+  shouldSendOwnerLifecycleNotifications,
+} from "@/lib/notifications";
 import { claimFreePostSlot, releaseFreePostSlot } from "@/lib/billing/free-posts";
 
 const log = createLogger("ListingCreate");
@@ -923,6 +927,14 @@ export async function POST(request: NextRequest) {
         href: "/dashboard/listings",
       });
     }
+
+    void notifyStaffForAdminEvent({
+      capability: "queue:view",
+      title: "New listing submission",
+      message: `\"${data.title}\" is waiting in the moderation queue.`,
+      href: "/admin/moderation",
+      excludeUserId: user.id,
+    });
 
     return NextResponse.json(
       {

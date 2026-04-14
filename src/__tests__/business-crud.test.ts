@@ -24,8 +24,13 @@ const { mockHasPhoneNumber } = vi.hoisted(() => ({
   mockHasPhoneNumber: vi.fn(),
 }));
 
-const { mockCreateNotification, mockShouldSendOwnerLifecycleNotifications } = vi.hoisted(() => ({
+const {
+  mockCreateNotification,
+  mockNotifyStaffForAdminEvent,
+  mockShouldSendOwnerLifecycleNotifications,
+} = vi.hoisted(() => ({
   mockCreateNotification: vi.fn().mockResolvedValue(true),
+  mockNotifyStaffForAdminEvent: vi.fn().mockResolvedValue(true),
   mockShouldSendOwnerLifecycleNotifications: vi.fn().mockReturnValue(true),
 }));
 
@@ -44,6 +49,7 @@ vi.mock("@/lib/utils/csrf", () => ({ enforceCsrfToken: mockEnforceCsrfToken }));
 vi.mock("@/lib/account/require-phone", () => ({ hasPhoneNumber: mockHasPhoneNumber }));
 vi.mock("@/lib/notifications", () => ({
   createNotification: mockCreateNotification,
+  notifyStaffForAdminEvent: mockNotifyStaffForAdminEvent,
   shouldSendOwnerLifecycleNotifications: mockShouldSendOwnerLifecycleNotifications,
 }));
 
@@ -338,6 +344,124 @@ describe("POST /api/businesses", () => {
     );
     // Video is allowed on all MZANSI_BUSINESS tiers
     expect(res.status).not.toBe(422);
+  });
+
+  it("creates a business successfully and notifies the admin queue", async () => {
+    const insertSpy = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: VALID_BUSINESS_ID }, error: null }),
+      }),
+    });
+
+    mockCreateClient.mockResolvedValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { tier: "growth" } }),
+          };
+        }
+        if (table === "businesses") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            neq: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+            insert: insertSpy,
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          gt: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          neq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } } }) },
+    });
+
+    mockCreateAdminClient.mockReturnValue({
+      rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { tier: "growth" } }),
+          };
+        }
+        if (table === "businesses") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const res = await POST(createRequest(VALID_BODY));
+    const body = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(body).toMatchObject({
+      success: true,
+      business: { id: VALID_BUSINESS_ID },
+    });
+    expect(mockCreateNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: USER_ID,
+        title: "Business profile submitted",
+        href: "/dashboard/businesses",
+      })
+    );
+    expect(mockNotifyStaffForAdminEvent).toHaveBeenCalledWith({
+      capability: "queue:view",
+      title: "New business submission",
+      message: '"Nomsa Fashion" is waiting in the moderation queue.',
+      href: "/admin/businesses",
+      excludeUserId: USER_ID,
+    });
   });
 
   it("returns 409 when the requested slug is already in use", async () => {

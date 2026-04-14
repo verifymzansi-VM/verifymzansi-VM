@@ -8,6 +8,7 @@ import crypto from "crypto";
 import { createLogger } from "@/lib/utils/logger";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { notifyStaffForAdminEvent } from "@/lib/notifications";
 import { sanitizeUserMessage } from "@/lib/utils/sanitize-html";
 
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
@@ -112,6 +113,14 @@ export async function POST(request: NextRequest) {
       });
       return NextResponse.json({ error: "Failed to submit report" }, { status: 500 });
     }
+
+    void notifyStaffForAdminEvent({
+      capability: "queue:view",
+      title: "New report submitted",
+      message: "A new report is waiting in the reports queue.",
+      href: "/admin/reports",
+      excludeUserId: user?.id ?? undefined,
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

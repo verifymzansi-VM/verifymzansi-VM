@@ -16,8 +16,13 @@ const { mockHasPhoneNumber } = vi.hoisted(() => ({
   mockHasPhoneNumber: vi.fn(),
 }));
 
-const { mockCreateNotification, mockShouldSendOwnerLifecycleNotifications } = vi.hoisted(() => ({
+const {
+  mockCreateNotification,
+  mockNotifyStaffForAdminEvent,
+  mockShouldSendOwnerLifecycleNotifications,
+} = vi.hoisted(() => ({
   mockCreateNotification: vi.fn().mockResolvedValue(true),
+  mockNotifyStaffForAdminEvent: vi.fn().mockResolvedValue(true),
   mockShouldSendOwnerLifecycleNotifications: vi.fn().mockReturnValue(true),
 }));
 
@@ -31,6 +36,7 @@ vi.mock("@/lib/utils/csrf", () => ({ enforceCsrfToken: mockEnforceCsrfToken }));
 vi.mock("@/lib/account/require-phone", () => ({ hasPhoneNumber: mockHasPhoneNumber }));
 vi.mock("@/lib/notifications", () => ({
   createNotification: mockCreateNotification,
+  notifyStaffForAdminEvent: mockNotifyStaffForAdminEvent,
   shouldSendOwnerLifecycleNotifications: mockShouldSendOwnerLifecycleNotifications,
 }));
 
@@ -609,6 +615,13 @@ describe("POST /api/promotions", () => {
         href: "/dashboard/promotions",
       })
     );
+    expect(mockNotifyStaffForAdminEvent).toHaveBeenCalledWith({
+      capability: "queue:view",
+      title: "New tourism or event submission",
+      message: '"Great Deal on Electronics" is waiting in the moderation queue.',
+      href: "/admin/promotions-events",
+      excludeUserId: USER_ID,
+    });
   });
 
   it("returns 404 when linked business is not owned by the caller", async () => {
