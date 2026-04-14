@@ -60,7 +60,7 @@ export default async function MzansiBusinessPage() {
     .filter(
       (business) => !isPlaceholderMarketplaceContent(business.business_name, business.description)
     )
-    .slice(0, 5);
+    .slice(0, 7);
 
   const carouselItems: CarouselItem[] =
     visibleTopBusinesses.length > 0

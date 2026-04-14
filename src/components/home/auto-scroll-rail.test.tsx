@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AutoScrollRail } from "./auto-scroll-rail";
+import { AutoScrollRail, useAutoScrollRailItemState } from "./auto-scroll-rail";
 
 const HOVER_QUERY = "(hover: hover) and (pointer: fine)";
 
@@ -26,6 +26,19 @@ function mockRailLayout(rail: HTMLDivElement, scrollLeft: number) {
     configurable: true,
     value: () => ({ width: 240 }),
   });
+}
+
+function RailItemProbe({ label }: { label: string }) {
+  const { isActive, isRailDragging } = useAutoScrollRailItemState();
+  return (
+    <div
+      data-testid={`rail-item-${label}`}
+      data-active={isActive ? "true" : "false"}
+      data-dragging={isRailDragging ? "true" : "false"}
+    >
+      {label}
+    </div>
+  );
 }
 
 describe("AutoScrollRail", () => {
@@ -170,5 +183,74 @@ describe("AutoScrollRail", () => {
     expect(rail.className).toContain("mx-0");
     expect(rail.className).toContain("px-0");
     expect(rail.className).not.toContain("-mx-2");
+  });
+
+  it("tracks the centered item as the active rail item", () => {
+    render(
+      <AutoScrollRail ariaLabel="Active rail">
+        <RailItemProbe label="one" />
+        <RailItemProbe label="two" />
+        <RailItemProbe label="three" />
+      </AutoScrollRail>
+    );
+
+    const rail = screen.getByLabelText("Active rail") as HTMLDivElement;
+    mockRailLayout(rail, 0);
+
+    act(() => {
+      vi.runAllTimers();
+    });
+    expect(screen.getByTestId("rail-item-one")).toHaveAttribute("data-active", "true");
+
+    act(() => {
+      rail.scrollLeft = 480;
+      fireEvent.scroll(rail);
+      vi.runAllTimers();
+    });
+
+    expect(screen.getByTestId("rail-item-three")).toHaveAttribute("data-active", "true");
+  });
+
+  it("marks the rail as dragging while desktop pointer dragging is active", () => {
+    render(
+      <AutoScrollRail ariaLabel="Dragging rail">
+        <RailItemProbe label="one" />
+        <RailItemProbe label="two" />
+      </AutoScrollRail>
+    );
+
+    const rail = screen.getByLabelText("Dragging rail") as HTMLDivElement;
+    mockRailLayout(rail, 0);
+
+    fireEvent.pointerDown(rail, { pointerType: "mouse", button: 0, pageX: 120 });
+    fireEvent.pointerMove(rail, { pointerType: "mouse", pageX: 180 });
+
+    expect(screen.getByTestId("rail-item-one")).toHaveAttribute("data-dragging", "true");
+
+    fireEvent.pointerUp(rail, { pointerType: "mouse" });
+
+    expect(screen.getByTestId("rail-item-one")).toHaveAttribute("data-dragging", "false");
+  });
+
+  it("marks the rail as dragging immediately on touch start and clears after settle", () => {
+    render(
+      <AutoScrollRail ariaLabel="Touch dragging rail">
+        <RailItemProbe label="one" />
+        <RailItemProbe label="two" />
+      </AutoScrollRail>
+    );
+
+    const rail = screen.getByLabelText("Touch dragging rail") as HTMLDivElement;
+    mockRailLayout(rail, 0);
+
+    fireEvent.touchStart(rail);
+    expect(screen.getByTestId("rail-item-one")).toHaveAttribute("data-dragging", "true");
+
+    act(() => {
+      fireEvent.touchEnd(rail);
+      vi.advanceTimersByTime(150);
+    });
+
+    expect(screen.getByTestId("rail-item-one")).toHaveAttribute("data-dragging", "false");
   });
 });

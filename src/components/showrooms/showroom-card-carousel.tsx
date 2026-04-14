@@ -5,6 +5,7 @@ import {
   useEffect,
   useCallback,
   useRef,
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type KeyboardEvent,
 } from "react";
@@ -62,8 +63,8 @@ const SWIPE_THRESHOLD = 50;
 const VELOCITY_THRESHOLD = 0.4; // px/ms — fast flick triggers swipe below distance threshold
 const DRAG_CLICK_THRESHOLD = 12; // px — tolerate small finger jitter so taps still open the active card
 const VISIBILITY_THRESHOLD = 0.25;
-const SPRING_BACK_MS = 350; // duration for drag-x to spring back to 0 after release
 const DRAG_SUPPRESSION_RESET_MS = 160;
+const PREVIEW_TILT_DEG = 8;
 const SA_FLAG_SRC = "/images/South%20African%20flag%20with%20confetti%20burst.png";
 
 const CARD_W =
@@ -132,6 +133,8 @@ export function ShowroomCardCarousel({
 
   /* ── Drag / pointer state ──────────────────────────────── */
   const [isDragging, setIsDragging] = useState(false);
+  const [dragDelta, setDragDelta] = useState(0);
+  const [previewStep, setPreviewStep] = useState<-1 | 0 | 1>(0);
   const dragStartXRef = useRef(0);
   const dragStartTimeRef = useRef(0);
   const didDragRef = useRef(false);
@@ -139,7 +142,6 @@ export function ShowroomCardCarousel({
   const activeInputModeRef = useRef<"pointer" | "mouse" | null>(null);
   const dragResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const coverflowRef = useRef<HTMLDivElement | null>(null);
-  const springBackRafRef = useRef<number | null>(null);
 
   const count = items.length;
 
@@ -167,41 +169,6 @@ export function ShowroomCardCarousel({
       setIsPaused(false);
     }, pauseOnInteractionMs);
   }, [pauseOnInteractionMs]);
-
-  /* ── Spring-back helper (animate --drag-x → 0) ─────────── */
-
-  const springBackDragX = useCallback(() => {
-    const el = coverflowRef.current;
-    if (!el) return;
-    // Use CSS transition on the pseudo-property via a wrapper element trick:
-    // Animate from current --drag-x to 0 over SPRING_BACK_MS.
-    const current = parseFloat(getComputedStyle(el).getPropertyValue("--drag-x")) || 0;
-    if (Math.abs(current) < 1) {
-      el.style.setProperty("--drag-x", "0px");
-      return;
-    }
-    const start = performance.now();
-    const from = current;
-    // Easing function matching cubic-bezier(0.22, 1, 0.36, 1)
-    const ease = (t: number) => {
-      // Approximation of cubic-bezier(0.22, 1, 0.36, 1) — strong ease-out with slight overshoot feel
-      return 1 - Math.pow(1 - t, 3);
-    };
-    const animate = (now: number) => {
-      const elapsed = now - start;
-      const progress = Math.min(elapsed / SPRING_BACK_MS, 1);
-      const value = from * (1 - ease(progress));
-      el.style.setProperty("--drag-x", `${value}px`);
-      if (progress < 1) {
-        springBackRafRef.current = requestAnimationFrame(animate);
-      } else {
-        el.style.setProperty("--drag-x", "0px");
-        springBackRafRef.current = null;
-      }
-    };
-    if (springBackRafRef.current !== null) cancelAnimationFrame(springBackRafRef.current);
-    springBackRafRef.current = requestAnimationFrame(animate);
-  }, []);
 
   const releasePointerCapture = useCallback((element: HTMLElement | null, pointerId: number) => {
     try {
@@ -254,18 +221,13 @@ export function ShowroomCardCarousel({
         return;
       }
 
-      // Cancel any ongoing spring-back before the next drag begins.
-      if (springBackRafRef.current !== null) {
-        cancelAnimationFrame(springBackRafRef.current);
-        springBackRafRef.current = null;
-      }
-
       activePointerIdRef.current = e.pointerId;
       activeInputModeRef.current = "pointer";
-      coverflowRef.current?.style.setProperty("--drag-x", "0px");
       dragStartXRef.current = e.clientX;
       dragStartTimeRef.current = Date.now();
       didDragRef.current = false;
+      setDragDelta(0);
+      setPreviewStep(0);
       setCarouselLinkInteractivity(true);
       pauseAutoSwipe();
       setIsDragging(true);
@@ -297,17 +259,13 @@ export function ShowroomCardCarousel({
         return;
       }
 
-      if (springBackRafRef.current !== null) {
-        cancelAnimationFrame(springBackRafRef.current);
-        springBackRafRef.current = null;
-      }
-
       activePointerIdRef.current = null;
       activeInputModeRef.current = "mouse";
-      coverflowRef.current?.style.setProperty("--drag-x", "0px");
       dragStartXRef.current = e.clientX;
       dragStartTimeRef.current = Date.now();
       didDragRef.current = false;
+      setDragDelta(0);
+      setPreviewStep(0);
       setCarouselLinkInteractivity(true);
       pauseAutoSwipe();
       setIsDragging(true);
@@ -330,6 +288,7 @@ export function ShowroomCardCarousel({
         releasePointerCapture(currentTarget, pointerId);
       }
       setIsDragging(false);
+      setDragDelta(0);
       if (!options?.preserveDragFlag) {
         didDragRef.current = false;
         setCarouselLinkInteractivity(true);
@@ -344,41 +303,38 @@ export function ShowroomCardCarousel({
       const elapsed = Math.max(Date.now() - dragStartTimeRef.current, 1);
       const absVelocity = Math.abs(rawDelta) / elapsed; // px/ms
       const shouldSuppressClick = didDragRef.current;
+      const previewStepAtRelease = previewStep;
 
       clearActiveDrag(coverflowRef.current, pointerId, { preserveDragFlag: shouldSuppressClick });
+      setPreviewStep(0);
 
       const shouldSwipe =
         Math.abs(rawDelta) >= SWIPE_THRESHOLD || absVelocity >= VELOCITY_THRESHOLD;
 
       if (shouldSwipe) {
         // Advance one card per swipe so users always move through the displayed sequence.
-        const direction = rawDelta > 0 ? -1 : 1; // positive delta = swipe right = go prev
+        const direction = previewStepAtRelease !== 0 ? previewStepAtRelease : rawDelta > 0 ? -1 : 1;
         pauseAutoSwipe();
-        // Animate --drag-x back to 0 smoothly while CSS transitions handle card positions
-        springBackDragX();
         goTo(activeIndex + direction);
-      } else {
-        // Not enough movement — spring back
-        springBackDragX();
       }
 
       if (shouldSuppressClick) {
         queueDragReset();
       }
     },
-    [clearActiveDrag, activeIndex, pauseAutoSwipe, goTo, queueDragReset, springBackDragX]
+    [clearActiveDrag, previewStep, activeIndex, pauseAutoSwipe, goTo, queueDragReset]
   );
 
   const cancelDrag = useCallback(
     (pointerId?: number) => {
       const shouldSuppressClick = didDragRef.current;
       clearActiveDrag(coverflowRef.current, pointerId, { preserveDragFlag: shouldSuppressClick });
-      springBackDragX();
+      setPreviewStep(0);
       if (shouldSuppressClick) {
         queueDragReset();
       }
     },
-    [clearActiveDrag, queueDragReset, springBackDragX]
+    [clearActiveDrag, queueDragReset]
   );
 
   useEffect(() => {
@@ -396,7 +352,8 @@ export function ShowroomCardCarousel({
         }
         didDragRef.current = true;
       }
-      coverflowRef.current?.style.setProperty("--drag-x", `${delta}px`);
+      setDragDelta(delta);
+      setPreviewStep(delta >= SWIPE_THRESHOLD ? -1 : delta <= -SWIPE_THRESHOLD ? 1 : 0);
     };
 
     const handleWindowPointerUp = (event: PointerEvent) => {
@@ -428,7 +385,8 @@ export function ShowroomCardCarousel({
         }
         didDragRef.current = true;
       }
-      coverflowRef.current?.style.setProperty("--drag-x", `${delta}px`);
+      setDragDelta(delta);
+      setPreviewStep(delta >= SWIPE_THRESHOLD ? -1 : delta <= -SWIPE_THRESHOLD ? 1 : 0);
     };
 
     const handleWindowMouseUp = (event: MouseEvent) => {
@@ -470,14 +428,15 @@ export function ShowroomCardCarousel({
       activeInputModeRef.current = null;
       activePointerIdRef.current = null;
       setIsDragging(false);
-      springBackDragX();
+      setDragDelta(0);
+      setPreviewStep(0);
       if (!shouldSuppressClick) {
         didDragRef.current = false;
         return;
       }
       queueDragReset();
     },
-    [queueDragReset, springBackDragX]
+    [queueDragReset]
   );
 
   const handleClickCapture = useCallback(
@@ -566,11 +525,13 @@ export function ShowroomCardCarousel({
     nextRef.current();
   }, []);
 
-  const activeIsVideo = isVideoUrl(items[activeIndex]?.mediaUrl);
+  const displayIndex =
+    count <= 1 ? activeIndex : (((activeIndex + previewStep) % count) + count) % count;
+  const activeIsVideo = isVideoUrl(items[displayIndex]?.mediaUrl);
 
   useEffect(() => {
     videoEndedRef.current = false;
-  }, [activeIndex]);
+  }, [displayIndex]);
 
   useEffect(() => {
     if (count <= 1 || reducedMotion || !isVisible) return;
@@ -584,7 +545,7 @@ export function ShowroomCardCarousel({
     }, delayMs);
     return () => clearTimeout(id);
   }, [
-    activeIndex,
+    displayIndex,
     activeIsVideo,
     imageDisplayMs,
     videoFallbackMs,
@@ -599,14 +560,13 @@ export function ShowroomCardCarousel({
     return () => {
       if (pauseTimeoutRef.current) clearTimeout(pauseTimeoutRef.current);
       if (dragResetTimeoutRef.current) clearTimeout(dragResetTimeoutRef.current);
-      if (springBackRafRef.current !== null) cancelAnimationFrame(springBackRafRef.current);
     };
   }, []);
 
   /* ── Render helpers ────────────────────────────────────── */
 
   function signedOffset(i: number): number {
-    const raw = i - activeIndex;
+    const raw = i - displayIndex;
     if (count <= 1) return 0;
     const half = count / 2;
     if (raw > half) return raw - count;
@@ -619,18 +579,31 @@ export function ShowroomCardCarousel({
       reducedMotion || isDragging ? "transition-none" : "transition-all duration-600";
 
     const byOffset: Record<number, string> = {
-      [-3]: "translate-x-[calc(-50%-92%)] scale-[0.68] opacity-0 blur-[1px] z-0 pointer-events-none",
-      [-2]: "translate-x-[calc(-50%-63%+var(--drag-x,0px))] scale-[0.76] opacity-55 saturate-[0.88] blur-[0.6px] z-10",
-      [-1]: "translate-x-[calc(-50%-36%+var(--drag-x,0px))] scale-[0.88] opacity-82 saturate-[0.94] z-20",
-      0: "translate-x-[calc(-50%+var(--drag-x,0px))] scale-100 opacity-100 z-30 shadow-[0_40px_120px_-48px_rgba(15,23,42,0.85)]",
-      1: "translate-x-[calc(-50%+36%+var(--drag-x,0px))] scale-[0.88] opacity-82 saturate-[0.94] z-20",
-      2: "translate-x-[calc(-50%+63%+var(--drag-x,0px))] scale-[0.76] opacity-55 saturate-[0.88] blur-[0.6px] z-10",
-      3: "translate-x-[calc(-50%+92%)] scale-[0.68] opacity-0 blur-[1px] z-0 pointer-events-none",
+      [-3]: "hidden lg:block translate-x-[calc(-50%-92%)] scale-[0.68] opacity-45 saturate-[0.82] blur-[1px] z-0 pointer-events-none",
+      [-2]: "hidden md:block translate-x-[calc(-50%-63%)] scale-[0.76] opacity-55 saturate-[0.88] blur-[0.6px] z-10 pointer-events-none",
+      [-1]: "translate-x-[calc(-50%-36%)] scale-[0.88] opacity-82 saturate-[0.94] z-20",
+      0: "translate-x-[-50%] scale-100 opacity-100 z-30 shadow-[0_40px_120px_-48px_rgba(15,23,42,0.85)]",
+      1: "translate-x-[calc(-50%+36%)] scale-[0.88] opacity-82 saturate-[0.94] z-20",
+      2: "hidden md:block translate-x-[calc(-50%+63%)] scale-[0.76] opacity-55 saturate-[0.88] blur-[0.6px] z-10 pointer-events-none",
+      3: "hidden lg:block translate-x-[calc(-50%+92%)] scale-[0.68] opacity-45 saturate-[0.82] blur-[1px] z-0 pointer-events-none",
     };
 
     const preset = byOffset[offset] ?? byOffset[Math.sign(offset) * 3] ?? byOffset[0];
 
     return cn("absolute left-1/2 top-0 will-change-transform", transitionClass, preset);
+  }
+
+  function cardStyle(offset: number): CSSProperties | undefined {
+    if (!isDragging || offset !== 0 || previewStep !== 0 || Math.abs(dragDelta) < 1) {
+      return reducedMotion || isDragging
+        ? undefined
+        : { transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" };
+    }
+
+    const progress = Math.max(-1, Math.min(1, dragDelta / SWIPE_THRESHOLD));
+    return {
+      transform: `translateX(-50%) rotateY(${progress * PREVIEW_TILT_DEG}deg) scale(${1 - Math.abs(progress) * 0.02})`,
+    };
   }
 
   /* ── Empty state ───────────────────────────────────────── */
@@ -709,11 +682,8 @@ export function ShowroomCardCarousel({
             <div
               key={item.id}
               className={cn(CARD_W, cardClass(offset))}
-              style={
-                reducedMotion || isDragging
-                  ? undefined
-                  : { transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }
-              }
+              style={cardStyle(offset)}
+              data-slot-offset={offset}
               role="group"
               aria-roledescription="slide"
               aria-label={`${i + 1} of ${count}`}
@@ -809,10 +779,10 @@ export function ShowroomCardCarousel({
               aria-label={`Go to slide ${i + 1}`}
               className="inline-flex h-8 w-8 items-center justify-center rounded-full"
             >
-              {i === activeIndex ? (
+              {i === displayIndex ? (
                 <span className="relative h-2 w-6 overflow-hidden rounded-full bg-white/25">
                   <span
-                    key={activeIndex}
+                    key={displayIndex}
                     className={cn(
                       "absolute inset-y-0 left-0 rounded-full bg-brand-green-400",
                       reducedMotion || isPaused
@@ -841,7 +811,7 @@ export function ShowroomCardCarousel({
       {/* Screen-reader live announcer */}
       {count > 1 && (
         <div className="sr-only" aria-live="polite" aria-atomic="true">
-          {`Slide ${activeIndex + 1} of ${count}`}
+          {`Slide ${displayIndex + 1} of ${count}`}
         </div>
       )}
     </SectionShell>

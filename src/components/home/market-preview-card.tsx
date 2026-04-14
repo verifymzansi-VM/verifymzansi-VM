@@ -1,6 +1,7 @@
 "use client";
 
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
+import { useAutoScrollRailItemState } from "@/components/home/auto-scroll-rail";
 
 interface MarketPreviewCardProps {
   href: string;
@@ -42,6 +43,8 @@ export function MarketPreviewCard({
   mediaWidth,
   mediaHeight,
 }: MarketPreviewCardProps) {
+  const { isActive, isRailDragging } = useAutoScrollRailItemState();
+
   return (
     <PosterCardShell
       href={href}
@@ -61,6 +64,7 @@ export function MarketPreviewCard({
       focalY={focalY}
       mediaWidth={mediaWidth}
       mediaHeight={mediaHeight}
+      feedPlaybackActive={isActive && !isRailDragging}
     />
   );
 }

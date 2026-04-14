@@ -55,7 +55,7 @@ export default async function MzansiMarketPage() {
   const carouselItems = (listings ?? [])
     .filter((listing) => !shouldHidePlaywrightFixtureRowWhenEnabled(listing, hideFixtures))
     .filter((listing) => !isPlaceholderMarketplaceContent(listing.title, listing.description))
-    .slice(0, 5)
+    .slice(0, 7)
     .map((l) => listingToCarouselItem(l));
 
   return (

@@ -1,11 +1,12 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ArrowRight, Building2, TreePalm, ShoppingBag } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { MobileNav } from "@/components/layout/mobile-nav";
+import { HomeOnboardingDestinations } from "@/components/home/home-onboarding-destinations";
 import { MarketplacePreviewsSkeleton } from "@/components/home/marketplace-previews-skeleton";
 import { HeroBannerWithData } from "@/components/home/hero-banner-with-data";
 import { HeroBannerSkeleton } from "@/components/home/hero-banner-skeleton";
@@ -36,26 +37,29 @@ export default async function HomePage() {
   const sameAs = getOfficialSocialSameAs(runtimeConfig.officialSocialLinks);
   const onboardingDestinations = [
     {
+      id: "mzansi-market",
       title: "Mzansi Market",
       description: "Products and listings from verified sellers.",
       href: "/mzansi-market",
-      icon: ShoppingBag,
+      iconKey: "market",
       accentClass: "text-brand-green",
       iconBgClass: "bg-brand-green/10",
     },
     {
+      id: "mzansi-business",
       title: "Mzansi Business",
       description: "Verified local businesses you can trust.",
       href: "/mzansi-business",
-      icon: Building2,
+      iconKey: "business",
       accentClass: "text-brand-blue",
       iconBgClass: "bg-brand-blue/10",
     },
     {
+      id: "tourism-events",
       title: "Tourism & Events",
       description: "Tourism destinations, accommodations, and events near you.",
       href: "/promotions",
-      icon: TreePalm,
+      iconKey: "tourism",
       accentClass: "text-teal-400",
       iconBgClass: "bg-teal-500/10",
     },
@@ -235,37 +239,7 @@ export default async function HomePage() {
                     </div>
                   </div>
 
-                  <div className="grid w-full max-w-xl gap-3 self-start justify-self-center">
-                    {onboardingDestinations.map(
-                      ({ title, description, href, icon: Icon, accentClass, iconBgClass }) => (
-                        <Link
-                          key={title}
-                          href={href}
-                          prefetch={false}
-                          className="group rounded-[1.5rem] border border-slate-200/80 bg-white/88 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white hover:shadow-[0_20px_40px_-28px_rgba(15,23,42,0.4)] dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-white/15 dark:hover:bg-white/[0.05]"
-                        >
-                          <div className="flex items-start gap-4">
-                            <div
-                              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${iconBgClass} ${accentClass}`}
-                            >
-                              <Icon className="h-5 w-5" />
-                            </div>
-                            <div className="min-w-0 space-y-2">
-                              <div className="flex items-center justify-between gap-3">
-                                <p className="text-base font-semibold text-slate-950 dark:text-white">
-                                  {title}
-                                </p>
-                                <ArrowRight className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-hover:translate-x-1 dark:text-slate-500" />
-                              </div>
-                              <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">
-                                {description}
-                              </p>
-                            </div>
-                          </div>
-                        </Link>
-                      )
-                    )}
-                  </div>
+                  <HomeOnboardingDestinations destinations={onboardingDestinations} />
                 </div>
               </div>
             </div>

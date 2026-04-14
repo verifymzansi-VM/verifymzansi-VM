@@ -17,8 +17,9 @@ import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
  * - Respects `prefers-reduced-motion: reduce`.
  *
  * @param videoSrc The video URL. Pass `undefined` when the media is not a video.
+ * @param isPlaybackEligible When false, the video stays paused even if visible.
  */
-export function useVideoFeed(videoSrc?: string) {
+export function useVideoFeed(videoSrc?: string, isPlaybackEligible = true) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const reducedMotion = useReducedMotion();
   const manager = useVideoPlaybackManager();
@@ -69,10 +70,11 @@ export function useVideoFeed(videoSrc?: string) {
           // Reset user-pause when element scrolls back into view from being mostly hidden
           // (handled below in the !isIntersecting branch)
 
-          if (!reducedMotion && !isPausedByUserRef.current) {
+          if (!reducedMotion && isPlaybackEligible && !isPausedByUserRef.current) {
             manager.updateVisibility(el, entry.intersectionRatio);
           } else {
             // User paused or reduced-motion — don't compete for playback
+            el.pause();
             manager.updateVisibility(el, 0);
           }
         } else {
@@ -95,7 +97,14 @@ export function useVideoFeed(videoSrc?: string) {
       observer.disconnect();
       manager.unregister(el);
     };
-  }, [videoSrc, reducedMotion, manager]);
+  }, [videoSrc, reducedMotion, manager, isPlaybackEligible]);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el || isPlaybackEligible) return;
+    el.pause();
+    manager.updateVisibility(el, 0);
+  }, [isPlaybackEligible, manager]);
 
   // Tap-to-toggle playback
   const togglePlayback = useCallback(() => {

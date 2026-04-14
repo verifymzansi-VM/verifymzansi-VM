@@ -37,7 +37,7 @@ export const metadata: Metadata = {
 
 export const revalidate = 60;
 
-const CAROUSEL_ITEM_LIMIT = 5;
+const CAROUSEL_ITEM_LIMIT = 7;
 
 type TourismBusinessCarouselRow = {
   id: string;

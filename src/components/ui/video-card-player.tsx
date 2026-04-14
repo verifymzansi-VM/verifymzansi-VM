@@ -223,6 +223,8 @@ export interface VideoCardPlayerProps {
   focalX?: number | null;
   /** Vertical focal point (0–1, top to bottom). */
   focalY?: number | null;
+  /** Gates touch-feed autoplay to cards that are currently in focus within a rail. */
+  feedPlaybackActive?: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -251,6 +253,7 @@ export function VideoCardPlayer({
   onEnded,
   focalX,
   focalY,
+  feedPlaybackActive = true,
 }: VideoCardPlayerProps) {
   const isVideoMedia = isVideo ?? isVideoUrl(src);
   const normalizedSrc = src ? normalizeMediaUrl(src) : undefined;
@@ -312,6 +315,7 @@ export function VideoCardPlayer({
         focalX={focalX}
         focalY={focalY}
         onEnded={onEnded}
+        feedPlaybackActive={feedPlaybackActive}
       />
     );
   }
@@ -1190,6 +1194,7 @@ interface FeedVideoPlayerProps {
   focalX?: number | null;
   focalY?: number | null;
   onEnded?: () => void;
+  feedPlaybackActive: boolean;
 }
 
 function FeedVideoPlayer({
@@ -1208,11 +1213,15 @@ function FeedVideoPlayer({
   focalX,
   focalY,
   onEnded,
+  feedPlaybackActive,
 }: FeedVideoPlayerProps) {
   const posterNeedsUnoptimized =
     normalizedPoster?.startsWith("blob:") || normalizedPoster?.startsWith("data:");
 
-  const { videoRef, isPlaying, togglePlayback, reducedMotion } = useVideoFeed(normalizedSrc);
+  const { videoRef, isPlaying, togglePlayback, reducedMotion } = useVideoFeed(
+    normalizedSrc,
+    feedPlaybackActive
+  );
   const [videoReady, setVideoReady] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [posterError, setPosterError] = useState(false);

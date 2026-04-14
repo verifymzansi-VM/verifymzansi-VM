@@ -77,6 +77,16 @@ const mockItems: CarouselItem[] = [
   },
 ];
 
+const denseItems: CarouselItem[] = Array.from({ length: 7 }, (_, index) => ({
+  id: `dense-${index + 1}`,
+  type: "listing" as const,
+  href: `/listing/dense-${index + 1}`,
+  title: `Dense ${index + 1}`,
+  description: `Dense card ${index + 1}`,
+  location: "Johannesburg",
+  mediaUrl: `/dense-${index + 1}.jpg`,
+}));
+
 // Stub IntersectionObserver
 beforeEach(() => {
   class MockIntersectionObserver {
@@ -183,6 +193,13 @@ describe("ShowroomCardCarousel", () => {
     expect(screen.getByText("Slide 2 of 3")).toBeInTheDocument();
     const dots = screen.getAllByRole("button", { name: /go to slide/i });
     expect(dots[1].innerHTML).toContain("bg-brand-green");
+  });
+
+  it("keeps slot transforms anchored instead of using shared drag translation classes", () => {
+    render(<ShowroomCardCarousel items={mockItems} />);
+
+    const slide = screen.getByRole("group", { name: "1 of 3" });
+    expect(slide.className).not.toContain("drag-x");
   });
 
   it("swipes right to the previous card in sequence", () => {
@@ -301,5 +318,18 @@ describe("ShowroomCardCarousel", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
     fireEvent.click(screen.getByRole("button", { name: "Playback" }));
     expect(screen.getByText("Slide 1 of 3")).toBeInTheDocument();
+  });
+
+  it("renders exactly one playable center card at a time", () => {
+    render(<ShowroomCardCarousel items={mockItems} />);
+    expect(screen.getAllByRole("button", { name: "Playback" })).toHaveLength(1);
+  });
+
+  it("renders the wider desktop stack when seven cards are available", () => {
+    render(<ShowroomCardCarousel items={denseItems} />);
+
+    expect(screen.getByRole("group", { name: "1 of 7" })).toHaveAttribute("data-slot-offset", "0");
+    expect(screen.getByRole("group", { name: "4 of 7" })).toHaveAttribute("data-slot-offset", "3");
+    expect(screen.getByRole("group", { name: "5 of 7" })).toHaveAttribute("data-slot-offset", "-3");
   });
 });

@@ -106,7 +106,7 @@ describe("PromotionsPage", () => {
     });
   });
 
-  it("keeps event slides in the showroom when tourism has at least five rows", async () => {
+  it("keeps event slides in the showroom when tourism has enough rows to fill the wider stack", async () => {
     mockCreateClient.mockResolvedValue(
       createSupabaseClient({
         businesses: Array.from({ length: 5 }, (_, index) => ({
@@ -156,7 +156,7 @@ describe("PromotionsPage", () => {
         ]),
       })
     );
-    expect(carouselSpy.mock.calls[0]?.[0].items).toHaveLength(5);
+    expect(carouselSpy.mock.calls[0]?.[0].items).toHaveLength(7);
   });
 
   it("overfetches before filtering so valid tourism slides survive placeholder rows", async () => {

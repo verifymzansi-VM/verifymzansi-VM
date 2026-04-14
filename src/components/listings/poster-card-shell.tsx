@@ -75,6 +75,8 @@ interface PosterCardShellProps {
   mediaControlVariant?: MediaControlVariant;
   /** Makes the entire card surface clickable even when playback controls are shown. */
   makeEntireCardClickable?: boolean;
+  /** Allows parent rails to gate autoplay to the focused card only. */
+  feedPlaybackActive?: boolean;
 }
 
 export function PosterCardShell({
@@ -113,6 +115,7 @@ export function PosterCardShell({
   cardVariant = "default",
   mediaControlVariant = "default",
   makeEntireCardClickable = false,
+  feedPlaybackActive = true,
 }: PosterCardShellProps) {
   const normalizedMediaUrl = mediaUrl ? normalizeMediaUrl(mediaUrl) : undefined;
   const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
@@ -279,6 +282,7 @@ export function PosterCardShell({
             onEnded={onVideoEnded}
             showPlaybackControl={showPlaybackControl}
             controlVariant={mediaControlVariant}
+            feedPlaybackActive={feedPlaybackActive}
           />
         ) : fallback ? (
           <div className="absolute inset-0 skeleton-shimmer">{fallback}</div>

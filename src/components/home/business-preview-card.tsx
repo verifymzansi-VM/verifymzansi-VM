@@ -2,6 +2,7 @@
 
 import { Store } from "lucide-react";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
+import { useAutoScrollRailItemState } from "@/components/home/auto-scroll-rail";
 import { BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
 import type { BusinessType } from "@/types/enums";
 
@@ -40,6 +41,7 @@ export function BusinessPreviewCard({
   mediaWidth,
   mediaHeight,
 }: BusinessPreviewCardProps) {
+  const { isActive, isRailDragging } = useAutoScrollRailItemState();
   const typeLabel =
     BUSINESS_TYPE_OPTIONS.find((t) => t.value === businessType)?.label || businessType;
 
@@ -62,6 +64,7 @@ export function BusinessPreviewCard({
       focalY={focalY}
       mediaWidth={mediaWidth}
       mediaHeight={mediaHeight}
+      feedPlaybackActive={isActive && !isRailDragging}
       fallback={
         <div className="flex h-full w-full items-center justify-center text-brand-blue/35">
           <Store className="h-16 w-16" />

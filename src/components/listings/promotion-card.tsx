@@ -4,6 +4,7 @@ import { memo } from "react";
 import { Tag } from "lucide-react";
 import { formatZARShort } from "@/lib/utils/format";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
+import { useAutoScrollRailItemState } from "@/components/home/auto-scroll-rail";
 import { getStoredPromotionTypePresentation } from "@/lib/promotions/type-presentation";
 import type { TrustLevel, PromotionType } from "@/types/enums";
 
@@ -149,6 +150,7 @@ export const PromotionCard = memo(function PromotionCard({
   mediaWidth,
   mediaHeight,
 }: PromotionCardProps) {
+  const { isActive, isRailDragging } = useAutoScrollRailItemState();
   const typePresentation = getStoredPromotionTypePresentation(promotionType);
   const status = getPromotionStatus(featured, boosted, promotionType);
   const urgency = getUrgencyLabel(endDate);
@@ -185,6 +187,7 @@ export const PromotionCard = memo(function PromotionCard({
       focalY={focalY}
       mediaWidth={mediaWidth}
       mediaHeight={mediaHeight}
+      feedPlaybackActive={isActive && !isRailDragging}
       fallback={
         <div className="flex h-full w-full items-center justify-center text-white/35">
           <Tag className="h-16 w-16" />
