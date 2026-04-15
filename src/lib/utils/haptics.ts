@@ -1,5 +1,14 @@
+"use client";
+
+/**
+ * Triggers device haptic feedback if supported by the browser.
+ * Must be called in response to a user interaction (click, touch, etc.).
+ */
 export function triggerHaptic(type: "light" | "medium" | "heavy" | "success" | "error" = "light") {
-  if (typeof navigator === "undefined" || !navigator.vibrate) return;
+  // Ensure we are in a browser environment and vibration is supported
+  if (typeof window === "undefined" || typeof navigator === "undefined" || !navigator.vibrate) {
+    return;
+  }
 
   try {
     switch (type) {
@@ -19,7 +28,10 @@ export function triggerHaptic(type: "light" | "medium" | "heavy" | "success" | "
         navigator.vibrate([20, 40, 20, 40, 30]);
         break;
     }
-  } catch {
-    // Ignore error if vibration fails
+  } catch (error) {
+    // Silently catch exceptions; many browsers block vibrate() outside of active interactions
+    if (process.env.NODE_ENV === "development") {
+      console.warn("Haptic feedback ignored by browser. Was it wrapped in a user gesture?", error);
+    }
   }
 }
