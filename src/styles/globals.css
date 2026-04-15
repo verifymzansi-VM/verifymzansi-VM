@@ -258,6 +258,10 @@
     @apply text-[13px] font-medium leading-snug text-red-700 dark:text-red-300;
   }
 
+  .animate-progress-fill {
+    animation: progress-fill var(--progress-fill-duration, 8000ms) linear forwards;
+  }
+
   /* ── Marketplace area accent chips ───────────────────────── */
   .area-mzansi-market {
     @apply bg-brand-green-100 text-brand-green-800 border-brand-green-300;
@@ -303,6 +307,16 @@
       #000 83%,
       #000 100%
     );
+  }
+}
+
+@keyframes progress-fill {
+  from {
+    width: 0%;
+  }
+
+  to {
+    width: 100%;
   }
 }
 

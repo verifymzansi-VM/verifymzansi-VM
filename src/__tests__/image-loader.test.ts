@@ -31,7 +31,9 @@ describe("cloudflareImageLoader", () => {
       width: 800,
       quality: 75,
     });
-    expect(result).toBe(`${PROXY}media/listing/abc.jpg`);
+    expect(result).toBe(
+      "/cdn-cgi/image/width=800,quality=75,format=auto/api/media/serve/media/listing/abc.jpg"
+    );
   });
 
   it("continues to convert CDN domain URLs when CF resizing is enabled", async () => {
@@ -51,6 +53,6 @@ describe("cloudflareImageLoader", () => {
       src: "/images/logo.png",
       width: 200,
     });
-    expect(result).toBe("/images/logo.png?w=200&q=75");
+    expect(result).toBe("/cdn-cgi/image/width=200,quality=75,format=auto/images/logo.png");
   });
 });

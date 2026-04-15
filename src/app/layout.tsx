@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import { CSRF_HEADER_NAME } from "@/lib/utils/csrf";
 import { ThemeProvider } from "@/components/providers/theme-provider";
-import { CsrfBootstrap } from "@/components/providers/csrf-bootstrap";
 import { PublicRuntimeConfigBridge } from "@/components/providers/public-runtime-config";
 import { VideoPlaybackProvider } from "@/contexts/video-playback-context";
 import { Toaster } from "@/components/ui/toaster";
@@ -133,9 +132,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             React 19 hydration mismatches ("Something went wrong" crash). */}
         <meta name="format-detection" content="telephone=no, date=no, email=no, address=no" />
         {csrfToken ? <meta name="csrf-token" content={csrfToken} /> : null}
-        {/* Early connection to media CDN — saves ~100-200 ms on first media load */}
-        <link rel="preconnect" href="https://media.verifymzansi.com" />
-        <link rel="dns-prefetch" href="https://media.verifymzansi.com" />
       </head>
       <body className="min-h-screen antialiased">
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: TURBOPACK_NAME_POLYFILL }} />
@@ -149,7 +145,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           Skip to main content
         </a>
         <PublicRuntimeConfigBridge />
-        <CsrfBootstrap />
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

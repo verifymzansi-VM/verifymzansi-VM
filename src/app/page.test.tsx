@@ -69,7 +69,7 @@ describe("HomePage", () => {
     expect(screen.getByTestId("promotions-showcase")).toBeInTheDocument();
     expect(
       screen.getByRole("heading", {
-        level: 2,
+        level: 1,
         name: "Mzansi's Proudly Trusted Market.",
       })
     ).toBeInTheDocument();

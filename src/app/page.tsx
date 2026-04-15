@@ -147,9 +147,9 @@ export default async function HomePage() {
                     </div>
 
                     <div className="space-y-3">
-                      <h2 className="font-display text-2xl font-bold leading-[1.05] tracking-tight text-slate-950 dark:text-white sm:text-4xl">
+                      <h1 className="font-display text-2xl font-bold leading-[1.05] tracking-tight text-slate-950 dark:text-white sm:text-4xl">
                         Mzansi&apos;s Proudly Trusted Market.
-                      </h2>
+                      </h1>
 
                       <p className="max-w-2xl text-base text-slate-600 dark:text-slate-300 sm:text-lg">
                         Verified sellers post with photos and videos. Request promotion across our

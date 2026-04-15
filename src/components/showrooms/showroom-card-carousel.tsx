@@ -716,11 +716,13 @@ export function ShowroomCardCarousel({
                 mediaHeight={item.mediaHeight}
                 priority={offset === 0}
                 videoMode={offset === 0 ? "ambient" : undefined}
+                deferVideoLoadUntilPlay={offset === 0}
                 onVideoEnded={offset === 0 ? handleVideoEnded : undefined}
                 showPlaybackControl={offset === 0}
                 makeEntireCardClickable={offset === 0}
                 cardVariant="hero"
                 mediaControlVariant={offset === 0 ? "hero" : "default"}
+                fitStrategy="cover"
               />
             </div>
           );
@@ -789,8 +791,13 @@ export function ShowroomCardCarousel({
                         ? "w-full"
                         : activeIsVideo
                           ? "w-full"
-                          : `animate-[progress-fill_${imageDisplayMs}ms_linear_forwards]`
+                          : "animate-progress-fill"
                     )}
+                    style={
+                      reducedMotion || isPaused || activeIsVideo
+                        ? undefined
+                        : ({ "--progress-fill-duration": `${imageDisplayMs}ms` } as CSSProperties)
+                    }
                   />
                 </span>
               ) : (
@@ -800,14 +807,6 @@ export function ShowroomCardCarousel({
           ))}
         </div>
       )}
-
-      {/* Progress fill keyframes (injected once) */}
-      <style
-        dangerouslySetInnerHTML={{
-          __html: `@keyframes progress-fill{from{width:0%}to{width:100%}}`,
-        }}
-      />
-
       {/* Screen-reader live announcer */}
       {count > 1 && (
         <div className="sr-only" aria-live="polite" aria-atomic="true">

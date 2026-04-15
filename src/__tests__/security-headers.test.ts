@@ -231,4 +231,20 @@ describe("withSecurityHeaders", () => {
 
     expect(response.headers.get("Permissions-Policy")).toContain("camera=()");
   });
+
+  it("pins immutable caching on public media proxy responses", () => {
+    const request = createRequest("/api/media/serve/media/listing/example.jpg");
+    const proxyResponse = NextResponse.next();
+    const response = withSecurityHeaders(request, proxyResponse);
+
+    expect(response.headers.get("Cache-Control")).toBe("public, max-age=31536000, immutable");
+  });
+
+  it("relaxes successful document caching away from no-store", () => {
+    const request = createRequest("/");
+    const proxyResponse = NextResponse.next();
+    const response = withSecurityHeaders(request, proxyResponse);
+
+    expect(response.headers.get("Cache-Control")).toBe("private, max-age=0, must-revalidate");
+  });
 });

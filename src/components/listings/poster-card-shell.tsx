@@ -77,6 +77,8 @@ interface PosterCardShellProps {
   makeEntireCardClickable?: boolean;
   /** Allows parent rails to gate autoplay to the focused card only. */
   feedPlaybackActive?: boolean;
+  /** Keeps hero videos poster-first until the user explicitly starts playback. */
+  deferVideoLoadUntilPlay?: boolean;
 }
 
 export function PosterCardShell({
@@ -116,6 +118,7 @@ export function PosterCardShell({
   mediaControlVariant = "default",
   makeEntireCardClickable = false,
   feedPlaybackActive = true,
+  deferVideoLoadUntilPlay = false,
 }: PosterCardShellProps) {
   const normalizedMediaUrl = mediaUrl ? normalizeMediaUrl(mediaUrl) : undefined;
   const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
@@ -283,6 +286,7 @@ export function PosterCardShell({
             showPlaybackControl={showPlaybackControl}
             controlVariant={mediaControlVariant}
             feedPlaybackActive={feedPlaybackActive}
+            deferVideoLoadUntilPlay={deferVideoLoadUntilPlay}
           />
         ) : fallback ? (
           <div className="absolute inset-0 skeleton-shimmer">{fallback}</div>

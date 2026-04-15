@@ -18,6 +18,8 @@ interface ImageLoaderParams {
   quality?: number;
 }
 
+const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "gif", "webp", "avif", "svg"]);
+
 function withSizeQuery(src: string, width: number, quality: number): string {
   const [withoutHash, hash = ""] = src.split("#", 2);
   const base = withoutHash || src;
@@ -29,6 +31,16 @@ function withSizeQuery(src: string, width: number, quality: number): string {
   params.set("q", String(quality));
   const suffix = params.toString();
   return `${path}?${suffix}${hash ? `#${hash}` : ""}`;
+}
+
+function getPathWithoutHash(src: string): string {
+  return src.split("#", 2)[0] || src;
+}
+
+function isImageSource(src: string): boolean {
+  const path = getPathWithoutHash(src).split("?")[0] || "";
+  const extension = path.split(".").pop()?.toLowerCase() ?? "";
+  return IMAGE_EXTENSIONS.has(extension);
 }
 
 /**
@@ -53,18 +65,25 @@ export default function cloudflareImageLoader({ src, width, quality }: ImageLoad
 
   const cfParams = `width=${width},quality=${resolvedQuality},format=auto`;
 
-  // Keep relative sources (static assets, app images, media-proxy API paths)
-  // pass-through so local/staging/prod render reliably even when /cdn-cgi/image
-  // local/staging/prod render reliably even when /cdn-cgi/image is unavailable.
+  // Keep relative sources on the same origin so Cloudflare can negotiate AVIF/WebP
+  // and right-size static homepage assets plus proxied media.
   if (!src.startsWith("http://") && !src.startsWith("https://")) {
-    if (src.startsWith("/api/media/serve/")) {
+    if (!isImageSource(src)) {
       return src;
     }
-    return withSizeQuery(src, width, resolvedQuality);
+    return `/cdn-cgi/image/${cfParams}${getPathWithoutHash(src)}`;
   }
 
-  // Absolute proxy URLs should also bypass resizing and keep exact path.
+  // Absolute same-origin proxy URLs are image-resized at the edge when possible.
   if (src.includes("/api/media/serve/")) {
+    try {
+      const parsed = new URL(src);
+      if (isImageSource(parsed.pathname)) {
+        return `/cdn-cgi/image/${cfParams}${parsed.pathname}${parsed.search}`;
+      }
+    } catch {
+      return src;
+    }
     return src;
   }
 
@@ -73,7 +92,7 @@ export default function cloudflareImageLoader({ src, width, quality }: ImageLoad
   try {
     const parsed = new URL(src);
     if (parsed.hostname === MEDIA_HOST || parsed.hostname === STAGING_MEDIA_HOST) {
-      return `/cdn-cgi/image/${cfParams}${parsed.pathname}`;
+      return `/cdn-cgi/image/${cfParams}${parsed.pathname}${parsed.search}`;
     }
   } catch {
     // Not a valid absolute URL — return original src as a safe fallback.

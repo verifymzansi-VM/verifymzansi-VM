@@ -2,6 +2,24 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { PosterCardShell } from "./poster-card-shell";
 
+const { videoCardPlayerMock } = vi.hoisted(() => ({
+  videoCardPlayerMock: vi.fn(
+    ({
+      showPlaybackControl,
+      deferVideoLoadUntilPlay,
+    }: {
+      showPlaybackControl?: boolean;
+      deferVideoLoadUntilPlay?: boolean;
+    }) => (
+      <div
+        data-testid="video-player"
+        data-controls={showPlaybackControl ? "yes" : "no"}
+        data-defer={deferVideoLoadUntilPlay ? "yes" : "no"}
+      />
+    )
+  ),
+}));
+
 vi.mock("next/link", () => ({
   default: ({
     children,
@@ -22,9 +40,7 @@ vi.mock("next/link", () => ({
 
 vi.mock("@/components/ui/video-card-player", () => ({
   isVideoUrl: (url?: string | null) => Boolean(url?.endsWith(".mp4")),
-  VideoCardPlayer: ({ showPlaybackControl }: { showPlaybackControl?: boolean }) => (
-    <div data-testid="video-player" data-controls={showPlaybackControl ? "yes" : "no"} />
-  ),
+  VideoCardPlayer: videoCardPlayerMock,
 }));
 
 vi.mock("@/components/ui/video-duration-badge", () => ({
@@ -62,5 +78,19 @@ describe("PosterCardShell", () => {
     );
 
     expect(screen.getByRole("link", { name: /hero image/i })).toHaveAttribute("draggable", "false");
+  });
+
+  it("forwards deferred video loading to the media player when requested", () => {
+    render(
+      <PosterCardShell
+        href="/listing/deferred"
+        title="Deferred hero"
+        mediaUrl="https://example.com/clip.mp4"
+        posterUrl="https://example.com/poster.jpg"
+        deferVideoLoadUntilPlay
+      />
+    );
+
+    expect(screen.getByTestId("video-player")).toHaveAttribute("data-defer", "yes");
   });
 });

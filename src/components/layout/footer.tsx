@@ -7,11 +7,14 @@ import { OfficialSocialLinks } from "@/components/shared/official-social-links";
 export function Footer() {
   const currentYear = new Date().getFullYear();
   const runtimeConfig = getServerPublicRuntimeConfig();
+  const footerLinkClassName =
+    "inline-flex min-h-6 items-center rounded-md py-1 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
   return (
     <footer className="border-t bg-warm-50 dark:bg-warm-950">
       <div className="container-page py-4 pb-[calc(env(safe-area-inset-bottom)+8rem)] md:pb-4">
         {/* Mobile nav is h-16 (64px). Extra bottom spacing keeps legal links above nav across mobile browsers. */}
+        <h2 className="sr-only">Footer navigation</h2>
         <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-4 lg:grid-cols-5">
           {/* Brand */}
           <div className="space-y-2">
@@ -25,34 +28,18 @@ export function Footer() {
 
           {/* Marketplace */}
           <div className="space-y-2">
-            <h4 className="font-display font-semibold text-xs">Marketplace</h4>
+            <h3 className="font-display font-semibold text-xs">Marketplace</h3>
             <nav aria-label="Marketplace" className="flex flex-col gap-1.5">
-              <Link
-                href="/mzansi-market"
-                prefetch={false}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
+              <Link href="/mzansi-market" prefetch={false} className={footerLinkClassName}>
                 Mzansi Market
               </Link>
-              <Link
-                href="/mzansi-business"
-                prefetch={false}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
+              <Link href="/mzansi-business" prefetch={false} className={footerLinkClassName}>
                 Mzansi Business
               </Link>
-              <Link
-                href="/promotions"
-                prefetch={false}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
+              <Link href="/promotions" prefetch={false} className={footerLinkClassName}>
                 Tourism & Events
               </Link>
-              <Link
-                href="/advertise"
-                prefetch={false}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
+              <Link href="/advertise" prefetch={false} className={footerLinkClassName}>
                 Advertise
               </Link>
             </nav>
@@ -60,27 +47,19 @@ export function Footer() {
 
           {/* Safety */}
           <div className="space-y-2">
-            <h4 className="font-display font-semibold text-xs">Safety</h4>
+            <h3 className="font-display font-semibold text-xs">Safety</h3>
             <nav aria-label="Safety" className="flex flex-col gap-1.5">
-              <Link
-                href="/safety/scam-alerts"
-                prefetch={false}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
+              <Link href="/safety/scam-alerts" prefetch={false} className={footerLinkClassName}>
                 Scam Alerts
               </Link>
               <Link
                 href="/safety/meeting-checklist"
                 prefetch={false}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                className={footerLinkClassName}
               >
                 Meeting Safety
               </Link>
-              <Link
-                href="/verify-buyer"
-                prefetch={false}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
+              <Link href="/verify-buyer" prefetch={false} className={footerLinkClassName}>
                 Verify a Buyer
               </Link>
             </nav>
@@ -88,20 +67,12 @@ export function Footer() {
 
           {/* Legal */}
           <div className="space-y-2">
-            <h4 className="font-display font-semibold text-xs">Legal</h4>
+            <h3 className="font-display font-semibold text-xs">Legal</h3>
             <nav aria-label="Legal" className="flex flex-col gap-1.5">
-              <Link
-                href="/privacy"
-                prefetch={false}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
+              <Link href="/privacy" prefetch={false} className={footerLinkClassName}>
                 Privacy Policy
               </Link>
-              <Link
-                href="/terms"
-                prefetch={false}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
+              <Link href="/terms" prefetch={false} className={footerLinkClassName}>
                 Terms of Service
               </Link>
             </nav>

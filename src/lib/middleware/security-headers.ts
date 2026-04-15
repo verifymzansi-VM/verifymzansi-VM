@@ -101,6 +101,22 @@ function isCacheableAssetRequest(pathname: string): boolean {
   return pathname.startsWith("/api/media/serve/") || pathname.startsWith("/images/");
 }
 
+function getAssetCacheControl(pathname: string): string | null {
+  if (pathname.startsWith("/api/media/serve/")) {
+    return "public, max-age=31536000, immutable";
+  }
+
+  if (pathname.startsWith("/images/")) {
+    return "public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400";
+  }
+
+  return null;
+}
+
+function shouldRelaxDocumentCache(pathname: string): boolean {
+  return !pathname.startsWith("/api/") && !pathname.startsWith("/_next/");
+}
+
 /** Attach all standard security headers to a response. */
 export function applySecurityHeaders(
   response: NextResponse,
@@ -189,6 +205,10 @@ export function withSecurityHeaders(
       : DEFAULT_PERMISSIONS_POLICY;
 
     applySecurityHeaders(proxyResponse, csp, permissionsPolicy);
+    const assetCacheControl = getAssetCacheControl(pathname);
+    if (assetCacheControl) {
+      proxyResponse.headers.set("Cache-Control", assetCacheControl);
+    }
     if (nonce) {
       proxyResponse.headers.set("x-nonce", nonce);
     }
@@ -263,6 +283,13 @@ export function withSecurityHeaders(
     : DEFAULT_PERMISSIONS_POLICY;
 
   applySecurityHeaders(response, csp, permissionsPolicy);
+  if (
+    shouldRelaxDocumentCache(request.nextUrl.pathname) &&
+    !response.headers.has("Cache-Control") &&
+    (request.method === "GET" || request.method === "HEAD")
+  ) {
+    response.headers.set("Cache-Control", "private, max-age=0, must-revalidate");
+  }
   if (nonce) {
     response.headers.set("x-nonce", nonce);
   }
