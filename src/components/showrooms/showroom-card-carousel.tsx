@@ -69,6 +69,7 @@ const SA_FLAG_SRC = "/images/South%20African%20flag%20with%20confetti%20burst.pn
 
 const CARD_W =
   "w-[62vw] max-w-[250px] sm:w-[34vw] md:w-[30vw] lg:w-[360px] lg:max-w-none xl:w-[400px]";
+const SECTION_SPACING = "pt-10 pb-10 sm:pt-12 sm:pb-12 lg:pt-0 lg:pb-14";
 
 /* ── SA flag section wrapper ───────────────────────────────── */
 
@@ -610,7 +611,7 @@ export function ShowroomCardCarousel({
 
   if (count === 0) {
     return (
-      <SectionShell sectionClassName="py-10 sm:py-12 lg:py-14" extraClassName={className}>
+      <SectionShell sectionClassName={SECTION_SPACING} extraClassName={className}>
         <div className="container-page flex items-center justify-center">
           <div className={CARD_W}>
             <PosterCardShell
@@ -633,7 +634,7 @@ export function ShowroomCardCarousel({
   return (
     <SectionShell
       sectionRef={containerRef}
-      sectionClassName="py-10 sm:py-12 lg:py-14"
+      sectionClassName={SECTION_SPACING}
       extraClassName={className}
     >
       {/* Card coverflow area */}

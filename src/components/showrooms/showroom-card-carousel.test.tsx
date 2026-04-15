@@ -111,6 +111,18 @@ describe("ShowroomCardCarousel", () => {
     expect(section || screen.getByLabelText("Showroom carousel")).toBeTruthy();
   });
 
+  it("removes desktop top padding while keeping bottom spacing", () => {
+    render(<ShowroomCardCarousel items={mockItems} />);
+    const section = screen.getByLabelText("Showroom carousel");
+
+    expect(section.className).toContain("pt-10");
+    expect(section.className).toContain("sm:pt-12");
+    expect(section.className).toContain("lg:pt-0");
+    expect(section.className).toContain("pb-10");
+    expect(section.className).toContain("sm:pb-12");
+    expect(section.className).toContain("lg:pb-14");
+  });
+
   it("renders slide groups with positional labels", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
     expect(screen.getByRole("group", { name: "1 of 3" })).toBeInTheDocument();
@@ -141,7 +153,10 @@ describe("ShowroomCardCarousel", () => {
     render(
       <ShowroomCardCarousel items={[]} emptyTitle="No Items" emptyDescription="Nothing to show" />
     );
-    expect(screen.getByLabelText("Showroom carousel")).toBeInTheDocument();
+    const section = screen.getByLabelText("Showroom carousel");
+    expect(section).toBeInTheDocument();
+    expect(section.className).toContain("lg:pt-0");
+    expect(section.className).toContain("lg:pb-14");
     expect(screen.getByText("No Items")).toBeInTheDocument();
     expect(screen.getByText("Nothing to show")).toBeInTheDocument();
   });

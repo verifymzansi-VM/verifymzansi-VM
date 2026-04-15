@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
  */
 export function ShowroomCardCarouselSkeleton() {
   return (
-    <section className="w-full bg-gradient-to-b from-warm-950 via-warm-900 to-warm-950 py-6 sm:py-8 lg:py-10 dark:from-black dark:via-warm-950 dark:to-black">
+    <section className="w-full bg-gradient-to-b from-warm-950 via-warm-900 to-warm-950 pt-6 pb-6 sm:pt-8 sm:pb-8 lg:pt-0 lg:pb-10 dark:from-black dark:via-warm-950 dark:to-black">
       <div className="relative mx-auto flex items-center justify-center overflow-hidden px-4">
         {/* Left card (scaled down) */}
         <div
