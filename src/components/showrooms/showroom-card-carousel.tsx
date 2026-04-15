@@ -68,7 +68,7 @@ const PREVIEW_TILT_DEG = 8;
 const SA_FLAG_SRC = "/images/South%20African%20flag%20with%20confetti%20burst.png";
 
 const CARD_W =
-  "w-[62vw] max-w-[250px] sm:w-[34vw] md:w-[30vw] lg:w-[360px] lg:max-w-none xl:w-[400px]";
+  "w-[62vw] max-w-[250px] sm:w-[34vw] md:w-[30vw] lg:w-[288px] lg:max-w-none xl:w-[320px]";
 const SECTION_SPACING = "pt-10 pb-10 sm:pt-12 sm:pb-12 lg:pt-0 lg:pb-14";
 
 /* ── SA flag section wrapper ───────────────────────────────── */

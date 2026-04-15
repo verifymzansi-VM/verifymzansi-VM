@@ -11,20 +11,20 @@ export function ShowroomCardCarouselSkeleton() {
       <div className="relative mx-auto flex items-center justify-center overflow-hidden px-4">
         {/* Left card (scaled down) */}
         <div
-          className="absolute left-[5%] sm:left-[10%] lg:left-[15%] w-[52vw] sm:w-[40vw] lg:w-[252px] xl:w-[288px] origin-center scale-[0.82] opacity-50"
+          className="absolute left-[5%] sm:left-[10%] lg:left-[15%] w-[52vw] sm:w-[40vw] lg:w-[288px] xl:w-[320px] origin-center scale-[0.82] opacity-50"
           aria-hidden="true"
         >
           <CardSkeleton />
         </div>
 
         {/* Center card (full size) */}
-        <div className="w-[52vw] sm:w-[40vw] lg:w-[252px] xl:w-[288px] z-10">
+        <div className="z-10 w-[52vw] sm:w-[40vw] lg:w-[288px] xl:w-[320px]">
           <CardSkeleton />
         </div>
 
         {/* Right card (scaled down) */}
         <div
-          className="absolute right-[5%] sm:right-[10%] lg:right-[15%] w-[52vw] sm:w-[40vw] lg:w-[252px] xl:w-[288px] origin-center scale-[0.82] opacity-50"
+          className="absolute right-[5%] sm:right-[10%] lg:right-[15%] w-[52vw] sm:w-[40vw] lg:w-[288px] xl:w-[320px] origin-center scale-[0.82] opacity-50"
           aria-hidden="true"
         >
           <CardSkeleton />

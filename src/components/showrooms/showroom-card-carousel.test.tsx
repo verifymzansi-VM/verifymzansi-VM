@@ -123,6 +123,14 @@ describe("ShowroomCardCarousel", () => {
     expect(section.className).toContain("lg:pb-14");
   });
 
+  it("uses the reduced desktop showroom widths on carousel cards", () => {
+    render(<ShowroomCardCarousel items={mockItems} />);
+
+    const centerSlide = screen.getByRole("group", { name: "1 of 3" });
+    expect(centerSlide.className).toContain("lg:w-[288px]");
+    expect(centerSlide.className).toContain("xl:w-[320px]");
+  });
+
   it("renders slide groups with positional labels", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
     expect(screen.getByRole("group", { name: "1 of 3" })).toBeInTheDocument();
@@ -150,13 +158,20 @@ describe("ShowroomCardCarousel", () => {
   });
 
   it("renders empty state when no items provided", () => {
-    render(
+    const { container } = render(
       <ShowroomCardCarousel items={[]} emptyTitle="No Items" emptyDescription="Nothing to show" />
     );
     const section = screen.getByLabelText("Showroom carousel");
+    const emptyStateCard = Array.from(container.querySelectorAll("div")).find(
+      (node) =>
+        node.className.includes("w-[62vw]") &&
+        node.className.includes("lg:w-[288px]") &&
+        node.className.includes("xl:w-[320px]")
+    );
     expect(section).toBeInTheDocument();
     expect(section.className).toContain("lg:pt-0");
     expect(section.className).toContain("lg:pb-14");
+    expect(emptyStateCard).toBeDefined();
     expect(screen.getByText("No Items")).toBeInTheDocument();
     expect(screen.getByText("Nothing to show")).toBeInTheDocument();
   });
