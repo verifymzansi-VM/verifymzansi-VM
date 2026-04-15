@@ -624,6 +624,49 @@ describe("POST /api/promotions", () => {
     });
   });
 
+  it("retries promotion creation without compatibility columns when category_key is unavailable", async () => {
+    const singleSpy = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: null,
+        error: { code: "42703", message: "column promotions.category_key does not exist" },
+      })
+      .mockResolvedValueOnce({ data: { id: VALID_UUID }, error: null });
+    const insertSpy = vi.fn().mockImplementation((_payload: Record<string, unknown>) => ({
+      select: vi.fn().mockReturnValue({
+        single: singleSpy,
+      }),
+    }));
+
+    mockAuth({ id: USER_ID });
+    mockAdmin({
+      account_profiles: {
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: {
+            id: "sp-1",
+            account_verification_status: "verified",
+          },
+        }),
+      },
+      promotions: {
+        insert: insertSpy,
+      },
+    });
+
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: { ...VALID_BODY, category_key: "tourism_hospitality" },
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(201);
+    expect(insertSpy).toHaveBeenCalledTimes(2);
+    expect(insertSpy.mock.calls[0][0]).toMatchObject({
+      category_key: "tourism_hospitality",
+    });
+    expect(insertSpy.mock.calls[1][0]).not.toHaveProperty("category_key");
+  });
+
   it("returns 404 when linked business is not owned by the caller", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({

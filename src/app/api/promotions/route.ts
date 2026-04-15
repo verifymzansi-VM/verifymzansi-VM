@@ -64,6 +64,36 @@ type PromotionQueryOps = {
   or: (filters: string) => PromotionQueryOps;
 };
 
+type PromotionInsertErrorLike = {
+  code?: string | null;
+  message?: string | null;
+} | null;
+
+type PromotionCompatField =
+  | "business_id"
+  | "category_key"
+  | "event_details"
+  | "focal_x"
+  | "focal_y"
+  | "location_address"
+  | "location_town"
+  | "logo_url"
+  | "media_height"
+  | "media_width";
+
+const PROMOTION_INSERT_COMPAT_FIELDS: readonly PromotionCompatField[] = [
+  "business_id",
+  "category_key",
+  "event_details",
+  "focal_x",
+  "focal_y",
+  "location_address",
+  "location_town",
+  "logo_url",
+  "media_height",
+  "media_width",
+];
+
 type PromotionResultRow = {
   id: string;
   owner_id?: string | null;
@@ -155,6 +185,39 @@ function applyEventStateFilter<T>(query: T, eventState: PromotionEventState, now
 
 function isPlaceholderPromotion(promotion: { title: string | null; description?: string | null }) {
   return isPlaceholderMarketplaceContent(promotion.title, promotion.description);
+}
+
+function canRetryPromotionInsertForCompat(
+  error: PromotionInsertErrorLike,
+  omittedFields: readonly PromotionCompatField[]
+) {
+  if (!error) return false;
+
+  const code = error.code ?? "";
+  const message = (error.message ?? "").toLowerCase();
+
+  if (/schema cache/.test(message)) {
+    return true;
+  }
+
+  const retryableCodes = new Set(["42703", "PGRST200", "PGRST202", "PGRST204", "XX000"]);
+
+  if (!retryableCodes.has(code) && !/does not exist|could not find/.test(message)) {
+    return false;
+  }
+
+  return omittedFields.some((field) => message.includes(field.toLowerCase()));
+}
+
+function omitPromotionCompatFields<T extends Record<string, unknown>>(
+  record: T,
+  omittedFields: readonly PromotionCompatField[]
+) {
+  const next = { ...record };
+  for (const field of omittedFields) {
+    delete next[field];
+  }
+  return next;
 }
 
 /**
@@ -357,44 +420,70 @@ export async function POST(request: NextRequest) {
     // Build the promotion row
     const priceCents =
       data.price_zar != null ? Math.round(+(data.price_zar * 100).toPrecision(12)) : null;
-    const { data: promotion, error: insertError } = await supabase
-      .from("promotions")
-      .insert(
-        withOwnerField(
-          {
-            id: freePostContentId,
-            title: data.title,
-            description: data.description,
-            promotion_type: data.promotion_type,
-            category: data.category || null,
-            category_key: categoryKey,
-            photos: data.images,
-            videos: data.videos,
-            video_thumbnail: data.video_thumbnail || null,
-            media_width: data.media_width ?? null,
-            media_height: data.media_height ?? null,
-            focal_x: data.focal_x ?? 0.5,
-            focal_y: data.focal_y ?? 0.5,
-            price_cents: priceCents,
-            price_negotiable: data.negotiable,
-            location_province: data.province,
-            location_city: data.city,
-            location_town: data.location_town || null,
-            location_address: data.location_address || null,
-            contact_methods: data.contact_methods,
-            start_date: data.start_date || null,
-            end_date: data.end_date || null,
-            business_id: data.business_id || null,
-            logo_url: data.logo_url || null,
-            event_details: data.event_details ?? null,
-            status: "pending_moderation",
-          },
-          ownerColumn,
-          user.id
-        )
-      )
-      .select("id")
-      .single();
+    const promotionRecord = withOwnerField(
+      {
+        id: freePostContentId,
+        title: data.title,
+        description: data.description,
+        promotion_type: data.promotion_type,
+        category: data.category || null,
+        category_key: categoryKey,
+        photos: data.images,
+        videos: data.videos,
+        video_thumbnail: data.video_thumbnail || null,
+        media_width: data.media_width ?? null,
+        media_height: data.media_height ?? null,
+        focal_x: data.focal_x ?? 0.5,
+        focal_y: data.focal_y ?? 0.5,
+        price_cents: priceCents,
+        price_negotiable: data.negotiable,
+        location_province: data.province,
+        location_city: data.city,
+        location_town: data.location_town || null,
+        location_address: data.location_address || null,
+        contact_methods: data.contact_methods,
+        start_date: data.start_date || null,
+        end_date: data.end_date || null,
+        business_id: data.business_id || null,
+        logo_url: data.logo_url || null,
+        event_details: data.event_details ?? null,
+        status: "pending_moderation",
+      },
+      ownerColumn,
+      user.id
+    );
+
+    let promotion: { id: string } | null = null;
+    let insertError: PromotionInsertErrorLike = null;
+    const insertAttempts = [[], PROMOTION_INSERT_COMPAT_FIELDS] as const;
+
+    for (let attemptIndex = 0; attemptIndex < insertAttempts.length; attemptIndex += 1) {
+      const omittedFields = insertAttempts[attemptIndex];
+      const insertPayload = omitPromotionCompatFields(promotionRecord, omittedFields);
+      const result = await supabase.from("promotions").insert(insertPayload).select("id").single();
+
+      promotion = result.data;
+      insertError = result.error;
+
+      if (!insertError && promotion) {
+        break;
+      }
+
+      const nextOmittedFields = insertAttempts[attemptIndex + 1];
+      if (!nextOmittedFields) {
+        break;
+      }
+
+      if (!canRetryPromotionInsertForCompat(insertError, nextOmittedFields)) {
+        break;
+      }
+
+      log.warn("Retrying promotion insert with compatibility payload", {
+        userId: user.id,
+        error: insertError?.message,
+        omittedFields: nextOmittedFields,
+      });
+    }
 
     if (insertError || !promotion) {
       log.error("Failed to create promotion", { error: insertError?.message });

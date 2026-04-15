@@ -4,8 +4,9 @@ import CreateTourismPage from "./page";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { compressVideoForUpload, VideoTranscodeError } from "@/lib/media/compress-before-upload";
 
-const { mediaFilesByLabel } = vi.hoisted(() => ({
+const { mediaFilesByLabel, lastPromotionCardProps } = vi.hoisted(() => ({
   mediaFilesByLabel: new Map<string, File[]>(),
+  lastPromotionCardProps: { current: null as Record<string, unknown> | null },
 }));
 
 vi.mock("next/navigation", () => ({
@@ -60,7 +61,10 @@ vi.mock("@/components/business/layouts/business-layout-router", () => ({
 }));
 
 vi.mock("@/components/listings/promotion-card", () => ({
-  PromotionCard: () => <div>Promotion Card Preview</div>,
+  PromotionCard: (props: Record<string, unknown>) => {
+    lastPromotionCardProps.current = props;
+    return <div>Promotion Card Preview</div>;
+  },
 }));
 
 vi.mock("@/components/listings/promotion-detail-content", () => ({
@@ -231,6 +235,7 @@ describe("CreateTourismPage type switch behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mediaFilesByLabel.clear();
+    lastPromotionCardProps.current = null;
     global.URL.createObjectURL = vi.fn(() => "blob:tourism-preview");
     global.URL.revokeObjectURL = vi.fn();
     global.fetch = vi.fn().mockResolvedValue({
@@ -632,6 +637,46 @@ describe("CreateTourismPage type switch behavior", () => {
     };
     expect(requestBody.images).toEqual([]);
     expect(requestBody.videos).toEqual(["https://media.verifymzansi.com/promotion/video.mp4"]);
+  });
+
+  it("marks the event preview card as video media for blob-based uploads", async () => {
+    mediaFilesByLabel.set("Upload video", [new File(["video"], "clip.mp4", { type: "video/mp4" })]);
+
+    render(<CreateTourismPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Event/ }));
+    fireEvent.change(screen.getByLabelText("Event Title *"), {
+      target: { value: "Soweto Food Festival" },
+    });
+    fireEvent.change(screen.getByLabelText("Description *"), {
+      target: { value: "A detailed event description with enough content to pass validation." },
+    });
+    fireEvent.change(screen.getByLabelText("Event Type"), {
+      target: { value: "festival_concert" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText("Start Date *"), {
+      target: { value: "2099-12-01" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText("Province"), {
+      target: { value: "Gauteng" },
+    });
+    fireEvent.change(screen.getByLabelText("City"), {
+      target: { value: "Johannesburg" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Add media for Upload video/i }));
+
+    await waitFor(() => {
+      expect(lastPromotionCardProps.current).toMatchObject({
+        imageUrl: "blob:tourism-preview",
+        isVideo: true,
+      });
+    });
   });
 
   it("blocks event submit when photo upload returns partial success", async () => {

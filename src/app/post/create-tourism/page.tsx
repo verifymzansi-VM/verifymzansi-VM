@@ -1641,6 +1641,7 @@ function CreateTourismContent() {
             price={priceCents}
             negotiable={negotiable}
             imageUrl={cardMediaUrl || undefined}
+            isVideo={previewVideoUrls.length > 0}
             posterUrl={cardPosterUrl}
             logoUrl={logoPreviewUrl || undefined}
             province={province || "Province"}
@@ -3412,6 +3413,7 @@ function CreateTourismContent() {
                           files={videoFiles}
                           onChange={(files) => {
                             setVideoFiles(files);
+                            setVideoThumbnailFile([]);
                             clearErrors("videos");
                           }}
                           accept="video/*"
