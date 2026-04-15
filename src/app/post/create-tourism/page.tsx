@@ -1641,7 +1641,6 @@ function CreateTourismContent() {
             price={priceCents}
             negotiable={negotiable}
             imageUrl={cardMediaUrl || undefined}
-            isVideo={previewVideoUrls.length > 0}
             posterUrl={cardPosterUrl}
             logoUrl={logoPreviewUrl || undefined}
             province={province || "Province"}
@@ -3268,7 +3267,9 @@ function CreateTourismContent() {
                     <div className="space-y-2">
                       <Label>Photos *</Label>
                       <p className="text-xs text-muted-foreground">
-                        Up to {maxPhotos} photos. The first photo will be your cover image.
+                        Up to {maxPhotos} photos. The first photo becomes the public hero image.
+                        Portrait 9:16 photos are recommended for tourism stays, destinations, and
+                        events.
                       </p>
                       <MediaUpload
                         label="Upload photos"
@@ -3340,6 +3341,10 @@ function CreateTourismContent() {
                     {photoFiles.length > 0 && (
                       <div className="space-y-2">
                         <Label>Cover Crop Position</Label>
+                        <p className="text-xs text-muted-foreground">
+                          This controls how your lead photo is framed when it appears as the public
+                          hero.
+                        </p>
                         <MediaCropPreview
                           file={photoFiles[0]}
                           aspectRatio={4 / 1}
@@ -3405,7 +3410,8 @@ function CreateTourismContent() {
                       <div className="space-y-2">
                         <Label>Video (optional)</Label>
                         <p className="text-xs text-muted-foreground">
-                          Up to {maxVideos} video{maxVideos > 1 ? "s" : ""}.
+                          Up to {maxVideos} video{maxVideos > 1 ? "s" : ""}. A single portrait 9:16
+                          clip works best for the event or tourism hero.
                         </p>
                         <MediaUpload
                           label="Upload video"
@@ -3432,6 +3438,9 @@ function CreateTourismContent() {
                         className="space-y-2 rounded-lg"
                       >
                         <Label>Video Thumbnail</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Choose the poster frame people see before the video starts.
+                        </p>
                         <VideoFrameSelector
                           file={videoFiles[0]}
                           onFrameSelect={(f) => {

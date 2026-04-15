@@ -9,6 +9,7 @@ import type {
 } from "@/components/business/business-detail-content";
 import type { LayoutTemplate } from "@/lib/business/layout-templates";
 import { UnifiedLayout } from "@/components/business/layouts/unified-layout";
+import { resolveBusinessProfileFamily } from "@/lib/presentation/profile-variants";
 
 interface BusinessLayoutRouterProps {
   business: BusinessDetailRecord;
@@ -41,9 +42,15 @@ export function BusinessLayoutRouter({
     business.delivery_options,
     business.business_details
   );
+  const family = resolveBusinessProfileFamily(
+    business.category as Parameters<typeof resolveBusinessProfileFamily>[0],
+    business.business_type as Parameters<typeof resolveBusinessProfileFamily>[1],
+    business.subcategory
+  );
 
   return (
     <UnifiedLayout
+      family={family}
       business={business}
       trustLevel={trustLevel}
       ownerProfile={ownerProfile}

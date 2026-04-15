@@ -1315,8 +1315,8 @@ export default function CreateListingPage() {
                         accept="image/*"
                       />
                       <p className="text-xs text-muted-foreground">
-                        Your first photo will be the main image on your listing card and search
-                        results.
+                        Your first photo becomes the hero image on the public listing page and the
+                        cover on cards. Portrait photos around 1080 x 1920 work best.
                       </p>
                       {photoFiles.length > 1 && (
                         <div className="space-y-1">
@@ -1398,6 +1398,10 @@ export default function CreateListingPage() {
                       {fieldErrors.videos && (
                         <p className="inline-form-error">{fieldErrors.videos}</p>
                       )}
+                      <p className="text-xs text-muted-foreground">
+                        Use one clear vertical clip for the poster-style hero. Portrait 9:16 video
+                        is the best fit.
+                      </p>
                     </div>
 
                     {videoFile.length > 0 && (
@@ -1420,6 +1424,10 @@ export default function CreateListingPage() {
                               onChange={setVideoCoverFile}
                               accept="image/*"
                             />
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              This image is shown before the video plays and may become the hero
+                              poster in previews.
+                            </p>
                           </div>
                         </details>
                       </div>

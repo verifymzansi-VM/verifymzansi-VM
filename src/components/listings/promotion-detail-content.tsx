@@ -67,6 +67,8 @@ export interface PromotionDetailRecord {
   created_at: string;
   logo_url?: string | null;
   event_details?: EventDetails | null;
+  media_width?: number | null;
+  media_height?: number | null;
 }
 
 export interface PromotionAdvertiserRecord {
@@ -282,6 +284,22 @@ export function PromotionDetailContent({
         ? promotion.end_date
         : null;
   const countdown = useCountdown(countdownTarget);
+  const heroUsesContain =
+    typeof promotion.media_width === "number" &&
+    typeof promotion.media_height === "number" &&
+    promotion.media_width > promotion.media_height * 1.2;
+  const eventTypeLabel = promotion.event_details?.event_type
+    ? EVENT_TYPES.find((t) => t.value === promotion.event_details?.event_type)?.label
+    : null;
+  const venueLabel = promotion.event_details?.venue_name ?? null;
+  const ticketSummary =
+    promotion.event_details?.ticket_tiers && promotion.event_details.ticket_tiers.length > 0
+      ? `${promotion.event_details.ticket_tiers.length} ticket tier${
+          promotion.event_details.ticket_tiers.length === 1 ? "" : "s"
+        }`
+      : promotion.event_details?.tickets_url
+        ? "Tickets available"
+        : null;
 
   // Calendar link (Google Calendar)
   const calendarUrl = promotion.start_date
@@ -300,34 +318,34 @@ export function PromotionDetailContent({
       <div className="space-y-4 lg:col-span-2">
         {/* ═══ HERO: Immersive video/photo — portrait on mobile ═══ */}
         {activeMedia && (
-          <div className="overflow-hidden rounded-2xl">
-            <div className={cn("relative aspect-video overflow-hidden bg-black")}>
+          <div className="mx-auto w-full max-w-[420px] overflow-hidden rounded-[28px] border border-slate-200/70 bg-black shadow-[0_35px_80px_-48px_rgba(15,23,42,0.55)] dark:border-white/10">
+            <div className={cn("relative aspect-[9/16] overflow-hidden bg-black")}>
               {activeMedia.kind === "video" ? (
                 <ProfileVideoPlayer
                   ref={videoRef}
                   src={normalizeMediaUrl(activeMedia.url)}
                   poster={activeMedia.poster ? normalizeMediaUrl(activeMedia.poster) : undefined}
                   title={promotion.title}
-                  videoClassName="object-cover"
+                  videoClassName={heroUsesContain ? "object-contain" : "object-cover"}
                   skipSeconds={10}
                   showErrorState
                 />
               ) : (
                 <button
                   type="button"
-                  className="relative w-full cursor-zoom-in"
+                  className="relative h-full w-full cursor-zoom-in"
                   onClick={() => openLightbox(activeMediaIndex)}
                   aria-label={`View ${promotion.title} photo fullscreen`}
                 >
                   <Image
                     src={normalizeMediaUrl(activeMedia.url)}
                     alt={promotion.title}
-                    width={0}
-                    height={0}
-                    className="w-full h-auto max-h-[80vh]"
-                    sizes="(max-width: 1024px) 100vw, 66vw"
+                    fill
+                    className={heroUsesContain ? "object-contain" : "object-cover"}
+                    sizes="(max-width: 1024px) 78vw, 420px"
                     priority
                   />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/5 to-transparent" />
                   <div className="absolute bottom-4 right-4 z-10 rounded-full bg-black/50 p-2 text-white backdrop-blur-sm">
                     <Maximize2 className="h-5 w-5" />
                   </div>
@@ -346,7 +364,7 @@ export function PromotionDetailContent({
 
               {/* Logo overlay */}
               {(promotion.logo_url || linkedBusiness?.logo_url) && (
-                <div className="absolute bottom-3 left-3 h-10 w-10 overflow-hidden rounded-lg border border-white/20 bg-white shadow-md sm:h-12 sm:w-12">
+                <div className="absolute bottom-4 left-4 h-12 w-12 overflow-hidden rounded-xl border border-white/20 bg-white shadow-md">
                   <Image
                     src={normalizeMediaUrl((promotion.logo_url ?? linkedBusiness?.logo_url)!)}
                     alt={`${promotion.title} logo`}
@@ -393,7 +411,7 @@ export function PromotionDetailContent({
 
         {/* ═══ PHOTO/VIDEO GALLERY GRID ═══ */}
         {mediaItems.length > 1 && (
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+          <div className="mx-auto flex max-w-[520px] gap-2 overflow-x-auto pb-1">
             {mediaItems.map((item, index) => {
               if (index === activeMediaIndex) return null;
               const isVideo = item.kind === "video";
@@ -402,7 +420,7 @@ export function PromotionDetailContent({
                   key={`${item.kind}-${index}`}
                   type="button"
                   onClick={() => setActiveMediaIndex(index)}
-                  className="group relative aspect-square overflow-hidden rounded-xl ring-2 ring-transparent transition-all hover:shadow-md hover:ring-brand-blue/50"
+                  className="group relative aspect-[9/16] w-20 shrink-0 overflow-hidden rounded-2xl ring-2 ring-transparent transition-all hover:shadow-md hover:ring-brand-blue/50"
                   aria-label={
                     isVideo
                       ? `View video ${index + 1}`
@@ -417,7 +435,7 @@ export function PromotionDetailContent({
                           alt={`${promotion.title} video thumbnail`}
                           fill
                           className="object-cover transition-transform group-hover:scale-105"
-                          sizes="(max-width: 640px) 50vw, 33vw"
+                          sizes="80px"
                         />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center bg-black" />
@@ -435,7 +453,7 @@ export function PromotionDetailContent({
                       alt={`${promotion.title} photo ${item.photoNumber ?? index + 1}`}
                       fill
                       className="object-cover transition-transform group-hover:scale-105"
-                      sizes="(max-width: 640px) 50vw, 33vw"
+                      sizes="80px"
                     />
                   )}
                 </button>
@@ -443,6 +461,69 @@ export function PromotionDetailContent({
             })}
           </div>
         )}
+
+        <Card className="border-slate-200/75 bg-white/95 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-slate-950/75">
+          <CardContent className="space-y-4 p-5">
+            <div className="space-y-1">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                Event At A Glance
+              </p>
+              <h2 className="font-display text-xl font-semibold">
+                Date, venue, and ticket clarity first
+              </h2>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {promotion.start_date ? (
+                <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Starts
+                  </p>
+                  <p className="mt-1 text-sm font-medium">
+                    {new Date(promotion.start_date).toLocaleDateString("en-ZA", {
+                      weekday: "short",
+                      day: "numeric",
+                      month: "short",
+                    })}
+                  </p>
+                </div>
+              ) : null}
+              {venueLabel ? (
+                <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Venue
+                  </p>
+                  <p className="mt-1 text-sm font-medium">{venueLabel}</p>
+                </div>
+              ) : null}
+              {eventTypeLabel ? (
+                <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Event Type
+                  </p>
+                  <p className="mt-1 text-sm font-medium">{eventTypeLabel}</p>
+                </div>
+              ) : null}
+              {ticketSummary ? (
+                <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Tickets
+                  </p>
+                  <p className="mt-1 text-sm font-medium">{ticketSummary}</p>
+                </div>
+              ) : null}
+            </div>
+            {(promotion.location_city || promotion.location_province) && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <MapPin className="h-4 w-4 text-brand-blue" />
+                <span>
+                  {[promotion.location_town, promotion.location_city, promotion.location_province]
+                    .filter(Boolean)
+                    .join(", ")}
+                </span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* ═══ EVENT COUNTDOWN (compact) ═══ */}
         {countdown && (

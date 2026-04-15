@@ -2093,8 +2093,8 @@ function CreateBusinessContent() {
                           <p className="inline-form-error">{fieldErrors.cover_photo}</p>
                         )}
                         <p className="text-xs text-muted-foreground">
-                          Wide banner displayed at the top of your business page. Recommended size:
-                          1200×400.
+                          This still supports a banner, but the public profile now gives stronger
+                          focus to portrait lead media. Use this for a broad brand backdrop only.
                         </p>
                       </div>
                       {/* Crop preview for cover photo */}
@@ -2172,7 +2172,9 @@ function CreateBusinessContent() {
                       />
                       <p className="flex items-center gap-1 text-xs text-muted-foreground">
                         <Camera className="h-3 w-3" />
-                        Use clear photos of your products, team, premises, or completed work.
+                        Use clear portrait-led photos of your products, team, premises, or completed
+                        work. The first photo becomes the main public hero when no cover video is
+                        present.
                       </p>
                       {galleryFiles.length > 1 && (
                         <div className="space-y-1">
@@ -2261,8 +2263,8 @@ function CreateBusinessContent() {
                         disabled={!videoAllowed}
                       />
                       <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Film className="h-3 w-3" />A short intro video works best. Keep it focused
-                        and easy to watch on mobile.
+                        <Film className="h-3 w-3" />A short intro video works best. Portrait 9:16 is
+                        recommended because the public profile now uses a poster-style hero.
                       </p>
                       {fieldErrors.cover_video && (
                         <p className="inline-form-error">{fieldErrors.cover_video}</p>
@@ -2297,6 +2299,9 @@ function CreateBusinessContent() {
                               }}
                               accept="image/*"
                             />
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              Use this when you want a cleaner poster image before the video starts.
+                            </p>
                           </div>
                         </details>
                         {fieldErrors.video_thumbnail && (

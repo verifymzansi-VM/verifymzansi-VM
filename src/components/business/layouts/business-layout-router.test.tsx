@@ -8,7 +8,11 @@ import { render, screen } from "@testing-library/react";
 /* ── Mocks ── */
 vi.mock("@/components/business/layouts/unified-layout", () => ({
   UnifiedLayout: (props: Record<string, unknown>) => (
-    <div data-testid="unified-layout" data-delivery={String(props.deliveryAvailable)} />
+    <div
+      data-testid="unified-layout"
+      data-delivery={String(props.deliveryAvailable)}
+      data-family={String(props.family)}
+    />
   ),
 }));
 
@@ -62,7 +66,7 @@ describe("BusinessLayoutRouter", () => {
     vi.clearAllMocks();
   });
 
-  it("always renders the unified layout regardless of category", () => {
+  it("routes retail categories to the showroom family", () => {
     render(
       <BusinessLayoutRouter
         business={makeBusiness({ category: "fashion_accessories" })}
@@ -70,10 +74,12 @@ describe("BusinessLayoutRouter", () => {
         ownerProfile={null}
       />
     );
-    expect(screen.getByTestId("unified-layout")).toBeInTheDocument();
+    const el = screen.getByTestId("unified-layout");
+    expect(el).toBeInTheDocument();
+    expect(el).toHaveAttribute("data-family", "showroom");
   });
 
-  it("renders unified layout for any category", () => {
+  it("routes service-heavy categories to the professional family", () => {
     render(
       <BusinessLayoutRouter
         business={makeBusiness({ category: "professional_services" })}
@@ -81,21 +87,21 @@ describe("BusinessLayoutRouter", () => {
         ownerProfile={null}
       />
     );
-    expect(screen.getByTestId("unified-layout")).toBeInTheDocument();
+    expect(screen.getByTestId("unified-layout")).toHaveAttribute("data-family", "professional");
   });
 
-  it("ignores layout_template — always renders unified", () => {
+  it("routes tourism categories to the tourism family", () => {
     render(
       <BusinessLayoutRouter
         business={makeBusiness({
-          category: "fashion_accessories",
+          category: "tourism_hospitality",
           layout_template: "professional",
         })}
         trustLevel={null}
         ownerProfile={null}
       />
     );
-    expect(screen.getByTestId("unified-layout")).toBeInTheDocument();
+    expect(screen.getByTestId("unified-layout")).toHaveAttribute("data-family", "tourism");
   });
 
   it("computes deliveryAvailable from delivery_options", () => {

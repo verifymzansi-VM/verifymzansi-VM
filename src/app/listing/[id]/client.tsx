@@ -26,6 +26,8 @@ interface ListingDetailClientProps {
   videoThumbnail?: string | null;
   /** When set, items at index >= photoCount are treated as videos (needed for blob URLs with no extension). */
   photoCount?: number;
+  heroAspectClassName?: string;
+  heroMediaClassName?: string;
 }
 
 type MediaKind = "photo" | "video";
@@ -75,6 +77,8 @@ export function ListingDetailClient({
   listingId,
   videoThumbnail,
   photoCount,
+  heroAspectClassName = "aspect-video",
+  heroMediaClassName,
 }: ListingDetailClientProps) {
   const normalizedPhotos = normalizeMediaUrls(photos).filter(Boolean);
   const normalizedVideos = normalizeMediaUrls(videos).filter(Boolean);
@@ -175,7 +179,7 @@ export function ListingDetailClient({
     <div className="space-y-3">
       {/* ── Main Image / Video ──────────────────────────── */}
       <div className="relative group rounded-xl overflow-hidden bg-warm-100 dark:bg-warm-800">
-        <div className="aspect-video relative">
+        <div className={`${heroAspectClassName} relative`}>
           {!hasActiveUrl ? (
             <div className="w-full h-full flex items-center justify-center bg-muted text-muted-foreground text-sm">
               Media could not load
@@ -215,7 +219,7 @@ export function ListingDetailClient({
                 poster={firstPhotoUrl}
                 title={title}
                 onError={() => setVideoError(true)}
-                videoClassName="rounded-xl object-contain"
+                videoClassName={heroMediaClassName ?? "rounded-xl object-contain"}
                 skipSeconds={10}
               />
             </>
@@ -231,7 +235,9 @@ export function ListingDetailClient({
                 src={activeUrl}
                 alt={`${title} - ${activeMedia?.kind ?? "photo"} ${activeIndex + 1}`}
                 fill
-                className="object-cover transition-transform duration-500"
+                className={cn(
+                  heroMediaClassName ?? "object-cover transition-transform duration-500"
+                )}
                 sizes="(max-width: 1024px) 100vw, 66vw"
                 priority={activeIndex === 0}
                 unoptimized={shouldUseUnoptimizedImage ? true : undefined}
