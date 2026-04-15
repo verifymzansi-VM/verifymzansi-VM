@@ -130,7 +130,7 @@ export const PLANS: PlanDefinition[] = [
       maxPhotos: 10,
       maxPostsPerMonth: 45, // 3x growth (15 * 3)
       videoAllowed: true,
-      maxVideos: 9,
+      maxVideos: 27, // 3x growth (9 * 3)
       boostAllowed: true,
       featuredAllowed: true,
       urgentAllowed: true,
