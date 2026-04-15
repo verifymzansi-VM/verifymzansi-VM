@@ -65,21 +65,26 @@ export default function cloudflareImageLoader({ src, width, quality }: ImageLoad
 
   const cfParams = `width=${width},quality=${resolvedQuality},format=auto`;
 
-  // Keep relative sources on the same origin so Cloudflare can negotiate AVIF/WebP
-  // and right-size static homepage assets plus proxied media.
+  // Keep same-origin relative assets on their native paths. Production is able
+  // to serve these directly, while rewriting them through `/cdn-cgi/image/`
+  // currently returns 404s for both `/images/*` and `/api/media/serve/*`.
   if (!src.startsWith("http://") && !src.startsWith("https://")) {
+    if (src.startsWith("/api/media/serve/")) {
+      return src;
+    }
     if (!isImageSource(src)) {
       return src;
     }
-    return `/cdn-cgi/image/${cfParams}${getPathWithoutHash(src)}`;
+    return withSizeQuery(src, width, resolvedQuality);
   }
 
-  // Absolute same-origin proxy URLs are image-resized at the edge when possible.
+  // Absolute proxy URLs should likewise stay on the proxy path. The proxy
+  // already serves cacheable responses with the correct content type.
   if (src.includes("/api/media/serve/")) {
     try {
       const parsed = new URL(src);
       if (isImageSource(parsed.pathname)) {
-        return `/cdn-cgi/image/${cfParams}${parsed.pathname}${parsed.search}`;
+        return withSizeQuery(`${parsed.pathname}${parsed.search}`, width, resolvedQuality);
       }
     } catch {
       return src;
