@@ -122,9 +122,17 @@ describe("CreatePromotionPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
-    vi.mocked(useRouter).mockReturnValue({ push: mockPush } as ReturnType<typeof useRouter>);
-    vi.mocked(useToast).mockReturnValue({ toast: mockToast });
-    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams());
+    vi.mocked(useRouter).mockReturnValue({ push: mockPush } as unknown as ReturnType<
+      typeof useRouter
+    >);
+    vi.mocked(useToast).mockReturnValue({
+      toast: mockToast,
+      dismiss: vi.fn(),
+      toasts: [],
+    });
+    vi.mocked(useSearchParams).mockReturnValue(
+      new URLSearchParams() as unknown as ReturnType<typeof useSearchParams>
+    );
     vi.mocked(fetchWithRetry).mockImplementation((input: RequestInfo | URL) => fetch(input));
     fetchMock.mockResolvedValue({
       ok: true,
@@ -402,11 +410,11 @@ describe("CreatePromotionPage", () => {
             uploadUrl: "https://upload.example.com/promo-video",
             publicUrl: "https://media.verifymzansi.com/promotions/video.mp4",
           }),
-        };
+        } as Response;
       }
 
       if (input === "https://upload.example.com/promo-video") {
-        return { ok: true, status: 200, json: async () => ({}) };
+        return { ok: true, status: 200, json: async () => ({}) } as Response;
       }
 
       return fetch(input);
