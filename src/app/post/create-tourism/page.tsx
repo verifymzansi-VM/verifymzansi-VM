@@ -1642,6 +1642,7 @@ function CreateTourismContent() {
             negotiable={negotiable}
             imageUrl={cardMediaUrl || undefined}
             posterUrl={cardPosterUrl}
+            isVideo={previewVideoUrls.length > 0}
             logoUrl={logoPreviewUrl || undefined}
             province={province || "Province"}
             city={city || "City"}

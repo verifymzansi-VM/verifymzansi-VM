@@ -190,4 +190,19 @@ describe("PromotionCard", () => {
     expect(videoPlayer).toHaveAttribute("data-fit-strategy", "smart");
     expect(videoPlayer).toHaveAttribute("data-mute-control", "always");
   });
+
+  it("treats blob media as video when explicitly marked", () => {
+    render(
+      <PromotionCard
+        {...defaultProps}
+        imageUrl="blob:tourism-preview"
+        posterUrl="blob:tourism-poster"
+        isVideo
+      />
+    );
+
+    const videoPlayer = screen.getByTestId("video-card-player");
+    expect(videoPlayer).toHaveAttribute("data-src", "blob:tourism-preview");
+    expect(videoPlayer).toHaveAttribute("data-mute-control", "always");
+  });
 });

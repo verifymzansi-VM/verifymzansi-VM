@@ -15,6 +15,7 @@ interface PromotionCardProps {
   negotiable?: boolean;
   imageUrl?: string;
   posterUrl?: string;
+  isVideo?: boolean;
   categoryLabel?: string;
   province: string;
   city: string;
@@ -129,6 +130,7 @@ export const PromotionCard = memo(function PromotionCard({
   negotiable,
   imageUrl,
   posterUrl,
+  isVideo,
   province: _province,
   city,
   promotionType,
@@ -163,6 +165,7 @@ export const PromotionCard = memo(function PromotionCard({
       title={title}
       mediaUrl={imageUrl}
       posterUrl={posterUrl}
+      isVideo={isVideo}
       mediaAlt={title}
       eyebrow={eyebrow}
       description={description}

@@ -674,6 +674,7 @@ describe("CreateTourismPage type switch behavior", () => {
     await waitFor(() => {
       expect(lastPromotionCardProps.current).toMatchObject({
         imageUrl: "blob:tourism-preview",
+        isVideo: true,
       });
     });
   });
