@@ -17,6 +17,7 @@ import { MediaLightbox } from "@/components/ui/media-lightbox";
 import { cn } from "@/lib/utils";
 import { normalizeMediaUrls } from "@/lib/utils/media-url";
 import { ProfileVideoPlayer } from "@/components/ui/profile-video-player";
+import { useHorizontalSwipeNavigation } from "@/hooks/use-horizontal-swipe-navigation";
 
 interface ListingDetailClientProps {
   photos: string[];
@@ -149,12 +150,24 @@ export function ListingDetailClient({
   const hasActiveUrl = isRenderableMediaUrl(activeUrl);
   const isVideo = activeMedia?.kind === "video";
   const shouldUseUnoptimizedImage = isBlobOrDataUrl(activeUrl);
+  const canPrevious = activeIndex > 0;
+  const canNext = activeIndex < orderedMedia.length - 1;
 
-  function goTo(index: number) {
-    if (index >= 0 && index < orderedMedia.length) {
-      setActiveIndex(index);
-    }
-  }
+  const goTo = useCallback(
+    (index: number) => {
+      if (index >= 0 && index < orderedMedia.length) {
+        setActiveIndex(index);
+      }
+    },
+    [orderedMedia.length]
+  );
+
+  const swipeHandlers = useHorizontalSwipeNavigation({
+    canPrevious,
+    canNext,
+    onPrevious: () => goTo(activeIndex - 1),
+    onNext: () => goTo(activeIndex + 1),
+  });
 
   async function copyShareLink() {
     try {
@@ -178,7 +191,10 @@ export function ListingDetailClient({
   return (
     <div className="space-y-3">
       {/* ── Main Image / Video ──────────────────────────── */}
-      <div className="relative group rounded-xl overflow-hidden bg-warm-100 dark:bg-warm-800">
+      <div
+        className="relative group overflow-hidden rounded-xl bg-warm-100 dark:bg-warm-800 touch-pan-y"
+        {...swipeHandlers}
+      >
         <div className={`${heroAspectClassName} relative`}>
           {!hasActiveUrl ? (
             <div className="w-full h-full flex items-center justify-center bg-muted text-muted-foreground text-sm">
@@ -258,6 +274,7 @@ export function ListingDetailClient({
                 disabled={activeIndex === 0}
                 className="absolute left-2 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-0 hover:bg-black/60 max-lg:opacity-100"
                 aria-label="Previous image"
+                data-carousel-control="true"
               >
                 <ChevronLeft className="h-5 w-5" />
               </button>
@@ -267,6 +284,7 @@ export function ListingDetailClient({
                 disabled={activeIndex === orderedMedia.length - 1}
                 className="absolute right-2 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-0 hover:bg-black/60 max-lg:opacity-100"
                 aria-label="Next image"
+                data-carousel-control="true"
               >
                 <ChevronRight className="h-5 w-5" />
               </button>
@@ -275,7 +293,7 @@ export function ListingDetailClient({
 
           {/* Image counter */}
           {orderedMedia.length > 1 && (
-            <div className="absolute right-3 top-3 bg-black/50 text-white text-xs font-medium px-2.5 py-1 rounded-full backdrop-blur-sm">
+            <div className="absolute left-3 top-3 bg-black/50 text-white text-xs font-medium px-2.5 py-1 rounded-full backdrop-blur-sm">
               {activeIndex + 1} / {orderedMedia.length}
             </div>
           )}

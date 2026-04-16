@@ -39,6 +39,7 @@ import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import { readAccountVerificationStatus } from "@/lib/account/compat";
 import { ProfileVideoPlayer } from "@/components/ui/profile-video-player";
 import type { EventDetails, TicketTier } from "@/types/tourism-details";
+import { useHorizontalSwipeNavigation } from "@/hooks/use-horizontal-swipe-navigation";
 
 export interface PromotionDetailRecord {
   id: string;
@@ -217,6 +218,21 @@ export function PromotionDetailContent({
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxStart, setLightboxStart] = useState(0);
   const wasPlayingRef = useRef(false);
+  const canPrevious = activeMediaIndex > 0;
+  const canNext = activeMediaIndex < mediaItems.length - 1;
+
+  function goTo(index: number) {
+    if (index >= 0 && index < mediaItems.length) {
+      setActiveMediaIndex(index);
+    }
+  }
+
+  const swipeHandlers = useHorizontalSwipeNavigation({
+    canPrevious,
+    canNext,
+    onPrevious: () => goTo(activeMediaIndex - 1),
+    onNext: () => goTo(activeMediaIndex + 1),
+  });
 
   const openLightbox = (idx: number) => {
     const v = videoRef.current;
@@ -310,16 +326,17 @@ export function PromotionDetailContent({
     <article
       className={
         showStickyBar
-          ? "grid grid-cols-1 gap-4 pb-24 lg:grid-cols-3 lg:gap-6 lg:pb-0"
-          : "grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6"
+          ? "grid grid-cols-1 gap-4 pb-24 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:gap-6 lg:pb-0"
+          : "grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:gap-6"
       }
     >
-      {/* ═══ LEFT COLUMN: Media + Details ═══ */}
-      <div className="space-y-4 lg:col-span-2">
-        {/* ═══ HERO: Immersive video/photo — portrait on mobile ═══ */}
-        {activeMedia && (
-          <div className="mx-auto w-full max-w-[280px] sm:max-w-[320px] lg:max-w-[300px] xl:max-w-[320px] overflow-hidden rounded-[28px] border border-slate-200/70 bg-black shadow-[0_35px_80px_-48px_rgba(15,23,42,0.55)] dark:border-white/10">
-            <div className={cn("relative aspect-[9/16] overflow-hidden bg-black")}>
+      {activeMedia ? (
+        <div className="space-y-4 lg:w-[20rem]">
+          <div
+            className="mx-auto w-full max-w-[280px] overflow-hidden rounded-[28px] border border-slate-200/70 bg-black shadow-[0_35px_80px_-48px_rgba(15,23,42,0.55)] sm:max-w-[320px] lg:max-w-none"
+            {...swipeHandlers}
+          >
+            <div className={cn("relative aspect-[9/16] overflow-hidden bg-black touch-pan-y")}>
               {activeMedia.kind === "video" ? (
                 <ProfileVideoPlayer
                   ref={videoRef}
@@ -352,7 +369,6 @@ export function PromotionDetailContent({
                 </button>
               )}
 
-              {/* Overlay badges */}
               <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
                 <Badge className="bg-black/50 text-white backdrop-blur-sm border-0">Event</Badge>
                 {eventState && (
@@ -362,7 +378,6 @@ export function PromotionDetailContent({
                 )}
               </div>
 
-              {/* Logo overlay */}
               {(promotion.logo_url || linkedBusiness?.logo_url) && (
                 <div className="absolute bottom-4 left-4 h-12 w-12 overflow-hidden rounded-xl border border-white/20 bg-white shadow-md">
                   <Image
@@ -376,8 +391,63 @@ export function PromotionDetailContent({
               )}
             </div>
           </div>
-        )}
 
+          {mediaItems.length > 1 && (
+            <div className="mx-auto flex w-full max-w-[320px] gap-2 overflow-x-auto pb-1 lg:max-w-none">
+              {mediaItems.map((item, index) => {
+                if (index === activeMediaIndex) return null;
+                const isVideo = item.kind === "video";
+                return (
+                  <button
+                    key={`${item.kind}-${index}`}
+                    type="button"
+                    onClick={() => goTo(index)}
+                    className="group relative aspect-[9/16] w-20 shrink-0 overflow-hidden rounded-2xl ring-2 ring-transparent transition-all hover:shadow-md hover:ring-brand-blue/50"
+                    aria-label={
+                      isVideo
+                        ? `View video ${index + 1}`
+                        : `View photo ${item.photoNumber ?? index + 1}`
+                    }
+                    data-carousel-control="true"
+                  >
+                    {isVideo ? (
+                      <>
+                        {item.poster ? (
+                          <Image
+                            src={normalizeMediaUrl(item.poster)}
+                            alt={`${promotion.title} video thumbnail`}
+                            fill
+                            className="object-cover transition-transform group-hover:scale-105"
+                            sizes="80px"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-black" />
+                        )}
+                        <div className="absolute inset-0 bg-black/25" />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="rounded-full bg-white/90 p-2 shadow-lg backdrop-blur-sm">
+                            <Play className="h-4 w-4 text-black fill-black" />
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <Image
+                        src={normalizeMediaUrl(item.url)}
+                        alt={`${promotion.title} photo ${item.photoNumber ?? index + 1}`}
+                        fill
+                        className="object-cover transition-transform group-hover:scale-105"
+                        sizes="80px"
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      <div className={cn("space-y-4", !activeMedia && "lg:col-span-2")}>
         {/* ═══ TITLE BAR — fallback when no media hero ═══ */}
         {!activeMedia && (
           <div>
@@ -408,61 +478,7 @@ export function PromotionDetailContent({
             </div>
           </div>
         )}
-
-        {/* ═══ PHOTO/VIDEO GALLERY GRID ═══ */}
-        {mediaItems.length > 1 && (
-          <div className="mx-auto flex max-w-[420px] gap-2 overflow-x-auto pb-1">
-            {mediaItems.map((item, index) => {
-              if (index === activeMediaIndex) return null;
-              const isVideo = item.kind === "video";
-              return (
-                <button
-                  key={`${item.kind}-${index}`}
-                  type="button"
-                  onClick={() => setActiveMediaIndex(index)}
-                  className="group relative aspect-[9/16] w-20 shrink-0 overflow-hidden rounded-2xl ring-2 ring-transparent transition-all hover:shadow-md hover:ring-brand-blue/50"
-                  aria-label={
-                    isVideo
-                      ? `View video ${index + 1}`
-                      : `View photo ${item.photoNumber ?? index + 1}`
-                  }
-                >
-                  {isVideo ? (
-                    <>
-                      {item.poster ? (
-                        <Image
-                          src={normalizeMediaUrl(item.poster)}
-                          alt={`${promotion.title} video thumbnail`}
-                          fill
-                          className="object-cover transition-transform group-hover:scale-105"
-                          sizes="80px"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-black" />
-                      )}
-                      <div className="absolute inset-0 bg-black/25" />
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="rounded-full bg-white/90 p-2 shadow-lg backdrop-blur-sm">
-                          <Play className="h-4 w-4 text-black fill-black" />
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <Image
-                      src={normalizeMediaUrl(item.url)}
-                      alt={`${promotion.title} photo ${item.photoNumber ?? index + 1}`}
-                      fill
-                      className="object-cover transition-transform group-hover:scale-105"
-                      sizes="80px"
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        <div className="mx-auto w-full max-w-4xl space-y-4">
+        <div className="space-y-4">
           <Card className="border-slate-200/75 bg-white/95 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-slate-950/75">
             <CardContent className="space-y-4 p-5">
               <div className="space-y-1">

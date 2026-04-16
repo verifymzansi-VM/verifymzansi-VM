@@ -208,6 +208,56 @@ describe("PromotionDetailContent", () => {
     ).toBe(true);
   });
 
+  it("swipes to the next hero media item on touch devices", () => {
+    const { container } = render(
+      <PromotionDetailContent
+        promotion={{
+          id: "promo-swipe",
+          owner_id: "seller-1",
+          business_id: null,
+          title: "Swipe Event",
+          description: "Swipe through the event gallery.",
+          promotion_type: "event",
+          category: "Live Music",
+          category_key: "events_entertainment",
+          photos: ["https://example.com/photo-1.jpg"],
+          videos: ["https://example.com/video-1.mp4"],
+          video_thumbnail: "https://example.com/video-thumb.jpg",
+          price_cents: null,
+          price_negotiable: false,
+          location_province: "Gauteng",
+          location_city: "Johannesburg",
+          location_town: null,
+          location_address: null,
+          contact_methods: [],
+          start_date: null,
+          end_date: null,
+          boost_until: null,
+          featured_until: null,
+          view_count: 1,
+          created_at: "2026-03-08T00:00:00.000Z",
+        }}
+        advertiserProfile={null}
+        linkedBusiness={null}
+      />
+    );
+
+    const heroVideo = container.querySelector("video");
+    expect(heroVideo).toBeTruthy();
+
+    fireEvent.touchStart(heroVideo!, {
+      touches: [{ clientX: 260, clientY: 220 }],
+    });
+    fireEvent.touchEnd(heroVideo!, {
+      changedTouches: [{ clientX: 120, clientY: 225 }],
+    });
+
+    const images = Array.from(container.querySelectorAll("img"));
+    expect(
+      images.some((img) => img.getAttribute("src") === "https://example.com/photo-1.jpg")
+    ).toBe(true);
+  });
+
   it("renders logo overlay when promotion has logo_url", () => {
     const { container } = render(
       <PromotionDetailContent

@@ -79,6 +79,7 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
     const [volume, setVolume] = useState(1);
     const [errorSource, setErrorSource] = useState<string | null>(null);
     const [retryKey, setRetryKey] = useState(0);
+    const [isCompactLayout, setIsCompactLayout] = useState(false);
     const videoError = showErrorState && errorSource === src;
 
     useEffect(() => {
@@ -86,6 +87,22 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
       if (!video) return;
       video.volume = volume;
     }, [volume]);
+
+    useEffect(() => {
+      const container = containerRef.current;
+      if (!container || typeof ResizeObserver === "undefined") {
+        return;
+      }
+
+      const observer = new ResizeObserver(([entry]) => {
+        const width = entry?.contentRect.width ?? 0;
+        setIsCompactLayout(width > 0 && width < 360);
+      });
+
+      observer.observe(container);
+
+      return () => observer.disconnect();
+    }, []);
 
     /* ---- Register with global playback manager ---- */
     useEffect(() => {
@@ -308,87 +325,121 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
         )}
 
         {!videoError && (
-          <div className="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-3 sm:p-4">
-            <input
-              type="range"
-              min={0}
-              max={Math.max(duration, 0)}
-              step={0.1}
-              value={Math.min(currentTime, duration || currentTime)}
-              onChange={(event) => seekTo(Number(event.target.value))}
-              className="mb-2 h-1.5 w-full cursor-pointer accent-brand-red"
-              aria-label="Seek playback"
-            />
+          <>
+            <button
+              type="button"
+              onClick={enterFullscreen}
+              className="absolute right-3 top-3 z-20 rounded-full bg-black/45 p-2 text-white/95 backdrop-blur-sm transition-colors hover:bg-black/65"
+              aria-label="Fullscreen"
+              data-carousel-control="true"
+            >
+              <Maximize2 className="h-4 w-4" />
+            </button>
+            <div className="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-3 sm:p-4">
+              <input
+                type="range"
+                min={0}
+                max={Math.max(duration, 0)}
+                step={0.1}
+                value={Math.min(currentTime, duration || currentTime)}
+                onChange={(event) => seekTo(Number(event.target.value))}
+                className="mb-2 h-1.5 w-full cursor-pointer accent-brand-red"
+                aria-label="Seek playback"
+                data-carousel-control="true"
+              />
 
-            <div className="flex items-center justify-between gap-2 text-white">
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <button
-                  type="button"
-                  onClick={() => skipBy(-skipSeconds)}
-                  className="rounded-full p-2.5 transition-colors hover:bg-white/20 sm:p-2"
-                  aria-label={`Rewind ${skipSeconds} seconds`}
-                >
-                  <SkipBack className="h-5 w-5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={togglePlay}
-                  className="rounded-full p-2.5 transition-colors hover:bg-white/20 sm:p-2"
-                  aria-label={isPlaying ? "Pause" : "Play"}
-                >
-                  {isPlaying ? (
-                    <Pause className="h-5 w-5" />
-                  ) : (
-                    <Play className="h-5 w-5 fill-white" />
+              <div className="flex items-center justify-between gap-2 text-white">
+                <div
+                  className={cn(
+                    "flex min-w-0 items-center text-white",
+                    isCompactLayout ? "gap-1" : "gap-1.5 sm:gap-2"
                   )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => skipBy(skipSeconds)}
-                  className="rounded-full p-2.5 transition-colors hover:bg-white/20 sm:p-2"
-                  aria-label={`Forward ${skipSeconds} seconds`}
                 >
-                  <SkipForward className="h-5 w-5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={toggleMute}
-                  className="rounded-full p-2.5 transition-colors hover:bg-white/20 sm:p-2"
-                  aria-label={isMuted ? "Unmute" : "Mute"}
-                >
-                  {isMuted ? (
-                    <VolumeX className="h-5 w-5" />
-                  ) : volume <= 0.5 ? (
-                    <Volume1 className="h-5 w-5" />
-                  ) : (
-                    <Volume2 className="h-5 w-5" />
-                  )}
-                </button>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  value={isMuted ? 0 : volume}
-                  onChange={(event) => onVolumeInput(Number(event.target.value))}
-                  className="hidden h-1.5 w-20 cursor-pointer accent-white sm:block"
-                  aria-label="Volume"
-                />
-                <span className="text-xs tabular-nums text-white/90 sm:text-sm">
-                  {formatSeconds(currentTime)} / {formatSeconds(duration)}
-                </span>
+                  <button
+                    type="button"
+                    onClick={() => skipBy(-skipSeconds)}
+                    className={cn(
+                      "rounded-full transition-colors hover:bg-white/20",
+                      isCompactLayout ? "p-2" : "p-2.5 sm:p-2"
+                    )}
+                    aria-label={`Rewind ${skipSeconds} seconds`}
+                    data-carousel-control="true"
+                  >
+                    <SkipBack className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={togglePlay}
+                    className={cn(
+                      "rounded-full transition-colors hover:bg-white/20",
+                      isCompactLayout ? "p-2" : "p-2.5 sm:p-2"
+                    )}
+                    aria-label={isPlaying ? "Pause" : "Play"}
+                    data-carousel-control="true"
+                  >
+                    {isPlaying ? (
+                      <Pause className="h-5 w-5" />
+                    ) : (
+                      <Play className="h-5 w-5 fill-white" />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => skipBy(skipSeconds)}
+                    className={cn(
+                      "rounded-full transition-colors hover:bg-white/20",
+                      isCompactLayout ? "p-2" : "p-2.5 sm:p-2"
+                    )}
+                    aria-label={`Forward ${skipSeconds} seconds`}
+                    data-carousel-control="true"
+                  >
+                    <SkipForward className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={toggleMute}
+                    className={cn(
+                      "rounded-full transition-colors hover:bg-white/20",
+                      isCompactLayout ? "p-2" : "p-2.5 sm:p-2"
+                    )}
+                    aria-label={isMuted ? "Unmute" : "Mute"}
+                    data-carousel-control="true"
+                  >
+                    {isMuted ? (
+                      <VolumeX className="h-5 w-5" />
+                    ) : volume <= 0.5 ? (
+                      <Volume1 className="h-5 w-5" />
+                    ) : (
+                      <Volume2 className="h-5 w-5" />
+                    )}
+                  </button>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={isMuted ? 0 : volume}
+                    onChange={(event) => onVolumeInput(Number(event.target.value))}
+                    className={cn(
+                      "hidden h-1.5 w-20 cursor-pointer accent-white",
+                      !isCompactLayout && "sm:block"
+                    )}
+                    aria-label="Volume"
+                    data-carousel-control="true"
+                  />
+                  <span
+                    className={cn(
+                      "truncate text-xs tabular-nums text-white/90",
+                      isCompactLayout ? "max-w-[4.75rem]" : "sm:text-sm"
+                    )}
+                    data-carousel-control="true"
+                  >
+                    {formatSeconds(currentTime)} / {formatSeconds(duration)}
+                  </span>
+                </div>
               </div>
-
-              <button
-                type="button"
-                onClick={enterFullscreen}
-                className="rounded-full p-2.5 transition-colors hover:bg-white/20 sm:p-2"
-                aria-label="Fullscreen"
-              >
-                <Maximize2 className="h-5 w-5" />
-              </button>
             </div>
-          </div>
+          </>
         )}
       </div>
     );

@@ -217,12 +217,12 @@ export function ListingDetailContent({
       <article
         className={
           showStickyBar
-            ? "grid grid-cols-1 gap-6 pb-24 lg:grid-cols-3 lg:pb-0"
-            : "grid grid-cols-1 gap-6 lg:grid-cols-3"
+            ? "grid grid-cols-1 gap-6 pb-24 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:items-start lg:pb-0"
+            : "grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:items-start"
         }
       >
-        <div className="space-y-6 lg:col-span-2">
-          <div className="mx-auto w-full max-w-[280px] sm:max-w-[320px] lg:max-w-[300px] xl:max-w-[320px]">
+        <div className="space-y-6 lg:grid lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] lg:items-start lg:gap-8 lg:space-y-0">
+          <div className="mx-auto w-full max-w-[280px] sm:max-w-[320px] lg:max-w-none">
             <ErrorBoundary
               label="ListingDetailClient"
               fallback={
@@ -248,7 +248,7 @@ export function ListingDetailContent({
             </ErrorBoundary>
           </div>
 
-          <div className="mx-auto w-full max-w-4xl space-y-5">
+          <div className="space-y-5">
             <div className="space-y-3 text-center lg:text-left">
               <div className="flex flex-wrap items-center justify-center gap-2 lg:justify-start">
                 <Badge variant="outline" className="text-[11px]">
@@ -365,7 +365,7 @@ export function ListingDetailContent({
           </div>
 
           {detailFacts.length > 0 ? (
-            <Card className="border-slate-200/75 bg-white/95 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-slate-950/75">
+            <Card className="border-slate-200/75 bg-white/95 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-slate-950/75 lg:col-span-2">
               <CardContent className="space-y-4 p-5">
                 <div className="space-y-1">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
@@ -389,7 +389,7 @@ export function ListingDetailContent({
           ) : null}
 
           {showSimilarListings && similarItems.length > 0 ? (
-            <div className="space-y-3">
+            <div className="space-y-3 lg:col-span-2">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">

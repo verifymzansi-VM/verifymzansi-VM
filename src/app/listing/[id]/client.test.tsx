@@ -3,7 +3,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 
 vi.mock("next/image", () => ({
   default: ({
@@ -172,5 +172,30 @@ describe("ListingDetailClient", () => {
     );
 
     expect(screen.getByText("Media could not load")).toBeTruthy();
+  });
+
+  it("swipes between hero media items on touch devices", () => {
+    render(
+      <ListingDetailClient
+        photos={["https://example.com/photo-1.jpg"]}
+        videos={["https://example.com/video-1.mp4"]}
+        title="Swipe Ready Listing"
+        listingId="listing-7"
+        videoThumbnail="https://example.com/video-thumb.jpg"
+      />
+    );
+
+    const heroVideo = screen.getByLabelText("Swipe Ready Listing video");
+    fireEvent.touchStart(heroVideo, {
+      touches: [{ clientX: 260, clientY: 200 }],
+    });
+    fireEvent.touchEnd(heroVideo, {
+      changedTouches: [{ clientX: 120, clientY: 210 }],
+    });
+
+    expect(screen.getByAltText("Swipe Ready Listing - photo 2")).toHaveAttribute(
+      "src",
+      "https://example.com/photo-1.jpg"
+    );
   });
 });

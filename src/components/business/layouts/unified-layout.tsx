@@ -34,6 +34,7 @@ import { ProfileVideoPlayer } from "@/components/ui/profile-video-player";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { safeExternalHref } from "@/lib/utils/sanitize-html";
 import type { BusinessProfileFamily } from "@/lib/presentation/profile-variants";
+import { useHorizontalSwipeNavigation } from "@/hooks/use-horizontal-swipe-navigation";
 
 interface UnifiedLayoutProps {
   family: BusinessProfileFamily;
@@ -50,6 +51,14 @@ interface UnifiedLayoutProps {
 interface QuickFact {
   label: string;
   value: string;
+}
+
+interface BusinessHeroMediaItem {
+  kind: "video" | "photo";
+  key: string;
+  url: string;
+  poster?: string;
+  label: string;
 }
 
 function normalizeList(values: unknown): string[] {
@@ -153,27 +162,76 @@ function MediaColumn({
   galleryPhotos: string[];
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const hasVideo = Boolean(business.cover_video);
-  const [activeHero, setActiveHero] = useState<"video" | "cover-photo" | "gallery-photo">(
-    hasVideo ? "video" : business.cover_photo ? "cover-photo" : "gallery-photo"
+  const heroMediaItems = useMemo<BusinessHeroMediaItem[]>(() => {
+    const items: BusinessHeroMediaItem[] = [];
+    const normalizedPoster =
+      business.video_thumbnail || business.cover_photo
+        ? normalizeMediaUrl((business.video_thumbnail || business.cover_photo)!)
+        : undefined;
+
+    if (business.cover_video) {
+      items.push({
+        kind: "video",
+        key: "video",
+        url: normalizeMediaUrl(business.cover_video),
+        poster: normalizedPoster,
+        label: "profile video",
+      });
+    }
+
+    if (business.cover_photo) {
+      items.push({
+        kind: "photo",
+        key: `cover:${business.cover_photo}`,
+        url: normalizeMediaUrl(business.cover_photo),
+        label: "cover photo",
+      });
+    }
+
+    galleryPhotos.forEach((photo, index) => {
+      const normalizedPhoto = normalizeMediaUrl(photo);
+      if (items.some((item) => item.kind === "photo" && item.url === normalizedPhoto)) {
+        return;
+      }
+
+      items.push({
+        kind: "photo",
+        key: `gallery:${normalizedPhoto}:${index}`,
+        url: normalizedPhoto,
+        label: `photo ${index + 1}`,
+      });
+    });
+
+    return items;
+  }, [business.cover_photo, business.cover_video, business.video_thumbnail, galleryPhotos]);
+  const lightboxItems = useMemo(
+    () =>
+      heroMediaItems
+        .filter((item) => item.kind === "photo")
+        .map((item) => ({ url: item.url, kind: "photo" as const })),
+    [heroMediaItems]
   );
-  const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+  const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxStart, setLightboxStart] = useState(0);
   const wasPlayingRef = useRef(false);
+  const activeMedia = heroMediaItems[activeMediaIndex] ?? null;
+  const canPrevious = activeMediaIndex > 0;
+  const canNext = activeMediaIndex < heroMediaItems.length - 1;
+  const swipeHandlers = useHorizontalSwipeNavigation({
+    canPrevious,
+    canNext,
+    onPrevious: () => setActiveMediaIndex((current) => Math.max(current - 1, 0)),
+    onNext: () =>
+      setActiveMediaIndex((current) => Math.min(current + 1, heroMediaItems.length - 1)),
+  });
 
-  const lightboxItems = useMemo(() => {
-    const items = galleryPhotos.map((url) => ({ url, kind: "photo" as const }));
-    if (business.cover_photo && !galleryPhotos.includes(business.cover_photo)) {
-      items.unshift({ url: business.cover_photo, kind: "photo" as const });
-    }
-    return items;
-  }, [business.cover_photo, galleryPhotos]);
-
-  const activePhotoUrl =
-    activeHero === "cover-photo"
-      ? business.cover_photo
-      : galleryPhotos[activePhotoIndex] || business.cover_photo;
+  const columnWidthClass =
+    family === "professional"
+      ? "mx-auto w-full max-w-[300px] sm:max-w-[320px] lg:max-w-none"
+      : family === "tourism"
+        ? "mx-auto w-full max-w-[310px] sm:max-w-[330px] lg:max-w-none"
+        : "mx-auto w-full max-w-[290px] sm:max-w-[310px] lg:max-w-none";
 
   function openLightbox(idx: number) {
     const video = videoRef.current;
@@ -190,45 +248,39 @@ function MediaColumn({
     }
   }
 
+  function openActivePhotoInLightbox() {
+    if (!activeMedia || activeMedia.kind !== "photo") {
+      return;
+    }
+
+    const photoIndex = lightboxItems.findIndex((item) => item.url === activeMedia.url);
+    openLightbox(photoIndex >= 0 ? photoIndex : 0);
+  }
+
   return (
     <div className="space-y-3">
-      <div
-        className={
-          family === "professional"
-            ? "mx-auto w-full max-w-[300px] sm:max-w-[320px] lg:max-w-[300px]"
-            : family === "tourism"
-              ? "mx-auto w-full max-w-[310px] sm:max-w-[330px] lg:max-w-[310px]"
-              : "mx-auto w-full max-w-[290px] sm:max-w-[310px] lg:max-w-[290px]"
-        }
-      >
+      <div className={columnWidthClass}>
         <div className="relative overflow-hidden rounded-[28px] border border-slate-200/70 bg-slate-950 shadow-[0_35px_80px_-48px_rgba(15,23,42,0.55)] dark:border-white/10">
-          <div className="relative aspect-[9/16] overflow-hidden">
-            {activeHero === "video" && hasVideo ? (
+          <div className="relative aspect-[9/16] overflow-hidden touch-pan-y" {...swipeHandlers}>
+            {activeMedia?.kind === "video" ? (
               <ProfileVideoPlayer
                 ref={videoRef}
-                src={normalizeMediaUrl(business.cover_video!)}
-                poster={
-                  business.video_thumbnail || business.cover_photo
-                    ? normalizeMediaUrl((business.video_thumbnail || business.cover_photo)!)
-                    : undefined
-                }
+                src={activeMedia.url}
+                poster={activeMedia.poster}
                 title={business.business_name}
                 videoClassName="object-cover"
                 skipSeconds={10}
                 showErrorState
               />
-            ) : activePhotoUrl ? (
+            ) : activeMedia?.kind === "photo" ? (
               <button
                 type="button"
                 className="relative h-full w-full cursor-zoom-in"
-                onClick={() => {
-                  const idx = lightboxItems.findIndex((item) => item.url === activePhotoUrl);
-                  openLightbox(idx >= 0 ? idx : 0);
-                }}
+                onClick={openActivePhotoInLightbox}
                 aria-label={`View ${business.business_name} media fullscreen`}
               >
                 <Image
-                  src={normalizeMediaUrl(activePhotoUrl)}
+                  src={activeMedia.url}
                   alt={`${business.business_name} hero`}
                   fill
                   className="object-cover"
@@ -281,61 +333,50 @@ function MediaColumn({
         </div>
       </div>
 
-      {(galleryPhotos.length > 0 || hasVideo) && (
-        <div className="mx-auto flex max-w-[520px] gap-2 overflow-x-auto pb-1">
-          {hasVideo && (
+      {heroMediaItems.length > 1 && (
+        <div className="mx-auto flex max-w-[520px] gap-2 overflow-x-auto pb-1 lg:max-w-none">
+          {heroMediaItems.map((item, index) => (
             <button
+              key={item.key}
               type="button"
-              onClick={() => setActiveHero("video")}
+              onClick={() => setActiveMediaIndex(index)}
               className={`group relative aspect-[9/16] w-20 shrink-0 overflow-hidden rounded-2xl ring-2 transition-all ${
-                activeHero === "video" ? "ring-brand-blue shadow-md" : "ring-transparent"
+                index === activeMediaIndex ? "ring-brand-blue shadow-md" : "ring-transparent"
               }`}
-              aria-label="View profile video"
+              aria-label={`View ${item.label}`}
+              data-carousel-control="true"
             >
-              {business.video_thumbnail || business.cover_photo ? (
+              {item.kind === "video" ? (
+                <>
+                  {item.poster ? (
+                    <Image
+                      src={item.poster}
+                      alt="Profile video thumbnail"
+                      fill
+                      className="object-cover transition-transform group-hover:scale-105"
+                      sizes="80px"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-slate-950 text-white/70">
+                      <Play className="h-5 w-5" />
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/25" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="rounded-full bg-white/90 p-2 shadow-lg backdrop-blur-sm">
+                      <Play className="h-4 w-4 fill-black text-black" />
+                    </div>
+                  </div>
+                </>
+              ) : (
                 <Image
-                  src={normalizeMediaUrl(business.video_thumbnail || business.cover_photo!)}
-                  alt="Profile video thumbnail"
+                  src={item.url}
+                  alt={`${business.business_name} ${item.label}`}
                   fill
-                  className="object-cover transition-transform group-hover:scale-105"
+                  className="object-cover"
                   sizes="80px"
                 />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center bg-slate-950 text-white/70">
-                  <Play className="h-5 w-5" />
-                </div>
               )}
-              <div className="absolute inset-0 bg-black/25" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="rounded-full bg-white/90 p-2 shadow-lg backdrop-blur-sm">
-                  <Play className="h-4 w-4 fill-black text-black" />
-                </div>
-              </div>
-            </button>
-          )}
-
-          {galleryPhotos.map((url, index) => (
-            <button
-              key={`${url}-${index}`}
-              type="button"
-              onClick={() => {
-                setActivePhotoIndex(index);
-                setActiveHero("gallery-photo");
-              }}
-              className={`relative aspect-[9/16] w-20 shrink-0 overflow-hidden rounded-2xl ring-2 transition-all ${
-                activeHero !== "video" && activePhotoUrl === url
-                  ? "ring-brand-blue shadow-md"
-                  : "ring-transparent"
-              }`}
-              aria-label={`View photo ${index + 1}`}
-            >
-              <Image
-                src={normalizeMediaUrl(url)}
-                alt={`${business.business_name} photo ${index + 1}`}
-                fill
-                className="object-cover"
-                sizes="80px"
-              />
             </button>
           ))}
         </div>
@@ -380,8 +421,8 @@ export function UnifiedLayout({
         : ctaConfig?.servicesHeading;
   const shellClassName =
     showPublicActions && (business.phone || business.whatsapp)
-      ? "grid grid-cols-1 gap-6 pb-24 lg:grid-cols-3 lg:pb-0"
-      : "grid grid-cols-1 gap-6 lg:grid-cols-3";
+      ? "grid grid-cols-1 gap-6 pb-24 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:items-start lg:pb-0"
+      : "grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:items-start";
 
   const introBody = (
     <div className="space-y-4">
@@ -663,11 +704,9 @@ export function UnifiedLayout({
   return (
     <>
       <div className={shellClassName} data-profile-family={family}>
-        <div className="space-y-5 lg:col-span-2">
-          <MediaColumn family={family} business={business} galleryPhotos={galleryPhotos} />
+        <MediaColumn family={family} business={business} galleryPhotos={galleryPhotos} />
 
-          <div className="mx-auto w-full max-w-5xl">{infoColumn}</div>
-        </div>
+        <div className="space-y-5">{infoColumn}</div>
 
         <div className="space-y-4">
           <ManagedByCard ownerProfile={ownerProfile} trustLevel={trustLevel} />
