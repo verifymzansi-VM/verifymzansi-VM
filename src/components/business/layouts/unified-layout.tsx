@@ -195,10 +195,10 @@ function MediaColumn({
       <div
         className={
           family === "professional"
-            ? "mx-auto w-full max-w-[420px]"
+            ? "mx-auto w-full max-w-[300px] sm:max-w-[320px] lg:max-w-[300px]"
             : family === "tourism"
-              ? "mx-auto w-full max-w-[440px]"
-              : "mx-auto w-full max-w-[400px]"
+              ? "mx-auto w-full max-w-[310px] sm:max-w-[330px] lg:max-w-[310px]"
+              : "mx-auto w-full max-w-[290px] sm:max-w-[310px] lg:max-w-[290px]"
         }
       >
         <div className="relative overflow-hidden rounded-[28px] border border-slate-200/70 bg-slate-950 shadow-[0_35px_80px_-48px_rgba(15,23,42,0.55)] dark:border-white/10">
@@ -664,27 +664,9 @@ export function UnifiedLayout({
     <>
       <div className={shellClassName} data-profile-family={family}>
         <div className="space-y-5 lg:col-span-2">
-          <div
-            className={
-              family === "professional"
-                ? "grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]"
-                : family === "tourism"
-                  ? "grid items-start gap-6 lg:grid-cols-[minmax(360px,440px)_minmax(0,1fr)]"
-                  : "grid items-start gap-6 lg:grid-cols-[minmax(340px,400px)_minmax(0,1fr)]"
-            }
-          >
-            {family === "professional" ? (
-              <>
-                {infoColumn}
-                <MediaColumn family={family} business={business} galleryPhotos={galleryPhotos} />
-              </>
-            ) : (
-              <>
-                <MediaColumn family={family} business={business} galleryPhotos={galleryPhotos} />
-                {infoColumn}
-              </>
-            )}
-          </div>
+          <MediaColumn family={family} business={business} galleryPhotos={galleryPhotos} />
+
+          <div className="mx-auto w-full max-w-5xl">{infoColumn}</div>
         </div>
 
         <div className="space-y-4">

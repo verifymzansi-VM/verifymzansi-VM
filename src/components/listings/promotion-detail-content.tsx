@@ -318,7 +318,7 @@ export function PromotionDetailContent({
       <div className="space-y-4 lg:col-span-2">
         {/* ═══ HERO: Immersive video/photo — portrait on mobile ═══ */}
         {activeMedia && (
-          <div className="mx-auto w-full max-w-[420px] overflow-hidden rounded-[28px] border border-slate-200/70 bg-black shadow-[0_35px_80px_-48px_rgba(15,23,42,0.55)] dark:border-white/10">
+          <div className="mx-auto w-full max-w-[280px] sm:max-w-[320px] lg:max-w-[300px] xl:max-w-[320px] overflow-hidden rounded-[28px] border border-slate-200/70 bg-black shadow-[0_35px_80px_-48px_rgba(15,23,42,0.55)] dark:border-white/10">
             <div className={cn("relative aspect-[9/16] overflow-hidden bg-black")}>
               {activeMedia.kind === "video" ? (
                 <ProfileVideoPlayer
@@ -342,7 +342,7 @@ export function PromotionDetailContent({
                     alt={promotion.title}
                     fill
                     className={heroUsesContain ? "object-contain" : "object-cover"}
-                    sizes="(max-width: 1024px) 78vw, 420px"
+                    sizes="(max-width: 1024px) 78vw, 320px"
                     priority
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/5 to-transparent" />
@@ -411,7 +411,7 @@ export function PromotionDetailContent({
 
         {/* ═══ PHOTO/VIDEO GALLERY GRID ═══ */}
         {mediaItems.length > 1 && (
-          <div className="mx-auto flex max-w-[520px] gap-2 overflow-x-auto pb-1">
+          <div className="mx-auto flex max-w-[420px] gap-2 overflow-x-auto pb-1">
             {mediaItems.map((item, index) => {
               if (index === activeMediaIndex) return null;
               const isVideo = item.kind === "video";
@@ -462,400 +462,404 @@ export function PromotionDetailContent({
           </div>
         )}
 
-        <Card className="border-slate-200/75 bg-white/95 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-slate-950/75">
-          <CardContent className="space-y-4 p-5">
-            <div className="space-y-1">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                Event At A Glance
-              </p>
-              <h2 className="font-display text-xl font-semibold">
-                Date, venue, and ticket clarity first
-              </h2>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              {promotion.start_date ? (
-                <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                    Starts
-                  </p>
-                  <p className="mt-1 text-sm font-medium">
-                    {new Date(promotion.start_date).toLocaleDateString("en-ZA", {
-                      weekday: "short",
-                      day: "numeric",
-                      month: "short",
-                    })}
-                  </p>
+        <div className="mx-auto w-full max-w-4xl space-y-4">
+          <Card className="border-slate-200/75 bg-white/95 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-slate-950/75">
+            <CardContent className="space-y-4 p-5">
+              <div className="space-y-1">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                  Event At A Glance
+                </p>
+                <h2 className="font-display text-xl font-semibold">
+                  Date, venue, and ticket clarity first
+                </h2>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {promotion.start_date ? (
+                  <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Starts
+                    </p>
+                    <p className="mt-1 text-sm font-medium">
+                      {new Date(promotion.start_date).toLocaleDateString("en-ZA", {
+                        weekday: "short",
+                        day: "numeric",
+                        month: "short",
+                      })}
+                    </p>
+                  </div>
+                ) : null}
+                {venueLabel ? (
+                  <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Venue
+                    </p>
+                    <p className="mt-1 text-sm font-medium">{venueLabel}</p>
+                  </div>
+                ) : null}
+                {eventTypeLabel ? (
+                  <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Event Type
+                    </p>
+                    <p className="mt-1 text-sm font-medium">{eventTypeLabel}</p>
+                  </div>
+                ) : null}
+                {ticketSummary ? (
+                  <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Tickets
+                    </p>
+                    <p className="mt-1 text-sm font-medium">{ticketSummary}</p>
+                  </div>
+                ) : null}
+              </div>
+              {(promotion.location_city || promotion.location_province) && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <MapPin className="h-4 w-4 text-brand-blue" />
+                  <span>
+                    {[promotion.location_town, promotion.location_city, promotion.location_province]
+                      .filter(Boolean)
+                      .join(", ")}
+                  </span>
                 </div>
-              ) : null}
-              {venueLabel ? (
-                <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                    Venue
-                  </p>
-                  <p className="mt-1 text-sm font-medium">{venueLabel}</p>
-                </div>
-              ) : null}
-              {eventTypeLabel ? (
-                <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                    Event Type
-                  </p>
-                  <p className="mt-1 text-sm font-medium">{eventTypeLabel}</p>
-                </div>
-              ) : null}
-              {ticketSummary ? (
-                <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                    Tickets
-                  </p>
-                  <p className="mt-1 text-sm font-medium">{ticketSummary}</p>
-                </div>
-              ) : null}
-            </div>
-            {(promotion.location_city || promotion.location_province) && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <MapPin className="h-4 w-4 text-brand-blue" />
-                <span>
-                  {[promotion.location_town, promotion.location_city, promotion.location_province]
-                    .filter(Boolean)
-                    .join(", ")}
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ═══ EVENT COUNTDOWN (compact) ═══ */}
+          {countdown && (
+            <div className="flex items-center justify-between rounded-xl border border-brand-blue/20 bg-gradient-to-r from-brand-blue/5 to-brand-blue/10 px-4 py-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-brand-blue">
+                <Timer className="h-4 w-4" />
+                <span className="hidden sm:inline">
+                  {eventState === "upcoming" ? "Starts in" : "Ends in"}
                 </span>
               </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* ═══ EVENT COUNTDOWN (compact) ═══ */}
-        {countdown && (
-          <div className="flex items-center justify-between rounded-xl border border-brand-blue/20 bg-gradient-to-r from-brand-blue/5 to-brand-blue/10 px-4 py-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-brand-blue">
-              <Timer className="h-4 w-4" />
-              <span className="hidden sm:inline">
-                {eventState === "upcoming" ? "Starts in" : "Ends in"}
-              </span>
-            </div>
-            <div className="flex gap-2 text-center">
-              {[
-                { value: countdown.days, label: "D" },
-                { value: countdown.hours, label: "H" },
-                { value: countdown.minutes, label: "M" },
-                { value: countdown.seconds, label: "S" },
-              ].map((unit) => (
-                <div key={unit.label} className="min-w-[2.5rem]">
-                  <div className="font-display text-lg font-bold tabular-nums sm:text-xl">
-                    {String(unit.value).padStart(2, "0")}
+              <div className="flex gap-2 text-center">
+                {[
+                  { value: countdown.days, label: "D" },
+                  { value: countdown.hours, label: "H" },
+                  { value: countdown.minutes, label: "M" },
+                  { value: countdown.seconds, label: "S" },
+                ].map((unit) => (
+                  <div key={unit.label} className="min-w-[2.5rem]">
+                    <div className="font-display text-lg font-bold tabular-nums sm:text-xl">
+                      {String(unit.value).padStart(2, "0")}
+                    </div>
+                    <div className="text-[9px] uppercase tracking-wide text-muted-foreground">
+                      {unit.label}
+                    </div>
                   </div>
-                  <div className="text-[9px] uppercase tracking-wide text-muted-foreground">
-                    {unit.label}
-                  </div>
-                </div>
-              ))}
-            </div>
-            {calendarUrl && (
-              <Button asChild variant="outline" size="sm" className="gap-1 text-xs">
-                <a href={calendarUrl} target="_blank" rel="noopener noreferrer">
-                  <CalendarPlus className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Add to Calendar</span>
-                  <span className="sm:hidden">Cal</span>
-                </a>
-              </Button>
-            )}
-          </div>
-        )}
-
-        {/* ═══ CONTACT ACTIONS — mobile-first, above details ═══ */}
-        {showContactActions && (
-          <div className="lg:hidden">
-            <Card>
-              <CardContent className="flex items-center gap-3 p-4">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-green text-sm font-bold text-white">
-                  {advertiserProfile?.display_name?.charAt(0)?.toUpperCase() || "A"}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">
-                    {advertiserProfile?.display_name || "Advertiser"}
-                  </p>
-                  <TrustBadge level={trustLevel} size="sm" />
-                </div>
-              </CardContent>
-            </Card>
-            <div className="mt-2">
-              <PromotionContactActions
-                promotionId={promotion.id}
-                contactMethods={contactMethods}
-                advertiserPhone={
-                  contactMethods.includes("call")
-                    ? (advertiserProfile?.masked_phone_public ?? null)
-                    : null
-                }
-                advertiserWhatsapp={
-                  contactMethods.includes("whatsapp") ? (advertiserProfile?.phone ?? null) : null
-                }
-              />
-            </div>
-          </div>
-        )}
-
-        {/* ═══ DESCRIPTION — condensed ═══ */}
-        {promotion.description && (
-          <div className="space-y-1">
-            <p
-              className={`whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground ${
-                !isDescExpanded ? "line-clamp-2" : ""
-              }`}
-            >
-              {promotion.description}
-            </p>
-            {promotion.description.length > 100 && (
-              <button
-                type="button"
-                onClick={() => setIsDescExpanded(!isDescExpanded)}
-                className="text-sm font-medium text-brand-blue hover:underline"
-              >
-                {isDescExpanded ? "Show less" : "Read more"}
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* ═══ DETAILS — collapsible single section ═══ */}
-        <div className="rounded-xl border">
-          <button
-            type="button"
-            onClick={() => setIsDetailsOpen(!isDetailsOpen)}
-            className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold"
-          >
-            Details
-            <ChevronDown
-              className={`h-4 w-4 text-muted-foreground transition-transform ${
-                isDetailsOpen ? "rotate-180" : ""
-              }`}
-            />
-          </button>
-          {isDetailsOpen && (
-            <div className="border-t px-4 py-3">
-              <dl className="grid grid-cols-2 gap-y-2.5 text-sm">
-                <dt className="text-muted-foreground">Type</dt>
-                <dd className="font-medium">Event</dd>
-
-                {categoryLabel && (
-                  <>
-                    <dt className="text-muted-foreground">Category</dt>
-                    <dd className="font-medium">{categoryLabel}</dd>
-                  </>
-                )}
-
-                {promotion.start_date && (
-                  <>
-                    <dt className="text-muted-foreground">Starts</dt>
-                    <dd className="flex items-center gap-1 font-medium">
-                      <Calendar className="h-3 w-3" />
-                      <time dateTime={promotion.start_date}>
-                        {new Date(promotion.start_date).toLocaleDateString("en-ZA", {
-                          weekday: "short",
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </time>
-                    </dd>
-                  </>
-                )}
-
-                {promotion.end_date && (
-                  <>
-                    <dt className="text-muted-foreground">Ends</dt>
-                    <dd className="flex items-center gap-1 font-medium">
-                      <Calendar className="h-3 w-3" />
-                      <time dateTime={promotion.end_date}>
-                        {new Date(promotion.end_date).toLocaleDateString("en-ZA", {
-                          weekday: "short",
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </time>
-                    </dd>
-                  </>
-                )}
-
-                <dt className="text-muted-foreground">Views</dt>
-                <dd className="flex items-center gap-1 font-medium">
-                  <Eye className="h-3 w-3" />
-                  {promotion.view_count || 0}
-                </dd>
-              </dl>
-
-              {(showContactSummary || contactMethods.length > 0) && contactMethods.length > 0 && (
-                <div className="mt-3 border-t pt-3">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    {showContactSummary ? "Saved contact methods" : "Contact options"}
-                  </p>
-                  <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    {contactMethods.map((method) => (
-                      <Badge key={method} variant="outline" className="capitalize text-xs">
-                        {CONTACT_METHOD_LABELS[method] ?? method}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
+                ))}
+              </div>
+              {calendarUrl && (
+                <Button asChild variant="outline" size="sm" className="gap-1 text-xs">
+                  <a href={calendarUrl} target="_blank" rel="noopener noreferrer">
+                    <CalendarPlus className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Add to Calendar</span>
+                    <span className="sm:hidden">Cal</span>
+                  </a>
+                </Button>
               )}
             </div>
           )}
-        </div>
 
-        {/* ═══ EVENT DETAILS — venue, tickets, accessibility ═══ */}
-        {promotion.event_details &&
-          (() => {
-            const ed = promotion.event_details!;
-            const eventTypeLabel = EVENT_TYPES.find((t) => t.value === ed.event_type)?.label;
-            const ageLabel = EVENT_AGE_RESTRICTIONS.find(
-              (a) => a.value === ed.age_restriction
-            )?.label;
-            const hasContent =
-              ed.event_type ||
-              ed.venue_name ||
-              ed.venue_capacity ||
-              (ed.ticket_tiers && ed.ticket_tiers.length > 0) ||
-              ed.tickets_url ||
-              ed.age_restriction ||
-              ed.dress_code ||
-              ed.lineup ||
-              ed.parking_available != null ||
-              ed.accessibility?.length ||
-              ed.food_drinks_available != null ||
-              ed.bring_your_own;
-            if (!hasContent) return null;
-            return (
+          {/* ═══ CONTACT ACTIONS — mobile-first, above details ═══ */}
+          {showContactActions && (
+            <div className="lg:hidden">
               <Card>
-                <CardContent className="space-y-4 p-4 text-sm">
-                  <h3 className="flex items-center gap-2 font-semibold">
-                    <Music2 className="h-4 w-4 text-muted-foreground" />
-                    Event Details
-                  </h3>
-
-                  <dl className="grid grid-cols-2 gap-y-2.5">
-                    {eventTypeLabel && (
-                      <>
-                        <dt className="text-muted-foreground">Event type</dt>
-                        <dd>
-                          <Badge variant="secondary">{eventTypeLabel}</Badge>
-                        </dd>
-                      </>
-                    )}
-
-                    {ed.venue_name && (
-                      <>
-                        <dt className="text-muted-foreground">Venue</dt>
-                        <dd className="font-medium">{ed.venue_name}</dd>
-                      </>
-                    )}
-
-                    {typeof ed.venue_capacity === "number" && (
-                      <>
-                        <dt className="flex items-center gap-1 text-muted-foreground">
-                          <Users className="h-3 w-3" /> Capacity
-                        </dt>
-                        <dd className="font-medium">{ed.venue_capacity.toLocaleString("en-ZA")}</dd>
-                      </>
-                    )}
-
-                    {ageLabel && (
-                      <>
-                        <dt className="text-muted-foreground">Age restriction</dt>
-                        <dd className="font-medium">{ageLabel}</dd>
-                      </>
-                    )}
-
-                    {ed.dress_code && (
-                      <>
-                        <dt className="text-muted-foreground">Dress code</dt>
-                        <dd className="font-medium">{ed.dress_code}</dd>
-                      </>
-                    )}
-
-                    {ed.parking_available != null && (
-                      <>
-                        <dt className="text-muted-foreground">Parking</dt>
-                        <dd className="font-medium">
-                          {ed.parking_available ? "Available" : "Not available"}
-                        </dd>
-                      </>
-                    )}
-
-                    {ed.food_drinks_available != null && (
-                      <>
-                        <dt className="flex items-center gap-1 text-muted-foreground">
-                          <UtensilsCrossed className="h-3 w-3" /> Food &amp; drinks
-                        </dt>
-                        <dd className="font-medium">
-                          {ed.food_drinks_available ? "Available" : "Not available"}
-                        </dd>
-                      </>
-                    )}
-                  </dl>
-
-                  {ed.lineup && (
-                    <div className="space-y-1">
-                      <p className="text-muted-foreground">Lineup / Performers</p>
-                      <p className="whitespace-pre-wrap font-medium">{ed.lineup}</p>
-                    </div>
-                  )}
-
-                  {ed.ticket_tiers && ed.ticket_tiers.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="flex items-center gap-1 text-muted-foreground">
-                        <Ticket className="h-3 w-3" /> Tickets
-                      </p>
-                      <div className="divide-y rounded-lg border">
-                        {ed.ticket_tiers.map((tier: TicketTier, i: number) => (
-                          <div key={i} className="flex items-center justify-between px-3 py-2">
-                            <span className="font-medium">{tier.name}</span>
-                            <span className="font-bold">
-                              {tier.price_cents != null && tier.price_cents > 0
-                                ? `R${(tier.price_cents / 100).toFixed(0)}`
-                                : "Free"}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {ed.tickets_url && (
-                    <Button asChild variant="outline" className="w-full gap-2">
-                      <a
-                        href={ed.tickets_url}
-                        target="_blank"
-                        rel="noopener noreferrer nofollow ugc"
-                      >
-                        <Globe className="h-4 w-4" />
-                        Buy Tickets
-                      </a>
-                    </Button>
-                  )}
-
-                  {ed.accessibility && ed.accessibility.length > 0 && (
-                    <div className="space-y-1">
-                      <p className="text-muted-foreground">Accessibility</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {ed.accessibility.map((a) => (
-                          <Badge key={a} variant="outline" className="text-xs">
-                            {a}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {ed.bring_your_own && (
-                    <div className="space-y-1">
-                      <p className="text-muted-foreground">What to bring</p>
-                      <p className="font-medium">{ed.bring_your_own}</p>
-                    </div>
-                  )}
+                <CardContent className="flex items-center gap-3 p-4">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-green text-sm font-bold text-white">
+                    {advertiserProfile?.display_name?.charAt(0)?.toUpperCase() || "A"}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">
+                      {advertiserProfile?.display_name || "Advertiser"}
+                    </p>
+                    <TrustBadge level={trustLevel} size="sm" />
+                  </div>
                 </CardContent>
               </Card>
-            );
-          })()}
+              <div className="mt-2">
+                <PromotionContactActions
+                  promotionId={promotion.id}
+                  contactMethods={contactMethods}
+                  advertiserPhone={
+                    contactMethods.includes("call")
+                      ? (advertiserProfile?.masked_phone_public ?? null)
+                      : null
+                  }
+                  advertiserWhatsapp={
+                    contactMethods.includes("whatsapp") ? (advertiserProfile?.phone ?? null) : null
+                  }
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ═══ DESCRIPTION — condensed ═══ */}
+          {promotion.description && (
+            <div className="space-y-1">
+              <p
+                className={`whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground ${
+                  !isDescExpanded ? "line-clamp-2" : ""
+                }`}
+              >
+                {promotion.description}
+              </p>
+              {promotion.description.length > 100 && (
+                <button
+                  type="button"
+                  onClick={() => setIsDescExpanded(!isDescExpanded)}
+                  className="text-sm font-medium text-brand-blue hover:underline"
+                >
+                  {isDescExpanded ? "Show less" : "Read more"}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* ═══ DETAILS — collapsible single section ═══ */}
+          <div className="rounded-xl border">
+            <button
+              type="button"
+              onClick={() => setIsDetailsOpen(!isDetailsOpen)}
+              className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold"
+            >
+              Details
+              <ChevronDown
+                className={`h-4 w-4 text-muted-foreground transition-transform ${
+                  isDetailsOpen ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+            {isDetailsOpen && (
+              <div className="border-t px-4 py-3">
+                <dl className="grid grid-cols-2 gap-y-2.5 text-sm">
+                  <dt className="text-muted-foreground">Type</dt>
+                  <dd className="font-medium">Event</dd>
+
+                  {categoryLabel && (
+                    <>
+                      <dt className="text-muted-foreground">Category</dt>
+                      <dd className="font-medium">{categoryLabel}</dd>
+                    </>
+                  )}
+
+                  {promotion.start_date && (
+                    <>
+                      <dt className="text-muted-foreground">Starts</dt>
+                      <dd className="flex items-center gap-1 font-medium">
+                        <Calendar className="h-3 w-3" />
+                        <time dateTime={promotion.start_date}>
+                          {new Date(promotion.start_date).toLocaleDateString("en-ZA", {
+                            weekday: "short",
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </time>
+                      </dd>
+                    </>
+                  )}
+
+                  {promotion.end_date && (
+                    <>
+                      <dt className="text-muted-foreground">Ends</dt>
+                      <dd className="flex items-center gap-1 font-medium">
+                        <Calendar className="h-3 w-3" />
+                        <time dateTime={promotion.end_date}>
+                          {new Date(promotion.end_date).toLocaleDateString("en-ZA", {
+                            weekday: "short",
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </time>
+                      </dd>
+                    </>
+                  )}
+
+                  <dt className="text-muted-foreground">Views</dt>
+                  <dd className="flex items-center gap-1 font-medium">
+                    <Eye className="h-3 w-3" />
+                    {promotion.view_count || 0}
+                  </dd>
+                </dl>
+
+                {(showContactSummary || contactMethods.length > 0) && contactMethods.length > 0 && (
+                  <div className="mt-3 border-t pt-3">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      {showContactSummary ? "Saved contact methods" : "Contact options"}
+                    </p>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {contactMethods.map((method) => (
+                        <Badge key={method} variant="outline" className="capitalize text-xs">
+                          {CONTACT_METHOD_LABELS[method] ?? method}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ═══ EVENT DETAILS — venue, tickets, accessibility ═══ */}
+          {promotion.event_details &&
+            (() => {
+              const ed = promotion.event_details!;
+              const eventTypeLabel = EVENT_TYPES.find((t) => t.value === ed.event_type)?.label;
+              const ageLabel = EVENT_AGE_RESTRICTIONS.find(
+                (a) => a.value === ed.age_restriction
+              )?.label;
+              const hasContent =
+                ed.event_type ||
+                ed.venue_name ||
+                ed.venue_capacity ||
+                (ed.ticket_tiers && ed.ticket_tiers.length > 0) ||
+                ed.tickets_url ||
+                ed.age_restriction ||
+                ed.dress_code ||
+                ed.lineup ||
+                ed.parking_available != null ||
+                ed.accessibility?.length ||
+                ed.food_drinks_available != null ||
+                ed.bring_your_own;
+              if (!hasContent) return null;
+              return (
+                <Card>
+                  <CardContent className="space-y-4 p-4 text-sm">
+                    <h3 className="flex items-center gap-2 font-semibold">
+                      <Music2 className="h-4 w-4 text-muted-foreground" />
+                      Event Details
+                    </h3>
+
+                    <dl className="grid grid-cols-2 gap-y-2.5">
+                      {eventTypeLabel && (
+                        <>
+                          <dt className="text-muted-foreground">Event type</dt>
+                          <dd>
+                            <Badge variant="secondary">{eventTypeLabel}</Badge>
+                          </dd>
+                        </>
+                      )}
+
+                      {ed.venue_name && (
+                        <>
+                          <dt className="text-muted-foreground">Venue</dt>
+                          <dd className="font-medium">{ed.venue_name}</dd>
+                        </>
+                      )}
+
+                      {typeof ed.venue_capacity === "number" && (
+                        <>
+                          <dt className="flex items-center gap-1 text-muted-foreground">
+                            <Users className="h-3 w-3" /> Capacity
+                          </dt>
+                          <dd className="font-medium">
+                            {ed.venue_capacity.toLocaleString("en-ZA")}
+                          </dd>
+                        </>
+                      )}
+
+                      {ageLabel && (
+                        <>
+                          <dt className="text-muted-foreground">Age restriction</dt>
+                          <dd className="font-medium">{ageLabel}</dd>
+                        </>
+                      )}
+
+                      {ed.dress_code && (
+                        <>
+                          <dt className="text-muted-foreground">Dress code</dt>
+                          <dd className="font-medium">{ed.dress_code}</dd>
+                        </>
+                      )}
+
+                      {ed.parking_available != null && (
+                        <>
+                          <dt className="text-muted-foreground">Parking</dt>
+                          <dd className="font-medium">
+                            {ed.parking_available ? "Available" : "Not available"}
+                          </dd>
+                        </>
+                      )}
+
+                      {ed.food_drinks_available != null && (
+                        <>
+                          <dt className="flex items-center gap-1 text-muted-foreground">
+                            <UtensilsCrossed className="h-3 w-3" /> Food &amp; drinks
+                          </dt>
+                          <dd className="font-medium">
+                            {ed.food_drinks_available ? "Available" : "Not available"}
+                          </dd>
+                        </>
+                      )}
+                    </dl>
+
+                    {ed.lineup && (
+                      <div className="space-y-1">
+                        <p className="text-muted-foreground">Lineup / Performers</p>
+                        <p className="whitespace-pre-wrap font-medium">{ed.lineup}</p>
+                      </div>
+                    )}
+
+                    {ed.ticket_tiers && ed.ticket_tiers.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="flex items-center gap-1 text-muted-foreground">
+                          <Ticket className="h-3 w-3" /> Tickets
+                        </p>
+                        <div className="divide-y rounded-lg border">
+                          {ed.ticket_tiers.map((tier: TicketTier, i: number) => (
+                            <div key={i} className="flex items-center justify-between px-3 py-2">
+                              <span className="font-medium">{tier.name}</span>
+                              <span className="font-bold">
+                                {tier.price_cents != null && tier.price_cents > 0
+                                  ? `R${(tier.price_cents / 100).toFixed(0)}`
+                                  : "Free"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {ed.tickets_url && (
+                      <Button asChild variant="outline" className="w-full gap-2">
+                        <a
+                          href={ed.tickets_url}
+                          target="_blank"
+                          rel="noopener noreferrer nofollow ugc"
+                        >
+                          <Globe className="h-4 w-4" />
+                          Buy Tickets
+                        </a>
+                      </Button>
+                    )}
+
+                    {ed.accessibility && ed.accessibility.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-muted-foreground">Accessibility</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {ed.accessibility.map((a) => (
+                            <Badge key={a} variant="outline" className="text-xs">
+                              {a}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {ed.bring_your_own && (
+                      <div className="space-y-1">
+                        <p className="text-muted-foreground">What to bring</p>
+                        <p className="font-medium">{ed.bring_your_own}</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })()}
+        </div>
 
         {/* ═══ LINKED BUSINESS + POSTED — mobile only ═══ */}
         <div className="space-y-3 lg:hidden">

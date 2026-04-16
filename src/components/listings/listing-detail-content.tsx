@@ -222,154 +222,146 @@ export function ListingDetailContent({
         }
       >
         <div className="space-y-6 lg:col-span-2">
-          <div className="grid items-start gap-6 lg:grid-cols-[minmax(340px,420px)_minmax(0,1fr)]">
-            <div className="mx-auto w-full max-w-[420px]">
-              <ErrorBoundary
-                label="ListingDetailClient"
-                fallback={
-                  <div className="aspect-[9/16] rounded-[28px] bg-muted flex items-center justify-center">
-                    <p className="text-sm text-muted-foreground">Image failed to load</p>
-                  </div>
+          <div className="mx-auto w-full max-w-[280px] sm:max-w-[320px] lg:max-w-[300px] xl:max-w-[320px]">
+            <ErrorBoundary
+              label="ListingDetailClient"
+              fallback={
+                <div className="aspect-[9/16] rounded-[28px] bg-muted flex items-center justify-center">
+                  <p className="text-sm text-muted-foreground">Image failed to load</p>
+                </div>
+              }
+            >
+              <ListingDetailClient
+                photos={listing.photos ?? []}
+                videos={listing.videos ?? []}
+                title={listing.title}
+                listingId={listing.id}
+                videoThumbnail={listing.video_thumbnail}
+                photoCount={photoCount}
+                heroAspectClassName="aspect-[9/16]"
+                heroMediaClassName={
+                  heroUsesContain
+                    ? "object-contain bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.22),_rgba(15,23,42,0.96))]"
+                    : "object-cover transition-transform duration-500"
                 }
-              >
-                <ListingDetailClient
-                  photos={listing.photos ?? []}
-                  videos={listing.videos ?? []}
-                  title={listing.title}
-                  listingId={listing.id}
-                  videoThumbnail={listing.video_thumbnail}
-                  photoCount={photoCount}
-                  heroAspectClassName="aspect-[9/16]"
-                  heroMediaClassName={
-                    heroUsesContain
-                      ? "object-contain bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.22),_rgba(15,23,42,0.96))]"
-                      : "object-cover transition-transform duration-500"
-                  }
-                />
-              </ErrorBoundary>
-            </div>
+              />
+            </ErrorBoundary>
+          </div>
 
-            <div className="space-y-5">
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline" className="text-[11px]">
-                    {listing.category?.replace(/_/g, " ")}
+          <div className="mx-auto w-full max-w-4xl space-y-5">
+            <div className="space-y-3 text-center lg:text-left">
+              <div className="flex flex-wrap items-center justify-center gap-2 lg:justify-start">
+                <Badge variant="outline" className="text-[11px]">
+                  {listing.category?.replace(/_/g, " ")}
+                </Badge>
+                {listing.condition ? (
+                  <Badge variant="secondary" className="text-[11px]">
+                    {getListingConditionLabel(listing.condition)}
                   </Badge>
-                  {listing.condition ? (
-                    <Badge variant="secondary" className="text-[11px]">
-                      {getListingConditionLabel(listing.condition)}
-                    </Badge>
-                  ) : null}
-                  {listing.contact_methods?.map((method) => (
-                    <Badge key={method} variant="outline" className="text-[11px] capitalize">
-                      {method}
-                    </Badge>
-                  ))}
-                </div>
-
-                <div className="space-y-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                    {variantCopy.eyebrow}
-                  </p>
-                  <h2 className="font-display text-2xl font-semibold tracking-tight">
-                    {variantCopy.title}
-                  </h2>
-                </div>
-
-                <div className="flex flex-wrap items-end gap-3">
-                  {listing.price_cents != null ? (
-                    <p className="font-display text-3xl font-bold text-brand-green">
-                      {formatZAR(listing.price_cents)}
-                    </p>
-                  ) : null}
-                  {listing.price_negotiable ? (
-                    <Badge className="bg-brand-green/10 text-brand-green">Negotiable</Badge>
-                  ) : null}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <Calendar className="h-4 w-4" />
-                    <time dateTime={listing.created_at}>{createdAt}</time>
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Eye className="h-4 w-4" />
-                    {listing.view_count ?? 0} {(listing.view_count ?? 0) === 1 ? "view" : "views"}
-                  </span>
-                </div>
+                ) : null}
+                {listing.contact_methods?.map((method) => (
+                  <Badge key={method} variant="outline" className="text-[11px] capitalize">
+                    {method}
+                  </Badge>
+                ))}
               </div>
 
-              {quickFacts.length > 0 ? (
-                <Card className="border-slate-200/75 bg-white/95 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-slate-950/75">
-                  <CardContent className="space-y-4 p-5">
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                        Quick Facts
-                      </p>
-                      <h3 className="font-display text-xl font-semibold">
-                        {variantCopy.detailsHeading}
-                      </h3>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      {quickFacts.map((fact) => (
-                        <div
-                          key={`${fact.label}-${fact.value}`}
-                          className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]"
-                        >
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                            {fact.label}
-                          </p>
-                          <p className="mt-1 text-sm font-medium">{fact.value}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : null}
+              <div className="space-y-2">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                  {variantCopy.eyebrow}
+                </p>
+                <h2 className="font-display text-2xl font-semibold tracking-tight">
+                  {variantCopy.title}
+                </h2>
+              </div>
 
-              {listing.description ? (
-                <Card className="border-slate-200/75 bg-white/95 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-slate-950/75">
-                  <CardContent className="space-y-3 p-5">
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                        Description
-                      </p>
-                      <h3 className="font-display text-xl font-semibold">
-                        What buyers should know
-                      </h3>
-                    </div>
-                    <p className="whitespace-pre-wrap leading-relaxed text-muted-foreground">
-                      {listing.description}
-                    </p>
-                  </CardContent>
-                </Card>
-              ) : null}
+              <div className="flex flex-wrap items-end justify-center gap-3 lg:justify-start">
+                {listing.price_cents != null ? (
+                  <p className="font-display text-3xl font-bold text-brand-green">
+                    {formatZAR(listing.price_cents)}
+                  </p>
+                ) : null}
+                {listing.price_negotiable ? (
+                  <Badge className="bg-brand-green/10 text-brand-green">Negotiable</Badge>
+                ) : null}
+              </div>
 
-              {(listing.location_province || listing.location_city) && (
-                <Card className="border-slate-200/75 bg-white/95 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-slate-950/75">
-                  <CardContent className="space-y-3 p-5">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4 text-brand-green" />
-                      <div>
-                        <p className="font-medium">
-                          {[
-                            listing.location_suburb,
-                            listing.location_city,
-                            listing.location_province,
-                          ]
-                            .filter(Boolean)
-                            .join(", ")}
-                        </p>
-                        <p className="text-xs text-muted-foreground">Listed location</p>
-                      </div>
-                    </div>
-                    {listing.location_address ? (
-                      <p className="text-sm text-muted-foreground">{listing.location_address}</p>
-                    ) : null}
-                  </CardContent>
-                </Card>
-              )}
+              <div className="flex flex-wrap items-center justify-center gap-3 text-sm text-muted-foreground lg:justify-start">
+                <span className="flex items-center gap-1">
+                  <Calendar className="h-4 w-4" />
+                  <time dateTime={listing.created_at}>{createdAt}</time>
+                </span>
+                <span className="flex items-center gap-1">
+                  <Eye className="h-4 w-4" />
+                  {listing.view_count ?? 0} {(listing.view_count ?? 0) === 1 ? "view" : "views"}
+                </span>
+              </div>
             </div>
+
+            {quickFacts.length > 0 ? (
+              <Card className="border-slate-200/75 bg-white/95 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-slate-950/75">
+                <CardContent className="space-y-4 p-5">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                      Quick Facts
+                    </p>
+                    <h3 className="font-display text-xl font-semibold">
+                      {variantCopy.detailsHeading}
+                    </h3>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {quickFacts.map((fact) => (
+                      <div
+                        key={`${fact.label}-${fact.value}`}
+                        className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]"
+                      >
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                          {fact.label}
+                        </p>
+                        <p className="mt-1 text-sm font-medium">{fact.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {listing.description ? (
+              <Card className="border-slate-200/75 bg-white/95 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-slate-950/75">
+                <CardContent className="space-y-3 p-5">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                      Description
+                    </p>
+                    <h3 className="font-display text-xl font-semibold">What buyers should know</h3>
+                  </div>
+                  <p className="whitespace-pre-wrap leading-relaxed text-muted-foreground">
+                    {listing.description}
+                  </p>
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {(listing.location_province || listing.location_city) && (
+              <Card className="border-slate-200/75 bg-white/95 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-slate-950/75">
+                <CardContent className="space-y-3 p-5">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-brand-green" />
+                    <div>
+                      <p className="font-medium">
+                        {[listing.location_suburb, listing.location_city, listing.location_province]
+                          .filter(Boolean)
+                          .join(", ")}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Listed location</p>
+                    </div>
+                  </div>
+                  {listing.location_address ? (
+                    <p className="text-sm text-muted-foreground">{listing.location_address}</p>
+                  ) : null}
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {detailFacts.length > 0 ? (
