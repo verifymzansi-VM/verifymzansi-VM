@@ -168,7 +168,7 @@ export function PosterCardShell({
   const cardClassName = cn(
     "relative h-full flex flex-col overflow-hidden border-transparent transition-all duration-300",
     isHeroVariant
-      ? "border border-white/55 bg-white/95 shadow-[0_30px_80px_-38px_rgba(15,23,42,0.55)] backdrop-blur-xl hover:-translate-y-0.5 hover:shadow-[0_36px_95px_-42px_rgba(15,23,42,0.62)]"
+      ? "border border-slate-200 bg-white text-slate-950 shadow-[0_34px_110px_-52px_rgba(15,23,42,0.72)] ring-1 ring-black/5 hover:-translate-y-0.5 hover:shadow-[0_44px_125px_-56px_rgba(15,23,42,0.82)] dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:ring-white/10"
       : isShowcaseVariant
         ? "border border-slate-200/75 bg-white/96 shadow-[0_22px_50px_-34px_rgba(15,23,42,0.38)] backdrop-blur-sm hover:-translate-y-1 hover:shadow-[0_28px_65px_-38px_rgba(15,23,42,0.42)] dark:border-white/10 dark:bg-slate-950/80"
         : "bg-warm-100 shadow-[0_2px_10px_-6px_rgba(15,23,42,0.16)] hover:-translate-y-px hover:shadow-[0_6px_18px_-10px_rgba(15,23,42,0.22)]",
@@ -255,7 +255,7 @@ export function PosterCardShell({
   );
 
   const cardInner = (
-    <Card className={cardClassName} trustLevel={trustLevel}>
+    <Card className={cardClassName} trustLevel={trustLevel} data-card-variant={cardVariant}>
       {/* ── 9:16 card thumbnail ───────────────────────────────── */}
       <div
         className={cn(

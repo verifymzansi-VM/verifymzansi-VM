@@ -93,4 +93,21 @@ describe("PosterCardShell", () => {
 
     expect(screen.getByTestId("video-player")).toHaveAttribute("data-defer", "yes");
   });
+
+  it("uses a solid surface for hero showroom cards", () => {
+    const { container } = render(
+      <PosterCardShell
+        href="/listing/solid"
+        title="Solid hero"
+        mediaUrl="https://example.com/poster.jpg"
+        cardVariant="hero"
+      />
+    );
+
+    const heroCard = container.querySelector('[data-card-variant="hero"]');
+    expect(heroCard).toBeTruthy();
+    expect(heroCard?.className).toContain("bg-white");
+    expect(heroCard?.className).not.toContain("bg-white/95");
+    expect(heroCard?.className).not.toContain("backdrop-blur");
+  });
 });

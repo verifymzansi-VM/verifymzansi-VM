@@ -15,6 +15,7 @@ vi.mock("@/components/listings/poster-card-shell", () => ({
     mediaUrl,
     showPlaybackControl,
     makeEntireCardClickable,
+    deferVideoLoadUntilPlay,
   }: {
     href: string;
     title: string;
@@ -23,8 +24,14 @@ vi.mock("@/components/listings/poster-card-shell", () => ({
     mediaUrl?: string;
     showPlaybackControl?: boolean;
     makeEntireCardClickable?: boolean;
+    deferVideoLoadUntilPlay?: boolean;
   }) => (
-    <div data-testid="poster-card" data-video-mode={videoMode} data-media-url={mediaUrl}>
+    <div
+      data-testid="poster-card"
+      data-video-mode={videoMode}
+      data-media-url={mediaUrl}
+      data-defer={deferVideoLoadUntilPlay ? "yes" : "no"}
+    >
       <div data-testid={`poster-card-surface-${title}`}>{title}</div>
       {description && <span>{description}</span>}
       {showPlaybackControl ? (
@@ -87,6 +94,19 @@ const denseItems: CarouselItem[] = Array.from({ length: 7 }, (_, index) => ({
   mediaUrl: `/dense-${index + 1}.jpg`,
 }));
 
+const expandedItems: CarouselItem[] = Array.from({ length: 15 }, (_, index) => ({
+  id: `expanded-${index + 1}`,
+  type: (index % 3 === 0 ? "listing" : index % 3 === 1 ? "business" : "promotion") as
+    | "listing"
+    | "business"
+    | "promotion",
+  href: `/expanded/${index + 1}`,
+  title: `Expanded ${index + 1}`,
+  description: `Expanded card ${index + 1}`,
+  location: "South Africa",
+  mediaUrl: `/expanded-${index + 1}.jpg`,
+}));
+
 // Stub IntersectionObserver
 beforeEach(() => {
   class MockIntersectionObserver {
@@ -111,24 +131,24 @@ describe("ShowroomCardCarousel", () => {
     expect(section || screen.getByLabelText("Showroom carousel")).toBeTruthy();
   });
 
-  it("removes desktop top padding while keeping bottom spacing", () => {
+  it("fills the desktop viewport while keeping mobile spacing", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
     const section = screen.getByLabelText("Showroom carousel");
 
     expect(section.className).toContain("pt-10");
     expect(section.className).toContain("sm:pt-12");
-    expect(section.className).toContain("lg:pt-0");
     expect(section.className).toContain("pb-10");
     expect(section.className).toContain("sm:pb-12");
-    expect(section.className).toContain("lg:pb-14");
+    expect(section.className).toContain("lg:min-h-[calc(100vh-4rem)]");
+    expect(section.className).toContain("lg:py-0");
   });
 
-  it("uses the reduced desktop showroom widths on carousel cards", () => {
+  it("uses the expanded desktop showroom widths on carousel cards", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
 
     const centerSlide = screen.getByRole("group", { name: "1 of 3" });
-    expect(centerSlide.className).toContain("lg:w-[288px]");
-    expect(centerSlide.className).toContain("xl:w-[320px]");
+    expect(centerSlide.className).toContain("lg:w-[336px]");
+    expect(centerSlide.className).toContain("xl:w-[372px]");
   });
 
   it("renders slide groups with positional labels", () => {
@@ -165,12 +185,11 @@ describe("ShowroomCardCarousel", () => {
     const emptyStateCard = Array.from(container.querySelectorAll("div")).find(
       (node) =>
         node.className.includes("w-[62vw]") &&
-        node.className.includes("lg:w-[288px]") &&
-        node.className.includes("xl:w-[320px]")
+        node.className.includes("lg:w-[336px]") &&
+        node.className.includes("xl:w-[372px]")
     );
     expect(section).toBeInTheDocument();
-    expect(section.className).toContain("lg:pt-0");
-    expect(section.className).toContain("lg:pb-14");
+    expect(section.className).toContain("lg:min-h-[calc(100vh-4rem)]");
     expect(emptyStateCard).toBeDefined();
     expect(screen.getByText("No Items")).toBeInTheDocument();
     expect(screen.getByText("Nothing to show")).toBeInTheDocument();
@@ -275,6 +294,14 @@ describe("ShowroomCardCarousel", () => {
     expect(ambientCards.length).toBe(1);
   });
 
+  it("autoplays the center card immediately instead of deferring hero playback", () => {
+    render(<ShowroomCardCarousel items={mockItems} />);
+    const cards = screen.getAllByTestId("poster-card");
+    const ambientCard = cards.find((card) => card.getAttribute("data-video-mode") === "ambient");
+
+    expect(ambientCard).toHaveAttribute("data-defer", "no");
+  });
+
   it("keeps playable video source on center card only", () => {
     const videoItems: CarouselItem[] = [
       {
@@ -361,5 +388,17 @@ describe("ShowroomCardCarousel", () => {
     expect(screen.getByRole("group", { name: "1 of 7" })).toHaveAttribute("data-slot-offset", "0");
     expect(screen.getByRole("group", { name: "4 of 7" })).toHaveAttribute("data-slot-offset", "3");
     expect(screen.getByRole("group", { name: "5 of 7" })).toHaveAttribute("data-slot-offset", "-3");
+  });
+
+  it("renders a desktop expanded field with support cards up to fifteen items", () => {
+    const { container } = render(<ShowroomCardCarousel items={expandedItems} />);
+
+    const supportCards = container.querySelectorAll('[data-showroom-layer="support"]');
+    const activeCards = container.querySelectorAll('[data-showroom-layer="active"]');
+    const stackCards = container.querySelectorAll('[data-showroom-layer="stack"]');
+
+    expect(supportCards).toHaveLength(8);
+    expect(activeCards).toHaveLength(1);
+    expect(stackCards).toHaveLength(6);
   });
 });

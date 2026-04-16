@@ -66,10 +66,12 @@ const VISIBILITY_THRESHOLD = 0.25;
 const DRAG_SUPPRESSION_RESET_MS = 160;
 const PREVIEW_TILT_DEG = 8;
 const SA_FLAG_SRC = "/images/South%20African%20flag%20with%20confetti%20burst.png";
+const DESKTOP_SHOWROOM_ITEM_LIMIT = 15;
 
 const CARD_W =
-  "w-[62vw] max-w-[250px] sm:w-[34vw] md:w-[30vw] lg:w-[288px] lg:max-w-none xl:w-[320px]";
-const SECTION_SPACING = "pt-10 pb-10 sm:pt-12 sm:pb-12 lg:pt-0 lg:pb-14";
+  "w-[62vw] max-w-[250px] sm:w-[34vw] md:w-[30vw] lg:w-[336px] lg:max-w-none xl:w-[372px]";
+const SUPPORT_CARD_W = "w-[160px] xl:w-[180px] 2xl:w-[196px]";
+const SECTION_SPACING = "pt-10 pb-10 sm:pt-12 sm:pb-12 lg:min-h-[calc(100vh-4rem)] lg:py-0";
 
 /* ── SA flag section wrapper ───────────────────────────────── */
 
@@ -124,7 +126,9 @@ export function ShowroomCardCarousel({
   emptyTitle = "Welcome to VerifyMzansi",
   emptyDescription = "Explore verified businesses, listings, and events.",
 }: ShowroomCardCarouselProps) {
+  const carouselItems = items.slice(0, DESKTOP_SHOWROOM_ITEM_LIMIT);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [isDesktopHovering, setIsDesktopHovering] = useState(false);
   const reducedMotion = useReducedMotion();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const pausedRef = useRef(false);
@@ -144,7 +148,8 @@ export function ShowroomCardCarousel({
   const dragResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const coverflowRef = useRef<HTMLDivElement | null>(null);
 
-  const count = items.length;
+  const count = carouselItems.length;
+  const normalizedActiveIndex = count <= 0 ? 0 : ((activeIndex % count) + count) % count;
 
   /* ── Navigation helpers ────────────────────────────────── */
 
@@ -156,8 +161,8 @@ export function ShowroomCardCarousel({
     [count]
   );
 
-  const next = useCallback(() => goTo(activeIndex + 1), [activeIndex, goTo]);
-  const prev = useCallback(() => goTo(activeIndex - 1), [activeIndex, goTo]);
+  const next = useCallback(() => goTo(normalizedActiveIndex + 1), [goTo, normalizedActiveIndex]);
+  const prev = useCallback(() => goTo(normalizedActiveIndex - 1), [goTo, normalizedActiveIndex]);
 
   /* ── Interaction pause ─────────────────────────────────── */
 
@@ -527,8 +532,10 @@ export function ShowroomCardCarousel({
   }, []);
 
   const displayIndex =
-    count <= 1 ? activeIndex : (((activeIndex + previewStep) % count) + count) % count;
-  const activeIsVideo = isVideoUrl(items[displayIndex]?.mediaUrl);
+    count <= 1
+      ? normalizedActiveIndex
+      : (((normalizedActiveIndex + previewStep) % count) + count) % count;
+  const activeIsVideo = isVideoUrl(carouselItems[displayIndex]?.mediaUrl);
 
   useEffect(() => {
     videoEndedRef.current = false;
@@ -577,21 +584,50 @@ export function ShowroomCardCarousel({
 
   function cardClass(offset: number): string {
     const transitionClass =
-      reducedMotion || isDragging ? "transition-none" : "transition-all duration-600";
+      reducedMotion || isDragging
+        ? "transition-none"
+        : "transition-[transform,opacity,filter,box-shadow] duration-700 ease-out";
 
     const byOffset: Record<number, string> = {
-      [-3]: "hidden lg:block translate-x-[calc(-50%-92%)] scale-[0.68] opacity-45 saturate-[0.82] blur-[1px] z-0 pointer-events-none",
-      [-2]: "hidden md:block translate-x-[calc(-50%-63%)] scale-[0.76] opacity-55 saturate-[0.88] blur-[0.6px] z-10 pointer-events-none",
-      [-1]: "translate-x-[calc(-50%-36%)] scale-[0.88] opacity-82 saturate-[0.94] z-20",
-      0: "translate-x-[-50%] scale-100 opacity-100 z-30 shadow-[0_40px_120px_-48px_rgba(15,23,42,0.85)]",
-      1: "translate-x-[calc(-50%+36%)] scale-[0.88] opacity-82 saturate-[0.94] z-20",
-      2: "hidden md:block translate-x-[calc(-50%+63%)] scale-[0.76] opacity-55 saturate-[0.88] blur-[0.6px] z-10 pointer-events-none",
-      3: "hidden lg:block translate-x-[calc(-50%+92%)] scale-[0.68] opacity-45 saturate-[0.82] blur-[1px] z-0 pointer-events-none",
+      [-3]: "hidden lg:block translate-x-[calc(-50%-116%)] translate-y-10 scale-[0.56] opacity-36 saturate-[0.74] blur-[1.4px] z-0 pointer-events-none",
+      [-2]: "hidden md:block translate-x-[calc(-50%-76%)] translate-y-5 scale-[0.72] opacity-50 saturate-[0.84] blur-[0.8px] z-10 pointer-events-none",
+      [-1]: "translate-x-[calc(-50%-41%)] lg:translate-y-2 scale-[0.86] lg:scale-[0.84] opacity-84 saturate-[0.92] z-20",
+      0: "translate-x-[-50%] lg:-translate-y-2 scale-100 lg:scale-[1.06] opacity-100 z-40 shadow-[0_50px_140px_-56px_rgba(15,23,42,0.88)]",
+      1: "translate-x-[calc(-50%+41%)] lg:translate-y-2 scale-[0.86] lg:scale-[0.84] opacity-84 saturate-[0.92] z-20",
+      2: "hidden md:block translate-x-[calc(-50%+76%)] translate-y-5 scale-[0.72] opacity-50 saturate-[0.84] blur-[0.8px] z-10 pointer-events-none",
+      3: "hidden lg:block translate-x-[calc(-50%+116%)] translate-y-10 scale-[0.56] opacity-36 saturate-[0.74] blur-[1.4px] z-0 pointer-events-none",
     };
 
     const preset = byOffset[offset] ?? byOffset[Math.sign(offset) * 3] ?? byOffset[0];
 
     return cn("absolute left-1/2 top-0 will-change-transform", transitionClass, preset);
+  }
+
+  function supportCardClass(offset: number): string {
+    const transitionClass =
+      reducedMotion || isDragging
+        ? "transition-none"
+        : "transition-[transform,opacity,filter] duration-700 ease-out";
+
+    const baseByOffset: Record<number, string> = {
+      [-7]: "translate-x-[calc(-50%-184%)] -translate-y-4 rotate-[-16deg] scale-[0.46] z-0",
+      [-6]: "translate-x-[calc(-50%-158%)] translate-y-20 rotate-[-12deg] scale-[0.52] z-[1]",
+      [-5]: "translate-x-[calc(-50%-134%)] -translate-y-10 rotate-[-10deg] scale-[0.58] z-[2]",
+      [-4]: "translate-x-[calc(-50%-108%)] translate-y-24 rotate-[-7deg] scale-[0.64] z-[3]",
+      4: "translate-x-[calc(-50%+108%)] translate-y-24 rotate-[7deg] scale-[0.64] z-[3]",
+      5: "translate-x-[calc(-50%+134%)] -translate-y-10 rotate-[10deg] scale-[0.58] z-[2]",
+      6: "translate-x-[calc(-50%+158%)] translate-y-20 rotate-[12deg] scale-[0.52] z-[1]",
+      7: "translate-x-[calc(-50%+184%)] -translate-y-4 rotate-[16deg] scale-[0.46] z-0",
+    };
+
+    return cn(
+      "absolute left-1/2 top-[34%] hidden lg:block pointer-events-none will-change-transform",
+      transitionClass,
+      baseByOffset[offset],
+      isDesktopHovering
+        ? "opacity-54 saturate-[0.98] blur-[0.4px]"
+        : "opacity-34 saturate-[0.78] blur-[1.1px]"
+    );
   }
 
   function cardStyle(offset: number): CSSProperties | undefined {
@@ -637,15 +673,25 @@ export function ShowroomCardCarousel({
       sectionClassName={SECTION_SPACING}
       extraClassName={className}
     >
+      <div
+        className="pointer-events-none absolute inset-x-0 top-[12%] z-[2] hidden h-28 lg:block bg-[radial-gradient(circle,rgba(255,255,255,0.42)_0%,rgba(255,255,255,0.08)_45%,transparent_72%)] blur-3xl"
+        aria-hidden="true"
+      />
+      <div
+        className="pointer-events-none absolute inset-x-0 bottom-[12%] z-[2] hidden h-24 lg:block bg-[radial-gradient(circle,rgba(15,23,42,0.32)_0%,rgba(15,23,42,0.08)_40%,transparent_72%)] blur-3xl"
+        aria-hidden="true"
+      />
       {/* Card coverflow area */}
       <div
         ref={coverflowRef}
         className={cn(
-          "relative mx-auto max-w-[1600px] overflow-x-clip overflow-y-visible select-none touch-pan-y pb-7",
+          "relative mx-auto max-w-[1780px] overflow-x-clip overflow-y-visible select-none touch-pan-y pb-7 lg:flex lg:min-h-[calc(100vh-8rem)] lg:items-center lg:pb-0",
           isDragging ? "cursor-grabbing" : "cursor-grab"
         )}
         onPointerDown={handlePointerDown}
         onMouseDown={handleMouseDown}
+        onMouseEnter={() => setIsDesktopHovering(true)}
+        onMouseLeave={() => setIsDesktopHovering(false)}
         onPointerCancel={handlePointerCancel}
         onLostPointerCapture={handleLostPointerCapture}
         onDragStartCapture={(e) => {
@@ -657,7 +703,7 @@ export function ShowroomCardCarousel({
         aria-label="Carousel slides"
       >
         {/* Height-establishing invisible card */}
-        <div className={cn("invisible mx-auto", CARD_W)} aria-hidden="true">
+        <div className={cn("invisible mx-auto lg:translate-y-4", CARD_W)} aria-hidden="true">
           <PosterCardShell
             href="#"
             title="Verified Marketplace Listing Placeholder"
@@ -670,8 +716,48 @@ export function ShowroomCardCarousel({
           />
         </div>
 
+        {/* Desktop-only expanded support field */}
+        {carouselItems.map((item, i) => {
+          const offset = signedOffset(i);
+          if (Math.abs(offset) <= 3 || Math.abs(offset) > 7) return null;
+
+          const supportMediaUrl =
+            item.posterUrl ??
+            (isVideoUrl(item.mediaUrl) ? "/images/fallbacks/hero-shop.svg" : item.mediaUrl);
+
+          return (
+            <div
+              key={`${item.id}-support`}
+              className={cn(SUPPORT_CARD_W, supportCardClass(offset))}
+              data-showroom-layer="support"
+              aria-hidden="true"
+            >
+              <PosterCardShell
+                href={item.href}
+                title={item.title}
+                description={item.description}
+                location={item.location}
+                mediaUrl={supportMediaUrl}
+                posterUrl={item.posterUrl}
+                logoUrl={item.logoUrl}
+                eyebrow={item.eyebrow}
+                statusLabel={item.statusLabel}
+                statusClassName={item.statusClassName}
+                trustLevel={item.trustLevel}
+                focalX={item.focalX}
+                focalY={item.focalY}
+                mediaWidth={item.mediaWidth}
+                mediaHeight={item.mediaHeight}
+                cardVariant="hero"
+                mediaControlVariant="hero"
+                fitStrategy="cover"
+              />
+            </div>
+          );
+        })}
+
         {/* Absolutely positioned coverflow cards */}
-        {items.map((item, i) => {
+        {carouselItems.map((item, i) => {
           const offset = signedOffset(i);
           if (Math.abs(offset) > 3) return null;
           const sideMediaFallback =
@@ -684,6 +770,7 @@ export function ShowroomCardCarousel({
               key={item.id}
               className={cn(CARD_W, cardClass(offset))}
               style={cardStyle(offset)}
+              data-showroom-layer={offset === 0 ? "active" : "stack"}
               data-slot-offset={offset}
               role="group"
               aria-roledescription="slide"
@@ -717,7 +804,6 @@ export function ShowroomCardCarousel({
                 mediaHeight={item.mediaHeight}
                 priority={offset === 0}
                 videoMode={offset === 0 ? "ambient" : undefined}
-                deferVideoLoadUntilPlay={offset === 0}
                 onVideoEnded={offset === 0 ? handleVideoEnded : undefined}
                 showPlaybackControl={offset === 0}
                 makeEntireCardClickable={offset === 0}
@@ -771,7 +857,7 @@ export function ShowroomCardCarousel({
           role="group"
           aria-label="Slide controls"
         >
-          {items.map((_, i) => (
+          {carouselItems.map((_, i) => (
             <button
               key={i}
               type="button"

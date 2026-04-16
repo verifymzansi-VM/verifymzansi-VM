@@ -23,6 +23,8 @@ function isValidHttpUrl(value: string): boolean {
 export async function HeroBannerWithData() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const perAreaTarget = 5;
+  const perAreaFetchLimit = 15;
 
   let topBusinesses = null;
   let latestListings = null;
@@ -35,47 +37,47 @@ export async function HeroBannerWithData() {
       supabase
         .from("businesses")
         .select(
-          "id, business_name, logo_url, cover_photo, cover_video, video_thumbnail, description, location_city"
+          "id, business_name, logo_url, cover_photo, cover_video, video_thumbnail, description, location_city, location_province, focal_x, focal_y, media_width, media_height"
         )
         .eq("status", "live")
         .order("boost_until", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
-        .limit(9),
+        .limit(perAreaFetchLimit),
       supabase
         .from("listings")
         .select(
-          "id, title, description, price_cents, photos, videos, video_thumbnail, logo_url, location_city, category"
+          "id, title, description, price_cents, photos, videos, video_thumbnail, logo_url, location_city, location_province, category, focal_x, focal_y, media_width, media_height"
         )
         .eq("status", "live")
         .eq("area", "MZANSI_MARKET")
         .order("featured", { ascending: false })
         .order("created_at", { ascending: false })
-        .limit(9),
+        .limit(perAreaFetchLimit),
       supabase
         .from("promotions")
         .select(
-          "id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, location_city, price_cents"
+          "id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, location_city, location_province, price_cents, focal_x, focal_y, media_width, media_height"
         )
         .eq("status", "live")
         .order("boost_until", { ascending: false, nullsFirst: false })
         .order("featured_until", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
-        .limit(9),
+        .limit(perAreaFetchLimit),
     ]);
 
     topBusinesses = (businesses.data || [])
       .filter(
         (business) => !isPlaceholderMarketplaceContent(business.business_name, business.description)
       )
-      .slice(0, 3);
+      .slice(0, perAreaTarget);
     latestListings = (listings.data || [])
       .filter((listing) => !isPlaceholderMarketplaceContent(listing.title, listing.description))
-      .slice(0, 3);
+      .slice(0, perAreaTarget);
     latestPromotions = (promotions.data || [])
       .filter(
         (promotion) => !isPlaceholderMarketplaceContent(promotion.title, promotion.description)
       )
-      .slice(0, 3);
+      .slice(0, perAreaTarget);
   }
 
   // Build mixed carousel items from all three content types
