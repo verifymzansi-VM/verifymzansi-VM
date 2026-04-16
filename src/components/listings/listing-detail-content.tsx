@@ -221,7 +221,7 @@ export function ListingDetailContent({
             : "grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:items-start"
         }
       >
-        <div className="space-y-6 lg:grid lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] lg:items-start lg:gap-8 lg:space-y-0">
+        <div className="space-y-6 lg:col-span-2 lg:grid lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] lg:items-start lg:gap-8 lg:space-y-0">
           <div className="mx-auto w-full max-w-[280px] sm:max-w-[320px] lg:max-w-none">
             <ErrorBoundary
               label="ListingDetailClient"
