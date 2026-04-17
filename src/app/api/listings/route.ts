@@ -484,13 +484,13 @@ export async function GET(request: NextRequest) {
       getContentViewCountMap(admin, "listing", listingIds),
       getContentLikeSummaryMap(admin, "listing", listingIds, viewerKey),
     ]);
-    if (!viewCountResult.ok || !likeSummaryResult.ok) {
+    const engagementAvailable = viewCountResult.ok && likeSummaryResult.ok;
+    if (!engagementAvailable) {
       log.error("Failed to load listing engagement summary", {
         listingIds,
         viewErrorCode: viewCountResult.errorCode,
         likeErrorCode: likeSummaryResult.errorCode,
       });
-      return NextResponse.json({ error: "Engagement data unavailable" }, { status: 503 });
     }
 
     const { data: sellers } = sellerIds.length
@@ -509,13 +509,15 @@ export async function GET(request: NextRequest) {
       })) ?? [];
     const serializedListings = listings.map((listing) => {
       const listingId = String(listing.id ?? "");
-      const fallbackViewCount = viewCountResult.data.get(listingId) ?? 0;
-      const likeSummary = likeSummaryResult.data.get(listingId);
+      const fallbackViewCount = engagementAvailable
+        ? (viewCountResult.data.get(listingId) ?? null)
+        : null;
+      const likeSummary = engagementAvailable ? likeSummaryResult.data.get(listingId) : undefined;
 
       return {
         ...listing,
         view_count: typeof listing.view_count === "number" ? listing.view_count : fallbackViewCount,
-        like_count: likeSummary?.likeCount ?? 0,
+        like_count: engagementAvailable ? (likeSummary?.likeCount ?? null) : null,
         viewer_has_liked: likeSummary?.viewerHasLiked ?? false,
       };
     });
@@ -523,6 +525,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       listings: serializedListings,
       sellers: serializedSellers,
+      engagement_available: engagementAvailable,
       total,
       page: filters.page,
       limit,

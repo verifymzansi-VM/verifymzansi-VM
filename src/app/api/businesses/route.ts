@@ -751,28 +751,29 @@ export async function GET(request: NextRequest) {
       getContentViewCountMap(admin, "business", businessIds),
       getContentLikeSummaryMap(admin, "business", businessIds, viewerKey),
     ]);
-    if (!viewCountResult.ok || !likeSummaryResult.ok) {
+    const engagementAvailable = viewCountResult.ok && likeSummaryResult.ok;
+    if (!engagementAvailable) {
       log.error("Failed to load business engagement summary", {
         businessIds,
         viewErrorCode: viewCountResult.errorCode,
         likeErrorCode: likeSummaryResult.errorCode,
       });
-      return NextResponse.json({ error: "Engagement data unavailable" }, { status: 503 });
     }
     const serializedBusinesses = publicBusinesses.map((business) => {
       const businessId = String(business.id ?? "");
-      const likeSummary = likeSummaryResult.data.get(businessId);
+      const likeSummary = engagementAvailable ? likeSummaryResult.data.get(businessId) : undefined;
 
       return {
         ...business,
-        view_count: viewCountResult.data.get(businessId) ?? 0,
-        like_count: likeSummary?.likeCount ?? 0,
+        view_count: engagementAvailable ? (viewCountResult.data.get(businessId) ?? null) : null,
+        like_count: engagementAvailable ? (likeSummary?.likeCount ?? null) : null,
         viewer_has_liked: likeSummary?.viewerHasLiked ?? false,
       };
     });
 
     return NextResponse.json({
       businesses: serializedBusinesses,
+      engagement_available: engagementAvailable,
       total: Math.max(
         0,
         (count ?? filteredBusinesses.length) -

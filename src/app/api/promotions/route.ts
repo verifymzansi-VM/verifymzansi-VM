@@ -776,21 +776,28 @@ export async function GET(request: NextRequest) {
       getContentViewCountMap(admin, "promotion", promotionIds),
       getContentLikeSummaryMap(admin, "promotion", promotionIds, viewerKey),
     ]);
-    if (!viewCountResult.ok || !likeSummaryResult.ok) {
+    const engagementAvailable = viewCountResult.ok && likeSummaryResult.ok;
+    if (!engagementAvailable) {
       log.error("Failed to load promotion engagement summary", {
         promotionIds,
         viewErrorCode: viewCountResult.errorCode,
         likeErrorCode: likeSummaryResult.errorCode,
       });
-      return NextResponse.json({ error: "Engagement data unavailable" }, { status: 503 });
     }
     const serializedPromotions = filteredPromotions.map((promotion) => {
-      const likeSummary = likeSummaryResult.data.get(promotion.id);
+      const likeSummary = engagementAvailable
+        ? likeSummaryResult.data.get(promotion.id)
+        : undefined;
 
       return {
         ...promotion,
-        view_count: viewCountResult.data.get(promotion.id) ?? 0,
-        like_count: likeSummary?.likeCount ?? 0,
+        view_count:
+          typeof promotion.view_count === "number"
+            ? promotion.view_count
+            : engagementAvailable
+              ? (viewCountResult.data.get(promotion.id) ?? null)
+              : null,
+        like_count: engagementAvailable ? (likeSummary?.likeCount ?? null) : null,
         viewer_has_liked: likeSummary?.viewerHasLiked ?? false,
       };
     });
@@ -828,6 +835,7 @@ export async function GET(request: NextRequest) {
       accountProfiles: serializedAccountProfiles,
       sellers: serializedAccountProfiles,
       businesses: businesses ?? [],
+      engagement_available: engagementAvailable,
       total: Math.max(0, (count ?? filteredPromotions.length) - removedCount),
       page,
       limit,
