@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { normalizeMediaUrls } from "@/lib/utils/media-url";
 import { ProfileVideoPlayer } from "@/components/ui/profile-video-player";
 import { useHorizontalSwipeNavigation } from "@/hooks/use-horizontal-swipe-navigation";
+import { useTrackContentView } from "@/hooks/use-track-content-view";
 
 interface ListingDetailClientProps {
   photos: string[];
@@ -81,6 +82,7 @@ export function ListingDetailClient({
   heroAspectClassName = "aspect-video",
   heroMediaClassName,
 }: ListingDetailClientProps) {
+  useTrackContentView(listingId, "listing");
   const normalizedPhotos = normalizeMediaUrls(photos).filter(Boolean);
   const normalizedVideos = normalizeMediaUrls(videos).filter(Boolean);
   const orderedMedia = useMemo(() => {

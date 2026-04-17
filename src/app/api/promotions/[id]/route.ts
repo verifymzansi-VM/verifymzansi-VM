@@ -28,6 +28,12 @@ import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { uuidSchema } from "@/lib/validations/shared";
 import { z } from "zod";
 import { createNotification, shouldSendOwnerLifecycleNotifications } from "@/lib/notifications";
+import {
+  buildViewerKey,
+  createAnonymousViewerId,
+  ENGAGEMENT_VIEWER_COOKIE,
+  ENGAGEMENT_VIEWER_COOKIE_MAX_AGE_SECONDS,
+} from "@/lib/engagement";
 
 const log = createLogger("PromotionDetail");
 const promotionIdParamsSchema = z.object({
@@ -65,7 +71,7 @@ type PromotionOwnerRow = {
  * Get a single promotion by ID. Public for live promotions.
  * Increments view_count.
  */
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const parsedParams = parseAndValidateRouteParams(await params, promotionIdParamsSchema, {
       validationErrorMessage: "Invalid promotion ID",
@@ -102,21 +108,57 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       }
     }
 
-    // Increment view count atomically (best-effort, non-blocking).
-    const admin = createAdminClient();
-    Promise.resolve(admin.rpc("increment_promotion_view_count", { promotion_id: id }))
-      .then(({ error }) => {
-        if (error) log.warn("View count increment failed", { id, error: error.message });
-      })
-      .catch((err: unknown) => log.warn("View count RPC error", { id, error: String(err) }));
+    const existingViewerId = request.cookies?.get?.(ENGAGEMENT_VIEWER_COOKIE)?.value ?? null;
+    const nextViewerId = existingViewerId ?? createAnonymousViewerId();
+    const viewerKey = buildViewerKey(nextViewerId, user?.id ?? null);
+
+    if (normalizedPromotion.status === "live") {
+      // Increment unique viewer count (best-effort, non-blocking).
+      try {
+        const admin = createAdminClient();
+        const rpc = admin.rpc?.bind(admin);
+        if (rpc) {
+          Promise.resolve(
+            rpc("record_content_view", {
+              p_target_id: id,
+              p_target_type: "promotion",
+              p_viewer_key: viewerKey,
+              p_viewer_user_id: user?.id ?? null,
+              p_viewer_ip_hash: null,
+            })
+          )
+            .then(({ error }) => {
+              if (error) log.warn("View count increment failed", { id, error: error.message });
+            })
+            .catch((err: unknown) => log.warn("View count RPC error", { id, error: String(err) }));
+        }
+      } catch (viewError) {
+        log.warn("View count tracking setup failed", {
+          id,
+          error: viewError instanceof Error ? viewError.message : "Unknown error",
+        });
+      }
+    }
 
     const promotionResponse = normalizedPromotion;
-
-    return NextResponse.json({
+    const response = NextResponse.json({
       promotion: {
         ...promotionResponse,
       },
     });
+    if (!existingViewerId) {
+      response.cookies.set({
+        name: ENGAGEMENT_VIEWER_COOKIE,
+        value: nextViewerId,
+        maxAge: ENGAGEMENT_VIEWER_COOKIE_MAX_AGE_SECONDS,
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+      });
+    }
+
+    return response;
   } catch (err) {
     log.error("Unexpected error", {
       error: err instanceof Error ? err.message : "Unknown error",

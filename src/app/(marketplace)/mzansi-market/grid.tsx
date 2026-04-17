@@ -42,6 +42,9 @@ interface ListingRow {
   focal_y: number | null;
   media_width: number | null;
   media_height: number | null;
+  view_count?: number | null;
+  like_count?: number | null;
+  viewer_has_liked?: boolean;
 }
 
 interface OwnerRow {
@@ -400,6 +403,9 @@ export function MzansiMarketGrid() {
                   focalY={listing.focal_y}
                   mediaWidth={listing.media_width}
                   mediaHeight={listing.media_height}
+                  viewCount={listing.view_count ?? undefined}
+                  likeCount={listing.like_count ?? 0}
+                  viewerHasLiked={listing.viewer_has_liked ?? false}
                 />
               </div>
             );
@@ -440,7 +446,9 @@ export function MzansiMarketGrid() {
                   createdAt={listing.created_at}
                   ownerTrustLevel={trustLevel}
                   ownerName={seller?.display_name}
-                  viewCount={undefined}
+                  viewCount={listing.view_count ?? undefined}
+                  likeCount={listing.like_count ?? 0}
+                  viewerHasLiked={listing.viewer_has_liked ?? false}
                   boosted={isBoosted}
                   featured={listing.featured}
                   focalX={listing.focal_x}

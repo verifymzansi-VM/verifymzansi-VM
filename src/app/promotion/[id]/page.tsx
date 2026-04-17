@@ -1,11 +1,13 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
 import { ACCOUNT_PROFILE_TABLE, normalizeOwnerRecord, readOwnerId } from "@/lib/account/compat";
 import type { Metadata } from "next";
+import { getContentViewCountMap } from "@/lib/engagement-server";
 
 interface PromotionDetailPageProps {
   params: Promise<{ id: string }>;
@@ -33,6 +35,7 @@ export async function generateMetadata({ params }: PromotionDetailPageProps): Pr
 export default async function PromotionDetailPage({ params }: PromotionDetailPageProps) {
   const { id } = await params;
   const supabase = await createClient();
+  const engagementAdmin = createAdminClient();
 
   // Fetch promotion
   const { data: rawPromotion } = await supabase
@@ -68,6 +71,9 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
           .maybeSingle()
       ).data
     : null;
+  const promotionViewCounts = await getContentViewCountMap(engagementAdmin, "promotion", [
+    promotion.id,
+  ]);
 
   const locationName = [promotion.location_city, promotion.location_province]
     .filter(Boolean)
@@ -112,7 +118,10 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
             ]}
           />
           <PromotionDetailContent
-            promotion={promotion}
+            promotion={{
+              ...promotion,
+              view_count: promotionViewCounts.get(promotion.id) ?? 0,
+            }}
             advertiserProfile={advertiserProfile}
             linkedBusiness={linkedBusiness}
           />

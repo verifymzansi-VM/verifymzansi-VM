@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/layout/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +20,8 @@ import {
   withOwnerColumn,
 } from "@/lib/account/compat";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
+import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
+import { getContentLikeSummaryMap, getContentViewCountMap } from "@/lib/engagement-server";
 
 interface BusinessDetailPageProps {
   params: Promise<{ id: string }>;
@@ -187,6 +191,7 @@ export async function generateMetadata({ params }: BusinessDetailPageProps): Pro
 
 export default async function BusinessDetailPage({ params }: BusinessDetailPageProps) {
   const { id } = await params;
+  const cookieStore = await cookies();
   const detail = await loadBusinessDetail(id);
 
   if (!detail) {
@@ -194,10 +199,23 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
   }
 
   const { business, ownerProfile, promotions, isOwnerPreview } = detail;
+  const viewerKey = buildViewerKey(cookieStore.get(ENGAGEMENT_VIEWER_COOKIE)?.value ?? null);
+  const engagementAdmin = createAdminClient();
+  const promotionIds = promotions.map((promotion) => promotion.id);
+  const [promotionViewSummary, promotionLikeSummary] = await Promise.all([
+    getContentViewCountMap(engagementAdmin, "promotion", promotionIds),
+    getContentLikeSummaryMap(engagementAdmin, "promotion", promotionIds, viewerKey),
+  ]);
   const trustLevel = ownerProfile
     ? computeTrustLevel(readAccountVerificationStatus(ownerProfile))
     : null;
   const breadcrumbs = getBreadcrumbs(isOwnerPreview, business.business_name);
+  const promotionsWithLikes = promotions.map((promotion) => ({
+    ...promotion,
+    view_count: promotionViewSummary.get(promotion.id) ?? 0,
+    like_count: promotionLikeSummary.get(promotion.id)?.likeCount ?? 0,
+    viewer_has_liked: promotionLikeSummary.get(promotion.id)?.viewerHasLiked ?? false,
+  }));
 
   return (
     <div className="bg-muted/30">
@@ -228,7 +246,7 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
           business={business}
           trustLevel={trustLevel}
           ownerProfile={ownerProfile}
-          promotions={promotions}
+          promotions={promotionsWithLikes}
           showPublicActions={!isOwnerPreview}
         />
       </div>

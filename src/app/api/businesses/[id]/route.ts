@@ -31,6 +31,12 @@ import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { uuidSchema } from "@/lib/validations/shared";
 import { z } from "zod";
 import { createNotification, shouldSendOwnerLifecycleNotifications } from "@/lib/notifications";
+import {
+  buildViewerKey,
+  createAnonymousViewerId,
+  ENGAGEMENT_VIEWER_COOKIE,
+  ENGAGEMENT_VIEWER_COOKIE_MAX_AGE_SECONDS,
+} from "@/lib/engagement";
 
 const log = createLogger("BusinessDetail");
 const businessIdParamsSchema = z.object({
@@ -74,7 +80,7 @@ function getMallPhotoUrls(details: BusinessDetails | null | undefined): string[]
  *
  * Get a single business by ID. Public for live businesses.
  */
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const parsedParams = parseAndValidateRouteParams(await params, businessIdParamsSchema, {
       validationErrorMessage: "Invalid business ID",
@@ -130,17 +136,42 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       log.warn("Failed to fetch linked promotions", { businessId: id, error: promoError.message });
     }
 
-    // Track view (best-effort — never block the response)
-    const admin = createAdminClient();
-    void admin
-      .from("listing_views")
-      .insert({
-        target_id: id,
-        target_type: "business",
-      })
-      .then(({ error: viewErr }) => {
-        if (viewErr) log.warn("View tracking failed", { error: viewErr.message, businessId: id });
-      });
+    if (!currentUser) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      currentUser = user;
+    }
+
+    const existingViewerId = request.cookies?.get?.(ENGAGEMENT_VIEWER_COOKIE)?.value ?? null;
+    const nextViewerId = existingViewerId ?? createAnonymousViewerId();
+    const viewerKey = buildViewerKey(nextViewerId, currentUser?.id ?? null);
+
+    if (normalizedBusiness.status === "live") {
+      // Track view (best-effort — never block the response)
+      try {
+        const admin = createAdminClient();
+        const rpc = admin.rpc?.bind(admin);
+        if (rpc) {
+          void rpc("record_content_view", {
+            p_target_id: id,
+            p_target_type: "business",
+            p_viewer_key: viewerKey,
+            p_viewer_user_id: currentUser?.id ?? null,
+            p_viewer_ip_hash: null,
+          }).then(({ error: viewErr }) => {
+            if (viewErr) {
+              log.warn("View tracking failed", { error: viewErr.message, businessId: id });
+            }
+          });
+        }
+      } catch (viewError) {
+        log.warn("View tracking setup failed", {
+          businessId: id,
+          error: viewError instanceof Error ? viewError.message : "Unknown error",
+        });
+      }
+    }
 
     // Strip owner identifiers from public response (POPIA data minimization)
     const { owner_id: _oid, ...publicBusiness } = normalizedBusiness;
@@ -149,17 +180,38 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     // email/phone harvesting. Authenticated users can see full details.
     // Reuse the user fetched above for non-live checks; fetch lazily otherwise.
     if (!currentUser) {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      currentUser = user;
-    }
-    if (!currentUser) {
       const { phone: _p, whatsapp: _w, email: _e, ...redactedBusiness } = publicBusiness;
-      return NextResponse.json({ business: redactedBusiness, promotions: promotions ?? [] });
+      const response = NextResponse.json({
+        business: redactedBusiness,
+        promotions: promotions ?? [],
+      });
+      if (!existingViewerId) {
+        response.cookies.set({
+          name: ENGAGEMENT_VIEWER_COOKIE,
+          value: nextViewerId,
+          maxAge: ENGAGEMENT_VIEWER_COOKIE_MAX_AGE_SECONDS,
+          httpOnly: true,
+          sameSite: "lax",
+          secure: process.env.NODE_ENV === "production",
+          path: "/",
+        });
+      }
+      return response;
     }
 
-    return NextResponse.json({ business: publicBusiness, promotions: promotions ?? [] });
+    const response = NextResponse.json({ business: publicBusiness, promotions: promotions ?? [] });
+    if (!existingViewerId) {
+      response.cookies.set({
+        name: ENGAGEMENT_VIEWER_COOKIE,
+        value: nextViewerId,
+        maxAge: ENGAGEMENT_VIEWER_COOKIE_MAX_AGE_SECONDS,
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+      });
+    }
+    return response;
   } catch (err) {
     log.error("Unexpected error", {
       error: err instanceof Error ? err.message : "Unknown error",

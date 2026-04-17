@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
@@ -17,6 +19,8 @@ import {
   readOwnerId,
   withOwnerColumn,
 } from "@/lib/account/compat";
+import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
+import { getContentLikeSummaryMap, getContentViewCountMap } from "@/lib/engagement-server";
 
 interface ListingDetailPageProps {
   params: Promise<{ id: string }>;
@@ -44,7 +48,9 @@ export async function generateMetadata({ params }: ListingDetailPageProps): Prom
 
 export default async function ListingDetailPage({ params }: ListingDetailPageProps) {
   const { id } = await params;
+  const cookieStore = await cookies();
   const supabase = await createClient();
+  const engagementAdmin = createAdminClient();
   const listingOwnerColumn = await getOwnerColumn(supabase, "listings");
 
   // Check if visitor is authenticated
@@ -84,15 +90,6 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
       : { ...seller, phone: null, masked_phone_public: null }
     : null;
 
-  // Track view (non-blocking, best-effort)
-  void (async () => {
-    try {
-      await supabase
-        .from("listing_views")
-        .insert({ target_id: listing.id, target_type: "listing" });
-    } catch {}
-  })();
-
   // Fetch similar listings (same category, excluding current)
   const { data: similarListings } = await supabase
     .from("listings")
@@ -128,6 +125,15 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
       .in("user_id", ownerIds);
     similarSellers = new Map((ownerData ?? []).map((s) => [s.user_id, s]));
   }
+  const viewerKey = buildViewerKey(
+    cookieStore.get(ENGAGEMENT_VIEWER_COOKIE)?.value ?? null,
+    user?.id
+  );
+  const similarListingIds = similarItems.map((item) => item.id);
+  const [listingViewCounts, similarLikeSummary] = await Promise.all([
+    getContentViewCountMap(engagementAdmin, "listing", [listing.id, ...similarListingIds]),
+    getContentLikeSummaryMap(engagementAdmin, "listing", similarListingIds, viewerKey),
+  ]);
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -162,9 +168,17 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
             ]}
           />
           <ListingDetailContent
-            listing={listing}
+            listing={{
+              ...listing,
+              view_count: listingViewCounts.get(listing.id) ?? 0,
+            }}
             seller={safeSeller}
-            similarItems={similarItems}
+            similarItems={similarItems.map((item) => ({
+              ...item,
+              view_count: listingViewCounts.get(item.id) ?? 0,
+              like_count: similarLikeSummary.get(item.id)?.likeCount ?? 0,
+              viewer_has_liked: similarLikeSummary.get(item.id)?.viewerHasLiked ?? false,
+            }))}
             similarSellers={similarSellers}
             showContactActions={isAuthenticated}
           />

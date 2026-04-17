@@ -47,6 +47,8 @@ interface PromotionRow {
   boost_until: string | null;
   featured_until: string | null;
   view_count: number;
+  like_count?: number | null;
+  viewer_has_liked?: boolean;
   focal_x: number | null;
   focal_y: number | null;
   media_width: number | null;
@@ -100,6 +102,9 @@ interface BusinessRow {
   focal_y: number | null;
   media_width: number | null;
   media_height: number | null;
+  view_count?: number | null;
+  like_count?: number | null;
+  viewer_has_liked?: boolean;
 }
 
 interface BusinessesResponse {
@@ -615,6 +620,9 @@ export function PromotionsExplorer() {
                       boostUntil={business.boost_until}
                       featuredUntil={business.featured_until}
                       serviceAreas={business.service_areas}
+                      viewCount={business.view_count ?? 0}
+                      likeCount={business.like_count ?? 0}
+                      viewerHasLiked={business.viewer_has_liked ?? false}
                       focalX={business.focal_x}
                       focalY={business.focal_y}
                       mediaWidth={business.media_width}
@@ -683,6 +691,8 @@ export function PromotionsExplorer() {
                         ownerTrustLevel={accountProfile?.trust}
                         ownerName={accountProfile?.display_name}
                         viewCount={promotion.view_count}
+                        likeCount={promotion.like_count ?? 0}
+                        viewerHasLiked={promotion.viewer_has_liked ?? false}
                         boosted={isBoosted}
                         featured={isFeatured}
                         startDate={promotion.start_date}

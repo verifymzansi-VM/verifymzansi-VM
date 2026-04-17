@@ -110,4 +110,23 @@ describe("PosterCardShell", () => {
     expect(heroCard?.className).not.toContain("bg-white/95");
     expect(heroCard?.className).not.toContain("backdrop-blur");
   });
+
+  it("renders engagement counts and a like button when engagement data is provided", () => {
+    render(
+      <PosterCardShell
+        href="/listing/engaged"
+        title="Engaged card"
+        mediaUrl="https://example.com/poster.jpg"
+        viewCount={128}
+        likeCount={12}
+        viewerHasLiked
+        engagementTargetId="listing-123"
+        engagementTargetType="listing"
+      />
+    );
+
+    expect(screen.getByText("128 views")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /unlike this card/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /unlike this card/i })).toHaveTextContent("12");
+  });
 });

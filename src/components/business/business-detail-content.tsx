@@ -61,6 +61,7 @@ import {
 import { getCategoryDetailFields } from "@/lib/forms/business-category-details";
 import type { TourismCategoryDetails } from "@/types/tourism-details";
 import type { BusinessDetails } from "@/types/business-details";
+import { useTrackContentView } from "@/hooks/use-track-content-view";
 
 const zarCurrency = new Intl.NumberFormat("en-ZA", {
   style: "currency",
@@ -127,6 +128,8 @@ export interface BusinessPromotionRecord {
   boost_until: string | null;
   featured_until: string | null;
   view_count: number | null;
+  like_count?: number | null;
+  viewer_has_liked?: boolean;
   start_date: string | null;
   end_date: string | null;
   created_at: string;
@@ -939,6 +942,7 @@ export function BusinessDetailContent({
   showPromotions?: boolean;
   showPublicActions?: boolean;
 }) {
+  useTrackContentView(business.id, "business", business.status === "live");
   const socialLinks = business.social_links;
   const opHours = business.operating_hours;
   const businessDetails = business.business_details;
@@ -1269,6 +1273,8 @@ export function BusinessDetailContent({
                       promotionType={promo.promotion_type as PromotionType}
                       createdAt={promo.created_at}
                       viewCount={promo.view_count ?? undefined}
+                      likeCount={promo.like_count ?? 0}
+                      viewerHasLiked={promo.viewer_has_liked ?? false}
                       boosted={promo.boost_until ? new Date(promo.boost_until) > new Date() : false}
                       featured={
                         promo.featured_until ? new Date(promo.featured_until) > new Date() : false

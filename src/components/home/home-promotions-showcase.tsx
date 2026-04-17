@@ -5,10 +5,13 @@ import { Button } from "@/components/ui/button";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { BusinessPreviewCard } from "@/components/home/business-preview-card";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { AutoScrollRail } from "./auto-scroll-rail";
 import { HomeShowcaseShell } from "./home-showcase-shell";
 import type { BusinessCategory, BusinessType, PromotionType } from "@/types/enums";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
+import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
+import { getContentLikeSummaryMap, getContentViewCountMap } from "@/lib/engagement-server";
 import {
   buildPublicEventPromotionsQuery,
   buildPublicTourismBusinessesQuery,
@@ -71,7 +74,9 @@ export async function HomePromotionsShowcase() {
   const hideFixtures = shouldHidePlaywrightFixtures(
     cookieStore.get(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
   );
+  const viewerKey = buildViewerKey(cookieStore.get(ENGAGEMENT_VIEWER_COOKIE)?.value ?? null);
   const supabase = await createClient();
+  const engagementAdmin = createAdminClient();
   const now = new Date().toISOString();
 
   const { data: eventData } = await buildPublicEventPromotionsQuery(
@@ -86,6 +91,11 @@ export async function HomePromotionsShowcase() {
     .filter((promotion) => !shouldHidePlaywrightFixtureRowWhenEnabled(promotion, hideFixtures))
     .filter((promotion) => !isPlaceholderMarketplaceContent(promotion.title))
     .slice(0, 4);
+  const promotionIds = promotions.map((promotion) => promotion.id);
+  const [promotionViewCountMap, promotionLikeSummary] = await Promise.all([
+    getContentViewCountMap(engagementAdmin, "promotion", promotionIds),
+    getContentLikeSummaryMap(engagementAdmin, "promotion", promotionIds, viewerKey),
+  ]);
 
   const { data: tourismData } = await buildPublicTourismBusinessesQuery(
     supabase,
@@ -98,6 +108,11 @@ export async function HomePromotionsShowcase() {
     .filter((b) => !shouldHidePlaywrightFixtureRowWhenEnabled(b, hideFixtures))
     .filter((b) => !isPlaceholderMarketplaceContent(b.business_name))
     .slice(0, 4);
+  const tourismIds = tourismBusinesses.map((business) => business.id);
+  const [tourismViewCountMap, tourismLikeSummary] = await Promise.all([
+    getContentViewCountMap(engagementAdmin, "business", tourismIds),
+    getContentLikeSummaryMap(engagementAdmin, "business", tourismIds, viewerKey),
+  ]);
 
   // Fetch business logos for promotions linked to a business
   const businessIds = [
@@ -170,6 +185,7 @@ export async function HomePromotionsShowcase() {
           >
             {item.kind === "tourism" ? (
               <BusinessPreviewCard
+                id={item.data.id}
                 href={`/mzansi-business/${item.data.id}`}
                 imageUrl={
                   item.data.cover_video ||
@@ -191,6 +207,9 @@ export async function HomePromotionsShowcase() {
                     ? new Date(item.data.featured_until) > new Date(now)
                     : false
                 }
+                viewCount={tourismViewCountMap.get(item.data.id) ?? 0}
+                likeCount={tourismLikeSummary.get(item.data.id)?.likeCount ?? 0}
+                viewerHasLiked={tourismLikeSummary.get(item.data.id)?.viewerHasLiked ?? false}
                 priority={false}
                 focalX={item.data.focal_x}
                 focalY={item.data.focal_y}
@@ -215,7 +234,9 @@ export async function HomePromotionsShowcase() {
                 city={item.data.location_city}
                 promotionType={item.data.promotion_type as PromotionType}
                 createdAt={item.data.created_at}
-                viewCount={item.data.view_count}
+                viewCount={promotionViewCountMap.get(item.data.id) ?? 0}
+                likeCount={promotionLikeSummary.get(item.data.id)?.likeCount ?? 0}
+                viewerHasLiked={promotionLikeSummary.get(item.data.id)?.viewerHasLiked ?? false}
                 boosted={
                   item.data.boost_until ? new Date(item.data.boost_until) > new Date(now) : false
                 }

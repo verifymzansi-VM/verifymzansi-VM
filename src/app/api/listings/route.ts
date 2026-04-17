@@ -50,6 +50,8 @@ import {
   shouldSendOwnerLifecycleNotifications,
 } from "@/lib/notifications";
 import { claimFreePostSlot, releaseFreePostSlot } from "@/lib/billing/free-posts";
+import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
+import { getContentLikeSummaryMap, getContentViewCountMap } from "@/lib/engagement-server";
 
 const log = createLogger("ListingCreate");
 const AREA: MarketplaceArea = "MZANSI_MARKET";
@@ -58,6 +60,7 @@ const LISTING_SELECT_FALLBACK_FIELDS = [
   "condition",
   "video_thumbnail",
   "logo_url",
+  "view_count",
 ] as const;
 const listingsQuerySchema = z.object({
   category: optionalTrimmedStringSchema,
@@ -202,6 +205,7 @@ function normalizeListingSelectShape(
     condition: listing.condition ?? null,
     video_thumbnail: listing.video_thumbnail ?? null,
     logo_url: listing.logo_url ?? null,
+    view_count: listing.view_count ?? null,
   }));
 }
 
@@ -231,6 +235,14 @@ export async function GET(request: NextRequest) {
     }
 
     const admin = createAdminClient();
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const viewerKey = buildViewerKey(
+      request.cookies?.get?.(ENGAGEMENT_VIEWER_COOKIE)?.value ?? null,
+      user?.id ?? null
+    );
     const parsedQuery = parseAndValidateSearchParams(
       request.nextUrl.searchParams,
       listingsQuerySchema,
@@ -276,35 +288,35 @@ export async function GET(request: NextRequest) {
     const selectAttempts = [
       {
         select: withOwnerColumn(
-          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured, media_width, media_height, focal_x, focal_y",
+          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured, view_count, media_width, media_height, focal_x, focal_y",
           ownerColumn
         ),
         omittedFields: [] as const,
       },
       {
         select: withOwnerColumn(
-          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured, media_width, media_height, focal_x, focal_y",
+          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured, view_count, media_width, media_height, focal_x, focal_y",
           ownerColumn
         ),
         omittedFields: ["featured_until"] as const,
       },
       {
         select: withOwnerColumn(
-          "id, owner_id, title, description, price_cents, price_negotiable, category, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured, media_width, media_height, focal_x, focal_y",
+          "id, owner_id, title, description, price_cents, price_negotiable, category, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured, view_count, media_width, media_height, focal_x, focal_y",
           ownerColumn
         ),
         omittedFields: ["condition"] as const,
       },
       {
         select: withOwnerColumn(
-          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured, media_width, media_height, focal_x, focal_y",
+          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured, view_count, media_width, media_height, focal_x, focal_y",
           ownerColumn
         ),
         omittedFields: ["video_thumbnail"] as const,
       },
       {
         select: withOwnerColumn(
-          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured_until, featured, media_width, media_height, focal_x, focal_y",
+          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured_until, featured, view_count, media_width, media_height, focal_x, focal_y",
           ownerColumn
         ),
         omittedFields: ["logo_url"] as const,
@@ -314,7 +326,13 @@ export async function GET(request: NextRequest) {
           "id, owner_id, title, description, price_cents, price_negotiable, category, attributes, photos, videos, location_province, location_city, created_at, boost_until, featured, media_width, media_height, focal_x, focal_y",
           ownerColumn
         ),
-        omittedFields: ["featured_until", "condition", "video_thumbnail", "logo_url"] as const,
+        omittedFields: [
+          "featured_until",
+          "condition",
+          "video_thumbnail",
+          "logo_url",
+          "view_count",
+        ] as const,
       },
     ] as const;
     const hasAttributeFilters = Object.keys(filters.attributes).length > 0;
@@ -456,9 +474,16 @@ export async function GET(request: NextRequest) {
     total = Math.max(0, total - (normalizedListings.length - publicListings.length));
     listings = publicListings;
 
+    const listingIds = listings
+      .map((listing) => String(listing.id ?? ""))
+      .filter((id): id is string => id.length > 0);
     const sellerIds = Array.from(
       new Set(listings.map((listing) => String(listing.owner_id)).filter(Boolean))
     );
+    const [viewCountMap, likeSummaryMap] = await Promise.all([
+      getContentViewCountMap(admin, "listing", listingIds),
+      getContentLikeSummaryMap(admin, "listing", listingIds, viewerKey),
+    ]);
 
     const { data: sellers } = sellerIds.length
       ? await admin
@@ -474,9 +499,21 @@ export async function GET(request: NextRequest) {
         display_name: seller.display_name,
         account_verification_status: readAccountVerificationStatus(seller),
       })) ?? [];
+    const serializedListings = listings.map((listing) => {
+      const listingId = String(listing.id ?? "");
+      const fallbackViewCount = viewCountMap.get(listingId) ?? 0;
+      const likeSummary = likeSummaryMap.get(listingId);
+
+      return {
+        ...listing,
+        view_count: typeof listing.view_count === "number" ? listing.view_count : fallbackViewCount,
+        like_count: likeSummary?.likeCount ?? 0,
+        viewer_has_liked: likeSummary?.viewerHasLiked ?? false,
+      };
+    });
 
     return NextResponse.json({
-      listings,
+      listings: serializedListings,
       sellers: serializedSellers,
       total,
       page: filters.page,

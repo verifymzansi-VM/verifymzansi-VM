@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { cookies } from "next/headers";
 import { Calendar } from "lucide-react";
 import { PageHeader } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,6 +19,8 @@ import {
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 import { PastEventsAccordion } from "./past-events-accordion";
 import Link from "next/link";
+import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
+import { getContentLikeSummaryMap, getContentViewCountMap } from "@/lib/engagement-server";
 
 export const metadata = {
   title: "Events",
@@ -81,7 +85,10 @@ function isPlaceholderEvent(event: { title: string | null; description?: string 
 }
 
 export default async function EventsPage() {
+  const cookieStore = await cookies();
+  const viewerKey = buildViewerKey(cookieStore.get(ENGAGEMENT_VIEWER_COOKIE)?.value ?? null);
   const admin = await createClient();
+  const engagementAdmin = createAdminClient();
   const promotionOwnerColumn = await getOwnerColumn(admin, "promotions");
   const now = new Date().toISOString();
 
@@ -129,6 +136,11 @@ export default async function EventsPage() {
   const past = normalizeOwnerRecords((pastEvents ?? []) as unknown as EventRow[]).filter(
     (event) => !isPlaceholderEvent(event)
   );
+  const allEventIds = [...upcoming, ...past].map((event) => event.id);
+  const [allViewSummary, allLikeSummary] = await Promise.all([
+    getContentViewCountMap(engagementAdmin, "promotion", allEventIds),
+    getContentLikeSummaryMap(engagementAdmin, "promotion", allEventIds, viewerKey),
+  ]);
   const allEvents = [...upcoming, ...past];
   const accountIds = [...new Set(allEvents.map((event) => readOwnerId(event)).filter(Boolean))];
   const { data: accountProfiles } = accountIds.length
@@ -236,7 +248,9 @@ export default async function EventsPage() {
                         createdAt={event.created_at}
                         ownerTrustLevel={accountProfile?.trust}
                         ownerName={accountProfile?.name}
-                        viewCount={event.view_count as number}
+                        viewCount={allViewSummary.get(event.id) ?? 0}
+                        likeCount={allLikeSummary.get(event.id)?.likeCount ?? 0}
+                        viewerHasLiked={allLikeSummary.get(event.id)?.viewerHasLiked ?? false}
                         boosted={isBoosted}
                         featured={isFeatured}
                         startDate={event.start_date as string | null}
@@ -292,10 +306,13 @@ export default async function EventsPage() {
               province: event.location_province ?? "",
               city: event.location_city ?? "",
               createdAt: event.created_at,
+              viewCount: allViewSummary.get(event.id) ?? 0,
               ownerTrustLevel: accountProfile?.trust,
               ownerName: accountProfile?.name,
               startDate: event.start_date,
               endDate: event.end_date,
+              likeCount: allLikeSummary.get(event.id)?.likeCount ?? 0,
+              viewerHasLiked: allLikeSummary.get(event.id)?.viewerHasLiked ?? false,
               focalX: (event.focal_x as number | null | undefined) ?? null,
               focalY: (event.focal_y as number | null | undefined) ?? null,
               mediaWidth: (event.media_width as number | null | undefined) ?? null,

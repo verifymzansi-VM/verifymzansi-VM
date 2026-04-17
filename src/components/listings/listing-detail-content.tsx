@@ -79,6 +79,9 @@ export interface SimilarListingRow {
   boost_until: string | null;
   featured: boolean;
   owner_id?: string | null;
+  view_count?: number | null;
+  like_count?: number | null;
+  viewer_has_liked?: boolean;
 }
 
 export interface SimilarSellerRow {
@@ -427,7 +430,9 @@ export function ListingDetailContent({
                       ownerTrustLevel={
                         sellerRow ? computeTrustLevel(sellerRow.account_verification_status) : 0
                       }
-                      viewCount={undefined}
+                      viewCount={item.view_count ?? undefined}
+                      likeCount={item.like_count ?? 0}
+                      viewerHasLiked={item.viewer_has_liked ?? false}
                       featured={item.featured}
                       logoUrl={item.logo_url}
                       focalX={item.focal_x}

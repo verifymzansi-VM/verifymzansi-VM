@@ -5,6 +5,7 @@ import { formatZARShort } from "@/lib/utils/format";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
 import type { MediaFitStrategy } from "@/components/ui/video-card-player";
 import type { TrustLevel } from "@/types/enums";
+import type { ContentTargetType } from "@/lib/engagement";
 
 interface ListingCardProps {
   id: string;
@@ -24,6 +25,8 @@ interface ListingCardProps {
   ownerTrustLevel?: TrustLevel;
   ownerName?: string;
   viewCount?: number;
+  likeCount?: number;
+  viewerHasLiked?: boolean;
   boosted?: boolean;
   featured?: boolean;
   urgent?: boolean;
@@ -76,6 +79,8 @@ export const ListingCard = memo(function ListingCard({
   createdAt,
   ownerTrustLevel = 0,
   viewCount,
+  likeCount,
+  viewerHasLiked = false,
   boosted,
   featured,
   urgent,
@@ -89,6 +94,7 @@ export const ListingCard = memo(function ListingCard({
   const status = getListingStatus(featured, boosted, urgent, createdAt);
   const priceLabel = price > 0 ? formatZARShort(price) : null;
   const eyebrow = priceLabel && negotiable ? `${priceLabel} · Neg` : priceLabel;
+  const targetType: ContentTargetType = "listing";
 
   return (
     <PosterCardShell
@@ -102,6 +108,10 @@ export const ListingCard = memo(function ListingCard({
       location={city || null}
       createdAt={createdAt}
       viewCount={viewCount}
+      likeCount={likeCount}
+      viewerHasLiked={viewerHasLiked}
+      engagementTargetId={id}
+      engagementTargetType={targetType}
       eyebrow={eyebrow}
       statusLabel={status?.label}
       statusClassName={status?.className}

@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { BusinessPreviewCard } from "./business-preview-card";
 import { AutoScrollRail } from "./auto-scroll-rail";
 import { HomeShowcaseShell } from "./home-showcase-shell";
@@ -11,6 +12,8 @@ import {
   PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
   shouldHidePlaywrightFixtures,
 } from "@/lib/supabase/playwright-visual-fixtures";
+import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
+import { getContentLikeSummaryMap, getContentViewCountMap } from "@/lib/engagement-server";
 
 function provinceCode(name: string): string {
   return SA_PROVINCES.find((p) => p.name.toLowerCase() === name?.toLowerCase())?.code ?? name;
@@ -21,7 +24,9 @@ export async function HomeBusinessShowcase() {
   const hideFixtures = shouldHidePlaywrightFixtures(
     cookieStore.get(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
   );
+  const viewerKey = buildViewerKey(cookieStore.get(ENGAGEMENT_VIEWER_COOKIE)?.value ?? null);
   const supabase = await createClient();
+  const engagementAdmin = createAdminClient();
   const { data: businesses } = await supabase
     .from("businesses")
     .select("*")
@@ -38,6 +43,11 @@ export async function HomeBusinessShowcase() {
     )
     .slice(0, 8);
   if (items.length === 0) return null;
+  const businessIds = items.map((business) => business.id as string);
+  const [viewCountMap, likeSummaryMap] = await Promise.all([
+    getContentViewCountMap(engagementAdmin, "business", businessIds),
+    getContentLikeSummaryMap(engagementAdmin, "business", businessIds, viewerKey),
+  ]);
 
   return (
     <HomeShowcaseShell
@@ -55,6 +65,7 @@ export async function HomeBusinessShowcase() {
             className="h-full min-w-[210px] max-w-[272px] sm:min-w-[228px] sm:max-w-[296px] lg:min-w-[248px] lg:max-w-[320px]"
           >
             <BusinessPreviewCard
+              id={b.id}
               href={`/mzansi-business/${b.id}`}
               imageUrl={b.cover_video || b.video_thumbnail || b.cover_photo}
               posterUrl={b.video_thumbnail || b.cover_photo || undefined}
@@ -65,6 +76,9 @@ export async function HomeBusinessShowcase() {
               provinceCode={provinceCode(b.location_province ?? "ZA")}
               boosted={b.boost_until ? new Date(b.boost_until) > new Date() : false}
               featured={b.featured_until ? new Date(b.featured_until) > new Date() : false}
+              viewCount={viewCountMap.get(b.id as string) ?? 0}
+              likeCount={likeSummaryMap.get(b.id as string)?.likeCount ?? 0}
+              viewerHasLiked={likeSummaryMap.get(b.id as string)?.viewerHasLiked ?? false}
               priority={false}
               focalX={b.focal_x as number | null | undefined}
               focalY={b.focal_y as number | null | undefined}

@@ -51,6 +51,8 @@ import {
   shouldSendOwnerLifecycleNotifications,
 } from "@/lib/notifications";
 import { claimFreePostSlot, releaseFreePostSlot } from "@/lib/billing/free-posts";
+import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
+import { getContentLikeSummaryMap, getContentViewCountMap } from "@/lib/engagement-server";
 
 const log = createLogger("BusinessesCRUD");
 const AREA: MarketplaceArea = "MZANSI_BUSINESS";
@@ -556,6 +558,14 @@ export async function GET(request: NextRequest) {
     }
 
     const admin = createAdminClient();
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const viewerKey = buildViewerKey(
+      request.cookies?.get?.(ENGAGEMENT_VIEWER_COOKIE)?.value ?? null,
+      user?.id ?? null
+    );
     let ownerColumn: OwnerColumn;
     try {
       ownerColumn = await getOwnerColumn(admin, "businesses");
@@ -734,9 +744,27 @@ export async function GET(request: NextRequest) {
     );
 
     const publicBusinesses = redactBusinessListContactFields(filteredBusinesses);
+    const businessIds = publicBusinesses
+      .map((business) => String(business.id ?? ""))
+      .filter((id): id is string => id.length > 0);
+    const [viewCountMap, likeSummaryMap] = await Promise.all([
+      getContentViewCountMap(admin, "business", businessIds),
+      getContentLikeSummaryMap(admin, "business", businessIds, viewerKey),
+    ]);
+    const serializedBusinesses = publicBusinesses.map((business) => {
+      const businessId = String(business.id ?? "");
+      const likeSummary = likeSummaryMap.get(businessId);
+
+      return {
+        ...business,
+        view_count: viewCountMap.get(businessId) ?? 0,
+        like_count: likeSummary?.likeCount ?? 0,
+        viewer_has_liked: likeSummary?.viewerHasLiked ?? false,
+      };
+    });
 
     return NextResponse.json({
-      businesses: publicBusinesses,
+      businesses: serializedBusinesses,
       total: Math.max(
         0,
         (count ?? filteredBusinesses.length) -

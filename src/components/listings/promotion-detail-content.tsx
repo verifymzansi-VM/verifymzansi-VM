@@ -40,6 +40,7 @@ import { readAccountVerificationStatus } from "@/lib/account/compat";
 import { ProfileVideoPlayer } from "@/components/ui/profile-video-player";
 import type { EventDetails, TicketTier } from "@/types/tourism-details";
 import { useHorizontalSwipeNavigation } from "@/hooks/use-horizontal-swipe-navigation";
+import { useTrackContentView } from "@/hooks/use-track-content-view";
 
 export interface PromotionDetailRecord {
   id: string;
@@ -170,6 +171,7 @@ export function PromotionDetailContent({
   showContactActions?: boolean;
   showContactSummary?: boolean;
 }) {
+  useTrackContentView(promotion.id, "promotion");
   const photos = promotion.photos ?? [];
   const videos = promotion.videos ?? [];
   const leadVideo = videos[0] ?? null;

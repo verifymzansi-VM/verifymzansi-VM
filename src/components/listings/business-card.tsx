@@ -23,6 +23,9 @@ interface BusinessCardProps {
   boostUntil?: string | null;
   featuredUntil?: string | null;
   serviceAreas?: Record<string, unknown> | null;
+  viewCount?: number;
+  likeCount?: number;
+  viewerHasLiked?: boolean;
   videoDuration?: number | null;
   focalX?: number | null;
   focalY?: number | null;
@@ -95,6 +98,9 @@ export function BusinessCard({
   subcategory,
   boostUntil,
   featuredUntil,
+  viewCount,
+  likeCount,
+  viewerHasLiked = false,
   videoDuration,
   focalX,
   focalY,
@@ -129,6 +135,11 @@ export function BusinessCard({
       statusVariant="ribbon"
       accentClassName="hover:border-brand-blue/55"
       trustLevel={trustLevel}
+      viewCount={viewCount}
+      likeCount={likeCount}
+      viewerHasLiked={viewerHasLiked}
+      engagementTargetId={id}
+      engagementTargetType="business"
       videoDuration={videoDuration}
       focalX={focalX}
       focalY={focalY}

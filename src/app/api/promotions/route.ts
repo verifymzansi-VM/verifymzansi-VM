@@ -52,6 +52,8 @@ import {
 import { toFieldErrorMap } from "@/lib/validations/zod-errors";
 import { z } from "zod";
 import { claimFreePostSlot, releaseFreePostSlot } from "@/lib/billing/free-posts";
+import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
+import { getContentLikeSummaryMap, getContentViewCountMap } from "@/lib/engagement-server";
 
 const log = createLogger("PromotionsCRUD");
 const AREA: MarketplaceArea = "PROMOTIONS_EVENTS";
@@ -609,6 +611,14 @@ export async function GET(request: NextRequest) {
     }
 
     const admin = createAdminClient();
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const viewerKey = buildViewerKey(
+      request.cookies?.get?.(ENGAGEMENT_VIEWER_COOKIE)?.value ?? null,
+      user?.id ?? null
+    );
     const ownerColumn = await getOwnerColumn(admin, "promotions");
     const parsedQuery = parseAndValidateSearchParams(
       request.nextUrl.searchParams,
@@ -755,6 +765,21 @@ export async function GET(request: NextRequest) {
       (promotion) => !isPlaceholderPromotion(promotion)
     );
     const removedCount = (promotions?.length ?? 0) - filteredPromotions.length;
+    const promotionIds = filteredPromotions.map((promotion) => promotion.id);
+    const [viewCountMap, likeSummaryMap] = await Promise.all([
+      getContentViewCountMap(admin, "promotion", promotionIds),
+      getContentLikeSummaryMap(admin, "promotion", promotionIds, viewerKey),
+    ]);
+    const serializedPromotions = filteredPromotions.map((promotion) => {
+      const likeSummary = likeSummaryMap.get(promotion.id);
+
+      return {
+        ...promotion,
+        view_count: viewCountMap.get(promotion.id) ?? 0,
+        like_count: likeSummary?.likeCount ?? 0,
+        viewer_has_liked: likeSummary?.viewerHasLiked ?? false,
+      };
+    });
 
     const accountIds = Array.from(
       new Set(filteredPromotions.map((promotion) => promotion.owner_id).filter(Boolean))
@@ -785,7 +810,7 @@ export async function GET(request: NextRequest) {
       })) ?? [];
 
     return NextResponse.json({
-      promotions: filteredPromotions,
+      promotions: serializedPromotions,
       accountProfiles: serializedAccountProfiles,
       sellers: serializedAccountProfiles,
       businesses: businesses ?? [],

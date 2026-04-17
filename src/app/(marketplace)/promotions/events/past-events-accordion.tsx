@@ -23,8 +23,11 @@ interface PastEvent {
   createdAt: string;
   ownerTrustLevel?: TrustLevel;
   ownerName?: string;
+  viewCount?: number;
   startDate?: string | null;
   endDate?: string | null;
+  likeCount?: number;
+  viewerHasLiked?: boolean;
 }
 
 export function PastEventsAccordion({ events }: { events: PastEvent[] }) {
@@ -67,8 +70,11 @@ export function PastEventsAccordion({ events }: { events: PastEvent[] }) {
                 createdAt={event.createdAt}
                 ownerTrustLevel={event.ownerTrustLevel}
                 ownerName={event.ownerName}
+                viewCount={event.viewCount}
                 startDate={event.startDate}
                 endDate={event.endDate}
+                likeCount={event.likeCount}
+                viewerHasLiked={event.viewerHasLiked}
                 focalX={event.focalX}
                 focalY={event.focalY}
                 mediaWidth={event.mediaWidth}

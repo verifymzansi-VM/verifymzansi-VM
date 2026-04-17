@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { MapPin } from "lucide-react";
+import { Eye, MapPin } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import {
   VideoCardPlayer,
@@ -10,10 +10,12 @@ import {
   type MediaFitStrategy,
 } from "@/components/ui/video-card-player";
 import { VideoDurationBadge } from "@/components/ui/video-duration-badge";
+import { ContentLikeButton } from "@/components/listings/content-like-button";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
 import type { TrustLevel } from "@/types/enums";
 import type { ReactNode } from "react";
+import type { ContentTargetType } from "@/lib/engagement";
 
 const CARD_FRAME = { aspectRatio: 9 / 16, aspectClassName: "aspect-[9/16]" } as const;
 type PosterCardVariant = "default" | "showcase" | "hero";
@@ -47,8 +49,16 @@ interface PosterCardShellProps {
   location?: string | null;
   /** ISO date string — shown as compact relative time ("2h ago") */
   createdAt?: string | null;
-  /** View count — shown as "1.2K views" next to timestamp */
+  /** View count — shown in the card engagement row. */
   viewCount?: number | null;
+  /** Like count — shown in the card engagement row and button. */
+  likeCount?: number | null;
+  /** Whether the current browser has liked this card. */
+  viewerHasLiked?: boolean;
+  /** Enables the persisted card like action. */
+  engagementTargetId?: string;
+  /** Target type for persisted likes. */
+  engagementTargetType?: ContentTargetType;
   /** Fit strategy for media in constrained frames. */
   fitStrategy?: MediaFitStrategy;
   /** Load the first-visible card's images eagerly for faster above-the-fold paint. */
@@ -103,7 +113,11 @@ export function PosterCardShell({
   description,
   location,
   createdAt: _createdAt,
-  viewCount: _viewCount,
+  viewCount,
+  likeCount,
+  viewerHasLiked = false,
+  engagementTargetId,
+  engagementTargetType,
   fitStrategy = "smart",
   priority = false,
   videoDuration,
@@ -120,6 +134,10 @@ export function PosterCardShell({
   feedPlaybackActive = true,
   deferVideoLoadUntilPlay = false,
 }: PosterCardShellProps) {
+  const hasEngagementStats = typeof viewCount === "number";
+  const canLike = Boolean(
+    engagementTargetId && engagementTargetType && typeof likeCount === "number"
+  );
   const normalizedMediaUrl = mediaUrl ? normalizeMediaUrl(mediaUrl) : undefined;
   const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
   const normalizedLogoUrl = logoUrl ? normalizeMediaUrl(logoUrl) : undefined;
@@ -156,10 +174,15 @@ export function PosterCardShell({
     ? "text-[11.5px] sm:text-[12.5px]"
     : "text-[11px] sm:text-xs";
   const wrapperClassName = cn(
-    "group block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+    "group relative block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
     rootRadiusClassName,
     className
   );
+  const formatCompactCount = (count: number) =>
+    new Intl.NumberFormat("en-ZA", {
+      notation: count >= 1000 ? "compact" : "standard",
+      maximumFractionDigits: count >= 1000 ? 1 : 0,
+    }).format(count);
   const handleNativeDragStart = (event: React.DragEvent<HTMLElement>) => {
     if (disableNativeDrag) {
       event.preventDefault();
@@ -249,6 +272,16 @@ export function PosterCardShell({
           >
             <span className="font-semibold">{eyebrow}</span>
           </p>
+        ) : null}
+        {hasEngagementStats ? (
+          <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+            {typeof viewCount === "number" ? (
+              <span className="inline-flex items-center gap-1">
+                <Eye className="h-3.5 w-3.5" />
+                {formatCompactCount(viewCount)} {viewCount === 1 ? "view" : "views"}
+              </span>
+            ) : null}
+          </div>
         ) : null}
       </div>
     </div>
@@ -351,19 +384,46 @@ export function PosterCardShell({
   );
 
   if (showPlaybackControl) {
-    return <div className={wrapperClassName}>{cardInner}</div>;
+    return (
+      <div className={wrapperClassName}>
+        {canLike ? (
+          <ContentLikeButton
+            targetId={engagementTargetId!}
+            targetType={engagementTargetType!}
+            initialLikeCount={likeCount}
+            initialLiked={viewerHasLiked}
+            className="absolute right-3 top-3"
+          />
+        ) : null}
+        {cardInner}
+      </div>
+    );
   }
 
   return (
-    <Link
-      href={href}
-      prefetch={false}
-      data-carousel-link={disableNativeDrag ? "true" : undefined}
-      draggable={disableNativeDrag ? false : undefined}
-      onDragStart={handleNativeDragStart}
-      className={wrapperClassName}
-    >
-      {cardInner}
-    </Link>
+    <div className={wrapperClassName}>
+      {canLike ? (
+        <ContentLikeButton
+          targetId={engagementTargetId!}
+          targetType={engagementTargetType!}
+          initialLikeCount={likeCount}
+          initialLiked={viewerHasLiked}
+          className="absolute right-3 top-3"
+        />
+      ) : null}
+      <Link
+        href={href}
+        prefetch={false}
+        data-carousel-link={disableNativeDrag ? "true" : undefined}
+        draggable={disableNativeDrag ? false : undefined}
+        onDragStart={handleNativeDragStart}
+        className={cn(
+          "block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+          rootRadiusClassName
+        )}
+      >
+        {cardInner}
+      </Link>
+    </div>
   );
 }

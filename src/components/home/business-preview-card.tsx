@@ -7,6 +7,7 @@ import { BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
 import type { BusinessType } from "@/types/enums";
 
 interface BusinessPreviewCardProps {
+  id: string;
   href: string;
   imageUrl?: string;
   posterUrl?: string;
@@ -17,6 +18,9 @@ interface BusinessPreviewCardProps {
   provinceCode: string;
   boosted?: boolean;
   featured?: boolean;
+  viewCount?: number;
+  likeCount?: number;
+  viewerHasLiked?: boolean;
   priority?: boolean;
   focalX?: number | null;
   focalY?: number | null;
@@ -25,6 +29,7 @@ interface BusinessPreviewCardProps {
 }
 
 export function BusinessPreviewCard({
+  id,
   href,
   imageUrl,
   posterUrl,
@@ -35,6 +40,9 @@ export function BusinessPreviewCard({
   provinceCode: _provinceCode,
   boosted: _boosted,
   featured: _featured,
+  viewCount,
+  likeCount,
+  viewerHasLiked = false,
   priority,
   focalX,
   focalY,
@@ -59,6 +67,11 @@ export function BusinessPreviewCard({
       statusClassName={undefined}
       accentClassName="hover:border-brand-blue/55"
       cardVariant="showcase"
+      viewCount={viewCount}
+      likeCount={likeCount}
+      viewerHasLiked={viewerHasLiked}
+      engagementTargetId={id}
+      engagementTargetType="business"
       priority={priority}
       focalX={focalX}
       focalY={focalY}
