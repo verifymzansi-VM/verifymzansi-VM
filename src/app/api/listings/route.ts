@@ -323,6 +323,34 @@ export async function GET(request: NextRequest) {
       },
       {
         select: withOwnerColumn(
+          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured, media_width, media_height, focal_x, focal_y",
+          ownerColumn
+        ),
+        omittedFields: ["view_count"] as const,
+      },
+      {
+        select: withOwnerColumn(
+          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured, media_width, media_height, focal_x, focal_y",
+          ownerColumn
+        ),
+        omittedFields: ["featured_until", "view_count"] as const,
+      },
+      {
+        select: withOwnerColumn(
+          "id, owner_id, title, description, price_cents, price_negotiable, category, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured, media_width, media_height, focal_x, focal_y",
+          ownerColumn
+        ),
+        omittedFields: ["condition", "view_count"] as const,
+      },
+      {
+        select: withOwnerColumn(
+          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured, media_width, media_height, focal_x, focal_y",
+          ownerColumn
+        ),
+        omittedFields: ["video_thumbnail", "view_count"] as const,
+      },
+      {
+        select: withOwnerColumn(
           "id, owner_id, title, description, price_cents, price_negotiable, category, attributes, photos, videos, location_province, location_city, created_at, boost_until, featured, media_width, media_height, focal_x, focal_y",
           ownerColumn
         ),

@@ -1172,6 +1172,14 @@ describe("GET /api/listings", () => {
       fallbackSelect:
         "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured_until, featured",
     },
+    {
+      missingField: "view_count",
+      expectedNullField: "view_count",
+      initialSelect:
+        "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured, view_count, media_width, media_height, focal_x, focal_y",
+      fallbackSelect:
+        "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured, media_width, media_height, focal_x, focal_y",
+    },
   ])(
     "returns 200 and normalizes %s when the column is missing",
     async ({ missingField, expectedNullField, initialSelect, fallbackSelect }) => {
@@ -1304,4 +1312,122 @@ describe("GET /api/listings", () => {
       });
     }
   );
+
+  it("preserves logo_url when view_count is missing from the listings table", async () => {
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "listings") {
+          return {
+            select: vi.fn((fields: string) => {
+              if (fields === "id, owner_id") {
+                return {
+                  limit: vi.fn().mockResolvedValue({ error: null }),
+                };
+              }
+
+              if (fields.includes("view_count")) {
+                return {
+                  eq: vi.fn().mockReturnThis(),
+                  neq: vi.fn().mockReturnThis(),
+                  not: vi.fn().mockReturnThis(),
+                  gte: vi.fn().mockReturnThis(),
+                  lte: vi.fn().mockReturnThis(),
+                  or: vi.fn().mockReturnThis(),
+                  order: vi.fn().mockReturnThis(),
+                  range: vi.fn().mockResolvedValue({
+                    data: null,
+                    count: null,
+                    error: {
+                      code: "42703",
+                      message: "column listings.view_count does not exist",
+                    },
+                  }),
+                };
+              }
+
+              if (fields.includes("logo_url")) {
+                return {
+                  eq: vi.fn().mockReturnThis(),
+                  neq: vi.fn().mockReturnThis(),
+                  not: vi.fn().mockReturnThis(),
+                  gte: vi.fn().mockReturnThis(),
+                  lte: vi.fn().mockReturnThis(),
+                  or: vi.fn().mockReturnThis(),
+                  order: vi.fn().mockReturnThis(),
+                  range: vi.fn().mockResolvedValue({
+                    data: [
+                      {
+                        id: "listing-live",
+                        owner_id: USER_ID,
+                        title: "Toyota Corolla",
+                        description: "Verified listing",
+                        price_cents: 1200000,
+                        price_negotiable: false,
+                        category: "vehicles",
+                        condition: "good",
+                        attributes: {},
+                        photos: [],
+                        videos: [],
+                        video_thumbnail: null,
+                        logo_url: "https://media.verifymzansi.com/listings/logo.jpg",
+                        location_province: "Gauteng",
+                        location_city: "Johannesburg",
+                        created_at: "2026-03-13T10:00:00.000Z",
+                        boost_until: null,
+                        featured_until: null,
+                        featured: false,
+                        media_width: null,
+                        media_height: null,
+                        focal_x: null,
+                        focal_y: null,
+                      },
+                    ],
+                    count: 1,
+                    error: null,
+                  }),
+                };
+              }
+
+              throw new Error(`Unexpected select clause: ${fields}`);
+            }),
+          };
+        }
+
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            in: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue({
+                data: [
+                  {
+                    user_id: USER_ID,
+                    display_name: "Nomsa",
+                    account_verification_status: "verified",
+                  },
+                ],
+              }),
+            }),
+          };
+        }
+
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const response = await GET(
+      createGetRequest("http://localhost:3000/api/listings?page=1&limit=24")
+    );
+
+    expect(response.status).toBe(200);
+    const json = await response.json();
+    expect(json.listings[0]).toMatchObject({
+      id: "listing-live",
+      logo_url: "https://media.verifymzansi.com/listings/logo.jpg",
+      view_count: null,
+    });
+  });
 });
