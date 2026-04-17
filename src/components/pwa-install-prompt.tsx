@@ -16,6 +16,9 @@ const PROMPT_BLOCKED_PATH_PREFIXES = [
   "/auth",
   "/verification",
   "/error",
+  "/mzansi-market",
+  "/mzansi-business",
+  "/promotions",
 ];
 
 // Define the interface for the beforeinstallprompt event

@@ -151,7 +151,14 @@ describe("PwaInstallPrompt", () => {
     expect(screen.queryByRole("button", { name: "How To Install" })).toBeNull();
   });
 
-  it.each(["/login", "/verification", "/error"])(
+  it.each([
+    "/login",
+    "/verification",
+    "/error",
+    "/mzansi-market",
+    "/mzansi-business",
+    "/promotions",
+  ])(
     "suppresses rendering on blocked route %s even when iOS fallback conditions match",
     (blockedPath) => {
       currentPath = blockedPath;

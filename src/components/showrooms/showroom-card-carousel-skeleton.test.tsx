@@ -3,17 +3,17 @@ import { describe, expect, it } from "vitest";
 import { ShowroomCardCarouselSkeleton } from "./showroom-card-carousel-skeleton";
 
 describe("ShowroomCardCarouselSkeleton", () => {
-  it("removes desktop top padding while keeping bottom spacing", () => {
+  it("uses fixed desktop viewport height while removing mobile top spacing", () => {
     const { container } = render(<ShowroomCardCarouselSkeleton />);
     const section = container.querySelector("section");
 
     expect(section).not.toBeNull();
-    expect(section?.className).toContain("pt-6");
-    expect(section?.className).toContain("sm:pt-8");
-    expect(section?.className).toContain("lg:pt-0");
-    expect(section?.className).toContain("pb-6");
-    expect(section?.className).toContain("sm:pb-8");
-    expect(section?.className).toContain("lg:pb-10");
+    expect(section?.className).toContain("pt-0");
+    expect(section?.className).toContain("sm:pt-0");
+    expect(section?.className).toContain("pb-1");
+    expect(section?.className).toContain("sm:pb-3");
+    expect(section?.className).toContain("lg:h-[calc(100svh-4rem)]");
+    expect(section?.className).toContain("lg:py-0");
     expect(screen.getAllByLabelText("Loading").length).toBeGreaterThan(0);
   });
 
@@ -21,7 +21,8 @@ describe("ShowroomCardCarouselSkeleton", () => {
     const { container } = render(<ShowroomCardCarouselSkeleton />);
     const sizedCards = Array.from(container.querySelectorAll("section > div > div"));
 
-    expect(sizedCards.some((node) => node.className.includes("lg:w-[288px]"))).toBe(true);
+    expect(sizedCards.some((node) => node.className.includes("w-[72vw]"))).toBe(true);
+    expect(sizedCards.some((node) => node.className.includes("lg:w-[292px]"))).toBe(true);
     expect(sizedCards.some((node) => node.className.includes("xl:w-[320px]"))).toBe(true);
   });
 });

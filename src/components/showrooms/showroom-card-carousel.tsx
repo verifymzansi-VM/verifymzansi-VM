@@ -9,8 +9,6 @@ import {
   type PointerEvent as ReactPointerEvent,
   type KeyboardEvent,
 } from "react";
-import Image from "next/image";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
 import { isVideoUrl } from "@/components/ui/video-card-player";
@@ -65,13 +63,12 @@ const DRAG_CLICK_THRESHOLD = 12; // px — tolerate small finger jitter so taps 
 const VISIBILITY_THRESHOLD = 0.25;
 const DRAG_SUPPRESSION_RESET_MS = 160;
 const PREVIEW_TILT_DEG = 8;
-const SA_FLAG_SRC = "/images/South%20African%20flag%20with%20confetti%20burst.png";
 const DESKTOP_SHOWROOM_ITEM_LIMIT = 15;
 
 const CARD_W =
-  "w-[62vw] max-w-[250px] sm:w-[34vw] md:w-[30vw] lg:w-[336px] lg:max-w-none xl:w-[372px]";
-const SUPPORT_CARD_W = "w-[160px] xl:w-[180px] 2xl:w-[196px]";
-const SECTION_SPACING = "pt-10 pb-10 sm:pt-12 sm:pb-12 lg:min-h-[calc(100vh-4rem)] lg:py-0";
+  "w-[72vw] max-w-[292px] sm:w-[46vw] sm:max-w-[310px] md:w-[34vw] lg:w-[292px] lg:max-w-none xl:w-[320px] 2xl:w-[336px]";
+const SECTION_SPACING =
+  "pt-0 pb-1 sm:pt-0 sm:pb-3 md:pt-8 md:pb-8 lg:h-[calc(100svh-4rem)] lg:min-h-0 lg:py-0";
 
 /* ── SA flag section wrapper ───────────────────────────────── */
 
@@ -89,24 +86,24 @@ function SectionShell({
   return (
     <section
       ref={sectionRef}
-      className={cn("relative w-full overflow-hidden", sectionClassName, extraClassName)}
+      className={cn(
+        "relative w-full overflow-hidden bg-[linear-gradient(180deg,#f8f5ec_0%,#f1e8da_48%,#e8decd_100%)]",
+        sectionClassName,
+        extraClassName
+      )}
       aria-roledescription="carousel"
       aria-label="Showroom carousel"
     >
-      {/* SA flag background */}
-      <div className="absolute inset-0 z-0" aria-hidden="true">
-        <Image src={SA_FLAG_SRC} alt="" fill className="object-cover" sizes="100vw" priority />
-      </div>
       <div
-        className="absolute inset-0 z-[1] bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.82),transparent_28%),linear-gradient(180deg,rgba(6,12,22,0.18),rgba(6,12,22,0.04)_24%,rgba(6,12,22,0.26)_100%)]"
+        className="absolute inset-0 z-[1] bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.88),transparent_30%),radial-gradient(circle_at_top_right,rgba(34,197,94,0.14),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.08),rgba(15,23,42,0.06)_48%,rgba(15,23,42,0.12)_100%)]"
         aria-hidden="true"
       />
       <div
-        className="absolute inset-y-0 left-0 z-[1] w-[28%] bg-gradient-to-r from-black/22 via-black/6 to-transparent"
+        className="absolute inset-y-0 left-0 z-[1] w-[24%] bg-gradient-to-r from-slate-950/10 via-slate-950/0 to-transparent"
         aria-hidden="true"
       />
       <div
-        className="absolute inset-y-0 right-0 z-[1] w-[28%] bg-gradient-to-l from-black/20 via-black/4 to-transparent"
+        className="absolute inset-y-0 right-0 z-[1] w-[24%] bg-gradient-to-l from-slate-950/8 via-slate-950/0 to-transparent"
         aria-hidden="true"
       />
       {/* Content above the flag */}
@@ -128,7 +125,6 @@ export function ShowroomCardCarousel({
 }: ShowroomCardCarouselProps) {
   const carouselItems = items.slice(0, DESKTOP_SHOWROOM_ITEM_LIMIT);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [isDesktopHovering, setIsDesktopHovering] = useState(false);
   const reducedMotion = useReducedMotion();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const pausedRef = useRef(false);
@@ -589,45 +585,18 @@ export function ShowroomCardCarousel({
         : "transition-[transform,opacity,filter,box-shadow] duration-700 ease-out";
 
     const byOffset: Record<number, string> = {
-      [-3]: "hidden lg:block translate-x-[calc(-50%-116%)] translate-y-10 scale-[0.56] opacity-36 saturate-[0.74] blur-[1.4px] z-0 pointer-events-none",
-      [-2]: "hidden md:block translate-x-[calc(-50%-76%)] translate-y-5 scale-[0.72] opacity-50 saturate-[0.84] blur-[0.8px] z-10 pointer-events-none",
-      [-1]: "translate-x-[calc(-50%-41%)] lg:translate-y-2 scale-[0.86] lg:scale-[0.84] opacity-84 saturate-[0.92] z-20",
-      0: "translate-x-[-50%] lg:-translate-y-2 scale-100 lg:scale-[1.06] opacity-100 z-40 shadow-[0_50px_140px_-56px_rgba(15,23,42,0.88)]",
-      1: "translate-x-[calc(-50%+41%)] lg:translate-y-2 scale-[0.86] lg:scale-[0.84] opacity-84 saturate-[0.92] z-20",
-      2: "hidden md:block translate-x-[calc(-50%+76%)] translate-y-5 scale-[0.72] opacity-50 saturate-[0.84] blur-[0.8px] z-10 pointer-events-none",
-      3: "hidden lg:block translate-x-[calc(-50%+116%)] translate-y-10 scale-[0.56] opacity-36 saturate-[0.74] blur-[1.4px] z-0 pointer-events-none",
+      [-3]: "hidden lg:block translate-x-[calc(-50%-106%)] translate-y-4 scale-[0.54] opacity-32 saturate-[0.72] blur-[1.4px] z-0 pointer-events-none",
+      [-2]: "hidden md:block translate-x-[calc(-50%-72%)] translate-y-2 scale-[0.7] opacity-48 saturate-[0.84] blur-[0.8px] z-10 pointer-events-none",
+      [-1]: "translate-x-[calc(-50%-39%)] lg:translate-y-0 scale-[0.9] lg:scale-[0.85] opacity-84 saturate-[0.92] z-20",
+      0: "translate-x-[-50%] lg:-translate-y-0 scale-100 lg:scale-[1.02] opacity-100 z-40 shadow-[0_42px_116px_-52px_rgba(15,23,42,0.72)]",
+      1: "translate-x-[calc(-50%+39%)] lg:translate-y-0 scale-[0.9] lg:scale-[0.85] opacity-84 saturate-[0.92] z-20",
+      2: "hidden md:block translate-x-[calc(-50%+72%)] translate-y-2 scale-[0.7] opacity-48 saturate-[0.84] blur-[0.8px] z-10 pointer-events-none",
+      3: "hidden lg:block translate-x-[calc(-50%+106%)] translate-y-4 scale-[0.54] opacity-32 saturate-[0.72] blur-[1.4px] z-0 pointer-events-none",
     };
 
     const preset = byOffset[offset] ?? byOffset[Math.sign(offset) * 3] ?? byOffset[0];
 
     return cn("absolute left-1/2 top-0 will-change-transform", transitionClass, preset);
-  }
-
-  function supportCardClass(offset: number): string {
-    const transitionClass =
-      reducedMotion || isDragging
-        ? "transition-none"
-        : "transition-[transform,opacity,filter] duration-700 ease-out";
-
-    const baseByOffset: Record<number, string> = {
-      [-7]: "translate-x-[calc(-50%-184%)] -translate-y-4 rotate-[-16deg] scale-[0.46] z-0",
-      [-6]: "translate-x-[calc(-50%-158%)] translate-y-20 rotate-[-12deg] scale-[0.52] z-[1]",
-      [-5]: "translate-x-[calc(-50%-134%)] -translate-y-10 rotate-[-10deg] scale-[0.58] z-[2]",
-      [-4]: "translate-x-[calc(-50%-108%)] translate-y-24 rotate-[-7deg] scale-[0.64] z-[3]",
-      4: "translate-x-[calc(-50%+108%)] translate-y-24 rotate-[7deg] scale-[0.64] z-[3]",
-      5: "translate-x-[calc(-50%+134%)] -translate-y-10 rotate-[10deg] scale-[0.58] z-[2]",
-      6: "translate-x-[calc(-50%+158%)] translate-y-20 rotate-[12deg] scale-[0.52] z-[1]",
-      7: "translate-x-[calc(-50%+184%)] -translate-y-4 rotate-[16deg] scale-[0.46] z-0",
-    };
-
-    return cn(
-      "absolute left-1/2 top-[34%] hidden lg:block pointer-events-none will-change-transform",
-      transitionClass,
-      baseByOffset[offset],
-      isDesktopHovering
-        ? "opacity-54 saturate-[0.98] blur-[0.4px]"
-        : "opacity-34 saturate-[0.78] blur-[1.1px]"
-    );
   }
 
   function cardStyle(offset: number): CSSProperties | undefined {
@@ -648,7 +617,7 @@ export function ShowroomCardCarousel({
   if (count === 0) {
     return (
       <SectionShell sectionClassName={SECTION_SPACING} extraClassName={className}>
-        <div className="container-page flex items-center justify-center">
+        <div className="container-page flex items-center justify-center lg:h-full">
           <div className={CARD_W}>
             <PosterCardShell
               href="#"
@@ -685,13 +654,11 @@ export function ShowroomCardCarousel({
       <div
         ref={coverflowRef}
         className={cn(
-          "relative mx-auto max-w-[1780px] overflow-x-clip overflow-y-visible select-none touch-pan-y pb-7 lg:flex lg:min-h-[calc(100vh-8rem)] lg:items-center lg:pb-0",
+          "relative mx-auto max-w-[1680px] overflow-x-clip overflow-y-visible select-none touch-pan-y pb-0 lg:flex lg:h-full lg:items-center lg:pb-0",
           isDragging ? "cursor-grabbing" : "cursor-grab"
         )}
         onPointerDown={handlePointerDown}
         onMouseDown={handleMouseDown}
-        onMouseEnter={() => setIsDesktopHovering(true)}
-        onMouseLeave={() => setIsDesktopHovering(false)}
         onPointerCancel={handlePointerCancel}
         onLostPointerCapture={handleLostPointerCapture}
         onDragStartCapture={(e) => {
@@ -703,7 +670,7 @@ export function ShowroomCardCarousel({
         aria-label="Carousel slides"
       >
         {/* Height-establishing invisible card */}
-        <div className={cn("invisible mx-auto lg:translate-y-4", CARD_W)} aria-hidden="true">
+        <div className={cn("invisible mx-auto lg:translate-y-2", CARD_W)} aria-hidden="true">
           <PosterCardShell
             href="#"
             title="Verified Marketplace Listing Placeholder"
@@ -715,46 +682,6 @@ export function ShowroomCardCarousel({
             mediaControlVariant="hero"
           />
         </div>
-
-        {/* Desktop-only expanded support field */}
-        {carouselItems.map((item, i) => {
-          const offset = signedOffset(i);
-          if (Math.abs(offset) <= 3 || Math.abs(offset) > 7) return null;
-
-          const supportMediaUrl =
-            item.posterUrl ??
-            (isVideoUrl(item.mediaUrl) ? "/images/fallbacks/hero-shop.svg" : item.mediaUrl);
-
-          return (
-            <div
-              key={`${item.id}-support`}
-              className={cn(SUPPORT_CARD_W, supportCardClass(offset))}
-              data-showroom-layer="support"
-              aria-hidden="true"
-            >
-              <PosterCardShell
-                href={item.href}
-                title={item.title}
-                description={item.description}
-                location={item.location}
-                mediaUrl={supportMediaUrl}
-                posterUrl={item.posterUrl}
-                logoUrl={item.logoUrl}
-                eyebrow={item.eyebrow}
-                statusLabel={item.statusLabel}
-                statusClassName={item.statusClassName}
-                trustLevel={item.trustLevel}
-                focalX={item.focalX}
-                focalY={item.focalY}
-                mediaWidth={item.mediaWidth}
-                mediaHeight={item.mediaHeight}
-                cardVariant="hero"
-                mediaControlVariant="hero"
-                fitStrategy="cover"
-              />
-            </div>
-          );
-        })}
 
         {/* Absolutely positioned coverflow cards */}
         {carouselItems.map((item, i) => {
@@ -816,44 +743,10 @@ export function ShowroomCardCarousel({
         })}
       </div>
 
-      {count > 1 ? (
-        <div
-          className="mt-4 flex items-center justify-center gap-3 sm:hidden"
-          aria-label="Mobile showroom controls"
-        >
-          <button
-            type="button"
-            data-carousel-control="true"
-            onClick={() => {
-              pauseAutoSwipe();
-              prev();
-            }}
-            aria-label="Return to previous card"
-            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/35 bg-white/90 px-4 text-sm font-semibold text-slate-900 shadow-[0_18px_44px_-30px_rgba(15,23,42,0.55)] backdrop-blur transition hover:bg-white"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            <span>Return</span>
-          </button>
-          <button
-            type="button"
-            data-carousel-control="true"
-            onClick={() => {
-              pauseAutoSwipe();
-              next();
-            }}
-            aria-label="Skip to next card"
-            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-brand-green-300/70 bg-brand-green-400/95 px-4 text-sm font-semibold text-brand-green-950 shadow-[0_18px_44px_-30px_rgba(21,128,61,0.7)] backdrop-blur transition hover:bg-brand-green-300"
-          >
-            <span>Skip</span>
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-      ) : null}
-
       {/* Navigation dots with progress indicator */}
       {count > 1 && (
         <div
-          className="mt-3 flex items-center justify-center gap-1.5"
+          className="absolute inset-x-0 bottom-2 z-20 flex items-center justify-center gap-1.5 lg:bottom-4"
           role="group"
           aria-label="Slide controls"
         >

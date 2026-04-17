@@ -131,24 +131,26 @@ describe("ShowroomCardCarousel", () => {
     expect(section || screen.getByLabelText("Showroom carousel")).toBeTruthy();
   });
 
-  it("fills the desktop viewport while keeping mobile spacing", () => {
+  it("fills the desktop viewport while removing mobile top spacing", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
     const section = screen.getByLabelText("Showroom carousel");
 
-    expect(section.className).toContain("pt-10");
-    expect(section.className).toContain("sm:pt-12");
-    expect(section.className).toContain("pb-10");
-    expect(section.className).toContain("sm:pb-12");
-    expect(section.className).toContain("lg:min-h-[calc(100vh-4rem)]");
+    expect(section.className).toContain("pt-0");
+    expect(section.className).toContain("sm:pt-0");
+    expect(section.className).toContain("pb-1");
+    expect(section.className).toContain("sm:pb-3");
+    expect(section.className).toContain("lg:h-[calc(100svh-4rem)]");
     expect(section.className).toContain("lg:py-0");
   });
 
-  it("uses the expanded desktop showroom widths on carousel cards", () => {
+  it("uses the larger mobile card width and reduced desktop showroom width", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
 
     const centerSlide = screen.getByRole("group", { name: "1 of 3" });
-    expect(centerSlide.className).toContain("lg:w-[336px]");
-    expect(centerSlide.className).toContain("xl:w-[372px]");
+    expect(centerSlide.className).toContain("w-[72vw]");
+    expect(centerSlide.className).toContain("max-w-[292px]");
+    expect(centerSlide.className).toContain("lg:w-[292px]");
+    expect(centerSlide.className).toContain("xl:w-[320px]");
   });
 
   it("renders slide groups with positional labels", () => {
@@ -184,12 +186,12 @@ describe("ShowroomCardCarousel", () => {
     const section = screen.getByLabelText("Showroom carousel");
     const emptyStateCard = Array.from(container.querySelectorAll("div")).find(
       (node) =>
-        node.className.includes("w-[62vw]") &&
-        node.className.includes("lg:w-[336px]") &&
-        node.className.includes("xl:w-[372px]")
+        node.className.includes("w-[72vw]") &&
+        node.className.includes("lg:w-[292px]") &&
+        node.className.includes("xl:w-[320px]")
     );
     expect(section).toBeInTheDocument();
-    expect(section.className).toContain("lg:min-h-[calc(100vh-4rem)]");
+    expect(section.className).toContain("lg:h-[calc(100svh-4rem)]");
     expect(emptyStateCard).toBeDefined();
     expect(screen.getByText("No Items")).toBeInTheDocument();
     expect(screen.getByText("Nothing to show")).toBeInTheDocument();
@@ -341,22 +343,13 @@ describe("ShowroomCardCarousel", () => {
     expect(sideCards[1].getAttribute("data-media-url")).toBe("https://cdn.example.com/side2.jpg");
   });
 
-  it("shows mobile return and skip controls", () => {
+  it("relies on swipe gestures and dots rather than a separate mobile button row", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
-    expect(screen.getByRole("button", { name: /return to previous card/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /skip to next card/i })).toBeInTheDocument();
-  });
-
-  it("uses the mobile skip control to advance", () => {
-    render(<ShowroomCardCarousel items={mockItems} />);
-    fireEvent.click(screen.getByRole("button", { name: /skip to next card/i }));
-    expect(screen.getByText("Slide 2 of 3")).toBeInTheDocument();
-  });
-
-  it("uses the mobile return control to go back", () => {
-    render(<ShowroomCardCarousel items={mockItems} />);
-    fireEvent.click(screen.getByRole("button", { name: /return to previous card/i }));
-    expect(screen.getByText("Slide 3 of 3")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /return to previous card/i })
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /skip to next card/i })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /go to slide/i })).toHaveLength(mockItems.length);
   });
 
   it("renders an active card link to the detail page", () => {
@@ -390,14 +383,14 @@ describe("ShowroomCardCarousel", () => {
     expect(screen.getByRole("group", { name: "5 of 7" })).toHaveAttribute("data-slot-offset", "-3");
   });
 
-  it("renders a desktop expanded field with support cards up to fifteen items", () => {
+  it("renders the simplified desktop stack without extra support cards", () => {
     const { container } = render(<ShowroomCardCarousel items={expandedItems} />);
 
     const supportCards = container.querySelectorAll('[data-showroom-layer="support"]');
     const activeCards = container.querySelectorAll('[data-showroom-layer="active"]');
     const stackCards = container.querySelectorAll('[data-showroom-layer="stack"]');
 
-    expect(supportCards).toHaveLength(8);
+    expect(supportCards).toHaveLength(0);
     expect(activeCards).toHaveLength(1);
     expect(stackCards).toHaveLength(6);
   });
