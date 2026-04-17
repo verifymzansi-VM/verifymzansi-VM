@@ -159,6 +159,7 @@ describe("ListingDetailClient", () => {
       "src",
       "blob:http://localhost/photo-preview"
     );
+    expect(screen.getByAltText("Blob Photo Listing - photo 1")).toHaveClass("object-contain");
   });
 
   it("shows a fallback when active media URL is blank-like", () => {

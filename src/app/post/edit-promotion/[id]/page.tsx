@@ -909,7 +909,7 @@ export default function EditPromotionPage() {
                         <img
                           src={normalizeMediaUrl(url)}
                           alt={`Photo ${i + 1}`}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full bg-muted object-contain"
                         />
                         <button
                           type="button"
@@ -953,7 +953,7 @@ export default function EditPromotionPage() {
                     <img
                       src={normalizeMediaUrl(existingLogoUrl)}
                       alt="Current logo"
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain"
                     />
                     <button
                       type="button"

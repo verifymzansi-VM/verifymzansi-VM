@@ -306,10 +306,6 @@ export function PromotionDetailContent({
         ? promotion.end_date
         : null;
   const countdown = useCountdown(countdownTarget);
-  const heroUsesContain =
-    typeof promotion.media_width === "number" &&
-    typeof promotion.media_height === "number" &&
-    promotion.media_width > promotion.media_height * 1.2;
   const eventTypeLabel = promotion.event_details?.event_type
     ? EVENT_TYPES.find((t) => t.value === promotion.event_details?.event_type)?.label
     : null;
@@ -349,7 +345,8 @@ export function PromotionDetailContent({
                   src={normalizeMediaUrl(activeMedia.url)}
                   poster={activeMedia.poster ? normalizeMediaUrl(activeMedia.poster) : undefined}
                   title={promotion.title}
-                  videoClassName={heroUsesContain ? "object-contain" : "object-cover"}
+                  mediaFit="contain"
+                  videoClassName="bg-black object-contain"
                   skipSeconds={10}
                   showErrorState
                 />
@@ -364,7 +361,7 @@ export function PromotionDetailContent({
                     src={normalizeMediaUrl(activeMedia.url)}
                     alt={promotion.title}
                     fill
-                    className={heroUsesContain ? "object-contain" : "object-cover"}
+                    className="bg-black object-contain"
                     sizes="(max-width: 1024px) 78vw, 320px"
                     priority
                   />
@@ -391,7 +388,7 @@ export function PromotionDetailContent({
                     alt={`${promotion.title} logo`}
                     width={48}
                     height={48}
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-contain"
                   />
                 </div>
               )}
@@ -423,7 +420,7 @@ export function PromotionDetailContent({
                             src={normalizeMediaUrl(item.poster)}
                             alt={`${promotion.title} video thumbnail`}
                             fill
-                            className="object-cover transition-transform group-hover:scale-105"
+                            className="bg-black object-contain transition-transform group-hover:scale-105"
                             sizes="80px"
                           />
                         ) : (
@@ -441,7 +438,7 @@ export function PromotionDetailContent({
                         src={normalizeMediaUrl(item.url)}
                         alt={`${promotion.title} photo ${item.photoNumber ?? index + 1}`}
                         fill
-                        className="object-cover transition-transform group-hover:scale-105"
+                        className="bg-black object-contain transition-transform group-hover:scale-105"
                         sizes="80px"
                       />
                     )}
@@ -897,7 +894,7 @@ export function PromotionDetailContent({
                     alt={linkedBusiness.business_name}
                     width={32}
                     height={32}
-                    className="object-cover"
+                    className="object-contain"
                   />
                 ) : (
                   <Building2 className="h-4 w-4 text-brand-blue" />
@@ -995,7 +992,7 @@ export function PromotionDetailContent({
                       alt={linkedBusiness.business_name}
                       width={32}
                       height={32}
-                      className="object-cover"
+                      className="object-contain"
                     />
                   ) : (
                     <Building2 className="h-4 w-4 text-brand-blue" />

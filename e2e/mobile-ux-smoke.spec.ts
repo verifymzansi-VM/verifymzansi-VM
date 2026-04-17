@@ -107,6 +107,22 @@ test.describe("Mobile UX smoke", () => {
     expect(footerRect.bottom).toBeLessThanOrEqual(navRect.top);
   });
 
+  test("showroom hero content stays clear of the fixed bottom navigation", async ({ page }) => {
+    await page.goto("/mzansi-market", { waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("networkidle").catch(() => {});
+
+    const showroomTitle = page.locator('section[aria-roledescription="carousel"] h3').first();
+    await expect(showroomTitle).toBeVisible();
+
+    const navRect = await getRect(page, 'nav[aria-label="Main"]');
+    const titleRect = await showroomTitle.evaluate((el) => {
+      const rect = el.getBoundingClientRect();
+      return { top: rect.top, bottom: rect.bottom };
+    });
+
+    expect(titleRect.bottom).toBeLessThanOrEqual(navRect.top);
+  });
+
   test("listing filter FAB is touch-friendly and opens the drawer", async ({ page }) => {
     await page.goto("/mzansi-market", { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle").catch(() => {});

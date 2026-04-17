@@ -118,7 +118,7 @@ export function PosterCardShell({
   viewerHasLiked = false,
   engagementTargetId,
   engagementTargetType,
-  fitStrategy = "smart",
+  fitStrategy = "contain",
   priority = false,
   videoDuration,
   focalX,
@@ -214,7 +214,7 @@ export function PosterCardShell({
               alt={`${title} logo`}
               width={isHeroVariant ? 32 : 28}
               height={isHeroVariant ? 32 : 28}
-              className="h-full w-full object-cover"
+              className="h-full w-full object-contain"
             />
           </div>
         ) : (

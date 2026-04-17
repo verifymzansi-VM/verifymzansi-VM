@@ -601,7 +601,7 @@ function Thumbnail({ item, muted = false }: { item: DashboardItem; muted?: boole
           alt={item.title || "Listing thumbnail"}
           width={64}
           height={64}
-          className="w-full h-full object-cover"
+          className="w-full h-full object-contain"
         />
       ) : (
         <div className="flex items-center justify-center h-full text-xs text-warm-400 dark:text-warm-500">

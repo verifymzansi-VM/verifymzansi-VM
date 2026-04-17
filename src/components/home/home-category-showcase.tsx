@@ -143,7 +143,7 @@ function CategoryCard({ category }: { category: CategoryInfo }) {
             src={category.thumbnailUrl}
             alt={category.title}
             fill
-            className="object-cover transition-transform duration-500 group-hover:scale-105"
+            className="bg-warm-100 object-contain transition-transform duration-500 group-hover:scale-105"
             sizes="(max-width: 640px) 80vw, 340px"
           />
         ) : (

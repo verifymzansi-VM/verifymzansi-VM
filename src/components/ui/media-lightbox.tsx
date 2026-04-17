@@ -577,7 +577,7 @@ export function MediaLightbox({ items, startIndex = 0, isOpen, onClose }: MediaL
                       src={normalizeMediaUrl(it.url)}
                       alt=""
                       fill
-                      className="object-cover"
+                      className="bg-black object-contain"
                       sizes="48px"
                     />
                   )}

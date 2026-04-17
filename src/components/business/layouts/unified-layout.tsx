@@ -268,7 +268,8 @@ function MediaColumn({
                 src={activeMedia.url}
                 poster={activeMedia.poster}
                 title={business.business_name}
-                videoClassName="object-cover"
+                mediaFit="contain"
+                videoClassName="bg-slate-950 object-contain"
                 skipSeconds={10}
                 showErrorState
               />
@@ -283,7 +284,7 @@ function MediaColumn({
                   src={activeMedia.url}
                   alt={`${business.business_name} hero`}
                   fill
-                  className="object-cover"
+                  className="bg-slate-950 object-contain"
                   priority
                   sizes="(max-width: 1024px) 78vw, 420px"
                 />
@@ -353,7 +354,7 @@ function MediaColumn({
                       src={item.poster}
                       alt="Profile video thumbnail"
                       fill
-                      className="object-cover transition-transform group-hover:scale-105"
+                      className="bg-slate-950 object-contain transition-transform group-hover:scale-105"
                       sizes="80px"
                     />
                   ) : (
@@ -373,7 +374,7 @@ function MediaColumn({
                   src={item.url}
                   alt={`${business.business_name} ${item.label}`}
                   fill
-                  className="object-cover"
+                  className="bg-slate-950 object-contain"
                   sizes="80px"
                 />
               )}

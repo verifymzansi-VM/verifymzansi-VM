@@ -122,11 +122,11 @@ describe("VideoCardPlayer", () => {
     expect(screen.queryByRole("button")).toBeNull();
   });
 
-  it("renders images with full-cover styling", () => {
+  it("renders images with full-display contain styling by default", () => {
     render(<VideoCardPlayer src="https://example.com/photo.jpg" alt="Photo" mode="ambient" />);
 
-    expect(screen.getByAltText("Photo")).toHaveClass("object-cover");
-    expect(screen.getByAltText("Photo")).toHaveAttribute("data-media-fit", "cover");
+    expect(screen.getByAltText("Photo")).toHaveClass("object-contain");
+    expect(screen.getByAltText("Photo")).toHaveAttribute("data-media-fit", "smart");
   });
 
   it("falls back to touch-friendly ambient behavior when hover is unavailable", () => {

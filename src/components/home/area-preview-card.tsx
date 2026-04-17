@@ -78,7 +78,7 @@ export function AreaPreviewCard({
               alt={title}
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
               mode="hover"
-              fitStrategy="smart"
+              fitStrategy="contain"
               containerAspectRatio={4 / 3}
               muteControlVisibility="always"
               focalX={focalX}
@@ -90,7 +90,7 @@ export function AreaPreviewCard({
               alt={title || "Preview image"}
               fill
               className={cn(
-                "object-cover focal-position-object transition-transform duration-500 group-hover:scale-110",
+                "bg-warm-100 object-contain focal-position-object transition-transform duration-500 group-hover:scale-110",
                 getFocalPositionClassName(focalX, focalY)
               )}
             />

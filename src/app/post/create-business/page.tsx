@@ -2123,7 +2123,7 @@ function CreateBusinessContent() {
                             <img
                               src={coverPreviewUrl}
                               alt="Cover preview"
-                              className="w-full h-full object-cover"
+                              className="w-full h-full bg-muted object-contain"
                               width={600}
                               height={150}
                             />

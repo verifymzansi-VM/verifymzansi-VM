@@ -158,7 +158,7 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
                     <img
                       src={getThumbnailUrl(item)!}
                       alt={`${item.title} thumbnail`}
-                      className="h-full w-full object-cover"
+                      className="h-full w-full object-contain"
                     />
                   </div>
                 ) : (

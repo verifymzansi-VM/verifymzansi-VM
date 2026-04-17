@@ -19,10 +19,16 @@ export interface VideoWithPosterProps extends Omit<
   posterUrl?: string;
   /** Alt text for the poster image (defaults to "Video thumbnail") */
   posterAlt?: string;
+  /** Controls whether poster/video media contain fully or crop to fill. */
+  mediaFit?: "contain" | "cover";
   /** Extra class names applied to the outer wrapper div */
   wrapperClassName?: string;
   /** Class names applied to the play-button overlay */
   playButtonClassName?: string;
+}
+
+function getMediaFitClassName(mediaFit: "contain" | "cover") {
+  return mediaFit === "contain" ? "object-contain bg-black" : "object-cover";
 }
 
 /* ------------------------------------------------------------------ */
@@ -43,6 +49,7 @@ export function VideoWithPoster({
   src,
   posterUrl,
   posterAlt = "Video thumbnail",
+  mediaFit = "contain",
   wrapperClassName,
   playButtonClassName,
   className,
@@ -55,6 +62,7 @@ export function VideoWithPoster({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const posterError = Boolean(posterUrl && posterErrorForSrc === posterUrl);
   const manager = useVideoPlaybackManager();
+  const mediaFitClassName = getMediaFitClassName(mediaFit);
 
   /* ---- Register with global playback manager when video is active ---- */
   useEffect(() => {
@@ -109,7 +117,7 @@ export function VideoWithPoster({
           <img
             src={posterUrl}
             alt={posterAlt}
-            className={cn("w-full h-full object-cover", className)}
+            className={cn("w-full h-full", mediaFitClassName, className)}
             draggable={false}
             onErrorCapture={handlePosterError}
           />
@@ -171,7 +179,7 @@ export function VideoWithPoster({
         autoPlay
         controls
         aria-label="Video player"
-        className={className}
+        className={cn(mediaFitClassName, className)}
         onError={handleError}
         {...videoProps}
       />
@@ -199,7 +207,7 @@ export function VideoWithPoster({
         <img
           src={posterUrl}
           alt={posterAlt}
-          className={cn("w-full h-full object-cover", className)}
+          className={cn("w-full h-full", mediaFitClassName, className)}
           draggable={false}
           onErrorCapture={handlePosterError}
         />

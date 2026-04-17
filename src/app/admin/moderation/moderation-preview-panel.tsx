@@ -167,7 +167,7 @@ function VideoThumbnailThumb({ firstPhoto }: { firstPhoto?: string }) {
       <img
         src={firstPhoto}
         alt="Video thumbnail"
-        className="w-full h-full object-cover"
+        className="w-full h-full bg-black object-contain"
         loading="lazy"
         width={80}
         height={80}
@@ -499,9 +499,10 @@ function BusinessModerationPreview({ item }: ModerationPreviewPanelProps) {
                           key={activeUrl}
                           src={activeUrl}
                           posterUrl={posterUrl}
+                          mediaFit="contain"
                           controls
                           playsInline
-                          className="w-full h-full object-contain bg-black rounded-lg"
+                          className="w-full h-full rounded-lg"
                           wrapperClassName="w-full h-full"
                         />
                       ) : (
@@ -509,7 +510,7 @@ function BusinessModerationPreview({ item }: ModerationPreviewPanelProps) {
                         <img
                           src={activeUrl}
                           alt={`${item.title ?? item.business_name ?? "Business"} - image ${activeIndex + 1}`}
-                          className="absolute inset-0 w-full h-full object-cover"
+                          className="absolute inset-0 w-full h-full bg-black object-contain"
                         />
                       )}
 
@@ -559,7 +560,7 @@ function BusinessModerationPreview({ item }: ModerationPreviewPanelProps) {
                             <img
                               src={media.url}
                               alt={`Thumbnail ${index + 1}`}
-                              className="w-full h-full object-cover"
+                              className="w-full h-full bg-black object-contain"
                             />
                           )}
                         </button>
@@ -878,9 +879,10 @@ export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
                     key={activeUrl}
                     src={activeUrl}
                     posterUrl={firstPhotoUrl}
+                    mediaFit="contain"
                     controls
                     playsInline
-                    className="w-full h-full object-contain bg-black rounded-lg"
+                    className="w-full h-full rounded-lg"
                     wrapperClassName="w-full h-full"
                   />
                 ) : (
@@ -888,7 +890,7 @@ export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
                   <img
                     src={activeUrl}
                     alt={`${item.title ?? "Item"} - image ${activeIndex + 1}`}
-                    className="absolute inset-0 w-full h-full object-cover"
+                    className="absolute inset-0 w-full h-full bg-black object-contain"
                   />
                 )}
 
@@ -946,7 +948,7 @@ export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
                         <img
                           src={media.url}
                           alt={`Thumbnail ${i + 1}`}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full bg-black object-contain"
                         />
                       )}
                     </button>

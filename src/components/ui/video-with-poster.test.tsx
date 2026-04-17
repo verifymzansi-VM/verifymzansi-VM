@@ -32,6 +32,24 @@ describe("VideoWithPoster", () => {
     expect(screen.getByRole("button", { name: "Play video" })).toBeTruthy();
   });
 
+  it("defaults posters and videos to full-display contain fitting", async () => {
+    const { VideoWithPoster } = await import("@/components/ui/video-with-poster");
+
+    render(
+      <VideoWithPoster
+        src="https://example.com/video.mp4"
+        posterUrl="https://example.com/poster.jpg"
+      />,
+      { wrapper: Wrapper }
+    );
+
+    expect(screen.getByAltText("Video thumbnail")).toHaveClass("object-contain");
+    expect(screen.getByAltText("Video thumbnail")).toHaveClass("bg-black");
+
+    fireEvent.click(screen.getByRole("button", { name: "Play video" }));
+    expect(screen.getByLabelText("Video player")).toHaveClass("object-contain");
+  });
+
   it("shows retry overlay when video fails after activation", async () => {
     const { VideoWithPoster } = await import("@/components/ui/video-with-poster");
 

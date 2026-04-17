@@ -211,10 +211,6 @@ export function ListingDetailContent({
   const showStickyBar = canCall || canWhatsapp;
   const facts = useMemo(() => buildListingFacts(listing), [listing]);
   const [viewCount, setViewCount] = useState(listing.view_count ?? 0);
-  const heroUsesContain =
-    typeof listing.media_width === "number" &&
-    typeof listing.media_height === "number" &&
-    listing.media_width > listing.media_height * 1.2;
   const quickFacts = facts.slice(0, 6);
   const detailFacts = facts.slice(6);
   const handleViewRecorded = useCallback(() => {
@@ -248,11 +244,7 @@ export function ListingDetailContent({
                 videoThumbnail={listing.video_thumbnail}
                 photoCount={photoCount}
                 heroAspectClassName="aspect-[9/16]"
-                heroMediaClassName={
-                  heroUsesContain
-                    ? "object-contain bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.22),_rgba(15,23,42,0.96))]"
-                    : "object-cover transition-transform duration-500"
-                }
+                heroMediaClassName="bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.22),_rgba(15,23,42,0.96))] object-contain transition-transform duration-500"
                 trackView={trackView}
                 onViewRecorded={handleViewRecorded}
               />

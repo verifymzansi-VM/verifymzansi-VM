@@ -9,8 +9,21 @@ vi.mock("@/components/ui/scroll-area", () => ({
 }));
 
 vi.mock("@/components/ui/video-with-poster", () => ({
-  VideoWithPoster: ({ src, posterUrl }: { src: string; posterUrl?: string }) => (
-    <div data-testid="video-with-poster" data-src={src} data-poster-url={posterUrl ?? ""} />
+  VideoWithPoster: ({
+    src,
+    posterUrl,
+    mediaFit,
+  }: {
+    src: string;
+    posterUrl?: string;
+    mediaFit?: string;
+  }) => (
+    <div
+      data-testid="video-with-poster"
+      data-src={src}
+      data-poster-url={posterUrl ?? ""}
+      data-media-fit={mediaFit ?? ""}
+    />
   ),
 }));
 
@@ -86,6 +99,26 @@ describe("ModerationPreviewPanel", () => {
       "data-poster-url",
       "/api/media/serve/listings/video-thumb.jpg"
     );
+    expect(screen.getByTestId("video-with-poster")).toHaveAttribute("data-media-fit", "contain");
+  });
+
+  it("uses contain fitting for moderation video previews and photo thumbnails", () => {
+    render(
+      <ModerationPreviewPanel
+        item={{
+          ...baseItem,
+          photos: ["https://bucket.r2.cloudflarestorage.com/listings/photo-1.jpg"],
+          videos: ["https://bucket.r2.cloudflarestorage.com/listings/video-1.mp4"],
+          video_thumbnail: "https://bucket.r2.cloudflarestorage.com/listings/video-thumb.jpg",
+        }}
+      />
+    );
+
+    expect(screen.getByAltText(/image 1/i)).toHaveClass("object-contain");
+
+    fireEvent.click(screen.getByAltText("Video thumbnail").closest("button")!);
+
+    expect(screen.getByTestId("video-with-poster")).toHaveAttribute("data-media-fit", "contain");
   });
 
   it("keeps .mov moderation uploads classified as video instead of image", () => {

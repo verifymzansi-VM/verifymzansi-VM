@@ -56,7 +56,7 @@ export function BusinessGallery({ photos, businessName }: BusinessGalleryProps) 
                   src={photo}
                   alt={`${businessName} photo ${index + 1}`}
                   fill
-                  className="object-cover transition-transform duration-300 group-hover:scale-105"
+                  className="bg-muted object-contain transition-transform duration-300 group-hover:scale-105"
                   sizes="(max-width: 1024px) 50vw, 33vw"
                 />
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
@@ -78,7 +78,7 @@ export function BusinessGallery({ photos, businessName }: BusinessGalleryProps) 
                   src={photo}
                   alt={`${businessName} photo ${index + 1}`}
                   fill
-                  className="object-cover"
+                  className="bg-muted object-contain"
                   sizes="70vw"
                 />
               </button>

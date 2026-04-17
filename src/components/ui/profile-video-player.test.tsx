@@ -84,5 +84,6 @@ describe("ProfileVideoPlayer", () => {
     fireEvent.click(fullscreenButton);
     expect(requestFullscreenMock).toHaveBeenCalledWith();
     expect(video).toBeInTheDocument();
+    expect(video).toHaveClass("object-contain");
   });
 });

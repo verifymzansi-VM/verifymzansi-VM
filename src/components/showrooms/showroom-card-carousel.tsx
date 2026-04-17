@@ -81,7 +81,7 @@ const PREVIEW_TILT_DEG = 8;
 const DESKTOP_SHOWROOM_ITEM_LIMIT = 15;
 
 const CARD_W =
-  "w-[72vw] max-w-[292px] sm:w-[46vw] sm:max-w-[310px] md:w-[34vw] lg:w-[280px] lg:max-w-none xl:w-[304px] 2xl:w-[320px]";
+  "w-[54vw] max-w-[220px] sm:w-[46vw] sm:max-w-[310px] md:w-[34vw] lg:w-[280px] lg:max-w-none xl:w-[304px] 2xl:w-[320px]";
 const SECTION_SPACING =
   "pt-0 pb-1 sm:pt-0 sm:pb-3 md:pt-8 md:pb-8 lg:h-[calc(100svh-4rem)] lg:min-h-0 lg:py-0";
 const SECTION_SURFACE = "bg-[linear-gradient(180deg,#f8f5ec_0%,#f1e8da_48%,#e8decd_100%)]";
@@ -870,7 +870,7 @@ export function ShowroomCardCarousel({
                 makeEntireCardClickable={offset === 0}
                 cardVariant="hero"
                 mediaControlVariant={offset === 0 ? "hero" : "default"}
-                fitStrategy="cover"
+                fitStrategy="contain"
               />
             </div>
           );

@@ -243,7 +243,7 @@ export function VideoCardPlayer({
   mediaFitClassName = DEFAULT_MEDIA_FIT,
   mode = "interactive",
   priority = false,
-  fitStrategy = "cover",
+  fitStrategy = "contain",
   containerAspectRatio = DEFAULT_CONTAINER_ASPECT_RATIO,
   muteControlVisibility = "auto",
   showPlaybackControl = false,

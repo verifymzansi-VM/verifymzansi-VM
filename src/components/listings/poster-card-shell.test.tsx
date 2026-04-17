@@ -7,14 +7,17 @@ const { videoCardPlayerMock } = vi.hoisted(() => ({
     ({
       showPlaybackControl,
       deferVideoLoadUntilPlay,
+      fitStrategy,
     }: {
       showPlaybackControl?: boolean;
       deferVideoLoadUntilPlay?: boolean;
+      fitStrategy?: string;
     }) => (
       <div
         data-testid="video-player"
         data-controls={showPlaybackControl ? "yes" : "no"}
         data-defer={deferVideoLoadUntilPlay ? "yes" : "no"}
+        data-fit={fitStrategy ?? ""}
       />
     )
   ),
@@ -92,6 +95,18 @@ describe("PosterCardShell", () => {
     );
 
     expect(screen.getByTestId("video-player")).toHaveAttribute("data-defer", "yes");
+  });
+
+  it("defaults card media to contain fit so uploads are fully visible", () => {
+    render(
+      <PosterCardShell
+        href="/listing/contain"
+        title="Contained card"
+        mediaUrl="https://example.com/poster.jpg"
+      />
+    );
+
+    expect(screen.getByTestId("video-player")).toHaveAttribute("data-fit", "contain");
   });
 
   it("uses a solid surface for hero showroom cards", () => {

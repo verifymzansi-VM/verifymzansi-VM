@@ -769,7 +769,7 @@ export default function EditListingPage() {
                           <img
                             src={normalizeMediaUrl(previewLogo)}
                             alt="Listing logo"
-                            className="h-full w-full object-cover"
+                            className="h-full w-full object-contain"
                           />
                         </div>
                         <div className="flex flex-col gap-2">
@@ -818,7 +818,7 @@ export default function EditListingPage() {
                             <img
                               src={displayExistingPhotos[i] || normalizeMediaUrl(url)}
                               alt={`Photo ${i + 1}`}
-                              className="aspect-square object-cover w-full"
+                              className="aspect-square w-full bg-muted object-contain"
                             />
                             <button
                               type="button"
@@ -874,7 +874,7 @@ export default function EditListingPage() {
                           >
                             <video
                               src={displayExistingVideos[i] || normalizeMediaUrl(url)}
-                              className="aspect-video object-cover w-full"
+                              className="aspect-video w-full bg-black object-contain"
                             />
                             <button
                               type="button"
@@ -969,7 +969,7 @@ export default function EditListingPage() {
                         imageUrl={previewVideos[0] || previewPhotos[0]}
                         posterUrl={previewVideoThumbnail || previewPhotos[0] || undefined}
                         isVideo={previewVideos.length > 0}
-                        fitStrategy={previewVideos.length > 0 ? "cover" : "smart"}
+                        fitStrategy="contain"
                         logoUrl={previewLogo}
                         province={province || "Province"}
                         city={city || "City"}

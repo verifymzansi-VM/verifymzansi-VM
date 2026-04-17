@@ -287,7 +287,7 @@ export function KycInlinePreview({
           <img
             src={blobUrl}
             alt={`${stepType.replace("_", " ")} document thumbnail`}
-            className="h-full w-full object-cover select-none"
+            className="h-full w-full bg-black object-contain select-none"
             draggable={false}
           />
           {/* Mini watermark */}

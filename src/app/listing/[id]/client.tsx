@@ -60,7 +60,7 @@ function VideoThumbnailThumb({ firstPhoto }: { firstPhoto?: string }) {
         alt="Video thumbnail"
         width={80}
         height={80}
-        className="w-full h-full object-cover"
+        className="w-full h-full bg-black object-contain"
         unoptimized={useUnoptimizedImage ? true : undefined}
       />
       <div className="absolute inset-0 flex items-center justify-center bg-black/30">
@@ -214,7 +214,7 @@ export function ListingDetailClient({
                   src={firstPhotoUrl}
                   alt="Video thumbnail"
                   fill
-                  className="object-cover opacity-40"
+                  className="bg-black object-contain opacity-40"
                   sizes="(max-width: 1024px) 100vw, 66vw"
                 />
               )}
@@ -241,7 +241,8 @@ export function ListingDetailClient({
                 poster={firstPhotoUrl}
                 title={title}
                 onError={() => setVideoError(true)}
-                videoClassName={heroMediaClassName ?? "rounded-xl object-contain"}
+                mediaFit="contain"
+                videoClassName={heroMediaClassName ?? "rounded-xl bg-black object-contain"}
                 skipSeconds={10}
               />
             </>
@@ -258,7 +259,7 @@ export function ListingDetailClient({
                 alt={`${title} - ${activeMedia?.kind ?? "photo"} ${activeIndex + 1}`}
                 fill
                 className={cn(
-                  heroMediaClassName ?? "object-cover transition-transform duration-500"
+                  heroMediaClassName ?? "bg-black object-contain transition-transform duration-500"
                 )}
                 sizes="(max-width: 1024px) 100vw, 66vw"
                 priority={activeIndex === 0}
@@ -331,7 +332,7 @@ export function ListingDetailClient({
                     src={item.url}
                     alt={`Thumbnail ${i + 1}`}
                     fill
-                    className="object-cover"
+                    className="bg-black object-contain"
                     sizes="80px"
                     unoptimized={isBlobOrDataUrl(item.url) ? true : undefined}
                   />

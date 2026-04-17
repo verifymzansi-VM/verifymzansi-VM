@@ -1317,7 +1317,7 @@ export default function EditBusinessPage() {
                           <img
                             src={normalizeMediaUrl(existingLogo)}
                             alt="Logo"
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-contain"
                           />
                         </div>
                       </div>
@@ -1330,7 +1330,7 @@ export default function EditBusinessPage() {
                           <img
                             src={normalizeMediaUrl(existingCoverPhoto)}
                             alt="Cover"
-                            className="w-full h-full object-cover"
+                            className="w-full h-full bg-muted object-contain"
                           />
                         </div>
                       </div>
@@ -1382,7 +1382,7 @@ export default function EditBusinessPage() {
                             <img
                               src={normalizeMediaUrl(url)}
                               alt={`Gallery ${i + 1}`}
-                              className="w-full h-full object-cover"
+                              className="w-full h-full bg-muted object-contain"
                             />
                           </div>
                         ))}
@@ -1418,7 +1418,7 @@ export default function EditBusinessPage() {
                               <img
                                 src={normalizeMediaUrl(url)}
                                 alt={`Mall photo ${i + 1}`}
-                                className="w-full h-full object-cover"
+                                className="w-full h-full bg-muted object-contain"
                               />
                             </div>
                           ))}

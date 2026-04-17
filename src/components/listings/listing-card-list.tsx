@@ -141,7 +141,7 @@ export const ListingCardList = memo(function ListingCardList({
                     alt={title}
                     fill
                     className={cn(
-                      "object-cover focal-position-object transition-transform duration-700 group-hover:scale-[1.04]",
+                      "bg-slate-900 object-contain focal-position-object transition-transform duration-700 group-hover:scale-[1.04]",
                       getFocalPositionClassName(focalX, focalY)
                     )}
                     sizes="160px"
@@ -186,7 +186,7 @@ export const ListingCardList = memo(function ListingCardList({
                       alt={`${title} logo`}
                       width={20}
                       height={20}
-                      className="h-full w-full object-cover"
+                      className="h-full w-full object-contain"
                     />
                   </div>
                 ) : null}

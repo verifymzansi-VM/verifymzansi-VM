@@ -33,11 +33,16 @@ interface ProfileVideoPlayerProps {
   poster?: string;
   className?: string;
   videoClassName?: string;
+  mediaFit?: "contain" | "cover";
   autoPlay?: boolean;
   loop?: boolean;
   onError?: () => void;
   skipSeconds?: number;
   showErrorState?: boolean;
+}
+
+function getMediaFitClassName(mediaFit: "contain" | "cover") {
+  return mediaFit === "contain" ? "object-contain bg-black" : "object-cover";
 }
 
 function formatSeconds(seconds: number): string {
@@ -56,6 +61,7 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
       poster,
       className,
       videoClassName,
+      mediaFit = "contain",
       autoPlay = true,
       loop = true,
       onError,
@@ -81,6 +87,7 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
     const [retryKey, setRetryKey] = useState(0);
     const [isCompactLayout, setIsCompactLayout] = useState(false);
     const videoError = showErrorState && errorSource === src;
+    const mediaFitClassName = getMediaFitClassName(mediaFit);
 
     useEffect(() => {
       const video = localVideoRef.current;
@@ -272,7 +279,7 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
                 src={poster}
                 alt={`${title} poster`}
                 fill
-                className="object-cover opacity-40"
+                className={cn(mediaFitClassName, "opacity-40")}
                 sizes="100vw"
               />
             ) : null}
@@ -304,7 +311,7 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
             onPlay={() => setIsPlaying(true)}
             onPause={() => setIsPlaying(false)}
             onError={handleVideoError}
-            className={cn("absolute inset-0 h-full w-full object-cover bg-black", videoClassName)}
+            className={cn("absolute inset-0 h-full w-full", mediaFitClassName, videoClassName)}
             aria-label={`${title} video`}
           >
             <track kind="captions" />

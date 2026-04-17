@@ -983,7 +983,7 @@ export function BusinessDetailContent({
               src={normalizeMediaUrl(business.cover_photo)}
               alt={`${business.business_name} Cover`}
               fill
-              className="object-cover"
+              className="bg-muted object-contain"
               priority
               sizes="100vw"
             />

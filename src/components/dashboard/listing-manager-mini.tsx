@@ -241,7 +241,7 @@ export function ListingManagerMini({ posts, limit = 5 }: ListingManagerMiniProps
                         alt=""
                         width={44}
                         height={44}
-                        className="h-full w-full object-cover"
+                        className="h-full w-full object-contain"
                       />
                     ) : (
                       <div className="flex h-full items-center justify-center">
