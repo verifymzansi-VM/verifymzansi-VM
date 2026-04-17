@@ -11,20 +11,20 @@ export function ShowroomCardCarouselSkeleton() {
       <div className="relative mx-auto flex items-center justify-center overflow-hidden px-4 lg:h-full">
         {/* Left card (scaled down) */}
         <div
-          className="absolute left-[3%] sm:left-[8%] lg:left-[15%] w-[72vw] max-w-[292px] sm:w-[46vw] sm:max-w-[310px] lg:w-[292px] xl:w-[320px] origin-center scale-[0.82] opacity-50"
+          className="absolute left-[3%] sm:left-[8%] lg:left-[15%] w-[72vw] max-w-[292px] sm:w-[46vw] sm:max-w-[310px] lg:w-[280px] xl:w-[304px] origin-center scale-[0.82] opacity-50"
           aria-hidden="true"
         >
           <CardSkeleton />
         </div>
 
         {/* Center card (full size) */}
-        <div className="z-10 w-[72vw] max-w-[292px] sm:w-[46vw] sm:max-w-[310px] lg:w-[292px] xl:w-[320px]">
+        <div className="z-10 w-[72vw] max-w-[292px] sm:w-[46vw] sm:max-w-[310px] lg:w-[280px] xl:w-[304px]">
           <CardSkeleton />
         </div>
 
         {/* Right card (scaled down) */}
         <div
-          className="absolute right-[3%] sm:right-[8%] lg:right-[15%] w-[72vw] max-w-[292px] sm:w-[46vw] sm:max-w-[310px] lg:w-[292px] xl:w-[320px] origin-center scale-[0.82] opacity-50"
+          className="absolute right-[3%] sm:right-[8%] lg:right-[15%] w-[72vw] max-w-[292px] sm:w-[46vw] sm:max-w-[310px] lg:w-[280px] xl:w-[304px] origin-center scale-[0.82] opacity-50"
           aria-hidden="true"
         >
           <CardSkeleton />

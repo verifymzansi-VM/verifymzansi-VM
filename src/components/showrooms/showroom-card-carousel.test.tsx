@@ -149,8 +149,8 @@ describe("ShowroomCardCarousel", () => {
     const centerSlide = screen.getByRole("group", { name: "1 of 3" });
     expect(centerSlide.className).toContain("w-[72vw]");
     expect(centerSlide.className).toContain("max-w-[292px]");
-    expect(centerSlide.className).toContain("lg:w-[292px]");
-    expect(centerSlide.className).toContain("xl:w-[320px]");
+    expect(centerSlide.className).toContain("lg:w-[280px]");
+    expect(centerSlide.className).toContain("xl:w-[304px]");
   });
 
   it("renders slide groups with positional labels", () => {
@@ -187,8 +187,8 @@ describe("ShowroomCardCarousel", () => {
     const emptyStateCard = Array.from(container.querySelectorAll("div")).find(
       (node) =>
         node.className.includes("w-[72vw]") &&
-        node.className.includes("lg:w-[292px]") &&
-        node.className.includes("xl:w-[320px]")
+        node.className.includes("lg:w-[280px]") &&
+        node.className.includes("xl:w-[304px]")
     );
     expect(section).toBeInTheDocument();
     expect(section.className).toContain("lg:h-[calc(100svh-4rem)]");

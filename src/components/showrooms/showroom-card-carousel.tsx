@@ -66,7 +66,7 @@ const PREVIEW_TILT_DEG = 8;
 const DESKTOP_SHOWROOM_ITEM_LIMIT = 15;
 
 const CARD_W =
-  "w-[72vw] max-w-[292px] sm:w-[46vw] sm:max-w-[310px] md:w-[34vw] lg:w-[292px] lg:max-w-none xl:w-[320px] 2xl:w-[336px]";
+  "w-[72vw] max-w-[292px] sm:w-[46vw] sm:max-w-[310px] md:w-[34vw] lg:w-[280px] lg:max-w-none xl:w-[304px] 2xl:w-[320px]";
 const SECTION_SPACING =
   "pt-0 pb-1 sm:pt-0 sm:pb-3 md:pt-8 md:pb-8 lg:h-[calc(100svh-4rem)] lg:min-h-0 lg:py-0";
 
@@ -587,9 +587,9 @@ export function ShowroomCardCarousel({
     const byOffset: Record<number, string> = {
       [-3]: "hidden lg:block translate-x-[calc(-50%-106%)] translate-y-4 scale-[0.54] opacity-32 saturate-[0.72] blur-[1.4px] z-0 pointer-events-none",
       [-2]: "hidden md:block translate-x-[calc(-50%-72%)] translate-y-2 scale-[0.7] opacity-48 saturate-[0.84] blur-[0.8px] z-10 pointer-events-none",
-      [-1]: "translate-x-[calc(-50%-39%)] lg:translate-y-0 scale-[0.9] lg:scale-[0.85] opacity-84 saturate-[0.92] z-20",
-      0: "translate-x-[-50%] lg:-translate-y-0 scale-100 lg:scale-[1.02] opacity-100 z-40 shadow-[0_42px_116px_-52px_rgba(15,23,42,0.72)]",
-      1: "translate-x-[calc(-50%+39%)] lg:translate-y-0 scale-[0.9] lg:scale-[0.85] opacity-84 saturate-[0.92] z-20",
+      [-1]: "translate-x-[calc(-50%-39%)] lg:-translate-y-2 scale-[0.9] lg:scale-[0.85] opacity-84 saturate-[0.92] z-20",
+      0: "translate-x-[-50%] lg:-translate-y-3 scale-100 lg:scale-[1.02] opacity-100 z-40 shadow-[0_42px_116px_-52px_rgba(15,23,42,0.72)]",
+      1: "translate-x-[calc(-50%+39%)] lg:-translate-y-2 scale-[0.9] lg:scale-[0.85] opacity-84 saturate-[0.92] z-20",
       2: "hidden md:block translate-x-[calc(-50%+72%)] translate-y-2 scale-[0.7] opacity-48 saturate-[0.84] blur-[0.8px] z-10 pointer-events-none",
       3: "hidden lg:block translate-x-[calc(-50%+106%)] translate-y-4 scale-[0.54] opacity-32 saturate-[0.72] blur-[1.4px] z-0 pointer-events-none",
     };
@@ -670,7 +670,7 @@ export function ShowroomCardCarousel({
         aria-label="Carousel slides"
       >
         {/* Height-establishing invisible card */}
-        <div className={cn("invisible mx-auto lg:translate-y-2", CARD_W)} aria-hidden="true">
+        <div className={cn("invisible mx-auto lg:-translate-y-1", CARD_W)} aria-hidden="true">
           <PosterCardShell
             href="#"
             title="Verified Marketplace Listing Placeholder"

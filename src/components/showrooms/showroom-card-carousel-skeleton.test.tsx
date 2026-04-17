@@ -22,7 +22,7 @@ describe("ShowroomCardCarouselSkeleton", () => {
     const sizedCards = Array.from(container.querySelectorAll("section > div > div"));
 
     expect(sizedCards.some((node) => node.className.includes("w-[72vw]"))).toBe(true);
-    expect(sizedCards.some((node) => node.className.includes("lg:w-[292px]"))).toBe(true);
-    expect(sizedCards.some((node) => node.className.includes("xl:w-[320px]"))).toBe(true);
+    expect(sizedCards.some((node) => node.className.includes("lg:w-[280px]"))).toBe(true);
+    expect(sizedCards.some((node) => node.className.includes("xl:w-[304px]"))).toBe(true);
   });
 });
