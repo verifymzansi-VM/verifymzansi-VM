@@ -80,8 +80,13 @@ function buildClient(
     promotions?: Array<Record<string, unknown>>;
     user?: { id: string } | null;
     onBusinessSelect?: (fields: string) => void;
+    businessSelectResponses?: Array<{
+      data: Record<string, unknown> | null;
+      error?: { code?: string; message?: string } | null;
+    }>;
   }
 ) {
+  let businessSelectCallIndex = 0;
   return {
     auth: {
       getUser: async () => ({ data: { user: options?.user ?? null } }),
@@ -91,10 +96,22 @@ function buildClient(
         return {
           select: (fields: string) => {
             options?.onBusinessSelect?.(fields);
+            const selectResponse = options?.businessSelectResponses?.[
+              Math.min(
+                businessSelectCallIndex++,
+                Math.max((options?.businessSelectResponses?.length ?? 1) - 1, 0)
+              )
+            ] ?? { data: business, error: null };
             return {
               eq: () => ({
-                maybeSingle: async () => ({ data: business }),
-                single: async () => ({ data: business }),
+                maybeSingle: async () => ({
+                  data: selectResponse.data,
+                  error: selectResponse.error ?? null,
+                }),
+                single: async () => ({
+                  data: selectResponse.data ?? business,
+                  error: selectResponse.error ?? null,
+                }),
               }),
             };
           },
@@ -235,6 +252,96 @@ describe("BusinessDetailPage", () => {
 
     expect(businessSelectSpy).toHaveBeenCalledTimes(1);
     expect(screen.getAllByText("Compat Business").length).toBeGreaterThan(0);
+  });
+
+  it("falls back when the businesses table does not yet expose view_count", async () => {
+    const businessSelectSpy = vi.fn();
+
+    mockCreateClient.mockResolvedValue(
+      buildClient(
+        {
+          id: "business-compat-view-count",
+          owner_id: "owner-1",
+          business_name: "Fallback Business",
+          description: "Should still load without businesses.view_count.",
+          status: "live",
+          business_type: "standalone_shop",
+          category: "professional_services",
+          cover_photo: null,
+          logo_url: null,
+          cover_video: null,
+          video_thumbnail: null,
+          gallery_photos: [],
+          social_links: {},
+          operating_hours: {},
+          services_offered: [],
+          payment_methods_accepted: [],
+          delivery_options: [],
+          service_areas: null,
+          location_city: "Johannesburg",
+          location_province: "Gauteng",
+          phone: null,
+          whatsapp: null,
+          email: null,
+          website: null,
+          store_number: null,
+          map_directions: null,
+          business_details: null,
+          layout_template: "showcase",
+        },
+        {
+          onBusinessSelect: businessSelectSpy,
+          businessSelectResponses: [
+            {
+              data: null,
+              error: {
+                code: "42703",
+                message: "column businesses.view_count does not exist",
+              },
+            },
+            {
+              data: {
+                id: "business-compat-view-count",
+                owner_id: "owner-1",
+                business_name: "Fallback Business",
+                description: "Should still load without businesses.view_count.",
+                status: "live",
+                business_type: "standalone_shop",
+                category: "professional_services",
+                cover_photo: null,
+                logo_url: null,
+                cover_video: null,
+                video_thumbnail: null,
+                gallery_photos: [],
+                social_links: {},
+                operating_hours: {},
+                services_offered: [],
+                payment_methods_accepted: [],
+                delivery_options: [],
+                service_areas: null,
+                location_city: "Johannesburg",
+                location_province: "Gauteng",
+                phone: null,
+                whatsapp: null,
+                email: null,
+                website: null,
+                store_number: null,
+                map_directions: null,
+                business_details: null,
+              },
+              error: null,
+            },
+          ],
+        }
+      )
+    );
+
+    render(
+      await BusinessDetailPage({ params: Promise.resolve({ id: "business-compat-view-count" }) })
+    );
+
+    expect(businessSelectSpy).toHaveBeenCalledTimes(2);
+    expect(screen.getAllByText("Fallback Business").length).toBeGreaterThan(0);
   });
 
   it("renders owner preview for a pending business and hides public actions", async () => {

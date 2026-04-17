@@ -63,10 +63,28 @@ const BUSINESS_DETAIL_SELECT_LEGACY = `
   created_at, updated_at
 `;
 
+const BUSINESS_DETAIL_SELECT_VIEW_COUNT_LEGACY = `
+  id, owner_id, business_type, business_name, slug, description, category, subcategory, category_details,
+  logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province,
+  location_city, store_number, map_directions, phone, whatsapp, email, website, social_links,
+  services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
+  delivery_options, boost_until, featured_until, published_at, status, area, layout_template,
+  created_at, updated_at
+`;
+
+const BUSINESS_DETAIL_SELECT_MIN_LEGACY = `
+  id, owner_id, business_type, business_name, slug, description, category, subcategory, category_details,
+  logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province,
+  location_city, store_number, map_directions, phone, whatsapp, email, website, social_links,
+  services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
+  delivery_options, boost_until, featured_until, published_at, status, area,
+  created_at, updated_at
+`;
+
 const BUSINESS_PROMOTION_SELECT =
   "id, title, promotion_type, category, category_key, photos, videos, video_thumbnail, focal_x, focal_y, media_width, media_height, price_cents, price_negotiable, location_province, location_city, boost_until, featured_until, view_count, start_date, end_date, created_at";
 
-function isMissingLayoutTemplateColumnError(
+function isMissingBusinessOptionalColumnError(
   error: { code?: string | null; message?: string | null } | null
 ) {
   if (!error) {
@@ -75,7 +93,7 @@ function isMissingLayoutTemplateColumnError(
 
   if (error.code === "42703") {
     const message = (error.message ?? "").toLowerCase();
-    return message.includes("layout_template");
+    return message.includes("layout_template") || message.includes("view_count");
   }
 
   return false;
@@ -84,21 +102,29 @@ function isMissingLayoutTemplateColumnError(
 async function loadBusinessDetail(id: string): Promise<LoadedBusinessDetail | null> {
   const supabase = await createClient();
   const ownerColumn = await getOwnerColumn(supabase, "businesses");
-  let { data: rawBusiness, error } = await supabase
-    .from("businesses")
-    .select(withOwnerColumn(BUSINESS_DETAIL_SELECT, ownerColumn))
-    .eq("id", id)
-    .maybeSingle();
+  const selectCandidates = [
+    BUSINESS_DETAIL_SELECT,
+    BUSINESS_DETAIL_SELECT_LEGACY,
+    BUSINESS_DETAIL_SELECT_VIEW_COUNT_LEGACY,
+    BUSINESS_DETAIL_SELECT_MIN_LEGACY,
+  ];
 
-  if (isMissingLayoutTemplateColumnError(error)) {
-    const legacyResult = await supabase
+  let rawBusiness: Record<string, unknown> | null = null;
+  let error: { code?: string | null; message?: string | null } | null = null;
+
+  for (const selectClause of selectCandidates) {
+    const result = await supabase
       .from("businesses")
-      .select(withOwnerColumn(BUSINESS_DETAIL_SELECT_LEGACY, ownerColumn))
+      .select(withOwnerColumn(selectClause, ownerColumn))
       .eq("id", id)
       .maybeSingle();
 
-    rawBusiness = legacyResult.data;
-    error = legacyResult.error;
+    rawBusiness = (result.data as Record<string, unknown> | null) ?? null;
+    error = (result.error as { code?: string | null; message?: string | null } | null) ?? null;
+
+    if (!error || !isMissingBusinessOptionalColumnError(error)) {
+      break;
+    }
   }
 
   if (error || !rawBusiness) {
