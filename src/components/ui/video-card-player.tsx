@@ -225,6 +225,8 @@ export interface VideoCardPlayerProps {
   focalY?: number | null;
   /** Gates touch-feed autoplay to cards that are currently in focus within a rail. */
   feedPlaybackActive?: boolean;
+  /** Prevent native browser dragging on image/video surfaces so parent carousels can own the gesture. */
+  disableNativeDrag?: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -254,6 +256,7 @@ export function VideoCardPlayer({
   focalX,
   focalY,
   feedPlaybackActive = true,
+  disableNativeDrag = false,
 }: VideoCardPlayerProps) {
   const isVideoMedia = isVideo ?? isVideoUrl(src);
   const normalizedSrc = src ? normalizeMediaUrl(src) : undefined;
@@ -282,6 +285,7 @@ export function VideoCardPlayer({
         muteControlVisibility={muteControlVisibility}
         focalX={focalX}
         focalY={focalY}
+        disableNativeDrag={disableNativeDrag}
       />
     );
   }
@@ -316,6 +320,7 @@ export function VideoCardPlayer({
         focalY={focalY}
         onEnded={onEnded}
         feedPlaybackActive={feedPlaybackActive}
+        disableNativeDrag={disableNativeDrag}
       />
     );
   }
@@ -345,6 +350,7 @@ export function VideoCardPlayer({
       onEnded={onEnded}
       focalX={focalX}
       focalY={focalY}
+      disableNativeDrag={disableNativeDrag}
     />
   );
 }
@@ -392,6 +398,7 @@ interface VideoCardPlayerInnerProps {
   onEnded?: () => void;
   focalX?: number | null;
   focalY?: number | null;
+  disableNativeDrag: boolean;
 }
 
 function VideoCardPlayerInner({
@@ -417,6 +424,7 @@ function VideoCardPlayerInner({
   onEnded,
   focalX,
   focalY,
+  disableNativeDrag,
 }: VideoCardPlayerInnerProps) {
   const posterNeedsUnoptimized =
     normalizedPoster?.startsWith("blob:") || normalizedPoster?.startsWith("data:");
@@ -530,6 +538,15 @@ function VideoCardPlayerInner({
   const handlePosterError = useCallback(() => {
     setPosterError(true);
   }, []);
+
+  const handleNativeDragStart = useCallback(
+    (event: React.DragEvent<HTMLElement>) => {
+      if (disableNativeDrag) {
+        event.preventDefault();
+      }
+    },
+    [disableNativeDrag]
+  );
 
   const handleVideoClick = useCallback(
     (e: React.MouseEvent | React.KeyboardEvent) => {
@@ -658,6 +675,8 @@ function VideoCardPlayerInner({
             onError={handlePosterError}
             data-media-fit="smart"
             unoptimized={srcNeedsUnoptimized ? true : undefined}
+            draggable={disableNativeDrag ? false : undefined}
+            onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
           />
         </div>
       );
@@ -683,6 +702,8 @@ function VideoCardPlayerInner({
           onError={handlePosterError}
           data-media-fit="cover"
           unoptimized={srcNeedsUnoptimized ? true : undefined}
+          draggable={disableNativeDrag ? false : undefined}
+          onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
         />
       </>
     );
@@ -718,6 +739,8 @@ function VideoCardPlayerInner({
             onError={handlePosterError}
             data-media-fit={usesSmartFit ? "smart" : "cover"}
             unoptimized={posterNeedsUnoptimized ? true : undefined}
+            draggable={disableNativeDrag ? false : undefined}
+            onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
           />
         ) : !videoReady || hasError || reducedMotion ? (
           <div className="absolute inset-0 z-[2] skeleton-shimmer" />
@@ -741,6 +764,8 @@ function VideoCardPlayerInner({
               : "opacity-100"
           )}
           data-media-fit={usesSmartFit ? "smart" : "cover"}
+          draggable={disableNativeDrag ? false : undefined}
+          onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
         />
 
         <MuteButton
@@ -829,6 +854,8 @@ function VideoCardPlayerInner({
           onError={handlePosterError}
           data-media-fit={usesSmartFit ? "smart" : "cover"}
           unoptimized={posterNeedsUnoptimized ? true : undefined}
+          draggable={disableNativeDrag ? false : undefined}
+          onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
         />
       ) : !videoReady || hasError || !isPlaying ? (
         <div className="absolute inset-0 z-[2] flex items-center justify-center skeleton-shimmer">
@@ -852,6 +879,8 @@ function VideoCardPlayerInner({
           !videoReady || hasError || !isPlaying ? "opacity-0" : "opacity-100"
         )}
         data-media-fit={usesSmartFit ? "smart" : "cover"}
+        draggable={disableNativeDrag ? false : undefined}
+        onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
       />
 
       {hasError && (
@@ -933,6 +962,7 @@ interface HoverVideoPlayerProps {
   muteControlVisibility: MuteControlVisibility;
   focalX?: number | null;
   focalY?: number | null;
+  disableNativeDrag: boolean;
 }
 
 function HoverVideoPlayer({
@@ -950,6 +980,7 @@ function HoverVideoPlayer({
   muteControlVisibility,
   focalX,
   focalY,
+  disableNativeDrag,
 }: HoverVideoPlayerProps) {
   const posterNeedsUnoptimized =
     normalizedPoster?.startsWith("blob:") || normalizedPoster?.startsWith("data:");
@@ -1025,6 +1056,15 @@ function HoverVideoPlayer({
     setPosterError(true);
   }, []);
 
+  const handleNativeDragStart = useCallback(
+    (event: React.DragEvent<HTMLElement>) => {
+      if (disableNativeDrag) {
+        event.preventDefault();
+      }
+    },
+    [disableNativeDrag]
+  );
+
   const handleImageLoad = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
     const image = event.currentTarget;
     if (image.naturalWidth > 0 && image.naturalHeight > 0) {
@@ -1055,6 +1095,8 @@ function HoverVideoPlayer({
             onError={handlePosterError}
             data-media-fit="smart"
             unoptimized={posterNeedsUnoptimized ? true : undefined}
+            draggable={disableNativeDrag ? false : undefined}
+            onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
           />
         </div>
       );
@@ -1072,6 +1114,8 @@ function HoverVideoPlayer({
         onError={handlePosterError}
         data-media-fit="cover"
         unoptimized={posterNeedsUnoptimized ? true : undefined}
+        draggable={disableNativeDrag ? false : undefined}
+        onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
       />
     );
   }
@@ -1104,6 +1148,8 @@ function HoverVideoPlayer({
           onError={handlePosterError}
           data-media-fit={usesSmartFit ? "smart" : "cover"}
           unoptimized={posterNeedsUnoptimized ? true : undefined}
+          draggable={disableNativeDrag ? false : undefined}
+          onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
         />
       ) : !(isHovering && videoReady) || hasError || reducedMotion ? (
         <div className="absolute inset-0 z-[2] skeleton-shimmer" />
@@ -1125,6 +1171,8 @@ function HoverVideoPlayer({
           hasError || reducedMotion || !videoReady || !isHovering ? "opacity-0" : "opacity-100"
         )}
         data-media-fit={usesSmartFit ? "smart" : "cover"}
+        draggable={disableNativeDrag ? false : undefined}
+        onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
       />
 
       <MuteButton videoRef={videoRef} showMuteControl={showMuteControl} />
@@ -1195,6 +1243,7 @@ interface FeedVideoPlayerProps {
   focalY?: number | null;
   onEnded?: () => void;
   feedPlaybackActive: boolean;
+  disableNativeDrag: boolean;
 }
 
 function FeedVideoPlayer({
@@ -1214,6 +1263,7 @@ function FeedVideoPlayer({
   focalY,
   onEnded,
   feedPlaybackActive,
+  disableNativeDrag,
 }: FeedVideoPlayerProps) {
   const posterNeedsUnoptimized =
     normalizedPoster?.startsWith("blob:") || normalizedPoster?.startsWith("data:");
@@ -1282,6 +1332,15 @@ function FeedVideoPlayer({
     setPosterError(true);
   }, []);
 
+  const handleNativeDragStart = useCallback(
+    (event: React.DragEvent<HTMLElement>) => {
+      if (disableNativeDrag) {
+        event.preventDefault();
+      }
+    },
+    [disableNativeDrag]
+  );
+
   const handleImageLoad = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
     const image = event.currentTarget;
     if (image.naturalWidth > 0 && image.naturalHeight > 0) {
@@ -1328,6 +1387,8 @@ function FeedVideoPlayer({
         onError={handlePosterError}
         data-media-fit={usesSmartFit ? "smart" : "cover"}
         unoptimized={posterNeedsUnoptimized ? true : undefined}
+        draggable={disableNativeDrag ? false : undefined}
+        onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
       />
     );
   }
@@ -1360,6 +1421,8 @@ function FeedVideoPlayer({
           onError={handlePosterError}
           data-media-fit={usesSmartFit ? "smart" : "cover"}
           unoptimized={posterNeedsUnoptimized ? true : undefined}
+          draggable={disableNativeDrag ? false : undefined}
+          onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
         />
       ) : showPoster ? (
         <div className="absolute inset-0 z-[2] skeleton-shimmer" />
@@ -1382,6 +1445,8 @@ function FeedVideoPlayer({
           hasError || !videoReady ? "opacity-0" : "opacity-100"
         )}
         data-media-fit={usesSmartFit ? "smart" : "cover"}
+        draggable={disableNativeDrag ? false : undefined}
+        onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
       />
 
       {/* Transparent tap overlay — intercepts taps to toggle playback,

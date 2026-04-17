@@ -129,6 +129,32 @@ describe("VideoCardPlayer", () => {
     expect(screen.getByAltText("Photo")).toHaveAttribute("data-media-fit", "smart");
   });
 
+  it("disables native dragging on showroom media surfaces when requested", () => {
+    const { rerender } = render(
+      <VideoCardPlayer
+        src="https://example.com/photo.jpg"
+        alt="Photo"
+        mode="ambient"
+        disableNativeDrag
+      />
+    );
+
+    expect(screen.getByAltText("Photo")).toHaveAttribute("draggable", "false");
+
+    rerender(
+      <VideoCardPlayer
+        src="https://example.com/clip.mp4"
+        posterUrl="https://example.com/poster.jpg"
+        alt="Clip"
+        mode="ambient"
+        disableNativeDrag
+      />
+    );
+
+    expect(screen.getByAltText("Clip")).toHaveAttribute("draggable", "false");
+    expect(document.querySelector("video")).toHaveAttribute("draggable", "false");
+  });
+
   it("falls back to touch-friendly ambient behavior when hover is unavailable", () => {
     useHoverCapabilityMock.mockReturnValue(false);
 

@@ -25,13 +25,13 @@ vi.mock("next/link", () => ({
 
 const destinations: HomeOnboardingDestination[] = [
   {
-    id: "mzansi-market",
-    title: "Mzansi Market",
-    description: "Products and listings from verified sellers.",
-    href: "/mzansi-market",
-    iconKey: "market",
-    accentClass: "text-brand-green",
-    iconBgClass: "bg-brand-green/10",
+    id: "tourism-events",
+    title: "Tourism & Events",
+    description: "Tourism destinations, accommodations, and events near you.",
+    href: "/promotions",
+    iconKey: "tourism",
+    accentClass: "text-teal-400",
+    iconBgClass: "bg-teal-500/10",
   },
   {
     id: "mzansi-business",
@@ -43,13 +43,13 @@ const destinations: HomeOnboardingDestination[] = [
     iconBgClass: "bg-brand-blue/10",
   },
   {
-    id: "tourism-events",
-    title: "Tourism & Events",
-    description: "Tourism destinations, accommodations, and events near you.",
-    href: "/promotions",
-    iconKey: "tourism",
-    accentClass: "text-teal-400",
-    iconBgClass: "bg-teal-500/10",
+    id: "mzansi-market",
+    title: "Mzansi Market",
+    description: "Products and listings from verified sellers.",
+    href: "/mzansi-market",
+    iconKey: "market",
+    accentClass: "text-brand-green",
+    iconBgClass: "bg-brand-green/10",
   },
 ];
 
@@ -130,9 +130,9 @@ describe("HomeOnboardingDestinations", () => {
     render(<HomeOnboardingDestinations destinations={destinations} />);
     mockCardHeights();
 
-    const marketCard = screen.getByRole("link", { name: /Mzansi Market/i });
+    const tourismCard = screen.getByRole("link", { name: /Tourism & Events/i });
 
-    fireEvent.pointerDown(marketCard, {
+    fireEvent.pointerDown(tourismCard, {
       button: 0,
       pointerId: 4,
       pointerType: "touch",
@@ -147,7 +147,7 @@ describe("HomeOnboardingDestinations", () => {
 
     fireEvent.pointerUp(window, { pointerId: 4, pointerType: "touch" });
 
-    expect(screen.getAllByRole("link")[0]).toHaveTextContent("Mzansi Market");
+    expect(screen.getAllByRole("link")[0]).toHaveTextContent("Tourism & Events");
   });
 
   it("reorders on touch only after a long press activates drag", () => {

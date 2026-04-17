@@ -37,13 +37,13 @@ export default async function HomePage() {
   const sameAs = getOfficialSocialSameAs(runtimeConfig.officialSocialLinks);
   const onboardingDestinations = [
     {
-      id: "mzansi-market",
-      title: "Mzansi Market",
-      description: "Products and listings from verified sellers.",
-      href: "/mzansi-market",
-      iconKey: "market",
-      accentClass: "text-brand-green",
-      iconBgClass: "bg-brand-green/10",
+      id: "tourism-events",
+      title: "Tourism & Events",
+      description: "Tourism destinations, accommodations, and events near you.",
+      href: "/promotions",
+      iconKey: "tourism",
+      accentClass: "text-teal-400",
+      iconBgClass: "bg-teal-500/10",
     },
     {
       id: "mzansi-business",
@@ -55,13 +55,13 @@ export default async function HomePage() {
       iconBgClass: "bg-brand-blue/10",
     },
     {
-      id: "tourism-events",
-      title: "Tourism & Events",
-      description: "Tourism destinations, accommodations, and events near you.",
-      href: "/promotions",
-      iconKey: "tourism",
-      accentClass: "text-teal-400",
-      iconBgClass: "bg-teal-500/10",
+      id: "mzansi-market",
+      title: "Mzansi Market",
+      description: "Products and listings from verified sellers.",
+      href: "/mzansi-market",
+      iconKey: "market",
+      accentClass: "text-brand-green",
+      iconBgClass: "bg-brand-green/10",
     },
   ] as const;
 
@@ -120,7 +120,7 @@ export default async function HomePage() {
 
           {/* ═══ Marketplace Showcase ═══ */}
           <Suspense fallback={<MarketplacePreviewsSkeleton />}>
-            <HomeMzansiMarketShowcase />
+            <HomePromotionsShowcase />
           </Suspense>
 
           <Suspense fallback={<MarketplacePreviewsSkeleton />}>
@@ -128,7 +128,7 @@ export default async function HomePage() {
           </Suspense>
 
           <Suspense fallback={<MarketplacePreviewsSkeleton />}>
-            <HomePromotionsShowcase />
+            <HomeMzansiMarketShowcase />
           </Suspense>
 
           {/* ═══ Onboarding Guide Section ═══ */}

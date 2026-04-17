@@ -333,6 +333,10 @@ export function ShowroomCardCarousel({
         return;
       }
 
+      if (e.pointerType === "mouse") {
+        e.preventDefault();
+      }
+
       if (dragResetTimeoutRef.current) {
         clearTimeout(dragResetTimeoutRef.current);
         dragResetTimeoutRef.current = null;
@@ -370,6 +374,8 @@ export function ShowroomCardCarousel({
       if (target?.closest('[data-carousel-control="true"]') || e.button !== 0) {
         return;
       }
+
+      e.preventDefault();
 
       if (dragResetTimeoutRef.current) {
         clearTimeout(dragResetTimeoutRef.current);

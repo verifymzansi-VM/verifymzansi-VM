@@ -215,6 +215,8 @@ export function PosterCardShell({
               width={isHeroVariant ? 32 : 28}
               height={isHeroVariant ? 32 : 28}
               className="h-full w-full object-contain"
+              draggable={disableNativeDrag ? false : undefined}
+              onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
             />
           </div>
         ) : (
@@ -309,6 +311,7 @@ export function PosterCardShell({
             controlVariant={mediaControlVariant}
             feedPlaybackActive={feedPlaybackActive}
             deferVideoLoadUntilPlay={deferVideoLoadUntilPlay}
+            disableNativeDrag={disableNativeDrag}
           />
         ) : fallback ? (
           <div className="absolute inset-0 skeleton-shimmer">{fallback}</div>
