@@ -1,5 +1,50 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
-  <rect width="1600" height="900" fill="#064e3b"/>
-  <text x="800" y="420" text-anchor="middle" font-family="system-ui, sans-serif" font-size="48" fill="#e5e7eb">Mzansi Market</text>
-  <text x="800" y="480" text-anchor="middle" font-family="system-ui, sans-serif" font-size="24" fill="#9ca3af">VerifyMzansi</text>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="900" viewBox="0 0 1200 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="900" rx="56" fill="#F9F7F1"/>
+  <rect width="1200" height="900" rx="56" fill="url(#mesh)"/>
+  <g opacity="0.9">
+    <rect x="92" y="84" width="1016" height="84" rx="30" fill="white" fill-opacity="0.88"/>
+    <rect x="120" y="112" width="228" height="28" rx="14" fill="#00833E" fill-opacity="0.18"/>
+    <rect x="860" y="106" width="112" height="40" rx="20" fill="white"/>
+    <rect x="986" y="106" width="92" height="40" rx="20" fill="#00833E"/>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="156" y="214" width="888" height="448" rx="48" fill="white" fill-opacity="0.8"/>
+    <rect x="192" y="252" width="520" height="372" rx="40" fill="url(#cardbg)"/>
+    <rect x="742" y="254" width="264" height="184" rx="32" fill="#FFFFFF" fill-opacity="0.9"/>
+    <rect x="742" y="458" width="264" height="142" rx="32" fill="#FFFFFF" fill-opacity="0.92"/>
+    <rect x="212" y="274" width="224" height="20" rx="10" fill="white" fill-opacity="0.82"/>
+    <rect x="212" y="306" width="310" height="58" rx="18" fill="white" fill-opacity="0.96"/>
+    <rect x="212" y="388" width="388" height="18" rx="9" fill="white" fill-opacity="0.74"/>
+    <rect x="212" y="420" width="276" height="18" rx="9" fill="white" fill-opacity="0.58"/>
+    <rect x="212" y="498" width="188" height="54" rx="27" fill="#00833E"/>
+    <rect x="212" y="578" width="420" height="12" rx="6" fill="#00833E" fill-opacity="0.5"/>
+    <rect x="770" y="282" width="208" height="22" rx="11" fill="#00833E" fill-opacity="0.18"/>
+    <rect x="770" y="322" width="166" height="48" rx="16" fill="#00833E" fill-opacity="0.95"/>
+    <rect x="770" y="488" width="164" height="20" rx="10" fill="#00833E" fill-opacity="0.18"/>
+    <rect x="770" y="526" width="198" height="16" rx="8" fill="#111827" fill-opacity="0.14"/>
+  </g>
+  <text x="182" y="730" fill="#111827" font-family="Segoe UI, sans-serif" font-size="30" font-weight="700" letter-spacing="6">MZANSI MARKET</text>
+  <text x="182" y="784" fill="#0F172A" font-family="Segoe UI, sans-serif" font-size="60" font-weight="800">Products with real visibility</text>
+  <text x="182" y="830" fill="#334155" font-family="Segoe UI, sans-serif" font-size="30">Live-inspired fallback for current listing discovery</text>
+  <defs>
+    <linearGradient id="mesh" x1="0" y1="0" x2="1200" y2="900" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F7F3E8"/>
+      <stop offset="0.56" stop-color="#F6FBF8"/>
+      <stop offset="1" stop-color="#F4F0E8"/>
+    </linearGradient>
+    <linearGradient id="cardbg" x1="192" y1="252" x2="712" y2="624" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#DFF8EB"/>
+      <stop offset="1" stop-color="#F6F8FB"/>
+    </linearGradient>
+    <filter id="shadow" x="116" y="190" width="968" height="512" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="18"/>
+      <feGaussianBlur stdDeviation="20"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.0588 0 0 0 0 0.0941 0 0 0 0 0.1608 0 0 0 0.18 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_1_1"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_1_1" result="shape"/>
+    </filter>
+  </defs>
 </svg>
