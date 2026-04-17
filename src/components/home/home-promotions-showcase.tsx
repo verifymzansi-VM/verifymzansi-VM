@@ -1,17 +1,19 @@
 import Link from "next/link";
-import { cookies } from "next/headers";
 import { TreePalm, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { BusinessPreviewCard } from "@/components/home/business-preview-card";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { AutoScrollRail } from "./auto-scroll-rail";
 import { HomeShowcaseShell } from "./home-showcase-shell";
 import type { BusinessCategory, BusinessType, PromotionType } from "@/types/enums";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
-import { getContentLikeSummaryMap, getContentViewCountMap } from "@/lib/engagement-server";
+import {
+  getOptionalContentLikeSummaryMap,
+  getOptionalContentViewCountMap,
+} from "@/lib/engagement-server";
 import {
   buildPublicEventPromotionsQuery,
   buildPublicTourismBusinessesQuery,
@@ -22,6 +24,7 @@ import {
   PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
   shouldHidePlaywrightFixtures,
 } from "@/lib/supabase/playwright-visual-fixtures";
+import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
 
 interface PromotionRow {
   id: string;
@@ -70,13 +73,13 @@ type ShowcaseItem =
   | { kind: "tourism"; data: TourismBusinessRow };
 
 export async function HomePromotionsShowcase() {
-  const cookieStore = await cookies();
+  const cookieStore = await getOptionalCookieStore();
   const hideFixtures = shouldHidePlaywrightFixtures(
-    cookieStore.get(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
+    readCookieValue(cookieStore, PLAYWRIGHT_HIDE_FIXTURES_COOKIE)
   );
-  const viewerKey = buildViewerKey(cookieStore.get(ENGAGEMENT_VIEWER_COOKIE)?.value ?? null);
+  const viewerKey = buildViewerKey(readCookieValue(cookieStore, ENGAGEMENT_VIEWER_COOKIE) ?? null);
   const supabase = await createClient();
-  const engagementAdmin = createAdminClient();
+  const engagementAdmin = tryCreateAdminClient();
   const now = new Date().toISOString();
 
   const { data: eventData } = await buildPublicEventPromotionsQuery(
@@ -93,8 +96,8 @@ export async function HomePromotionsShowcase() {
     .slice(0, 4);
   const promotionIds = promotions.map((promotion) => promotion.id);
   const [promotionViewCountMap, promotionLikeSummary] = await Promise.all([
-    getContentViewCountMap(engagementAdmin, "promotion", promotionIds),
-    getContentLikeSummaryMap(engagementAdmin, "promotion", promotionIds, viewerKey),
+    getOptionalContentViewCountMap(engagementAdmin, "promotion", promotionIds),
+    getOptionalContentLikeSummaryMap(engagementAdmin, "promotion", promotionIds, viewerKey),
   ]);
 
   const { data: tourismData } = await buildPublicTourismBusinessesQuery(
@@ -110,8 +113,8 @@ export async function HomePromotionsShowcase() {
     .slice(0, 4);
   const tourismIds = tourismBusinesses.map((business) => business.id);
   const [tourismViewCountMap, tourismLikeSummary] = await Promise.all([
-    getContentViewCountMap(engagementAdmin, "business", tourismIds),
-    getContentLikeSummaryMap(engagementAdmin, "business", tourismIds, viewerKey),
+    getOptionalContentViewCountMap(engagementAdmin, "business", tourismIds),
+    getOptionalContentLikeSummaryMap(engagementAdmin, "business", tourismIds, viewerKey),
   ]);
 
   // Fetch business logos for promotions linked to a business

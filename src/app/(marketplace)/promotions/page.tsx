@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import {
   ShowroomCardCarousel,
@@ -24,6 +23,7 @@ import {
   shouldHidePlaywrightFixtures,
 } from "@/lib/supabase/playwright-visual-fixtures";
 import { PromotionsExplorer } from "./client";
+import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com";
 
@@ -86,9 +86,9 @@ function buildBalancedCarouselItems(
 }
 
 export default async function PromotionsPage() {
-  const cookieStore = await cookies();
+  const cookieStore = await getOptionalCookieStore();
   const hideFixtures = shouldHidePlaywrightFixtures(
-    cookieStore.get(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
+    readCookieValue(cookieStore, PLAYWRIGHT_HIDE_FIXTURES_COOKIE)
   );
   const supabase = await createClient();
   const promotionOwnerColumn = await getOwnerColumn(supabase, "promotions");

@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { cookies } from "next/headers";
+import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { Calendar } from "lucide-react";
 import { PageHeader } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,7 +19,11 @@ import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content
 import { PastEventsAccordion } from "./past-events-accordion";
 import Link from "next/link";
 import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
-import { getContentLikeSummaryMap, getContentViewCountMap } from "@/lib/engagement-server";
+import {
+  getOptionalContentLikeSummaryMap,
+  getOptionalContentViewCountMap,
+} from "@/lib/engagement-server";
+import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
 
 export const metadata = {
   title: "Events",
@@ -85,10 +88,10 @@ function isPlaceholderEvent(event: { title: string | null; description?: string 
 }
 
 export default async function EventsPage() {
-  const cookieStore = await cookies();
-  const viewerKey = buildViewerKey(cookieStore.get(ENGAGEMENT_VIEWER_COOKIE)?.value ?? null);
+  const cookieStore = await getOptionalCookieStore();
+  const viewerKey = buildViewerKey(readCookieValue(cookieStore, ENGAGEMENT_VIEWER_COOKIE) ?? null);
   const admin = await createClient();
-  const engagementAdmin = createAdminClient();
+  const engagementAdmin = tryCreateAdminClient();
   const promotionOwnerColumn = await getOwnerColumn(admin, "promotions");
   const now = new Date().toISOString();
 
@@ -138,8 +141,8 @@ export default async function EventsPage() {
   );
   const allEventIds = [...upcoming, ...past].map((event) => event.id);
   const [allViewSummary, allLikeSummary] = await Promise.all([
-    getContentViewCountMap(engagementAdmin, "promotion", allEventIds),
-    getContentLikeSummaryMap(engagementAdmin, "promotion", allEventIds, viewerKey),
+    getOptionalContentViewCountMap(engagementAdmin, "promotion", allEventIds),
+    getOptionalContentLikeSummaryMap(engagementAdmin, "promotion", allEventIds, viewerKey),
   ]);
   const allEvents = [...upcoming, ...past];
   const accountIds = [...new Set(allEvents.map((event) => readOwnerId(event)).filter(Boolean))];

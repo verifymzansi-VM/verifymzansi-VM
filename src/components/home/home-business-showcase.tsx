@@ -1,6 +1,5 @@
-import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { BusinessPreviewCard } from "./business-preview-card";
 import { AutoScrollRail } from "./auto-scroll-rail";
 import { HomeShowcaseShell } from "./home-showcase-shell";
@@ -13,20 +12,24 @@ import {
   shouldHidePlaywrightFixtures,
 } from "@/lib/supabase/playwright-visual-fixtures";
 import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
-import { getContentLikeSummaryMap, getContentViewCountMap } from "@/lib/engagement-server";
+import {
+  getOptionalContentLikeSummaryMap,
+  getOptionalContentViewCountMap,
+} from "@/lib/engagement-server";
+import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
 
 function provinceCode(name: string): string {
   return SA_PROVINCES.find((p) => p.name.toLowerCase() === name?.toLowerCase())?.code ?? name;
 }
 
 export async function HomeBusinessShowcase() {
-  const cookieStore = await cookies();
+  const cookieStore = await getOptionalCookieStore();
   const hideFixtures = shouldHidePlaywrightFixtures(
-    cookieStore.get(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
+    readCookieValue(cookieStore, PLAYWRIGHT_HIDE_FIXTURES_COOKIE)
   );
-  const viewerKey = buildViewerKey(cookieStore.get(ENGAGEMENT_VIEWER_COOKIE)?.value ?? null);
+  const viewerKey = buildViewerKey(readCookieValue(cookieStore, ENGAGEMENT_VIEWER_COOKIE) ?? null);
   const supabase = await createClient();
-  const engagementAdmin = createAdminClient();
+  const engagementAdmin = tryCreateAdminClient();
   const { data: businesses } = await supabase
     .from("businesses")
     .select("*")
@@ -45,8 +48,8 @@ export async function HomeBusinessShowcase() {
   if (items.length === 0) return null;
   const businessIds = items.map((business) => business.id as string);
   const [viewCountMap, likeSummaryMap] = await Promise.all([
-    getContentViewCountMap(engagementAdmin, "business", businessIds),
-    getContentLikeSummaryMap(engagementAdmin, "business", businessIds, viewerKey),
+    getOptionalContentViewCountMap(engagementAdmin, "business", businessIds),
+    getOptionalContentLikeSummaryMap(engagementAdmin, "business", businessIds, viewerKey),
   ]);
 
   return (

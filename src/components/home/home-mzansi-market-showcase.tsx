@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { MarketPreviewCard } from "./market-preview-card";
 import { AutoScrollRail } from "./auto-scroll-rail";
@@ -11,6 +10,7 @@ import {
   PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
   shouldHidePlaywrightFixtures,
 } from "@/lib/supabase/playwright-visual-fixtures";
+import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
 
 const log = createLogger("HomeMzansiMarketShowcase");
 
@@ -19,9 +19,9 @@ function provinceCode(name: string): string {
 }
 
 export async function HomeMzansiMarketShowcase() {
-  const cookieStore = await cookies();
+  const cookieStore = await getOptionalCookieStore();
   const hideFixtures = shouldHidePlaywrightFixtures(
-    cookieStore.get(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
+    readCookieValue(cookieStore, PLAYWRIGHT_HIDE_FIXTURES_COOKIE)
   );
   const supabase = await createClient();
   const { data: listings, error } = await supabase

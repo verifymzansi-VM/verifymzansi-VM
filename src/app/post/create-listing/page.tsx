@@ -635,27 +635,27 @@ export default function CreateListingPage() {
         return `${fallback} (HTTP ${response.status})`;
       };
 
-      // Upload photos, video, and video cover in parallel
+      let logoUrls: string[] = [];
+      if (logoFile.length > 0) {
+        const uploadData = new FormData();
+        uploadData.append("area", "listing_logo");
+        uploadData.append("files", logoFile[0]);
+        const uploadRes = await fetchWithRetry("/api/media/upload", {
+          method: "POST",
+          headers: withCsrfHeaders(),
+          body: uploadData,
+        });
+        if (!uploadRes.ok) {
+          throw new Error(await readUploadError(uploadRes, "Failed to upload listing logo"));
+        }
+        const uploadJson = await uploadRes.json();
+        logoUrls = (uploadJson.urls || []) as string[];
+        setUploadStatuses((current) => ({ ...current, logo: "done" }));
+      }
+
+      // Upload photos, video, and video cover in parallel after the logo upload settles.
       let compressedVideoFileRef: File | null = null;
-      const [logoUrls, photoUrls, videoUrl, videoThumbnailUrl] = await Promise.all([
-        logoFile.length > 0
-          ? (async () => {
-              const uploadData = new FormData();
-              uploadData.append("area", "listing_logo");
-              uploadData.append("files", logoFile[0]);
-              const uploadRes = await fetchWithRetry("/api/media/upload", {
-                method: "POST",
-                headers: withCsrfHeaders(),
-                body: uploadData,
-              });
-              if (!uploadRes.ok) {
-                throw new Error(await readUploadError(uploadRes, "Failed to upload listing logo"));
-              }
-              const uploadJson = await uploadRes.json();
-              setUploadStatuses((current) => ({ ...current, logo: "done" }));
-              return (uploadJson.urls || []) as string[];
-            })()
-          : Promise.resolve([] as string[]),
+      const [photoUrls, videoUrl, videoThumbnailUrl] = await Promise.all([
         // Photos via server proxy (small files)
         photoFiles.length > 0
           ? (async () => {
@@ -952,6 +952,7 @@ export default function CreateListingPage() {
           showContactActions={false}
           showSimilarListings={false}
           photoCount={photoPreviewUrls.length}
+          trackView={false}
         />
       </div>
     );

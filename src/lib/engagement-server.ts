@@ -49,6 +49,18 @@ export async function getContentViewCountMap(
   }
 }
 
+export async function getOptionalContentViewCountMap(
+  admin: SupabaseClient | null | undefined,
+  targetType: ContentTargetType,
+  targetIds: string[]
+) {
+  if (!admin) {
+    return new Map<string, number>();
+  }
+
+  return getContentViewCountMap(admin, targetType, targetIds);
+}
+
 export async function getContentLikeSummaryMap(
   admin: SupabaseClient,
   targetType: ContentTargetType,
@@ -87,4 +99,17 @@ export async function getContentLikeSummaryMap(
   } catch {
     return new Map<string, { likeCount: number; viewerHasLiked: boolean }>();
   }
+}
+
+export async function getOptionalContentLikeSummaryMap(
+  admin: SupabaseClient | null | undefined,
+  targetType: ContentTargetType,
+  targetIds: string[],
+  viewerKey?: string | null
+) {
+  if (!admin) {
+    return new Map<string, { likeCount: number; viewerHasLiked: boolean }>();
+  }
+
+  return getContentLikeSummaryMap(admin, targetType, targetIds, viewerKey);
 }

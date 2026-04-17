@@ -180,6 +180,7 @@ export function ListingDetailContent({
   similarItems = [],
   similarSellers = new Map<string, SimilarSellerRow>(),
   photoCount,
+  trackView = true,
 }: {
   listing: ListingDetailRecord;
   seller: ListingSellerRecord | null;
@@ -188,6 +189,7 @@ export function ListingDetailContent({
   similarItems?: SimilarListingRow[];
   similarSellers?: Map<string, SimilarSellerRow>;
   photoCount?: number;
+  trackView?: boolean;
 }) {
   const trustLevel = seller ? computeTrustLevel(seller.account_verification_status ?? null) : null;
   const createdAt = new Date(listing.created_at).toLocaleDateString("en-ZA", {
@@ -247,6 +249,7 @@ export function ListingDetailContent({
                     ? "object-contain bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.22),_rgba(15,23,42,0.96))]"
                     : "object-cover transition-transform duration-500"
                 }
+                trackView={trackView}
               />
             </ErrorBoundary>
           </div>

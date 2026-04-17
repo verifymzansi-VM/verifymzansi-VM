@@ -611,13 +611,19 @@ export async function GET(request: NextRequest) {
     }
 
     const admin = createAdminClient();
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    let userId: string | null = null;
+
+    try {
+      const supabase = await createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      userId = user?.id ?? null;
+    } catch {}
+
     const viewerKey = buildViewerKey(
       request.cookies?.get?.(ENGAGEMENT_VIEWER_COOKIE)?.value ?? null,
-      user?.id ?? null
+      userId
     );
     const ownerColumn = await getOwnerColumn(admin, "promotions");
     const parsedQuery = parseAndValidateSearchParams(

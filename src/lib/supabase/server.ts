@@ -2,10 +2,10 @@ import "server-only";
 
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { cookies } from "next/headers";
 import { createPlaywrightStubSupabaseClient } from "@/lib/supabase/playwright-stub";
 import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
+import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
 
 const logger = createLogger("Supabase");
 
@@ -14,13 +14,13 @@ const logger = createLogger("Supabase");
  * Reads/writes auth cookies via the Next.js `cookies()` API.
  */
 export async function createClient(): Promise<SupabaseClient> {
-  const cookieStore = await cookies();
+  const cookieStore = await getOptionalCookieStore();
 
   if (isPlaywrightSupabaseStubMode()) {
     return createPlaywrightStubSupabaseClient({
       cookies: {
         get(name: string) {
-          return cookieStore.get(name)?.value;
+          return readCookieValue(cookieStore, name);
         },
         set(name: string, value: string, options?: CookieOptions) {
           try {
@@ -48,7 +48,7 @@ export async function createClient(): Promise<SupabaseClient> {
   return createServerClient(url, anonKey, {
     cookies: {
       get(name: string) {
-        return cookieStore.get(name)?.value;
+        return readCookieValue(cookieStore, name);
       },
       set(name: string, value: string, options: CookieOptions) {
         try {

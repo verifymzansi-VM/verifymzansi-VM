@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { ShowroomCardCarousel } from "@/components/showrooms/showroom-card-carousel";
 import { listingToCarouselItem } from "@/components/showrooms/carousel-item-transforms";
@@ -20,6 +19,7 @@ import {
   PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
   shouldHidePlaywrightFixtures,
 } from "@/lib/supabase/playwright-visual-fixtures";
+import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com";
 
@@ -36,9 +36,9 @@ export const metadata: Metadata = {
 export const revalidate = 60;
 
 export default async function MzansiMarketPage() {
-  const cookieStore = await cookies();
+  const cookieStore = await getOptionalCookieStore();
   const hideFixtures = shouldHidePlaywrightFixtures(
-    cookieStore.get(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
+    readCookieValue(cookieStore, PLAYWRIGHT_HIDE_FIXTURES_COOKIE)
   );
   const supabase = await createClient();
 

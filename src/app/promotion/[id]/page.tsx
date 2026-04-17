@@ -1,13 +1,13 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
 import { ACCOUNT_PROFILE_TABLE, normalizeOwnerRecord, readOwnerId } from "@/lib/account/compat";
 import type { Metadata } from "next";
-import { getContentViewCountMap } from "@/lib/engagement-server";
+import { getOptionalContentViewCountMap } from "@/lib/engagement-server";
 
 interface PromotionDetailPageProps {
   params: Promise<{ id: string }>;
@@ -35,7 +35,7 @@ export async function generateMetadata({ params }: PromotionDetailPageProps): Pr
 export default async function PromotionDetailPage({ params }: PromotionDetailPageProps) {
   const { id } = await params;
   const supabase = await createClient();
-  const engagementAdmin = createAdminClient();
+  const engagementAdmin = tryCreateAdminClient();
 
   // Fetch promotion
   const { data: rawPromotion } = await supabase
@@ -71,7 +71,7 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
           .maybeSingle()
       ).data
     : null;
-  const promotionViewCounts = await getContentViewCountMap(engagementAdmin, "promotion", [
+  const promotionViewCounts = await getOptionalContentViewCountMap(engagementAdmin, "promotion", [
     promotion.id,
   ]);
 
