@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { ShowroomCardCarousel } from "@/components/showrooms/showroom-card-carousel";
+import { mzansiBusinessShowroomBackground } from "@/components/showrooms/showroom-backgrounds";
 import {
   businessToCarouselItem,
   type CarouselItem,
@@ -88,6 +89,7 @@ export default async function MzansiBusinessPage() {
         items={carouselItems}
         emptyTitle="Mzansi Business"
         emptyDescription="Discover verified South African businesses and services."
+        background={mzansiBusinessShowroomBackground}
       />
 
       <TrustStrip variant="blue" />

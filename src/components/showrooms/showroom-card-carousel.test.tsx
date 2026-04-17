@@ -1,6 +1,10 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { ShowroomCardCarousel, type CarouselItem } from "./showroom-card-carousel";
+import {
+  ShowroomCardCarousel,
+  type CarouselItem,
+  type ShowroomDecorativeBackground,
+} from "./showroom-card-carousel";
 
 vi.mock("@/hooks/use-reduced-motion", () => ({
   useReducedMotion: () => false,
@@ -107,6 +111,16 @@ const expandedItems: CarouselItem[] = Array.from({ length: 15 }, (_, index) => (
   mediaUrl: `/expanded-${index + 1}.jpg`,
 }));
 
+const mockBackground: ShowroomDecorativeBackground = {
+  src: "/images/showrooms/test-desktop.jpg",
+  mobileSrc: "/images/showrooms/test-mobile.jpg",
+  objectPosition: "center 38%",
+  mobileObjectPosition: "center 22%",
+  overlayPreset: "market",
+  blurPx: 18,
+  dimOpacity: 0.48,
+};
+
 // Stub IntersectionObserver
 beforeEach(() => {
   class MockIntersectionObserver {
@@ -195,6 +209,45 @@ describe("ShowroomCardCarousel", () => {
     expect(emptyStateCard).toBeDefined();
     expect(screen.getByText("No Items")).toBeInTheDocument();
     expect(screen.getByText("Nothing to show")).toBeInTheDocument();
+  });
+
+  it("renders decorative showroom background layers when configured", () => {
+    const { container } = render(
+      <ShowroomCardCarousel items={mockItems} background={mockBackground} />
+    );
+
+    const desktopBackground = container.querySelector('[data-showroom-background="desktop"]');
+    const mobileBackground = container.querySelector('[data-showroom-background="mobile"]');
+
+    expect(desktopBackground).toHaveAttribute(
+      "src",
+      expect.stringContaining(encodeURIComponent("/images/showrooms/test-desktop.jpg"))
+    );
+    expect(mobileBackground).toHaveAttribute(
+      "src",
+      expect.stringContaining(encodeURIComponent("/images/showrooms/test-mobile.jpg"))
+    );
+  });
+
+  it("keeps the default gradient-only shell when no decorative background is provided", () => {
+    const { container } = render(<ShowroomCardCarousel items={mockItems} />);
+
+    expect(container.querySelector('[data-showroom-background="desktop"]')).toBeNull();
+    expect(container.querySelector('[data-showroom-background="mobile"]')).toBeNull();
+  });
+
+  it("preserves the empty state when a decorative background is provided", () => {
+    const { container } = render(
+      <ShowroomCardCarousel
+        items={[]}
+        background={mockBackground}
+        emptyTitle="No Items"
+        emptyDescription="Nothing to show"
+      />
+    );
+
+    expect(screen.getByText("No Items")).toBeInTheDocument();
+    expect(container.querySelector('[data-showroom-background="desktop"]')).toBeTruthy();
   });
 
   it("navigates to next slide on dot click", () => {

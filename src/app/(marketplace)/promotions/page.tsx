@@ -9,6 +9,7 @@ import {
   businessToCarouselItem,
   promotionToCarouselItem,
 } from "@/components/showrooms/carousel-item-transforms";
+import { tourismEventsShowroomBackground } from "@/components/showrooms/showroom-backgrounds";
 import { TrustStrip } from "@/components/layout/trust-strip";
 import { getOwnerColumn, withOwnerColumn } from "@/lib/account/compat";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
@@ -160,6 +161,7 @@ export default async function PromotionsPage() {
         items={carouselItems}
         emptyTitle="Tourism & Events"
         emptyDescription="Discover tourism destinations, accommodations, and events from verified South African businesses."
+        background={tourismEventsShowroomBackground}
       />
 
       <TrustStrip variant="green" />

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { ShowroomCardCarousel } from "@/components/showrooms/showroom-card-carousel";
+import { mzansiMarketShowroomBackground } from "@/components/showrooms/showroom-backgrounds";
 import { listingToCarouselItem } from "@/components/showrooms/carousel-item-transforms";
 import { PageHeader } from "@/components/layout";
 import { TrustStrip } from "@/components/layout/trust-strip";
@@ -69,6 +70,7 @@ export default async function MzansiMarketPage() {
         items={carouselItems}
         emptyTitle="Mzansi Market"
         emptyDescription="Browse classified ads from identity-verified members."
+        background={mzansiMarketShowroomBackground}
       />
 
       <TrustStrip variant="green" />

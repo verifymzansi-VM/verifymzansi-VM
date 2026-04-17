@@ -24,6 +24,7 @@ vi.mock("@/components/showrooms/showroom-card-carousel", () => ({
     items: Array<{ id: string; type: string }>;
     emptyTitle?: string;
     emptyDescription?: string;
+    background?: { src?: string; overlayPreset?: string };
   }) => {
     carouselSpy(props);
     return <div data-testid="showroom-card-carousel" />;
@@ -210,6 +211,26 @@ describe("PromotionsPage", () => {
     );
     expect(carouselSpy.mock.calls[0]?.[0].items).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ id: "tourism-events-empty" })])
+    );
+  });
+
+  it("passes the tourism-led decorative background into the showroom", async () => {
+    mockCreateClient.mockResolvedValue(
+      createSupabaseClient({
+        businesses: [],
+        promotions: [],
+      })
+    );
+
+    render(await PromotionsPage());
+
+    expect(carouselSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        background: expect.objectContaining({
+          src: "/images/showrooms/tourism-events-cape-town-sunrise.jpg",
+          overlayPreset: "tourism",
+        }),
+      })
     );
   });
 });

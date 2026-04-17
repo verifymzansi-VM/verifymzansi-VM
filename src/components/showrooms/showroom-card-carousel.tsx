@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import {
   useState,
   useEffect,
@@ -50,6 +51,20 @@ export interface ShowroomCardCarouselProps {
   emptyTitle?: string;
   /** Fallback description when items is empty */
   emptyDescription?: string;
+  /** Optional decorative photo background for market pages. */
+  background?: ShowroomDecorativeBackground;
+}
+
+export type ShowroomBackgroundOverlayPreset = "market" | "business" | "tourism";
+
+export interface ShowroomDecorativeBackground {
+  src: string;
+  mobileSrc?: string;
+  objectPosition?: string;
+  mobileObjectPosition?: string;
+  overlayPreset?: ShowroomBackgroundOverlayPreset;
+  blurPx?: number;
+  dimOpacity?: number;
 }
 
 /* ── Constants ─────────────────────────────────────────────── */
@@ -69,6 +84,49 @@ const CARD_W =
   "w-[72vw] max-w-[292px] sm:w-[46vw] sm:max-w-[310px] md:w-[34vw] lg:w-[280px] lg:max-w-none xl:w-[304px] 2xl:w-[320px]";
 const SECTION_SPACING =
   "pt-0 pb-1 sm:pt-0 sm:pb-3 md:pt-8 md:pb-8 lg:h-[calc(100svh-4rem)] lg:min-h-0 lg:py-0";
+const SECTION_SURFACE = "bg-[linear-gradient(180deg,#f8f5ec_0%,#f1e8da_48%,#e8decd_100%)]";
+
+function getBackgroundOverlayClasses(preset: ShowroomBackgroundOverlayPreset = "market") {
+  switch (preset) {
+    case "business":
+      return {
+        wash: "bg-[linear-gradient(180deg,rgba(246,246,244,0.88)_0%,rgba(229,234,240,0.54)_38%,rgba(15,23,42,0.46)_100%)]",
+        accent:
+          "bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.18),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(148,163,184,0.14),transparent_32%)]",
+        edgeLeft: "bg-gradient-to-r from-slate-950/22 via-slate-950/6 to-transparent",
+        edgeRight: "bg-gradient-to-l from-slate-950/18 via-slate-950/4 to-transparent",
+        topGlow:
+          "bg-[radial-gradient(circle,rgba(255,255,255,0.32)_0%,rgba(219,234,254,0.12)_45%,transparent_72%)]",
+        bottomGlow:
+          "bg-[radial-gradient(circle,rgba(15,23,42,0.42)_0%,rgba(30,41,59,0.12)_40%,transparent_72%)]",
+      };
+    case "tourism":
+      return {
+        wash: "bg-[linear-gradient(180deg,rgba(238,246,255,0.52)_0%,rgba(234,239,244,0.18)_32%,rgba(15,23,42,0.34)_100%)]",
+        accent:
+          "bg-[radial-gradient(circle_at_top_right,rgba(125,211,252,0.18),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(251,191,36,0.16),transparent_32%)]",
+        edgeLeft: "bg-gradient-to-r from-slate-950/16 via-slate-950/4 to-transparent",
+        edgeRight: "bg-gradient-to-l from-slate-950/12 via-slate-950/3 to-transparent",
+        topGlow:
+          "bg-[radial-gradient(circle,rgba(219,234,254,0.34)_0%,rgba(255,255,255,0.08)_45%,transparent_72%)]",
+        bottomGlow:
+          "bg-[radial-gradient(circle,rgba(15,23,42,0.32)_0%,rgba(15,23,42,0.08)_40%,transparent_72%)]",
+      };
+    case "market":
+    default:
+      return {
+        wash: "bg-[linear-gradient(180deg,rgba(250,246,239,0.82)_0%,rgba(241,232,218,0.5)_38%,rgba(15,23,42,0.4)_100%)]",
+        accent:
+          "bg-[radial-gradient(circle_at_top_right,rgba(34,197,94,0.16),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.12),transparent_30%)]",
+        edgeLeft: "bg-gradient-to-r from-slate-950/18 via-slate-950/4 to-transparent",
+        edgeRight: "bg-gradient-to-l from-slate-950/16 via-slate-950/4 to-transparent",
+        topGlow:
+          "bg-[radial-gradient(circle,rgba(255,255,255,0.36)_0%,rgba(255,255,255,0.08)_45%,transparent_72%)]",
+        bottomGlow:
+          "bg-[radial-gradient(circle,rgba(15,23,42,0.38)_0%,rgba(15,23,42,0.1)_40%,transparent_72%)]",
+      };
+  }
+}
 
 /* ── SA flag section wrapper ───────────────────────────────── */
 
@@ -77,33 +135,93 @@ function SectionShell({
   sectionRef,
   sectionClassName,
   extraClassName,
+  background,
 }: {
   children: React.ReactNode;
   sectionRef?: React.Ref<HTMLDivElement>;
   sectionClassName: string;
   extraClassName?: string;
+  background?: ShowroomDecorativeBackground;
 }) {
+  const hasBackground = Boolean(background?.src);
+  const overlayClasses = getBackgroundOverlayClasses(background?.overlayPreset);
+  const backgroundFilter = `blur(${background?.blurPx ?? 18}px) saturate(0.82) brightness(0.78)`;
+  const backgroundSrc = background?.src ?? "";
+  const mobileBackgroundSrc = background?.mobileSrc ?? backgroundSrc;
+  const desktopPosition = background?.objectPosition ?? "center";
+  const mobilePosition = background?.mobileObjectPosition ?? desktopPosition;
+
   return (
     <section
       ref={sectionRef}
       className={cn(
-        "relative w-full overflow-hidden bg-[linear-gradient(180deg,#f8f5ec_0%,#f1e8da_48%,#e8decd_100%)]",
+        "relative w-full overflow-hidden",
+        SECTION_SURFACE,
         sectionClassName,
         extraClassName
       )}
       aria-roledescription="carousel"
       aria-label="Showroom carousel"
     >
+      {hasBackground ? (
+        <div
+          className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
+          aria-hidden="true"
+        >
+          <Image
+            src={backgroundSrc}
+            alt=""
+            fill
+            sizes="100vw"
+            priority
+            className={cn("hidden object-cover md:block", "scale-[1.08] lg:scale-[1.04]")}
+            style={{ objectPosition: desktopPosition, filter: backgroundFilter }}
+            data-showroom-background="desktop"
+          />
+          <Image
+            src={mobileBackgroundSrc}
+            alt=""
+            fill
+            sizes="100vw"
+            priority
+            className="object-cover md:hidden scale-[1.12]"
+            style={{ objectPosition: mobilePosition, filter: backgroundFilter }}
+            data-showroom-background="mobile"
+          />
+          <div
+            className="absolute inset-0 bg-slate-950"
+            style={{ opacity: background?.dimOpacity ?? 0.44 }}
+          />
+        </div>
+      ) : null}
       <div
-        className="absolute inset-0 z-[1] bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.88),transparent_30%),radial-gradient(circle_at_top_right,rgba(34,197,94,0.14),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.08),rgba(15,23,42,0.06)_48%,rgba(15,23,42,0.12)_100%)]"
+        className={cn(
+          "absolute inset-0 z-[1]",
+          hasBackground
+            ? overlayClasses.wash
+            : "bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.88),transparent_30%),radial-gradient(circle_at_top_right,rgba(34,197,94,0.14),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.08),rgba(15,23,42,0.06)_48%,rgba(15,23,42,0.12)_100%)]"
+        )}
+        aria-hidden="true"
+      />
+      {hasBackground ? (
+        <div className={cn("absolute inset-0 z-[1]", overlayClasses.accent)} aria-hidden="true" />
+      ) : null}
+      <div
+        className={cn(
+          "absolute inset-y-0 left-0 z-[1] w-[24%]",
+          hasBackground
+            ? overlayClasses.edgeLeft
+            : "bg-gradient-to-r from-slate-950/10 via-slate-950/0 to-transparent"
+        )}
         aria-hidden="true"
       />
       <div
-        className="absolute inset-y-0 left-0 z-[1] w-[24%] bg-gradient-to-r from-slate-950/10 via-slate-950/0 to-transparent"
-        aria-hidden="true"
-      />
-      <div
-        className="absolute inset-y-0 right-0 z-[1] w-[24%] bg-gradient-to-l from-slate-950/8 via-slate-950/0 to-transparent"
+        className={cn(
+          "absolute inset-y-0 right-0 z-[1] w-[24%]",
+          hasBackground
+            ? overlayClasses.edgeRight
+            : "bg-gradient-to-l from-slate-950/8 via-slate-950/0 to-transparent"
+        )}
         aria-hidden="true"
       />
       {/* Content above the flag */}
@@ -122,6 +240,7 @@ export function ShowroomCardCarousel({
   className,
   emptyTitle = "Welcome to VerifyMzansi",
   emptyDescription = "Explore verified businesses, listings, and events.",
+  background,
 }: ShowroomCardCarouselProps) {
   const carouselItems = items.slice(0, DESKTOP_SHOWROOM_ITEM_LIMIT);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -616,7 +735,11 @@ export function ShowroomCardCarousel({
 
   if (count === 0) {
     return (
-      <SectionShell sectionClassName={SECTION_SPACING} extraClassName={className}>
+      <SectionShell
+        sectionClassName={SECTION_SPACING}
+        extraClassName={className}
+        background={background}
+      >
         <div className="container-page flex items-center justify-center lg:h-full">
           <div className={CARD_W}>
             <PosterCardShell
@@ -641,13 +764,24 @@ export function ShowroomCardCarousel({
       sectionRef={containerRef}
       sectionClassName={SECTION_SPACING}
       extraClassName={className}
+      background={background}
     >
       <div
-        className="pointer-events-none absolute inset-x-0 top-[12%] z-[2] hidden h-28 lg:block bg-[radial-gradient(circle,rgba(255,255,255,0.42)_0%,rgba(255,255,255,0.08)_45%,transparent_72%)] blur-3xl"
+        className={cn(
+          "pointer-events-none absolute inset-x-0 top-[12%] z-[2] hidden h-28 lg:block blur-3xl",
+          background
+            ? getBackgroundOverlayClasses(background.overlayPreset).topGlow
+            : "bg-[radial-gradient(circle,rgba(255,255,255,0.42)_0%,rgba(255,255,255,0.08)_45%,transparent_72%)]"
+        )}
         aria-hidden="true"
       />
       <div
-        className="pointer-events-none absolute inset-x-0 bottom-[12%] z-[2] hidden h-24 lg:block bg-[radial-gradient(circle,rgba(15,23,42,0.32)_0%,rgba(15,23,42,0.08)_40%,transparent_72%)] blur-3xl"
+        className={cn(
+          "pointer-events-none absolute inset-x-0 bottom-[12%] z-[2] hidden h-24 lg:block blur-3xl",
+          background
+            ? getBackgroundOverlayClasses(background.overlayPreset).bottomGlow
+            : "bg-[radial-gradient(circle,rgba(15,23,42,0.32)_0%,rgba(15,23,42,0.08)_40%,transparent_72%)]"
+        )}
         aria-hidden="true"
       />
       {/* Card coverflow area */}
