@@ -210,9 +210,21 @@ export async function HomePromotionsShowcase() {
                     ? new Date(item.data.featured_until) > new Date(now)
                     : false
                 }
-                viewCount={tourismViewCountMap.get(item.data.id) ?? 0}
-                likeCount={tourismLikeSummary.get(item.data.id)?.likeCount ?? 0}
-                viewerHasLiked={tourismLikeSummary.get(item.data.id)?.viewerHasLiked ?? false}
+                viewCount={
+                  tourismViewCountMap.ok
+                    ? (tourismViewCountMap.data.get(item.data.id) ?? undefined)
+                    : undefined
+                }
+                likeCount={
+                  tourismLikeSummary.ok
+                    ? (tourismLikeSummary.data.get(item.data.id)?.likeCount ?? undefined)
+                    : undefined
+                }
+                viewerHasLiked={
+                  tourismLikeSummary.ok
+                    ? (tourismLikeSummary.data.get(item.data.id)?.viewerHasLiked ?? false)
+                    : false
+                }
                 priority={false}
                 focalX={item.data.focal_x}
                 focalY={item.data.focal_y}
@@ -237,9 +249,21 @@ export async function HomePromotionsShowcase() {
                 city={item.data.location_city}
                 promotionType={item.data.promotion_type as PromotionType}
                 createdAt={item.data.created_at}
-                viewCount={promotionViewCountMap.get(item.data.id) ?? 0}
-                likeCount={promotionLikeSummary.get(item.data.id)?.likeCount ?? 0}
-                viewerHasLiked={promotionLikeSummary.get(item.data.id)?.viewerHasLiked ?? false}
+                viewCount={
+                  promotionViewCountMap.ok
+                    ? (promotionViewCountMap.data.get(item.data.id) ?? undefined)
+                    : undefined
+                }
+                likeCount={
+                  promotionLikeSummary.ok
+                    ? (promotionLikeSummary.data.get(item.data.id)?.likeCount ?? undefined)
+                    : undefined
+                }
+                viewerHasLiked={
+                  promotionLikeSummary.ok
+                    ? (promotionLikeSummary.data.get(item.data.id)?.viewerHasLiked ?? false)
+                    : false
+                }
                 boosted={
                   item.data.boost_until ? new Date(item.data.boost_until) > new Date(now) : false
                 }

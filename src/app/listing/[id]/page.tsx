@@ -173,14 +173,22 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
           <ListingDetailContent
             listing={{
               ...listing,
-              view_count: listingViewCounts.get(listing.id) ?? 0,
+              view_count: listingViewCounts.ok
+                ? (listingViewCounts.data.get(listing.id) ?? 0)
+                : (listing.view_count ?? null),
             }}
             seller={safeSeller}
             similarItems={similarItems.map((item) => ({
               ...item,
-              view_count: listingViewCounts.get(item.id) ?? 0,
-              like_count: similarLikeSummary.get(item.id)?.likeCount ?? 0,
-              viewer_has_liked: similarLikeSummary.get(item.id)?.viewerHasLiked ?? false,
+              view_count: listingViewCounts.ok
+                ? (listingViewCounts.data.get(item.id) ?? null)
+                : null,
+              like_count: similarLikeSummary.ok
+                ? (similarLikeSummary.data.get(item.id)?.likeCount ?? null)
+                : null,
+              viewer_has_liked: similarLikeSummary.ok
+                ? (similarLikeSummary.data.get(item.id)?.viewerHasLiked ?? false)
+                : false,
             }))}
             similarSellers={similarSellers}
             showContactActions={isAuthenticated}

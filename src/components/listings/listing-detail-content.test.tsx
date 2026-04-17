@@ -3,7 +3,14 @@
  */
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
+
+const { listingDetailClientState } = vi.hoisted(() => ({
+  listingDetailClientState: {
+    shouldThrow: true,
+    lastProps: null as null | Record<string, unknown>,
+  },
+}));
 
 vi.mock("next/link", () => ({
   default: ({ children, href }: { children: React.ReactNode; href: string }) => (
@@ -39,8 +46,12 @@ vi.mock("@/components/listings/listing-card", () => ({
 }));
 
 vi.mock("@/app/listing/[id]/client", () => ({
-  ListingDetailClient: () => {
-    throw new Error("Media render crash");
+  ListingDetailClient: (props: Record<string, unknown>) => {
+    listingDetailClientState.lastProps = props;
+    if (listingDetailClientState.shouldThrow) {
+      throw new Error("Media render crash");
+    }
+    return <div data-testid="listing-detail-client" />;
   },
 }));
 
@@ -73,6 +84,8 @@ const { ListingDetailContent } = await import("@/components/listings/listing-det
 describe("ListingDetailContent", () => {
   beforeEach(() => {
     vi.spyOn(console, "error").mockImplementation(() => {});
+    listingDetailClientState.shouldThrow = true;
+    listingDetailClientState.lastProps = null;
   });
 
   afterEach(() => {
@@ -115,5 +128,48 @@ describe("ListingDetailContent", () => {
     );
 
     expect(screen.getByText("Image failed to load")).toBeTruthy();
+  });
+
+  it("updates the visible view count after a recorded detail-page view", async () => {
+    listingDetailClientState.shouldThrow = false;
+
+    render(
+      <ListingDetailContent
+        listing={{
+          id: "listing-2",
+          owner_id: "owner-1",
+          title: "Viewed listing",
+          description: "Test description",
+          price_cents: 12300000,
+          price_negotiable: false,
+          category: "jobs_services",
+          condition: "like_new",
+          attributes: null,
+          photos: [],
+          videos: [],
+          video_thumbnail: null,
+          logo_url: null,
+          location_province: "KwaZulu-Natal",
+          location_city: "Richards Bay",
+          location_suburb: null,
+          location_address: null,
+          contact_methods: ["call"],
+          created_at: new Date().toISOString(),
+          view_count: 7,
+        }}
+        seller={null}
+        showContactActions={false}
+        showSimilarListings={false}
+      />
+    );
+
+    expect(screen.getByText("7 views")).toBeTruthy();
+    expect(listingDetailClientState.lastProps?.onViewRecorded).toBeTypeOf("function");
+
+    await act(async () => {
+      (listingDetailClientState.lastProps?.onViewRecorded as (() => void) | undefined)?.();
+    });
+
+    expect(screen.getByText("8 views")).toBeTruthy();
   });
 });

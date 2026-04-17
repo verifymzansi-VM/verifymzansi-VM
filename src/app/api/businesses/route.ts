@@ -747,17 +747,25 @@ export async function GET(request: NextRequest) {
     const businessIds = publicBusinesses
       .map((business) => String(business.id ?? ""))
       .filter((id): id is string => id.length > 0);
-    const [viewCountMap, likeSummaryMap] = await Promise.all([
+    const [viewCountResult, likeSummaryResult] = await Promise.all([
       getContentViewCountMap(admin, "business", businessIds),
       getContentLikeSummaryMap(admin, "business", businessIds, viewerKey),
     ]);
+    if (!viewCountResult.ok || !likeSummaryResult.ok) {
+      log.error("Failed to load business engagement summary", {
+        businessIds,
+        viewErrorCode: viewCountResult.errorCode,
+        likeErrorCode: likeSummaryResult.errorCode,
+      });
+      return NextResponse.json({ error: "Engagement data unavailable" }, { status: 503 });
+    }
     const serializedBusinesses = publicBusinesses.map((business) => {
       const businessId = String(business.id ?? "");
-      const likeSummary = likeSummaryMap.get(businessId);
+      const likeSummary = likeSummaryResult.data.get(businessId);
 
       return {
         ...business,
-        view_count: viewCountMap.get(businessId) ?? 0,
+        view_count: viewCountResult.data.get(businessId) ?? 0,
         like_count: likeSummary?.likeCount ?? 0,
         viewer_has_liked: likeSummary?.viewerHasLiked ?? false,
       };

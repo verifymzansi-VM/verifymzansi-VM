@@ -72,6 +72,15 @@ describe("GET /api/promotions", () => {
     });
 
     mockCreateAdminClient.mockReturnValue({
+      rpc: vi.fn().mockImplementation((fn: string) => {
+        if (fn === "get_content_view_counts") {
+          return Promise.resolve({ data: [], error: null });
+        }
+        if (fn === "get_content_like_summary") {
+          return Promise.resolve({ data: [], error: null });
+        }
+        return Promise.resolve({ data: [], error: null });
+      }),
       from: vi.fn((table: string) => {
         if (table === "promotions") {
           return {
@@ -140,6 +149,32 @@ describe("GET /api/promotions", () => {
     });
 
     mockCreateAdminClient.mockReturnValue({
+      rpc: vi.fn().mockImplementation((fn: string) => {
+        if (fn === "get_content_view_counts") {
+          return Promise.resolve({
+            data: [
+              {
+                target_id: "00000000-0000-0000-0000-000000000111",
+                view_count: 0,
+              },
+            ],
+            error: null,
+          });
+        }
+        if (fn === "get_content_like_summary") {
+          return Promise.resolve({
+            data: [
+              {
+                target_id: "00000000-0000-0000-0000-000000000111",
+                like_count: 0,
+                viewer_has_liked: false,
+              },
+            ],
+            error: null,
+          });
+        }
+        return Promise.resolve({ data: [], error: null });
+      }),
       from: vi.fn((table: string) => {
         if (table === "promotions") {
           return {

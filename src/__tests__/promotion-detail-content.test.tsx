@@ -3,7 +3,18 @@
  */
 import { describe, it, expect, vi } from "vitest";
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+
+const { trackViewState } = vi.hoisted(() => ({
+  trackViewState: {
+    lastArgs: null as null | {
+      targetId: string;
+      targetType: string;
+      enabled: boolean;
+      onRecorded?: () => void;
+    },
+  },
+}));
 
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: React.ReactNode; href: string }) => (
@@ -64,9 +75,64 @@ vi.mock("@/contexts/video-playback-context", () => ({
   }),
 }));
 
+vi.mock("@/hooks/use-track-content-view", () => ({
+  useTrackContentView: (
+    targetId: string,
+    targetType: string,
+    enabled = true,
+    onRecorded?: () => void
+  ) => {
+    trackViewState.lastArgs = { targetId, targetType, enabled, onRecorded };
+  },
+}));
+
 const { PromotionDetailContent } = await import("@/components/listings/promotion-detail-content");
 
 describe("PromotionDetailContent", () => {
+  it("increments the visible detail-page view count after a recorded view", async () => {
+    render(
+      <PromotionDetailContent
+        promotion={{
+          id: "promo-view",
+          owner_id: "seller-1",
+          business_id: null,
+          title: "Viewed Event",
+          description: "Count me once.",
+          promotion_type: "event",
+          category: "Live Music",
+          category_key: "events_entertainment",
+          photos: [],
+          videos: [],
+          video_thumbnail: null,
+          price_cents: null,
+          price_negotiable: false,
+          location_province: "Gauteng",
+          location_city: "Johannesburg",
+          location_town: null,
+          location_address: null,
+          contact_methods: [],
+          start_date: null,
+          end_date: null,
+          boost_until: null,
+          featured_until: null,
+          view_count: 4,
+          created_at: "2026-03-08T00:00:00.000Z",
+        }}
+        advertiserProfile={null}
+        linkedBusiness={null}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /details/i }));
+    expect(screen.getByText("4")).toBeTruthy();
+
+    await act(async () => {
+      trackViewState.lastArgs?.onRecorded?.();
+    });
+
+    expect(screen.getByText("5")).toBeTruthy();
+  });
+
   it("renders event state and readable contact method labels", () => {
     render(
       <PromotionDetailContent

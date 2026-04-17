@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Calendar, Eye, MapPin, Phone, Sparkles } from "lucide-react";
@@ -210,12 +210,16 @@ export function ListingDetailContent({
     Boolean(listing.contact_methods?.includes("whatsapp"));
   const showStickyBar = canCall || canWhatsapp;
   const facts = useMemo(() => buildListingFacts(listing), [listing]);
+  const [viewCount, setViewCount] = useState(listing.view_count ?? 0);
   const heroUsesContain =
     typeof listing.media_width === "number" &&
     typeof listing.media_height === "number" &&
     listing.media_width > listing.media_height * 1.2;
   const quickFacts = facts.slice(0, 6);
   const detailFacts = facts.slice(6);
+  const handleViewRecorded = useCallback(() => {
+    setViewCount((currentCount) => currentCount + 1);
+  }, []);
 
   return (
     <>
@@ -250,6 +254,7 @@ export function ListingDetailContent({
                     : "object-cover transition-transform duration-500"
                 }
                 trackView={trackView}
+                onViewRecorded={handleViewRecorded}
               />
             </ErrorBoundary>
           </div>
@@ -299,7 +304,7 @@ export function ListingDetailContent({
                 </span>
                 <span className="flex items-center gap-1">
                   <Eye className="h-4 w-4" />
-                  {listing.view_count ?? 0} {(listing.view_count ?? 0) === 1 ? "view" : "views"}
+                  {viewCount} {viewCount === 1 ? "view" : "views"}
                 </span>
               </div>
             </div>
@@ -434,7 +439,7 @@ export function ListingDetailContent({
                         sellerRow ? computeTrustLevel(sellerRow.account_verification_status) : 0
                       }
                       viewCount={item.view_count ?? undefined}
-                      likeCount={item.like_count ?? 0}
+                      likeCount={typeof item.like_count === "number" ? item.like_count : undefined}
                       viewerHasLiked={item.viewer_has_liked ?? false}
                       featured={item.featured}
                       logoUrl={item.logo_url}

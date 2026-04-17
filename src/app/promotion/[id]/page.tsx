@@ -120,7 +120,9 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
           <PromotionDetailContent
             promotion={{
               ...promotion,
-              view_count: promotionViewCounts.get(promotion.id) ?? 0,
+              view_count: promotionViewCounts.ok
+                ? (promotionViewCounts.data.get(promotion.id) ?? 0)
+                : (promotion.view_count ?? null),
             }}
             advertiserProfile={advertiserProfile}
             linkedBusiness={linkedBusiness}

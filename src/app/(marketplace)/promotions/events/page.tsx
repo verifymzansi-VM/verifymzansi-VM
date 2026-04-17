@@ -251,9 +251,21 @@ export default async function EventsPage() {
                         createdAt={event.created_at}
                         ownerTrustLevel={accountProfile?.trust}
                         ownerName={accountProfile?.name}
-                        viewCount={allViewSummary.get(event.id) ?? 0}
-                        likeCount={allLikeSummary.get(event.id)?.likeCount ?? 0}
-                        viewerHasLiked={allLikeSummary.get(event.id)?.viewerHasLiked ?? false}
+                        viewCount={
+                          allViewSummary.ok
+                            ? (allViewSummary.data.get(event.id) ?? undefined)
+                            : undefined
+                        }
+                        likeCount={
+                          allLikeSummary.ok
+                            ? (allLikeSummary.data.get(event.id)?.likeCount ?? undefined)
+                            : undefined
+                        }
+                        viewerHasLiked={
+                          allLikeSummary.ok
+                            ? (allLikeSummary.data.get(event.id)?.viewerHasLiked ?? false)
+                            : false
+                        }
                         boosted={isBoosted}
                         featured={isFeatured}
                         startDate={event.start_date as string | null}
@@ -309,13 +321,19 @@ export default async function EventsPage() {
               province: event.location_province ?? "",
               city: event.location_city ?? "",
               createdAt: event.created_at,
-              viewCount: allViewSummary.get(event.id) ?? 0,
+              viewCount: allViewSummary.ok
+                ? (allViewSummary.data.get(event.id) ?? undefined)
+                : undefined,
               ownerTrustLevel: accountProfile?.trust,
               ownerName: accountProfile?.name,
               startDate: event.start_date,
               endDate: event.end_date,
-              likeCount: allLikeSummary.get(event.id)?.likeCount ?? 0,
-              viewerHasLiked: allLikeSummary.get(event.id)?.viewerHasLiked ?? false,
+              likeCount: allLikeSummary.ok
+                ? (allLikeSummary.data.get(event.id)?.likeCount ?? undefined)
+                : undefined,
+              viewerHasLiked: allLikeSummary.ok
+                ? (allLikeSummary.data.get(event.id)?.viewerHasLiked ?? false)
+                : false,
               focalX: (event.focal_x as number | null | undefined) ?? null,
               focalY: (event.focal_y as number | null | undefined) ?? null,
               mediaWidth: (event.media_width as number | null | undefined) ?? null,

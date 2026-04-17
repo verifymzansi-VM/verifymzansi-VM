@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -171,7 +171,11 @@ export function PromotionDetailContent({
   showContactActions?: boolean;
   showContactSummary?: boolean;
 }) {
-  useTrackContentView(promotion.id, "promotion");
+  const [viewCount, setViewCount] = useState(promotion.view_count ?? 0);
+  const handleViewRecorded = useCallback(() => {
+    setViewCount((currentCount) => currentCount + 1);
+  }, []);
+  useTrackContentView(promotion.id, "promotion", true, handleViewRecorded);
   const photos = promotion.photos ?? [];
   const videos = promotion.videos ?? [];
   const leadVideo = videos[0] ?? null;
@@ -699,7 +703,7 @@ export function PromotionDetailContent({
                   <dt className="text-muted-foreground">Views</dt>
                   <dd className="flex items-center gap-1 font-medium">
                     <Eye className="h-3 w-3" />
-                    {promotion.view_count || 0}
+                    {viewCount}
                   </dd>
                 </dl>
 

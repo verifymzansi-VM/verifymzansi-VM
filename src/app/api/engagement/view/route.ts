@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     }
 
     const admin = createAdminClient();
-    const { error } = await admin.rpc("record_content_view", {
+    const { data, error } = await admin.rpc("record_content_view", {
       p_target_id: targetId,
       p_target_type: targetType,
       p_viewer_key: viewerKey,
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to record view" }, { status: 500 });
     }
 
-    const response = NextResponse.json({ ok: true });
+    const response = NextResponse.json({ ok: true, recorded: Boolean(data) });
     if (!existingViewerId) {
       response.cookies.set({
         name: ENGAGEMENT_VIEWER_COOKIE,

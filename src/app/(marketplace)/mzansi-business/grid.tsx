@@ -274,7 +274,7 @@ export function MzansiBusinessGrid() {
               featuredUntil={business.featured_until}
               serviceAreas={business.service_areas}
               viewCount={business.view_count ?? 0}
-              likeCount={business.like_count ?? 0}
+              likeCount={typeof business.like_count === "number" ? business.like_count : undefined}
               viewerHasLiked={business.viewer_has_liked ?? false}
               focalX={business.focal_x}
               focalY={business.focal_y}

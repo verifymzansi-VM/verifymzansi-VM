@@ -94,4 +94,25 @@ describe("ListingCardList", () => {
     expect(player).toHaveAttribute("data-poster", "https://example.com/listing.jpg");
     expect(player).toHaveAttribute("data-mode", "ambient");
   });
+
+  it("hides view counts and keeps the like control in the metadata area", () => {
+    const { container } = render(
+      <ListingCardList
+        id="listing-2"
+        title="Compact Engagement Listing"
+        price={15000}
+        province="Gauteng"
+        city="Johannesburg"
+        category="Electronics"
+        createdAt={new Date().toISOString()}
+        viewCount={321}
+        likeCount={1400}
+        viewerHasLiked
+      />
+    );
+
+    expect(screen.queryByText(/views/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /unlike this card/i })).toHaveTextContent("999");
+    expect(container.querySelector(".bottom-3.right-3")).toBeTruthy();
+  });
 });

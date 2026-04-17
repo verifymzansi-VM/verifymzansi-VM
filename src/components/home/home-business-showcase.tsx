@@ -79,9 +79,19 @@ export async function HomeBusinessShowcase() {
               provinceCode={provinceCode(b.location_province ?? "ZA")}
               boosted={b.boost_until ? new Date(b.boost_until) > new Date() : false}
               featured={b.featured_until ? new Date(b.featured_until) > new Date() : false}
-              viewCount={viewCountMap.get(b.id as string) ?? 0}
-              likeCount={likeSummaryMap.get(b.id as string)?.likeCount ?? 0}
-              viewerHasLiked={likeSummaryMap.get(b.id as string)?.viewerHasLiked ?? false}
+              viewCount={
+                viewCountMap.ok ? (viewCountMap.data.get(b.id as string) ?? undefined) : undefined
+              }
+              likeCount={
+                likeSummaryMap.ok
+                  ? (likeSummaryMap.data.get(b.id as string)?.likeCount ?? undefined)
+                  : undefined
+              }
+              viewerHasLiked={
+                likeSummaryMap.ok
+                  ? (likeSummaryMap.data.get(b.id as string)?.viewerHasLiked ?? false)
+                  : false
+              }
               priority={false}
               focalX={b.focal_x as number | null | undefined}
               focalY={b.focal_y as number | null | undefined}

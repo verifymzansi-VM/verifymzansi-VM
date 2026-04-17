@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Eye, MapPin } from "lucide-react";
+import { MapPin } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import {
   VideoCardPlayer,
@@ -113,7 +113,7 @@ export function PosterCardShell({
   description,
   location,
   createdAt: _createdAt,
-  viewCount,
+  viewCount: _viewCount,
   likeCount,
   viewerHasLiked = false,
   engagementTargetId,
@@ -134,7 +134,6 @@ export function PosterCardShell({
   feedPlaybackActive = true,
   deferVideoLoadUntilPlay = false,
 }: PosterCardShellProps) {
-  const hasEngagementStats = typeof viewCount === "number";
   const canLike = Boolean(
     engagementTargetId && engagementTargetType && typeof likeCount === "number"
   );
@@ -178,11 +177,6 @@ export function PosterCardShell({
     rootRadiusClassName,
     className
   );
-  const formatCompactCount = (count: number) =>
-    new Intl.NumberFormat("en-ZA", {
-      notation: count >= 1000 ? "compact" : "standard",
-      maximumFractionDigits: count >= 1000 ? 1 : 0,
-    }).format(count);
   const handleNativeDragStart = (event: React.DragEvent<HTMLElement>) => {
     if (disableNativeDrag) {
       event.preventDefault();
@@ -198,7 +192,12 @@ export function PosterCardShell({
     rootRadiusClassName,
     accentClassName
   );
-  const metadataClassName = cn("flex flex-1", contentPaddingClassName, contentClassName);
+  const metadataClassName = cn(
+    "flex flex-1",
+    contentPaddingClassName,
+    canLike ? "pr-14" : undefined,
+    contentClassName
+  );
   const metadataBody = (
     <div className={metadataClassName}>
       {/* Channel avatar / logo */}
@@ -272,16 +271,6 @@ export function PosterCardShell({
           >
             <span className="font-semibold">{eyebrow}</span>
           </p>
-        ) : null}
-        {hasEngagementStats ? (
-          <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] font-medium text-slate-500 dark:text-slate-400">
-            {typeof viewCount === "number" ? (
-              <span className="inline-flex items-center gap-1">
-                <Eye className="h-3.5 w-3.5" />
-                {formatCompactCount(viewCount)} {viewCount === 1 ? "view" : "views"}
-              </span>
-            ) : null}
-          </div>
         ) : null}
       </div>
     </div>
@@ -392,7 +381,7 @@ export function PosterCardShell({
             targetType={engagementTargetType!}
             initialLikeCount={likeCount}
             initialLiked={viewerHasLiked}
-            className="absolute right-3 top-3"
+            className="absolute bottom-3 right-3"
           />
         ) : null}
         {cardInner}
@@ -408,7 +397,7 @@ export function PosterCardShell({
           targetType={engagementTargetType!}
           initialLikeCount={likeCount}
           initialLiked={viewerHasLiked}
-          className="absolute right-3 top-3"
+          className="absolute bottom-3 right-3"
         />
       ) : null}
       <Link

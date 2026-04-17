@@ -480,10 +480,18 @@ export async function GET(request: NextRequest) {
     const sellerIds = Array.from(
       new Set(listings.map((listing) => String(listing.owner_id)).filter(Boolean))
     );
-    const [viewCountMap, likeSummaryMap] = await Promise.all([
+    const [viewCountResult, likeSummaryResult] = await Promise.all([
       getContentViewCountMap(admin, "listing", listingIds),
       getContentLikeSummaryMap(admin, "listing", listingIds, viewerKey),
     ]);
+    if (!viewCountResult.ok || !likeSummaryResult.ok) {
+      log.error("Failed to load listing engagement summary", {
+        listingIds,
+        viewErrorCode: viewCountResult.errorCode,
+        likeErrorCode: likeSummaryResult.errorCode,
+      });
+      return NextResponse.json({ error: "Engagement data unavailable" }, { status: 503 });
+    }
 
     const { data: sellers } = sellerIds.length
       ? await admin
@@ -501,8 +509,8 @@ export async function GET(request: NextRequest) {
       })) ?? [];
     const serializedListings = listings.map((listing) => {
       const listingId = String(listing.id ?? "");
-      const fallbackViewCount = viewCountMap.get(listingId) ?? 0;
-      const likeSummary = likeSummaryMap.get(listingId);
+      const fallbackViewCount = viewCountResult.data.get(listingId) ?? 0;
+      const likeSummary = likeSummaryResult.data.get(listingId);
 
       return {
         ...listing,

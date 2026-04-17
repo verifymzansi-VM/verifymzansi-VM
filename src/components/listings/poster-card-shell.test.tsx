@@ -112,21 +112,23 @@ describe("PosterCardShell", () => {
   });
 
   it("renders engagement counts and a like button when engagement data is provided", () => {
-    render(
+    const { container } = render(
       <PosterCardShell
         href="/listing/engaged"
         title="Engaged card"
         mediaUrl="https://example.com/poster.jpg"
         viewCount={128}
-        likeCount={12}
+        likeCount={1200}
         viewerHasLiked
         engagementTargetId="listing-123"
         engagementTargetType="listing"
       />
     );
 
-    expect(screen.getByText("128 views")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /unlike this card/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /unlike this card/i })).toHaveTextContent("12");
+    expect(screen.queryByText(/views/i)).not.toBeInTheDocument();
+    const likeButton = screen.getByRole("button", { name: /unlike this card/i });
+    expect(likeButton).toBeInTheDocument();
+    expect(likeButton).toHaveTextContent("999");
+    expect(container.querySelector(".bottom-3.right-3")).toBeTruthy();
   });
 });

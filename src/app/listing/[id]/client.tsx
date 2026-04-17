@@ -31,6 +31,7 @@ interface ListingDetailClientProps {
   heroAspectClassName?: string;
   heroMediaClassName?: string;
   trackView?: boolean;
+  onViewRecorded?: () => void;
 }
 
 type MediaKind = "photo" | "video";
@@ -83,8 +84,9 @@ export function ListingDetailClient({
   heroAspectClassName = "aspect-video",
   heroMediaClassName,
   trackView = true,
+  onViewRecorded,
 }: ListingDetailClientProps) {
-  useTrackContentView(listingId, "listing", trackView);
+  useTrackContentView(listingId, "listing", trackView, onViewRecorded);
   const normalizedPhotos = normalizeMediaUrls(photos).filter(Boolean);
   const normalizedVideos = normalizeMediaUrls(videos).filter(Boolean);
   const orderedMedia = useMemo(() => {

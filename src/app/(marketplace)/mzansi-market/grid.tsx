@@ -404,7 +404,9 @@ export function MzansiMarketGrid() {
                   mediaWidth={listing.media_width}
                   mediaHeight={listing.media_height}
                   viewCount={listing.view_count ?? undefined}
-                  likeCount={listing.like_count ?? 0}
+                  likeCount={
+                    typeof listing.like_count === "number" ? listing.like_count : undefined
+                  }
                   viewerHasLiked={listing.viewer_has_liked ?? false}
                 />
               </div>
@@ -447,7 +449,9 @@ export function MzansiMarketGrid() {
                   ownerTrustLevel={trustLevel}
                   ownerName={seller?.display_name}
                   viewCount={listing.view_count ?? undefined}
-                  likeCount={listing.like_count ?? 0}
+                  likeCount={
+                    typeof listing.like_count === "number" ? listing.like_count : undefined
+                  }
                   viewerHasLiked={listing.viewer_has_liked ?? false}
                   boosted={isBoosted}
                   featured={listing.featured}

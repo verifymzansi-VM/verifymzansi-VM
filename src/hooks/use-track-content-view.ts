@@ -6,7 +6,8 @@ import type { ContentTargetType } from "@/lib/engagement";
 export function useTrackContentView(
   targetId: string,
   targetType: ContentTargetType,
-  enabled = true
+  enabled = true,
+  onRecorded?: () => void
 ) {
   useEffect(() => {
     if (!enabled) {
@@ -25,10 +26,21 @@ export function useTrackContentView(
         targetType,
       }),
       signal: controller.signal,
-    }).catch(() => {
-      // Non-blocking analytics-style request: ignore failures.
-    });
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json().catch(() => null)) as { recorded?: boolean } | null;
+        if (payload?.recorded) {
+          onRecorded?.();
+        }
+      })
+      .catch(() => {
+        // Non-blocking analytics-style request: ignore failures.
+      });
 
     return () => controller.abort();
-  }, [enabled, targetId, targetType]);
+  }, [enabled, onRecorded, targetId, targetType]);
 }

@@ -772,16 +772,24 @@ export async function GET(request: NextRequest) {
     );
     const removedCount = (promotions?.length ?? 0) - filteredPromotions.length;
     const promotionIds = filteredPromotions.map((promotion) => promotion.id);
-    const [viewCountMap, likeSummaryMap] = await Promise.all([
+    const [viewCountResult, likeSummaryResult] = await Promise.all([
       getContentViewCountMap(admin, "promotion", promotionIds),
       getContentLikeSummaryMap(admin, "promotion", promotionIds, viewerKey),
     ]);
+    if (!viewCountResult.ok || !likeSummaryResult.ok) {
+      log.error("Failed to load promotion engagement summary", {
+        promotionIds,
+        viewErrorCode: viewCountResult.errorCode,
+        likeErrorCode: likeSummaryResult.errorCode,
+      });
+      return NextResponse.json({ error: "Engagement data unavailable" }, { status: 503 });
+    }
     const serializedPromotions = filteredPromotions.map((promotion) => {
-      const likeSummary = likeSummaryMap.get(promotion.id);
+      const likeSummary = likeSummaryResult.data.get(promotion.id);
 
       return {
         ...promotion,
-        view_count: viewCountMap.get(promotion.id) ?? 0,
+        view_count: viewCountResult.data.get(promotion.id) ?? 0,
         like_count: likeSummary?.likeCount ?? 0,
         viewer_has_liked: likeSummary?.viewerHasLiked ?? false,
       };

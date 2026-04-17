@@ -50,7 +50,7 @@ const BUSINESS_DETAIL_SELECT = `
   logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province,
   location_city, store_number, map_directions, phone, whatsapp, email, website, social_links,
   services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
-  delivery_options, boost_until, featured_until, published_at, status, area, layout_template,
+  delivery_options, boost_until, featured_until, published_at, status, area, layout_template, view_count,
   created_at, updated_at
 `;
 
@@ -59,7 +59,7 @@ const BUSINESS_DETAIL_SELECT_LEGACY = `
   logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province,
   location_city, store_number, map_directions, phone, whatsapp, email, website, social_links,
   services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
-  delivery_options, boost_until, featured_until, published_at, status, area,
+  delivery_options, boost_until, featured_until, published_at, status, area, view_count,
   created_at, updated_at
 `;
 
@@ -196,16 +196,24 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
   const { id } = await params;
   const cookieStore = await getOptionalCookieStore();
   const detail = await loadBusinessDetail(id);
+  const supabase = await createClient();
 
   if (!detail) {
     notFound();
   }
 
   const { business, ownerProfile, promotions, isOwnerPreview } = detail;
-  const viewerKey = buildViewerKey(readCookieValue(cookieStore, ENGAGEMENT_VIEWER_COOKIE) ?? null);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const viewerKey = buildViewerKey(
+    readCookieValue(cookieStore, ENGAGEMENT_VIEWER_COOKIE) ?? null,
+    user?.id
+  );
   const engagementAdmin = tryCreateAdminClient();
   const promotionIds = promotions.map((promotion) => promotion.id);
-  const [promotionViewSummary, promotionLikeSummary] = await Promise.all([
+  const [businessViewSummary, promotionViewSummary, promotionLikeSummary] = await Promise.all([
+    getOptionalContentViewCountMap(engagementAdmin, "business", [business.id]),
     getOptionalContentViewCountMap(engagementAdmin, "promotion", promotionIds),
     getOptionalContentLikeSummaryMap(engagementAdmin, "promotion", promotionIds, viewerKey),
   ]);
@@ -215,9 +223,13 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
   const breadcrumbs = getBreadcrumbs(isOwnerPreview, business.business_name);
   const promotionsWithLikes = promotions.map((promotion) => ({
     ...promotion,
-    view_count: promotionViewSummary.get(promotion.id) ?? 0,
-    like_count: promotionLikeSummary.get(promotion.id)?.likeCount ?? 0,
-    viewer_has_liked: promotionLikeSummary.get(promotion.id)?.viewerHasLiked ?? false,
+    view_count: promotionViewSummary.ok ? (promotionViewSummary.data.get(promotion.id) ?? 0) : null,
+    like_count: promotionLikeSummary.ok
+      ? (promotionLikeSummary.data.get(promotion.id)?.likeCount ?? null)
+      : null,
+    viewer_has_liked: promotionLikeSummary.ok
+      ? (promotionLikeSummary.data.get(promotion.id)?.viewerHasLiked ?? false)
+      : false,
   }));
 
   return (
@@ -246,7 +258,12 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
         )}
 
         <BusinessLayoutRouter
-          business={business}
+          business={{
+            ...business,
+            view_count: businessViewSummary.ok
+              ? (businessViewSummary.data.get(business.id) ?? 0)
+              : (business.view_count ?? null),
+          }}
           trustLevel={trustLevel}
           ownerProfile={ownerProfile}
           promotions={promotionsWithLikes}

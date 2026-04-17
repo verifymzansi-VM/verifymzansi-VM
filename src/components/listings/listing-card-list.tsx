@@ -3,7 +3,7 @@
 import { memo } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Eye, MapPin } from "lucide-react";
+import { MapPin } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
 import { VideoDurationBadge } from "@/components/ui/video-duration-badge";
@@ -82,7 +82,7 @@ export const ListingCardList = memo(function ListingCardList({
   city,
   createdAt,
   ownerTrustLevel = 0,
-  viewCount,
+  viewCount: _viewCount,
   likeCount = 0,
   boosted,
   featured,
@@ -100,11 +100,6 @@ export const ListingCardList = memo(function ListingCardList({
   const normalizedLogoUrl = logoUrl ? normalizeMediaUrl(logoUrl) : undefined;
   const status = getListingStatus(featured, boosted, urgent, createdAt);
   const frameAspectRatio = CARD_ASPECT_RATIO;
-  const formatCompactCount = (count: number) =>
-    new Intl.NumberFormat("en-ZA", {
-      notation: count >= 1000 ? "compact" : "standard",
-      maximumFractionDigits: count >= 1000 ? 1 : 0,
-    }).format(count);
 
   return (
     <div className="group relative">
@@ -113,7 +108,7 @@ export const ListingCardList = memo(function ListingCardList({
         targetType="listing"
         initialLikeCount={likeCount}
         initialLiked={viewerHasLiked}
-        className="absolute right-3 top-3"
+        className="absolute bottom-3 right-3"
       />
       <Link
         href={`/listing/${id}`}
@@ -201,15 +196,6 @@ export const ListingCardList = memo(function ListingCardList({
                     {city}, {province}
                   </span>
                 </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3 text-[11px] font-medium text-muted-foreground">
-                {typeof viewCount === "number" ? (
-                  <span className="inline-flex items-center gap-1">
-                    <Eye className="h-3.5 w-3.5" />
-                    {formatCompactCount(viewCount)} {viewCount === 1 ? "view" : "views"}
-                  </span>
-                ) : null}
               </div>
             </div>
           </div>
