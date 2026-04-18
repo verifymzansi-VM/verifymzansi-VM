@@ -77,6 +77,7 @@ export function BusinessPreviewCard({
       focalY={focalY}
       mediaWidth={mediaWidth}
       mediaHeight={mediaHeight}
+      disableNativeDrag
       feedPlaybackActive={isActive && !isRailDragging}
       fallback={
         <div className="flex h-full w-full items-center justify-center text-brand-blue/35">

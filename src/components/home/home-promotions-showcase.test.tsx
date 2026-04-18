@@ -149,12 +149,14 @@ describe("HomePromotionsShowcase", () => {
       boosted: boolean;
       featured: boolean;
       logoUrl: string;
+      disableNativeDrag: boolean;
     };
     expect(props.imageUrl).toBe("https://example.com/video.mp4");
     expect(props.posterUrl).toBe("https://example.com/thumb.jpg");
     expect(props.boosted).toBe(true);
     expect(props.featured).toBe(true);
     expect(props.logoUrl).toBe("https://example.com/business-logo.jpg");
+    expect(props.disableNativeDrag).toBe(true);
   });
 
   it("renders live tourism businesses on the homepage showcase", async () => {

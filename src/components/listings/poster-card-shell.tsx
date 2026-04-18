@@ -85,6 +85,8 @@ interface PosterCardShellProps {
   mediaControlVariant?: MediaControlVariant;
   /** Makes the entire card surface clickable even when playback controls are shown. */
   makeEntireCardClickable?: boolean;
+  /** Prevents the browser from treating card surfaces as native drag sources. */
+  disableNativeDrag?: boolean;
   /** Allows parent rails to gate autoplay to the focused card only. */
   feedPlaybackActive?: boolean;
   /** Keeps hero videos poster-first until the user explicitly starts playback. */
@@ -131,6 +133,7 @@ export function PosterCardShell({
   cardVariant = "default",
   mediaControlVariant = "default",
   makeEntireCardClickable = false,
+  disableNativeDrag: disableNativeDragProp = false,
   feedPlaybackActive = true,
   deferVideoLoadUntilPlay = false,
 }: PosterCardShellProps) {
@@ -145,7 +148,7 @@ export function PosterCardShell({
   const effectiveFitStrategy = fitStrategy;
   const isHeroVariant = cardVariant === "hero";
   const isShowcaseVariant = cardVariant === "showcase";
-  const disableNativeDrag = isHeroVariant;
+  const disableNativeDrag = disableNativeDragProp || isHeroVariant;
   const rootRadiusClassName = isHeroVariant ? "rounded-[28px]" : "rounded-xl";
   const mediaRadiusClassName = isHeroVariant ? "rounded-t-[28px]" : "rounded-t-xl";
   const contentPaddingClassName = isHeroVariant

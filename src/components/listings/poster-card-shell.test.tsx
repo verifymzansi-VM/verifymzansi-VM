@@ -8,16 +8,19 @@ const { videoCardPlayerMock } = vi.hoisted(() => ({
       showPlaybackControl,
       deferVideoLoadUntilPlay,
       fitStrategy,
+      disableNativeDrag,
     }: {
       showPlaybackControl?: boolean;
       deferVideoLoadUntilPlay?: boolean;
       fitStrategy?: string;
+      disableNativeDrag?: boolean;
     }) => (
       <div
         data-testid="video-player"
         data-controls={showPlaybackControl ? "yes" : "no"}
         data-defer={deferVideoLoadUntilPlay ? "yes" : "no"}
         data-fit={fitStrategy ?? ""}
+        data-drag-disabled={disableNativeDrag ? "yes" : "no"}
       />
     )
   ),
@@ -81,6 +84,20 @@ describe("PosterCardShell", () => {
     );
 
     expect(screen.getByRole("link", { name: /hero image/i })).toHaveAttribute("draggable", "false");
+  });
+
+  it("can disable native drag on non-hero cards used by homepage rails", () => {
+    render(
+      <PosterCardShell
+        href="/listing/rail"
+        title="Rail image"
+        mediaUrl="https://example.com/poster.jpg"
+        disableNativeDrag
+      />
+    );
+
+    expect(screen.getByRole("link", { name: /rail image/i })).toHaveAttribute("draggable", "false");
+    expect(screen.getByTestId("video-player")).toHaveAttribute("data-drag-disabled", "yes");
   });
 
   it("forwards deferred video loading to the media player when requested", () => {

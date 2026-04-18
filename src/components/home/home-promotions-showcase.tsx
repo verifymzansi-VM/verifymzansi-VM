@@ -278,6 +278,7 @@ export async function HomePromotionsShowcase() {
                 priority={false}
                 mediaWidth={item.data.media_width}
                 mediaHeight={item.data.media_height}
+                disableNativeDrag
               />
             )}
           </div>

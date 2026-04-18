@@ -39,6 +39,7 @@ interface PromotionCardProps {
   focalY?: number | null;
   mediaWidth?: number | null;
   mediaHeight?: number | null;
+  disableNativeDrag?: boolean;
 }
 
 /* ── Urgency helper ─────────────────────────────────────────────── */
@@ -155,6 +156,7 @@ export const PromotionCard = memo(function PromotionCard({
   focalY,
   mediaWidth,
   mediaHeight,
+  disableNativeDrag = false,
   viewerHasLiked = false,
 }: PromotionCardProps) {
   const { isActive, isRailDragging } = useAutoScrollRailItemState();
@@ -200,6 +202,7 @@ export const PromotionCard = memo(function PromotionCard({
       focalY={focalY}
       mediaWidth={mediaWidth}
       mediaHeight={mediaHeight}
+      disableNativeDrag={disableNativeDrag}
       feedPlaybackActive={isActive && !isRailDragging}
       fallback={
         <div className="flex h-full w-full items-center justify-center text-white/35">

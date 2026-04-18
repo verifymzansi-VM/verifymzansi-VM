@@ -70,4 +70,26 @@ describe("MarketPreviewCard", () => {
       feedPlaybackActive: false,
     });
   });
+
+  it("disables native browser dragging for homepage rail cards", () => {
+    railStateSpy.mockReturnValue({
+      isActive: true,
+      isRailDragging: false,
+    });
+
+    render(
+      <MarketPreviewCard
+        href="/listing/3"
+        imageUrl="https://example.com/poster.jpg"
+        title="Civic"
+        price={110000}
+        city="Johannesburg"
+        provinceCode="GP"
+      />
+    );
+
+    expect(posterCardSpy.mock.calls[0]?.[0]).toMatchObject({
+      disableNativeDrag: true,
+    });
+  });
 });

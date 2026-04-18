@@ -11,6 +11,7 @@ const matchMediaMock = vi.fn().mockImplementation((query: string) => ({
 }));
 
 function mockRailLayout(rail: HTMLDivElement, scrollLeft: number) {
+  let capturedPointerId: number | null = null;
   Object.defineProperty(rail, "scrollTo", {
     configurable: true,
     value: vi.fn(),
@@ -25,6 +26,28 @@ function mockRailLayout(rail: HTMLDivElement, scrollLeft: number) {
   Object.defineProperty(rail.firstElementChild, "getBoundingClientRect", {
     configurable: true,
     value: () => ({ width: 240 }),
+  });
+  Object.defineProperty(rail, "getBoundingClientRect", {
+    configurable: true,
+    value: () => ({ left: 24 }),
+  });
+  Object.defineProperty(rail, "setPointerCapture", {
+    configurable: true,
+    value: vi.fn((pointerId: number) => {
+      capturedPointerId = pointerId;
+    }),
+  });
+  Object.defineProperty(rail, "releasePointerCapture", {
+    configurable: true,
+    value: vi.fn((pointerId: number) => {
+      if (capturedPointerId === pointerId) {
+        capturedPointerId = null;
+      }
+    }),
+  });
+  Object.defineProperty(rail, "hasPointerCapture", {
+    configurable: true,
+    value: vi.fn((pointerId: number) => capturedPointerId === pointerId),
   });
 }
 
@@ -41,15 +64,43 @@ function RailItemProbe({ label }: { label: string }) {
   );
 }
 
+function RailLinkProbe({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick?: (event: React.MouseEvent<HTMLAnchorElement>) => void;
+}) {
+  return (
+    <a href={`/${label}`} data-testid={`rail-link-${label}`} onClick={onClick}>
+      {label}
+    </a>
+  );
+}
+
+function RailControlProbe({ onClick }: { onClick?: () => void }) {
+  return (
+    <button type="button" data-carousel-control="true" onClick={onClick}>
+      Control
+    </button>
+  );
+}
+
 describe("AutoScrollRail", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.stubGlobal("matchMedia", matchMediaMock);
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: matchMediaMock,
+    });
   });
 
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+    delete (window as Partial<Window>).matchMedia;
   });
 
   it("auto-advances horizontally when visible", () => {
@@ -222,14 +273,110 @@ describe("AutoScrollRail", () => {
     const rail = screen.getByLabelText("Dragging rail") as HTMLDivElement;
     mockRailLayout(rail, 0);
 
-    fireEvent.pointerDown(rail, { pointerType: "mouse", button: 0, pageX: 120 });
-    fireEvent.pointerMove(rail, { pointerType: "mouse", pageX: 180 });
+    fireEvent.pointerDown(rail, { pointerType: "mouse", button: 0, clientX: 120, pointerId: 1 });
+    fireEvent.pointerMove(rail, { pointerType: "mouse", clientX: 180, pointerId: 1 });
 
     expect(screen.getByTestId("rail-item-one")).toHaveAttribute("data-dragging", "true");
 
-    fireEvent.pointerUp(rail, { pointerType: "mouse" });
+    fireEvent.pointerUp(rail, { pointerType: "mouse", pointerId: 1 });
 
     expect(screen.getByTestId("rail-item-one")).toHaveAttribute("data-dragging", "false");
+  });
+
+  it("supports desktop dragging that begins on a nested card link surface", () => {
+    render(
+      <AutoScrollRail ariaLabel="Nested link rail">
+        <RailLinkProbe label="one" />
+        <RailLinkProbe label="two" />
+      </AutoScrollRail>
+    );
+
+    const rail = screen.getByLabelText("Nested link rail") as HTMLDivElement;
+    mockRailLayout(rail, 240);
+    const link = screen.getByTestId("rail-link-one");
+
+    fireEvent.pointerDown(link, { pointerType: "mouse", button: 0, clientX: 180, pointerId: 7 });
+    fireEvent.pointerMove(rail, { pointerType: "mouse", clientX: 120, pointerId: 7 });
+
+    expect(rail.scrollLeft).toBe(360);
+
+    fireEvent.pointerUp(rail, { pointerType: "mouse", pointerId: 7 });
+  });
+
+  it("suppresses click-through after a desktop drag gesture", () => {
+    const clickSpy = vi.fn();
+
+    render(
+      <AutoScrollRail ariaLabel="Click suppression rail">
+        <RailLinkProbe label="one" onClick={clickSpy} />
+        <RailLinkProbe label="two" />
+      </AutoScrollRail>
+    );
+
+    const rail = screen.getByLabelText("Click suppression rail") as HTMLDivElement;
+    mockRailLayout(rail, 240);
+    const link = screen.getByTestId("rail-link-one");
+
+    fireEvent.pointerDown(link, { pointerType: "mouse", button: 0, clientX: 180, pointerId: 9 });
+    fireEvent.pointerMove(rail, { pointerType: "mouse", clientX: 120, pointerId: 9 });
+    fireEvent.pointerUp(rail, { pointerType: "mouse", pointerId: 9 });
+    fireEvent.click(link);
+
+    expect(clickSpy).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.runAllTimers();
+    });
+  });
+
+  it("clears desktop drag state when pointer capture is cancelled", () => {
+    render(
+      <AutoScrollRail ariaLabel="Cancelled drag rail">
+        <RailItemProbe label="one" />
+        <RailItemProbe label="two" />
+      </AutoScrollRail>
+    );
+
+    const rail = screen.getByLabelText("Cancelled drag rail") as HTMLDivElement;
+    mockRailLayout(rail, 0);
+
+    fireEvent.pointerDown(rail, { pointerType: "mouse", button: 0, clientX: 120, pointerId: 3 });
+    fireEvent.pointerMove(rail, { pointerType: "mouse", clientX: 180, pointerId: 3 });
+
+    expect(screen.getByTestId("rail-item-one")).toHaveAttribute("data-dragging", "true");
+
+    fireEvent.pointerCancel(rail, { pointerType: "mouse", pointerId: 3 });
+
+    expect(screen.getByTestId("rail-item-one")).toHaveAttribute("data-dragging", "false");
+  });
+
+  it("does not start dragging when the pointer down begins on a real control", () => {
+    const controlClickSpy = vi.fn();
+
+    render(
+      <AutoScrollRail ariaLabel="Control-protected rail">
+        <RailControlProbe onClick={controlClickSpy} />
+        <RailItemProbe label="two" />
+      </AutoScrollRail>
+    );
+
+    const rail = screen.getByLabelText("Control-protected rail") as HTMLDivElement;
+    mockRailLayout(rail, 120);
+    const control = screen.getByRole("button", { name: "Control" });
+
+    fireEvent.pointerDown(control, {
+      pointerType: "mouse",
+      button: 0,
+      clientX: 180,
+      pointerId: 12,
+    });
+    fireEvent.pointerMove(rail, { pointerType: "mouse", clientX: 60, pointerId: 12 });
+    fireEvent.pointerUp(rail, { pointerType: "mouse", pointerId: 12 });
+    fireEvent.click(control);
+
+    expect(rail.scrollLeft).toBe(120);
+    expect(controlClickSpy).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("rail-item-two")).toHaveAttribute("data-dragging", "false");
   });
 
   it("marks the rail as dragging immediately on touch start and clears after settle", () => {

@@ -64,6 +64,7 @@ export function MarketPreviewCard({
       focalY={focalY}
       mediaWidth={mediaWidth}
       mediaHeight={mediaHeight}
+      disableNativeDrag
       feedPlaybackActive={isActive && !isRailDragging}
     />
   );

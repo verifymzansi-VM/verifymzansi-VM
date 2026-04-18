@@ -17,6 +17,9 @@ import { cn } from "@/lib/utils";
 
 const DEFAULT_INTERVAL_MS = 4500;
 const DEFAULT_PAUSE_MS = 7000;
+const DRAG_CLICK_THRESHOLD_PX = 5;
+const POINTER_DRAG_BLOCKER_SELECTOR =
+  'button, input, select, textarea, summary, [role="button"], [contenteditable="true"], [data-carousel-control="true"]';
 
 interface AutoScrollRailProps {
   children: ReactNode;
@@ -109,11 +112,13 @@ export function AutoScrollRail({
   const [dragging, setDragging] = useState(false);
 
   const isDragging = useRef(false);
+  const activePointerIdRef = useRef<number | null>(null);
   const startX = useRef(0);
   const scrollLeftStr = useRef(0);
   const dragMoved = useRef(false);
   const settleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollRafRef = useRef<number | null>(null);
+  const dragResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const pauseAndResume = useCallback(() => {
     pausedRef.current = true;
@@ -144,6 +149,16 @@ export function AutoScrollRail({
       }
     }, 120);
   }, [updateActiveIndex]);
+
+  const queueDragReset = useCallback(() => {
+    if (dragResetTimeoutRef.current) {
+      clearTimeout(dragResetTimeoutRef.current);
+    }
+    dragResetTimeoutRef.current = setTimeout(() => {
+      dragMoved.current = false;
+      dragResetTimeoutRef.current = null;
+    }, 0);
+  }, []);
 
   // Detect hover-capable (desktop) devices — auto-scroll only runs on desktop.
   // Touch-only devices rely on native swipe via snap-scroll.
@@ -217,6 +232,9 @@ export function AutoScrollRail({
       if (settleTimeoutRef.current) {
         clearTimeout(settleTimeoutRef.current);
       }
+      if (dragResetTimeoutRef.current) {
+        clearTimeout(dragResetTimeoutRef.current);
+      }
       if (scrollRafRef.current !== null) {
         cancelAnimationFrame(scrollRafRef.current);
       }
@@ -288,49 +306,138 @@ export function AutoScrollRail({
   }, [pauseAndResume, scheduleSettle]);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.pointerType !== "mouse" || e.button !== 0) return;
+    if (
+      e.pointerType !== "mouse" ||
+      e.button !== 0 ||
+      activePointerIdRef.current !== null ||
+      (e.target instanceof HTMLElement && e.target.closest(POINTER_DRAG_BLOCKER_SELECTOR))
+    ) {
+      return;
+    }
 
     const container = containerRef.current;
     if (!container) return;
 
+    if (dragResetTimeoutRef.current) {
+      clearTimeout(dragResetTimeoutRef.current);
+      dragResetTimeoutRef.current = null;
+    }
+
     isDragging.current = true;
+    activePointerIdRef.current = e.pointerId;
     setDragging(true);
-    startX.current = e.pageX - container.offsetLeft;
+    startX.current = e.clientX - container.getBoundingClientRect().left;
     scrollLeftStr.current = container.scrollLeft;
     dragMoved.current = false;
 
     container.style.scrollBehavior = "auto";
     container.style.scrollSnapType = "none";
+
+    try {
+      if (
+        typeof container.setPointerCapture === "function" &&
+        !container.hasPointerCapture?.(e.pointerId)
+      ) {
+        container.setPointerCapture(e.pointerId);
+      }
+    } catch {
+      /* noop */
+    }
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDragging.current) return;
+    if (
+      !isDragging.current ||
+      activePointerIdRef.current === null ||
+      e.pointerId !== activePointerIdRef.current
+    ) {
+      return;
+    }
     e.preventDefault();
 
     const container = containerRef.current;
     if (!container) return;
 
-    const x = e.pageX - container.offsetLeft;
+    const x = e.clientX - container.getBoundingClientRect().left;
     const diff = x - startX.current;
 
-    if (Math.abs(diff) > 5) {
+    if (Math.abs(diff) > DRAG_CLICK_THRESHOLD_PX) {
       dragMoved.current = true;
     }
 
     container.scrollLeft = scrollLeftStr.current - diff * 2;
   };
 
-  const handlePointerUpOrLeave = () => {
-    if (!isDragging.current) return;
+  const clearPointerDrag = useCallback((pointerId?: number, resetDragMoved = false) => {
     isDragging.current = false;
+    activePointerIdRef.current = null;
     setDragging(false);
 
     const container = containerRef.current;
-    if (!container) return;
+    if (!container) {
+      if (resetDragMoved) {
+        dragMoved.current = false;
+      }
+      return;
+    }
 
     container.style.scrollBehavior = "";
     container.style.scrollSnapType = "";
+    try {
+      if (
+        typeof pointerId === "number" &&
+        typeof container.releasePointerCapture === "function" &&
+        container.hasPointerCapture?.(pointerId)
+      ) {
+        container.releasePointerCapture(pointerId);
+      }
+    } catch {
+      /* noop */
+    }
+
+    if (resetDragMoved) {
+      dragMoved.current = false;
+    }
+  }, []);
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (
+      !isDragging.current ||
+      activePointerIdRef.current === null ||
+      e.pointerId !== activePointerIdRef.current
+    ) {
+      return;
+    }
+
+    const moved = dragMoved.current;
+    clearPointerDrag(e.pointerId);
     pauseAndResume();
+    scheduleSettle();
+
+    if (moved) {
+      queueDragReset();
+    }
+  };
+
+  const handlePointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (
+      !isDragging.current ||
+      activePointerIdRef.current === null ||
+      e.pointerId !== activePointerIdRef.current
+    ) {
+      return;
+    }
+
+    clearPointerDrag(e.pointerId, true);
+    scheduleSettle();
+  };
+
+  const handleLostPointerCapture = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (activePointerIdRef.current === null || e.pointerId !== activePointerIdRef.current) {
+      return;
+    }
+
+    clearPointerDrag(undefined, true);
     scheduleSettle();
   };
 
@@ -338,8 +445,7 @@ export function AutoScrollRail({
     if (dragMoved.current) {
       e.stopPropagation();
       e.preventDefault();
-      // Reset drag flag shortly after to allow subsequent clicks
-      setTimeout(() => (dragMoved.current = false), 0);
+      queueDragReset();
     }
   };
 
@@ -358,15 +464,17 @@ export function AutoScrollRail({
           ref={containerRef}
           aria-label={railLabel}
           className={cn(
-            "flex overflow-x-auto snap-x snap-mandatory gap-3 pb-3 scrollbar-hide sm:gap-4 lg:gap-5 select-none",
+            "flex overflow-x-auto snap-x snap-mandatory gap-3 pb-3 scrollbar-hide select-none sm:gap-4 lg:gap-5",
+            canHover ? (dragging ? "cursor-grabbing" : "cursor-grab") : undefined,
             flushEdges ? "mx-0 px-0" : "-mx-2 px-2 sm:-mx-1 sm:px-1 lg:-mx-2 lg:px-2",
             className
           )}
           tabIndex={0}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUpOrLeave}
-          onPointerLeave={handlePointerUpOrLeave}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+          onLostPointerCapture={handleLostPointerCapture}
           onClickCapture={handleClickCapture}
         >
           {items.map((item, index) => (
