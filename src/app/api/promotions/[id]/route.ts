@@ -91,7 +91,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       .eq("id", id)
       .maybeSingle();
 
-    if (error || !promotion) {
+    if (error) {
+      log.error("Failed to fetch promotion", {
+        id,
+        error: error.message,
+      });
+      return NextResponse.json({ error: "Failed to fetch promotion" }, { status: 500 });
+    }
+
+    if (!promotion) {
       return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
     }
 

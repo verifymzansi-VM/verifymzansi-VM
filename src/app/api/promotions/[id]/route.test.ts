@@ -1,15 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
-const { mockCreateClient, mockCreateAdminClient } = vi.hoisted(() => ({
+const { mockCreateClient, mockCreateAdminClient, mockLoggerError } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
+  mockLoggerError: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/utils/logger", () => ({
-  createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
+  createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: mockLoggerError }),
 }));
 
 import { GET } from "./route";
@@ -87,5 +88,32 @@ describe("GET /api/promotions/[id]", () => {
 
     expect(payload.promotion?.event_details?.venue_name).toBe("Main Arena");
     expect(payload.promotion?.event_details?.parking_available).toBe(false);
+  });
+
+  it("returns 500 when the promotion query fails", async () => {
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
+      },
+      from: vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: null,
+          error: { message: "column promotions.logo_url does not exist" },
+        }),
+      })),
+    });
+
+    const response = await GET({} as NextRequest, {
+      params: Promise.resolve({ id: "00000000-0000-0000-0000-000000000111" }),
+    });
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ error: "Failed to fetch promotion" });
+    expect(mockLoggerError).toHaveBeenCalledWith("Failed to fetch promotion", {
+      id: "00000000-0000-0000-0000-000000000111",
+      error: "column promotions.logo_url does not exist",
+    });
   });
 });

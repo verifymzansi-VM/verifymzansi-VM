@@ -2,11 +2,14 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import AdminModerationPage from "./page";
 
-const { mockCreateClient, mockCreateAdminClient, mockRedirect } = vi.hoisted(() => ({
-  mockCreateClient: vi.fn(),
-  mockCreateAdminClient: vi.fn(),
-  mockRedirect: vi.fn(),
-}));
+const { mockCreateClient, mockCreateAdminClient, mockRedirect, mockLoggerError } = vi.hoisted(
+  () => ({
+    mockCreateClient: vi.fn(),
+    mockCreateAdminClient: vi.fn(),
+    mockRedirect: vi.fn(),
+    mockLoggerError: vi.fn(),
+  })
+);
 
 let listingQuery: ReturnType<typeof createQuery> | undefined;
 let businessQuery: ReturnType<typeof createQuery> | undefined;
@@ -29,6 +32,10 @@ vi.mock("@/lib/auth/roles", () => ({
   isModeratorOrAdmin: vi.fn(() => true),
 }));
 
+vi.mock("@/lib/utils/logger", () => ({
+  createLogger: () => ({ error: mockLoggerError, info: vi.fn(), warn: vi.fn() }),
+}));
+
 vi.mock("./moderation-queue-client", () => ({
   ModerationQueueClient: ({ items }: { items: Array<{ title?: string; itemType: string }> }) => (
     <div>
@@ -40,12 +47,12 @@ vi.mock("./moderation-queue-client", () => ({
   ),
 }));
 
-function createQuery(data: unknown[]) {
+function createQuery(data: unknown[], error: { message: string } | null = null) {
   const builder = {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockResolvedValue({ data }),
+    limit: vi.fn().mockResolvedValue({ data, error }),
   };
 
   return builder;
@@ -131,5 +138,57 @@ describe("AdminModerationPage", () => {
       expect.stringContaining("payment_methods_accepted")
     );
     expect(promotionQuery?.select).toHaveBeenCalledWith(expect.stringContaining("video_thumbnail"));
+  });
+
+  it("shows a warning when one moderation area fails to load instead of silently dropping it", async () => {
+    mockCreateAdminClient.mockReturnValue({
+      from: (table: string) => {
+        if (table === "listings") {
+          return createQuery([
+            {
+              id: "listing-1",
+              title: "Used iPhone 15",
+              status: "pending_moderation",
+              created_at: "2026-03-20T08:00:00.000Z",
+              category: "electronics",
+              owner_id: "user-1",
+            },
+          ]);
+        }
+
+        if (table === "businesses") {
+          return createQuery([
+            {
+              id: "business-1",
+              business_name: "Nomsa Beauty Studio",
+              business_type: "service",
+              status: "pending_moderation",
+              created_at: "2026-03-20T09:00:00.000Z",
+              owner_id: "user-2",
+            },
+          ]);
+        }
+
+        if (table === "promotions") {
+          return createQuery([], { message: "column promotions.logo_url does not exist" });
+        }
+
+        throw new Error(`Unexpected table ${table}`);
+      },
+    });
+
+    render(await AdminModerationPage());
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Some moderation items could not be loaded for: Tourism & Events."
+    );
+    expect(screen.getByText("2 Pending")).toBeInTheDocument();
+    expect(screen.getByText("queue-size:2")).toBeInTheDocument();
+    expect(mockLoggerError).toHaveBeenCalledWith("Failed to load some moderation queues", {
+      failedAreas: ["Tourism & Events"],
+      listingsError: undefined,
+      businessesError: undefined,
+      promotionsError: "column promotions.logo_url does not exist",
+    });
   });
 });
