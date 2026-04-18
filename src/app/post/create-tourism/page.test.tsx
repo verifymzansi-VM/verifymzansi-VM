@@ -8,6 +8,10 @@ const { mediaFilesByLabel, lastPromotionCardProps } = vi.hoisted(() => ({
   mediaFilesByLabel: new Map<string, File[]>(),
   lastPromotionCardProps: { current: null as Record<string, unknown> | null },
 }));
+const { businessPreviewProps, promotionPreviewProps } = vi.hoisted(() => ({
+  businessPreviewProps: { current: null as Record<string, unknown> | null },
+  promotionPreviewProps: { current: null as Record<string, unknown> | null },
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -55,9 +59,13 @@ vi.mock("@/contexts/video-playback-context", () => ({
 }));
 
 vi.mock("@/components/business/layouts/business-layout-router", () => ({
-  BusinessLayoutRouter: ({ business }: { business: { business_name?: string } }) => (
-    <div>Business Preview: {business.business_name ?? "preview"}</div>
-  ),
+  BusinessLayoutRouter: (props: {
+    business: { business_name?: string };
+    layoutMode?: "public" | "review";
+  }) => {
+    businessPreviewProps.current = props;
+    return <div>Business Preview: {props.business.business_name ?? "preview"}</div>;
+  },
 }));
 
 vi.mock("@/components/listings/promotion-card", () => ({
@@ -68,9 +76,13 @@ vi.mock("@/components/listings/promotion-card", () => ({
 }));
 
 vi.mock("@/components/listings/promotion-detail-content", () => ({
-  PromotionDetailContent: ({ promotion }: { promotion: { title?: string } }) => (
-    <div>Promotion Preview: {promotion.title ?? "preview"}</div>
-  ),
+  PromotionDetailContent: (props: {
+    promotion: { title?: string };
+    layoutMode?: "public" | "review";
+  }) => {
+    promotionPreviewProps.current = props;
+    return <div>Promotion Preview: {props.promotion.title ?? "preview"}</div>;
+  },
 }));
 
 vi.mock("@/components/billing/plan-gate", () => ({
@@ -677,6 +689,10 @@ describe("CreateTourismPage type switch behavior", () => {
         isVideo: true,
       });
     });
+    expect(businessPreviewProps.current).toEqual(expect.objectContaining({ layoutMode: "review" }));
+    expect(promotionPreviewProps.current).toEqual(
+      expect.objectContaining({ layoutMode: "review" })
+    );
   });
 
   it("blocks event submit when photo upload returns partial success", async () => {

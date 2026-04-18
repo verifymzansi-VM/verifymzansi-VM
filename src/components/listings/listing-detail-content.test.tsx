@@ -172,4 +172,47 @@ describe("ListingDetailContent", () => {
 
     expect(screen.getByText("8 views")).toBeTruthy();
   });
+
+  it("renders review mode without public contact actions", () => {
+    listingDetailClientState.shouldThrow = false;
+
+    const { container } = render(
+      <ListingDetailContent
+        listing={{
+          id: "listing-3",
+          owner_id: "owner-1",
+          title: "Preview listing",
+          description: "Review mode preview",
+          price_cents: 456000,
+          price_negotiable: false,
+          category: "jobs_services",
+          condition: "like_new",
+          attributes: { brand: "Apple" },
+          photos: [],
+          videos: [],
+          video_thumbnail: null,
+          logo_url: null,
+          location_province: "KwaZulu-Natal",
+          location_city: "Richards Bay",
+          location_suburb: null,
+          location_address: null,
+          contact_methods: ["call"],
+          created_at: new Date().toISOString(),
+        }}
+        seller={{
+          display_name: "You",
+          location_province: "KwaZulu-Natal",
+          location_city: "Richards Bay",
+          account_verification_status: null,
+        }}
+        showContactActions={false}
+        showSimilarListings={false}
+        layoutMode="review"
+      />
+    );
+
+    expect(container.querySelector('article[data-layout-mode="review"]')).toBeTruthy();
+    expect(screen.queryByTestId("contact-actions")).toBeNull();
+    expect(screen.getByText("Preview mode")).toBeTruthy();
+  });
 });

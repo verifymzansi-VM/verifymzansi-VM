@@ -223,6 +223,7 @@ describe("CreatePromotionPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     expect(screen.getByText("Upcoming Event")).toBeInTheDocument();
+    expect(document.querySelector('[data-layout-mode="review"]')).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Details" }));
     expect(screen.getByText("Saved contact methods")).toBeInTheDocument();
     expect(screen.getByText("Phone Call")).toBeInTheDocument();

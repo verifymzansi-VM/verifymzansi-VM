@@ -953,6 +953,7 @@ export default function CreateListingPage() {
           showSimilarListings={false}
           photoCount={photoPreviewUrls.length}
           trackView={false}
+          layoutMode="review"
         />
       </div>
     );

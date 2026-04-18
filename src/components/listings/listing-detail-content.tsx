@@ -181,6 +181,7 @@ export function ListingDetailContent({
   similarSellers = new Map<string, SimilarSellerRow>(),
   photoCount,
   trackView = true,
+  layoutMode = "public",
 }: {
   listing: ListingDetailRecord;
   seller: ListingSellerRecord | null;
@@ -190,7 +191,9 @@ export function ListingDetailContent({
   similarSellers?: Map<string, SimilarSellerRow>;
   photoCount?: number;
   trackView?: boolean;
+  layoutMode?: "public" | "review";
 }) {
+  const isReviewLayout = layoutMode === "review";
   const trustLevel = seller ? computeTrustLevel(seller.account_verification_status ?? null) : null;
   const createdAt = new Date(listing.created_at).toLocaleDateString("en-ZA", {
     day: "numeric",
@@ -208,7 +211,7 @@ export function ListingDetailContent({
     showContactActions &&
     Boolean(seller?.phone) &&
     Boolean(listing.contact_methods?.includes("whatsapp"));
-  const showStickyBar = canCall || canWhatsapp;
+  const showStickyBar = layoutMode === "public" && (canCall || canWhatsapp);
   const facts = useMemo(() => buildListingFacts(listing), [listing]);
   const [viewCount, setViewCount] = useState(listing.view_count ?? 0);
   const quickFacts = facts.slice(0, 6);
@@ -220,14 +223,27 @@ export function ListingDetailContent({
   return (
     <>
       <article
+        data-layout-mode={layoutMode}
         className={
-          showStickyBar
-            ? "grid grid-cols-1 gap-6 pb-24 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:items-start lg:pb-0"
-            : "grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:items-start"
+          isReviewLayout
+            ? "grid grid-cols-1 gap-6"
+            : showStickyBar
+              ? "grid grid-cols-1 gap-6 pb-24 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:items-start lg:pb-0"
+              : "grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:items-start"
         }
       >
-        <div className="space-y-6 lg:col-span-2 lg:grid lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] lg:items-start lg:gap-8 lg:space-y-0">
-          <div className="mx-auto w-full max-w-[280px] sm:max-w-[320px] lg:max-w-none">
+        <div
+          className={
+            isReviewLayout
+              ? "space-y-6 2xl:grid 2xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] 2xl:items-start 2xl:gap-8 2xl:space-y-0"
+              : "space-y-6 lg:col-span-2 lg:grid lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] lg:items-start lg:gap-8 lg:space-y-0"
+          }
+        >
+          <div
+            className={`mx-auto w-full max-w-[280px] sm:max-w-[320px] ${
+              isReviewLayout ? "2xl:max-w-none" : "lg:max-w-none"
+            }`}
+          >
             <ErrorBoundary
               label="ListingDetailClient"
               fallback={
@@ -312,7 +328,7 @@ export function ListingDetailContent({
                       {variantCopy.detailsHeading}
                     </h3>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {quickFacts.map((fact) => (
                       <div
                         key={`${fact.label}-${fact.value}`}

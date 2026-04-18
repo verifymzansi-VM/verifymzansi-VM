@@ -10,6 +10,9 @@ const { mockMaybeSingle } = vi.hoisted(() => ({
 const { listingCardSpy } = vi.hoisted(() => ({
   listingCardSpy: vi.fn(),
 }));
+const { listingDetailPreviewSpy } = vi.hoisted(() => ({
+  listingDetailPreviewSpy: vi.fn(),
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: vi.fn(),
@@ -44,17 +47,21 @@ vi.mock("@/components/billing/plan-gate", () => ({
 }));
 
 vi.mock("@/components/listings/listing-detail-content", () => ({
-  ListingDetailContent: ({
-    listing,
-  }: {
+  ListingDetailContent: (props: {
     listing: { title: string; attributes?: Record<string, unknown> };
-  }) => (
-    <div>
-      <div>Listing Detail Preview</div>
-      <div>{listing.title}</div>
-      {listing.attributes?.brand ? <div>Brand {String(listing.attributes.brand)}</div> : null}
-    </div>
-  ),
+    layoutMode?: "public" | "review";
+  }) => {
+    listingDetailPreviewSpy(props);
+    return (
+      <div>
+        <div>Listing Detail Preview</div>
+        <div>{props.listing.title}</div>
+        {props.listing.attributes?.brand ? (
+          <div>Brand {String(props.listing.attributes.brand)}</div>
+        ) : null}
+      </div>
+    );
+  },
 }));
 
 vi.mock("@/components/ui/media-upload", () => ({
@@ -159,6 +166,9 @@ describe("EditListingPage", () => {
     expect(screen.getByText("Listing preview")).toBeInTheDocument();
     expect(screen.getByText("Listing Detail Preview")).toBeInTheDocument();
     expect(screen.getByText("Brand Apple")).toBeInTheDocument();
+    expect(listingDetailPreviewSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ layoutMode: "review" })
+    );
     expect(listingCardSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         logoUrl: "https://media.verifymzansi.com/listings/existing-logo.jpg",

@@ -1130,6 +1130,8 @@ function CreatePromotionContent() {
                         }
                         showContactActions={false}
                         showContactSummary
+                        trackView={false}
+                        layoutMode="review"
                       />
                     </div>
                   </div>

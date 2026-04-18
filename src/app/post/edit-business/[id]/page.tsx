@@ -1679,6 +1679,7 @@ export default function EditBusinessPage() {
                   promotions={[]}
                   showPromotions={false}
                   showPublicActions={false}
+                  layoutMode="review"
                 />
               </div>
 

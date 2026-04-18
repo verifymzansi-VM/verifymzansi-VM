@@ -18,6 +18,7 @@ interface BusinessLayoutRouterProps {
   promotions?: BusinessPromotionRecord[];
   showPromotions?: boolean;
   showPublicActions?: boolean;
+  layoutMode?: "public" | "review";
   /** Kept for backward compat — single unified layout is always rendered (value is ignored). */
   layoutOverride?: LayoutTemplate;
 }
@@ -36,6 +37,7 @@ export function BusinessLayoutRouter({
   promotions = [],
   showPromotions = true,
   showPublicActions = true,
+  layoutMode = "public",
 }: BusinessLayoutRouterProps) {
   const galleryPhotos = business.gallery_photos ?? [];
   const deliveryAvailable = hasBusinessDeliveryAvailable(
@@ -57,6 +59,7 @@ export function BusinessLayoutRouter({
       promotions={promotions}
       showPromotions={showPromotions}
       showPublicActions={showPublicActions}
+      layoutMode={layoutMode}
       galleryPhotos={galleryPhotos}
       deliveryAvailable={deliveryAvailable}
     />

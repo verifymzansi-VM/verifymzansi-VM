@@ -15,6 +15,9 @@ type MockAuthState = {
 const { useAuthMock } = vi.hoisted(() => ({
   useAuthMock: vi.fn<() => MockAuthState>(() => ({ user: null, profile: null, isLoading: false })),
 }));
+const { businessLayoutRouterSpy } = vi.hoisted(() => ({
+  businessLayoutRouterSpy: vi.fn(),
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: vi.fn(),
@@ -114,9 +117,13 @@ vi.mock("@/lib/constants/sa-provinces", () => ({
 }));
 
 vi.mock("@/components/business/layouts/business-layout-router", () => ({
-  BusinessLayoutRouter: ({ business }: { business: { business_name: string } }) => (
-    <div data-testid="layout-router">{business.business_name}</div>
-  ),
+  BusinessLayoutRouter: (props: {
+    business: { business_name: string };
+    layoutMode?: "public" | "review";
+  }) => {
+    businessLayoutRouterSpy(props);
+    return <div data-testid="layout-router">{props.business.business_name}</div>;
+  },
 }));
 
 describe("CreateBusinessPage", () => {
@@ -333,6 +340,9 @@ describe("CreateBusinessPage", () => {
 
     expect(screen.getByText(/Profile preview/i)).toBeInTheDocument();
     expect(screen.getByText(/Step 3 of 3/i)).toBeInTheDocument();
+    expect(businessLayoutRouterSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ layoutMode: "review" })
+    );
   });
 
   it("does not submit while advancing into the media review step", async () => {

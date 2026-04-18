@@ -164,18 +164,24 @@ export function PromotionDetailContent({
   linkedBusiness,
   showContactActions = true,
   showContactSummary = false,
+  trackView = true,
+  layoutMode = "public",
 }: {
   promotion: PromotionDetailRecord;
   advertiserProfile: PromotionAdvertiserRecord | null;
   linkedBusiness: LinkedBusinessRecord | null;
   showContactActions?: boolean;
   showContactSummary?: boolean;
+  trackView?: boolean;
+  layoutMode?: "public" | "review";
 }) {
+  const isReviewLayout = layoutMode === "review";
+  const shouldTrackView = trackView && !isReviewLayout;
   const [viewCount, setViewCount] = useState(promotion.view_count ?? 0);
   const handleViewRecorded = useCallback(() => {
     setViewCount((currentCount) => currentCount + 1);
   }, []);
-  useTrackContentView(promotion.id, "promotion", true, handleViewRecorded);
+  useTrackContentView(promotion.id, "promotion", shouldTrackView, handleViewRecorded);
   const photos = promotion.photos ?? [];
   const videos = promotion.videos ?? [];
   const leadVideo = videos[0] ?? null;
@@ -288,7 +294,7 @@ export function PromotionDetailContent({
     Boolean(advertiserProfile?.masked_phone_public);
   const canWhatsapp =
     showContactActions && contactMethods.includes("whatsapp") && Boolean(advertiserProfile?.phone);
-  const showStickyBar = canCall || canWhatsapp;
+  const showStickyBar = layoutMode === "public" && (canCall || canWhatsapp);
   const eventState = getEventState(promotion.start_date, promotion.end_date);
   const categoryLabel = getPromotionCategoryDisplayLabel(
     promotion.category_key,
@@ -326,16 +332,21 @@ export function PromotionDetailContent({
 
   return (
     <article
+      data-layout-mode={layoutMode}
       className={
-        showStickyBar
-          ? "grid grid-cols-1 gap-4 pb-24 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:gap-6 lg:pb-0"
-          : "grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:gap-6"
+        isReviewLayout
+          ? "grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] 2xl:gap-6"
+          : showStickyBar
+            ? "grid grid-cols-1 gap-4 pb-24 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:gap-6 lg:pb-0"
+            : "grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:gap-6"
       }
     >
       {activeMedia ? (
-        <div className="space-y-4 lg:w-[20rem]">
+        <div className={isReviewLayout ? "space-y-4 2xl:w-[20rem]" : "space-y-4 lg:w-[20rem]"}>
           <div
-            className="mx-auto w-full max-w-[280px] overflow-hidden rounded-[28px] border border-slate-200/70 bg-black shadow-[0_35px_80px_-48px_rgba(15,23,42,0.55)] sm:max-w-[320px] lg:max-w-none"
+            className={`mx-auto w-full max-w-[280px] overflow-hidden rounded-[28px] border border-slate-200/70 bg-black shadow-[0_35px_80px_-48px_rgba(15,23,42,0.55)] sm:max-w-[320px] ${
+              isReviewLayout ? "2xl:max-w-none" : "lg:max-w-none"
+            }`}
             {...swipeHandlers}
           >
             <div className={cn("relative aspect-[9/16] overflow-hidden bg-black touch-pan-y")}>
@@ -396,7 +407,11 @@ export function PromotionDetailContent({
           </div>
 
           {mediaItems.length > 1 && (
-            <div className="mx-auto flex w-full max-w-[320px] gap-2 overflow-x-auto pb-1 lg:max-w-none">
+            <div
+              className={`mx-auto flex w-full max-w-[320px] gap-2 overflow-x-auto pb-1 ${
+                isReviewLayout ? "2xl:max-w-none" : "lg:max-w-none"
+              }`}
+            >
               {mediaItems.map((item, index) => {
                 if (index === activeMediaIndex) return null;
                 const isVideo = item.kind === "video";
@@ -450,7 +465,12 @@ export function PromotionDetailContent({
         </div>
       ) : null}
 
-      <div className={cn("space-y-4", !activeMedia && "lg:col-span-2")}>
+      <div
+        className={cn(
+          "space-y-4",
+          !activeMedia && (isReviewLayout ? "2xl:col-span-2" : "lg:col-span-2")
+        )}
+      >
         {/* ═══ TITLE BAR — fallback when no media hero ═══ */}
         {!activeMedia && (
           <div>
@@ -492,7 +512,7 @@ export function PromotionDetailContent({
                   Date, venue, and ticket clarity first
                 </h2>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {promotion.start_date ? (
                   <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
@@ -547,14 +567,14 @@ export function PromotionDetailContent({
 
           {/* ═══ EVENT COUNTDOWN (compact) ═══ */}
           {countdown && (
-            <div className="flex items-center justify-between rounded-xl border border-brand-blue/20 bg-gradient-to-r from-brand-blue/5 to-brand-blue/10 px-4 py-3">
-              <div className="flex items-center gap-2 text-sm font-medium text-brand-blue">
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-brand-blue/20 bg-gradient-to-r from-brand-blue/5 to-brand-blue/10 px-4 py-3">
+              <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-brand-blue">
                 <Timer className="h-4 w-4" />
                 <span className="hidden sm:inline">
                   {eventState === "upcoming" ? "Starts in" : "Ends in"}
                 </span>
               </div>
-              <div className="flex gap-2 text-center">
+              <div className="flex flex-1 flex-wrap gap-2 text-center sm:justify-center">
                 {[
                   { value: countdown.days, label: "D" },
                   { value: countdown.hours, label: "H" },
@@ -572,7 +592,12 @@ export function PromotionDetailContent({
                 ))}
               </div>
               {calendarUrl && (
-                <Button asChild variant="outline" size="sm" className="gap-1 text-xs">
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-center gap-1 text-xs sm:ml-auto sm:w-auto"
+                >
                   <a href={calendarUrl} target="_blank" rel="noopener noreferrer">
                     <CalendarPlus className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">Add to Calendar</span>
@@ -654,7 +679,7 @@ export function PromotionDetailContent({
             </button>
             {isDetailsOpen && (
               <div className="border-t px-4 py-3">
-                <dl className="grid grid-cols-2 gap-y-2.5 text-sm">
+                <dl className="grid grid-cols-1 gap-x-4 gap-y-2.5 text-sm sm:grid-cols-2">
                   <dt className="text-muted-foreground">Type</dt>
                   <dd className="font-medium">Event</dd>
 
@@ -752,7 +777,7 @@ export function PromotionDetailContent({
                       Event Details
                     </h3>
 
-                    <dl className="grid grid-cols-2 gap-y-2.5">
+                    <dl className="grid grid-cols-1 gap-x-4 gap-y-2.5 sm:grid-cols-2">
                       {eventTypeLabel && (
                         <>
                           <dt className="text-muted-foreground">Event type</dt>
@@ -829,7 +854,10 @@ export function PromotionDetailContent({
                         </p>
                         <div className="divide-y rounded-lg border">
                           {ed.ticket_tiers.map((tier: TicketTier, i: number) => (
-                            <div key={i} className="flex items-center justify-between px-3 py-2">
+                            <div
+                              key={i}
+                              className="flex flex-wrap items-center justify-between gap-2 px-3 py-2"
+                            >
                               <span className="font-medium">{tier.name}</span>
                               <span className="font-bold">
                                 {tier.price_cents != null && tier.price_cents > 0
@@ -881,42 +909,44 @@ export function PromotionDetailContent({
         </div>
 
         {/* ═══ LINKED BUSINESS + POSTED — mobile only ═══ */}
-        <div className="space-y-3 lg:hidden">
-          {linkedBusiness && (
-            <Link
-              href={`/mzansi-business/${linkedBusiness.id}`}
-              className="flex items-center gap-3 rounded-xl border p-3 transition-opacity hover:opacity-80"
-            >
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-brand-blue/10">
-                {linkedBusiness.logo_url ? (
-                  <Image
-                    src={normalizeMediaUrl(linkedBusiness.logo_url)}
-                    alt={linkedBusiness.business_name}
-                    width={32}
-                    height={32}
-                    className="object-contain"
-                  />
-                ) : (
-                  <Building2 className="h-4 w-4 text-brand-blue" />
-                )}
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{linkedBusiness.business_name}</p>
-                <p className="text-xs text-brand-blue">View Business</p>
-              </div>
-            </Link>
-          )}
-          <p className="text-center text-xs text-muted-foreground">
-            Posted{" "}
-            <time dateTime={promotion.created_at}>
-              {new Date(promotion.created_at).toLocaleDateString("en-ZA")}
-            </time>
-          </p>
-        </div>
+        {!isReviewLayout && (
+          <div className="space-y-3 lg:hidden">
+            {linkedBusiness && (
+              <Link
+                href={`/mzansi-business/${linkedBusiness.id}`}
+                className="flex items-center gap-3 rounded-xl border p-3 transition-opacity hover:opacity-80"
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-brand-blue/10">
+                  {linkedBusiness.logo_url ? (
+                    <Image
+                      src={normalizeMediaUrl(linkedBusiness.logo_url)}
+                      alt={linkedBusiness.business_name}
+                      width={32}
+                      height={32}
+                      className="object-contain"
+                    />
+                  ) : (
+                    <Building2 className="h-4 w-4 text-brand-blue" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{linkedBusiness.business_name}</p>
+                  <p className="text-xs text-brand-blue">View Business</p>
+                </div>
+              </Link>
+            )}
+            <p className="text-center text-xs text-muted-foreground">
+              Posted{" "}
+              <time dateTime={promotion.created_at}>
+                {new Date(promotion.created_at).toLocaleDateString("en-ZA")}
+              </time>
+            </p>
+          </div>
+        )}
       </div>
 
       {/* ═══ SIDEBAR — desktop only (mobile contact shown above) ═══ */}
-      <div className="hidden space-y-4 lg:block">
+      <div className={isReviewLayout ? "space-y-4 2xl:col-span-2" : "hidden space-y-4 lg:block"}>
         {/* Price card (when no media overlay) */}
         {promotion.price_cents != null &&
           promotion.price_cents > 0 &&

@@ -44,6 +44,7 @@ interface UnifiedLayoutProps {
   promotions: BusinessPromotionRecord[];
   showPromotions: boolean;
   showPublicActions: boolean;
+  layoutMode?: "public" | "review";
   galleryPhotos: string[];
   deliveryAvailable: boolean;
 }
@@ -156,10 +157,12 @@ function MediaColumn({
   family,
   business,
   galleryPhotos,
+  layoutMode,
 }: {
   family: BusinessProfileFamily;
   business: BusinessDetailRecord;
   galleryPhotos: string[];
+  layoutMode: "public" | "review";
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const heroMediaItems = useMemo<BusinessHeroMediaItem[]>(() => {
@@ -228,10 +231,16 @@ function MediaColumn({
 
   const columnWidthClass =
     family === "professional"
-      ? "mx-auto w-full max-w-[300px] sm:max-w-[320px] lg:max-w-none"
+      ? `mx-auto w-full max-w-[300px] sm:max-w-[320px] ${
+          layoutMode === "review" ? "2xl:max-w-none" : "lg:max-w-none"
+        }`
       : family === "tourism"
-        ? "mx-auto w-full max-w-[310px] sm:max-w-[330px] lg:max-w-none"
-        : "mx-auto w-full max-w-[290px] sm:max-w-[310px] lg:max-w-none";
+        ? `mx-auto w-full max-w-[310px] sm:max-w-[330px] ${
+            layoutMode === "review" ? "2xl:max-w-none" : "lg:max-w-none"
+          }`
+        : `mx-auto w-full max-w-[290px] sm:max-w-[310px] ${
+            layoutMode === "review" ? "2xl:max-w-none" : "lg:max-w-none"
+          }`;
 
   function openLightbox(idx: number) {
     const video = videoRef.current;
@@ -401,9 +410,11 @@ export function UnifiedLayout({
   promotions,
   showPromotions,
   showPublicActions,
+  layoutMode = "public",
   galleryPhotos,
   deliveryAvailable,
 }: UnifiedLayoutProps) {
+  const isReviewLayout = layoutMode === "review";
   const businessType = business.business_type as BusinessType;
   const businessCategory = business.category as BusinessCategory;
   const ctaConfig = CATEGORY_CTA_CONFIG[businessCategory];
@@ -420,8 +431,10 @@ export function UnifiedLayout({
       : family === "professional"
         ? "Service Scope"
         : ctaConfig?.servicesHeading;
-  const shellClassName =
-    showPublicActions && (business.phone || business.whatsapp)
+  const showStickyContactBar = layoutMode === "public" && showPublicActions;
+  const shellClassName = isReviewLayout
+    ? "grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] 2xl:items-start"
+    : showStickyContactBar && (business.phone || business.whatsapp)
       ? "grid grid-cols-1 gap-6 pb-24 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:items-start lg:pb-0"
       : "grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:items-start";
 
@@ -458,7 +471,7 @@ export function UnifiedLayout({
         </p>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {quickFacts.map((fact) => (
           <div
             key={`${fact.label}-${fact.value}`}
@@ -706,12 +719,17 @@ export function UnifiedLayout({
 
   return (
     <>
-      <div className={shellClassName} data-profile-family={family}>
-        <MediaColumn family={family} business={business} galleryPhotos={galleryPhotos} />
+      <div className={shellClassName} data-layout-mode={layoutMode} data-profile-family={family}>
+        <MediaColumn
+          family={family}
+          business={business}
+          galleryPhotos={galleryPhotos}
+          layoutMode={layoutMode}
+        />
 
         <div className="space-y-5">{infoColumn}</div>
 
-        <div className="space-y-4">
+        <div className={isReviewLayout ? "space-y-4 2xl:col-span-2" : "space-y-4"}>
           <ManagedByCard ownerProfile={ownerProfile} trustLevel={trustLevel} />
           {business.operating_hours ? (
             <OperatingHoursCard operatingHours={business.operating_hours} />
@@ -776,7 +794,7 @@ export function UnifiedLayout({
         </div>
       </div>
 
-      {showPublicActions ? (
+      {showStickyContactBar ? (
         <StickyContactBar business={business} ctaLabel={ctaConfig?.primaryCta ?? "Call Now"} />
       ) : null}
     </>

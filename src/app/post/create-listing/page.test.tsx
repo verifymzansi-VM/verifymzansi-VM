@@ -226,6 +226,7 @@ describe("CreateListingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     expect(screen.getByText(/Listing preview/i)).toBeInTheDocument();
+    expect(document.querySelector('[data-layout-mode="review"]')).not.toBeNull();
     expect(screen.getByText("Brand")).toBeInTheDocument();
     expect(screen.getByText("Apple")).toBeInTheDocument();
     expect(screen.getByText(/Electronics/i)).toBeInTheDocument();

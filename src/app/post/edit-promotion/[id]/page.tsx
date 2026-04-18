@@ -1023,6 +1023,8 @@ export default function EditPromotionPage() {
                   }
                   showContactActions={false}
                   showContactSummary
+                  trackView={false}
+                  layoutMode="review"
                 />
               </div>
 

@@ -4,6 +4,10 @@ import EditBusinessPage from "./page";
 import { useParams, useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 
+const { businessLayoutRouterSpy } = vi.hoisted(() => ({
+  businessLayoutRouterSpy: vi.fn(),
+}));
+
 vi.mock("next/navigation", () => ({
   useRouter: vi.fn(),
   useParams: vi.fn(),
@@ -42,9 +46,13 @@ vi.mock("@/components/layout/page-header", () => ({
 }));
 
 vi.mock("@/components/business/layouts/business-layout-router", () => ({
-  BusinessLayoutRouter: ({ business }: { business: { business_name: string } }) => (
-    <div data-testid="layout-router">{business.business_name}</div>
-  ),
+  BusinessLayoutRouter: (props: {
+    business: { business_name: string };
+    layoutMode?: "public" | "review";
+  }) => {
+    businessLayoutRouterSpy(props);
+    return <div data-testid="layout-router">{props.business.business_name}</div>;
+  },
 }));
 
 vi.mock("@/components/business/business-detail-content", () => ({
@@ -182,6 +190,9 @@ describe("EditBusinessPage", () => {
     expect(screen.getByText("Home Business")).toBeInTheDocument();
     expect(screen.getByText("Profile preview")).toBeInTheDocument();
     expect(screen.getByTestId("layout-router")).toBeInTheDocument();
+    expect(businessLayoutRouterSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ layoutMode: "review" })
+    );
     expect(screen.getByText("Nomsa Home Studio")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));

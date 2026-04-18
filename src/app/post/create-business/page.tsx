@@ -1177,6 +1177,7 @@ function CreateBusinessContent() {
           promotions={[]}
           showPromotions={false}
           showPublicActions={false}
+          layoutMode="review"
         />
       </div>
     );

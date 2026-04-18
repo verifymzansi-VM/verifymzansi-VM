@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import EditPromotionPage from "./page";
 import { useParams, useRouter } from "next/navigation";
 
+const { promotionDetailPreviewSpy } = vi.hoisted(() => ({
+  promotionDetailPreviewSpy: vi.fn(),
+}));
+
 vi.mock("next/navigation", () => ({
   useRouter: vi.fn(),
   useParams: vi.fn(),
@@ -29,19 +33,20 @@ vi.mock("@/components/layout/page-header", () => ({
 }));
 
 vi.mock("@/components/listings/promotion-detail-content", () => ({
-  PromotionDetailContent: ({
-    promotion,
-    linkedBusiness,
-  }: {
+  PromotionDetailContent: (props: {
     promotion: { title: string };
     linkedBusiness: { business_name?: string | null } | null;
-  }) => (
-    <div>
-      <div>Promotion Detail Preview</div>
-      <div>{promotion.title}</div>
-      <div>{linkedBusiness?.business_name ?? "No linked business"}</div>
-    </div>
-  ),
+    layoutMode?: "public" | "review";
+  }) => {
+    promotionDetailPreviewSpy(props);
+    return (
+      <div>
+        <div>Promotion Detail Preview</div>
+        <div>{props.promotion.title}</div>
+        <div>{props.linkedBusiness?.business_name ?? "No linked business"}</div>
+      </div>
+    );
+  },
 }));
 
 vi.mock("@/components/ui/media-upload", () => ({
@@ -124,6 +129,9 @@ describe("EditPromotionPage", () => {
     expect(screen.getByText("Promotion preview")).toBeInTheDocument();
     expect(screen.getByText("Promotion Detail Preview")).toBeInTheDocument();
     expect(screen.getAllByText("Nomsa Kitchen").length).toBeGreaterThan(0);
+    expect(promotionDetailPreviewSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ layoutMode: "review" })
+    );
 
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
 

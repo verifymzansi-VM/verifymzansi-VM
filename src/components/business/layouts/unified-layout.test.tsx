@@ -139,4 +139,24 @@ describe("UnifiedLayout", () => {
     expect(screen.getByRole("button", { name: "View cover photo" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "View photo 1" })).toBeInTheDocument();
   });
+
+  it("renders review mode without the sticky contact bar", () => {
+    const { container } = render(
+      <UnifiedLayout
+        family="showroom"
+        business={business}
+        trustLevel={null}
+        ownerProfile={null as BusinessOwnerRecord | null}
+        promotions={[] as BusinessPromotionRecord[]}
+        showPromotions={false}
+        showPublicActions
+        layoutMode="review"
+        galleryPhotos={business.gallery_photos ?? []}
+        deliveryAvailable={false}
+      />
+    );
+
+    expect(container.querySelector('[data-layout-mode="review"]')).toBeTruthy();
+    expect(screen.queryByText("Sticky Contact")).not.toBeInTheDocument();
+  });
 });

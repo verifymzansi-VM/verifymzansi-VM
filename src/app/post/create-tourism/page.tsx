@@ -1581,6 +1581,7 @@ function CreateTourismContent() {
             promotions={[]}
             showPromotions={false}
             showPublicActions={false}
+            layoutMode="review"
           />
         </div>
       );
@@ -1661,6 +1662,8 @@ function CreateTourismContent() {
           linkedBusiness={null}
           showContactActions={false}
           showContactSummary={false}
+          trackView={false}
+          layoutMode="review"
         />
       </div>
     );

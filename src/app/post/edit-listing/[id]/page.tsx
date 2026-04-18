@@ -1014,6 +1014,7 @@ export default function EditListingPage() {
                       showContactActions={false}
                       showSimilarListings={false}
                       photoCount={previewPhotos.length}
+                      layoutMode="review"
                     />
                   </div>
 
