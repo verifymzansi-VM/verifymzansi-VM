@@ -5,6 +5,7 @@ const {
   mockCreateClient,
   mockCreateAdminClient,
   mockCreateDecisionRecord,
+  mockCheckLocalRateLimit,
   mockLogAuditEvent,
   mockSendAccountEnforcementEmail,
   mockVerifyStaffActorRoleFromDb,
@@ -15,6 +16,7 @@ const {
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
   mockCreateDecisionRecord: vi.fn(),
+  mockCheckLocalRateLimit: vi.fn(),
   mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
   mockSendAccountEnforcementEmail: vi.fn().mockResolvedValue({ success: true }),
   mockVerifyStaffActorRoleFromDb: vi.fn(),
@@ -41,6 +43,9 @@ vi.mock("@/lib/utils/mutation-origin", () => ({
 vi.mock("@/lib/utils/csrf", () => ({
   enforceCsrfToken: mockEnforceCsrfToken,
 }));
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkLocalRateLimit: mockCheckLocalRateLimit,
+}));
 
 import { POST } from "@/app/api/admin/flagging/action/route";
 
@@ -64,6 +69,7 @@ describe("POST /api/admin/flagging/action", () => {
     mockCreateDecisionRecord.mockResolvedValue({ id: "decision-1" });
     mockEnforceSameOriginMutation.mockReturnValue(null);
     mockEnforceCsrfToken.mockReturnValue(null);
+    mockCheckLocalRateLimit.mockReturnValue({ limited: false });
     mockGetUserById.mockResolvedValue({
       data: {
         user: {
@@ -112,6 +118,27 @@ describe("POST /api/admin/flagging/action", () => {
     );
 
     expect(res.status).toBe(403);
+  });
+
+  it("returns 429 when moderation actions are rate limited", async () => {
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "mod-1" } } }),
+      },
+    });
+    mockVerifyStaffActorRoleFromDb.mockResolvedValue("moderator");
+    mockCheckLocalRateLimit.mockReturnValue({ limited: true, retryAfter: 30 });
+
+    const res = await POST(
+      createRequest({
+        reportId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        action: "hide",
+      })
+    );
+
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("30");
+    await expect(res.json()).resolves.toMatchObject({ error: "Too many requests" });
   });
 
   it("hides reported content and resolves the report", async () => {
@@ -491,7 +518,7 @@ describe("POST /api/admin/flagging/action", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns 400 when report lookup returns null (not found)", async () => {
+  it("returns 404 when report lookup returns null (not found)", async () => {
     const reportsEq = vi.fn().mockReturnValue({
       single: vi.fn().mockResolvedValue({
         data: null,
@@ -526,6 +553,66 @@ describe("POST /api/admin/flagging/action", () => {
       })
     );
 
-    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 when owner-targeted enforcement has no account holder", async () => {
+    const reportsEq = vi.fn().mockReturnValue({
+      single: vi.fn().mockResolvedValue({
+        data: {
+          id: "report-1",
+          area: "MZANSI_MARKET",
+          target_type: "listing",
+          target_id: "listing-1",
+        },
+        error: null,
+      }),
+    });
+    const listingsEq = vi.fn().mockReturnValue({
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: null,
+        error: null,
+      }),
+    });
+
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: "mod-1", app_metadata: { role: "moderator" } } },
+        }),
+      },
+    });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "reports") {
+          return {
+            select: vi.fn().mockReturnValue({ eq: reportsEq }),
+          };
+        }
+
+        if (table === "listings") {
+          return {
+            select: vi.fn().mockReturnValue({ eq: listingsEq }),
+          };
+        }
+
+        throw new Error(`Unexpected table ${table}`);
+      }),
+      auth: { admin: { getUserById: mockGetUserById } },
+      rpc: vi.fn().mockResolvedValue({ error: null }),
+    });
+
+    const res = await POST(
+      createRequest({
+        reportId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        action: "warn",
+        reason: "Owner missing",
+      })
+    );
+
+    expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Target content not found or has no associated account holder",
+    });
   });
 });

@@ -57,14 +57,18 @@ function makeAuditLogChain(maybeSingleResult: { data: unknown; error: unknown })
 
 /**
  * Build a mock `.eq()` fn that returns a self-referencing chainable+thenable
- * object.  This supports `.eq("id", id).eq("status", "rejected")` chains and
+ * object.  This supports `.eq("id", id).eq("status", "rejected").select(...)` chains and
  * resolves to `result` when awaited.
+ *
+ * Pass `data: []` to simulate a CAS race where 0 rows were updated.
+ * Pass `data: [{ id: "some-id" }]` (or omit, defaults to undefined) for the happy path.
  */
-function makeChainableEq(result: { error: unknown; count?: number }) {
+function makeChainableEq(result: { error: unknown; data?: unknown[] }) {
   const eq = vi.fn();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const chain: any = {
     eq,
+    select: vi.fn().mockReturnThis(),
     then: (resolve: (v: unknown) => void, reject?: (e: unknown) => void) =>
       Promise.resolve(result).then(resolve, reject),
   };
@@ -335,7 +339,8 @@ describe("POST /api/content/resubmit", () => {
   it("returns 409 when status changed between check and update (CAS guard)", async () => {
     // The item appears rejected at fetch time, but the update matched 0 rows
     // because another request changed the status concurrently.
-    const updateEq = makeChainableEq({ error: null, count: 0 });
+    // data: [] means .select("id") returned no rows — the race condition fired.
+    const updateEq = makeChainableEq({ error: null, data: [] });
     mockCreateClient.mockResolvedValue({
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),

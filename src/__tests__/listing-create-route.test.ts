@@ -333,6 +333,45 @@ describe("POST /api/listings", () => {
     });
   });
 
+  it("rejects condition for jobs and services listings", async () => {
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const res = await POST(
+      createRequest({
+        ...VALID_BODY,
+        category: "jobs_services",
+        condition: "good",
+        attributes: { job_type: "full_time", location_type: "on_site" },
+      })
+    );
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Validation failed",
+      issues: expect.arrayContaining([expect.objectContaining({ path: "condition" })]),
+    });
+  });
+
   it("rejects overlong province and city values", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {

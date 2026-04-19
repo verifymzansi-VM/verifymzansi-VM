@@ -369,6 +369,54 @@ describe("POST /api/account/email/change", () => {
     expect(mockLogger.warn).toHaveBeenCalled();
   });
 
+  it("returns 200 and logs error when profile update resolves with a non-23505 Supabase error", async () => {
+    // Fix 3: When the Supabase auth change is already in-flight, a non-duplicate
+    // DB error on the cooldown stamp is logged (error level) but the route still
+    // returns 200 because the change cannot be rolled back.
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                neq: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                  }),
+                }),
+              }),
+            }),
+            update: vi.fn().mockReturnValue({
+              // Resolves (not rejects) but with a non-23505 Supabase error
+              eq: vi
+                .fn()
+                .mockResolvedValue({ error: { message: "connection reset", code: "08006" } }),
+            }),
+          };
+        }
+        if (table === "contact_change_history") {
+          return {
+            insert: vi.fn().mockResolvedValue({ error: null }),
+          };
+        }
+        return {
+          insert: vi.fn().mockResolvedValue({ error: null }),
+        };
+      }),
+    });
+
+    const response = await POST(createRequest({ newEmail: "new@example.com" }));
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.success).toBe(true);
+    // The gap must be traceable in logs
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining("Failed to stamp email change cooldown"),
+      expect.objectContaining({ code: "08006" })
+    );
+  });
+
   it("returns 500 when an unexpected exception is thrown", async () => {
     mockCreateClient.mockRejectedValue(new Error("boom"));
 

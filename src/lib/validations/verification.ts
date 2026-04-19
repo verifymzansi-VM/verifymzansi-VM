@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { saIdSchema, saPhoneSchema, otpSchema } from "./shared";
 
+const legalNamePattern = /^[\p{L}\p{M}\s'-]+$/u;
+
 /** Zod schema for the phone-entry step of KYC verification. */
 export const verificationPhoneSchema = z.object({
   phone: saPhoneSchema,
@@ -19,12 +21,17 @@ export const verificationIdDocSchema = z.object({
     .string()
     .trim()
     .min(1, "First name as shown on your ID is required")
-    .max(100, "First name cannot exceed 100 characters"),
+    .max(100, "First name cannot exceed 100 characters")
+    .regex(
+      legalNamePattern,
+      "First name may only contain letters, spaces, apostrophes, and hyphens"
+    ),
   lastName: z
     .string()
     .trim()
     .min(1, "Surname as shown on your ID is required")
-    .max(100, "Surname cannot exceed 100 characters"),
+    .max(100, "Surname cannot exceed 100 characters")
+    .regex(legalNamePattern, "Surname may only contain letters, spaces, apostrophes, and hyphens"),
   idDocumentUrl: z.string().url("Upload your ID document"),
   idDocumentType: z.enum(["sa_id"]),
 });
@@ -95,9 +102,22 @@ export const fileUploadSchema = z
     idNumber: z.string().max(13).optional(),
     idDocumentType: z.enum(["sa_id"]).optional(),
     /** First name as printed on the ID document (required for id_document uploads). */
-    firstName: z.string().trim().max(100).optional(),
+    firstName: z
+      .string()
+      .trim()
+      .max(100)
+      .regex(
+        legalNamePattern,
+        "First name may only contain letters, spaces, apostrophes, and hyphens"
+      )
+      .optional(),
     /** Surname as printed on the ID document (required for id_document uploads). */
-    lastName: z.string().trim().max(100).optional(),
+    lastName: z
+      .string()
+      .trim()
+      .max(100)
+      .regex(legalNamePattern, "Surname may only contain letters, spaces, apostrophes, and hyphens")
+      .optional(),
     /** How the image was captured: camera (getUserMedia) or file upload. */
     captureMethod: z.enum(["camera", "file_upload"]).optional(),
   })

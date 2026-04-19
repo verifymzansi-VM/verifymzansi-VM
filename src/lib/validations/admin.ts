@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { optionalTrimmedStringSchema, uuidSchema } from "@/lib/validations/shared";
+import { OVERRIDE_REASON_CODES, REASON_CODES } from "@/lib/constants/verification";
 
 /**
  * Zod schemas for admin API route input validation
@@ -35,9 +36,9 @@ export const adminVerificationDecideSchema = z
       .transform(
         (v) => (v === "resubmit" ? "needs_resubmission" : v) as Exclude<typeof v, "resubmit">
       ),
-    reasonCode: optionalTrimmedStringSchema.pipe(z.string().max(100).optional()),
+    reasonCode: optionalTrimmedStringSchema.pipe(z.enum(REASON_CODES).optional()),
     reasonNote: optionalTrimmedStringSchema.pipe(z.string().max(500).optional()),
-    overrideReasonCode: optionalTrimmedStringSchema.pipe(z.string().max(100).optional()),
+    overrideReasonCode: optionalTrimmedStringSchema.pipe(z.enum(OVERRIDE_REASON_CODES).optional()),
   })
   .refine((data) => data.decision === "approved" || data.reasonCode, {
     message: "Reason code is required for rejection or resubmission",

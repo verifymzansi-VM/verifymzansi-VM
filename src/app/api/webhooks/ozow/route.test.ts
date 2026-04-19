@@ -107,7 +107,7 @@ describe("POST /api/webhooks/ozow", () => {
     await expect(response.json()).resolves.toEqual({ error: "Webhook secret not configured" });
   });
 
-  it("returns 401 for malformed JSON payloads (Svix verify rejects unparseable bodies)", async () => {
+  it("returns 401 for malformed payloads that fail webhook signature verification", async () => {
     const raw = '{"eventType":"transaction.complete",';
     const webhook = new Webhook(webhookSecret);
     const timestamp = new Date();

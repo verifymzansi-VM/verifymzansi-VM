@@ -22,6 +22,7 @@ import { logAuditEvent } from "@/lib/services/audit";
 import { sendPaymentFailedEmail, sendPaymentReceiptEmail } from "@/lib/services/email";
 
 const log = createLogger("OzowWebhook");
+const SUPPORTED_OZOW_EVENT_TYPE = "transaction.complete";
 
 function isE2eLoggingContext(): boolean {
   const runtimeMode = (process.env.VERIFYMZANSI_RUNTIME_MODE || "").toLowerCase();
@@ -230,14 +231,17 @@ export async function POST(request: NextRequest) {
     let parsedBody: unknown;
     try {
       parsedBody = JSON.parse(rawBody) as unknown;
-    } catch {
+    } catch (error) {
+      log.warn("Ozow webhook JSON parse failed", {
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
       return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
     }
     const payload = normalizeOzowWebhook(parsedBody);
     if (!payload?.merchantReference) {
       return NextResponse.json({ error: "Missing merchantReference" }, { status: 400 });
     }
-    if (payload.eventType?.toLowerCase() === "transaction.complete" && !payload.status) {
+    if (payload.eventType?.toLowerCase() === SUPPORTED_OZOW_EVENT_TYPE && !payload.status) {
       return NextResponse.json({ error: "Missing transaction status" }, { status: 400 });
     }
 
@@ -308,7 +312,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Payment ID mismatch" }, { status: 400 });
     }
 
-    if (eventType === "transaction.complete" && isFailedTransactionStatus(status)) {
+    if (eventType === SUPPORTED_OZOW_EVENT_TYPE && isFailedTransactionStatus(status)) {
       if (payment.status === "failed") {
         return NextResponse.json({ success: true, duplicate: true });
       }
@@ -335,11 +339,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
-    if (eventType && eventType !== "transaction.complete") {
+    if (eventType && eventType !== SUPPORTED_OZOW_EVENT_TYPE) {
       return NextResponse.json({ success: true, ignored: true });
     }
 
-    if (eventType === "transaction.complete" && !isSuccessfulTransactionStatus(status)) {
+    if (eventType === SUPPORTED_OZOW_EVENT_TYPE && !isSuccessfulTransactionStatus(status)) {
       return NextResponse.json({ success: true, ignored: true });
     }
 

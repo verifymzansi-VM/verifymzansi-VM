@@ -775,7 +775,10 @@ describe("POST /api/verification/upload", () => {
     });
 
     mockUploadKycDocument.mockResolvedValue({ url: "u", key: "real-key" });
-    mockDeleteFromR2.mockResolvedValue(undefined);
+    mockDeleteFromR2
+      .mockRejectedValueOnce(new Error("temporary failure 1"))
+      .mockRejectedValueOnce(new Error("temporary failure 2"))
+      .mockResolvedValue(undefined);
 
     const req = createFormDataRequest({
       file: createTestFile(),
@@ -784,7 +787,28 @@ describe("POST /api/verification/upload", () => {
 
     const response = await POST(req);
     expect(response.status).toBe(500);
-    expect(mockDeleteFromR2).toHaveBeenCalled();
+    expect(mockDeleteFromR2).toHaveBeenCalledTimes(3);
+  });
+
+  it("rejects numeric legal names for id document uploads", async () => {
+    mockAuth({ id: "user-1" });
+
+    const response = await POST(
+      createFormDataRequest({
+        file: createTestFile(),
+        docType: "id_document",
+        firstName: "12345",
+        lastName: "Mokoena",
+      })
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        error: "Invalid upload metadata",
+      })
+    );
+    expect(mockUploadKycDocument).not.toHaveBeenCalled();
   });
 
   it("promotes account status to pending_review and links the artifact into the session", async () => {

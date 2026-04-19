@@ -4,6 +4,8 @@ import type { NextRequest } from "next/server";
 const {
   mockCreateClient,
   mockCreateAdminClient,
+  mockEnforceCsrfToken,
+  mockEnforceSameOriginMutation,
   mockVerifyStaffActorRoleFromDb,
   mockCheckLocalRateLimit,
   mockGetLinkedEvidenceArtifactIds,
@@ -13,6 +15,8 @@ const {
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
+  mockEnforceCsrfToken: vi.fn(),
+  mockEnforceSameOriginMutation: vi.fn(),
   mockVerifyStaffActorRoleFromDb: vi.fn(),
   mockCheckLocalRateLimit: vi.fn(),
   mockGetLinkedEvidenceArtifactIds: vi.fn(),
@@ -37,6 +41,14 @@ vi.mock("@/lib/utils/rate-limit", () => ({
   checkLocalRateLimit: (...args: unknown[]) => mockCheckLocalRateLimit(...args),
 }));
 
+vi.mock("@/lib/utils/mutation-origin", () => ({
+  enforceSameOriginMutation: (...args: unknown[]) => mockEnforceSameOriginMutation(...args),
+}));
+
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: (...args: unknown[]) => mockEnforceCsrfToken(...args),
+}));
+
 vi.mock("@/lib/services/kyc-evidence-access", () => ({
   getLinkedEvidenceArtifactIds: (...args: unknown[]) => mockGetLinkedEvidenceArtifactIds(...args),
 }));
@@ -57,7 +69,7 @@ vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }));
 
-import { GET } from "./route";
+import { GET, POST } from "./route";
 
 const STEP_ID = "123e4567-e89b-42d3-a456-426614174000";
 const USER_ID = "123e4567-e89b-42d3-a456-426614174111";
@@ -87,6 +99,8 @@ describe("/api/admin/verification/evidence/metadata", () => {
 
     mockVerifyStaffActorRoleFromDb.mockResolvedValue("admin");
     mockCheckLocalRateLimit.mockReturnValue({ limited: false });
+    mockEnforceSameOriginMutation.mockReturnValue(null);
+    mockEnforceCsrfToken.mockReturnValue(null);
     mockGetLinkedEvidenceArtifactIds.mockResolvedValue([]);
     mockLogAuditEvent.mockResolvedValue(undefined);
 
@@ -254,6 +268,157 @@ describe("/api/admin/verification/evidence/metadata", () => {
     const response = await GET(
       createGetRequest("http://localhost:3000/api/admin/verification/evidence/metadata")
     );
+
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 403 when no active review case exists for the resolved user", async () => {
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "verification_steps") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({
+                data: [
+                  {
+                    id: STEP_ID,
+                    user_id: USER_ID,
+                    step_type: "id_doc",
+                    status: "approved",
+                  },
+                ],
+                error: null,
+              }),
+            }),
+          };
+        }
+
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+        };
+      }),
+    });
+
+    const response = await GET(
+      createGetRequest(
+        `http://localhost:3000/api/admin/verification/evidence/metadata?stepId=${STEP_ID}`
+      )
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "no_active_case",
+    });
+  });
+
+  it("falls back to userId when stepId is stale but userId is supplied", async () => {
+    const fallbackSelect = vi.fn();
+    fallbackSelect
+      .mockReturnValueOnce({
+        eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+      })
+      .mockReturnValueOnce({
+        eq: vi.fn().mockResolvedValue({
+          data: [
+            {
+              id: STEP_ID,
+              user_id: USER_ID,
+              step_type: "id_doc",
+              status: "pending_review",
+              reviewed_at: null,
+              decided_at: null,
+              rejection_reason: null,
+            },
+          ],
+          error: null,
+        }),
+      });
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "verification_steps") {
+          return { select: fallbackSelect };
+        }
+
+        if (table === "kyc_artifacts") {
+          return {
+            select: vi.fn().mockReturnValue({
+              in: vi.fn().mockReturnValue({
+                order: vi.fn().mockResolvedValue({ data: [], error: null }),
+              }),
+              eq: vi.fn().mockReturnValue({
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+                }),
+              }),
+            }),
+          };
+        }
+
+        if (table === "kyc_risk_signals") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+                }),
+              }),
+            }),
+          };
+        }
+
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+              }),
+            }),
+          };
+        }
+
+        if (table === "kyc_evidence_access_logs") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+                }),
+              }),
+            }),
+          };
+        }
+
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+        };
+      }),
+    });
+
+    const response = await GET(
+      createGetRequest(
+        `http://localhost:3000/api/admin/verification/evidence/metadata?stepId=${STEP_ID}&userId=${USER_ID}`
+      )
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(fallbackSelect).toHaveBeenCalledTimes(2);
+    expect(Array.isArray(payload.steps)).toBe(true);
+  });
+
+  it("rejects POST wrapper requests with invalid body before delegating to GET", async () => {
+    mockEnforceCsrfToken.mockReturnValue(null);
+
+    const request = {
+      url: "http://localhost:3000/api/admin/verification/evidence/metadata",
+      headers: new Headers(),
+      text: async () => JSON.stringify({}),
+    } as unknown as NextRequest;
+
+    const response = await POST(request);
 
     expect(response.status).toBe(400);
   });

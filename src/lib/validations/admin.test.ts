@@ -6,6 +6,7 @@ import {
   adminDsarDecideSchema,
   adminDsarCompleteSchema,
 } from "./admin";
+import { OVERRIDE_REASON_CODES, REASON_CODES } from "@/lib/constants/verification";
 
 describe("adminContentDecideSchema", () => {
   it("accepts valid approve", () => {
@@ -68,8 +69,36 @@ describe("adminVerificationDecideSchema", () => {
     const result = adminVerificationDecideSchema.safeParse({
       stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
       decision: "rejected",
-      reasonCode: "blurry_image",
+      reasonCode: REASON_CODES[0],
       reasonNote: "Photo too blurry to read",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects invalid reasonCode values", () => {
+    const result = adminVerificationDecideSchema.safeParse({
+      stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+      decision: "rejected",
+      reasonCode: "not_a_real_reason",
+      reasonNote: "Photo too blurry to read",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects invalid overrideReasonCode values", () => {
+    const result = adminVerificationDecideSchema.safeParse({
+      stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+      decision: "approved",
+      overrideReasonCode: "manual_override",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts valid overrideReasonCode values", () => {
+    const result = adminVerificationDecideSchema.safeParse({
+      stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+      decision: "approved",
+      overrideReasonCode: OVERRIDE_REASON_CODES[0],
     });
     expect(result.success).toBe(true);
   });

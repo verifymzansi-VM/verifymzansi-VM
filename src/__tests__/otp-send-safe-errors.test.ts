@@ -66,10 +66,16 @@ describe("POST /api/otp/send safe error envelopes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockServerFrom.mockImplementation(() => {
+      const selectQuery = {
+        eq: vi.fn().mockReturnValue({
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        }),
+      };
       const updateQuery = {
         eq: vi.fn().mockResolvedValue({ error: null }),
       };
       return {
+        select: vi.fn().mockReturnValue(selectQuery),
         update: vi.fn().mockReturnValue(updateQuery),
       };
     });

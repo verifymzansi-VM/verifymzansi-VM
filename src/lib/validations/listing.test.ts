@@ -127,6 +127,16 @@ describe("listingSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("rejects condition on jobs listings", () => {
+    const result = listingSchema.safeParse({
+      ...baseFields,
+      category: "jobs_services",
+      condition: "good",
+      attributes: { job_type: "full_time", location_type: "on_site" },
+    });
+    expect(result.success).toBe(false);
+  });
+
   // ── Common validation ──────────────────────────────────
 
   it("rejects listing with title too short", () => {

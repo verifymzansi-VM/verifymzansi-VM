@@ -170,6 +170,15 @@ export async function POST(request: NextRequest) {
         { error: ACCOUNT_EMAIL_PENDING_CONFLICT_ERROR, code: "email_pending_conflict" },
         { status: 409 }
       );
+    } else if (profileUpdate.value.error) {
+      // Non-duplicate Supabase error: cooldown not stamped but the auth
+      // email-change is already in-flight and cannot be rolled back.
+      // Log so the rate-limit gap is traceable; still return 200 to the client.
+      log.error("Failed to stamp email change cooldown (Supabase error — cooldown not enforced)", {
+        userId: user.id,
+        error: profileUpdate.value.error.message,
+        code: profileUpdate.value.error.code,
+      });
     }
     if (auditInsert.status === "rejected") {
       log.warn("Failed to write email change audit record", {

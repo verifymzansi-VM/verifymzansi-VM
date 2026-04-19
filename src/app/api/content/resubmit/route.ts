@@ -183,21 +183,23 @@ export async function POST(request: Request) {
           .from(config.table)
           .update({ status: "pending_moderation", status_reason: null })
           .eq("id", itemId)
-          .eq("status", "rejected"),
+          .eq("status", "rejected")
+          .select("id"),
         ownerColumn,
         user.id
       );
 
       const updateResult = await updateQuery;
-      // If no rows were updated, the status changed between check and update (race condition)
-      if (!updateResult.error && (updateResult as unknown as { count?: number }).count === 0) {
+      // If no rows were updated, the status changed between check and update (race condition).
+      // Supabase update without .select() returns count: null, so we request .select("id") and
+      // check data.length instead — the previous count === 0 check was always false.
+      if (!updateResult.error && (updateResult.data?.length ?? -1) === 0) {
         return NextResponse.json(
           { error: "Content status changed. Please refresh and try again." },
           { status: 409 }
         );
       }
-      updateErrorMessage =
-        (updateResult.error as unknown as { message?: string | null } | null)?.message ?? null;
+      updateErrorMessage = updateResult.error?.message ?? null;
     } else {
       const admin = createAdminClient();
       // Detect owner column for tables not in the standard compat list (e.g. storefronts)
@@ -254,16 +256,18 @@ export async function POST(request: Request) {
         .from(config.table)
         .update({ status: "pending_moderation", status_reason: null })
         .eq("id", itemId)
-        .eq("status", "rejected");
-      // If no rows were updated, the status changed between check and update (race condition)
-      if (!updateResult.error && (updateResult as unknown as { count?: number }).count === 0) {
+        .eq("status", "rejected")
+        .select("id");
+      // If no rows were updated, the status changed between check and update (race condition).
+      // Supabase update without .select() returns count: null, so we request .select("id") and
+      // check data.length instead — the previous count === 0 check was always false.
+      if (!updateResult.error && (updateResult.data?.length ?? -1) === 0) {
         return NextResponse.json(
           { error: "Content status changed. Please refresh and try again." },
           { status: 409 }
         );
       }
-      updateErrorMessage =
-        (updateResult.error as unknown as { message?: string | null } | null)?.message ?? null;
+      updateErrorMessage = updateResult.error?.message ?? null;
     }
 
     if (updateErrorMessage) {

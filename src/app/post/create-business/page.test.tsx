@@ -50,10 +50,12 @@ vi.mock("next/link", () => ({
   default: ({
     children,
     href,
+    prefetch: _prefetch,
     ...props
   }: {
     children: React.ReactNode;
     href: string;
+    prefetch?: boolean;
     [key: string]: unknown;
   }) => (
     <a href={href} {...props}>
@@ -185,15 +187,19 @@ describe("CreateBusinessPage", () => {
     await selectBusinessType(/Own Premises/i);
     fillCoreBusinessFields();
     fillStandaloneStepOneDetails();
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    });
   }
 
-  function completeLocationStep() {
+  async function completeLocationStep() {
     fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });
     fireEvent.change(screen.getByLabelText(/^City$/i), {
       target: { value: "Johannesburg" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    });
   }
 
   function jsonResponse(body: unknown, init?: { ok?: boolean; status?: number }) {
@@ -336,7 +342,7 @@ describe("CreateBusinessPage", () => {
     render(<CreateBusinessPage />);
 
     await completeStandaloneStepOne();
-    completeLocationStep();
+    await completeLocationStep();
 
     expect(screen.getByText(/Profile preview/i)).toBeInTheDocument();
     expect(screen.getByText(/Step 3 of 3/i)).toBeInTheDocument();
@@ -354,7 +360,7 @@ describe("CreateBusinessPage", () => {
     render(<CreateBusinessPage />);
 
     await completeStandaloneStepOne();
-    completeLocationStep();
+    await completeLocationStep();
 
     expect(screen.getByText(/Step 3 of 3/i)).toBeInTheDocument();
     expect(screen.getByText("Business logo (optional)")).toBeInTheDocument();
@@ -373,9 +379,11 @@ describe("CreateBusinessPage", () => {
     render(<CreateBusinessPage />);
 
     await completeStandaloneStepOne();
-    completeLocationStep();
+    await completeLocationStep();
 
-    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+    });
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledTimes(1);
@@ -415,12 +423,20 @@ describe("CreateBusinessPage", () => {
     render(<CreateBusinessPage />);
 
     await completeStandaloneStepOne();
-    completeLocationStep();
+    await completeLocationStep();
 
-    fireEvent.click(screen.getByRole("button", { name: "Business logo (optional)" }));
-    fireEvent.click(screen.getByRole("button", { name: "Cover photo (optional)" }));
-    fireEvent.click(screen.getByRole("button", { name: /Profile photos \(up to 5\)/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Business logo (optional)" }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Cover photo (optional)" }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Profile photos \(up to 5\)/i }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+    });
 
     await waitFor(() => {
       const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
@@ -457,10 +473,14 @@ describe("CreateBusinessPage", () => {
     render(<CreateBusinessPage />);
 
     await completeStandaloneStepOne();
-    completeLocationStep();
+    await completeLocationStep();
 
-    fireEvent.click(screen.getByRole("button", { name: "Business logo (optional)" }));
-    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Business logo (optional)" }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+    });
 
     expect(
       (await screen.findAllByText("Business logo upload failed. Retry the selected image.")).length
@@ -488,10 +508,14 @@ describe("CreateBusinessPage", () => {
     render(<CreateBusinessPage />);
 
     await completeStandaloneStepOne();
-    completeLocationStep();
+    await completeLocationStep();
 
-    fireEvent.click(screen.getByRole("button", { name: /Profile photos \(up to 5\)/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Profile photos \(up to 5\)/i }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+    });
 
     expect(
       (
@@ -527,10 +551,14 @@ describe("CreateBusinessPage", () => {
     render(<CreateBusinessPage />);
 
     await completeStandaloneStepOne();
-    completeLocationStep();
+    await completeLocationStep();
 
-    fireEvent.click(screen.getByRole("button", { name: /Business logo \(optional\)/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Business logo \(optional\)/i }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+    });
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
@@ -553,10 +581,14 @@ describe("CreateBusinessPage", () => {
     render(<CreateBusinessPage />);
 
     await completeStandaloneStepOne();
-    completeLocationStep();
+    await completeLocationStep();
 
-    fireEvent.click(screen.getByRole("button", { name: /Video \(optional\)/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Video \(optional\)/i }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+    });
 
     expect(
       (await screen.findAllByText("Promo video upload failed. Retry the selected file.")).length
@@ -579,7 +611,7 @@ describe("CreateBusinessPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    completeLocationStep();
+    await completeLocationStep();
 
     expect(screen.getByText(/Profile preview/i)).toBeInTheDocument();
     expect(screen.getByText("Nomsa Home Studio")).toBeInTheDocument();
@@ -589,7 +621,7 @@ describe("CreateBusinessPage", () => {
     render(<CreateBusinessPage />);
 
     await completeStandaloneStepOne();
-    completeLocationStep();
+    await completeLocationStep();
 
     const details = screen.getByText("Optional extras").closest("details");
     expect(details).not.toHaveAttribute("open");
@@ -598,7 +630,9 @@ describe("CreateBusinessPage", () => {
     fireEvent.change(screen.getByPlaceholderText("Facebook URL"), {
       target: { value: "not-a-url" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+    });
 
     expect(screen.getAllByText("Enter a valid Facebook URL.").length).toBeGreaterThan(0);
     expect(screen.getByText(/Please fix 1 field/i)).toBeInTheDocument();
@@ -610,7 +644,7 @@ describe("CreateBusinessPage", () => {
     render(<CreateBusinessPage />);
 
     await completeStandaloneStepOne();
-    completeLocationStep();
+    await completeLocationStep();
 
     const details = screen.getByText("Optional extras").closest("details");
     expect(details).not.toHaveAttribute("open");
@@ -629,7 +663,7 @@ describe("CreateBusinessPage", () => {
     render(<CreateBusinessPage />);
 
     await completeStandaloneStepOne();
-    completeLocationStep();
+    await completeLocationStep();
 
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
@@ -651,7 +685,7 @@ describe("CreateBusinessPage", () => {
     render(<CreateBusinessPage />);
 
     await completeStandaloneStepOne();
-    completeLocationStep();
+    await completeLocationStep();
 
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
@@ -673,7 +707,7 @@ describe("CreateBusinessPage", () => {
     render(<CreateBusinessPage />);
 
     await completeStandaloneStepOne();
-    completeLocationStep();
+    await completeLocationStep();
 
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
@@ -695,7 +729,7 @@ describe("CreateBusinessPage", () => {
     render(<CreateBusinessPage />);
 
     await completeStandaloneStepOne();
-    completeLocationStep();
+    await completeLocationStep();
 
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
@@ -714,7 +748,7 @@ describe("CreateBusinessPage", () => {
     render(<CreateBusinessPage />);
 
     await completeStandaloneStepOne();
-    completeLocationStep();
+    await completeLocationStep();
 
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
@@ -733,7 +767,7 @@ describe("CreateBusinessPage", () => {
     render(<CreateBusinessPage />);
 
     await completeStandaloneStepOne();
-    completeLocationStep();
+    await completeLocationStep();
 
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
@@ -768,7 +802,7 @@ describe("CreateBusinessPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    completeLocationStep();
+    await completeLocationStep();
 
     expect(screen.queryByText(/^Delivery Service$/i)).not.toBeInTheDocument();
 

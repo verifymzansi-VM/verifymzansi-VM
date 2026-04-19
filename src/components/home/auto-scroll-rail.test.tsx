@@ -115,7 +115,9 @@ describe("AutoScrollRail", () => {
     mockRailLayout(rail, 0);
     const scrollToSpy = vi.spyOn(rail, "scrollTo").mockImplementation(() => undefined);
 
-    vi.advanceTimersByTime(1000);
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
 
     expect(scrollToSpy).toHaveBeenCalledWith({ left: 240, behavior: "smooth" });
   });
@@ -132,7 +134,9 @@ describe("AutoScrollRail", () => {
     mockRailLayout(rail, 600);
     const scrollToSpy = vi.spyOn(rail, "scrollTo").mockImplementation(() => undefined);
 
-    vi.advanceTimersByTime(1000);
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
 
     expect(scrollToSpy).toHaveBeenCalledWith({ left: 0, behavior: "smooth" });
   });
@@ -182,7 +186,9 @@ describe("AutoScrollRail", () => {
     mockRailLayout(rail, 0);
     const scrollToSpy = vi.spyOn(rail, "scrollTo").mockImplementation(() => undefined);
 
-    vi.advanceTimersByTime(1000);
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
 
     expect(scrollToSpy).not.toHaveBeenCalled();
   });
@@ -205,7 +211,9 @@ describe("AutoScrollRail", () => {
     mockRailLayout(rail, 0);
     const scrollToSpy = vi.spyOn(rail, "scrollTo").mockImplementation(() => undefined);
 
-    vi.advanceTimersByTime(1000);
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
 
     expect(scrollToSpy).not.toHaveBeenCalled();
   });

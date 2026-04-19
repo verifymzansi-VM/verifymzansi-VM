@@ -41,7 +41,9 @@ if (typeof window !== "undefined" && "serviceWorker" in navigator) {
         window.sessionStorage.removeItem(cleanupKey);
       }
     })
-    .catch(() => {});
+    .catch((err) => {
+      console.warn("[VerifyMzansi] Dev service-worker cleanup failed", err);
+    });
 }
 `;
 

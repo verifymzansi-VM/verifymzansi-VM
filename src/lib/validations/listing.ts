@@ -248,19 +248,29 @@ const babyKidsAttrs = z.object({
  * Validates base fields (title, description, price, location, category, images)
  * plus category-specific attribute objects (property, cars, auto_parts, etc.).
  */
-export const listingSchema = z.discriminatedUnion("category", [
-  listingBase.extend({ category: z.literal("property"), attributes: propertyAttrs }),
-  listingBase.extend({ category: z.literal("vehicles"), attributes: carsAttrs }),
-  listingBase.extend({ category: z.literal("auto_parts"), attributes: autoPartsAttrs }),
-  listingBase.extend({ category: z.literal("electronics"), attributes: electronicsAttrs }),
-  listingBase.extend({ category: z.literal("home_lifestyle"), attributes: homeLifestyleAttrs }),
-  listingBase.extend({ category: z.literal("jobs_services"), attributes: jobsAttrs }),
-  listingBase.extend({
-    category: z.literal("farming_agriculture"),
-    attributes: farmingAgricultureAttrs,
-  }),
-  listingBase.extend({ category: z.literal("baby_kids"), attributes: babyKidsAttrs }),
-]);
+export const listingSchema = z
+  .discriminatedUnion("category", [
+    listingBase.extend({ category: z.literal("property"), attributes: propertyAttrs }),
+    listingBase.extend({ category: z.literal("vehicles"), attributes: carsAttrs }),
+    listingBase.extend({ category: z.literal("auto_parts"), attributes: autoPartsAttrs }),
+    listingBase.extend({ category: z.literal("electronics"), attributes: electronicsAttrs }),
+    listingBase.extend({ category: z.literal("home_lifestyle"), attributes: homeLifestyleAttrs }),
+    listingBase.extend({ category: z.literal("jobs_services"), attributes: jobsAttrs }),
+    listingBase.extend({
+      category: z.literal("farming_agriculture"),
+      attributes: farmingAgricultureAttrs,
+    }),
+    listingBase.extend({ category: z.literal("baby_kids"), attributes: babyKidsAttrs }),
+  ])
+  .superRefine((data, ctx) => {
+    if (data.category === "jobs_services" && data.condition) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Condition is not applicable to jobs and services listings",
+        path: ["condition"],
+      });
+    }
+  });
 
 /** Inferred input type for {@link listingSchema}. */
 export type ListingInput = z.infer<typeof listingSchema>;

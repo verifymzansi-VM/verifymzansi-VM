@@ -21,6 +21,7 @@ const otpSendSchema = z.object({ phone: saPhoneSchema });
 
 type OtpSendErrorCode =
   | "unauthorized"
+  | "already_verified"
   | "rate_limited"
   | "hourly_limit_reached"
   | "database_unavailable"
@@ -134,6 +135,30 @@ export async function POST(request: NextRequest) {
     if (!user.email_confirmed_at) {
       return NextResponse.json(buildVerificationEmailConfirmationRequiredPayload(), {
         status: 403,
+      });
+    }
+
+    const { data: existingProfile, error: existingProfileError } = await supabase
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
+      .select("phone")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (existingProfileError) {
+      log.error("Failed to read existing profile before OTP send", {
+        userId: user.id,
+        error: existingProfileError.message,
+        code: existingProfileError.code,
+      });
+
+      return otpSendError("Failed to prepare phone verification. Please try again.", 500, {
+        code: "internal_error",
+      });
+    }
+
+    if (existingProfile?.phone === phone) {
+      return otpSendError("This phone number is already verified on your account.", 409, {
+        code: "already_verified",
       });
     }
 

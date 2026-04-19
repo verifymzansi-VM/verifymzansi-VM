@@ -293,6 +293,11 @@ describe("OTP Routes", () => {
       mockUserClient.from.mockImplementation((table: string) => {
         if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
           return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+              }),
+            }),
             update: vi.fn().mockReturnValue({
               eq: vi.fn().mockResolvedValue({
                 error: {
@@ -313,6 +318,36 @@ describe("OTP Routes", () => {
       expect(res.status).toBe(409);
       expect(data).toMatchObject({
         error: "This phone number is already linked to another account.",
+      });
+      expect(smsService.sendOtpSms).not.toHaveBeenCalled();
+    });
+
+    it("returns 409 when the phone is already verified on the same account", async () => {
+      mockUserClient.from.mockImplementation((table: string) => {
+        if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: { phone: "+27821234567" },
+                  error: null,
+                }),
+              }),
+            }),
+            update: vi.fn(),
+          };
+        }
+
+        return {};
+      });
+
+      const res = await sendOtp(createMockRequest("/api/otp/send", { phone: "+27821234567" }));
+      const data = await res.json();
+
+      expect(res.status).toBe(409);
+      expect(data).toMatchObject({
+        error: "This phone number is already verified on your account.",
+        code: "already_verified",
       });
       expect(smsService.sendOtpSms).not.toHaveBeenCalled();
     });

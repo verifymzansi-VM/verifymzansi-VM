@@ -33,9 +33,60 @@ import { extractDobFromSaId, calculateAgeFromDob } from "@/lib/utils/sa-id-valid
 const log = createLogger("VerificationUpload");
 const ID_NUMBER_IN_USE_ERROR = "This ID number is already linked to another account.";
 const ID_NUMBER_DUPLICATE_CODE = "id_number_duplicate";
+const R2_CLEANUP_RETRY_DELAYS_MS = [0, 75, 150] as const;
 
 // Re-exported from shared module
 import { getDefaultDisplayName } from "@/lib/account/ensure-profile";
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function cleanupUploadedR2Object(params: {
+  bucket: string;
+  key: string;
+  requestId: string;
+  reason: string;
+}): Promise<boolean> {
+  for (let attempt = 0; attempt < R2_CLEANUP_RETRY_DELAYS_MS.length; attempt += 1) {
+    const delayMs = R2_CLEANUP_RETRY_DELAYS_MS[attempt];
+    if (delayMs > 0) {
+      await sleep(delayMs);
+    }
+
+    try {
+      await deleteFromR2(params.bucket, params.key);
+
+      if (attempt > 0) {
+        log.warn("R2 cleanup succeeded after retry", {
+          requestId: params.requestId,
+          r2Key: params.key,
+          reason: params.reason,
+          attempts: attempt + 1,
+        });
+      }
+
+      return true;
+    } catch (error) {
+      const details = {
+        requestId: params.requestId,
+        r2Key: params.key,
+        reason: params.reason,
+        attempt: attempt + 1,
+        error: error instanceof Error ? error.message : String(error),
+      };
+
+      if (attempt === R2_CLEANUP_RETRY_DELAYS_MS.length - 1) {
+        log.error("CRITICAL: Failed to clean up orphaned R2 file after retries", details);
+        return false;
+      }
+
+      log.warn("R2 cleanup attempt failed; retrying", details);
+    }
+  }
+
+  return false;
+}
 
 /**
  * POST /api/verification/upload
@@ -531,12 +582,13 @@ export async function POST(request: NextRequest) {
 
       // Rollback orphaned R2 file only if upload reached R2.
       if (uploadedToR2) {
-        try {
-          const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
-          await deleteFromR2(privateBucket, uploadResult.key);
-        } catch (cleanupError) {
-          log.error("CRITICAL: Failed to clean up orphaned R2 file:", { error: cleanupError });
-        }
+        const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
+        await cleanupUploadedR2Object({
+          bucket: privateBucket,
+          key: uploadResult.key,
+          requestId,
+          reason: "artifact_insert_failed",
+        });
       }
 
       if (isDuplicate) {
@@ -717,7 +769,12 @@ export async function POST(request: NextRequest) {
             existingUserId: existingHmac.user_id,
           });
           const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
-          await deleteFromR2(privateBucket, uploadResult.key).catch(() => {});
+          await cleanupUploadedR2Object({
+            bucket: privateBucket,
+            key: uploadResult.key,
+            requestId,
+            reason: "duplicate_id_number_check",
+          });
           return NextResponse.json(
             {
               error: ID_NUMBER_IN_USE_ERROR,
@@ -755,7 +812,12 @@ export async function POST(request: NextRequest) {
 
       if (isApprovedIdConflict) {
         const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
-        await deleteFromR2(privateBucket, uploadResult.key).catch(() => {});
+        await cleanupUploadedR2Object({
+          bucket: privateBucket,
+          key: uploadResult.key,
+          requestId,
+          reason: "approved_id_conflict_update",
+        });
         return NextResponse.json(
           {
             error: ID_NUMBER_IN_USE_ERROR,
@@ -785,7 +847,12 @@ export async function POST(request: NextRequest) {
 
         if (isApprovedIdConflict) {
           const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
-          await deleteFromR2(privateBucket, uploadResult.key).catch(() => {});
+          await cleanupUploadedR2Object({
+            bucket: privateBucket,
+            key: uploadResult.key,
+            requestId,
+            reason: "approved_id_conflict_insert",
+          });
           return NextResponse.json(
             {
               error: ID_NUMBER_IN_USE_ERROR,
@@ -826,15 +893,13 @@ export async function POST(request: NextRequest) {
         });
       }
       if (uploadedToR2) {
-        try {
-          const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
-          await deleteFromR2(privateBucket, uploadResult.key);
-        } catch (r2CleanupErr) {
-          log.error("CRITICAL: Failed to clean up orphaned R2 file after step upsert failure", {
-            r2Key: uploadResult.key,
-            error: r2CleanupErr,
-          });
-        }
+        const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
+        await cleanupUploadedR2Object({
+          bucket: privateBucket,
+          key: uploadResult.key,
+          requestId,
+          reason: "step_upsert_failed",
+        });
       }
 
       return jsonError(

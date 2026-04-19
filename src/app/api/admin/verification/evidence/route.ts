@@ -172,7 +172,9 @@ export async function GET(request: NextRequest) {
       user_id: artifact.user_id,
       ip_hash: ipHash,
     });
+    let auditLogFailed = false;
     if (accessLogErr) {
+      auditLogFailed = true;
       log.error("Failed to log evidence access (POPIA compliance gap)", {
         error: accessLogErr.message,
         actorId: user.id,
@@ -184,14 +186,16 @@ export async function GET(request: NextRequest) {
     if (artifact.r2_key.startsWith("dev://")) {
       cacheHit = true;
       // Return a placeholder in dev mode
-      return new NextResponse(Buffer.from("Development mode — no real artifact stored"), {
+      const devHeaders: Record<string, string> = {
+        "Content-Type": "text/plain",
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+        "X-Content-Type-Options": "nosniff",
+        "Content-Disposition": "inline",
+      };
+      if (auditLogFailed) devHeaders["X-Audit-Warning"] = "log-failed";
+      return new NextResponse(Buffer.from("Development mode \u2014 no real artifact stored"), {
         status: 200,
-        headers: {
-          "Content-Type": "text/plain",
-          "Cache-Control": "no-store, no-cache, must-revalidate",
-          "X-Content-Type-Options": "nosniff",
-          "Content-Disposition": "inline",
-        },
+        headers: devHeaders,
       });
     }
 
@@ -324,16 +328,19 @@ export async function GET(request: NextRequest) {
     // because we encrypt before upload. Use the original content_type from the artifact record.
     const contentType = artifact.content_type || "application/octet-stream";
 
+    const responseHeaders: Record<string, string> = {
+      "Content-Type": contentType,
+      "Content-Disposition": "inline",
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+      "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "DENY",
+      "Content-Security-Policy": "default-src 'none'; img-src 'self'",
+    };
+    if (auditLogFailed) responseHeaders["X-Audit-Warning"] = "log-failed";
+
     return new NextResponse(new Uint8Array(decryptedBuffer), {
       status: 200,
-      headers: {
-        "Content-Type": contentType,
-        "Content-Disposition": "inline",
-        "Cache-Control": "no-store, no-cache, must-revalidate",
-        "X-Content-Type-Options": "nosniff",
-        "X-Frame-Options": "DENY",
-        "Content-Security-Policy": "default-src 'none'; img-src 'self'",
-      },
+      headers: responseHeaders,
     });
   } catch (err) {
     responseStatus = 500;
