@@ -331,13 +331,15 @@ export default function CreateListingPage() {
   useEffect(() => {
     if (!profile) return;
 
-    if (!province && profile.location_province) {
-      setProvince(profile.location_province);
-    }
+    queueMicrotask(() => {
+      if (!province && profile.location_province) {
+        setProvince(profile.location_province);
+      }
 
-    if (!city && profile.location_city && (!province || province === profile.location_province)) {
-      setCity(profile.location_city);
-    }
+      if (!city && profile.location_city && (!province || province === profile.location_province)) {
+        setCity(profile.location_city);
+      }
+    });
   }, [profile, province, city]);
 
   useEffect(() => {
@@ -351,28 +353,30 @@ export default function CreateListingPage() {
     if (!restored) return;
 
     const restoredData = restored.data;
-    setStep(Math.min(Math.max(restored.step ?? 0, 0), STEPS.length - 1));
-    setTitle(restoredData.title ?? "");
-    setDescription(restoredData.description ?? "");
-    setPrice(restoredData.price ?? "");
-    setNegotiable(Boolean(restoredData.negotiable));
-    setCategory((restoredData.category as ListingCategory | "") ?? "");
-    setCondition((restoredData.condition as ListingCondition | "") ?? "");
-    setCategoryAttributes(restoredData.categoryAttributes ?? {});
-    setProvince(restoredData.province ?? "");
-    setCity(restoredData.city ?? "");
-    setTown(restoredData.town ?? "");
-    setAddress(restoredData.address ?? "");
-    setContactMethods(
-      Array.isArray(restoredData.contactMethods) && restoredData.contactMethods.length > 0
-        ? restoredData.contactMethods
-        : ["call"]
-    );
-    setLastSavedAt(restored.savedAt ?? null);
-    toast({
-      title: "Draft restored",
-      description: "You can continue from where you left off.",
-      variant: "success",
+    queueMicrotask(() => {
+      setStep(Math.min(Math.max(restored.step ?? 0, 0), STEPS.length - 1));
+      setTitle(restoredData.title ?? "");
+      setDescription(restoredData.description ?? "");
+      setPrice(restoredData.price ?? "");
+      setNegotiable(Boolean(restoredData.negotiable));
+      setCategory((restoredData.category as ListingCategory | "") ?? "");
+      setCondition((restoredData.condition as ListingCondition | "") ?? "");
+      setCategoryAttributes(restoredData.categoryAttributes ?? {});
+      setProvince(restoredData.province ?? "");
+      setCity(restoredData.city ?? "");
+      setTown(restoredData.town ?? "");
+      setAddress(restoredData.address ?? "");
+      setContactMethods(
+        Array.isArray(restoredData.contactMethods) && restoredData.contactMethods.length > 0
+          ? restoredData.contactMethods
+          : ["call"]
+      );
+      setLastSavedAt(restored.savedAt ?? null);
+      toast({
+        title: "Draft restored",
+        description: "You can continue from where you left off.",
+        variant: "success",
+      });
     });
   }, [user?.id, isLoading, submitSucceeded, restoreDraft, toast]);
 
@@ -393,7 +397,9 @@ export default function CreateListingPage() {
       address,
       contactMethods,
     });
-    setLastSavedAt(Date.now());
+    queueMicrotask(() => {
+      setLastSavedAt(Date.now());
+    });
   }, [
     user?.id,
     isLoading,

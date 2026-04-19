@@ -227,19 +227,23 @@ function CreatePromotionContent() {
         // Non-critical.
       }
     }
-    void loadBusinesses();
+    queueMicrotask(() => {
+      void loadBusinesses();
+    });
   }, []);
 
   useEffect(() => {
     if (!profile) return;
 
-    if (!province && profile.location_province) {
-      setProvince(profile.location_province);
-    }
+    queueMicrotask(() => {
+      if (!province && profile.location_province) {
+        setProvince(profile.location_province);
+      }
 
-    if (!city && profile.location_city && (!province || province === profile.location_province)) {
-      setCity(profile.location_city);
-    }
+      if (!city && profile.location_city && (!province || province === profile.location_province)) {
+        setCity(profile.location_city);
+      }
+    });
   }, [profile, province, city]);
 
   useEffect(() => {
@@ -249,43 +253,47 @@ function CreatePromotionContent() {
     if (!restored) return;
 
     const restoredData = restored.data;
-    setStep(Math.min(Math.max(restored.step ?? 0, 0), STEPS.length - 1));
-    setPromotionType("event");
-    setTitle(restoredData.title ?? "");
-    setDescription(restoredData.description ?? "");
-    setCategory(restoredData.category ?? "");
-    setCategoryKey((restoredData.categoryKey as BusinessCategory | "") ?? "");
-    setPriceZar(restoredData.priceZar ?? "");
-    setNegotiable(Boolean(restoredData.negotiable));
-    setProvince(restoredData.province ?? "");
-    setCity(restoredData.city ?? "");
-    setLocationTown(restoredData.locationTown ?? "");
-    setLocationAddress(restoredData.locationAddress ?? "");
-    setContactMethods(
-      Array.isArray(restoredData.contactMethods) && restoredData.contactMethods.length > 0
-        ? restoredData.contactMethods
-        : ["call"]
-    );
-    setStartDate(restoredData.startDate ?? "");
-    setEndDate(restoredData.endDate ?? "");
-    setBusinessId(restoredData.businessId ?? (searchParams.get("business_id") || ""));
-    setLastSavedAt(restored.savedAt ?? null);
-    toast({
-      title: "Draft restored",
-      description: "You can continue from where you left off.",
-      variant: "success",
+    queueMicrotask(() => {
+      setStep(Math.min(Math.max(restored.step ?? 0, 0), STEPS.length - 1));
+      setPromotionType("event");
+      setTitle(restoredData.title ?? "");
+      setDescription(restoredData.description ?? "");
+      setCategory(restoredData.category ?? "");
+      setCategoryKey((restoredData.categoryKey as BusinessCategory | "") ?? "");
+      setPriceZar(restoredData.priceZar ?? "");
+      setNegotiable(Boolean(restoredData.negotiable));
+      setProvince(restoredData.province ?? "");
+      setCity(restoredData.city ?? "");
+      setLocationTown(restoredData.locationTown ?? "");
+      setLocationAddress(restoredData.locationAddress ?? "");
+      setContactMethods(
+        Array.isArray(restoredData.contactMethods) && restoredData.contactMethods.length > 0
+          ? restoredData.contactMethods
+          : ["call"]
+      );
+      setStartDate(restoredData.startDate ?? "");
+      setEndDate(restoredData.endDate ?? "");
+      setBusinessId(restoredData.businessId ?? (searchParams.get("business_id") || ""));
+      setLastSavedAt(restored.savedAt ?? null);
+      toast({
+        title: "Draft restored",
+        description: "You can continue from where you left off.",
+        variant: "success",
+      });
     });
   }, [user?.id, isLoading, submitSucceeded, restoreDraft, searchParams, toast]);
 
   useEffect(() => {
     const defaults = getDefaultEventDates(startDate, endDate);
-    if (!startDate) {
-      setStartDate(defaults.startDate);
-    }
+    queueMicrotask(() => {
+      if (!startDate) {
+        setStartDate(defaults.startDate);
+      }
 
-    if (!endDate) {
-      setEndDate(defaults.endDate);
-    }
+      if (!endDate) {
+        setEndDate(defaults.endDate);
+      }
+    });
   }, [startDate, endDate]);
 
   useEffect(() => {
@@ -308,7 +316,9 @@ function CreatePromotionContent() {
       endDate,
       businessId,
     });
-    setLastSavedAt(Date.now());
+    queueMicrotask(() => {
+      setLastSavedAt(Date.now());
+    });
   }, [
     user?.id,
     isLoading,

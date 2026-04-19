@@ -241,21 +241,23 @@ export function PlanGate({ area, children }: PlanGateProps) {
 
   useEffect(() => {
     if (isPlaywrightTestMode()) {
-      setPlanInfo({
-        tier: "free",
-        isTrial: true,
-        trialDaysLeft: FREE_POST_CONFIG.durationDays,
-        freePostAvailable: true,
-        freePostsUsed: 0,
-        freePostsRemaining: FREE_POST_COUNT,
-        postingLimitBypassEnabled: true,
-        currentCount: 0,
-        maxAllowed: -1,
-        maxPhotos: FREE_POST_CONFIG.maxPhotos,
-        maxVideos: FREE_POST_CONFIG.maxVideos,
-        videoAllowed: FREE_POST_CONFIG.videoAllowed,
+      queueMicrotask(() => {
+        setPlanInfo({
+          tier: "free",
+          isTrial: true,
+          trialDaysLeft: FREE_POST_CONFIG.durationDays,
+          freePostAvailable: true,
+          freePostsUsed: 0,
+          freePostsRemaining: FREE_POST_COUNT,
+          postingLimitBypassEnabled: true,
+          currentCount: 0,
+          maxAllowed: -1,
+          maxPhotos: FREE_POST_CONFIG.maxPhotos,
+          maxVideos: FREE_POST_CONFIG.maxVideos,
+          videoAllowed: FREE_POST_CONFIG.videoAllowed,
+        });
+        setLoading(false);
       });
-      setLoading(false);
       return;
     }
 
@@ -380,13 +382,15 @@ export function PlanGate({ area, children }: PlanGateProps) {
       }
     }
 
-    checkEntitlements();
+    queueMicrotask(() => {
+      void checkEntitlements();
+    });
 
     // Re-check when tab becomes visible (handles cross-tab free post consumption)
     function handleVisibilityChange() {
       if (document.visibilityState === "visible") {
         _entitlementCache.clear();
-        checkEntitlements();
+        void checkEntitlements();
       }
     }
     document.addEventListener("visibilitychange", handleVisibilityChange);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -118,8 +118,19 @@ export function DashboardKycPanel({
   const [overrideReasonCode, setOverrideReasonCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const filtered = filter === "all" ? items : items.filter((i) => i.step_type === filter);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 60000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   function openDialog(step: DashboardKycItem, decision: KycDialogState["decision"]) {
     setDialog({ step, decision });
@@ -255,7 +266,7 @@ export function DashboardKycPanel({
             const StepIcon = STEP_ICONS[item.step_type] || FileCheck;
             const stepLabel = STEP_LABELS[item.step_type] || item.step_type;
             const waitTime = item.submitted_at || item.created_at;
-            const waitMs = Date.now() - new Date(waitTime).getTime();
+            const waitMs = nowMs - new Date(waitTime).getTime();
             const waitHours = waitMs / (1000 * 60 * 60);
             const isUrgent = waitHours > 24;
             const displayName = item.account_display_name ?? null;

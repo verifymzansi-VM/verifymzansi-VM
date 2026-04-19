@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ContentTargetType } from "@/lib/engagement";
@@ -20,18 +20,23 @@ export function ContentLikeButton({
   initialLiked = false,
   className,
 }: ContentLikeButtonProps) {
-  const [liked, setLiked] = useState(initialLiked);
-  const [likeCount, setLikeCount] = useState(initialLikeCount ?? 0);
+  const [optimisticState, setOptimisticState] = useState<{
+    targetId: string;
+    targetType: ContentTargetType;
+    liked: boolean;
+    likeCount: number;
+  } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  useEffect(() => {
-    setLiked(initialLiked);
-  }, [initialLiked]);
-
-  useEffect(() => {
-    setLikeCount(initialLikeCount ?? 0);
-  }, [initialLikeCount]);
+  const currentState =
+    optimisticState &&
+    optimisticState.targetId === targetId &&
+    optimisticState.targetType === targetType
+      ? optimisticState
+      : null;
+  const liked = currentState?.liked ?? initialLiked;
+  const likeCount = currentState?.likeCount ?? initialLikeCount ?? 0;
 
   const displayedLikeCount = Math.min(999, Math.max(0, likeCount ?? 0));
   const ariaLabel = liked
@@ -55,8 +60,12 @@ export function ContentLikeButton({
           const optimisticLikeCount = Math.max(0, previousLikeCount + (optimisticLiked ? 1 : -1));
 
           setErrorMessage(null);
-          setLiked(optimisticLiked);
-          setLikeCount(optimisticLikeCount);
+          setOptimisticState({
+            targetId,
+            targetType,
+            liked: optimisticLiked,
+            likeCount: optimisticLikeCount,
+          });
 
           startTransition(async () => {
             try {
@@ -81,11 +90,19 @@ export function ContentLikeButton({
                 throw new Error(payload?.error || "Unable to update like right now.");
               }
 
-              setLiked(Boolean(payload?.liked));
-              setLikeCount(Number(payload?.likeCount) || 0);
+              setOptimisticState({
+                targetId,
+                targetType,
+                liked: Boolean(payload?.liked),
+                likeCount: Number(payload?.likeCount) || 0,
+              });
             } catch (error) {
-              setLiked(previousLiked);
-              setLikeCount(previousLikeCount);
+              setOptimisticState({
+                targetId,
+                targetType,
+                liked: previousLiked,
+                likeCount: previousLikeCount,
+              });
               setErrorMessage(
                 error instanceof Error ? error.message : "Unable to update like right now."
               );

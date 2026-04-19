@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ACCOUNT_PROFILE_WRITE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
 import { createClient } from "@/lib/supabase/client";
 import { createLogger } from "@/lib/utils/logger";
@@ -24,8 +24,7 @@ export function useKycStatus() {
   const [steps, setSteps] = useState<KycStep[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const supabaseRef = useRef(createClient());
-  const supabase = supabaseRef.current;
+  const [supabase] = useState(createClient);
 
   const fetchStatus = useCallback(async (cancelled: () => boolean) => {
     setIsLoading(true);
@@ -107,7 +106,9 @@ export function useKycStatus() {
 
   useEffect(() => {
     let dead = false;
-    fetchStatus(() => dead);
+    queueMicrotask(() => {
+      void fetchStatus(() => dead);
+    });
     return () => {
       dead = true;
     };

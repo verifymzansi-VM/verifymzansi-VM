@@ -380,33 +380,39 @@ function CreateBusinessContent() {
 
   useEffect(() => {
     if (!slugManual && businessName) {
-      setSlug(generateSlug(businessName));
+      queueMicrotask(() => {
+        setSlug(generateSlug(businessName));
+      });
     }
   }, [businessName, slugManual]);
 
   useEffect(() => {
     if (!profile) return;
 
-    if (!province && profile.location_province) {
-      setProvince(profile.location_province);
-    }
+    queueMicrotask(() => {
+      if (!province && profile.location_province) {
+        setProvince(profile.location_province);
+      }
 
-    if (!city && profile.location_city && (!province || province === profile.location_province)) {
-      setCity(profile.location_city);
-    }
+      if (!city && profile.location_city && (!province || province === profile.location_province)) {
+        setCity(profile.location_city);
+      }
 
-    if (!phone && profile.phone) {
-      setPhone(profile.phone);
-    }
+      if (!phone && profile.phone) {
+        setPhone(profile.phone);
+      }
 
-    if (!whatsapp && profile.phone) {
-      setWhatsapp(profile.phone);
-    }
+      if (!whatsapp && profile.phone) {
+        setWhatsapp(profile.phone);
+      }
+    });
   }, [profile, province, city, phone, whatsapp]);
 
   useEffect(() => {
     if (!email && user?.email) {
-      setEmail(user.email);
+      queueMicrotask(() => {
+        setEmail(user.email);
+      });
     }
   }, [email, user?.email]);
 
@@ -418,83 +424,84 @@ function CreateBusinessContent() {
 
     const restoredData = restored.data;
     const restoredType = (restoredData.businessType as BusinessType) || "";
+    queueMicrotask(() => {
+      setStep(Math.min(Math.max(restored.step ?? 0, 0), STEPS.length - 1));
+      setBusinessType(restoredType);
+      if (restoredType) {
+        const fallbackDetails = getDefaultBusinessDetails(restoredType);
+        const restoredDetails =
+          restoredData.businessDetails && typeof restoredData.businessDetails === "object"
+            ? (restoredData.businessDetails as unknown as BusinessDetails)
+            : fallbackDetails;
+        setBusinessDetails(coerceBusinessDetails(restoredType, restoredDetails));
+      } else {
+        setBusinessDetails(null);
+      }
 
-    setStep(Math.min(Math.max(restored.step ?? 0, 0), STEPS.length - 1));
-    setBusinessType(restoredType);
-    if (restoredType) {
-      const fallbackDetails = getDefaultBusinessDetails(restoredType);
-      const restoredDetails =
-        restoredData.businessDetails && typeof restoredData.businessDetails === "object"
-          ? (restoredData.businessDetails as unknown as BusinessDetails)
-          : fallbackDetails;
-      setBusinessDetails(coerceBusinessDetails(restoredType, restoredDetails));
-    } else {
-      setBusinessDetails(null);
-    }
-
-    setBusinessName(restoredData.businessName ?? "");
-    setSlug(restoredData.slug ?? "");
-    setSlugManual(Boolean(restoredData.slugManual));
-    setDescription(restoredData.description ?? "");
-    setCategory((restoredData.category as BusinessCategory | "") ?? "");
-    setSubcategory(typeof restoredData.subcategory === "string" ? restoredData.subcategory : "");
-    setCategoryDetails(
-      restoredData.categoryDetails && typeof restoredData.categoryDetails === "object"
-        ? (restoredData.categoryDetails as Record<string, unknown>)
-        : {}
-    );
-    setProvince(restoredData.province ?? "");
-    setCity(restoredData.city ?? "");
-    setLocationTown(restoredData.locationTown ?? "");
-    setLocationAddress(restoredData.locationAddress ?? "");
-    setStoreNumber(restoredData.storeNumber ?? "");
-    setServiceAreasInput(restoredData.serviceAreasInput ?? "");
-    setMapDirections(restoredData.mapDirections ?? "");
-    setPhone(restoredData.phone ?? "");
-    setWhatsapp(restoredData.whatsapp ?? "");
-    setEmail(restoredData.email ?? "");
-    setWebsite(restoredData.website ?? "");
-    setHoursMonFri(
-      restoredData.hoursMonFri
-        ? typeof restoredData.hoursMonFri === "string"
-          ? parseHoursValue(restoredData.hoursMonFri)
-          : (restoredData.hoursMonFri as { open: string; close: string; closed: boolean })
-        : { open: "", close: "", closed: false }
-    );
-    setHoursSat(
-      restoredData.hoursSat
-        ? typeof restoredData.hoursSat === "string"
-          ? parseHoursValue(restoredData.hoursSat)
-          : (restoredData.hoursSat as { open: string; close: string; closed: boolean })
-        : { open: "", close: "", closed: false }
-    );
-    setHoursSun(
-      restoredData.hoursSun
-        ? typeof restoredData.hoursSun === "string"
-          ? parseHoursValue(restoredData.hoursSun)
-          : (restoredData.hoursSun as { open: string; close: string; closed: boolean })
-        : { open: "", close: "", closed: true }
-    );
-    setSocialFacebook(restoredData.socialFacebook ?? "");
-    setSocialInstagram(restoredData.socialInstagram ?? "");
-    setSocialTwitter(restoredData.socialTwitter ?? "");
-    setSocialTiktok(restoredData.socialTiktok ?? "");
-    setServicesInput(restoredData.servicesInput ?? "");
-    setServices(Array.isArray(restoredData.services) ? restoredData.services : []);
-    setPaymentMethods(
-      Array.isArray(restoredData.paymentMethods) ? restoredData.paymentMethods : []
-    );
-    setDeliveryOptions(
-      Array.isArray(restoredData.deliveryOptions) ? restoredData.deliveryOptions : []
-    );
-    setLayoutTemplate(
-      restoredData.selectedLayout ? (restoredData.selectedLayout as LayoutTemplate) : null
-    );
-    setLastSavedAt(restored.savedAt ?? null);
-    toast({
-      title: "Draft restored",
-      description: "You can continue from where you left off.",
-      variant: "success",
+      setBusinessName(restoredData.businessName ?? "");
+      setSlug(restoredData.slug ?? "");
+      setSlugManual(Boolean(restoredData.slugManual));
+      setDescription(restoredData.description ?? "");
+      setCategory((restoredData.category as BusinessCategory | "") ?? "");
+      setSubcategory(typeof restoredData.subcategory === "string" ? restoredData.subcategory : "");
+      setCategoryDetails(
+        restoredData.categoryDetails && typeof restoredData.categoryDetails === "object"
+          ? (restoredData.categoryDetails as Record<string, unknown>)
+          : {}
+      );
+      setProvince(restoredData.province ?? "");
+      setCity(restoredData.city ?? "");
+      setLocationTown(restoredData.locationTown ?? "");
+      setLocationAddress(restoredData.locationAddress ?? "");
+      setStoreNumber(restoredData.storeNumber ?? "");
+      setServiceAreasInput(restoredData.serviceAreasInput ?? "");
+      setMapDirections(restoredData.mapDirections ?? "");
+      setPhone(restoredData.phone ?? "");
+      setWhatsapp(restoredData.whatsapp ?? "");
+      setEmail(restoredData.email ?? "");
+      setWebsite(restoredData.website ?? "");
+      setHoursMonFri(
+        restoredData.hoursMonFri
+          ? typeof restoredData.hoursMonFri === "string"
+            ? parseHoursValue(restoredData.hoursMonFri)
+            : (restoredData.hoursMonFri as { open: string; close: string; closed: boolean })
+          : { open: "", close: "", closed: false }
+      );
+      setHoursSat(
+        restoredData.hoursSat
+          ? typeof restoredData.hoursSat === "string"
+            ? parseHoursValue(restoredData.hoursSat)
+            : (restoredData.hoursSat as { open: string; close: string; closed: boolean })
+          : { open: "", close: "", closed: false }
+      );
+      setHoursSun(
+        restoredData.hoursSun
+          ? typeof restoredData.hoursSun === "string"
+            ? parseHoursValue(restoredData.hoursSun)
+            : (restoredData.hoursSun as { open: string; close: string; closed: boolean })
+          : { open: "", close: "", closed: true }
+      );
+      setSocialFacebook(restoredData.socialFacebook ?? "");
+      setSocialInstagram(restoredData.socialInstagram ?? "");
+      setSocialTwitter(restoredData.socialTwitter ?? "");
+      setSocialTiktok(restoredData.socialTiktok ?? "");
+      setServicesInput(restoredData.servicesInput ?? "");
+      setServices(Array.isArray(restoredData.services) ? restoredData.services : []);
+      setPaymentMethods(
+        Array.isArray(restoredData.paymentMethods) ? restoredData.paymentMethods : []
+      );
+      setDeliveryOptions(
+        Array.isArray(restoredData.deliveryOptions) ? restoredData.deliveryOptions : []
+      );
+      setLayoutTemplate(
+        restoredData.selectedLayout ? (restoredData.selectedLayout as LayoutTemplate) : null
+      );
+      setLastSavedAt(restored.savedAt ?? null);
+      toast({
+        title: "Draft restored",
+        description: "You can continue from where you left off.",
+        variant: "success",
+      });
     });
   }, [user?.id, isLoading, submitSucceeded, restoreDraft, toast]);
 
@@ -535,7 +542,9 @@ function CreateBusinessContent() {
       businessDetails: businessDetails as Record<string, unknown> | null,
       selectedLayout: layoutTemplate || "",
     });
-    setLastSavedAt(Date.now());
+    queueMicrotask(() => {
+      setLastSavedAt(Date.now());
+    });
   }, [
     user?.id,
     isLoading,

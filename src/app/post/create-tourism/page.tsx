@@ -476,18 +476,22 @@ function CreateTourismContent() {
   // Pre-fill location from profile
   useEffect(() => {
     if (!profile) return;
-    if (!province && profile.location_province) setProvince(profile.location_province);
-    if (!city && profile.location_city && (!province || province === profile.location_province)) {
-      setCity(profile.location_city);
-    }
+    queueMicrotask(() => {
+      if (!province && profile.location_province) setProvince(profile.location_province);
+      if (!city && profile.location_city && (!province || province === profile.location_province)) {
+        setCity(profile.location_city);
+      }
+    });
   }, [profile, province, city]);
 
   // Default event dates
   useEffect(() => {
     if (listingType !== "event") return;
     const defaults = getDefaultEventDates(startDate, endDate);
-    if (!startDate) setStartDate(defaults.startDate);
-    if (!endDate) setEndDate(defaults.endDate);
+    queueMicrotask(() => {
+      if (!startDate) setStartDate(defaults.startDate);
+      if (!endDate) setEndDate(defaults.endDate);
+    });
   }, [listingType, startDate, endDate]);
 
   // Reset category-specific fields when subcategory changes
@@ -503,61 +507,66 @@ function CreateTourismContent() {
     // Skip on first render
     if (!prevGroup) return;
 
-    // Same-group subcategory changes can still invalidate group-specific choices.
-    if (prevGroup === newGroup) {
-      if (prevGroup === "C" && prevSubcategory && prevSubcategory !== subcategory) {
-        setActivityTypes([]);
-        if (prevSubcategory === "adventure_activities" || subcategory !== "adventure_activities") {
-          setDifficultyLevel("");
-          setEquipmentProvided(false);
+    queueMicrotask(() => {
+      // Same-group subcategory changes can still invalidate group-specific choices.
+      if (prevGroup === newGroup) {
+        if (prevGroup === "C" && prevSubcategory && prevSubcategory !== subcategory) {
+          setActivityTypes([]);
+          if (
+            prevSubcategory === "adventure_activities" ||
+            subcategory !== "adventure_activities"
+          ) {
+            setDifficultyLevel("");
+            setEquipmentProvided(false);
+          }
         }
+        return;
       }
-      return;
-    }
 
-    // Reset accommodation fields (Group A/B)
-    if (prevGroup === "A" || prevGroup === "B") {
-      setStarRating("");
-      setNumberOfRooms("");
-      setAccommodationTypes([]);
-      setCheckInTime("");
-      setCheckOutTime("");
-      setMealOptions([]);
-      setPetsAllowed(false);
-      setSmokingAllowed(false);
-    }
-    // Reset spa fields (Group B)
-    if (prevGroup === "B") setTreatmentTypes([]);
-    // Reset tour fields (Group C)
-    if (prevGroup === "C") {
-      setActivityTypes([]);
-      setTourDuration("");
-      setMaxGroupSize("");
-      setDifficultyLevel("");
-      setEquipmentProvided(false);
-      setWhatsIncluded("");
-      setTourismAgeRestriction("");
-    }
-    // Reset travel agency fields (Group D)
-    if (prevGroup === "D") {
-      setServicesOffered([]);
-      setTourismSpecializations([]);
-    }
-    // Reset attraction fields (Group E)
-    if (prevGroup === "E") {
-      setGuidedTours(false);
-      setAudioGuide(false);
-      setVisitDuration("");
-      setTourismAgeRestriction("");
-    }
-    // Reset car rental fields (Group F)
-    if (prevGroup === "F") {
-      setVehicleTypes([]);
-      setDeliveryCollection(false);
-      setMinDriverAge("");
-      setInsuranceIncluded(false);
-      setGpsAvailable(false);
-    }
+      // Reset accommodation fields (Group A/B)
+      if (prevGroup === "A" || prevGroup === "B") {
+        setStarRating("");
+        setNumberOfRooms("");
+        setAccommodationTypes([]);
+        setCheckInTime("");
+        setCheckOutTime("");
+        setMealOptions([]);
+        setPetsAllowed(false);
+        setSmokingAllowed(false);
+      }
+      // Reset spa fields (Group B)
+      if (prevGroup === "B") setTreatmentTypes([]);
+      // Reset tour fields (Group C)
+      if (prevGroup === "C") {
+        setActivityTypes([]);
+        setTourDuration("");
+        setMaxGroupSize("");
+        setDifficultyLevel("");
+        setEquipmentProvided(false);
+        setWhatsIncluded("");
+        setTourismAgeRestriction("");
+      }
+      // Reset travel agency fields (Group D)
+      if (prevGroup === "D") {
+        setServicesOffered([]);
+        setTourismSpecializations([]);
+      }
+      // Reset attraction fields (Group E)
+      if (prevGroup === "E") {
+        setGuidedTours(false);
+        setAudioGuide(false);
+        setVisitDuration("");
+        setTourismAgeRestriction("");
+      }
+      // Reset car rental fields (Group F)
+      if (prevGroup === "F") {
+        setVehicleTypes([]);
+        setDeliveryCollection(false);
+        setMinDriverAge("");
+        setInsuranceIncluded(false);
+        setGpsAvailable(false);
+      }
+    });
   }, [subcategory]);
 
   // Restore draft
@@ -565,87 +574,89 @@ function CreateTourismContent() {
     if (!user?.id || isLoading) return;
     const draft = restoreDraft();
     if (!draft) return;
-    setStep(draft.step);
     const d = draft.data;
-    if (d.listingType) setListingType(d.listingType as TourismListingType);
-    if (d.title) setTitle(d.title);
-    if (d.description) setDescription(d.description);
-    if (d.subcategory) setSubcategory(d.subcategory);
-    if (d.starRating) setStarRating(d.starRating);
-    if (d.numberOfRooms) setNumberOfRooms(d.numberOfRooms);
-    if (d.accommodationTypes?.length) setAccommodationTypes(d.accommodationTypes);
-    if (d.checkInTime) setCheckInTime(d.checkInTime);
-    if (d.checkOutTime) setCheckOutTime(d.checkOutTime);
-    if (d.priceRange) setPriceRange(d.priceRange);
-    if (d.amenities?.length) setAmenities(d.amenities);
-    if (d.mealOptions?.length) setMealOptions(d.mealOptions);
-    if (d.languagesSpoken) setLanguagesSpoken(d.languagesSpoken);
-    if (d.cancellationPolicy) setCancellationPolicy(d.cancellationPolicy);
-    if (d.bookingUrl) setBookingUrl(d.bookingUrl);
-    if (d.petsAllowed) setPetsAllowed(d.petsAllowed);
-    if (d.smokingAllowed) setSmokingAllowed(d.smokingAllowed);
-    if (d.treatmentTypes?.length) setTreatmentTypes(d.treatmentTypes);
-    if (d.activityTypes?.length) setActivityTypes(d.activityTypes);
-    if (d.tourDuration) setTourDuration(d.tourDuration);
-    if (d.maxGroupSize) setMaxGroupSize(d.maxGroupSize);
-    if (d.difficultyLevel) setDifficultyLevel(d.difficultyLevel);
-    if (d.equipmentProvided) setEquipmentProvided(d.equipmentProvided);
-    if (d.whatsIncluded) setWhatsIncluded(d.whatsIncluded);
-    if (d.tourismAgeRestriction) setTourismAgeRestriction(d.tourismAgeRestriction);
-    if (d.servicesOffered?.length) setServicesOffered(d.servicesOffered);
-    if (d.tourismSpecializations?.length) setTourismSpecializations(d.tourismSpecializations);
-    if (d.guidedTours) setGuidedTours(d.guidedTours);
-    if (d.audioGuide) setAudioGuide(d.audioGuide);
-    if (d.visitDuration) setVisitDuration(d.visitDuration);
-    if (d.vehicleTypes?.length) setVehicleTypes(d.vehicleTypes);
-    if (d.deliveryCollection) setDeliveryCollection(d.deliveryCollection);
-    if (d.minDriverAge) setMinDriverAge(d.minDriverAge);
-    if (d.insuranceIncluded) setInsuranceIncluded(d.insuranceIncluded);
-    if (d.gpsAvailable) setGpsAvailable(d.gpsAvailable);
-    if (d.hoursMonFri) setHoursMonFri(d.hoursMonFri);
-    if (d.hoursSat) setHoursSat(d.hoursSat);
-    if (d.hoursSun) setHoursSun(d.hoursSun);
-    if (d.eventType) setEventType(d.eventType);
-    if (d.startDate) setStartDate(d.startDate);
-    if (d.endDate) setEndDate(d.endDate);
-    if (d.priceZar) setPriceZar(d.priceZar);
-    if (d.negotiable) setNegotiable(d.negotiable);
-    if (d.venueName) setVenueName(d.venueName);
-    if (d.venueCapacity) setVenueCapacity(d.venueCapacity);
-    if (d.ticketTiers?.length) setTicketTiers(d.ticketTiers);
-    if (d.ticketsUrl) setTicketsUrl(d.ticketsUrl);
-    if (d.ageRestriction) setAgeRestriction(d.ageRestriction);
-    if (d.dressCode) setDressCode(d.dressCode);
-    if (d.lineup) setLineup(d.lineup);
-    if (d.parkingAvailable) setParkingAvailable(d.parkingAvailable);
-    if (d.accessibility?.length) setEventAccessibility(d.accessibility);
-    if (d.foodDrinksAvailable) setFoodDrinksAvailable(d.foodDrinksAvailable);
-    if (d.bringYourOwn) setBringYourOwn(d.bringYourOwn);
-    if (d.province) setProvince(d.province);
-    if (d.city) setCity(d.city);
-    if (d.locationTown) setLocationTown(d.locationTown);
-    if (d.locationAddress) setLocationAddress(d.locationAddress);
-    if (d.contactMethods?.length) setContactMethods(d.contactMethods);
-    if (d.phone) setPhone(d.phone);
-    if (d.whatsapp) setWhatsapp(d.whatsapp);
-    if (d.email) setEmail(d.email);
-    if (d.website) setWebsite(d.website);
-    if (d.socialFacebook) setSocialFacebook(d.socialFacebook);
-    if (d.socialInstagram) setSocialInstagram(d.socialInstagram);
-    if (d.socialTwitter) setSocialTwitter(d.socialTwitter);
-    if (d.socialTiktok) setSocialTiktok(d.socialTiktok);
-    if (d.businessId) setBusinessId(d.businessId);
-    if (d.socialAuthorization) {
-      setSocialAuthorization({
-        granted: !!d.socialAuthorization.granted,
-        authorizerName: d.socialAuthorization.authorizerName,
-        authorizerRole: d.socialAuthorization.authorizerRole,
-        relationship: d.socialAuthorization.relationship,
-        monetizationAcknowledged: !!d.socialAuthorization.monetizationAcknowledged,
-        acceptedVersion: d.socialAuthorization.acceptedVersion || "v1",
-      });
-    }
-    toast({ title: "Draft restored", description: "Continuing where you left off." });
+    queueMicrotask(() => {
+      setStep(draft.step);
+      if (d.listingType) setListingType(d.listingType as TourismListingType);
+      if (d.title) setTitle(d.title);
+      if (d.description) setDescription(d.description);
+      if (d.subcategory) setSubcategory(d.subcategory);
+      if (d.starRating) setStarRating(d.starRating);
+      if (d.numberOfRooms) setNumberOfRooms(d.numberOfRooms);
+      if (d.accommodationTypes?.length) setAccommodationTypes(d.accommodationTypes);
+      if (d.checkInTime) setCheckInTime(d.checkInTime);
+      if (d.checkOutTime) setCheckOutTime(d.checkOutTime);
+      if (d.priceRange) setPriceRange(d.priceRange);
+      if (d.amenities?.length) setAmenities(d.amenities);
+      if (d.mealOptions?.length) setMealOptions(d.mealOptions);
+      if (d.languagesSpoken) setLanguagesSpoken(d.languagesSpoken);
+      if (d.cancellationPolicy) setCancellationPolicy(d.cancellationPolicy);
+      if (d.bookingUrl) setBookingUrl(d.bookingUrl);
+      if (d.petsAllowed) setPetsAllowed(d.petsAllowed);
+      if (d.smokingAllowed) setSmokingAllowed(d.smokingAllowed);
+      if (d.treatmentTypes?.length) setTreatmentTypes(d.treatmentTypes);
+      if (d.activityTypes?.length) setActivityTypes(d.activityTypes);
+      if (d.tourDuration) setTourDuration(d.tourDuration);
+      if (d.maxGroupSize) setMaxGroupSize(d.maxGroupSize);
+      if (d.difficultyLevel) setDifficultyLevel(d.difficultyLevel);
+      if (d.equipmentProvided) setEquipmentProvided(d.equipmentProvided);
+      if (d.whatsIncluded) setWhatsIncluded(d.whatsIncluded);
+      if (d.tourismAgeRestriction) setTourismAgeRestriction(d.tourismAgeRestriction);
+      if (d.servicesOffered?.length) setServicesOffered(d.servicesOffered);
+      if (d.tourismSpecializations?.length) setTourismSpecializations(d.tourismSpecializations);
+      if (d.guidedTours) setGuidedTours(d.guidedTours);
+      if (d.audioGuide) setAudioGuide(d.audioGuide);
+      if (d.visitDuration) setVisitDuration(d.visitDuration);
+      if (d.vehicleTypes?.length) setVehicleTypes(d.vehicleTypes);
+      if (d.deliveryCollection) setDeliveryCollection(d.deliveryCollection);
+      if (d.minDriverAge) setMinDriverAge(d.minDriverAge);
+      if (d.insuranceIncluded) setInsuranceIncluded(d.insuranceIncluded);
+      if (d.gpsAvailable) setGpsAvailable(d.gpsAvailable);
+      if (d.hoursMonFri) setHoursMonFri(d.hoursMonFri);
+      if (d.hoursSat) setHoursSat(d.hoursSat);
+      if (d.hoursSun) setHoursSun(d.hoursSun);
+      if (d.eventType) setEventType(d.eventType);
+      if (d.startDate) setStartDate(d.startDate);
+      if (d.endDate) setEndDate(d.endDate);
+      if (d.priceZar) setPriceZar(d.priceZar);
+      if (d.negotiable) setNegotiable(d.negotiable);
+      if (d.venueName) setVenueName(d.venueName);
+      if (d.venueCapacity) setVenueCapacity(d.venueCapacity);
+      if (d.ticketTiers?.length) setTicketTiers(d.ticketTiers);
+      if (d.ticketsUrl) setTicketsUrl(d.ticketsUrl);
+      if (d.ageRestriction) setAgeRestriction(d.ageRestriction);
+      if (d.dressCode) setDressCode(d.dressCode);
+      if (d.lineup) setLineup(d.lineup);
+      if (d.parkingAvailable) setParkingAvailable(d.parkingAvailable);
+      if (d.accessibility?.length) setEventAccessibility(d.accessibility);
+      if (d.foodDrinksAvailable) setFoodDrinksAvailable(d.foodDrinksAvailable);
+      if (d.bringYourOwn) setBringYourOwn(d.bringYourOwn);
+      if (d.province) setProvince(d.province);
+      if (d.city) setCity(d.city);
+      if (d.locationTown) setLocationTown(d.locationTown);
+      if (d.locationAddress) setLocationAddress(d.locationAddress);
+      if (d.contactMethods?.length) setContactMethods(d.contactMethods);
+      if (d.phone) setPhone(d.phone);
+      if (d.whatsapp) setWhatsapp(d.whatsapp);
+      if (d.email) setEmail(d.email);
+      if (d.website) setWebsite(d.website);
+      if (d.socialFacebook) setSocialFacebook(d.socialFacebook);
+      if (d.socialInstagram) setSocialInstagram(d.socialInstagram);
+      if (d.socialTwitter) setSocialTwitter(d.socialTwitter);
+      if (d.socialTiktok) setSocialTiktok(d.socialTiktok);
+      if (d.businessId) setBusinessId(d.businessId);
+      if (d.socialAuthorization) {
+        setSocialAuthorization({
+          granted: !!d.socialAuthorization.granted,
+          authorizerName: d.socialAuthorization.authorizerName,
+          authorizerRole: d.socialAuthorization.authorizerRole,
+          relationship: d.socialAuthorization.relationship,
+          monetizationAcknowledged: !!d.socialAuthorization.monetizationAcknowledged,
+          acceptedVersion: d.socialAuthorization.acceptedVersion || "v1",
+        });
+      }
+      toast({ title: "Draft restored", description: "Continuing where you left off." });
+    });
   }, [user?.id, isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-save draft

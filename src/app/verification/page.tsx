@@ -667,37 +667,41 @@ export default function VerificationPage() {
   useEffect(() => {
     if (idNumber.length === 13 && /^\d{13}$/.test(idNumber)) {
       const valid = validateSaIdChecksum(idNumber);
-      setIdChecksumValid(valid);
-      if (valid) {
-        const dob = extractDobFromSaId(idNumber);
-        const gender = extractGenderFromSaId(idNumber);
-        setIdDob(
-          dob
-            ? dob.toLocaleDateString("en-ZA", {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })
-            : null
-        );
-        setIdGender(gender);
-        // Age gate: must be 18+
-        const under18 = isUnder18FromSaId(idNumber);
-        if (under18 === true) {
-          setIdAgeError("You must be at least 18 years old to register.");
+      queueMicrotask(() => {
+        setIdChecksumValid(valid);
+        if (valid) {
+          const dob = extractDobFromSaId(idNumber);
+          const gender = extractGenderFromSaId(idNumber);
+          setIdDob(
+            dob
+              ? dob.toLocaleDateString("en-ZA", {
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })
+              : null
+          );
+          setIdGender(gender);
+          // Age gate: must be 18+
+          const under18 = isUnder18FromSaId(idNumber);
+          if (under18 === true) {
+            setIdAgeError("You must be at least 18 years old to register.");
+          } else {
+            setIdAgeError(null);
+          }
         } else {
+          setIdDob(null);
+          setIdGender(null);
           setIdAgeError(null);
         }
-      } else {
+      });
+    } else {
+      queueMicrotask(() => {
+        setIdChecksumValid(null);
         setIdDob(null);
         setIdGender(null);
         setIdAgeError(null);
-      }
-    } else {
-      setIdChecksumValid(null);
-      setIdDob(null);
-      setIdGender(null);
-      setIdAgeError(null);
+      });
     }
   }, [idNumber]);
 
