@@ -413,6 +413,10 @@ export function getPlanCheckoutHref(plan: Pick<PlanDefinition, "area" | "tier">)
   return `/billing/checkout?plan=${getPlanCheckoutId(plan)}`;
 }
 
+export function getActivePlanByCheckoutId(planId: string): PlanDefinition | undefined {
+  return getActivePlans().find((plan) => getPlanCheckoutId(plan) === planId);
+}
+
 export function getPlanFeatureItems(
   plan: PlanDefinition,
   options?: { includeDisabled?: boolean }

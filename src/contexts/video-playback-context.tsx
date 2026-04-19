@@ -28,14 +28,20 @@ interface VideoPlaybackManager {
   releaseExclusive(id: string): void;
 }
 
-const VideoPlaybackContext = createContext<VideoPlaybackManager | null>(null);
+const noopVideoPlaybackManager: VideoPlaybackManager = {
+  register() {},
+  unregister() {},
+  updateVisibility() {},
+  requestPriority() {},
+  releasePriority() {},
+  claimExclusive() {},
+  releaseExclusive() {},
+};
+
+const VideoPlaybackContext = createContext<VideoPlaybackManager>(noopVideoPlaybackManager);
 
 export function useVideoPlaybackManager(): VideoPlaybackManager {
-  const ctx = useContext(VideoPlaybackContext);
-  if (!ctx) {
-    throw new Error("useVideoPlaybackManager must be used within <VideoPlaybackProvider>");
-  }
-  return ctx;
+  return useContext(VideoPlaybackContext);
 }
 
 export function VideoPlaybackProvider({ children }: { children: React.ReactNode }) {

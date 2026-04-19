@@ -71,7 +71,7 @@ export function HomeShowcaseShell({
   const styles = toneStyles[tone];
 
   return (
-    <section className={cn("relative py-4 sm:py-5 lg:py-6", className)}>
+    <section className={cn("relative py-3 sm:py-4 lg:py-5", className)}>
       <div className="container-page">
         <div
           className={cn(
@@ -91,7 +91,7 @@ export function HomeShowcaseShell({
             aria-hidden="true"
           />
 
-          <div className="relative flex flex-col gap-5 px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7">
+          <div className="relative flex flex-col gap-4 px-4 py-4 sm:px-6 sm:py-5 lg:px-7 lg:py-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div className="max-w-2xl space-y-3">
                 <div

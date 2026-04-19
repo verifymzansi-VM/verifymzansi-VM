@@ -18,6 +18,11 @@ export const metadata = {
 export default function BillingPage() {
   const { marketPlans, businessPlans, promotionPlans } = getActivePlansByArea();
   const freePostCount = Number(FREE_POST_CONFIG.maxAllowed);
+  const summaryPoints = [
+    `${freePostCount} free ${freePostCount === 1 ? "post" : "posts"} per area`,
+    `${FREE_POST_CONFIG.maxPhotos} photos + ${FREE_POST_CONFIG.maxVideos} video on free publishing`,
+    "Paid plans add boost, featured placement, and urgent badges",
+  ] as const;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -26,10 +31,21 @@ export default function BillingPage() {
         <div className="container-page py-4 space-y-4">
           <PageHeader
             centered
-            title="Simple, transparent pricing"
-            description="All plans include trust badges and verification."
+            title="Choose your visibility plan"
+            description="Start free, then upgrade only when you want stronger placement and trust-led reach."
             className="border-0 pb-0"
           />
+
+          <div className="grid max-w-5xl gap-3 mx-auto md:grid-cols-3">
+            {summaryPoints.map((point) => (
+              <div
+                key={point}
+                className="rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 text-sm text-slate-700 shadow-sm dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200"
+              >
+                {point}
+              </div>
+            ))}
+          </div>
 
           {/* Free Post Banner */}
           <div className="max-w-4xl mx-auto">
@@ -52,7 +68,7 @@ export default function BillingPage() {
                 className="bg-brand-green text-white shadow-md shadow-brand-green/20 font-semibold shrink-0 hover:bg-brand-green/90 transition-all duration-300 hover:shadow-lg hover:shadow-brand-green/30"
               >
                 <Link href="/post/create" className="flex items-center gap-1 group/btn">
-                  Choose Your Free Post
+                  Start with a Free Post
                   <ArrowRight className="h-4 w-4 shrink-0 transition-transform duration-300 group-hover/btn:translate-x-1" />
                 </Link>
               </Button>

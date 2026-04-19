@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import Image from "next/image";
 import { Volume2, VolumeX, Play, Pause, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -227,6 +227,31 @@ export interface VideoCardPlayerProps {
   feedPlaybackActive?: boolean;
   /** Prevent native browser dragging on image/video surfaces so parent carousels can own the gesture. */
   disableNativeDrag?: boolean;
+  /** Optional shared media fallback when image/video loading fails. */
+  fallback?: ReactNode;
+}
+
+function MediaFallback({ fallback, className }: { fallback?: ReactNode; className?: string }) {
+  if (fallback) {
+    return (
+      <div
+        className={cn(
+          "absolute inset-0 z-[2] flex items-center justify-center overflow-hidden",
+          className
+        )}
+        data-testid="media-fallback"
+      >
+        {fallback}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={cn("absolute inset-0 z-[2] skeleton-shimmer", className)}
+      data-testid="media-fallback"
+    />
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -257,6 +282,7 @@ export function VideoCardPlayer({
   focalY,
   feedPlaybackActive = true,
   disableNativeDrag = false,
+  fallback,
 }: VideoCardPlayerProps) {
   const isVideoMedia = isVideo ?? isVideoUrl(src);
   const normalizedSrc = src ? normalizeMediaUrl(src) : undefined;
@@ -286,6 +312,7 @@ export function VideoCardPlayer({
         focalX={focalX}
         focalY={focalY}
         disableNativeDrag={disableNativeDrag}
+        fallback={fallback}
       />
     );
   }
@@ -321,6 +348,7 @@ export function VideoCardPlayer({
         onEnded={onEnded}
         feedPlaybackActive={feedPlaybackActive}
         disableNativeDrag={disableNativeDrag}
+        fallback={fallback}
       />
     );
   }
@@ -351,6 +379,7 @@ export function VideoCardPlayer({
       focalX={focalX}
       focalY={focalY}
       disableNativeDrag={disableNativeDrag}
+      fallback={fallback}
     />
   );
 }
@@ -399,6 +428,7 @@ interface VideoCardPlayerInnerProps {
   focalX?: number | null;
   focalY?: number | null;
   disableNativeDrag: boolean;
+  fallback?: ReactNode;
 }
 
 function VideoCardPlayerInner({
@@ -425,6 +455,7 @@ function VideoCardPlayerInner({
   focalX,
   focalY,
   disableNativeDrag,
+  fallback,
 }: VideoCardPlayerInnerProps) {
   const posterNeedsUnoptimized =
     normalizedPoster?.startsWith("blob:") || normalizedPoster?.startsWith("data:");
@@ -649,7 +680,7 @@ function VideoCardPlayerInner({
 
   if (!isVideo) {
     if (!normalizedSrc || posterError) {
-      return <div className="absolute inset-0 skeleton-shimmer" />;
+      return <MediaFallback fallback={fallback} />;
     }
 
     if (usesSmartFit) {
@@ -743,7 +774,7 @@ function VideoCardPlayerInner({
             onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
           />
         ) : !videoReady || hasError || reducedMotion ? (
-          <div className="absolute inset-0 z-[2] skeleton-shimmer" />
+          <MediaFallback fallback={fallback} />
         ) : null}
 
         <video
@@ -773,7 +804,9 @@ function VideoCardPlayerInner({
           showMuteControl={showMuteControl}
           controlVariant={controlVariant}
         />
-        {hasError && showPlaybackToggle ? (
+        {hasError && fallback ? (
+          <MediaFallback fallback={fallback} className="z-20 bg-black/25 backdrop-blur-sm" />
+        ) : hasError && showPlaybackToggle ? (
           <div
             role="button"
             tabIndex={0}
@@ -858,9 +891,7 @@ function VideoCardPlayerInner({
           onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
         />
       ) : !videoReady || hasError || !isPlaying ? (
-        <div className="absolute inset-0 z-[2] flex items-center justify-center skeleton-shimmer">
-          <Play className="h-10 w-10 text-white/60" />
-        </div>
+        <MediaFallback fallback={fallback} />
       ) : null}
 
       <video
@@ -883,7 +914,9 @@ function VideoCardPlayerInner({
         onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
       />
 
-      {hasError && (
+      {hasError && fallback ? (
+        <MediaFallback fallback={fallback} className="z-20 bg-black/25 backdrop-blur-sm" />
+      ) : hasError ? (
         <div
           role="button"
           tabIndex={0}
@@ -897,7 +930,7 @@ function VideoCardPlayerInner({
           <AlertTriangle className="h-5 w-5 text-amber-400" />
           <span className="text-xs font-medium text-white/90">Video unavailable</span>
         </div>
-      )}
+      ) : null}
 
       <MuteButton videoRef={videoRef} showMuteControl={showMuteControl} />
 
@@ -963,6 +996,7 @@ interface HoverVideoPlayerProps {
   focalX?: number | null;
   focalY?: number | null;
   disableNativeDrag: boolean;
+  fallback?: ReactNode;
 }
 
 function HoverVideoPlayer({
@@ -981,6 +1015,7 @@ function HoverVideoPlayer({
   focalX,
   focalY,
   disableNativeDrag,
+  fallback,
 }: HoverVideoPlayerProps) {
   const posterNeedsUnoptimized =
     normalizedPoster?.startsWith("blob:") || normalizedPoster?.startsWith("data:");
@@ -1074,7 +1109,7 @@ function HoverVideoPlayer({
 
   if (!normalizedSrc) {
     if (!normalizedPoster || posterError) {
-      return <div className="absolute inset-0 skeleton-shimmer" />;
+      return <MediaFallback fallback={fallback} />;
     }
 
     if (usesSmartFit) {
@@ -1152,7 +1187,7 @@ function HoverVideoPlayer({
           onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
         />
       ) : !(isHovering && videoReady) || hasError || reducedMotion ? (
-        <div className="absolute inset-0 z-[2] skeleton-shimmer" />
+        <MediaFallback fallback={fallback} />
       ) : null}
 
       <video
@@ -1244,6 +1279,7 @@ interface FeedVideoPlayerProps {
   onEnded?: () => void;
   feedPlaybackActive: boolean;
   disableNativeDrag: boolean;
+  fallback?: ReactNode;
 }
 
 function FeedVideoPlayer({
@@ -1264,6 +1300,7 @@ function FeedVideoPlayer({
   onEnded,
   feedPlaybackActive,
   disableNativeDrag,
+  fallback,
 }: FeedVideoPlayerProps) {
   const posterNeedsUnoptimized =
     normalizedPoster?.startsWith("blob:") || normalizedPoster?.startsWith("data:");
@@ -1368,7 +1405,7 @@ function FeedVideoPlayer({
 
   if (!normalizedSrc) {
     if (!normalizedPoster || posterError) {
-      return <div className="absolute inset-0 skeleton-shimmer" />;
+      return <MediaFallback fallback={fallback} />;
     }
 
     return (
@@ -1425,7 +1462,7 @@ function FeedVideoPlayer({
           onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
         />
       ) : showPoster ? (
-        <div className="absolute inset-0 z-[2] skeleton-shimmer" />
+        <MediaFallback fallback={fallback} />
       ) : null}
 
       {/* Video element */}

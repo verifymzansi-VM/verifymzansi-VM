@@ -384,4 +384,36 @@ describe("VideoCardPlayer", () => {
     const poster = screen.getByAltText("Clip");
     expect(poster.className).toContain("opacity-100");
   });
+
+  it("renders the provided fallback when an image fails to load", () => {
+    render(
+      <VideoCardPlayer
+        src="https://example.com/photo.jpg"
+        alt="Photo"
+        mode="ambient"
+        fallback={<div>Fallback media</div>}
+      />
+    );
+
+    fireEvent.error(screen.getByAltText("Photo"));
+
+    expect(screen.getByTestId("media-fallback")).toHaveTextContent("Fallback media");
+  });
+
+  it("renders the provided fallback when a video cannot be loaded", () => {
+    render(
+      <VideoCardPlayer
+        src="https://example.com/clip.mp4"
+        posterUrl="https://example.com/poster.jpg"
+        alt="Clip"
+        mode="ambient"
+        showPlaybackControl
+        fallback={<div>Fallback media</div>}
+      />
+    );
+
+    fireEvent.error(document.querySelector("video") as HTMLVideoElement);
+
+    expect(screen.getByTestId("media-fallback")).toHaveTextContent("Fallback media");
+  });
 });

@@ -23,7 +23,7 @@
     "deploy": "pnpm validate:launch-env && node scripts/preflight-cloudflare.js && pnpm exec opennextjs-cloudflare build && pnpm exec opennextjs-cloudflare deploy",
     "start": "next start",
     "lint": "eslint src",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "format": "prettier --write \"src/**/*.{ts,tsx,json,css}\" \"*.{js,json,md}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,json,css}\" \"*.{js,json,md}\"",
     "storybook": "storybook dev -p 6006",

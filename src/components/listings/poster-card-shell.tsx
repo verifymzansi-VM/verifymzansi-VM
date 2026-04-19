@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { MapPin } from "lucide-react";
+import { ImageOff, MapPin } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import {
   VideoCardPlayer,
@@ -280,6 +280,17 @@ export function PosterCardShell({
       </div>
     </div>
   );
+  const mediaFallback = fallback ?? (
+    <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.16),rgba(15,23,42,0)_55%),linear-gradient(180deg,rgba(15,23,42,0.12),rgba(15,23,42,0.24))] px-6 text-center text-white/88">
+      <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/12 bg-black/30 backdrop-blur-sm">
+        <ImageOff className="h-6 w-6" />
+      </div>
+      <div className="space-y-1">
+        <p className="text-sm font-semibold">Preview unavailable</p>
+        <p className="text-xs text-white/70">{title}</p>
+      </div>
+    </div>
+  );
 
   const cardInner = (
     <Card className={cardClassName} trustLevel={trustLevel} data-card-variant={cardVariant}>
@@ -315,11 +326,10 @@ export function PosterCardShell({
             feedPlaybackActive={feedPlaybackActive}
             deferVideoLoadUntilPlay={deferVideoLoadUntilPlay}
             disableNativeDrag={disableNativeDrag}
+            fallback={mediaFallback}
           />
-        ) : fallback ? (
-          <div className="absolute inset-0 skeleton-shimmer">{fallback}</div>
         ) : (
-          <div className="absolute inset-0 skeleton-shimmer" />
+          <div className="absolute inset-0">{mediaFallback}</div>
         )}
 
         {/* Status badge — top-left corner of thumbnail */}

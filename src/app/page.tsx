@@ -15,6 +15,7 @@ import { HomeBusinessShowcase } from "@/components/home/home-business-showcase";
 import { HomePromotionsShowcase } from "@/components/home/home-promotions-showcase";
 import { getServerPublicRuntimeConfig } from "@/lib/public-runtime-config";
 import { getOfficialSocialSameAs } from "@/lib/official-social-links";
+import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 
 export const metadata: Metadata = {
   title: "VerifyMzansi — Mzansi's Proudly Trusted Market",
@@ -63,6 +64,12 @@ export default async function HomePage() {
       accentClass: "text-brand-green",
       iconBgClass: "bg-brand-green/10",
     },
+  ] as const;
+  const freePostCount = Number(FREE_POST_CONFIG.maxAllowed);
+  const freePostHighlights = [
+    `${freePostCount} free ${freePostCount === 1 ? "post" : "posts"} per area`,
+    `${FREE_POST_CONFIG.maxPhotos} photos + ${FREE_POST_CONFIG.maxVideos} video`,
+    "Trust-first publishing",
   ] as const;
 
   const jsonLd = {
@@ -118,18 +125,20 @@ export default async function HomePage() {
             aria-hidden="true"
           />
 
-          {/* ═══ Marketplace Showcase ═══ */}
-          <Suspense fallback={<MarketplacePreviewsSkeleton />}>
-            <HomePromotionsShowcase />
-          </Suspense>
+          <div className="lg:-mt-10">
+            {/* ═══ Marketplace Showcase ═══ */}
+            <Suspense fallback={<MarketplacePreviewsSkeleton />}>
+              <HomePromotionsShowcase />
+            </Suspense>
 
-          <Suspense fallback={<MarketplacePreviewsSkeleton />}>
-            <HomeBusinessShowcase />
-          </Suspense>
+            <Suspense fallback={<MarketplacePreviewsSkeleton />}>
+              <HomeBusinessShowcase />
+            </Suspense>
 
-          <Suspense fallback={<MarketplacePreviewsSkeleton />}>
-            <HomeMzansiMarketShowcase />
-          </Suspense>
+            <Suspense fallback={<MarketplacePreviewsSkeleton />}>
+              <HomeMzansiMarketShowcase />
+            </Suspense>
+          </div>
 
           {/* ═══ Onboarding Guide Section ═══ */}
           <section className="relative py-4 sm:py-5 lg:py-6">
@@ -147,13 +156,23 @@ export default async function HomePage() {
                     </div>
 
                     <div className="space-y-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {freePostHighlights.map((highlight) => (
+                          <span
+                            key={highlight}
+                            className="inline-flex rounded-full border border-slate-200/80 bg-white/80 px-3 py-1 text-[11px] font-medium text-slate-600 shadow-sm dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200"
+                          >
+                            {highlight}
+                          </span>
+                        ))}
+                      </div>
                       <h1 className="font-display text-2xl font-bold leading-[1.05] tracking-tight text-slate-950 dark:text-white sm:text-4xl">
                         Mzansi&apos;s Proudly Trusted Market.
                       </h1>
 
                       <p className="max-w-2xl text-base text-slate-600 dark:text-slate-300 sm:text-lg">
-                        Verified sellers post with photos and videos. Request promotion across our
-                        social media channels.
+                        Start with free posts, build trust with verification, and upgrade only when
+                        you want more visibility across market, business, or event surfaces.
                       </p>
                     </div>
 
@@ -202,8 +221,8 @@ export default async function HomePage() {
                         size="lg"
                         className="h-12 w-full gap-2 rounded-full bg-brand-green px-8 text-base font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-brand-green-600 sm:w-auto"
                       >
-                        <Link href="/advertise" prefetch={false}>
-                          Start for Free
+                        <Link href="/post/create" prefetch={false}>
+                          Post for Free
                           <ArrowRight className="h-5 w-5" />
                         </Link>
                       </Button>

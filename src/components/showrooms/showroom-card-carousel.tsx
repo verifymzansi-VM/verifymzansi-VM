@@ -83,7 +83,7 @@ const DESKTOP_SHOWROOM_ITEM_LIMIT = 15;
 const CARD_W =
   "w-[54vw] max-w-[220px] sm:w-[46vw] sm:max-w-[310px] md:w-[34vw] lg:w-[280px] lg:max-w-none xl:w-[304px] 2xl:w-[320px]";
 const SECTION_SPACING =
-  "pt-0 pb-1 sm:pt-0 sm:pb-3 md:pt-8 md:pb-8 lg:h-[calc(100svh-4rem)] lg:min-h-0 lg:py-0";
+  "pt-0 pb-2 sm:pt-0 sm:pb-4 md:pt-4 md:pb-8 lg:min-h-[clamp(30rem,62vh,40rem)] lg:py-8";
 const SECTION_SURFACE = "bg-[linear-gradient(180deg,#f8f5ec_0%,#f1e8da_48%,#e8decd_100%)]";
 
 function getBackgroundOverlayClasses(preset: ShowroomBackgroundOverlayPreset = "market") {
@@ -794,7 +794,7 @@ export function ShowroomCardCarousel({
       <div
         ref={coverflowRef}
         className={cn(
-          "relative mx-auto max-w-[1680px] overflow-x-clip overflow-y-visible select-none touch-pan-y pb-0 lg:flex lg:h-full lg:items-center lg:pb-0",
+          "relative mx-auto max-w-[1680px] overflow-x-clip overflow-y-visible select-none touch-pan-y pb-0 lg:flex lg:min-h-[clamp(24rem,54vh,34rem)] lg:items-center lg:pb-0",
           isDragging ? "cursor-grabbing" : "cursor-grab"
         )}
         onPointerDown={handlePointerDown}

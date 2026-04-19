@@ -93,4 +93,34 @@ describe("SubscribeButton", () => {
       expect(toastMock).not.toHaveBeenCalled();
     });
   });
+
+  it("shows a sign-in prompt when checkout returns unauthorized", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({
+        error: "Unauthorized",
+      }),
+    } as Response);
+
+    render(
+      <SubscribeButton
+        planId="550e8400-e29b-41d4-a716-446655440000"
+        planName="Mzansi Market Growth"
+        priceCents={25000}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /choose mzansi market growth/i }));
+
+    await waitFor(() => {
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          description: "Sign in to continue to secure checkout.",
+        })
+      );
+    });
+
+    expect(screen.getByText("Sign in to continue to secure checkout.")).toBeInTheDocument();
+  });
 });

@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { useToast } from "@/hooks/use-toast";
+import { getFriendlyCheckoutError } from "@/lib/billing/checkout-copy";
 
 interface SubscribeButtonProps {
   planId: string;
@@ -14,7 +15,8 @@ interface SubscribeButtonProps {
 }
 
 export function SubscribeButton({ planId, planName, priceCents, isPopular }: SubscribeButtonProps) {
-  const [loading, setLoading] = useState(false);
+  const [checkoutState, setCheckoutState] = useState<"idle" | "submitting" | "redirecting">("idle");
+  const [inlineMessage, setInlineMessage] = useState<string | null>(null);
   const pendingRef = useRef(false);
   const mountedRef = useRef(true);
   const requestControllerRef = useRef<AbortController | null>(null);
@@ -33,7 +35,9 @@ export function SubscribeButton({ planId, planName, priceCents, isPopular }: Sub
     if (pendingRef.current) return;
     pendingRef.current = true;
 
-    setLoading(true);
+    setInlineMessage("Opening secure Ozow checkout…");
+    setCheckoutState("submitting");
+    let redirectStarted = false;
     const controller = new AbortController();
     requestControllerRef.current = controller;
     try {
@@ -47,26 +51,44 @@ export function SubscribeButton({ planId, planName, priceCents, isPopular }: Sub
       const data = await res.json();
 
       if (!res.ok) {
+        const message = getFriendlyCheckoutError(res.status, data.error, planName);
+        if (mountedRef.current) {
+          setCheckoutState("idle");
+          setInlineMessage(message);
+        }
         toast({
           title: "Checkout error",
-          description: data.error || "Failed to start checkout. Please try again.",
+          description: message,
           variant: "destructive",
         });
         return;
       }
 
       if (data.checkoutUrl) {
+        redirectStarted = true;
+        if (mountedRef.current) {
+          setCheckoutState("redirecting");
+          setInlineMessage("Redirecting you to secure Ozow checkout…");
+        }
         window.location.assign(data.checkoutUrl);
       } else {
+        if (mountedRef.current) {
+          setCheckoutState("idle");
+          setInlineMessage("Secure checkout did not return a redirect URL.");
+        }
         toast({
           title: "Checkout error",
-          description: "No checkout URL received.",
+          description: "Secure checkout did not return a redirect URL.",
           variant: "destructive",
         });
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         return;
+      }
+      if (mountedRef.current) {
+        setCheckoutState("idle");
+        setInlineMessage(`Could not start secure checkout for ${planName}. Please try again.`);
       }
       toast({
         title: "Something went wrong",
@@ -76,7 +98,9 @@ export function SubscribeButton({ planId, planName, priceCents, isPopular }: Sub
     } finally {
       requestControllerRef.current = null;
       if (mountedRef.current) {
-        setLoading(false);
+        if (!redirectStarted) {
+          setCheckoutState("idle");
+        }
       }
       pendingRef.current = false;
     }
@@ -90,22 +114,38 @@ export function SubscribeButton({ planId, planName, priceCents, isPopular }: Sub
     );
   }
 
+  const isBusy = checkoutState === "submitting" || checkoutState === "redirecting";
+
   return (
-    <Button
-      size="lg"
-      variant={isPopular ? "trust-verified" : "outline"}
-      className={`w-full font-semibold ${isPopular ? "shadow-md" : ""}`}
-      disabled={loading}
-      onClick={handleClick}
-    >
-      {loading ? (
-        <>
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          Processing…
-        </>
-      ) : (
-        `Choose ${planName}`
-      )}
-    </Button>
+    <div className="space-y-2">
+      <Button
+        size="lg"
+        variant={isPopular ? "trust-verified" : "outline"}
+        className={`w-full font-semibold ${isPopular ? "shadow-md" : ""}`}
+        disabled={isBusy}
+        onClick={handleClick}
+      >
+        {isBusy ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            {checkoutState === "redirecting" ? "Redirecting…" : "Connecting to Ozow…"}
+          </>
+        ) : (
+          `Choose ${planName}`
+        )}
+      </Button>
+      <p
+        aria-live="polite"
+        className={`min-h-[1.25rem] text-xs ${
+          inlineMessage?.toLowerCase().includes("could not") ||
+          inlineMessage?.toLowerCase().includes("sign in") ||
+          inlineMessage?.toLowerCase().includes("unavailable")
+            ? "text-destructive"
+            : "text-muted-foreground"
+        }`}
+      >
+        {inlineMessage ?? "Secure Ozow checkout opens after you confirm this plan."}
+      </p>
+    </div>
   );
 }

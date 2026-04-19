@@ -14,6 +14,11 @@ export const metadata = {
 export default function PricingPage() {
   const { marketPlans, businessPlans, promotionPlans } = getActivePlansByArea();
   const freePostCount = Number(FREE_POST_CONFIG.maxAllowed);
+  const summaryPoints = [
+    `${freePostCount} free ${freePostCount === 1 ? "post" : "posts"} per area every ${FREE_POST_CONFIG.durationDays} days`,
+    `${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video on the free plan`,
+    "Paid plans unlock boost, placement, and stronger trust signals",
+  ] as const;
 
   const allPlans = [...marketPlans, ...businessPlans, ...promotionPlans];
   const jsonLd = {
@@ -50,9 +55,20 @@ export default function PricingPage() {
         <div className="container-page py-4 space-y-4">
           <PageHeader
             title="Pricing"
-            description={`${freePostCount} free ${freePostCount === 1 ? "post" : "posts"} per area every ${FREE_POST_CONFIG.durationDays} days, with ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} ${FREE_POST_CONFIG.maxVideos === 1 ? "video" : "videos"}. Upgrade for more visibility and trust badges.`}
+            description={`Start free, compare each surface clearly, and move into secure checkout only when you are ready to add more visibility.`}
             breadcrumbs={[{ label: "Pricing" }]}
           />
+
+          <div className="grid gap-3 md:grid-cols-3">
+            {summaryPoints.map((point) => (
+              <div
+                key={point}
+                className="rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 text-sm text-slate-700 shadow-sm dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200"
+              >
+                {point}
+              </div>
+            ))}
+          </div>
 
           <Tabs defaultValue="market" className="max-w-5xl mx-auto">
             <div className="flex justify-center mb-3">
@@ -92,6 +108,11 @@ export default function PricingPage() {
               </TabsContent>
             )}
           </Tabs>
+
+          <p className="text-center text-sm text-muted-foreground">
+            Compare a surface, choose a plan, then continue to secure Ozow checkout after
+            sign-in.{" "}
+          </p>
 
           <p className="text-center text-sm text-muted-foreground">
             Have questions?{" "}
