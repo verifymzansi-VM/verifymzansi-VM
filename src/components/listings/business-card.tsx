@@ -140,6 +140,7 @@ export function BusinessCard({
       viewerHasLiked={viewerHasLiked}
       engagementTargetId={id}
       engagementTargetType="business"
+      fitStrategy="smart"
       videoDuration={videoDuration}
       focalX={focalX}
       focalY={focalY}

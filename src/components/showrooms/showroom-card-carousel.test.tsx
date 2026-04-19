@@ -151,18 +151,18 @@ describe("ShowroomCardCarousel", () => {
 
     expect(section.className).toContain("pt-0");
     expect(section.className).toContain("sm:pt-0");
-    expect(section.className).toContain("pb-1");
-    expect(section.className).toContain("sm:pb-3");
-    expect(section.className).toContain("lg:h-[calc(100svh-4rem)]");
-    expect(section.className).toContain("lg:py-0");
+    expect(section.className).toContain("pb-2");
+    expect(section.className).toContain("sm:pb-4");
+    expect(section.className).toContain("lg:min-h-[clamp(30rem,62vh,40rem)]");
+    expect(section.className).toContain("lg:py-8");
   });
 
   it("uses the larger mobile card width and reduced desktop showroom width", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
 
     const centerSlide = screen.getByRole("group", { name: "1 of 3" });
-    expect(centerSlide.className).toContain("w-[72vw]");
-    expect(centerSlide.className).toContain("max-w-[292px]");
+    expect(centerSlide.className).toContain("w-[54vw]");
+    expect(centerSlide.className).toContain("max-w-[220px]");
     expect(centerSlide.className).toContain("lg:w-[280px]");
     expect(centerSlide.className).toContain("xl:w-[304px]");
   });
@@ -200,12 +200,13 @@ describe("ShowroomCardCarousel", () => {
     const section = screen.getByLabelText("Showroom carousel");
     const emptyStateCard = Array.from(container.querySelectorAll("div")).find(
       (node) =>
-        node.className.includes("w-[72vw]") &&
+        node.className.includes("w-[54vw]") &&
+        node.className.includes("max-w-[220px]") &&
         node.className.includes("lg:w-[280px]") &&
         node.className.includes("xl:w-[304px]")
     );
     expect(section).toBeInTheDocument();
-    expect(section.className).toContain("lg:h-[calc(100svh-4rem)]");
+    expect(section.className).toContain("lg:min-h-[clamp(30rem,62vh,40rem)]");
     expect(emptyStateCard).toBeDefined();
     expect(screen.getByText("No Items")).toBeInTheDocument();
     expect(screen.getByText("Nothing to show")).toBeInTheDocument();

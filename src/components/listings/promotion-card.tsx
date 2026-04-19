@@ -184,6 +184,7 @@ export const PromotionCard = memo(function PromotionCard({
       viewerHasLiked={viewerHasLiked}
       engagementTargetId={id}
       engagementTargetType={targetType}
+      fitStrategy="smart"
       logoUrl={logoUrl}
       eyebrowClassName={
         price != null && price > 0

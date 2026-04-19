@@ -94,9 +94,9 @@ describe("HomePage", () => {
     const ui = await HomePage();
     render(ui);
 
-    expect(screen.getByRole("link", { name: /Start for Free/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Post for Free/i })).toHaveAttribute(
       "href",
-      "/advertise"
+      "/post/create"
     );
     expect(screen.getByRole("link", { name: /^Create Account$/i })).toHaveAttribute(
       "href",
@@ -124,9 +124,9 @@ describe("HomePage", () => {
     const ui = await HomePage();
     render(ui);
 
-    expect(screen.getByRole("link", { name: /Start for Free/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Post for Free/i })).toHaveAttribute(
       "href",
-      "/advertise"
+      "/post/create"
     );
     expect(screen.getByRole("link", { name: /^Create Account$/i })).toHaveAttribute(
       "href",

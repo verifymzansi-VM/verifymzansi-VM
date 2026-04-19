@@ -36,6 +36,7 @@ export default function LoginPage() {
     getTurnstileClientState().mode === "unavailable" ? TURNSTILE_UNAVAILABLE_MESSAGE : null
   );
   const [resendPromptVisible, setResendPromptVisible] = useState(false);
+  const [emailConfirmedVisible, setEmailConfirmedVisible] = useState(false);
   const [resendingEmail, setResendingEmail] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -76,7 +77,7 @@ export default function LoginPage() {
         reason: null as string | null,
       };
   const justRegistered = resendPromptVisible || loginPageFlags.justRegistered;
-  const emailConfirmed = loginPageFlags.emailConfirmed;
+  const emailConfirmed = emailConfirmedVisible || loginPageFlags.emailConfirmed;
 
   // Read query params client-side to avoid useSearchParams + Suspense,
   // ensuring the full form renders on first paint for Playwright assertions.
@@ -86,6 +87,7 @@ export default function LoginPage() {
     }
 
     if (loginPageFlags.emailConfirmed) {
+      setEmailConfirmedVisible(true);
       // Clean URL to prevent re-flash on refresh/back navigation
       window.history.replaceState({}, "", window.location.pathname);
     }
