@@ -48,7 +48,6 @@ export function ContentLikeButton({
       <button
         type="button"
         aria-label={ariaLabel}
-        aria-pressed={liked}
         disabled={isPending}
         onClick={(event) => {
           event.preventDefault();

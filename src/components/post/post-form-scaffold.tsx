@@ -42,6 +42,20 @@ interface PostFormScaffoldProps {
   completeness?: number;
 }
 
+function formatFieldSummaryLabel(fieldKey: string, fieldLabels?: Record<string, string>): string {
+  const explicitLabel = fieldLabels?.[fieldKey]?.trim();
+  if (explicitLabel) {
+    return explicitLabel;
+  }
+
+  return fieldKey
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/(^|\s)\S/g, (character) => character.toUpperCase());
+}
+
 export function PostFormScaffold({
   title,
   description,
@@ -199,16 +213,10 @@ export function PostFormScaffold({
                   {fieldErrors && Object.keys(fieldErrors).length > 0 && (
                     <ul className="mt-2 list-disc pl-4 space-y-0.5 text-[13px]">
                       {Object.entries(fieldErrors).map(([key, msg], i) => {
-                        const label = fieldLabels?.[key];
+                        const label = formatFieldSummaryLabel(key, fieldLabels);
                         return (
                           <li key={i}>
-                            {label ? (
-                              <>
-                                <strong>{label}:</strong> {msg}
-                              </>
-                            ) : (
-                              msg
-                            )}
+                            <strong>{label}:</strong> {msg}
                           </li>
                         );
                       })}

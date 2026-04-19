@@ -74,7 +74,7 @@ export function BusinessCategoryStrip({ categoryCounts }: BusinessCategoryStripP
             <button
               key={cat.value}
               type="button"
-              aria-pressed={isSelected}
+              aria-label={isSelected ? `${cat.label}, selected` : cat.label}
               onClick={() =>
                 setFilter(
                   "businessCategory" as keyof typeof filters,
