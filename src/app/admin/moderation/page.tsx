@@ -96,7 +96,7 @@ export default async function AdminModerationPage() {
   const totalPending = allItems.length;
 
   return (
-    <div className="min-w-0 max-w-full space-y-6 overflow-x-hidden">
+    <div className="min-w-0 w-full max-w-full space-y-6 overflow-x-hidden">
       <PageHeader
         title="Moderation Queue"
         description="Review and approve pending content."

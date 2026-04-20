@@ -142,11 +142,11 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
         ))}
       </div>
 
-      <div className="min-w-0 max-w-full space-y-3">
+      <div className="min-w-0 w-full max-w-full space-y-3">
         {filtered.map((item) => (
           <Card
             key={item.id}
-            className="cursor-pointer transition-colors hover:border-brand-green/40"
+            className="w-full cursor-pointer transition-colors hover:border-brand-green/40"
             onClick={() => openPreview(item)}
           >
             <CardContent className="py-4">

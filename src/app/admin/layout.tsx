@@ -75,7 +75,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <AdminLiveNotifier userId={staffUser.id} />
       <AdminRealtimeRefresh />
 
-      <div className="flex min-w-0 flex-1 overflow-x-hidden">
+      <div className="flex min-w-0 w-full flex-1 overflow-x-hidden">
         <AdminSidebar
           pendingVerifications={pendingVerifications || 0}
           openReports={openReports || 0}
@@ -83,8 +83,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           userRole={role}
           evidenceDeskEnabled={evidenceDeskEnabled}
         />
-        <main className="min-w-0 flex-1 overflow-y-auto">
-          <div className="min-w-0 max-w-full px-3 py-4 sm:px-4 sm:py-6 lg:px-5">{children}</div>
+        <main className="min-w-0 w-0 flex-1 overflow-x-hidden overflow-y-auto">
+          <div className="min-w-0 w-full max-w-full px-3 py-4 sm:px-4 sm:py-6 lg:px-5">
+            {children}
+          </div>
         </main>
       </div>
     </div>
