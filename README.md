@@ -92,6 +92,47 @@ For the production environment, make sure both of these are aligned:
 Without that allow-list entry, signup confirmation emails may fall back to the
 site root with `?code=...` instead of the app callback handler.
 
+### Supabase Security Advisor Settings
+
+Some Supabase security controls are dashboard-only and are not represented in
+`supabase/config.toml` or app code.
+
+- Enable leaked-password protection in Supabase Dashboard > Auth > Security. The
+  VerifyMzansi auth routes rely on Supabase to enforce that control once it is
+  enabled for the project. The repo also exposes the same control through the
+  Supabase Management API field `password_hibp_enabled`. Supabase only allows
+  that setting on Pro plans and above.
+  - The `avatars` storage bucket is intentionally public because the profile
+    avatar upload flow stores a persistent public URL in `avatar_url`. Keep the
+    bucket public for direct object delivery, but do not add a broad public
+    `SELECT` policy on `storage.objects`; that re-enables bucket listing.
+
+### Supabase CLI From Workspace Env
+
+The repo includes an env-aware Supabase CLI wrapper so linked remote commands do
+not depend on manually exporting `SUPABASE_ACCESS_TOKEN` and
+`SUPABASE_DB_PASSWORD` into your terminal first.
+
+Use either the generic wrapper:
+
+```bash
+pnpm supabase:cli -- migration list
+pnpm supabase:cli -- db push
+```
+
+Or the convenience aliases:
+
+```bash
+pnpm supabase:migration:list
+pnpm supabase:db:push
+```
+
+To use a different env file, pass it through the generic wrapper:
+
+```bash
+pnpm supabase:cli -- --env-file=.env.local migration list
+```
+
 ### Playwright / CI smoke
 
 - Playwright does not depend on your local `.env.local`
@@ -179,6 +220,8 @@ pnpm wrangler secret put OZOW_WEBHOOK_SECRET
 | `pnpm exec playwright test --grep "@smoke" --project chromium --project mobile-chrome` | Launch-path smoke coverage                           |
 | `pnpm bootstrap:operator`                                                              | Create or update the first live staff account        |
 | `pnpm reset:launch-data`                                                               | Launch-reset inventory / wipe tool                   |
+| `pnpm supabase:migration:list`                                                         | List linked Supabase local vs remote migrations      |
+| `pnpm supabase:db:push`                                                                | Apply pending local migrations to linked Supabase    |
 | `pnpm preflight`                                                                       | Local launch checks with development-mode validation |
 | `pnpm preflight:prod`                                                                  | Production launch checks                             |
 | `pnpm validate:launch-env`                                                             | Fail-fast production env validation                  |
