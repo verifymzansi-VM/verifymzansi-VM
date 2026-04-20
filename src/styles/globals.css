@@ -17,6 +17,7 @@
     --font-display: "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
     --font-body: "Segoe UI", system-ui, sans-serif;
     --desktop-page-scale: 0.9;
+    --admin-page-scale: 0.92;
 
     --background: 0 0% 100%;
     --foreground: 30 20% 12%;
@@ -145,8 +146,39 @@
     }
   }
 
+  @media (min-width: 1024px) and (max-width: 1700px) {
+    .admin-page-fit {
+      width: calc(100% / var(--admin-page-scale));
+      margin-inline: calc((100% - (100% / var(--admin-page-scale))) / 2);
+      overflow-x: hidden;
+      overflow-x: clip;
+      zoom: var(--admin-page-scale);
+    }
+  }
+
+  @supports not (zoom: 1) {
+    @media (min-width: 1024px) and (max-width: 1700px) {
+      .admin-page-fit {
+        width: calc(100% / var(--admin-page-scale));
+        min-height: calc(100vh / var(--admin-page-scale));
+        margin-inline: calc((100% - (100% / var(--admin-page-scale))) / 2);
+        overflow-x: hidden;
+        overflow-x: clip;
+        transform: scale(var(--admin-page-scale));
+        transform-origin: top center;
+      }
+    }
+  }
+
   @media print {
     .desktop-page-scale {
+      width: 100% !important;
+      min-height: 0 !important;
+      zoom: 1 !important;
+      transform: none !important;
+    }
+
+    .admin-page-fit {
       width: 100% !important;
       min-height: 0 !important;
       zoom: 1 !important;

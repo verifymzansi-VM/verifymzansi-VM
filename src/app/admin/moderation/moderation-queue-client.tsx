@@ -150,7 +150,7 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
             onClick={() => openPreview(item)}
           >
             <CardContent className="py-4">
-              <div className="flex min-w-0 flex-wrap items-start gap-4 sm:flex-nowrap sm:items-center">
+              <div className="flex min-w-0 flex-wrap items-start gap-4">
                 {/* Thumbnail preview */}
                 {getThumbnailUrl(item) ? (
                   <div className="relative h-14 w-14 flex-shrink-0 rounded-md overflow-hidden bg-muted">
@@ -187,7 +187,7 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
                     Submitted {formatRelativeTime(item.created_at)}
                   </p>
                 </div>
-                <div className="flex w-full flex-wrap gap-1 sm:ml-auto sm:w-auto sm:flex-shrink-0 sm:justify-end">
+                <div className="flex w-full flex-wrap gap-1 justify-start sm:justify-end">
                   <Button
                     size="sm"
                     variant="outline"
