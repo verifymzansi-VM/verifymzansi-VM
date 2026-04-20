@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import Link from "next/link";
 import * as Sentry from "@sentry/nextjs";
 import { Camera, Loader2, RefreshCw, ShieldCheck, VideoOff } from "lucide-react";
@@ -47,7 +48,6 @@ export function CameraCapture({
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const pendingStartRef = useRef(false);
   const [state, setState] = useState<CameraState>("idle");
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [capturedUrl, setCapturedUrl] = useState<string>("");
@@ -363,17 +363,6 @@ export function CameraCapture({
     };
   }, [capturedUrl]);
 
-  // Start camera after the permission dialog closes with confirmation.
-  // Deferring via effect avoids stale-closure issues and ensures the
-  // Radix Dialog focus-trap is fully unmounted before getUserMedia fires,
-  // which would otherwise block the browser's camera permission prompt.
-  useEffect(() => {
-    if (!showPermissionDialog && pendingStartRef.current) {
-      pendingStartRef.current = false;
-      startCamera();
-    }
-  }, [showPermissionDialog, startCamera]);
-
   const permissionDialog = (
     <Dialog open={showPermissionDialog} onOpenChange={setShowPermissionDialog}>
       <DialogContent className="max-w-sm">
@@ -389,8 +378,12 @@ export function CameraCapture({
             type="button"
             className="w-full"
             onClick={() => {
-              pendingStartRef.current = true;
-              setShowPermissionDialog(false);
+              // Keep the getUserMedia request in the same user interaction that
+              // confirmed camera access while removing the dialog focus-trap first.
+              flushSync(() => {
+                setShowPermissionDialog(false);
+              });
+              void startCamera();
             }}
           >
             <Camera className="mr-2 h-4 w-4" />
