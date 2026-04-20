@@ -13,6 +13,7 @@ import {
 import { summarizeVerification } from "@/lib/account/verification-summary";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import { EmailConfirmedToast } from "@/components/dashboard/email-confirmed-toast";
+import { DashboardOnboarding } from "@/components/dashboard/dashboard-onboarding";
 import {
   ListingManagerMini,
   type MiniListingPost,
@@ -249,6 +250,8 @@ export default async function DashboardPage() {
   const isVerified = trustLevel >= 3;
   const verStatus = verificationSummary.accountVerificationStatus;
   const stepsRemaining = verificationSummary.stepsRemaining;
+  const hasAnyPosts = posts.length > 0;
+  const showDashboardOnboarding = !hasAnyPosts && businessCount === 0 && activePromos === 0;
 
   return (
     <div className="space-y-5">
@@ -313,8 +316,16 @@ export default async function DashboardPage() {
 
       {/* ───── Main content — responsive grid ───── */}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
-        {/* Left: Mini listing manager */}
-        <ListingManagerMini posts={posts} />
+        {/* Left: Fresh-start onboarding or listing manager */}
+        {showDashboardOnboarding ? (
+          <DashboardOnboarding
+            isVerified={isVerified}
+            hasListings={hasAnyPosts}
+            hasBusinesses={businessCount > 0}
+          />
+        ) : (
+          <ListingManagerMini posts={posts} />
+        )}
 
         {/* Right: Quick links (stacks below on mobile) */}
         <QuickLinks planLabel={planLabel} />

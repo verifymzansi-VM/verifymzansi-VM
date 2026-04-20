@@ -2,9 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 import { MarketPreviewCard } from "./market-preview-card";
 import { AutoScrollRail } from "./auto-scroll-rail";
 import { HomeShowcaseShell } from "./home-showcase-shell";
+import { HomeShowcaseEmptyState } from "./home-showcase-empty-state";
 import { SA_PROVINCES } from "@/lib/constants/sa-provinces";
 import { createLogger } from "@/lib/utils/logger";
 import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
+import { PackageOpen } from "lucide-react";
 import { shouldHidePlaywrightFixtureRowWhenEnabled } from "./playwright-fixture-filter";
 import {
   PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
@@ -43,7 +45,27 @@ export async function HomeMzansiMarketShowcase() {
     .filter((listing) => !shouldHidePlaywrightFixtureRowWhenEnabled(listing, hideFixtures))
     .filter((listing) => !isPlaceholderMarketplaceContent(listing.title, listing.description))
     .slice(0, 8);
-  if (items.length === 0) return null;
+  if (items.length === 0) {
+    return (
+      <HomeShowcaseShell
+        badge="Mzansi Market"
+        title="Latest on Mzansi Market"
+        description="Verified sellers. Real products. Video and photos arranged in a calmer, more premium browsing surface."
+        href="/mzansi-market"
+        ctaLabel="View All Listings"
+        tone="green"
+      >
+        <HomeShowcaseEmptyState
+          title="No listings yet."
+          description="The marketplace is clean. Publish the first verified ad and this rail will fill with fresh posts."
+          ctaHref="/post/create-listing"
+          ctaLabel="Post First Listing"
+          tone="green"
+          icon={<PackageOpen className="h-7 w-7" />}
+        />
+      </HomeShowcaseShell>
+    );
+  }
 
   return (
     <HomeShowcaseShell

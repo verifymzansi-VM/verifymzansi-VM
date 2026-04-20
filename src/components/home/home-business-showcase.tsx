@@ -3,8 +3,10 @@ import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { BusinessPreviewCard } from "./business-preview-card";
 import { AutoScrollRail } from "./auto-scroll-rail";
 import { HomeShowcaseShell } from "./home-showcase-shell";
+import { HomeShowcaseEmptyState } from "./home-showcase-empty-state";
 import { SA_PROVINCES } from "@/lib/constants/sa-provinces";
 import type { BusinessType } from "@/types/enums";
+import { Building2 } from "lucide-react";
 import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
 import { shouldHidePlaywrightFixtureRowWhenEnabled } from "./playwright-fixture-filter";
 import {
@@ -45,7 +47,27 @@ export async function HomeBusinessShowcase() {
       (business) => !isPlaceholderMarketplaceContent(business.business_name, business.description)
     )
     .slice(0, 8);
-  if (items.length === 0) return null;
+  if (items.length === 0) {
+    return (
+      <HomeShowcaseShell
+        badge="Mzansi Business"
+        title="Mzansi Business"
+        description="Trusted local businesses, verified and presented with the same polished rhythm as the hero showcase."
+        href="/mzansi-business"
+        ctaLabel="View All Businesses"
+        tone="blue"
+      >
+        <HomeShowcaseEmptyState
+          title="No businesses yet."
+          description="The business directory is ready for its first verified profile. Add a business and it will appear here."
+          ctaHref="/post/create-business"
+          ctaLabel="List First Business"
+          tone="blue"
+          icon={<Building2 className="h-7 w-7" />}
+        />
+      </HomeShowcaseShell>
+    );
+  }
   const businessIds = items.map((business) => business.id as string);
   const [viewCountMap, likeSummaryMap] = await Promise.all([
     getOptionalContentViewCountMap(engagementAdmin, "business", businessIds),

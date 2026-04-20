@@ -178,7 +178,7 @@ pnpm wrangler secret put OZOW_WEBHOOK_SECRET
 | `pnpm test:e2e`                                                                        | Full Playwright suite                                |
 | `pnpm exec playwright test --grep "@smoke" --project chromium --project mobile-chrome` | Launch-path smoke coverage                           |
 | `pnpm bootstrap:operator`                                                              | Create or update the first live staff account        |
-| `pnpm reset:launch-data`                                                               | Capture a non-destructive launch-reset inventory     |
+| `pnpm reset:launch-data`                                                               | Launch-reset inventory / wipe tool                   |
 | `pnpm preflight`                                                                       | Local launch checks with development-mode validation |
 | `pnpm preflight:prod`                                                                  | Production launch checks                             |
 | `pnpm validate:launch-env`                                                             | Fail-fast production env validation                  |
@@ -321,6 +321,46 @@ Notes:
   `app_metadata.role`, and upserts a minimal `account_profiles` row.
 - It refuses to run unless `--confirm-project` matches the current
   `NEXT_PUBLIC_SUPABASE_URL` project ref.
+
+## Launch Reset
+
+Use the launch reset tool in inventory mode first, then only run a destructive
+wipe after reviewing the generated snapshot:
+
+```bash
+pnpm reset:launch-data
+```
+
+For a destructive wipe that keeps exactly one admin account, pass the project
+confirmation flag and an explicit preserve target when needed:
+
+```bash
+pnpm reset:launch-data -- \
+  --execute \
+  --confirm-project=your-project-ref \
+  --preserve-admin-email=admin@verifymzansi.com
+```
+
+Or preserve by auth user id:
+
+```bash
+pnpm reset:launch-data -- \
+  --execute \
+  --confirm-project=your-project-ref \
+  --preserve-admin-user-id=00000000-0000-0000-0000-000000000000
+```
+
+Notes:
+
+- Inventory writes a JSON snapshot to `tmp/` showing auth users, admin users,
+  legal holds, and table counts.
+- Wipe mode now refuses to proceed when multiple admin users exist unless you
+  explicitly choose which admin to preserve.
+- When there is exactly one admin user, wipe mode preserves it automatically.
+- The wipe clears tracked application tables first, then deletes all auth users
+  except the preserved admin.
+- Media and KYC object deletion completes through `r2_cleanup_queue` and the
+  retention worker after the database wipe.
 
 ## Deployment
 

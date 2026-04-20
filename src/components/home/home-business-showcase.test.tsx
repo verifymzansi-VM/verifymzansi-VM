@@ -103,11 +103,17 @@ describe("HomeBusinessShowcase", () => {
     expect(props.provinceCode).toBe("GP");
   });
 
-  it("returns null when there are no live businesses", async () => {
+  it("renders a branded empty state when there are no live businesses", async () => {
     vi.mocked(createClient).mockResolvedValue(createSupabaseMock([]) as never);
 
     const ui = await HomeBusinessShowcase();
-    expect(ui).toBeNull();
+    render(ui);
+
+    expect(screen.getByText("No businesses yet.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /list first business/i })).toHaveAttribute(
+      "href",
+      "/post/create-business"
+    );
   });
 
   it("renders businesses inside the shared auto-scroll rail", async () => {

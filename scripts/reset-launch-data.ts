@@ -1,5 +1,6 @@
 /* eslint-disable no-console */
 
+import { pathToFileURL } from "node:url";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { loadEnvConfig } from "@next/env";
@@ -7,7 +8,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 type ScriptMode = "inventory" | "wipe";
 
-type AuthUserRecord = {
+export type AuthUserRecord = {
   id: string;
   email: string | null;
   role: string | null;
@@ -28,16 +29,25 @@ type LaunchResetSnapshot = {
   mode: ScriptMode;
   sourceEnvFile: string | null;
   authUsers: AuthUserRecord[];
+  adminUsers: AuthUserRecord[];
   tableCounts: TableSummary[];
   demoUsers: AuthUserRecord[];
   legalHoldUserIds: string[];
 };
 
-type Args = {
+export type Args = {
   mode: ScriptMode;
   envFile: string | null;
   outputPath: string | null;
   confirmProject: string | null;
+  preserveAdminEmail: string | null;
+  preserveAdminUserId: string | null;
+};
+
+export type WipePlan = {
+  adminUsers: AuthUserRecord[];
+  preservedAdmins: AuthUserRecord[];
+  usersToDelete: AuthUserRecord[];
 };
 
 type TableDeletePlan = {
@@ -124,6 +134,20 @@ const DEMO_EMAIL_PATTERNS = [
   /^dev_seller\d+@test\.com$/i,
 ] as const;
 
+function printUsage(): void {
+  console.log("");
+  console.log("Launch reset inventory and wipe tool");
+  console.log("");
+  console.log(
+    "Usage: pnpm reset:launch-data [--execute] [--env-file=.env.local] [--output=tmp/file.json] [--confirm-project=<project-ref>] [--preserve-admin-email=<email> | --preserve-admin-user-id=<uuid>]"
+  );
+  console.log("");
+}
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
 function takeOptionValue(argv: string[], index: number, flag: string): string {
   const value = argv[index + 1];
   if (!value || value.startsWith("--")) {
@@ -133,16 +157,23 @@ function takeOptionValue(argv: string[], index: number, flag: string): string {
   return value;
 }
 
-function parseArgs(argv: string[]): Args {
+export function parseArgs(argv: string[]): Args {
   const args: Args = {
     mode: "inventory",
     envFile: null,
     outputPath: null,
     confirmProject: null,
+    preserveAdminEmail: null,
+    preserveAdminUserId: null,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
+
+    if (arg === "--help" || arg === "-h") {
+      printUsage();
+      process.exit(0);
+    }
 
     if (arg === "--execute") {
       args.mode = "wipe";
@@ -179,6 +210,28 @@ function parseArgs(argv: string[]): Args {
 
     if (arg.startsWith("--confirm-project=")) {
       args.confirmProject = arg.slice("--confirm-project=".length);
+      continue;
+    }
+
+    if (arg === "--preserve-admin-email") {
+      args.preserveAdminEmail = takeOptionValue(argv, index, arg);
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith("--preserve-admin-email=")) {
+      args.preserveAdminEmail = arg.slice("--preserve-admin-email=".length);
+      continue;
+    }
+
+    if (arg === "--preserve-admin-user-id") {
+      args.preserveAdminUserId = takeOptionValue(argv, index, arg);
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith("--preserve-admin-user-id=")) {
+      args.preserveAdminUserId = arg.slice("--preserve-admin-user-id=".length);
       continue;
     }
 
@@ -290,7 +343,7 @@ function isDemoUser(user: AuthUserRecord): boolean {
   return DEMO_EMAIL_PATTERNS.some((pattern) => pattern.test(email));
 }
 
-function isAdminUser(user: AuthUserRecord): boolean {
+export function isAdminUser(user: AuthUserRecord): boolean {
   const appRole =
     user.app_metadata && typeof user.app_metadata.role === "string"
       ? user.app_metadata.role.toLowerCase()
@@ -301,6 +354,75 @@ function isAdminUser(user: AuthUserRecord): boolean {
       : null;
 
   return appRole === "admin" || userRole === "admin";
+}
+
+function describeUser(user: AuthUserRecord): string {
+  return user.email ?? user.id;
+}
+
+function findUserByEmail(users: AuthUserRecord[], email: string): AuthUserRecord | null {
+  const normalizedEmail = normalizeEmail(email);
+  return users.find((user) => user.email && normalizeEmail(user.email) === normalizedEmail) ?? null;
+}
+
+export function buildWipePlan(
+  users: AuthUserRecord[],
+  options?: {
+    preserveAdminEmail?: string | null;
+    preserveAdminUserId?: string | null;
+  }
+): WipePlan {
+  const preserveAdminEmail = options?.preserveAdminEmail?.trim() || null;
+  const preserveAdminUserId = options?.preserveAdminUserId?.trim() || null;
+
+  if (preserveAdminEmail && preserveAdminUserId) {
+    throw new Error(
+      "Refusing wipe: choose either --preserve-admin-email or --preserve-admin-user-id, not both."
+    );
+  }
+
+  const adminUsers = users.filter(isAdminUser);
+  if (adminUsers.length === 0) {
+    throw new Error("Refusing wipe: no admin users found to preserve.");
+  }
+
+  let preservedAdmin: AuthUserRecord | null = null;
+
+  if (preserveAdminUserId) {
+    preservedAdmin = users.find((user) => user.id === preserveAdminUserId) ?? null;
+
+    if (!preservedAdmin) {
+      throw new Error(
+        `Refusing wipe: no auth user found for --preserve-admin-user-id=${preserveAdminUserId}.`
+      );
+    }
+  } else if (preserveAdminEmail) {
+    preservedAdmin = findUserByEmail(users, preserveAdminEmail);
+
+    if (!preservedAdmin) {
+      throw new Error(
+        `Refusing wipe: no auth user found for --preserve-admin-email=${preserveAdminEmail}.`
+      );
+    }
+  } else if (adminUsers.length === 1) {
+    preservedAdmin = adminUsers[0] ?? null;
+  } else {
+    throw new Error(
+      `Refusing wipe: found ${adminUsers.length} admin users. Re-run with --preserve-admin-email or --preserve-admin-user-id to keep exactly one admin.`
+    );
+  }
+
+  if (!preservedAdmin || !isAdminUser(preservedAdmin)) {
+    throw new Error(
+      `Refusing wipe: selected preserved user ${preservedAdmin ? describeUser(preservedAdmin) : "unknown"} is not an admin.`
+    );
+  }
+
+  return {
+    adminUsers,
+    preservedAdmins: [preservedAdmin],
+    usersToDelete: users.filter((user) => user.id !== preservedAdmin.id),
+  };
 }
 
 async function countRows(supabase: SupabaseClient, table: string): Promise<number> {
@@ -356,6 +478,7 @@ async function buildSnapshot(
     mode,
     sourceEnvFile,
     authUsers,
+    adminUsers: authUsers.filter(isAdminUser),
     tableCounts,
     demoUsers: authUsers.filter(isDemoUser),
     legalHoldUserIds,
@@ -447,6 +570,7 @@ function printSnapshot(snapshot: LaunchResetSnapshot, outputPath: string): void 
   console.log(`Supabase URL: ${snapshot.supabaseUrl}`);
   console.log(`Snapshot: ${outputPath}`);
   console.log(`Auth users: ${snapshot.authUsers.length}`);
+  console.log(`Admin users: ${snapshot.adminUsers.length}`);
   console.log(`Demo-pattern users: ${snapshot.demoUsers.length}`);
   console.log(`Legal-hold profiles: ${snapshot.legalHoldUserIds.length}`);
   console.log("");
@@ -456,19 +580,21 @@ function printSnapshot(snapshot: LaunchResetSnapshot, outputPath: string): void 
   }
 }
 
-async function runWipe(supabase: SupabaseClient, snapshot: LaunchResetSnapshot): Promise<void> {
+async function runWipe(
+  supabase: SupabaseClient,
+  snapshot: LaunchResetSnapshot,
+  args: Args
+): Promise<void> {
   if (snapshot.legalHoldUserIds.length > 0) {
     throw new Error(
       `Refusing wipe: found ${snapshot.legalHoldUserIds.length} account_profiles rows with legal_hold=true.`
     );
   }
 
-  const adminUsers = snapshot.authUsers.filter(isAdminUser);
-  if (adminUsers.length === 0) {
-    throw new Error("Refusing wipe: no admin users found to preserve.");
-  }
-
-  const usersToDelete = snapshot.authUsers.filter((user) => !isAdminUser(user));
+  const wipePlan = buildWipePlan(snapshot.authUsers, {
+    preserveAdminEmail: args.preserveAdminEmail,
+    preserveAdminUserId: args.preserveAdminUserId,
+  });
 
   console.log("");
   console.log("Deleting account-linked application data...");
@@ -480,9 +606,10 @@ async function runWipe(supabase: SupabaseClient, snapshot: LaunchResetSnapshot):
 
   console.log("");
   console.log("Deleting non-admin auth users...");
-  const deletedUsers = await deleteAllAuthUsers(supabase, usersToDelete);
+  console.log(`  preserving admin: ${describeUser(wipePlan.preservedAdmins[0]!)}`);
+  const deletedUsers = await deleteAllAuthUsers(supabase, wipePlan.usersToDelete);
   console.log(`  deleted auth.users: ${deletedUsers}`);
-  console.log(`  preserved admin users: ${adminUsers.length}`);
+  console.log(`  preserved admin users: ${wipePlan.preservedAdmins.length}`);
 }
 
 async function main(): Promise<void> {
@@ -507,7 +634,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  await runWipe(supabase, snapshot);
+  await runWipe(supabase, snapshot, args);
 
   const postWipeSnapshot = await buildSnapshot(supabase, "inventory", args.envFile);
   const postWipePath = await writeSnapshot(
@@ -520,8 +647,16 @@ async function main(): Promise<void> {
   console.log(`Remaining auth users: ${postWipeSnapshot.authUsers.length}`);
 }
 
-main().catch((error) => {
-  console.error("Launch reset failed:");
-  console.error(error instanceof Error ? error.message : error);
-  process.exit(1);
-});
+const isMainModule =
+  typeof process !== "undefined" &&
+  Array.isArray(process.argv) &&
+  process.argv.length > 1 &&
+  import.meta.url === pathToFileURL(process.argv[1]!).href;
+
+if (isMainModule) {
+  main().catch((error) => {
+    console.error("Launch reset failed:");
+    console.error(error instanceof Error ? error.message : error);
+    process.exit(1);
+  });
+}

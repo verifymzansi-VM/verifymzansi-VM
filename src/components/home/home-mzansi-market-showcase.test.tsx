@@ -170,12 +170,18 @@ describe("HomeMzansiMarketShowcase", () => {
     expect(screen.getByTestId("auto-scroll-rail")).toBeInTheDocument();
   });
 
-  it("returns null when no listings are available", async () => {
+  it("renders a branded empty state when no listings are available", async () => {
     const { client } = createSupabaseMock({ data: [] });
     vi.mocked(createClient).mockResolvedValue(client as never);
 
     const ui = await HomeMzansiMarketShowcase();
-    expect(ui).toBeNull();
+    render(ui);
+
+    expect(screen.getByText("No listings yet.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /post first listing/i })).toHaveAttribute(
+      "href",
+      "/post/create-listing"
+    );
   });
 
   it("filters placeholder listings before rendering the rail", async () => {

@@ -58,6 +58,18 @@ vi.mock("@/components/dashboard/listing-manager-mini", () => ({
   ListingManagerMini: () => <div>listing-manager-mini</div>,
 }));
 
+vi.mock("@/components/dashboard/dashboard-onboarding", () => ({
+  DashboardOnboarding: ({
+    isVerified,
+    hasListings,
+    hasBusinesses,
+  }: {
+    isVerified: boolean;
+    hasListings: boolean;
+    hasBusinesses: boolean;
+  }) => <div>{`dashboard-onboarding:${isVerified}:${hasListings}:${hasBusinesses}`}</div>,
+}));
+
 vi.mock("@/components/dashboard/quick-links", () => ({
   QuickLinks: () => <div>quick-links</div>,
 }));
@@ -104,9 +116,26 @@ describe("DashboardPage", () => {
   function stubDashboardQueries({
     profileStatus,
     verificationSteps,
+    listings = [],
+    activeListingsCount = 0,
+    activePromosCount = 0,
+    businessCount = 0,
   }: {
     profileStatus: string | null;
     verificationSteps: Array<{ step_type: string; status: string }>;
+    listings?: Array<{
+      id: string;
+      title: string | null;
+      status: string;
+      area?: string | null;
+      photos?: string[] | null;
+      view_count?: number | null;
+      created_at: string;
+      updated_at?: string | null;
+    }>;
+    activeListingsCount?: number;
+    activePromosCount?: number;
+    businessCount?: number;
   }) {
     mockSupabase.from.mockImplementation((table: string) => {
       if (table === "account_profiles") {
@@ -125,6 +154,18 @@ describe("DashboardPage", () => {
 
       if (table === "verification_steps") {
         return createQueryResult({ data: verificationSteps });
+      }
+
+      if (table === "listings") {
+        return createQueryResult({ data: listings, count: activeListingsCount });
+      }
+
+      if (table === "promotions") {
+        return createQueryResult({ data: [], count: activePromosCount });
+      }
+
+      if (table === "businesses") {
+        return createQueryResult({ data: [], count: businessCount });
       }
 
       if (table === "listing_views") {
@@ -151,6 +192,7 @@ describe("DashboardPage", () => {
 
     expect(screen.getByText("needs:verified:0")).toBeInTheDocument();
     expect(screen.getAllByText(/Verified/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("dashboard-onboarding:true:false:false")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Create Post|Post/i })).toHaveAttribute(
       "href",
       "/post/create"
@@ -170,6 +212,38 @@ describe("DashboardPage", () => {
     render(ui);
 
     expect(screen.getByText("needs:incomplete:2")).toBeInTheDocument();
+    expect(screen.getByText("dashboard-onboarding:false:false:false")).toBeInTheDocument();
     expect(screen.getByText(/2 steps to verify/i)).toBeInTheDocument();
+  });
+
+  it("shows the listing manager once the account has content", async () => {
+    stubDashboardQueries({
+      profileStatus: "verified",
+      verificationSteps: [
+        { step_type: "phone", status: "approved" },
+        { step_type: "id_doc", status: "approved" },
+        { step_type: "selfie", status: "approved" },
+        { step_type: "location", status: "approved" },
+      ],
+      listings: [
+        {
+          id: "listing-1",
+          title: "Starter listing",
+          status: "live",
+          area: "MZANSI_MARKET",
+          photos: [],
+          view_count: 0,
+          created_at: "2026-04-20T00:00:00.000Z",
+          updated_at: "2026-04-20T00:00:00.000Z",
+        },
+      ],
+      activeListingsCount: 1,
+    });
+
+    const ui = await DashboardPage();
+    render(ui);
+
+    expect(screen.getByText("listing-manager-mini")).toBeInTheDocument();
+    expect(screen.queryByText(/dashboard-onboarding:/i)).not.toBeInTheDocument();
   });
 });
