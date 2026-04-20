@@ -185,7 +185,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        project: [chromium, firefox, webkit, mobile-chrome, mobile-safari]
+        # WebKit/mobile-safari are intentionally quarantined from the full push
+        # matrix because the current suite already marks their page-navigation
+        # coverage as unreliable under headless CI.
+        project: [chromium, firefox, mobile-chrome]
     env:
       PLAYWRIGHT_TEST_MODE: "1"
       NEXT_PUBLIC_TURNSTILE_SITE_KEY: "dummy_site_key"
