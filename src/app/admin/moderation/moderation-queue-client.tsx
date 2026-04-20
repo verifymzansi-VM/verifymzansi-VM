@@ -150,7 +150,7 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
             onClick={() => openPreview(item)}
           >
             <CardContent className="py-4">
-              <div className="flex min-w-0 flex-wrap items-start gap-4">
+              <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-3 sm:gap-4">
                 {/* Thumbnail preview */}
                 {getThumbnailUrl(item) ? (
                   <div className="relative h-14 w-14 flex-shrink-0 rounded-md overflow-hidden bg-muted">
@@ -166,7 +166,7 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
                     <Package className="h-5 w-5 text-muted-foreground/50" />
                   </div>
                 )}
-                <div className="flex-1 min-w-0">
+                <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-medium truncate">
                       {item.title || `Item ${item.id.slice(0, 8)}`}
@@ -187,7 +187,7 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
                     Submitted {formatRelativeTime(item.created_at)}
                   </p>
                 </div>
-                <div className="flex w-full flex-wrap gap-1 justify-start sm:justify-end">
+                <div className="col-span-2 flex flex-wrap gap-1 border-t border-border/60 pt-3 sm:justify-end">
                   <Button
                     size="sm"
                     variant="outline"
