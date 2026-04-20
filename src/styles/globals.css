@@ -98,6 +98,9 @@
       "calt" 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    max-width: 100%;
+    overflow-x: hidden;
+    overflow-x: clip;
   }
 
   /* Only use smooth scrolling when the user hasn't opted for reduced motion */
@@ -113,12 +116,17 @@
 
   body {
     @apply bg-background text-foreground font-body;
+    max-width: 100%;
+    overflow-x: hidden;
+    overflow-x: clip;
   }
 
   @media (min-width: 1024px) {
     .desktop-page-scale {
       width: calc(100% / var(--desktop-page-scale));
-      margin-inline: auto;
+      margin-inline: calc((100% - (100% / var(--desktop-page-scale))) / 2);
+      overflow-x: hidden;
+      overflow-x: clip;
       zoom: var(--desktop-page-scale);
     }
   }
@@ -128,7 +136,9 @@
       .desktop-page-scale {
         width: calc(100% / var(--desktop-page-scale));
         min-height: calc(100vh / var(--desktop-page-scale));
-        margin-inline: auto;
+        margin-inline: calc((100% - (100% / var(--desktop-page-scale))) / 2);
+        overflow-x: hidden;
+        overflow-x: clip;
         transform: scale(var(--desktop-page-scale));
         transform-origin: top center;
       }
