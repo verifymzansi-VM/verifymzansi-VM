@@ -14,7 +14,7 @@ const routes = [
   },
   {
     name: "promotions",
-    path: "/promotions",
+    path: "/tourism-events",
     heading: /tourism & events/i,
   },
 ] as const;

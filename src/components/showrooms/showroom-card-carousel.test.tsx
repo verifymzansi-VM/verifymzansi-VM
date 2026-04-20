@@ -80,7 +80,7 @@ const mockItems: CarouselItem[] = [
   {
     id: "3",
     type: "promotion",
-    href: "/promotion/3",
+    href: "/tourism-events/3",
     title: "Test Event",
     description: "A test event",
     location: "Durban",

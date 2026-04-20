@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import CreatePromotionPage from "./page";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -640,9 +640,13 @@ describe("CreatePromotionPage", () => {
         expect(screen.getByLabelText(/Title/i)).toHaveValue("Saved Music Festival");
       });
 
-      fireEvent.click(screen.getByRole("button", { name: "Discard draft" }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Discard draft" }));
+      });
 
-      expect(screen.getByLabelText(/Title/i)).toHaveValue("");
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Title/i)).toHaveValue("");
+      });
       expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Draft discarded" }));
     });
   });

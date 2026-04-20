@@ -157,7 +157,7 @@ describe("PwaInstallPrompt", () => {
     "/error",
     "/mzansi-market",
     "/mzansi-business",
-    "/promotions",
+    "/tourism-events",
   ])(
     "suppresses rendering on blocked route %s even when iOS fallback conditions match",
     (blockedPath) => {

@@ -95,7 +95,7 @@ function getEditHref(id: string, area?: string | null): string {
     case "MZANSI_BUSINESS":
       return `/post/edit-business/${id}`;
     case "PROMOTIONS_EVENTS":
-      return `/post/edit-promotion/${id}`;
+      return `/post/edit-tourism/${id}`;
     case "BUSINESS_ADS":
       return `/post/edit-business/${id}`;
     case "MALL_SHOPS":

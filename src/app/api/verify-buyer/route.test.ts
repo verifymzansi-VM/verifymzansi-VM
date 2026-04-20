@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type NextRequest } from "next/server";
 
 const { mockFrom, mockCreateAdminClient, mockEnforceCsrfToken } = vi.hoisted(() => ({
@@ -56,7 +56,13 @@ function createQueryResponse(
 describe("POST /api/verify-buyer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-20T00:00:00.000Z"));
     mockCreateAdminClient.mockReturnValue({ from: mockFrom });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("returns 400 for malformed token payload", async () => {
@@ -123,7 +129,7 @@ describe("POST /api/verify-buyer", () => {
       createQueryResponse({
         first_name_initial: "S",
         issued_at: "2026-02-20T10:00:00.000Z",
-        expires_at: "2026-04-20T10:00:00.000Z",
+        expires_at: "2026-04-21T10:00:00.000Z",
         status: "valid",
       })
     );

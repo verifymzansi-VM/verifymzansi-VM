@@ -95,7 +95,7 @@ function getEditHref(item: DashboardItem) {
   if (item.source === "business") return `/post/edit-business/${item.id}`;
   switch (item.area) {
     case "PROMOTIONS_EVENTS":
-      return `/post/edit-promotion/${item.id}`;
+      return `/post/edit-tourism/${item.id}`;
     case "BUSINESS_ADS":
       return `/post/edit-business-ad/${item.id}`;
     case "MALL_SHOPS":
@@ -119,7 +119,7 @@ function getViewHref(item: DashboardItem) {
   if (item.source === "business") return `/mzansi-business/${item.id}`;
   switch (item.area) {
     case "PROMOTIONS_EVENTS":
-      return `/promotion/${item.id}`;
+      return `/tourism-events/${item.id}`;
     default:
       return `/listing/${item.id}`;
   }

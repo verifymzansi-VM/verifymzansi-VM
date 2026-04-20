@@ -6,9 +6,9 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("Dashboard promotions page", () => {
-  it("redirects to the unified My Posts page filtered by PROMOTIONS_EVENTS", async () => {
+  it("redirects legacy dashboard promotions URLs to the canonical tourism dashboard route", async () => {
     const { default: PromotionsPage } = await import("@/app/dashboard/promotions/page");
     await PromotionsPage();
-    expect(redirect).toHaveBeenCalledWith("/dashboard/listings?area=PROMOTIONS_EVENTS");
+    expect(redirect).toHaveBeenCalledWith("/dashboard/tourism-events");
   });
 });

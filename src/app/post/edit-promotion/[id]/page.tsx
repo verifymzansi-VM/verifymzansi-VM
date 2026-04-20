@@ -125,7 +125,7 @@ export default function EditPromotionPage() {
       try {
         const res = await fetch(`/api/promotions/${promotionId}`);
         if (!res.ok) {
-          setError("Promotion not found");
+          setError("Tourism & Events listing not found");
           return;
         }
         const data = await res.json();
@@ -433,14 +433,14 @@ export default function EditPromotionPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || "Failed to update promotion");
+        setError(data.error || "Failed to update tourism and events listing");
         if (data?.details && typeof data.details === "object") {
           setFieldErrors(data.details as Record<string, string>);
         }
         return;
       }
 
-      toast({ title: "Promotion updated!", variant: "success" });
+      toast({ title: "Tourism & Events listing updated!", variant: "success" });
       setUploadStatuses((c) => ({ ...c, saving: "done" }));
       router.push("/dashboard/listings?area=PROMOTIONS_EVENTS&updated=promotion");
     } catch (error: unknown) {
@@ -481,7 +481,7 @@ export default function EditPromotionPage() {
             title="Edit Event"
             breadcrumbs={[
               { label: "Dashboard", href: "/dashboard" },
-              { label: "Tourism & Events", href: "/dashboard/promotions" },
+              { label: "Tourism & Events", href: "/dashboard/tourism-events" },
               { label: "Edit" },
             ]}
           />
@@ -1082,7 +1082,7 @@ export default function EditPromotionPage() {
 
               <div className="flex justify-between">
                 <Button variant="outline" asChild className="h-11 gap-1">
-                  <Link href="/dashboard/promotions">
+                  <Link href="/dashboard/tourism-events">
                     <ArrowLeft className="h-4 w-4" />
                     Cancel
                   </Link>

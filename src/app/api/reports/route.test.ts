@@ -6,11 +6,13 @@ const {
   mockCreateAdminClient,
   mockCheckRateLimit,
   mockNotifyStaffForAdminEvent,
+  mockVerifyTurnstileToken,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
   mockCheckRateLimit: vi.fn(),
   mockNotifyStaffForAdminEvent: vi.fn().mockResolvedValue(true),
+  mockVerifyTurnstileToken: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -46,6 +48,10 @@ vi.mock("@/lib/notifications", () => ({
   notifyStaffForAdminEvent: mockNotifyStaffForAdminEvent,
 }));
 
+vi.mock("@/lib/utils/turnstile", () => ({
+  verifyTurnstileToken: mockVerifyTurnstileToken,
+}));
+
 import { POST } from "./route";
 
 function createRequest(body: Record<string, unknown>) {
@@ -71,6 +77,7 @@ describe("POST /api/reports", () => {
         insert: vi.fn().mockResolvedValue({ error: null }),
       }),
     });
+    mockVerifyTurnstileToken.mockResolvedValue({ success: true });
   });
 
   it("notifies staff when a report is submitted", async () => {

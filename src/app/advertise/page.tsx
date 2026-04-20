@@ -40,17 +40,23 @@ export default function AdvertisePage() {
     {
       name: "Mzansi Market",
       description: "Promote individual products, offers, and listings.",
-      href: "/mzansi-market",
+      browseHref: "/mzansi-market",
+      createHref: "/post/create-listing",
+      createLabel: "Create marketplace listing",
     },
     {
       name: "Mzansi Business",
       description: "Build a business profile that supports discovery and trust.",
-      href: "/mzansi-business",
+      browseHref: "/mzansi-business",
+      createHref: "/post/create-business",
+      createLabel: "Create business profile",
     },
     {
       name: "Tourism & Events",
       description: "Promote your tourism business and events with trusted visibility.",
-      href: "/promotions",
+      browseHref: "/tourism-events",
+      createHref: "/post/create-tourism?type=event",
+      createLabel: "Create event campaign",
     },
   ];
 
@@ -74,16 +80,22 @@ export default function AdvertisePage() {
             </PageHeader>
 
             <div className="max-w-3xl space-y-4 text-sm text-muted-foreground sm:text-base">
-              <p>Reach verified buyers with video-powered listings.</p>
-              <div className="flex flex-col gap-3 sm:flex-row">
+              <p>
+                Reach verified buyers with video-powered listings, trusted business profiles, and
+                event campaigns that can be boosted after approval.
+              </p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <Button asChild size="lg" className="gap-2">
-                  <Link href="/register">
-                    Create Account
+                  <Link href="/post/create">
+                    Start Advertising
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                 </Button>
                 <Button asChild size="lg" variant="outline">
-                  <Link href="/promotions">Explore promotions</Link>
+                  <Link href="/register">Create Account</Link>
+                </Button>
+                <Button asChild size="lg" variant="outline">
+                  <Link href="/tourism-events">Explore Tourism & Events</Link>
                 </Button>
               </div>
             </div>
@@ -141,9 +153,17 @@ export default function AdvertisePage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <p className="text-sm text-muted-foreground">{surface.description}</p>
-                  <Button asChild variant="outline" className="w-full sm:w-auto">
-                    <Link href={surface.href}>Open {surface.name}</Link>
-                  </Button>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                    <Button asChild className="w-full gap-2 sm:w-auto">
+                      <Link href={surface.createHref}>
+                        {surface.createLabel}
+                        <ArrowRight className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                    <Button asChild variant="outline" className="w-full sm:w-auto">
+                      <Link href={surface.browseHref}>Browse {surface.name}</Link>
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}

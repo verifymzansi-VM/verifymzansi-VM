@@ -58,6 +58,16 @@ function shouldUseSmartFit(
   return getCropRatio(mediaAspectRatio, containerAspectRatio) > SMART_FIT_CROP_THRESHOLD;
 }
 
+function getInitialMediaAspectRatio(
+  mediaWidth?: number | null,
+  mediaHeight?: number | null
+): number | null {
+  if (!mediaWidth || !mediaHeight || mediaWidth <= 0 || mediaHeight <= 0) {
+    return null;
+  }
+
+  return mediaWidth / mediaHeight;
+}
 function getForegroundMediaClassName(
   baseFitClassName: string,
   usesSmartFit: boolean,
@@ -207,6 +217,10 @@ export interface VideoCardPlayerProps {
   fitStrategy?: MediaFitStrategy;
   /** Aspect ratio of the media frame when using smart fit. */
   containerAspectRatio?: number;
+  /** Source media width in pixels when known ahead of image/video load. */
+  mediaWidth?: number | null;
+  /** Source media height in pixels when known ahead of image/video load. */
+  mediaHeight?: number | null;
   /** Controls whether the mute toggle should stay visible. */
   muteControlVisibility?: MuteControlVisibility;
   /** Shows a persistent play/pause toggle for ambient video previews. */
@@ -272,6 +286,8 @@ export function VideoCardPlayer({
   priority = false,
   fitStrategy = "contain",
   containerAspectRatio = DEFAULT_CONTAINER_ASPECT_RATIO,
+  mediaWidth,
+  mediaHeight,
   muteControlVisibility = "auto",
   showPlaybackControl = false,
   controlVariant = "default",
@@ -308,6 +324,8 @@ export function VideoCardPlayer({
         priority={priority}
         fitStrategy={fitStrategy}
         containerAspectRatio={containerAspectRatio}
+        mediaWidth={mediaWidth}
+        mediaHeight={mediaHeight}
         muteControlVisibility={muteControlVisibility}
         focalX={focalX}
         focalY={focalY}
@@ -342,6 +360,8 @@ export function VideoCardPlayer({
         priority={priority}
         fitStrategy={fitStrategy}
         containerAspectRatio={containerAspectRatio}
+        mediaWidth={mediaWidth}
+        mediaHeight={mediaHeight}
         muteControlVisibility={muteControlVisibility}
         focalX={focalX}
         focalY={focalY}
@@ -370,6 +390,8 @@ export function VideoCardPlayer({
       canHover={canHover}
       fitStrategy={fitStrategy}
       containerAspectRatio={containerAspectRatio}
+      mediaWidth={mediaWidth}
+      mediaHeight={mediaHeight}
       muteControlVisibility={muteControlVisibility}
       showPlaybackControl={showPlaybackControl}
       controlVariant={controlVariant}
@@ -419,6 +441,8 @@ interface VideoCardPlayerInnerProps {
   canHover: boolean;
   fitStrategy: MediaFitStrategy;
   containerAspectRatio: number;
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
   muteControlVisibility: MuteControlVisibility;
   showPlaybackControl: boolean;
   controlVariant: MediaControlVariant;
@@ -446,6 +470,8 @@ function VideoCardPlayerInner({
   canHover: _canHover,
   fitStrategy,
   containerAspectRatio,
+  mediaWidth,
+  mediaHeight,
   muteControlVisibility,
   showPlaybackControl,
   controlVariant,
@@ -478,7 +504,15 @@ function VideoCardPlayerInner({
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [posterError, setPosterError] = useState(false);
-  const [mediaAspectRatio, setMediaAspectRatio] = useState<number | null>(null);
+  const aspectRatioKey = `${normalizedSrc ?? ""}|${normalizedPoster ?? ""}|${mediaWidth ?? ""}|${mediaHeight ?? ""}`;
+  const [measuredMediaAspectRatio, setMeasuredMediaAspectRatio] = useState<{
+    key: string;
+    value: number;
+  } | null>(null);
+  const mediaAspectRatio =
+    measuredMediaAspectRatio?.key === aspectRatioKey
+      ? measuredMediaAspectRatio.value
+      : getInitialMediaAspectRatio(mediaWidth, mediaHeight);
   const [imageLoaded, setImageLoaded] = useState(false);
 
   const usesSmartFit = shouldUseSmartFit(fitStrategy, mediaAspectRatio, containerAspectRatio);
@@ -518,7 +552,10 @@ function VideoCardPlayerInner({
     const onPause = () => setIsPlaying(false);
     const onLoadedMetadata = () => {
       if (el.videoWidth > 0 && el.videoHeight > 0) {
-        setMediaAspectRatio(el.videoWidth / el.videoHeight);
+        setMeasuredMediaAspectRatio({
+          key: aspectRatioKey,
+          value: el.videoWidth / el.videoHeight,
+        });
       }
     };
     const onEndedNative = () => onEnded?.();
@@ -535,7 +572,7 @@ function VideoCardPlayerInner({
       el.removeEventListener("loadedmetadata", onLoadedMetadata);
       el.removeEventListener("ended", onEndedNative);
     };
-  }, [videoRef, onEnded]);
+  }, [aspectRatioKey, videoRef, onEnded]);
 
   // Sync external pause/play events (e.g. global manager arbitration) back to
   // the showroom's isActiveVideoPaused state so the slide timer pauses properly.
@@ -558,13 +595,19 @@ function VideoCardPlayerInner({
     };
   }, [videoRef, onPlaybackStateChange, showPlaybackControl]);
 
-  const handleImageLoad = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
-    const image = event.currentTarget;
-    if (image.naturalWidth > 0 && image.naturalHeight > 0) {
-      setMediaAspectRatio(image.naturalWidth / image.naturalHeight);
-    }
-    setImageLoaded(true);
-  }, []);
+  const handleImageLoad = useCallback(
+    (event: React.SyntheticEvent<HTMLImageElement>) => {
+      const image = event.currentTarget;
+      if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+        setMeasuredMediaAspectRatio({
+          key: aspectRatioKey,
+          value: image.naturalWidth / image.naturalHeight,
+        });
+      }
+      setImageLoaded(true);
+    },
+    [aspectRatioKey]
+  );
 
   const handlePosterError = useCallback(() => {
     setPosterError(true);
@@ -992,6 +1035,8 @@ interface HoverVideoPlayerProps {
   priority: boolean;
   fitStrategy: MediaFitStrategy;
   containerAspectRatio: number;
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
   muteControlVisibility: MuteControlVisibility;
   focalX?: number | null;
   focalY?: number | null;
@@ -1011,6 +1056,8 @@ function HoverVideoPlayer({
   priority,
   fitStrategy,
   containerAspectRatio,
+  mediaWidth,
+  mediaHeight,
   muteControlVisibility,
   focalX,
   focalY,
@@ -1024,7 +1071,15 @@ function HoverVideoPlayer({
   const [videoReady, setVideoReady] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [posterError, setPosterError] = useState(false);
-  const [mediaAspectRatio, setMediaAspectRatio] = useState<number | null>(null);
+  const aspectRatioKey = `${normalizedSrc ?? ""}|${normalizedPoster ?? ""}|${mediaWidth ?? ""}|${mediaHeight ?? ""}`;
+  const [measuredMediaAspectRatio, setMeasuredMediaAspectRatio] = useState<{
+    key: string;
+    value: number;
+  } | null>(null);
+  const mediaAspectRatio =
+    measuredMediaAspectRatio?.key === aspectRatioKey
+      ? measuredMediaAspectRatio.value
+      : getInitialMediaAspectRatio(mediaWidth, mediaHeight);
   const [hoverProgress, setHoverProgress] = useState(0);
 
   const usesSmartFit = shouldUseSmartFit(fitStrategy, mediaAspectRatio, containerAspectRatio);
@@ -1056,7 +1111,10 @@ function HoverVideoPlayer({
     const onPlaying = () => setVideoReady(true);
     const onLoadedMetadata = () => {
       if (el.videoWidth > 0 && el.videoHeight > 0) {
-        setMediaAspectRatio(el.videoWidth / el.videoHeight);
+        setMeasuredMediaAspectRatio({
+          key: aspectRatioKey,
+          value: el.videoWidth / el.videoHeight,
+        });
       }
     };
 
@@ -1066,7 +1124,7 @@ function HoverVideoPlayer({
       el.removeEventListener("playing", onPlaying);
       el.removeEventListener("loadedmetadata", onLoadedMetadata);
     };
-  }, [videoRef]);
+  }, [aspectRatioKey, videoRef]);
 
   // Track hover playback progress for YouTube-style red progress bar
   useEffect(() => {
@@ -1100,12 +1158,18 @@ function HoverVideoPlayer({
     [disableNativeDrag]
   );
 
-  const handleImageLoad = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
-    const image = event.currentTarget;
-    if (image.naturalWidth > 0 && image.naturalHeight > 0) {
-      setMediaAspectRatio(image.naturalWidth / image.naturalHeight);
-    }
-  }, []);
+  const handleImageLoad = useCallback(
+    (event: React.SyntheticEvent<HTMLImageElement>) => {
+      const image = event.currentTarget;
+      if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+        setMeasuredMediaAspectRatio({
+          key: aspectRatioKey,
+          value: image.naturalWidth / image.naturalHeight,
+        });
+      }
+    },
+    [aspectRatioKey]
+  );
 
   if (!normalizedSrc) {
     if (!normalizedPoster || posterError) {
@@ -1273,6 +1337,8 @@ interface FeedVideoPlayerProps {
   priority: boolean;
   fitStrategy: MediaFitStrategy;
   containerAspectRatio: number;
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
   muteControlVisibility: MuteControlVisibility;
   focalX?: number | null;
   focalY?: number | null;
@@ -1294,6 +1360,8 @@ function FeedVideoPlayer({
   priority,
   fitStrategy,
   containerAspectRatio,
+  mediaWidth,
+  mediaHeight,
   muteControlVisibility,
   focalX,
   focalY,
@@ -1312,7 +1380,15 @@ function FeedVideoPlayer({
   const [videoReady, setVideoReady] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [posterError, setPosterError] = useState(false);
-  const [mediaAspectRatio, setMediaAspectRatio] = useState<number | null>(null);
+  const aspectRatioKey = `${normalizedSrc ?? ""}|${normalizedPoster ?? ""}|${mediaWidth ?? ""}|${mediaHeight ?? ""}`;
+  const [measuredMediaAspectRatio, setMeasuredMediaAspectRatio] = useState<{
+    key: string;
+    value: number;
+  } | null>(null);
+  const mediaAspectRatio =
+    measuredMediaAspectRatio?.key === aspectRatioKey
+      ? measuredMediaAspectRatio.value
+      : getInitialMediaAspectRatio(mediaWidth, mediaHeight);
   const [tapIndicator, setTapIndicator] = useState<{
     key: number;
     action: "play" | "pause";
@@ -1345,7 +1421,10 @@ function FeedVideoPlayer({
     const onPlaying = () => setVideoReady(true);
     const onLoadedMetadata = () => {
       if (el.videoWidth > 0 && el.videoHeight > 0) {
-        setMediaAspectRatio(el.videoWidth / el.videoHeight);
+        setMeasuredMediaAspectRatio({
+          key: aspectRatioKey,
+          value: el.videoWidth / el.videoHeight,
+        });
       }
     };
 
@@ -1359,7 +1438,7 @@ function FeedVideoPlayer({
       el.removeEventListener("loadedmetadata", onLoadedMetadata);
       el.removeEventListener("ended", onEndedNative);
     };
-  }, [videoRef, onEnded]);
+  }, [aspectRatioKey, videoRef, onEnded]);
 
   const handleError = useCallback(() => {
     setHasError(true);
@@ -1378,12 +1457,18 @@ function FeedVideoPlayer({
     [disableNativeDrag]
   );
 
-  const handleImageLoad = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
-    const image = event.currentTarget;
-    if (image.naturalWidth > 0 && image.naturalHeight > 0) {
-      setMediaAspectRatio(image.naturalWidth / image.naturalHeight);
-    }
-  }, []);
+  const handleImageLoad = useCallback(
+    (event: React.SyntheticEvent<HTMLImageElement>) => {
+      const image = event.currentTarget;
+      if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+        setMeasuredMediaAspectRatio({
+          key: aspectRatioKey,
+          value: image.naturalWidth / image.naturalHeight,
+        });
+      }
+    },
+    [aspectRatioKey]
+  );
 
   const handleTap = useCallback(
     (e: React.MouseEvent | React.TouchEvent) => {

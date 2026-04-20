@@ -42,15 +42,31 @@ describe("AdvertisePage", () => {
       screen.getByRole("heading", { level: 1, name: "Advertise on VerifyMzansi" })
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /View pricing/i })).toHaveAttribute("href", "/pricing");
+    expect(screen.getByRole("link", { name: /Start Advertising/i })).toHaveAttribute(
+      "href",
+      "/post/create"
+    );
     expect(screen.getByRole("link", { name: /Create Account/i })).toHaveAttribute(
       "href",
       "/register"
     );
-    expect(screen.getByRole("link", { name: /Explore promotions/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Explore Tourism & Events/i })).toHaveAttribute(
       "href",
-      "/promotions"
+      "/tourism-events"
     );
-    expect(screen.getByRole("link", { name: /Open Mzansi Business/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Create marketplace listing/i })).toHaveAttribute(
+      "href",
+      "/post/create-listing"
+    );
+    expect(screen.getByRole("link", { name: /Create business profile/i })).toHaveAttribute(
+      "href",
+      "/post/create-business"
+    );
+    expect(screen.getByRole("link", { name: /Create event campaign/i })).toHaveAttribute(
+      "href",
+      "/post/create-tourism?type=event"
+    );
+    expect(screen.getByRole("link", { name: /Browse Mzansi Business/i })).toHaveAttribute(
       "href",
       "/mzansi-business"
     );

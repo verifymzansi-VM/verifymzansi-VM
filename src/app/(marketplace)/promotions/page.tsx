@@ -32,7 +32,7 @@ export const metadata: Metadata = {
   title: "Tourism & Events",
   description: "Discover tourism destinations, accommodations, and events across South Africa.",
   alternates: {
-    canonical: `${BASE_URL}/promotions`,
+    canonical: `${BASE_URL}/tourism-events`,
   },
 };
 
@@ -137,7 +137,7 @@ export default async function PromotionsPage() {
   )
     .filter((p) => !shouldHidePlaywrightFixtureRowWhenEnabled(p, hideFixtures))
     .filter((p) => !isPlaceholderMarketplaceContent(p.title, p.description))
-    .map((p) => promotionToCarouselItem(p, `/promotion/${p.id}`));
+    .map((p) => promotionToCarouselItem(p, `/tourism-events/${p.id}`));
 
   const carouselItems: CarouselItem[] = buildBalancedCarouselItems(tourismItems, eventItems);
 

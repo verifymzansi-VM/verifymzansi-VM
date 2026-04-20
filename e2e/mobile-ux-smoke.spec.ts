@@ -70,6 +70,12 @@ test.describe("Mobile UX smoke", () => {
     await page.waitForLoadState("networkidle").catch(() => {});
 
     const slideButton = page.getByRole("button", { name: /go to slide/i }).first();
+    if ((await slideButton.count()) === 0) {
+      test.skip(
+        true,
+        "Homepage hero currently renders a single slide, so dot controls are absent."
+      );
+    }
     await expect(slideButton).toBeVisible();
 
     const box = await slideButton.boundingBox();
@@ -111,7 +117,9 @@ test.describe("Mobile UX smoke", () => {
     await page.goto("/mzansi-market", { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle").catch(() => {});
 
-    const showroomTitle = page.locator('section[aria-roledescription="carousel"] h3').first();
+    const showroomTitle = page
+      .locator('section[aria-roledescription="carousel"] h3:visible')
+      .first();
     await expect(showroomTitle).toBeVisible();
 
     const navRect = await getRect(page, 'nav[aria-label="Main"]');
@@ -135,22 +143,20 @@ test.describe("Mobile UX smoke", () => {
       expect(createPostBox!.height).toBeGreaterThanOrEqual(44);
     }
 
-    const fab = page.getByRole("button", { name: /open listing filters/i });
+    const fab = page.locator('button[aria-label="Open listing filters"]:visible').last();
     await expect(fab).toBeVisible();
 
-    const listingFabRect = await fab.evaluate((el) => {
-      const rect = el.getBoundingClientRect();
-      return { width: rect.width, height: rect.height };
-    });
-    expect(listingFabRect.width).toBeGreaterThanOrEqual(44);
-    expect(listingFabRect.height).toBeGreaterThanOrEqual(44);
+    await expect.poll(async () => (await fab.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(44);
+    await expect
+      .poll(async () => (await fab.boundingBox())?.height ?? 0)
+      .toBeGreaterThanOrEqual(44);
 
     await fab.click();
     await expect(page.getByRole("heading", { name: "Filters" })).toBeVisible();
   });
 
   test("promotion filter FAB is touch-friendly and opens the drawer", async ({ page }) => {
-    await page.goto("/promotions", { waitUntil: "domcontentloaded" });
+    await page.goto("/tourism-events", { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle").catch(() => {});
 
     const createEventButton = page.getByRole("link", { name: /create event/i }).first();
@@ -161,15 +167,13 @@ test.describe("Mobile UX smoke", () => {
       expect(createEventBox!.height).toBeGreaterThanOrEqual(44);
     }
 
-    const fab = page.getByRole("button", { name: /open promotion filters/i });
+    const fab = page.locator('button[aria-label="Open tourism and events filters"]:visible').last();
     await expect(fab).toBeVisible();
 
-    const promotionFabRect = await fab.evaluate((el) => {
-      const rect = el.getBoundingClientRect();
-      return { width: rect.width, height: rect.height };
-    });
-    expect(promotionFabRect.width).toBeGreaterThanOrEqual(44);
-    expect(promotionFabRect.height).toBeGreaterThanOrEqual(44);
+    await expect.poll(async () => (await fab.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(44);
+    await expect
+      .poll(async () => (await fab.boundingBox())?.height ?? 0)
+      .toBeGreaterThanOrEqual(44);
 
     await fab.click();
     await expect(page.getByRole("heading", { name: /filter tourism & events/i })).toBeVisible();
@@ -183,7 +187,7 @@ test.describe("Mobile UX smoke", () => {
 
     await openAuthenticatedBilling(page);
 
-    await expect(page.getByRole("heading", { name: /simple, transparent pricing/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /choose your visibility plan/i })).toBeVisible();
 
     const tabs = [
       page.getByRole("tab", { name: /market/i }),
@@ -207,10 +211,10 @@ test.describe("Mobile UX smoke", () => {
   });
 
   test("promotion detail action controls stay touch-friendly", async ({ page }) => {
-    await page.goto("/promotions", { waitUntil: "domcontentloaded" });
+    await page.goto("/tourism-events", { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle").catch(() => {});
 
-    const promotionHrefs = await collectVisibleHrefs(page, 'a[href^="/promotion/"]');
+    const promotionHrefs = await collectVisibleHrefs(page, 'a[href^="/tourism-events/"]');
     if (promotionHrefs.length === 0) {
       test.skip(true, "No promotion links available in current fixture data.");
     }

@@ -45,7 +45,7 @@ describe("MarketplaceSwitcher", () => {
     );
     expect(screen.getByRole("link", { name: "Tourism & Events" })).toHaveAttribute(
       "href",
-      "/promotions"
+      "/tourism-events"
     );
   });
 

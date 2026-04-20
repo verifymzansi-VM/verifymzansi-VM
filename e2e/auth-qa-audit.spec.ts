@@ -371,8 +371,7 @@ test.describe("Login Flow", () => {
 // SECTION 4: Auth Guards
 // ============================================================
 test.describe("Auth Guards", () => {
-  test("TC07a — /verification redirects to /login with returnUrl", async ({ page }, testInfo) => {
-    test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
+  test("TC07a — /verification redirects to /login with returnUrl", async ({ page }) => {
     setupPageListeners(page);
 
     await page.goto("/verification");
@@ -385,15 +384,13 @@ test.describe("Auth Guards", () => {
     await screenshot(page, "TC07a-verification-redirect");
   });
 
-  test("TC07b — /dashboard redirects to /login with returnUrl", async ({ page }, testInfo) => {
-    test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
+  test("TC07b — /dashboard redirects to /login with returnUrl", async ({ page }) => {
     await page.goto("/dashboard");
     await page.waitForURL("**/login**", { timeout: 10000 });
     expect(page.url()).toContain("/login");
   });
 
-  test("TC07c — /billing redirects to /login with returnUrl", async ({ page }, testInfo) => {
-    test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
+  test("TC07c — /billing redirects to /login with returnUrl", async ({ page }) => {
     await page.goto("/billing");
     await page.waitForURL("**/login**", { timeout: 10000 });
     expect(page.url()).toContain("/login");
@@ -546,8 +543,7 @@ test.describe("Login Redirect", () => {
 // SECTION 8: Login page "registered=true" banner check
 // ============================================================
 test.describe("Post-Registration UX", () => {
-  test("TC13 — /login?registered=true shows confirmation", async ({ page }, testInfo) => {
-    test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
+  test("TC13 — /login?registered=true shows confirmation", async ({ page }) => {
     setupPageListeners(page);
 
     await page.goto("/login?registered=true");

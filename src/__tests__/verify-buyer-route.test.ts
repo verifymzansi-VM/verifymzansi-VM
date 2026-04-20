@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
 const { mockCreateAdminClient, mockCheckRateLimit, mockLoggerError, mockEnforceCsrfToken } =
@@ -42,8 +42,14 @@ function createRequest(body: unknown): NextRequest {
 describe("POST /api/verify-buyer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-20T00:00:00.000Z"));
     mockCheckRateLimit.mockResolvedValue({ limited: false });
     mockEnforceCsrfToken.mockReturnValue(null);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("returns 429 when buyer verification attempts are rate limited", async () => {

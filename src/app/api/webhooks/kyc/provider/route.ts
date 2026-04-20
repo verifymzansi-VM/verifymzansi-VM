@@ -109,6 +109,10 @@ function isExplicitLocalUnsignedWebhookBypass(request: NextRequest): boolean {
   );
 }
 
+function getConfiguredKycProvider(): string {
+  return (process.env.KYC_PROVIDER || "stub").trim().toLowerCase();
+}
+
 export async function POST(request: NextRequest) {
   try {
     // ── Rate limiting ─────────────────────────────────────────
@@ -128,6 +132,14 @@ export async function POST(request: NextRequest) {
     const isPlaywrightTestMode = checkPlaywrightTestMode();
     const allowUnsignedWebhook =
       isExplicitLocalUnsignedWebhookBypass(request) || isPlaywrightTestMode;
+    const kycProvider = getConfiguredKycProvider();
+
+    if (kycProvider === "stub" && !allowUnsignedWebhook) {
+      log.warn("Received provider webhook while KYC_PROVIDER=stub", {
+        hostname: request.nextUrl.hostname,
+      });
+      return NextResponse.json({ error: "KYC provider callbacks are disabled" }, { status: 503 });
+    }
 
     // ── Webhook signature validation ──────────────────────────
     // When KYC_WEBHOOK_SECRET is set, validate HMAC-SHA256 signature

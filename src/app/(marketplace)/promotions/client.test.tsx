@@ -124,7 +124,7 @@ vi.mock("@/components/listings/business-card", () => ({
 describe("PromotionsExplorer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    usePathnameMock.mockReturnValue("/promotions");
+    usePathnameMock.mockReturnValue("/tourism-events");
     useRouterMock.mockReturnValue({ replace: replaceMock });
     useSearchParamsMock.mockReturnValue(
       new URLSearchParams() as ReturnType<typeof useSearchParamsMock>
@@ -172,5 +172,40 @@ describe("PromotionsExplorer", () => {
       expect.stringContaining("tab=events"),
       expect.anything()
     );
+  });
+
+  it("exposes canonical tourism creation links on the tourism tab", async () => {
+    render(<PromotionsExplorer />);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+
+    const links = screen.getAllByRole("link", { name: /List Tourism Business/i });
+    expect(links.length).toBeGreaterThan(0);
+    for (const link of links) {
+      expect(link).toHaveAttribute("href", "/post/create-tourism");
+    }
+  });
+
+  it("exposes canonical event creation links on the events tab", async () => {
+    useSearchParamsMock.mockReturnValue(
+      new URLSearchParams("tab=events") as ReturnType<typeof useSearchParamsMock>
+    );
+
+    render(<PromotionsExplorer />);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/api/promotions?page=1&limit=24&type=event"),
+        expect.anything()
+      );
+    });
+
+    const links = screen.getAllByRole("link", { name: /Create Event/i });
+    expect(links.length).toBeGreaterThan(0);
+    for (const link of links) {
+      expect(link).toHaveAttribute("href", "/post/create-tourism?type=event");
+    }
   });
 });

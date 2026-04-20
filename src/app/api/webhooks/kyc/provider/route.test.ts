@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
+import crypto from "crypto";
 
 // ── Hoisted mocks ────────────────────────────────────────────
 
@@ -23,9 +24,26 @@ import { POST } from "./route";
 function createMockRequest(body: Record<string, unknown>) {
   return {
     json: async () => body,
+    text: async () => JSON.stringify(body),
     nextUrl: new URL("http://localhost/api/webhooks/kyc/provider"),
     headers: {
       get: vi.fn(() => null),
+    },
+  } as unknown as NextRequest;
+}
+
+function createSignedMockRequest(body: Record<string, unknown>, secret: string) {
+  const rawBody = JSON.stringify(body);
+  const signature = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
+
+  return {
+    json: async () => JSON.parse(rawBody),
+    text: async () => rawBody,
+    nextUrl: new URL("https://verifymzansi.com/api/webhooks/kyc/provider"),
+    headers: {
+      get: vi.fn((name: string) =>
+        name.toLowerCase() === "x-webhook-signature" ? signature : null
+      ),
     },
   } as unknown as NextRequest;
 }
@@ -54,6 +72,7 @@ describe("POST /api/webhooks/kyc/provider", () => {
     mockLogAuditEvent.mockResolvedValue(undefined);
     vi.unstubAllEnvs();
     vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("KYC_PROVIDER", "stub");
     vi.stubEnv("ENABLE_DEV_KYC_WEBHOOK_BYPASS", "1");
     delete process.env.KYC_WEBHOOK_SECRET;
     delete process.env.PLAYWRIGHT_TEST_MODE;
@@ -419,11 +438,68 @@ describe("POST /api/webhooks/kyc/provider", () => {
     }
   });
 
+  it("returns 503 when signed provider callbacks hit stub mode outside explicit test bypass", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("KYC_PROVIDER", "stub");
+    vi.stubEnv("KYC_WEBHOOK_SECRET", "signed-secret");
+    delete process.env.ENABLE_DEV_KYC_WEBHOOK_BYPASS;
+
+    const res = await POST(
+      createSignedMockRequest({ provider_ref: "ref-1", status: "approved" }, "signed-secret")
+    );
+
+    expect(res.status).toBe(503);
+    await expect(res.json()).resolves.toEqual({ error: "KYC provider callbacks are disabled" });
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
   it("allows unsigned webhook payloads only in explicit local development mode", async () => {
     const res = await POST(createMockRequest({}));
 
     // Should hit payload validation (400) instead of 503
     expect(res.status).toBe(400);
+  });
+
+  it("accepts a valid signed webhook when a non-stub provider is configured", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("KYC_PROVIDER", "veriff");
+    vi.stubEnv("KYC_WEBHOOK_SECRET", "signed-secret");
+    delete process.env.ENABLE_DEV_KYC_WEBHOOK_BYPASS;
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "kyc_provider_results") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: providerResult, error: null }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ error: null }),
+          }),
+        };
+      }
+      if (table === "kyc_artifacts") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+            }),
+          }),
+        };
+      }
+      return {};
+    });
+
+    const res = await POST(
+      createSignedMockRequest({ provider_ref: "ref-1", status: "approved" }, "signed-secret")
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      acknowledged: true,
+      provider_result_id: "pr-1",
+    });
   });
 
   it("sets auto_status to needs_manual_review for ambiguous result", async () => {

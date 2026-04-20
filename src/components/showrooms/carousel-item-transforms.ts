@@ -115,7 +115,7 @@ export function promotionToCarouselItem(
   return {
     id: p.id,
     type: "promotion",
-    href: hrefOverride ?? `/promotion/${p.id}`,
+    href: hrefOverride ?? `/tourism-events/${p.id}`,
     title: p.title,
     description: p.description ?? undefined,
     location: p.location_city || p.location_province || "South Africa",

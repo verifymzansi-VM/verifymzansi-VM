@@ -140,7 +140,7 @@ export async function HomePromotionsShowcase() {
         badge="Tourism & Events"
         title="Tourism & Events"
         description="Destinations, stays, and live experiences across South Africa."
-        href="/promotions"
+        href="/tourism-events"
         ctaLabel="View All"
         tone="teal"
         icon={<TreePalm className="h-3.5 w-3.5" />}
@@ -175,7 +175,7 @@ export async function HomePromotionsShowcase() {
       badge="Tourism & Events"
       title="Tourism & Events"
       description="Destinations, stays, and live experiences across South Africa presented in the same hero-led visual language."
-      href="/promotions"
+      href="/tourism-events"
       ctaLabel="View All"
       tone="teal"
       icon={<TreePalm className="h-3.5 w-3.5" />}

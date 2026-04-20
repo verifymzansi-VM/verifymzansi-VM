@@ -163,7 +163,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             : isHidden
               ? `"${shortTitle}" has been hidden by moderation.`
               : `"${shortTitle}" needs changes before it can go live.`,
-          href: "/dashboard/promotions",
+          href: "/dashboard/tourism-events",
         });
       } catch {
         // non-fatal

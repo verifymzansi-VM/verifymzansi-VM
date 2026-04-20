@@ -28,7 +28,7 @@ const destinations: HomeOnboardingDestination[] = [
     id: "tourism-events",
     title: "Tourism & Events",
     description: "Tourism destinations, accommodations, and events near you.",
-    href: "/promotions",
+    href: "/tourism-events",
     iconKey: "tourism",
     accentClass: "text-teal-400",
     iconBgClass: "bg-teal-500/10",
@@ -88,7 +88,7 @@ describe("HomeOnboardingDestinations", () => {
     );
     expect(screen.getByRole("link", { name: /Tourism & Events/i })).toHaveAttribute(
       "href",
-      "/promotions"
+      "/tourism-events"
     );
   });
 

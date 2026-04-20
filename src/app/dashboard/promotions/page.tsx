@@ -6,5 +6,5 @@ export const metadata = {
 };
 
 export default function PromotionsPage() {
-  redirect("/dashboard/listings?area=PROMOTIONS_EVENTS");
+  redirect("/dashboard/tourism-events");
 }

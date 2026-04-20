@@ -8,6 +8,7 @@ const {
   mockNotifyStaffForAdminEvent,
   mockSendDsarSubmissionEmail,
   mockLogAuditEvent,
+  mockVerifyTurnstileToken,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
@@ -15,6 +16,7 @@ const {
   mockNotifyStaffForAdminEvent: vi.fn().mockResolvedValue(true),
   mockSendDsarSubmissionEmail: vi.fn().mockResolvedValue(undefined),
   mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
+  mockVerifyTurnstileToken: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -31,6 +33,10 @@ vi.mock("@/lib/services/audit", () => ({
 
 vi.mock("@/lib/services/email", () => ({
   sendDsarSubmissionEmail: mockSendDsarSubmissionEmail,
+}));
+
+vi.mock("@/lib/utils/turnstile", () => ({
+  verifyTurnstileToken: mockVerifyTurnstileToken,
 }));
 
 vi.mock("@/lib/utils/logger", () => ({
@@ -92,6 +98,7 @@ describe("POST /api/dsar/submit", () => {
         }),
       }),
     });
+    mockVerifyTurnstileToken.mockResolvedValue({ success: true });
   });
 
   it("notifies DSAR staff when a request is submitted", async () => {

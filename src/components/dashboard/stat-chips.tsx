@@ -48,7 +48,7 @@ const defaultChips = (counts: {
   {
     label: "Tourism & Events",
     value: counts.activePromos,
-    href: "/dashboard/promotions",
+    href: "/dashboard/tourism-events",
     icon: Megaphone,
     toneClassName: "bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-100",
   },

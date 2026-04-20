@@ -24,7 +24,7 @@ test.describe("Promotions showroom", () => {
       pageErrors.push(String(error));
     });
 
-    await page.goto("/promotions", { waitUntil: "domcontentloaded" });
+    await page.goto("/tourism-events", { waitUntil: "domcontentloaded" });
     await page.locator("body").waitFor({ state: "visible" });
     await page.getByRole("heading", { level: 1, name: "Tourism & Events" }).waitFor({
       state: "visible",

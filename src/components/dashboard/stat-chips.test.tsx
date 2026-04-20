@@ -13,7 +13,7 @@ describe("defaultChips", () => {
     expect(chips).toHaveLength(4);
     expect(chips[3]).toMatchObject({
       label: "Tourism & Events",
-      href: "/dashboard/promotions",
+      href: "/dashboard/tourism-events",
       value: 4,
     });
   });

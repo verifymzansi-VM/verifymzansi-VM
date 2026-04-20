@@ -104,7 +104,7 @@ export function PromotionContactActions({
   }
 
   async function handleShare() {
-    const url = `${window.location.origin}/promotion/${promotionId}`;
+    const url = `${window.location.origin}/tourism-events/${promotionId}`;
     if (navigator.share) {
       try {
         await navigator.share({ title: "Check out this promotion on VerifyMzansi", url });

@@ -119,7 +119,7 @@ describe("HomePage", () => {
       screen.getByRole("link", {
         name: /Tourism & Events/i,
       })
-    ).toHaveAttribute("href", "/promotions");
+    ).toHaveAttribute("href", "/tourism-events");
   });
 
   it("links onboarding destinations and actions to the expected pages", async () => {

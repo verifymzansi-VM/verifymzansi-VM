@@ -5,6 +5,7 @@ type MediaRoute = {
   path: string;
   readySelector: string;
   apiPattern: string;
+  apiPath: string;
   body: unknown;
 };
 
@@ -12,9 +13,9 @@ const routes: MediaRoute[] = [
   {
     name: "mzansi-market",
     path: "/mzansi-market",
-    readySelector:
-      '[data-testid="mzansi-market-grid-ready"], [data-testid="mzansi-market-grid-empty"]',
-    apiPattern: "**/api/listings?**",
+    readySelector: 'a[href^="/listing/"]',
+    apiPattern: "**/api/listings**",
+    apiPath: "/api/listings",
     body: {
       listings: [
         {
@@ -55,9 +56,9 @@ const routes: MediaRoute[] = [
   {
     name: "mzansi-business",
     path: "/mzansi-business",
-    readySelector:
-      '[data-testid="mzansi-business-grid-ready"], [data-testid="mzansi-business-grid-empty"]',
-    apiPattern: "**/api/businesses?**",
+    readySelector: 'a[href^="/mzansi-business/"]',
+    apiPattern: "**/api/businesses**",
+    apiPath: "/api/businesses",
     body: {
       businesses: [
         {
@@ -88,9 +89,10 @@ const routes: MediaRoute[] = [
   },
   {
     name: "promotions",
-    path: "/promotions",
-    readySelector: 'h1:has-text("Tourism & Events"), a[href^="/promotion/"]',
-    apiPattern: "**/api/promotions?**",
+    path: "/tourism-events?tab=events&type=event",
+    readySelector: 'a[href^="/tourism-events/"]',
+    apiPattern: "**/api/promotions**",
+    apiPath: "/api/promotions",
     body: {
       promotions: [
         {
@@ -128,6 +130,29 @@ const routes: MediaRoute[] = [
 ];
 
 async function gotoReady(page: Page, route: MediaRoute) {
+  await page.addInitScript(
+    ({ apiPath, body }) => {
+      const originalFetch = window.fetch.bind(window);
+
+      window.fetch = async (input, init) => {
+        const requestUrl =
+          typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+
+        if (requestUrl.includes(apiPath)) {
+          return new Response(JSON.stringify(body), {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          });
+        }
+
+        return originalFetch(input, init);
+      };
+    },
+    { apiPath: route.apiPath, body: route.body }
+  );
+
   await page.route(route.apiPattern, async (request) => {
     await request.fulfill({
       status: 200,

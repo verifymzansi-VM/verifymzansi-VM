@@ -3,6 +3,13 @@
 **Date:** 2026-03-01 **Branch:** test/addon-route-coverage → merging to master
 **Status:** NOT LAUNCH-READY (fixable — see below)
 
+> 2026-04-20 update: this document contains historical findings from an earlier
+> pass. The repo now has a live `/advertise` landing page, homepage advertise
+> CTA, and header/footer advertise links. The remaining advertising hardening
+> focus is no longer route discovery; it is conversion consistency into the
+> canonical create flows (`/post/create`, `/post/create-listing`,
+> `/post/create-business`, and `/post/create-tourism?type=event`).
+
 ---
 
 ## 1) Summary (Plain English)
@@ -45,9 +52,10 @@ The platform differentiates from competitors through **identity verification
 
 1. **CRITICAL:** The advertising/promotions feature — described as "the big part
    of this platform" — is underbuilt. The current `/promotions` page is a
-   passive display of boosted items. There is no self-service advertising flow,
-   no standalone ad campaigns, no "Advertise Here" CTA, and advertising is not
-   prominently positioned in navigation or homepage.
+   passive display of boosted items. Earlier discovery/navigation gaps have
+   largely been closed, but launch readiness still depends on a reliable
+   self-service conversion path from advertise surfaces into the correct create
+   flows.
 2. **CRITICAL:** Cloudflare build fails on Windows (symlink EPERM error). Must
    build from Ubuntu/WSL.
 3. **HIGH:** Type mismatches between `database.ts` post types and actual API
@@ -70,6 +78,10 @@ secondary feature (boost/featured/urgent add-ons on existing listings).
 
 **What Exists:**
 
+- `src/app/advertise/page.tsx` — Dedicated advertising landing page
+- `src/app/page.tsx` — Homepage advertise CTA and promotion-aware copy
+- `src/components/layout/header.tsx` — Desktop/mobile advertise CTA
+- `src/components/layout/footer.tsx` — Footer advertise entry
 - `src/app/(marketplace)/promotions/page.tsx` — Shows boosted/featured/urgent
   listings + storefront/business posts (passive display only)
 - `src/app/dashboard/promotions/page.tsx` — Shows user's active promotions
@@ -81,24 +93,19 @@ secondary feature (boost/featured/urgent add-ons on existing listings).
 
 **What's Missing:**
 
-1. **No "Advertise" CTA on homepage** — Homepage has no advertising entry point.
-   The category grid at `src/app/page.tsx:96-169` has 8 categories but none for
-   advertising/promotions.
-2. **No prominent "Advertise" button in header** — The header at
-   `src/components/layout/header.tsx` only has "+ Post" for authenticated users.
-   There's no "Advertise" or "Promote" call-to-action.
-3. **No link to Promotions in footer** —
-   `src/components/layout/footer.tsx:27-48` lists Mzansi Market, Mall Shops,
-   Business Ads but NOT Promotions.
-4. **The `/promotions` page is read-only** — It shows promoted content but
+1. **Canonical create flow was inconsistent** — Several live links already used
+   `/post/create-tourism?type=event`, but the tourism/events editor did not
+   honor that query parameter on first render, so event CTAs could land on the
+   wrong editor mode.
+2. **The `/promotions` page is read-only** — It shows promoted content but
    doesn't let users CREATE promotions or start advertising campaigns directly
    from that page.
-5. **No self-service advertising landing page** — There should be an
-   `/advertise` page explaining how to advertise on the platform (pricing,
-   reach, options), targeted at both existing sellers AND external advertisers.
-6. **Post creation page doesn't mention advertising** —
-   `src/app/post/create/page.tsx:14-42` offers three options but none
-   specifically for "Create a Promotion" or "Advertise."
+3. **Advertise page needed direct create-surface CTAs** — The landing page was
+   present, but it pushed users mostly toward browsing instead of directly into
+   listing/business/event creation.
+4. **Post creation page didn't explain the advertising path** —
+   `src/app/post/create/page.tsx:14-42` offers three options but none explained
+   how posting and paid visibility connect.
 
 **Fix Required:** See Section 4 for implementation details.
 

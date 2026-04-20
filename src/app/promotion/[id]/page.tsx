@@ -23,12 +23,15 @@ export async function generateMetadata({ params }: PromotionDetailPageProps): Pr
     .single();
 
   if (!promotion) {
-    return { title: "Promotion Not Found" };
+    return { title: "Tourism & Events Listing Not Found" };
   }
 
   return {
-    title: `${promotion.title} | Promotions`,
+    title: `${promotion.title} | Tourism & Events`,
     description: promotion.description?.slice(0, 160),
+    alternates: {
+      canonical: `/tourism-events/${id}`,
+    },
   };
 }
 
@@ -113,7 +116,7 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
             title={promotion.title}
             breadcrumbs={[
               { label: "Home", href: "/" },
-              { label: "Tourism & Events", href: "/promotions" },
+              { label: "Tourism & Events", href: "/tourism-events" },
               { label: promotion.title },
             ]}
           />

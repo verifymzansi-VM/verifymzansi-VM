@@ -273,6 +273,25 @@ describe("VideoCardPlayer", () => {
     );
   });
 
+  it("uses known media dimensions to apply smart-fit before poster load", () => {
+    render(
+      <VideoCardPlayer
+        src="https://example.com/clip.mp4"
+        posterUrl="https://example.com/poster.jpg"
+        alt="Clip"
+        mode="ambient"
+        fitStrategy="smart"
+        mediaWidth={2048}
+        mediaHeight={768}
+      />
+    );
+
+    const poster = screen.getByAltText("Clip");
+
+    expect(poster).toHaveAttribute("data-media-fit", "smart");
+    expect(poster).toHaveClass("object-contain");
+  });
+
   it("applies smart-fit to video elements after metadata establishes an extreme aspect ratio", () => {
     render(
       <VideoCardPlayer

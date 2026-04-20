@@ -8,7 +8,7 @@ function isMobileProject(projectName: string): boolean {
 const routes = [
   { name: "mzansi-market", path: "/mzansi-market" },
   { name: "mzansi-business", path: "/mzansi-business" },
-  { name: "promotions", path: "/promotions" },
+  { name: "tourism-events", path: "/tourism-events" },
 ] as const;
 
 test.describe("Marketplace showroom CTA touch targets", () => {

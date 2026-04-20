@@ -20,9 +20,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "hourly",
       priority: 0.9,
     },
-    { url: `${BASE_URL}/promotions`, lastModified: now, changeFrequency: "hourly", priority: 0.8 },
     {
-      url: `${BASE_URL}/promotions/events`,
+      url: `${BASE_URL}/tourism-events`,
+      lastModified: now,
+      changeFrequency: "hourly",
+      priority: 0.8,
+    },
+    {
+      url: `${BASE_URL}/tourism-events?type=event`,
       lastModified: now,
       changeFrequency: "daily",
       priority: 0.7,

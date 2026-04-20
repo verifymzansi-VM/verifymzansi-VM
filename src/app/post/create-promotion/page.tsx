@@ -576,7 +576,10 @@ function CreatePromotionContent() {
           }
         }
 
-        const normalized = normalizeCreatePostError(payload, "Failed to create promotion.");
+        const normalized = normalizeCreatePostError(
+          payload,
+          "Failed to create tourism and events listing."
+        );
         const targetStep = getStepForServerErrors(normalized.fieldErrors);
         const count = Object.keys(normalized.fieldErrors).length;
         if (count > 0) {

@@ -12,10 +12,13 @@ const { businessPreviewProps, promotionPreviewProps } = vi.hoisted(() => ({
   businessPreviewProps: { current: null as Record<string, unknown> | null },
   promotionPreviewProps: { current: null as Record<string, unknown> | null },
 }));
+const { searchParamGetMock } = vi.hoisted(() => ({
+  searchParamGetMock: vi.fn(),
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
-  useSearchParams: () => ({ get: vi.fn().mockReturnValue(null) }),
+  useSearchParams: () => ({ get: searchParamGetMock }),
 }));
 
 vi.mock("@/hooks/use-auth", () => ({
@@ -248,6 +251,7 @@ describe("CreateTourismPage type switch behavior", () => {
     vi.clearAllMocks();
     mediaFilesByLabel.clear();
     lastPromotionCardProps.current = null;
+    searchParamGetMock.mockReturnValue(null);
     global.URL.createObjectURL = vi.fn(() => "blob:tourism-preview");
     global.URL.revokeObjectURL = vi.fn();
     global.fetch = vi.fn().mockResolvedValue({
@@ -297,6 +301,15 @@ describe("CreateTourismPage type switch behavior", () => {
 
     expect(screen.getByLabelText("Business Name *")).toBeInTheDocument();
     expect(screen.queryByLabelText("Event Title *")).not.toBeInTheDocument();
+  });
+
+  it("honors the canonical event creation query param on first render", () => {
+    searchParamGetMock.mockImplementation((key: string) => (key === "type" ? "event" : null));
+
+    render(<CreateTourismPage />);
+
+    expect(screen.getByLabelText("Event Title *")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Business Name *")).not.toBeInTheDocument();
   });
 
   it("maps event API 422 photo-limit errors to the media step", async () => {

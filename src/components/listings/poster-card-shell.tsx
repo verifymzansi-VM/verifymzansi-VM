@@ -125,8 +125,8 @@ export function PosterCardShell({
   videoDuration,
   focalX,
   focalY,
-  mediaWidth: _mediaWidth,
-  mediaHeight: _mediaHeight,
+  mediaWidth,
+  mediaHeight,
   videoMode,
   onVideoEnded,
   showPlaybackControl = false,
@@ -320,6 +320,8 @@ export function PosterCardShell({
             priority={priority}
             focalX={focalX}
             focalY={focalY}
+            mediaWidth={mediaWidth}
+            mediaHeight={mediaHeight}
             onEnded={onVideoEnded}
             showPlaybackControl={showPlaybackControl}
             controlVariant={mediaControlVariant}

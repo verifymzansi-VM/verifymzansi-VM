@@ -612,7 +612,7 @@ describe("POST /api/promotions", () => {
       expect.objectContaining({
         userId: USER_ID,
         title: "Tourism & Event post submitted",
-        href: "/dashboard/promotions",
+        href: "/dashboard/tourism-events",
       })
     );
     expect(mockNotifyStaffForAdminEvent).toHaveBeenCalledWith({

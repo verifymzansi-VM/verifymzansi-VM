@@ -169,7 +169,7 @@ export const PromotionCard = memo(function PromotionCard({
 
   return (
     <PosterCardShell
-      href={`/promotion/${id}`}
+      href={`/tourism-events/${id}`}
       title={title}
       mediaUrl={imageUrl}
       posterUrl={posterUrl}

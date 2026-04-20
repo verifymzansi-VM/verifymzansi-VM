@@ -179,7 +179,7 @@ describe("promotionToCarouselItem", () => {
     expect(item).toMatchObject({
       id: "p1",
       type: "promotion",
-      href: "/promotion/p1",
+      href: "/tourism-events/p1",
       title: "Food Festival",
       description: "Live music and food",
       location: "Durban",

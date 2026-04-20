@@ -33,9 +33,9 @@ export default function PromotionError({
           <Button
             variant="outline"
             className="h-11 w-full sm:w-auto"
-            onClick={() => (window.location.href = "/promotions")}
+            onClick={() => (window.location.href = "/tourism-events")}
           >
-            Browse Promotions
+            Browse Tourism & Events
           </Button>
           <Button className="h-11 w-full sm:w-auto" onClick={() => reset()}>
             Retry

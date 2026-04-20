@@ -131,7 +131,7 @@ describe("EditListingPage", () => {
         location_suburb: "Sandton",
         price_negotiable: true,
         contact_methods: ["call", "whatsapp"],
-        photos: ["https://example.com/photo.jpg"],
+        photos: ["https://media.verifymzansi.com/listings/photo.jpg"],
         videos: [],
         video_thumbnail: null,
         logo_url: "https://media.verifymzansi.com/listings/existing-logo.jpg",

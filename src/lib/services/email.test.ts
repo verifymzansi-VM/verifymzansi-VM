@@ -27,6 +27,7 @@ import {
 describe("email service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv("NODE_ENV", "test");
     vi.stubEnv("RESEND_API_KEY", "re_test_mock_key");
     mockSend.mockResolvedValue({ data: { id: "msg-123" }, error: null });
   });

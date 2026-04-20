@@ -207,7 +207,7 @@ export async function POST(request: Request) {
             : table === "storefronts"
               ? "/dashboard/storefronts"
               : table === "promotions"
-                ? "/dashboard/promotions"
+                ? "/dashboard/tourism-events"
                 : table === "business_profiles"
                   ? "/dashboard/business-profiles"
                   : "/dashboard/businesses";

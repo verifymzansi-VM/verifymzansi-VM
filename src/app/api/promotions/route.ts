@@ -572,7 +572,7 @@ export async function POST(request: NextRequest) {
         type: "info",
         title: "Tourism & Event post submitted",
         message: `\"${data.title}\" was submitted for review.`,
-        href: "/dashboard/promotions",
+        href: "/dashboard/tourism-events",
       });
     }
 

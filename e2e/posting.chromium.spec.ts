@@ -297,10 +297,10 @@ test.describe("Posting flows in Chromium", () => {
     const { promotionId, promotionTitle } = await completePromotionCreate(page);
     const updatedPromotionTitle = `Playwright Weekend Deal Updated ${RUN_SUFFIX}`;
 
-    await page.goto("/dashboard/promotions");
+    await page.goto("/dashboard/tourism-events");
     await expect(page.getByText(promotionTitle).first()).toBeVisible();
 
-    await page.goto(`/post/edit-promotion/${promotionId}`);
+    await page.goto(`/post/edit-tourism/${promotionId}`);
     await page.getByLabel(/Event Title|Title/i).fill(updatedPromotionTitle);
     const updatePromise = page.waitForResponse(
       (response) =>
@@ -312,7 +312,7 @@ test.describe("Posting flows in Chromium", () => {
     await updatePromise;
     await expect(page).toHaveURL(PROMOTION_DASHBOARD_URL);
 
-    await page.goto("/dashboard/promotions");
+    await page.goto("/dashboard/tourism-events");
     await expect(page.getByText(updatedPromotionTitle).first()).toBeVisible();
   });
 });

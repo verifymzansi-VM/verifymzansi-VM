@@ -98,12 +98,17 @@ describe("CreatePostPage", () => {
     expect(screen.getAllByText("Mzansi Business").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Tourism & Events").length).toBeGreaterThan(0);
     expect(screen.getByText("Pick a category to start posting.")).toBeInTheDocument();
+    expect(screen.getByText("Need more visibility after launch?")).toBeInTheDocument();
     expect(screen.getByText("Sell, buy, or rent a single item.")).toBeInTheDocument();
     expect(screen.getByText("Create your full business profile.")).toBeInTheDocument();
     expect(screen.getByText("List accommodation, attractions, or events.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Mzansi Market/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Mzansi Business/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Tourism & Events/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /See advertising options/i })).toHaveAttribute(
+      "href",
+      "/advertise"
+    );
   });
 
   it("sends verified users directly to the create forms", async () => {

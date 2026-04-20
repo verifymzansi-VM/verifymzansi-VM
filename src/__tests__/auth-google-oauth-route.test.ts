@@ -41,6 +41,7 @@ function createRequest(body: unknown, url = "http://localhost:3000/api/auth/oaut
 describe("POST /api/auth/oauth/google", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
     mockCheckLocalRateLimit.mockReturnValue({ limited: false });
   });
 

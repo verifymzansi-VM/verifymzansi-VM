@@ -413,7 +413,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         message: movedBackToReview
           ? `\"${data.title}\" was updated and is now pending moderation.`
           : `\"${data.title}\" was updated successfully.`,
-        href: "/dashboard/promotions",
+        href: "/dashboard/tourism-events",
       });
     }
 

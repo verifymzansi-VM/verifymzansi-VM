@@ -169,7 +169,7 @@ describe("POST /api/admin/content/decide", () => {
       expect.objectContaining({
         userId: "owner-1",
         title: "Promotion approved!",
-        href: "/dashboard/promotions",
+        href: "/dashboard/tourism-events",
       })
     );
   });

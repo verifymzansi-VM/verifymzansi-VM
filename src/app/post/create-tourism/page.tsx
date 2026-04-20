@@ -275,9 +275,33 @@ export default function CreateTourismPage() {
   );
 }
 
+function parseRequestedTourismListingType(value: string | null): TourismListingType | null {
+  const normalized = value?.trim().toLowerCase();
+
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized === "event" || normalized === "events") {
+    return "event";
+  }
+
+  if (
+    normalized === "tourism" ||
+    normalized === "tourism_business" ||
+    normalized === "tourism-business" ||
+    normalized === "business"
+  ) {
+    return "tourism_business";
+  }
+
+  return null;
+}
+
 function CreateTourismContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const requestedListingType = parseRequestedTourismListingType(searchParams.get("type"));
   const { toast } = useToast();
   const { user, profile, isLoading } = useAuth();
 
@@ -297,7 +321,9 @@ function CreateTourismContent() {
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
 
   /* ── Shared state ────────────────────────────────────────── */
-  const [listingType, setListingType] = useState<TourismListingType>("tourism_business");
+  const [listingType, setListingType] = useState<TourismListingType>(
+    requestedListingType ?? "tourism_business"
+  );
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [province, setProvince] = useState("");

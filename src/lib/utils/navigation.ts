@@ -9,7 +9,7 @@ const ALLOWED_REDIRECT_PREFIXES = [
   "/mzansi-market",
   "/mall-shops",
   "/business-ads",
-  "/promotions",
+  "/tourism-events",
   "/dsar",
   "/banned",
 ];

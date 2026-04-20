@@ -309,7 +309,7 @@ describe("POST /api/admin/promotions/[id]/moderate", () => {
         userId: "owner-1",
         type: "error",
         title: "Promotion rejected",
-        href: "/dashboard/promotions",
+        href: "/dashboard/tourism-events",
       })
     );
     expect(mockCreateNotification.mock.calls[0][0].message).toContain("Inappropriate content");
@@ -348,7 +348,7 @@ describe("POST /api/admin/promotions/[id]/moderate", () => {
         userId: "owner-1",
         type: "error",
         title: "Promotion hidden",
-        href: "/dashboard/promotions",
+        href: "/dashboard/tourism-events",
       })
     );
     expect(mockCreateNotification.mock.calls[0][0].message).toContain("hidden");

@@ -198,4 +198,14 @@ describe("launch env validation", () => {
       /Production app URL must be public HTTPS/
     );
   });
+
+  it("fails strict production env validation when KYC_PROVIDER is non-stub and the webhook secret is missing", () => {
+    applyEnv({
+      ...validProductionEnv,
+      KYC_PROVIDER: "veriff",
+      KYC_WEBHOOK_SECRET: undefined,
+    });
+
+    expect(() => validateEnv({ strict: true, mode: "production" })).toThrow(/KYC_WEBHOOK_SECRET/);
+  });
 });

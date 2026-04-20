@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Building2, Loader2, TreePalm, ShieldAlert, ShoppingBag } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { buildPostCategoryHref } from "@/app/post/_lib/post-access";
 import { normalizeAccountVerificationStatus } from "@/lib/account/compat";
 import type { AccountVerificationStatus } from "@/types/enums";
@@ -166,6 +168,26 @@ export function PostCreateClient({
           </div>
         </Alert>
       )}
+
+      <Card className="border-brand-green/20 bg-brand-green/5 shadow-sm dark:border-brand-green/30 dark:bg-brand-green/10">
+        <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1.5">
+            <p className="text-sm font-semibold text-foreground">
+              Need more visibility after launch?
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Start with the surface that matches your offer, then use advertising and boost tools
+              to increase reach once your listing or event is live.
+            </p>
+          </div>
+          <Button asChild variant="outline" className="gap-2 self-start sm:self-center">
+            <Link href="/advertise">
+              See advertising options
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {POST_OPTIONS.map((option) => {

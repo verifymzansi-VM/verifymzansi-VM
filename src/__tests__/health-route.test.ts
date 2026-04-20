@@ -1,8 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getLaunchHealthSnapshot } from "@/lib/health/launch-health";
 
+const { mockError } = vi.hoisted(() => ({
+  mockError: vi.fn(),
+}));
+
 vi.mock("@/lib/health/launch-health", () => ({
   getLaunchHealthSnapshot: vi.fn(),
+}));
+
+vi.mock("@/lib/utils/logger", () => ({
+  createLogger: () => ({
+    error: mockError,
+  }),
 }));
 
 describe("Health route", () => {
@@ -52,5 +62,36 @@ describe("Health route", () => {
 
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({ status: "degraded" });
+  });
+
+  it("returns a controlled degraded payload when health snapshot generation throws", async () => {
+    vi.mocked(getLaunchHealthSnapshot).mockRejectedValue(new Error("schema probe timed out"));
+
+    const { GET } = await import("@/app/api/health/route");
+    const response = await GET();
+    const payload = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(payload).toMatchObject({
+      status: "degraded",
+      checks: {
+        config: {
+          status: "degraded",
+          failedChecks: ["health_snapshot_generation"],
+        },
+        supabase: {
+          status: "skipped",
+        },
+        schema: {
+          status: "skipped",
+        },
+        audit: {
+          status: "skipped",
+        },
+      },
+    });
+    expect(mockError).toHaveBeenCalledWith("Health snapshot generation failed", {
+      error: "schema probe timed out",
+    });
   });
 });

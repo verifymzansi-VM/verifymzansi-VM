@@ -311,7 +311,7 @@ export async function POST(request: Request) {
         MZANSI_BUSINESS: "/dashboard/businesses",
         BUSINESS_ADS: "/dashboard/businesses",
         MALL_SHOPS: "/dashboard/storefronts",
-        PROMOTIONS_EVENTS: "/dashboard/promotions",
+        PROMOTIONS_EVENTS: "/dashboard/tourism-events",
       };
       void createNotification({
         userId: user.id,

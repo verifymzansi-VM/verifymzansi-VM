@@ -1,8 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const WEBKIT_SKIP = ["webkit", "mobile-safari"];
-const WEBKIT_SKIP_MSG =
-  "WebKit rendering under headless CI is unreliable for page-navigation tests.";
+type CapturedOauthRequest = {
+  method: string;
+  headers: Record<string, string>;
+  body: string | null;
+};
 
 function collectHydrationErrors(page: Page) {
   const hydrationErrors: string[] = [];
@@ -50,11 +52,20 @@ function collectMarketplacePageErrors(page: Page) {
   return { consoleErrors, pageErrors, failedApiResponses };
 }
 
+function getCapturedOauthRequests(page: Page) {
+  return page.evaluate(() => {
+    return (
+      (
+        window as typeof window & {
+          __vmzGoogleOauthRequests?: CapturedOauthRequest[];
+        }
+      ).__vmzGoogleOauthRequests ?? []
+    );
+  });
+}
+
 test.describe("Platform Smoke", () => {
-  test("@smoke public and auth pages render without hydration errors", async ({
-    page,
-  }, testInfo) => {
-    test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
+  test("@smoke public and auth pages render without hydration errors", async ({ page }) => {
     const hydrationErrors = collectHydrationErrors(page);
 
     const checks = [
@@ -97,15 +108,15 @@ test.describe("Platform Smoke", () => {
     ];
 
     for (const check of checks) {
-      await page.goto(check.path);
+      await page.goto(check.path, { waitUntil: "domcontentloaded" });
+      await page.waitForLoadState("networkidle").catch(() => {});
       await check.assert();
     }
 
     expect(hydrationErrors).toEqual([]);
   });
 
-  test("@smoke protected pages redirect unauthenticated users", async ({ page }, testInfo) => {
-    test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
+  test("@smoke protected pages redirect unauthenticated users", async ({ page }) => {
     await page.goto("/dashboard");
     await page.waitForURL(/\/login/);
     await page.goto("/admin");
@@ -122,27 +133,54 @@ test.describe("Platform Smoke", () => {
 
   test("@smoke Google OAuth recovers when the page starts without a CSRF token", async ({
     page,
-  }, testInfo) => {
-    test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
-    // Use Playwright's native network-level interception rather than patching
-    // window.fetch via addInitScript.  The addInitScript approach is flaky across
-    // browser engines because certain runtimes (Chromium's V8, WebKit's JSC) may
-    // reference the original fetch binding before the script replacement takes
-    // effect.  page.route() intercepts at the network layer and is reliable on
-    // every browser project.
-    await page.route(/\/api\/auth\/oauth\/google(?:\?|$)/, async (route) => {
-      if (route.request().method() === "POST") {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({ url: "/login#oauth-ok" }),
-        });
-      } else {
-        await route.continue();
+  }) => {
+    await page.addInitScript(() => {
+      const state = window as typeof window & {
+        __vmzGoogleOauthRequests?: Array<{
+          method: string;
+          headers: Record<string, string>;
+          body: string | null;
+        }>;
+      };
+      const originalFetch = window.fetch.bind(window);
+
+      function normalizeHeaders(headersInit?: HeadersInit): Record<string, string> {
+        return Object.fromEntries(
+          Array.from(new Headers(headersInit).entries(), ([key, value]) => [
+            key.toLowerCase(),
+            value,
+          ])
+        );
       }
+
+      state.__vmzGoogleOauthRequests = [];
+
+      window.fetch = async (input, init) => {
+        const request = input instanceof Request ? input : null;
+        const requestUrl =
+          typeof input === "string" ? input : request ? request.url : String(input);
+        const url = new URL(requestUrl, window.location.href);
+        const method = (init?.method ?? request?.method ?? "GET").toUpperCase();
+
+        if (url.pathname === "/api/auth/oauth/google" && method === "POST") {
+          state.__vmzGoogleOauthRequests?.push({
+            method,
+            headers: normalizeHeaders(init?.headers ?? request?.headers),
+            body: typeof init?.body === "string" ? init.body : null,
+          });
+
+          return new Response(JSON.stringify({ url: "/login#oauth-ok" }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
+        return originalFetch(input, init);
+      };
     });
 
-    await page.goto("/login");
+    await page.goto("/login", { waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("networkidle").catch(() => {});
 
     const clearedState = await page.evaluate(() => {
       document.cookie = "vm_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
@@ -154,19 +192,13 @@ test.describe("Platform Smoke", () => {
     });
     expect(clearedState).toEqual({ cookie: false, meta: false });
 
-    // Register the response waiter before clicking so the request cannot slip by.
-    const oauthResponsePromise = page.waitForResponse(
-      (res) =>
-        /\/api\/auth\/oauth\/google(?:\?|$)/.test(res.url()) && res.request().method() === "POST"
-    );
     await page.getByRole("button", { name: /continue with google/i }).click();
-    const oauthResponse = await oauthResponsePromise;
 
-    // The CSRF token must have been bootstrapped and included in the request.
-    expect(oauthResponse.request().headers()["x-csrf-token"]).toMatch(/^[a-f0-9]{64}$/i);
+    await expect.poll(async () => (await getCapturedOauthRequests(page)).length).toBe(1);
 
-    // ensureCsrfTokenReady() sets the meta tag before the POST fires, so the
-    // token should already be present — poll briefly for any async DOM settling.
+    const oauthRequests = await getCapturedOauthRequests(page);
+    expect(oauthRequests[0]?.headers["x-csrf-token"]).toMatch(/^[a-f0-9]{64}$/i);
+
     await expect
       .poll(() =>
         page.evaluate(
@@ -175,6 +207,7 @@ test.describe("Platform Smoke", () => {
       )
       .toMatch(/^[a-f0-9]{64}$/i);
 
+    await expect(page).toHaveURL(/\/login#oauth-ok$/);
     await expect(page.getByText(/invalid csrf token/i)).toHaveCount(0);
     await expect(page.getByText(/google sign-in failed/i)).toHaveCount(0);
     await expect(page.getByText(/something went wrong/i)).toHaveCount(0);
@@ -195,10 +228,7 @@ test.describe("Platform Smoke", () => {
     expect(kyc.status()).toBeLessThan(500);
   });
 
-  test("@smoke mzansi business filters can be cleared from the keyboard", async ({
-    page,
-  }, testInfo) => {
-    test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
+  test("@smoke mzansi business filters can be cleared from the keyboard", async ({ page }) => {
     await page.goto("/mzansi-business");
 
     const isMobileViewport = (page.viewportSize()?.width ?? 1280) < 1024;
@@ -223,7 +253,6 @@ test.describe("Platform Smoke", () => {
       await clearQuery.focus();
       await page.keyboard.press("Enter");
       await expect(search).toHaveValue("");
-      // Ensure any onBlur/debounced URL sync has a chance to commit.
       await search.blur();
     }
 
@@ -234,8 +263,7 @@ test.describe("Platform Smoke", () => {
 
   test("@smoke mobile footer stays above bottom nav and marketplace tabs remain readable", async ({
     page,
-  }, testInfo) => {
-    test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
+  }) => {
     test.skip((page.viewportSize()?.width ?? 1280) >= 1024, "Mobile-only layout check");
 
     await page.goto("/mzansi-business");
@@ -270,15 +298,11 @@ test.describe("Platform Smoke", () => {
 
   test("@smoke marketplace mobile pages avoid bootstrap errors and overlapping chrome", async ({
     page,
-  }, testInfo) => {
-    test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
+  }) => {
     test.skip((page.viewportSize()?.width ?? 1280) >= 1024, "Mobile-only marketplace check");
 
     const { consoleErrors, pageErrors, failedApiResponses } = collectMarketplacePageErrors(page);
-    const pageChecks: Array<{
-      path: string;
-      filterButtonName?: string;
-    }> = [
+    const pageChecks: Array<{ path: string; filterButtonName?: string }> = [
       {
         path: "/mzansi-market",
         filterButtonName: "Open listing filters",
@@ -288,8 +312,8 @@ test.describe("Platform Smoke", () => {
         filterButtonName: "Open business filters",
       },
       {
-        path: "/promotions",
-        filterButtonName: "Open promotion filters",
+        path: "/tourism-events",
+        filterButtonName: "Open tourism and events filters",
       },
     ];
 
@@ -298,12 +322,13 @@ test.describe("Platform Smoke", () => {
       await page.waitForTimeout(1_000);
 
       if (check.filterButtonName) {
-        const filterButton = page.getByRole("button", { name: check.filterButtonName });
+        const filterButton = page
+          .locator(`button[aria-label="${check.filterButtonName}"]:visible`)
+          .last();
         const bottomNav = page.getByRole("navigation", { name: "Main" });
 
         await expect(filterButton).toBeVisible();
         await expect(bottomNav).toBeVisible();
-        await filterButton.scrollIntoViewIfNeeded();
         await filterButton.click();
         await expect(page.getByRole("dialog").first()).toBeVisible();
       }

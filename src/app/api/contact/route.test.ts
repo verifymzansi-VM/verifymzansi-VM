@@ -10,6 +10,7 @@ const {
   mockFrom,
   mockGetUserById,
   mockSendContactFormNotification,
+  mockVerifyTurnstileToken,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
@@ -18,6 +19,7 @@ const {
   mockFrom: vi.fn(),
   mockGetUserById: vi.fn(),
   mockSendContactFormNotification: vi.fn(),
+  mockVerifyTurnstileToken: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -34,6 +36,10 @@ vi.mock("@/lib/notifications", () => ({
 
 vi.mock("@/lib/services/email", () => ({
   sendContactFormNotification: mockSendContactFormNotification,
+}));
+
+vi.mock("@/lib/utils/turnstile", () => ({
+  verifyTurnstileToken: mockVerifyTurnstileToken,
 }));
 
 vi.mock("@/lib/utils/rate-limit", () => ({
@@ -92,6 +98,7 @@ describe("POST /api/contact", () => {
       error: null,
     });
     mockSendContactFormNotification.mockResolvedValue({ success: true });
+    mockVerifyTurnstileToken.mockResolvedValue({ success: true });
   });
 
   it("creates an account holder notification for anonymous contact requests", async () => {

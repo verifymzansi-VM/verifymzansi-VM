@@ -36,7 +36,7 @@ export function Footer() {
               <Link href="/mzansi-business" prefetch={false} className={footerLinkClassName}>
                 Mzansi Business
               </Link>
-              <Link href="/promotions" prefetch={false} className={footerLinkClassName}>
+              <Link href="/tourism-events" prefetch={false} className={footerLinkClassName}>
                 Tourism & Events
               </Link>
               <Link href="/advertise" prefetch={false} className={footerLinkClassName}>

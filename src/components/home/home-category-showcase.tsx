@@ -95,7 +95,7 @@ export async function HomeCategoryShowcase() {
     {
       title: "Tourism & Events",
       description: "Discover tourism destinations, accommodations, and events near you.",
-      href: "/promotions",
+      href: "/tourism-events",
       icon: TreePalm,
       accentColor: "text-teal-500",
       accentBg: "bg-teal-500/10",

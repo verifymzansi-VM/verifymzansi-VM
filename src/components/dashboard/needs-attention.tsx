@@ -82,8 +82,8 @@ export function NeedsAttention({
 
   if (expiringPromoCount > 0) {
     items.push({
-      label: `${expiringPromoCount} promotion${expiringPromoCount > 1 ? "s" : ""} ending in 48h`,
-      href: "/dashboard/promotions",
+      label: `${expiringPromoCount} tourism or event post${expiringPromoCount > 1 ? "s" : ""} ending in 48h`,
+      href: "/dashboard/tourism-events",
       icon: TrendingUp,
       variant: "warning",
     });

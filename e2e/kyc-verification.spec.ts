@@ -1,9 +1,5 @@
 import { test, expect } from "@playwright/test";
 
-const WEBKIT_SKIP = ["webkit", "mobile-safari"];
-const WEBKIT_SKIP_MSG =
-  "WebKit rendering under headless CI is unreliable for page-navigation tests.";
-
 /**
  * E2E KYC Verification Tests
  *
@@ -44,8 +40,7 @@ async function withTransientNetworkRetry<T>(
 
 test.describe("KYC Verification Flows", () => {
   test.describe("Unauthenticated access", () => {
-    test("verification page redirects to login", async ({ page }, testInfo) => {
-      test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
+    test("verification page redirects to login", async ({ page }) => {
       await page.goto("/verification");
       await page.waitForURL(/\/login/);
       expect(page.url()).toContain("/login");
@@ -60,8 +55,7 @@ test.describe("KYC Verification Flows", () => {
       expect(response.status()).toBe(401);
     });
 
-    test("admin evidence desk requires auth", async ({ page }, testInfo) => {
-      test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
+    test("admin evidence desk requires auth", async ({ page }) => {
       await page.goto("/admin/verification/evidence");
       // Should redirect to login or show unauthorized
       await page.waitForURL(/\/login|\/admin/);

@@ -37,7 +37,7 @@ const TABS: TabDef[] = [
 ];
 
 /** Marketplace prefixes the Browse tab should match */
-const BROWSE_PREFIXES = ["/mzansi-market", "/mzansi-business", "/promotions"];
+const BROWSE_PREFIXES = ["/mzansi-market", "/mzansi-business", "/tourism-events"];
 
 export function MobileNav() {
   const pathname = usePathname();

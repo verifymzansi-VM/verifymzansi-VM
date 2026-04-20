@@ -19,7 +19,7 @@ test.describe("Marketplace showroom desktop drag", () => {
     await expect(liveRegion).toContainText("Slide 1 of");
 
     const ambientVideo = showroomSection.locator("video").first();
-    await expect(ambientVideo).toHaveAttribute("src", /showroom-drag\.mp4$/);
+    await expect(ambientVideo).toHaveAttribute("src", /advertiser-desktop\.webm$/);
 
     const activeCardLink = showroomSection.getByRole("link", { name: /^Open / }).first();
     await expect(activeCardLink).toBeVisible();

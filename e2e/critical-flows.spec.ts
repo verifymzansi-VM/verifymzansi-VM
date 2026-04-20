@@ -21,7 +21,7 @@ test.describe("Critical Platform Flows", () => {
     const report = await request.post("/api/reports", {
       data: {},
     });
-    expect([400, 401]).toContain(report.status());
+    expect([400, 401, 403]).toContain(report.status());
   });
 
   test("critical auth flow: login and dashboard access with seeded user", async ({

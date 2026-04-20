@@ -133,6 +133,8 @@ it the same as other dev bypass flags.
   OTP, and DSAR launch paths in one command.
 - Confirm the KYC provider webhook secret is configured before enabling live
   provider callbacks at `/api/webhooks/kyc/provider`.
+- Confirm `KYC_PROVIDER` is set intentionally. When it remains `stub`, live
+  provider callbacks are disabled even if `KYC_WEBHOOK_SECRET` is present.
 - Confirm Africa's Talking sender approval is complete for the live sender ID.
 - Confirm Resend domain verification is complete for the production sender
   domain.

@@ -118,7 +118,9 @@ site root with `?code=...` instead of the app callback handler.
 - `NEXT_PUBLIC_APP_URL` must be public HTTPS
 - `AFRICASTALKING_SENDER_ID`, `IP_HASH_SECRET`, Ozow credentials, Turnstile, R2,
   Resend, and encryption keys must all be populated
-- `KYC_WEBHOOK_SECRET` must be set for signed KYC provider callbacks
+- `KYC_PROVIDER` defaults to `stub`; when you switch to a real provider,
+  `KYC_WEBHOOK_SECRET` becomes a launch-blocking requirement for signed KYC
+  callbacks
 - If `OZOW_API_BASE_URL` is set, it must target an official Ozow HTTPS host.
   Production accepts only `https://one.ozow.com`.
 - If you set `RATE_LIMITER_API_KEY`, you must also set `OTP_RATE_LIMITER_URL`
@@ -258,6 +260,18 @@ Use `-- --dry-run` to preview the command sequence without executing it.
 Each run now writes machine-readable evidence artifacts to `tmp/safety-gate`:
 
 - Timestamped JSON and Markdown files per run
+
+## Health Endpoint Behavior
+
+`GET /api/health` is the post-deploy readiness endpoint used by launch checks.
+
+- Returns `200` with `status: "ok"` when launch config, schema, audit, and
+  production probes are healthy
+- Returns `503` with `status: "degraded"` when any enforced launch check is
+  degraded
+- Returns a controlled degraded `503` payload even when health snapshot
+  generation itself throws before probes complete, so deploy automation never
+  has to interpret an unstructured runtime exception
 - `latest-review.json` / `latest-review.md`
 - `latest-release.json` / `latest-release.md`
 - `latest.json` / `latest.md`

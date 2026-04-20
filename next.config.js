@@ -84,8 +84,33 @@ const nextConfig = {
   async redirects() {
     return [
       {
+        source: "/promotions/events",
+        destination: "/tourism-events?type=event",
+        permanent: true,
+      },
+      {
+        source: "/promotions",
+        destination: "/tourism-events",
+        permanent: true,
+      },
+      {
+        source: "/promotion/:id",
+        destination: "/tourism-events/:id",
+        permanent: true,
+      },
+      {
         source: "/post/create-promotion",
         destination: "/post/create-tourism",
+        permanent: true,
+      },
+      {
+        source: "/post/edit-promotion/:id",
+        destination: "/post/edit-tourism/:id",
+        permanent: true,
+      },
+      {
+        source: "/dashboard/promotions",
+        destination: "/dashboard/tourism-events",
         permanent: true,
       },
     ];

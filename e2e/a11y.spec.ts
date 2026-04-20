@@ -9,10 +9,6 @@ import AxeBuilder from "@axe-core/playwright";
  *   pnpm exec playwright test e2e/a11y.spec.ts
  */
 
-const WEBKIT_SKIP = ["webkit", "mobile-safari"];
-const WEBKIT_SKIP_MSG =
-  "WebKit rendering under headless CI is unreliable for page-navigation tests.";
-
 const publicPages = [
   { name: "homepage", path: "/" },
   { name: "login", path: "/login" },
@@ -48,8 +44,7 @@ async function expectNoSeriousViolations(page: Page, name: string): Promise<void
 
 test.describe("Accessibility (axe-core WCAG 2.1 AA)", () => {
   for (const page of publicPages) {
-    test(`${page.name} has no critical a11y violations`, async ({ page: pw }, testInfo) => {
-      test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
+    test(`${page.name} has no critical a11y violations`, async ({ page: pw }) => {
       await pw.goto(page.path, { waitUntil: "domcontentloaded" });
       // Allow styles/animations to settle before running axe
       await pw.waitForLoadState("networkidle").catch(() => {});
@@ -57,11 +52,7 @@ test.describe("Accessibility (axe-core WCAG 2.1 AA)", () => {
     });
   }
 
-  test("login validation state has no critical a11y violations", async ({ page }, testInfo) => {
-    test.skip(
-      ["webkit", "mobile-safari"].includes(testInfo.project.name),
-      "WebKit auth pages intermittently render an empty main under automation; page-load a11y coverage still runs."
-    );
+  test("login validation state has no critical a11y violations", async ({ page }) => {
     await page.goto("/login", { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle").catch(() => {});
     await expect(page.getByRole("button", { name: /sign in/i })).toBeVisible();
@@ -70,11 +61,7 @@ test.describe("Accessibility (axe-core WCAG 2.1 AA)", () => {
     await expectNoSeriousViolations(page, "login validation state");
   });
 
-  test("register validation state has no critical a11y violations", async ({ page }, testInfo) => {
-    test.skip(
-      ["webkit", "mobile-safari"].includes(testInfo.project.name),
-      "WebKit auth pages intermittently render an empty main under automation; page-load a11y coverage still runs."
-    );
+  test("register validation state has no critical a11y violations", async ({ page }) => {
     await page.goto("/register", { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle").catch(() => {});
     await expect(page.getByRole("button", { name: /create account/i })).toBeVisible();

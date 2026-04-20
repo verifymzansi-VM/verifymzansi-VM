@@ -129,6 +129,9 @@ export function PromotionsExplorer() {
 
   /* ── Active tab ── */
   const activeTab: ActiveTab = currentSearchParams.get("tab") === "events" ? "events" : "tourism";
+  const createHref =
+    activeTab === "events" ? "/post/create-tourism?type=event" : "/post/create-tourism";
+  const createLabel = activeTab === "events" ? "Create Event" : "List Tourism Business";
 
   /* ── Events state ── */
   const [eventsResponse, setEventsResponse] = useState<PromotionsResponse>({
@@ -401,8 +404,8 @@ export function PromotionsExplorer() {
         breadcrumbs={[{ label: "Home", href: "/" }, { label: "Tourism & Events" }]}
       >
         <Button asChild size="sm" className="h-11 gap-1">
-          <Link href="/post/create-tourism">
-            Create Event
+          <Link href={createHref}>
+            {createLabel}
             <ArrowRight className="h-4 w-4" />
           </Link>
         </Button>
@@ -537,14 +540,12 @@ export function PromotionsExplorer() {
                 </>
               )}
             </p>
-            {activeTab === "events" && (
-              <Button asChild variant="outline" size="sm" className="h-11 gap-1">
-                <Link href="/post/create-tourism">
-                  Create Event
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-            )}
+            <Button asChild variant="outline" size="sm" className="h-11 gap-1">
+              <Link href={createHref}>
+                {createLabel}
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
           </div>
 
           {/* ── Grid / Loading / Error / Empty ── */}
@@ -582,11 +583,20 @@ export function PromotionsExplorer() {
                     : "No events match your filters"}
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  Try broadening the filters or clearing a location filter.
+                  Try broadening the filters, clearing a location filter, or publishing a new
+                  {activeTab === "tourism" ? " tourism business" : " event"}.
                 </p>
-                <Button variant="outline" size="sm" className="h-11" onClick={clearAllFilters}>
-                  Clear all filters
-                </Button>
+                <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+                  <Button asChild size="sm" className="h-11 gap-1">
+                    <Link href={createHref}>
+                      {createLabel}
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-11" onClick={clearAllFilters}>
+                    Clear all filters
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ) : activeTab === "tourism" ? (
