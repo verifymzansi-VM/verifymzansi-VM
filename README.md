@@ -101,11 +101,12 @@ Some Supabase security controls are dashboard-only and are not represented in
   VerifyMzansi auth routes rely on Supabase to enforce that control once it is
   enabled for the project. The repo also exposes the same control through the
   Supabase Management API field `password_hibp_enabled`. Supabase only allows
-  that setting on Pro plans and above.
-  - The `avatars` storage bucket is intentionally public because the profile
-    avatar upload flow stores a persistent public URL in `avatar_url`. Keep the
-    bucket public for direct object delivery, but do not add a broad public
-    `SELECT` policy on `storage.objects`; that re-enables bucket listing.
+  that setting on Pro plans and above, so the related Security Advisor warning
+  is expected while the project remains on the free plan.
+- The `avatars` storage bucket is intentionally public because the profile
+  avatar upload flow stores a persistent public URL in `avatar_url`. Keep the
+  bucket public for direct object delivery, but do not add a broad public
+  `SELECT` policy on `storage.objects`; that re-enables bucket listing.
 
 ### Supabase CLI From Workspace Env
 
@@ -126,6 +127,18 @@ Or the convenience aliases:
 pnpm supabase:migration:list
 pnpm supabase:db:push
 ```
+
+To check live Supabase Security Advisor findings from workspace env:
+
+```bash
+pnpm supabase:advisor:security
+pnpm supabase:advisor:security -- --json
+pnpm supabase:advisor:security:strict
+```
+
+The advisor script classifies plan-gated findings separately. On free Supabase
+plans, `auth_leaked_password_protection` is reported as plan-blocked instead of
+being treated as an unresolved repo-owned issue.
 
 To use a different env file, pass it through the generic wrapper:
 

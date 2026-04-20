@@ -67,27 +67,45 @@ function parseArgs(argv: string[]): Args {
 async function loadEnvFile(envFile: string | null): Promise<void> {
   loadEnvConfig(process.cwd());
 
-  if (!envFile) {
-    return;
-  }
+  const candidateFiles = envFile ? [envFile] : [".env.local", ".env"];
 
-  const resolvedPath = path.isAbsolute(envFile) ? envFile : path.join(process.cwd(), envFile);
-  const content = await readFile(resolvedPath, "utf8");
+  for (const candidateFile of candidateFiles) {
+    const resolvedPath = path.isAbsolute(candidateFile)
+      ? candidateFile
+      : path.join(process.cwd(), candidateFile);
 
-  for (const rawLine of content.split(/\r?\n/u)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) {
-      continue;
+    let content: string;
+    try {
+      content = await readFile(resolvedPath, "utf8");
+    } catch (error) {
+      if (
+        !envFile &&
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        error.code === "ENOENT"
+      ) {
+        continue;
+      }
+
+      throw error;
     }
 
-    const separatorIndex = line.indexOf("=");
-    if (separatorIndex < 0) {
-      continue;
-    }
+    for (const rawLine of content.split(/\r?\n/u)) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith("#")) {
+        continue;
+      }
 
-    const key = line.slice(0, separatorIndex).trim();
-    const value = line.slice(separatorIndex + 1).trim();
-    process.env[key] = value;
+      const separatorIndex = line.indexOf("=");
+      if (separatorIndex < 0) {
+        continue;
+      }
+
+      const key = line.slice(0, separatorIndex).trim();
+      const value = line.slice(separatorIndex + 1).trim();
+      process.env[key] = value;
+    }
   }
 }
 
