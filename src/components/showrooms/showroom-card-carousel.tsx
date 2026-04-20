@@ -81,7 +81,7 @@ const PREVIEW_TILT_DEG = 8;
 const DESKTOP_SHOWROOM_ITEM_LIMIT = 15;
 
 const CARD_W =
-  "w-[60vw] max-w-[240px] sm:w-[50vw] sm:max-w-[320px] md:w-[34vw] lg:w-[280px] lg:max-w-none xl:w-[304px] 2xl:w-[320px]";
+  "w-[72vw] max-w-[280px] sm:w-[58vw] sm:max-w-[360px] md:w-[34vw] lg:w-[280px] lg:max-w-none xl:w-[304px] 2xl:w-[320px]";
 const SECTION_SPACING =
   "pt-0 pb-2 sm:pt-0 sm:pb-4 md:pt-4 md:pb-8 lg:min-h-[clamp(30rem,62vh,40rem)] lg:py-8";
 const SECTION_SURFACE = "bg-[linear-gradient(180deg,#f8f5ec_0%,#f1e8da_48%,#e8decd_100%)]";

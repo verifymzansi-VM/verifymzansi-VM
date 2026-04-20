@@ -154,10 +154,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           disableTransitionOnChange
           nonce={nonce}
         >
-          <VideoPlaybackProvider>{children}</VideoPlaybackProvider>
-          <Toaster />
-          <PwaInstallPrompt />
-          <ServiceWorkerRegistrar />
+          <div className="desktop-page-scale">
+            <VideoPlaybackProvider>{children}</VideoPlaybackProvider>
+            <Toaster />
+            <PwaInstallPrompt />
+            <ServiceWorkerRegistrar />
+          </div>
         </ThemeProvider>
         <noscript>
           <div className="mx-auto max-w-[600px] p-8 text-center font-sans">

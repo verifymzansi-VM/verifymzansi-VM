@@ -161,10 +161,10 @@ describe("ShowroomCardCarousel", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
 
     const centerSlide = screen.getByRole("group", { name: "1 of 3" });
-    expect(centerSlide.className).toContain("w-[60vw]");
-    expect(centerSlide.className).toContain("max-w-[240px]");
-    expect(centerSlide.className).toContain("sm:w-[50vw]");
-    expect(centerSlide.className).toContain("sm:max-w-[320px]");
+    expect(centerSlide.className).toContain("w-[72vw]");
+    expect(centerSlide.className).toContain("max-w-[280px]");
+    expect(centerSlide.className).toContain("sm:w-[58vw]");
+    expect(centerSlide.className).toContain("sm:max-w-[360px]");
     expect(centerSlide.className).toContain("lg:w-[280px]");
     expect(centerSlide.className).toContain("xl:w-[304px]");
   });
@@ -202,10 +202,10 @@ describe("ShowroomCardCarousel", () => {
     const section = screen.getByLabelText("Showroom carousel");
     const emptyStateCard = Array.from(container.querySelectorAll("div")).find(
       (node) =>
-        node.className.includes("w-[60vw]") &&
-        node.className.includes("max-w-[240px]") &&
-        node.className.includes("sm:w-[50vw]") &&
-        node.className.includes("sm:max-w-[320px]") &&
+        node.className.includes("w-[72vw]") &&
+        node.className.includes("max-w-[280px]") &&
+        node.className.includes("sm:w-[58vw]") &&
+        node.className.includes("sm:max-w-[360px]") &&
         node.className.includes("lg:w-[280px]") &&
         node.className.includes("xl:w-[304px]")
     );
