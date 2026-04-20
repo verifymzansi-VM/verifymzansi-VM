@@ -216,6 +216,24 @@ describe("POST /api/verification/location/manual", () => {
     expect(body.riskLevel).toBe("low");
   });
 
+  it("normalizes province aliases and city casing before persistence", async () => {
+    setupAuthenticatedUser();
+    mockParseAndValidateJsonRequest.mockResolvedValue({
+      success: true,
+      data: {
+        province: "kzn",
+        city: "durban",
+      },
+    });
+
+    const res = await POST(makeRequest({ province: "kzn", city: "durban" }));
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body.province).toBe("KwaZulu-Natal");
+    expect(body.city).toBe("Durban");
+  });
+
   it("should return 400 for empty body", async () => {
     mockGetUser.mockResolvedValue({
       data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },

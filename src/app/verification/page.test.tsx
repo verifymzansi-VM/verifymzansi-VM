@@ -699,7 +699,7 @@ describe("VerificationPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save Address/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/^Verified address$/i)).toBeInTheDocument();
+      expect(screen.getByText(/^Saved address$/i)).toBeInTheDocument();
       expect(screen.getAllByText(/Soweto, Johannesburg, Gauteng/i).length).toBeGreaterThan(0);
       expect(screen.getByRole("button", { name: /Verify Address with GPS/i })).toBeInTheDocument();
     });
@@ -781,7 +781,7 @@ describe("VerificationPage", () => {
     await waitFor(() => {
       expect(screen.getByText(/^GPS-verified address$/i)).toBeInTheDocument();
       expect(screen.getByText(/Address verified by GPS/i)).toBeInTheDocument();
-      expect(screen.getByText(/Address verified \(GPS: high\)/i)).toBeInTheDocument();
+      expect(screen.getByText(/GPS verified \(GPS: high\)/i)).toBeInTheDocument();
     });
   });
 
@@ -847,7 +847,7 @@ describe("VerificationPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save Address/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/^Verified address$/i)).toBeInTheDocument();
+      expect(screen.getByText(/^Saved address$/i)).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /Verify Address with GPS/i })).toBeInTheDocument();
     });
 

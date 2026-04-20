@@ -3,7 +3,12 @@
  * Uses Nominatim (OpenStreetMap) API with fallback to bounding-box checks.
  */
 
-import { SA_PROVINCES, isCoordInProvince } from "@/lib/constants/sa-provinces";
+import {
+  SA_PROVINCES,
+  citiesMatch,
+  isCoordInProvince,
+  normalizeProvinceName,
+} from "@/lib/constants/sa-provinces";
 import {
   DEFAULT_NOMINATIM_URL,
   GEOCODING_REQUEST_TIMEOUT_MS,
@@ -208,14 +213,15 @@ export function computeLocationConfidence(
     return "none";
   }
 
-  const provinceMatch = gpsProvince.toLowerCase() === declaredProvince.toLowerCase();
+  const provinceMatch =
+    normalizeProvinceName(gpsProvince) === normalizeProvinceName(declaredProvince);
 
   if (!provinceMatch) {
     return "low";
   }
 
   // Province matches, check city + accuracy
-  const cityMatch = gpsCity !== null && gpsCity.toLowerCase() === declaredCity.toLowerCase();
+  const cityMatch = gpsCity !== null && citiesMatch(declaredProvince, gpsCity, declaredCity);
 
   if (cityMatch && accuracyMeters < GPS_ACCURACY_WARN_METERS) {
     return "high";

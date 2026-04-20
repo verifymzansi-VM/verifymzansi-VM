@@ -21,7 +21,12 @@ import {
   buildVerificationSessionResumePatch,
 } from "@/lib/services/verification-state";
 import { summarizeVerification } from "@/lib/account/verification-summary";
-import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
+import {
+  getProvinceNames,
+  getCitiesForProvince,
+  normalizeProvinceName,
+  resolveCityName,
+} from "@/lib/constants/sa-provinces";
 import { trimmedStringSchema } from "@/lib/validations/shared";
 import { buildVerificationEmailConfirmationRequiredPayload } from "@/lib/constants/verification-email-confirmation";
 
@@ -107,10 +112,11 @@ export async function POST(request: NextRequest) {
     }
 
     const { province, city, town } = bodyResult.data;
+    const normalizedProvince = normalizeProvinceName(province);
 
     // Validate province
     const validProvinces = getProvinceNames();
-    if (!validProvinces.includes(province)) {
+    if (!normalizedProvince || !validProvinces.includes(normalizedProvince)) {
       return NextResponse.json(
         { error: "Invalid province. Please select a valid South African province." },
         { status: 400 }
@@ -118,8 +124,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate city belongs to province
-    const validCities = getCitiesForProvince(province);
-    if (!validCities.includes(city)) {
+    const normalizedCity = resolveCityName(normalizedProvince, city);
+    const validCities = getCitiesForProvince(normalizedProvince);
+    if (!normalizedCity || !validCities.includes(normalizedCity)) {
       return NextResponse.json(
         { error: "Invalid city for the selected province." },
         { status: 400 }
@@ -178,8 +185,8 @@ export async function POST(request: NextRequest) {
             location_method: "manual",
             gps_lat: null,
             gps_lon: null,
-            location_province: province,
-            location_city: city,
+            location_province: normalizedProvince,
+            location_city: normalizedCity,
             location_town: town || null,
             risk_score: riskScore,
             risk_level: riskLevel,
@@ -209,8 +216,8 @@ export async function POST(request: NextRequest) {
       signal_code: "manual_only_location",
       severity: "info",
       value_json: {
-        province,
-        city,
+        province: normalizedProvince,
+        city: normalizedCity,
         town: town || undefined,
         note: "Location submitted via manual selection without GPS confirmation",
       },
@@ -238,8 +245,8 @@ export async function POST(request: NextRequest) {
 
     // Update account profile with location
     const profilePatch: Record<string, unknown> = {
-      location_province: province,
-      location_city: city,
+      location_province: normalizedProvince,
+      location_city: normalizedCity,
     };
 
     // Check if all verification steps are now approved → promote to verified
@@ -327,8 +334,8 @@ export async function POST(request: NextRequest) {
       targetType: "verification_step",
       targetId: step.id,
       metadata: {
-        province,
-        city,
+        province: normalizedProvince,
+        city: normalizedCity,
         risk_score: riskScore,
         risk_level: riskLevel,
       },
@@ -337,8 +344,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       stepId: step.id,
-      province,
-      city,
+      province: normalizedProvince,
+      city: normalizedCity,
       riskScore,
       riskLevel,
     });

@@ -17,6 +17,7 @@ import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { optionalTrimmedStringSchema } from "@/lib/validations/shared";
+import { citiesMatch, normalizeProvinceName, resolveCityName } from "@/lib/constants/sa-provinces";
 
 const log = createLogger("GpsVerification");
 import {
@@ -33,38 +34,6 @@ import {
 } from "@/lib/services/verification-state";
 import { buildVerificationEmailConfirmationRequiredPayload } from "@/lib/constants/verification-email-confirmation";
 import { summarizeVerification } from "@/lib/account/verification-summary";
-
-/**
- * Canonical province name mapping for South African provinces.
- * Handles common abbreviations and alternate spellings from geocoding APIs.
- */
-const SA_PROVINCE_ALIASES: Record<string, string> = {
-  "eastern cape": "Eastern Cape",
-  ec: "Eastern Cape",
-  "free state": "Free State",
-  fs: "Free State",
-  gauteng: "Gauteng",
-  gp: "Gauteng",
-  gt: "Gauteng",
-  "kwazulu-natal": "KwaZulu-Natal",
-  "kwazulu natal": "KwaZulu-Natal",
-  kzn: "KwaZulu-Natal",
-  limpopo: "Limpopo",
-  lp: "Limpopo",
-  mpumalanga: "Mpumalanga",
-  mp: "Mpumalanga",
-  "north west": "North West",
-  nw: "North West",
-  "northern cape": "Northern Cape",
-  nc: "Northern Cape",
-  "western cape": "Western Cape",
-  wc: "Western Cape",
-};
-
-function normalizeProvinceName(province: string): string {
-  const lower = province.trim().toLowerCase();
-  return SA_PROVINCE_ALIASES[lower] ?? province.trim();
-}
 
 const gpsLocationSchema = z.object({
   latitude: z.number().min(-35).max(-22),
@@ -145,6 +114,10 @@ export async function POST(request: NextRequest) {
     const { latitude, longitude, accuracy, timestamp, declaredProvince, declaredCity } =
       bodyResult.data;
     const isConfirmationMode = !!declaredProvince;
+    const normalizedDeclaredProvince = isConfirmationMode
+      ? normalizeProvinceName(declaredProvince)
+      : null;
+    const gpsAge = Date.now() - timestamp;
 
     // Reject extremely poor accuracy
     if (accuracy > GPS_ACCURACY_REJECT_METERS) {
@@ -152,8 +125,21 @@ export async function POST(request: NextRequest) {
         {
           error:
             "GPS accuracy is too poor for location verification. Please try again or upload proof of address.",
+          code: "gps_accuracy_poor",
           accuracy,
           threshold: GPS_ACCURACY_REJECT_METERS,
+        },
+        { status: 422 }
+      );
+    }
+
+    if (gpsAge > GPS_REPLAY_REJECT_MS) {
+      return NextResponse.json(
+        {
+          error: "GPS reading is too old. Request your current location again.",
+          code: "gps_replay_detected",
+          ageMs: gpsAge,
+          thresholdMs: GPS_REPLAY_REJECT_MS,
         },
         { status: 422 }
       );
@@ -214,7 +200,7 @@ export async function POST(request: NextRequest) {
     const resolvedCity = geoResult.city;
     const confidence = computeLocationConfidence(
       resolvedProvince,
-      isConfirmationMode ? declaredProvince! : resolvedProvince,
+      isConfirmationMode ? (normalizedDeclaredProvince ?? declaredProvince!) : resolvedProvince,
       resolvedCity,
       isConfirmationMode ? (declaredCity ?? resolvedCity ?? "") : (resolvedCity ?? ""),
       accuracy
@@ -230,14 +216,17 @@ export async function POST(request: NextRequest) {
     // Mismatch detection in confirmation mode
     const mismatch = { province: false, city: false };
     if (isConfirmationMode) {
+      const canonicalResolvedProvince = normalizeProvinceName(resolvedProvince);
       const provinceMatch =
-        normalizeProvinceName(resolvedProvince) === normalizeProvinceName(declaredProvince!);
-      const cityMatch = resolvedCity
-        ? resolvedCity.toLowerCase() === (declaredCity ?? "").toLowerCase()
-        : false;
+        canonicalResolvedProvince !== null &&
+        canonicalResolvedProvince === normalizedDeclaredProvince;
+      const cityMatch =
+        !!declaredCity &&
+        !!resolvedCity &&
+        citiesMatch(normalizedDeclaredProvince, resolvedCity, declaredCity);
 
       mismatch.province = !provinceMatch;
-      mismatch.city = !cityMatch;
+      mismatch.city = provinceMatch && !!declaredCity && !!resolvedCity && !cityMatch;
 
       if (!provinceMatch) {
         signals.push({
@@ -286,19 +275,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Stale GPS reading — timestamp too far in the past
-    const gpsAge = Date.now() - timestamp;
-    if (gpsAge > GPS_REPLAY_REJECT_MS) {
-      // Hard block for extremely stale readings (likely replayed/cached)
-      signals.push({
-        signal_code: "gps_replay_detected",
-        severity: "block",
-        value_json: {
-          age_ms: gpsAge,
-          threshold_ms: GPS_REPLAY_REJECT_MS,
-        },
-      });
-    } else if (gpsAge > GPS_MAX_AGE_MS) {
+    // Stale GPS reading — warn when the reading is older than the preferred freshness window.
+    if (gpsAge > GPS_MAX_AGE_MS) {
       signals.push({
         signal_code: "gps_stale_reading",
         severity: "warn",
@@ -331,6 +309,15 @@ export async function POST(request: NextRequest) {
 
     const riskLevel =
       riskScore <= 25 ? "low" : riskScore <= 50 ? "medium" : riskScore <= 75 ? "high" : "critical";
+    const gpsVerified = isConfirmationMode ? !mismatch.province && !mismatch.city : true;
+    const locationProvince = isConfirmationMode
+      ? (normalizedDeclaredProvince ?? declaredProvince!)
+      : resolvedProvince;
+    const locationCity = isConfirmationMode
+      ? (resolveCityName(normalizedDeclaredProvince, declaredCity ?? resolvedCity ?? null) ??
+        declaredCity ??
+        resolvedCity)
+      : (resolveCityName(resolvedProvince, resolvedCity ?? null) ?? resolvedCity);
 
     // Upsert verification step — always auto-approved (location is self-service)
     const stepStatus = "approved" as const;
@@ -341,8 +328,8 @@ export async function POST(request: NextRequest) {
         location_method: isConfirmationMode ? "manual_with_gps" : "gps",
         gps_lat: latitude,
         gps_lon: longitude,
-        location_province: isConfirmationMode ? declaredProvince! : resolvedProvince,
-        location_city: isConfirmationMode ? (declaredCity ?? resolvedCity) : resolvedCity,
+        location_province: locationProvince,
+        location_city: locationCity,
         risk_score: riskScore,
         risk_level: riskLevel,
         auto_status: "approved",
@@ -350,10 +337,11 @@ export async function POST(request: NextRequest) {
         ...(isConfirmationMode
           ? {
               metadata: {
-                declared_province: declaredProvince,
-                declared_city: declaredCity,
-                gps_province: resolvedProvince,
-                gps_city: resolvedCity,
+                declared_province: locationProvince,
+                declared_city: locationCity,
+                gps_province: normalizeProvinceName(resolvedProvince) ?? resolvedProvince,
+                gps_city: resolveCityName(resolvedProvince, resolvedCity ?? null) ?? resolvedCity,
+                confidence,
                 mismatch,
               },
             }
@@ -463,9 +451,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const locationProvince = isConfirmationMode ? declaredProvince! : resolvedProvince;
-    const locationCity = isConfirmationMode ? (declaredCity ?? resolvedCity) : resolvedCity;
-
     const profilePatch: Record<string, unknown> = {
       location_province: locationProvince,
       location_city: locationCity,
@@ -548,7 +533,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       stepId: step.id,
-      verified: stepStatus === "approved",
+      verified: gpsVerified,
       stepStatus,
       confidence,
       resolvedProvince,

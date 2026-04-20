@@ -4,6 +4,90 @@ export interface Province {
   cities: string[];
 }
 
+const SA_PROVINCE_ALIASES: Record<string, string> = {
+  "eastern cape": "Eastern Cape",
+  ec: "Eastern Cape",
+  "free state": "Free State",
+  fs: "Free State",
+  gauteng: "Gauteng",
+  gp: "Gauteng",
+  gt: "Gauteng",
+  "kwazulu-natal": "KwaZulu-Natal",
+  "kwazulu natal": "KwaZulu-Natal",
+  kzn: "KwaZulu-Natal",
+  limpopo: "Limpopo",
+  lp: "Limpopo",
+  mpumalanga: "Mpumalanga",
+  mp: "Mpumalanga",
+  "north west": "North West",
+  nw: "North West",
+  "northern cape": "Northern Cape",
+  nc: "Northern Cape",
+  "western cape": "Western Cape",
+  wc: "Western Cape",
+};
+
+function normalizeLocationLookupValue(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/[()]/g, " ")
+    .replace(/[^a-zA-Z0-9\s-]+/g, " ")
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function getCityAliasCandidates(cityName: string): string[] {
+  const aliases = new Set<string>();
+  const trimmedCity = cityName.trim();
+
+  if (!trimmedCity) {
+    return [];
+  }
+
+  aliases.add(trimmedCity);
+
+  const parentheticalMatches = [...trimmedCity.matchAll(/\(([^)]+)\)/g)]
+    .map((match) => match[1]?.trim())
+    .filter((value): value is string => Boolean(value));
+
+  const withoutParenthetical = trimmedCity
+    .replace(/\s*\([^)]*\)\s*/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (withoutParenthetical) {
+    aliases.add(withoutParenthetical);
+  }
+
+  for (const alias of parentheticalMatches) {
+    aliases.add(alias);
+  }
+
+  return [...aliases];
+}
+
+const CITY_ALIAS_LOOKUP = new Map<string, Map<string, string>>();
+
+function getProvinceCityAliasLookup(provinceName: string): Map<string, string> {
+  const cached = CITY_ALIAS_LOOKUP.get(provinceName);
+  if (cached) {
+    return cached;
+  }
+
+  const province = SA_PROVINCES.find((entry) => entry.name === provinceName);
+  const lookup = new Map<string, string>();
+
+  for (const city of province?.cities ?? []) {
+    for (const alias of getCityAliasCandidates(city)) {
+      lookup.set(normalizeLocationLookupValue(alias), city);
+    }
+  }
+
+  CITY_ALIAS_LOOKUP.set(provinceName, lookup);
+  return lookup;
+}
+
 export const SA_PROVINCES: Province[] = [
   {
     name: "Gauteng",
@@ -172,6 +256,68 @@ export function isCoordInProvince(lat: number, lon: number, provinceName: string
   return lat >= latMin && lat <= latMax && lon >= lonMin && lon <= lonMax;
 }
 
+export function normalizeProvinceName(provinceName: string | null | undefined): string | null {
+  if (!provinceName) {
+    return null;
+  }
+
+  const trimmedProvince = provinceName.trim();
+  if (!trimmedProvince) {
+    return null;
+  }
+
+  const normalizedProvince = normalizeLocationLookupValue(trimmedProvince);
+
+  return (
+    SA_PROVINCE_ALIASES[normalizedProvince] ??
+    SA_PROVINCES.find(
+      (province) => normalizeLocationLookupValue(province.name) === normalizedProvince
+    )?.name ??
+    null
+  );
+}
+
+export function resolveCityName(
+  provinceName: string | null | undefined,
+  cityName: string | null | undefined
+): string | null {
+  if (!cityName) {
+    return null;
+  }
+
+  const canonicalProvince = normalizeProvinceName(provinceName);
+  const trimmedCity = cityName.trim();
+
+  if (!canonicalProvince || !trimmedCity) {
+    return null;
+  }
+
+  const aliasLookup = getProvinceCityAliasLookup(canonicalProvince);
+  return aliasLookup.get(normalizeLocationLookupValue(trimmedCity)) ?? null;
+}
+
+export function citiesMatch(
+  provinceName: string | null | undefined,
+  firstCity: string | null | undefined,
+  secondCity: string | null | undefined
+): boolean {
+  if (!firstCity || !secondCity) {
+    return false;
+  }
+
+  const canonicalProvince = normalizeProvinceName(provinceName);
+  if (canonicalProvince) {
+    const firstResolved = resolveCityName(canonicalProvince, firstCity);
+    const secondResolved = resolveCityName(canonicalProvince, secondCity);
+
+    if (firstResolved && secondResolved) {
+      return firstResolved === secondResolved;
+    }
+  }
+
+  return normalizeLocationLookupValue(firstCity) === normalizeLocationLookupValue(secondCity);
+}
+
 /**
  * Get all province names.
  */
@@ -183,7 +329,8 @@ export function getProvinceNames(): string[] {
  * Get cities for a province by name.
  */
 export function getCitiesForProvince(provinceName: string): string[] {
-  const province = SA_PROVINCES.find((p) => p.name === provinceName);
+  const canonicalProvince = normalizeProvinceName(provinceName) ?? provinceName;
+  const province = SA_PROVINCES.find((p) => p.name === canonicalProvince);
   return province?.cities ?? [];
 }
 

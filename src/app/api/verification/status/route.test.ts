@@ -229,4 +229,68 @@ describe("GET /api/verification/status", () => {
     expect(body.accountVerificationStatus).toBe("verified");
     expect(body.overallStatus).toBe("verified");
   });
+
+  it("returns persisted GPS mismatch and confidence context for the location step", async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: "profile-1",
+                  account_verification_status: "pending_review",
+                },
+              }),
+            }),
+          }),
+        };
+      }
+
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({
+              data: [
+                {
+                  step_type: "location",
+                  status: "approved",
+                  location_method: "manual_with_gps",
+                  location_province: "Gauteng",
+                  location_city: "Johannesburg",
+                  metadata: {
+                    gps_province: "Gauteng",
+                    gps_city: "Pretoria",
+                    confidence: "medium",
+                    mismatch: {
+                      province: false,
+                      city: true,
+                    },
+                  },
+                },
+              ],
+            }),
+          }),
+        };
+      }
+
+      return {};
+    });
+
+    const response = await GET({} as unknown as NextRequest);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.steps[0]).toMatchObject({
+      step_type: "location",
+      location_method: "manual_with_gps",
+      gps_mismatch: {
+        province: false,
+        city: true,
+      },
+      gps_resolved_province: "Gauteng",
+      gps_resolved_city: "Pretoria",
+      gps_confidence: "medium",
+    });
+  });
 });

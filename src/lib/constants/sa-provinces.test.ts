@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { SA_PROVINCES, getProvinceNames, getCitiesForProvince } from "./sa-provinces";
+import {
+  SA_PROVINCES,
+  citiesMatch,
+  getProvinceNames,
+  getCitiesForProvince,
+  normalizeProvinceName,
+  resolveCityName,
+} from "./sa-provinces";
 
 describe("sa-provinces", () => {
   it("contains exactly 9 provinces", () => {
@@ -60,6 +67,37 @@ describe("sa-provinces", () => {
     it("returns empty array for unknown province", () => {
       const cities = getCitiesForProvince("Narnia");
       expect(cities).toEqual([]);
+    });
+
+    it("accepts province aliases when fetching cities", () => {
+      const cities = getCitiesForProvince("kzn");
+      expect(cities).toContain("Durban");
+      expect(cities).toContain("Richards Bay");
+    });
+  });
+
+  describe("normalizeProvinceName", () => {
+    it("maps common province aliases to canonical names", () => {
+      expect(normalizeProvinceName("kzn")).toBe("KwaZulu-Natal");
+      expect(normalizeProvinceName("western cape")).toBe("Western Cape");
+    });
+  });
+
+  describe("resolveCityName", () => {
+    it("maps parenthetical city aliases to canonical stored values", () => {
+      expect(resolveCityName("Eastern Cape", "Gqeberha")).toBe("Port Elizabeth (Gqeberha)");
+      expect(resolveCityName("Mpumalanga", "Nelspruit")).toBe("Mbombela (Nelspruit)");
+    });
+  });
+
+  describe("citiesMatch", () => {
+    it("treats canonical city aliases as equivalent within a province", () => {
+      expect(citiesMatch("Eastern Cape", "Gqeberha", "Port Elizabeth (Gqeberha)")).toBe(true);
+      expect(citiesMatch("Mpumalanga", "Mbombela (Nelspruit)", "Nelspruit")).toBe(true);
+    });
+
+    it("does not match different cities within the same province", () => {
+      expect(citiesMatch("Gauteng", "Johannesburg", "Pretoria")).toBe(false);
     });
   });
 });

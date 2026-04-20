@@ -65,19 +65,9 @@ vi.mock("@/lib/constants/verification", () => ({
   GPS_CITY_MISMATCH_RISK: 25,
 }));
 
-vi.mock("@/lib/constants/sa-provinces", () => ({
-  getProvinceNames: () => [
-    "Gauteng",
-    "Western Cape",
-    "KwaZulu-Natal",
-    "Eastern Cape",
-    "Free State",
-    "Limpopo",
-    "Mpumalanga",
-    "Northern Cape",
-    "North West",
-  ],
-}));
+vi.mock("@/lib/constants/sa-provinces", async () => {
+  return vi.importActual("@/lib/constants/sa-provinces");
+});
 
 import { POST } from "@/app/api/verification/location/gps/route";
 import type { NextRequest } from "next/server";
@@ -304,6 +294,244 @@ describe("POST /api/verification/location/gps", () => {
         location_city: "Johannesburg",
         account_verification_status: "pending_review",
       })
+    );
+  });
+
+  it("treats canonical city aliases as a GPS match for the selected city", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },
+      error: null,
+    });
+    mockIsFeatureEnabled.mockResolvedValue(true);
+    mockParseAndValidateJsonRequest.mockResolvedValue({
+      success: true,
+      data: {
+        latitude: -33.9608,
+        longitude: 25.6022,
+        accuracy: 15,
+        timestamp: Date.now(),
+        declaredProvince: "Eastern Cape",
+        declaredCity: "Port Elizabeth (Gqeberha)",
+      },
+    });
+    mockReverseGeocode.mockResolvedValue({
+      province: "Eastern Cape",
+      city: "Gqeberha",
+      source: "nominatim",
+    });
+    mockComputeLocationConfidence.mockReturnValue("high");
+
+    const upsertVerificationStep = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: { id: "step-ec" }, error: null }),
+    });
+
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: "profile-1", account_verification_status: "incomplete" },
+              }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
+        };
+      }
+
+      if (table === "verification_sessions") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+            }),
+          }),
+          upsert: vi.fn().mockResolvedValue({ error: null }),
+        };
+      }
+
+      if (table === "verification_steps") {
+        return {
+          upsert: upsertVerificationStep,
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({
+              data: [
+                { step_type: "phone", status: "approved" },
+                { step_type: "id_doc", status: "pending" },
+                { step_type: "selfie", status: "approved" },
+                { step_type: "location", status: "approved" },
+              ],
+            }),
+          }),
+        };
+      }
+
+      if (table === "kyc_risk_signals") {
+        return {
+          insert: vi.fn().mockResolvedValue({ error: null }),
+        };
+      }
+
+      if (table === "kyc_artifacts") {
+        return {
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              is: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          }),
+        };
+      }
+
+      return {};
+    });
+
+    const res = await POST(
+      makeRequest({
+        latitude: -33.9608,
+        longitude: 25.6022,
+        accuracy: 15,
+        timestamp: Date.now(),
+        declaredProvince: "Eastern Cape",
+        declaredCity: "Port Elizabeth (Gqeberha)",
+      })
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual(
+      expect.objectContaining({
+        verified: true,
+        mismatch: {
+          province: false,
+          city: false,
+        },
+      })
+    );
+    expect(upsertVerificationStep).toHaveBeenCalledWith(
+      expect.objectContaining({
+        location_province: "Eastern Cape",
+        location_city: "Port Elizabeth (Gqeberha)",
+      }),
+      expect.anything()
+    );
+  });
+
+  it("returns success with warning-only city mismatch but does not mark the address GPS-verified", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },
+      error: null,
+    });
+    mockIsFeatureEnabled.mockResolvedValue(true);
+    mockParseAndValidateJsonRequest.mockResolvedValue({
+      success: true,
+      data: {
+        latitude: -26.2041,
+        longitude: 28.0473,
+        accuracy: 15,
+        timestamp: Date.now(),
+        declaredProvince: "Gauteng",
+        declaredCity: "Johannesburg",
+      },
+    });
+    mockReverseGeocode.mockResolvedValue({
+      province: "Gauteng",
+      city: "Pretoria",
+      source: "nominatim",
+    });
+    mockComputeLocationConfidence.mockReturnValue("medium");
+
+    const insertedSignals: unknown[] = [];
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: "profile-1", account_verification_status: "incomplete" },
+              }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
+        };
+      }
+
+      if (table === "verification_sessions") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+            }),
+          }),
+          upsert: vi.fn().mockResolvedValue({ error: null }),
+        };
+      }
+
+      if (table === "verification_steps") {
+        return {
+          upsert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: { id: "step-city-mismatch" }, error: null }),
+          }),
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({
+              data: [
+                { step_type: "phone", status: "approved" },
+                { step_type: "id_doc", status: "pending" },
+                { step_type: "selfie", status: "approved" },
+                { step_type: "location", status: "approved" },
+              ],
+            }),
+          }),
+        };
+      }
+
+      if (table === "kyc_risk_signals") {
+        return {
+          insert: vi.fn((rows: unknown[]) => {
+            insertedSignals.push(...rows);
+            return Promise.resolve({ error: null });
+          }),
+        };
+      }
+
+      if (table === "kyc_artifacts") {
+        return {
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              is: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          }),
+        };
+      }
+
+      return {};
+    });
+
+    const res = await POST(
+      makeRequest({
+        latitude: -26.2041,
+        longitude: 28.0473,
+        accuracy: 15,
+        timestamp: Date.now(),
+        declaredProvince: "Gauteng",
+        declaredCity: "Johannesburg",
+      })
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual(
+      expect.objectContaining({
+        verified: false,
+        mismatch: {
+          province: false,
+          city: true,
+        },
+      })
+    );
+    expect(insertedSignals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ signal_code: "gps_city_mismatch", severity: "warn" }),
+      ])
     );
   });
 
@@ -677,12 +905,6 @@ describe("POST /api/verification/location/gps", () => {
     });
     mockComputeLocationConfidence.mockReturnValue("high");
 
-    const insertedSignals: unknown[] = [];
-    const upsertVerificationStep = vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: { id: "step-1" }, error: null }),
-    });
-
     mockAdminFrom.mockImplementation((table: string) => {
       if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
@@ -706,29 +928,6 @@ describe("POST /api/verification/location/gps", () => {
           upsert: vi.fn().mockResolvedValue({ error: null }),
         };
       }
-      if (table === "verification_steps") {
-        return {
-          upsert: upsertVerificationStep,
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockResolvedValue({
-              data: [
-                { step_type: "phone", status: "approved" },
-                { step_type: "id_doc", status: "pending" },
-                { step_type: "selfie", status: "approved" },
-                { step_type: "location", status: "approved" },
-              ],
-            }),
-          }),
-        };
-      }
-      if (table === "kyc_risk_signals") {
-        return {
-          insert: vi.fn((rows: unknown[]) => {
-            insertedSignals.push(...rows);
-            return Promise.resolve({ error: null });
-          }),
-        };
-      }
       if (table === "kyc_artifacts") {
         return {
           update: vi.fn().mockReturnValue({
@@ -750,15 +949,12 @@ describe("POST /api/verification/location/gps", () => {
       })
     );
 
-    // Should still return 200 but the signal must be recorded as a block
-    expect(res.status).toBe(200);
-    expect(insertedSignals).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          signal_code: "gps_replay_detected",
-          severity: "block",
-        }),
-      ])
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toEqual(
+      expect.objectContaining({
+        code: "gps_replay_detected",
+        error: expect.stringMatching(/too old/i),
+      })
     );
   });
 });

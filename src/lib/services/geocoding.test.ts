@@ -81,6 +81,18 @@ describe("computeLocationConfidence", () => {
     expect(computeLocationConfidence(null, "Gauteng", null, "Johannesburg", 50)).toBe("none");
   });
 
+  it("returns 'high' for equivalent canonical city aliases with good accuracy", () => {
+    expect(
+      computeLocationConfidence(
+        "Eastern Cape",
+        "Eastern Cape",
+        "Gqeberha",
+        "Port Elizabeth (Gqeberha)",
+        30
+      )
+    ).toBe("high");
+  });
+
   it("returns 'low' when province does not match", () => {
     expect(
       computeLocationConfidence("Western Cape", "Gauteng", "Cape Town", "Johannesburg", 30)
