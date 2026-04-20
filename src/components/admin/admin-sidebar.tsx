@@ -346,7 +346,7 @@ export function AdminSidebar({
       {/* Desktop sidebar — hidden on mobile */}
       <aside
         className={cn(
-          "hidden md:flex sticky top-[65px] h-[calc(100vh-65px)] border-r bg-card transition-all duration-200 flex-col",
+          "sticky top-[65px] hidden h-[calc(100vh-65px)] shrink-0 flex-col border-r bg-card transition-all duration-200 md:flex",
           collapsed ? "w-16" : "w-56"
         )}
       >

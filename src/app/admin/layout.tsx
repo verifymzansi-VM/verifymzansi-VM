@@ -56,7 +56,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   ]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
+    <div className="flex min-h-screen flex-col overflow-x-hidden bg-slate-50 dark:bg-slate-950">
       {/* Admin specific minimalist top-nav instead of public Header */}
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-14 items-center justify-between gap-4">
@@ -75,7 +75,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <AdminLiveNotifier userId={staffUser.id} />
       <AdminRealtimeRefresh />
 
-      <div className="flex flex-1">
+      <div className="flex min-w-0 flex-1 overflow-x-hidden">
         <AdminSidebar
           pendingVerifications={pendingVerifications || 0}
           openReports={openReports || 0}
@@ -83,8 +83,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           userRole={role}
           evidenceDeskEnabled={evidenceDeskEnabled}
         />
-        <main className="flex-1 min-w-0 overflow-x-hidden overflow-y-auto">
-          <div className="w-full px-4 sm:px-6 py-4 sm:py-6">{children}</div>
+        <main className="min-w-0 flex-1 overflow-y-auto">
+          <div className="min-w-0 max-w-full px-4 py-4 sm:px-6 sm:py-6">{children}</div>
         </main>
       </div>
     </div>
