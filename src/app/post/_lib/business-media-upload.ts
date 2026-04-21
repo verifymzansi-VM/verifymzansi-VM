@@ -2,6 +2,7 @@ import { createLogger } from "@/lib/utils/logger";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { VideoTranscodeError, compressVideoForUpload } from "@/lib/media/compress-before-upload";
+import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-errors";
 import type { UploadArea } from "@/types/enums";
 
 const log = createLogger("BusinessMediaUpload");
@@ -28,6 +29,8 @@ type UploadResponse = {
   urls?: unknown;
   errors?: unknown;
   error?: unknown;
+  message?: unknown;
+  traceId?: unknown;
 };
 
 function parseUploadResponse(payload: UploadResponse | null) {
@@ -45,10 +48,83 @@ function parseUploadResponse(payload: UploadResponse | null) {
 
 function getPayloadError(payload: UploadResponse | null): string | null {
   if (!payload || typeof payload.error !== "string" || payload.error.trim().length === 0) {
-    return null;
+    if (typeof payload?.message !== "string" || payload.message.trim().length === 0) {
+      return null;
+    }
+
+    return payload.message.trim();
   }
 
   return payload.error.trim();
+}
+
+function getPayloadTraceId(payload: UploadResponse | null, response?: Response): string | null {
+  if (payload && typeof payload.traceId === "string" && payload.traceId.trim().length > 0) {
+    return payload.traceId.trim();
+  }
+
+  if (response && typeof response.headers?.get === "function") {
+    const traceId = response.headers.get("x-upload-trace-id");
+    if (traceId && traceId.trim().length > 0) {
+      return traceId.trim();
+    }
+  }
+
+  return null;
+}
+
+function appendTraceId(message: string, traceId: string | null): string {
+  if (!traceId || message.includes(traceId)) {
+    return message;
+  }
+
+  return `${message} (Trace: ${traceId})`;
+}
+
+async function readUploadError(response: Response, fallback: string): Promise<string> {
+  const payload = await parseJson(response);
+  const payloadError = getPayloadError(payload);
+  const traceId = getPayloadTraceId(payload, response);
+  const message = payloadError || `${fallback} (HTTP ${response.status})`;
+
+  return appendTraceId(normalizeCreatePostRuntimeError(new Error(message), fallback), traceId);
+}
+
+async function uploadBusinessVideoViaServer({
+  file,
+  area,
+}: {
+  file: File;
+  area: UploadArea;
+}): Promise<string> {
+  const uploadData = new FormData();
+  uploadData.append("area", area);
+  uploadData.append("files", file);
+
+  const response = await fetchWithRetry("/api/media/upload", {
+    method: "POST",
+    headers: withCsrfHeaders(),
+    body: uploadData,
+  });
+
+  const payload = await parseJson(response);
+  const { urls, errors } = parseUploadResponse(payload);
+  const uploadSucceeded = response.ok && errors.length === 0 && urls.length === 1;
+
+  if (!uploadSucceeded) {
+    const payloadError = getPayloadError(payload);
+    const detail = errors[0] ?? payloadError ?? `Failed to upload video (HTTP ${response.status})`;
+    const traceId = getPayloadTraceId(payload, response);
+    throw new BusinessMediaUploadError(
+      "cover_video",
+      appendTraceId(
+        normalizeCreatePostRuntimeError(new Error(detail), FIELD_MESSAGES.cover_video),
+        traceId
+      )
+    );
+  }
+
+  return urls[0] ?? "";
 }
 
 export class BusinessMediaUploadError extends Error {
@@ -143,65 +219,79 @@ export async function uploadRequiredBusinessVideo({
     throw error;
   }
 
-  const urlResponse = await fetchWithRetry("/api/media/upload-url", {
-    method: "POST",
-    headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({
+  try {
+    const urlResponse = await fetchWithRetry("/api/media/upload-url", {
+      method: "POST",
+      headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        filename: compressed.name,
+        contentType: compressed.type,
+        size: compressed.size,
+        area,
+      }),
+    });
+
+    const urlPayload = await parseJson(urlResponse);
+
+    if (!urlResponse.ok) {
+      log.warn("Direct business video upload URL generation failed; retrying via server upload", {
+        field: "cover_video",
+        area,
+        filename: file.name,
+        contentType: file.type,
+        status: urlResponse.status,
+        payloadError: getPayloadError(urlPayload),
+      });
+      throw new Error(await readUploadError(urlResponse, "Failed to get video upload URL"));
+    }
+
+    const uploadUrl =
+      urlPayload && typeof (urlPayload as Record<string, unknown>).uploadUrl === "string"
+        ? ((urlPayload as Record<string, unknown>).uploadUrl as string)
+        : null;
+    const publicUrl =
+      urlPayload && typeof (urlPayload as Record<string, unknown>).publicUrl === "string"
+        ? ((urlPayload as Record<string, unknown>).publicUrl as string)
+        : null;
+
+    if (!uploadUrl || !publicUrl) {
+      log.warn(
+        "Direct business video upload returned incomplete payload; retrying via server upload",
+        {
+          field: "cover_video",
+          area,
+          hasUploadUrl: Boolean(uploadUrl),
+          hasPublicUrl: Boolean(publicUrl),
+        }
+      );
+      throw new Error("Failed to get video upload URL");
+    }
+
+    const putResponse = await fetchWithRetry(uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": compressed.type },
+      body: compressed,
+    });
+
+    if (!putResponse.ok) {
+      log.warn("Direct business video upload PUT failed; retrying via server upload", {
+        field: "cover_video",
+        area,
+        filename: compressed.name,
+        status: putResponse.status,
+      });
+      throw new Error(`Failed to upload video (HTTP ${putResponse.status})`);
+    }
+
+    return publicUrl;
+  } catch (error) {
+    log.warn("Direct business video upload failed; retrying via server upload", {
+      field: "cover_video",
+      area,
       filename: compressed.name,
-      contentType: compressed.type,
-      size: compressed.size,
-      area,
-    }),
-  });
-
-  const urlPayload = await parseJson(urlResponse);
-
-  if (!urlResponse.ok) {
-    log.warn("Blocking business save because video upload URL generation failed", {
-      field: "cover_video",
-      area,
-      filename: file.name,
-      contentType: file.type,
-      status: urlResponse.status,
-      payloadError: getPayloadError(urlPayload),
+      error: error instanceof Error ? error.message : String(error),
     });
-    throw new BusinessMediaUploadError("cover_video");
+
+    return await uploadBusinessVideoViaServer({ file: compressed, area });
   }
-
-  const uploadUrl =
-    urlPayload && typeof (urlPayload as Record<string, unknown>).uploadUrl === "string"
-      ? ((urlPayload as Record<string, unknown>).uploadUrl as string)
-      : null;
-  const publicUrl =
-    urlPayload && typeof (urlPayload as Record<string, unknown>).publicUrl === "string"
-      ? ((urlPayload as Record<string, unknown>).publicUrl as string)
-      : null;
-
-  if (!uploadUrl || !publicUrl) {
-    log.warn("Blocking business save because upload URL payload was incomplete", {
-      field: "cover_video",
-      area,
-      hasUploadUrl: Boolean(uploadUrl),
-      hasPublicUrl: Boolean(publicUrl),
-    });
-    throw new BusinessMediaUploadError("cover_video");
-  }
-
-  const putResponse = await fetchWithRetry(uploadUrl, {
-    method: "PUT",
-    headers: { "Content-Type": compressed.type },
-    body: compressed,
-  });
-
-  if (!putResponse.ok) {
-    log.warn("Blocking business save because video upload PUT failed", {
-      field: "cover_video",
-      area,
-      filename: compressed.name,
-      status: putResponse.status,
-    });
-    throw new BusinessMediaUploadError("cover_video");
-  }
-
-  return publicUrl;
 }

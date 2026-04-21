@@ -374,55 +374,72 @@ describe("EditBusinessPage", () => {
     expect(mockPush).not.toHaveBeenCalled();
   });
 
-  it("blocks saving when a replacement promo video upload fails", async () => {
+  it("falls back to the server upload path when a replacement promo video upload fails", async () => {
     (global.fetch as unknown as ReturnType<typeof vi.fn>).mockReset();
-    (global.fetch as unknown as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce(
-        jsonResponse({
-          business: {
-            id: "business-1",
-            status: "live",
-            business_type: "home_business",
-            business_name: "Nomsa Home Studio",
-            slug: "nomsa-home-studio",
-            description: "A home-based studio.",
-            category: "health_beauty",
-            location_province: "Gauteng",
-            location_city: "Johannesburg",
-            store_number: null,
-            map_directions: "",
-            phone: "",
-            whatsapp: "",
-            email: "",
-            website: "",
-            logo_url: "",
-            cover_photo: "",
-            cover_video: "",
-            video_thumbnail: "",
-            gallery_photos: [],
-            services_offered: [],
-            payment_methods_accepted: [],
-            delivery_options: [],
-            social_links: {},
-            operating_hours: {},
-            service_areas: null,
-            business_details: {
-              type: "home_business",
-              service_suburb: "Noordwyk",
-              appointment_required: true,
-              customer_pickup_allowed: false,
-              visitor_notes: "",
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/businesses/business-1") {
+          const existingBusiness = {
+            business: {
+              id: "business-1",
+              status: "live",
+              business_type: "home_business",
+              business_name: "Nomsa Home Studio",
+              slug: "nomsa-home-studio",
+              description: "A home-based studio.",
+              category: "health_beauty",
+              location_province: "Gauteng",
+              location_city: "Johannesburg",
+              store_number: null,
+              map_directions: "",
+              phone: "",
+              whatsapp: "",
+              email: "",
+              website: "",
+              logo_url: "",
+              cover_photo: "",
+              cover_video: "",
+              video_thumbnail: "",
+              gallery_photos: [],
+              services_offered: [],
+              payment_methods_accepted: [],
+              delivery_options: [],
+              social_links: {},
+              operating_hours: {},
+              service_areas: null,
+              business_details: {
+                type: "home_business",
+                service_suburb: "Noordwyk",
+                appointment_required: true,
+                customer_pickup_allowed: false,
+                visitor_notes: "",
+              },
             },
-          },
-        })
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
-          uploadUrl: "https://upload.example.com/business-video",
-          publicUrl: "https://media.verifymzansi.com/media/business_cover/user/video.mp4",
-        })
-      )
-      .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) });
+          };
+
+          return jsonResponse(existingBusiness, { status: 200 });
+        }
+
+        if (input === "/api/media/upload-url") {
+          return jsonResponse({
+            uploadUrl: "https://upload.example.com/business-video",
+            publicUrl: "https://media.verifymzansi.com/media/business_cover/user/video.mp4",
+          });
+        }
+
+        if (input === "https://upload.example.com/business-video") {
+          return { ok: false, status: 500, json: async () => ({}) };
+        }
+
+        if (input === "/api/media/upload") {
+          return jsonResponse({
+            urls: ["https://media.verifymzansi.com/media/business_cover/user/video-fallback.mp4"],
+          });
+        }
+
+        return jsonResponse({ success: true }, { status: 200 });
+      }
+    );
 
     render(<EditBusinessPage />);
 
@@ -433,10 +450,19 @@ describe("EditBusinessPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Video \(1 max\)/i }));
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
 
-    expect(
-      (await screen.findAllByText("Promo video upload failed. Retry the selected file.")).length
-    ).toBeGreaterThan(0);
-    expect(global.fetch).toHaveBeenCalledTimes(3);
-    expect(mockPush).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/businesses/business-1",
+        expect.objectContaining({
+          method: "PATCH",
+          body: expect.stringContaining(
+            '"cover_video":"https://media.verifymzansi.com/media/business_cover/user/video-fallback.mp4"'
+          ),
+        })
+      );
+    });
+
+    expect(screen.queryByText("Promo video upload failed. Retry the selected file.")).toBeNull();
+    expect(mockPush).toHaveBeenCalled();
   });
 });

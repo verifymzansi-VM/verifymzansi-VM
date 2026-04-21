@@ -27,6 +27,16 @@ export const mediaBucket = new cloudflare.R2Bucket("verifymzansi-media", {
   name: "verifymzansi-media",
 });
 
+// NOTE: browser direct uploads to the public bucket depend on an account-level
+// R2 bucket CORS policy that currently sits outside this Pulumi program.
+// Keep the bucket policy aligned with the public app origins configured in
+// wrangler.toml / NEXT_PUBLIC_APP_URL, including:
+//   - https://verifymzansi.com
+//   - https://www.verifymzansi.com
+//   - https://staging.verifymzansi.com
+// If these origins drift out of sync, presigned browser PUT uploads can fail
+// on the media/review step even while server-side photo uploads continue to work.
+
 // ── R2 Bucket — KYC evidence (private, encrypted at rest) ─
 export const kycBucket = new cloudflare.R2Bucket("verifymzansi-kyc", {
   accountId,

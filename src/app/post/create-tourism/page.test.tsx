@@ -664,6 +664,102 @@ describe("CreateTourismPage type switch behavior", () => {
     expect(requestBody.videos).toEqual(["https://media.verifymzansi.com/promotion/video.mp4"]);
   });
 
+  it("falls back to the server upload path when direct event video upload fails", async () => {
+    mediaFilesByLabel.set("Upload video", [new File(["video"], "clip.mp4", { type: "video/mp4" })]);
+
+    (fetchWithRetry as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/media/upload-url") {
+          return {
+            ok: true,
+            json: async () => ({
+              uploadUrl: "https://upload.example.com/promo-video",
+              publicUrl: "https://media.verifymzansi.com/promotion/video.mp4",
+            }),
+          };
+        }
+        if (input === "https://upload.example.com/promo-video") {
+          throw new TypeError("Failed to fetch");
+        }
+        if (input === "/api/media/upload") {
+          return {
+            ok: true,
+            json: async () => ({
+              urls: ["https://media.verifymzansi.com/promotion/video-fallback.mp4"],
+              errors: [],
+            }),
+          };
+        }
+
+        throw new Error(`Unexpected fetchWithRetry call: ${String(input)}`);
+      }
+    );
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/promotions") {
+          return {
+            ok: true,
+            status: 201,
+            json: async () => ({ success: true, promotion: { id: "promo-1" } }),
+          };
+        }
+
+        return {
+          ok: true,
+          json: async () => ({ id: "ok" }),
+        };
+      }
+    );
+
+    render(<CreateTourismPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Event/ }));
+    fireEvent.change(screen.getByLabelText("Event Title *"), {
+      target: { value: "Soweto Food Festival" },
+    });
+    fireEvent.change(screen.getByLabelText("Description *"), {
+      target: { value: "A detailed event description with enough content to pass validation." },
+    });
+    fireEvent.change(screen.getByLabelText("Event Type"), {
+      target: { value: "festival_concert" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText("Start Date *"), {
+      target: { value: "2099-12-01" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText("Province"), {
+      target: { value: "Gauteng" },
+    });
+    fireEvent.change(screen.getByLabelText("City"), {
+      target: { value: "Johannesburg" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Add media for Upload video/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/promotions",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining(
+            '"videos":["https://media.verifymzansi.com/promotion/video-fallback.mp4"]'
+          ),
+        })
+      );
+    });
+
+    expect(
+      screen.queryByText(
+        "Selected media could not be uploaded. Retry the highlighted files and try again."
+      )
+    ).toBeNull();
+  });
+
   it("marks the event preview card as video media for blob-based uploads", async () => {
     mediaFilesByLabel.set("Upload video", [new File(["video"], "clip.mp4", { type: "video/mp4" })]);
 

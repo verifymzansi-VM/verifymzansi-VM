@@ -568,15 +568,33 @@ describe("CreateBusinessPage", () => {
     });
   });
 
-  it("blocks submission when a selected promo video upload fails", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce(
-        jsonResponse({
-          uploadUrl: "https://upload.example.com/business-video",
-          publicUrl: "https://media.verifymzansi.com/media/business_cover/user/video.mp4",
-        })
-      )
-      .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) });
+  it("falls back to the server upload path when direct promo video upload fails", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/media/upload-url") {
+          return jsonResponse({
+            uploadUrl: "https://upload.example.com/business-video",
+            publicUrl: "https://media.verifymzansi.com/media/business_cover/user/video.mp4",
+          });
+        }
+
+        if (input === "https://upload.example.com/business-video") {
+          return { ok: false, status: 500, json: async () => ({}) };
+        }
+
+        if (input === "/api/media/upload") {
+          return jsonResponse({
+            urls: ["https://media.verifymzansi.com/media/business_cover/user/video-fallback.mp4"],
+          });
+        }
+
+        if (input === "/api/businesses") {
+          return jsonResponse({ success: true, business: { id: "biz-1" } }, { status: 201 });
+        }
+
+        return jsonResponse({});
+      }
+    );
 
     render(<CreateBusinessPage />);
 
@@ -590,11 +608,22 @@ describe("CreateBusinessPage", () => {
       fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
     });
 
-    expect(
-      (await screen.findAllByText("Promo video upload failed. Retry the selected file.")).length
-    ).toBeGreaterThan(0);
-    expect(global.fetch).toHaveBeenCalledTimes(2);
-    expect(mockPush).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/businesses",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining(
+            '"cover_video":"https://media.verifymzansi.com/media/business_cover/user/video-fallback.mp4"'
+          ),
+        })
+      );
+    });
+
+    expect(screen.queryByText("Promo video upload failed. Retry the selected file.")).toBeNull();
+    expect(mockPush).toHaveBeenCalledWith(
+      "/dashboard/listings?area=MZANSI_BUSINESS&created=business"
+    );
   });
 
   it("renders subtype-specific details in the shared review preview", async () => {
