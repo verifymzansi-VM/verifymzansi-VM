@@ -85,10 +85,7 @@ export async function HomeBusinessShowcase() {
     >
       <AutoScrollRail ariaLabel="Mzansi Business" showEdgeFades={false} flushEdges>
         {items.map((b) => (
-          <div
-            key={b.id}
-            className="h-full min-w-[210px] max-w-[272px] sm:min-w-[228px] sm:max-w-[296px] lg:min-w-[248px] lg:max-w-[320px]"
-          >
+          <div key={b.id} className="h-full w-[272px] sm:w-[296px] lg:w-[320px]">
             <BusinessPreviewCard
               id={b.id}
               href={`/mzansi-business/${b.id}`}

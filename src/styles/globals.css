@@ -123,10 +123,8 @@
 
   @media (min-width: 1024px) {
     .desktop-page-scale {
-      /* No margin-inline here: with zoom the element starts at x=0 and
-         zoom scales it to exactly viewport-width. Adding negative margin
-         would shift the whole page left and clip the sidebar. */
       width: calc(100% / var(--desktop-page-scale));
+      margin-inline: calc((100% - (100% / var(--desktop-page-scale))) / 2);
       overflow-x: hidden;
       overflow-x: clip;
       zoom: var(--desktop-page-scale);

@@ -176,7 +176,7 @@ export function PosterCardShell({
     ? "text-[11.5px] sm:text-[12.5px]"
     : "text-[11px] sm:text-xs";
   const wrapperClassName = cn(
-    "group relative block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+    "group relative block h-full w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
     rootRadiusClassName,
     className
   );
@@ -186,7 +186,7 @@ export function PosterCardShell({
     }
   };
   const cardClassName = cn(
-    "relative h-full flex flex-col overflow-hidden border-transparent transition-all duration-300",
+    "relative h-full w-full flex flex-col overflow-hidden border-transparent transition-all duration-300",
     isHeroVariant
       ? "border border-slate-200 bg-white text-slate-950 shadow-[0_34px_110px_-52px_rgba(15,23,42,0.72)] ring-1 ring-black/5 hover:-translate-y-0.5 hover:shadow-[0_44px_125px_-56px_rgba(15,23,42,0.82)] dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:ring-white/10"
       : isShowcaseVariant
@@ -425,7 +425,7 @@ export function PosterCardShell({
         draggable={disableNativeDrag ? false : undefined}
         onDragStart={handleNativeDragStart}
         className={cn(
-          "block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+          "block h-full w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
           rootRadiusClassName
         )}
       >

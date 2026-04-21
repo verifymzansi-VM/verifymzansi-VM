@@ -82,10 +82,7 @@ export async function HomeMzansiMarketShowcase() {
           const isBoosted = l.boost_until ? new Date(l.boost_until) > new Date() : false;
           const poster = l.video_thumbnail || l.photos?.[0] || undefined;
           return (
-            <div
-              key={l.id}
-              className="h-full min-w-[210px] max-w-[272px] sm:min-w-[228px] sm:max-w-[296px] lg:min-w-[248px] lg:max-w-[320px]"
-            >
+            <div key={l.id} className="h-full w-[272px] sm:w-[296px] lg:w-[320px]">
               <MarketPreviewCard
                 href={`/listing/${l.id}`}
                 imageUrl={displayUrl}
