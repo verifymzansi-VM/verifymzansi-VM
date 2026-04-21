@@ -697,8 +697,6 @@ export function UnifiedLayout({
                 promotionType={promo.promotion_type as PromotionType}
                 createdAt={promo.created_at}
                 viewCount={promo.view_count ?? undefined}
-                likeCount={typeof promo.like_count === "number" ? promo.like_count : undefined}
-                viewerHasLiked={promo.viewer_has_liked ?? false}
                 boosted={promo.boost_until ? new Date(promo.boost_until) > new Date() : false}
                 featured={
                   promo.featured_until ? new Date(promo.featured_until) > new Date() : false

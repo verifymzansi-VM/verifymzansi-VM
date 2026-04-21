@@ -32,7 +32,6 @@ describe("BusinessPreviewCard", () => {
 
     render(
       <BusinessPreviewCard
-        id="business-1"
         href="/mzansi-business/business-1"
         imageUrl="https://example.com/poster.jpg"
         title="Nomsa Fashion"
@@ -47,5 +46,6 @@ describe("BusinessPreviewCard", () => {
       disableNativeDrag: true,
       feedPlaybackActive: true,
     });
+    expect(posterCardSpy.mock.calls[0]?.[0]).not.toHaveProperty("engagementTargetId");
   });
 });

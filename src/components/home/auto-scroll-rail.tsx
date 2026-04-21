@@ -329,19 +329,22 @@ export function AutoScrollRail({
     startX.current = e.clientX - container.getBoundingClientRect().left;
     scrollLeftStr.current = container.scrollLeft;
     dragMoved.current = false;
+    const startedOnLink = e.target instanceof HTMLElement && Boolean(e.target.closest("a[href]"));
 
     container.style.scrollBehavior = "auto";
     container.style.scrollSnapType = "none";
 
-    try {
-      if (
-        typeof container.setPointerCapture === "function" &&
-        !container.hasPointerCapture?.(e.pointerId)
-      ) {
-        container.setPointerCapture(e.pointerId);
+    if (!startedOnLink) {
+      try {
+        if (
+          typeof container.setPointerCapture === "function" &&
+          !container.hasPointerCapture?.(e.pointerId)
+        ) {
+          container.setPointerCapture(e.pointerId);
+        }
+      } catch {
+        /* noop */
       }
-    } catch {
-      /* noop */
     }
   };
 

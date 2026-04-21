@@ -9,11 +9,7 @@ import { AutoScrollRail } from "./auto-scroll-rail";
 import { HomeShowcaseShell } from "./home-showcase-shell";
 import type { BusinessCategory, BusinessType, PromotionType } from "@/types/enums";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
-import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
-import {
-  getOptionalContentLikeSummaryMap,
-  getOptionalContentViewCountMap,
-} from "@/lib/engagement-server";
+import { getOptionalContentViewCountMap } from "@/lib/engagement-server";
 import {
   buildPublicEventPromotionsQuery,
   buildPublicTourismBusinessesQuery,
@@ -77,7 +73,6 @@ export async function HomePromotionsShowcase() {
   const hideFixtures = shouldHidePlaywrightFixtures(
     readCookieValue(cookieStore, PLAYWRIGHT_HIDE_FIXTURES_COOKIE)
   );
-  const viewerKey = buildViewerKey(readCookieValue(cookieStore, ENGAGEMENT_VIEWER_COOKIE) ?? null);
   const supabase = await createClient();
   const engagementAdmin = tryCreateAdminClient();
   const now = new Date().toISOString();
@@ -95,10 +90,11 @@ export async function HomePromotionsShowcase() {
     .filter((promotion) => !isPlaceholderMarketplaceContent(promotion.title))
     .slice(0, 4);
   const promotionIds = promotions.map((promotion) => promotion.id);
-  const [promotionViewCountMap, promotionLikeSummary] = await Promise.all([
-    getOptionalContentViewCountMap(engagementAdmin, "promotion", promotionIds),
-    getOptionalContentLikeSummaryMap(engagementAdmin, "promotion", promotionIds, viewerKey),
-  ]);
+  const promotionViewCountMap = await getOptionalContentViewCountMap(
+    engagementAdmin,
+    "promotion",
+    promotionIds
+  );
 
   const { data: tourismData } = await buildPublicTourismBusinessesQuery(
     supabase,
@@ -112,10 +108,11 @@ export async function HomePromotionsShowcase() {
     .filter((b) => !isPlaceholderMarketplaceContent(b.business_name))
     .slice(0, 4);
   const tourismIds = tourismBusinesses.map((business) => business.id);
-  const [tourismViewCountMap, tourismLikeSummary] = await Promise.all([
-    getOptionalContentViewCountMap(engagementAdmin, "business", tourismIds),
-    getOptionalContentLikeSummaryMap(engagementAdmin, "business", tourismIds, viewerKey),
-  ]);
+  const tourismViewCountMap = await getOptionalContentViewCountMap(
+    engagementAdmin,
+    "business",
+    tourismIds
+  );
 
   // Fetch business logos for promotions linked to a business
   const businessIds = [
@@ -188,7 +185,6 @@ export async function HomePromotionsShowcase() {
           >
             {item.kind === "tourism" ? (
               <BusinessPreviewCard
-                id={item.data.id}
                 href={`/mzansi-business/${item.data.id}`}
                 imageUrl={
                   item.data.cover_video ||
@@ -214,16 +210,6 @@ export async function HomePromotionsShowcase() {
                   tourismViewCountMap.ok
                     ? (tourismViewCountMap.data.get(item.data.id) ?? undefined)
                     : undefined
-                }
-                likeCount={
-                  tourismLikeSummary.ok
-                    ? (tourismLikeSummary.data.get(item.data.id)?.likeCount ?? undefined)
-                    : undefined
-                }
-                viewerHasLiked={
-                  tourismLikeSummary.ok
-                    ? (tourismLikeSummary.data.get(item.data.id)?.viewerHasLiked ?? false)
-                    : false
                 }
                 priority={false}
                 focalX={item.data.focal_x}
@@ -253,16 +239,6 @@ export async function HomePromotionsShowcase() {
                   promotionViewCountMap.ok
                     ? (promotionViewCountMap.data.get(item.data.id) ?? undefined)
                     : undefined
-                }
-                likeCount={
-                  promotionLikeSummary.ok
-                    ? (promotionLikeSummary.data.get(item.data.id)?.likeCount ?? undefined)
-                    : undefined
-                }
-                viewerHasLiked={
-                  promotionLikeSummary.ok
-                    ? (promotionLikeSummary.data.get(item.data.id)?.viewerHasLiked ?? false)
-                    : false
                 }
                 boosted={
                   item.data.boost_until ? new Date(item.data.boost_until) > new Date(now) : false

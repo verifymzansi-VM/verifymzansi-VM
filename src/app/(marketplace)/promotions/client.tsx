@@ -631,10 +631,6 @@ export function PromotionsExplorer() {
                       featuredUntil={business.featured_until}
                       serviceAreas={business.service_areas}
                       viewCount={business.view_count ?? 0}
-                      likeCount={
-                        typeof business.like_count === "number" ? business.like_count : undefined
-                      }
-                      viewerHasLiked={business.viewer_has_liked ?? false}
                       focalX={business.focal_x}
                       focalY={business.focal_y}
                       mediaWidth={business.media_width}
@@ -703,12 +699,6 @@ export function PromotionsExplorer() {
                         ownerTrustLevel={accountProfile?.trust}
                         ownerName={accountProfile?.display_name}
                         viewCount={promotion.view_count}
-                        likeCount={
-                          typeof promotion.like_count === "number"
-                            ? promotion.like_count
-                            : undefined
-                        }
-                        viewerHasLiked={promotion.viewer_has_liked ?? false}
                         boosted={isBoosted}
                         featured={isFeatured}
                         startDate={promotion.start_date}

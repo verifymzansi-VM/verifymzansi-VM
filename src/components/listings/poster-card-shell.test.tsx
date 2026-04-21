@@ -143,24 +143,20 @@ describe("PosterCardShell", () => {
     expect(heroCard?.className).not.toContain("backdrop-blur");
   });
 
-  it("renders engagement counts and a like button when engagement data is provided", () => {
-    const { container } = render(
+  it("renders poster cards without a like button overlay", () => {
+    render(
       <PosterCardShell
-        href="/listing/engaged"
-        title="Engaged card"
+        href="/listing/plain"
+        title="Plain card"
         mediaUrl="https://example.com/poster.jpg"
         viewCount={128}
-        likeCount={1200}
-        viewerHasLiked
-        engagementTargetId="listing-123"
-        engagementTargetType="listing"
       />
     );
 
-    expect(screen.queryByText(/views/i)).not.toBeInTheDocument();
-    const likeButton = screen.getByRole("button", { name: /unlike this card/i });
-    expect(likeButton).toBeInTheDocument();
-    expect(likeButton).toHaveTextContent("999");
-    expect(container.querySelector(".bottom-3.right-3")).toBeTruthy();
+    expect(screen.getByRole("link", { name: /plain card/i })).toHaveAttribute(
+      "href",
+      "/listing/plain"
+    );
+    expect(screen.queryByRole("button", { name: /like this card|unlike this card/i })).toBeNull();
   });
 });

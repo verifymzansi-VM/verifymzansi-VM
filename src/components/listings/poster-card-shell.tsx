@@ -10,12 +10,10 @@ import {
   type MediaFitStrategy,
 } from "@/components/ui/video-card-player";
 import { VideoDurationBadge } from "@/components/ui/video-duration-badge";
-import { ContentLikeButton } from "@/components/listings/content-like-button";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
 import type { TrustLevel } from "@/types/enums";
 import type { ReactNode } from "react";
-import type { ContentTargetType } from "@/lib/engagement";
 
 const CARD_FRAME = { aspectRatio: 9 / 16, aspectClassName: "aspect-[9/16]" } as const;
 type PosterCardVariant = "default" | "showcase" | "hero";
@@ -51,14 +49,6 @@ interface PosterCardShellProps {
   createdAt?: string | null;
   /** View count — shown in the card engagement row. */
   viewCount?: number | null;
-  /** Like count — shown in the card engagement row and button. */
-  likeCount?: number | null;
-  /** Whether the current browser has liked this card. */
-  viewerHasLiked?: boolean;
-  /** Enables the persisted card like action. */
-  engagementTargetId?: string;
-  /** Target type for persisted likes. */
-  engagementTargetType?: ContentTargetType;
   /** Fit strategy for media in constrained frames. */
   fitStrategy?: MediaFitStrategy;
   /** Load the first-visible card's images eagerly for faster above-the-fold paint. */
@@ -116,10 +106,6 @@ export function PosterCardShell({
   location,
   createdAt: _createdAt,
   viewCount: _viewCount,
-  likeCount,
-  viewerHasLiked = false,
-  engagementTargetId,
-  engagementTargetType,
   fitStrategy = "contain",
   priority = false,
   videoDuration,
@@ -137,9 +123,6 @@ export function PosterCardShell({
   feedPlaybackActive = true,
   deferVideoLoadUntilPlay = false,
 }: PosterCardShellProps) {
-  const canLike = Boolean(
-    engagementTargetId && engagementTargetType && typeof likeCount === "number"
-  );
   const normalizedMediaUrl = mediaUrl ? normalizeMediaUrl(mediaUrl) : undefined;
   const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
   const normalizedLogoUrl = logoUrl ? normalizeMediaUrl(logoUrl) : undefined;
@@ -195,12 +178,7 @@ export function PosterCardShell({
     rootRadiusClassName,
     accentClassName
   );
-  const metadataClassName = cn(
-    "flex flex-1",
-    contentPaddingClassName,
-    canLike ? "pr-14" : undefined,
-    contentClassName
-  );
+  const metadataClassName = cn("flex flex-1", contentPaddingClassName, contentClassName);
   const metadataBody = (
     <div className={metadataClassName}>
       {/* Channel avatar / logo */}
@@ -391,33 +369,11 @@ export function PosterCardShell({
   );
 
   if (showPlaybackControl) {
-    return (
-      <div className={wrapperClassName}>
-        {canLike ? (
-          <ContentLikeButton
-            targetId={engagementTargetId!}
-            targetType={engagementTargetType!}
-            initialLikeCount={likeCount}
-            initialLiked={viewerHasLiked}
-            className="absolute bottom-3 right-3"
-          />
-        ) : null}
-        {cardInner}
-      </div>
-    );
+    return <div className={wrapperClassName}>{cardInner}</div>;
   }
 
   return (
     <div className={wrapperClassName}>
-      {canLike ? (
-        <ContentLikeButton
-          targetId={engagementTargetId!}
-          targetType={engagementTargetType!}
-          initialLikeCount={likeCount}
-          initialLiked={viewerHasLiked}
-          className="absolute bottom-3 right-3"
-        />
-      ) : null}
       <Link
         href={href}
         prefetch={false}

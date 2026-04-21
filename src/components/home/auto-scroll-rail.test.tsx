@@ -311,6 +311,29 @@ describe("AutoScrollRail", () => {
     fireEvent.pointerUp(rail, { pointerType: "mouse", pointerId: 7 });
   });
 
+  it("does not cancel pointerdown defaults or capture the pointer when a click starts on a card link", () => {
+    render(
+      <AutoScrollRail ariaLabel="Clickable link rail">
+        <RailLinkProbe label="one" />
+        <RailLinkProbe label="two" />
+      </AutoScrollRail>
+    );
+
+    const rail = screen.getByLabelText("Clickable link rail") as HTMLDivElement;
+    mockRailLayout(rail, 240);
+    const link = screen.getByTestId("rail-link-one");
+
+    expect(
+      fireEvent.pointerDown(link, {
+        pointerType: "mouse",
+        button: 0,
+        clientX: 180,
+        pointerId: 8,
+      })
+    ).toBe(true);
+    expect(rail.setPointerCapture).not.toHaveBeenCalled();
+  });
+
   it("suppresses click-through after a desktop drag gesture", () => {
     const clickSpy = vi.fn();
 

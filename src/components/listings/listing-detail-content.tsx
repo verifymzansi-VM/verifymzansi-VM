@@ -447,8 +447,6 @@ export function ListingDetailContent({
                         sellerRow ? computeTrustLevel(sellerRow.account_verification_status) : 0
                       }
                       viewCount={item.view_count ?? undefined}
-                      likeCount={typeof item.like_count === "number" ? item.like_count : undefined}
-                      viewerHasLiked={item.viewer_has_liked ?? false}
                       featured={item.featured}
                       logoUrl={item.logo_url}
                       focalX={item.focal_x}

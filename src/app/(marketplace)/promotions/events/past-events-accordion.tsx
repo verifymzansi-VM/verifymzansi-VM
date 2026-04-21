@@ -26,8 +26,6 @@ interface PastEvent {
   viewCount?: number;
   startDate?: string | null;
   endDate?: string | null;
-  likeCount?: number;
-  viewerHasLiked?: boolean;
 }
 
 export function PastEventsAccordion({ events }: { events: PastEvent[] }) {
@@ -73,8 +71,6 @@ export function PastEventsAccordion({ events }: { events: PastEvent[] }) {
                 viewCount={event.viewCount}
                 startDate={event.startDate}
                 endDate={event.endDate}
-                likeCount={event.likeCount}
-                viewerHasLiked={event.viewerHasLiked}
                 focalX={event.focalX}
                 focalY={event.focalY}
                 mediaWidth={event.mediaWidth}

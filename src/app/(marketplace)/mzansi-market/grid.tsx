@@ -404,10 +404,6 @@ export function MzansiMarketGrid() {
                   mediaWidth={listing.media_width}
                   mediaHeight={listing.media_height}
                   viewCount={listing.view_count ?? undefined}
-                  likeCount={
-                    typeof listing.like_count === "number" ? listing.like_count : undefined
-                  }
-                  viewerHasLiked={listing.viewer_has_liked ?? false}
                 />
               </div>
             );

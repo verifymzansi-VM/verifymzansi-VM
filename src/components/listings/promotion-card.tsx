@@ -7,7 +7,6 @@ import { PosterCardShell } from "@/components/listings/poster-card-shell";
 import { useAutoScrollRailItemState } from "@/components/home/auto-scroll-rail";
 import { getStoredPromotionTypePresentation } from "@/lib/promotions/type-presentation";
 import type { TrustLevel, PromotionType } from "@/types/enums";
-import type { ContentTargetType } from "@/lib/engagement";
 
 interface PromotionCardProps {
   id: string;
@@ -25,8 +24,6 @@ interface PromotionCardProps {
   ownerTrustLevel?: TrustLevel;
   ownerName?: string;
   viewCount?: number;
-  likeCount?: number;
-  viewerHasLiked?: boolean;
   boosted?: boolean;
   featured?: boolean;
   startDate?: string | null;
@@ -142,7 +139,6 @@ export const PromotionCard = memo(function PromotionCard({
   ownerTrustLevel = 0,
   ownerName: _ownerName,
   viewCount,
-  likeCount,
   categoryLabel: _categoryLabel,
   boosted,
   featured,
@@ -157,7 +153,6 @@ export const PromotionCard = memo(function PromotionCard({
   mediaWidth,
   mediaHeight,
   disableNativeDrag = false,
-  viewerHasLiked = false,
 }: PromotionCardProps) {
   const { isActive, isRailDragging } = useAutoScrollRailItemState();
   const typePresentation = getStoredPromotionTypePresentation(promotionType);
@@ -165,7 +160,6 @@ export const PromotionCard = memo(function PromotionCard({
   const urgency = getUrgencyLabel(endDate);
   const eyebrow = formatPromotionEyebrow(price, negotiable, promotionType, startDate, urgency);
   const description = buildDescription(businessName);
-  const targetType: ContentTargetType = "promotion";
 
   return (
     <PosterCardShell
@@ -180,10 +174,6 @@ export const PromotionCard = memo(function PromotionCard({
       location={city || null}
       createdAt={createdAt}
       viewCount={viewCount}
-      likeCount={likeCount}
-      viewerHasLiked={viewerHasLiked}
-      engagementTargetId={id}
-      engagementTargetType={targetType}
       fitStrategy="smart"
       logoUrl={logoUrl}
       eyebrowClassName={

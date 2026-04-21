@@ -18,12 +18,7 @@ import {
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 import { PastEventsAccordion } from "./past-events-accordion";
 import Link from "next/link";
-import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
-import {
-  getOptionalContentLikeSummaryMap,
-  getOptionalContentViewCountMap,
-} from "@/lib/engagement-server";
-import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
+import { getOptionalContentViewCountMap } from "@/lib/engagement-server";
 
 export const metadata = {
   title: "Events",
@@ -88,8 +83,6 @@ function isPlaceholderEvent(event: { title: string | null; description?: string 
 }
 
 export default async function EventsPage() {
-  const cookieStore = await getOptionalCookieStore();
-  const viewerKey = buildViewerKey(readCookieValue(cookieStore, ENGAGEMENT_VIEWER_COOKIE) ?? null);
   const admin = await createClient();
   const engagementAdmin = tryCreateAdminClient();
   const promotionOwnerColumn = await getOwnerColumn(admin, "promotions");
@@ -140,10 +133,11 @@ export default async function EventsPage() {
     (event) => !isPlaceholderEvent(event)
   );
   const allEventIds = [...upcoming, ...past].map((event) => event.id);
-  const [allViewSummary, allLikeSummary] = await Promise.all([
-    getOptionalContentViewCountMap(engagementAdmin, "promotion", allEventIds),
-    getOptionalContentLikeSummaryMap(engagementAdmin, "promotion", allEventIds, viewerKey),
-  ]);
+  const allViewSummary = await getOptionalContentViewCountMap(
+    engagementAdmin,
+    "promotion",
+    allEventIds
+  );
   const allEvents = [...upcoming, ...past];
   const accountIds = [...new Set(allEvents.map((event) => readOwnerId(event)).filter(Boolean))];
   const { data: accountProfiles } = accountIds.length
@@ -256,16 +250,6 @@ export default async function EventsPage() {
                             ? (allViewSummary.data.get(event.id) ?? undefined)
                             : undefined
                         }
-                        likeCount={
-                          allLikeSummary.ok
-                            ? (allLikeSummary.data.get(event.id)?.likeCount ?? undefined)
-                            : undefined
-                        }
-                        viewerHasLiked={
-                          allLikeSummary.ok
-                            ? (allLikeSummary.data.get(event.id)?.viewerHasLiked ?? false)
-                            : false
-                        }
                         boosted={isBoosted}
                         featured={isFeatured}
                         startDate={event.start_date as string | null}
@@ -328,12 +312,6 @@ export default async function EventsPage() {
               ownerName: accountProfile?.name,
               startDate: event.start_date,
               endDate: event.end_date,
-              likeCount: allLikeSummary.ok
-                ? (allLikeSummary.data.get(event.id)?.likeCount ?? undefined)
-                : undefined,
-              viewerHasLiked: allLikeSummary.ok
-                ? (allLikeSummary.data.get(event.id)?.viewerHasLiked ?? false)
-                : false,
               focalX: (event.focal_x as number | null | undefined) ?? null,
               focalY: (event.focal_y as number | null | undefined) ?? null,
               mediaWidth: (event.media_width as number | null | undefined) ?? null,

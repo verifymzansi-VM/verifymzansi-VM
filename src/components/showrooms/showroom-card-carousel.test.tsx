@@ -335,6 +335,13 @@ describe("ShowroomCardCarousel", () => {
     expect(screen.getByText("Slide 2 of 3")).toBeInTheDocument();
   });
 
+  it("does not cancel pointerdown defaults on the active card link surface", () => {
+    render(<ShowroomCardCarousel items={mockItems} />);
+    const activeLink = screen.getByRole("link", { name: "Open Test Listing" });
+
+    expect(fireEvent.pointerDown(activeLink, { clientX: 240, pointerId: 1 })).toBe(true);
+  });
+
   it("treats side-card drags as carousel rotation instead of a recenter click", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
     const sideLink = screen.getByRole("link", { name: "Open Test Business" });

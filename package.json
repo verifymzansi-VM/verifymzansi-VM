@@ -53,6 +53,7 @@
     "check:bundle-budget": "tsx scripts/check-bundle-budget.ts",
     "test:e2e": "playwright test",
     "test:public-verify": "tsx scripts/verify-public-pages.ts",
+    "test:live-pages": "tsx scripts/verify-live-pages.ts",
     "security:audit:live-load": "tsx scripts/audit-live-load.ts",
     "security:audit:live-load:strict": "tsx scripts/audit-live-load.ts --strict",
     "bootstrap:operator": "tsx scripts/bootstrap-operator.ts",

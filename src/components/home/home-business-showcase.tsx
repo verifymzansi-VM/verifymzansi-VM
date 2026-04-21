@@ -13,11 +13,7 @@ import {
   PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
   shouldHidePlaywrightFixtures,
 } from "@/lib/supabase/playwright-visual-fixtures";
-import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
-import {
-  getOptionalContentLikeSummaryMap,
-  getOptionalContentViewCountMap,
-} from "@/lib/engagement-server";
+import { getOptionalContentViewCountMap } from "@/lib/engagement-server";
 import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
 
 function provinceCode(name: string): string {
@@ -29,7 +25,6 @@ export async function HomeBusinessShowcase() {
   const hideFixtures = shouldHidePlaywrightFixtures(
     readCookieValue(cookieStore, PLAYWRIGHT_HIDE_FIXTURES_COOKIE)
   );
-  const viewerKey = buildViewerKey(readCookieValue(cookieStore, ENGAGEMENT_VIEWER_COOKIE) ?? null);
   const supabase = await createClient();
   const engagementAdmin = tryCreateAdminClient();
   const { data: businesses } = await supabase
@@ -69,10 +64,11 @@ export async function HomeBusinessShowcase() {
     );
   }
   const businessIds = items.map((business) => business.id as string);
-  const [viewCountMap, likeSummaryMap] = await Promise.all([
-    getOptionalContentViewCountMap(engagementAdmin, "business", businessIds),
-    getOptionalContentLikeSummaryMap(engagementAdmin, "business", businessIds, viewerKey),
-  ]);
+  const viewCountMap = await getOptionalContentViewCountMap(
+    engagementAdmin,
+    "business",
+    businessIds
+  );
 
   return (
     <HomeShowcaseShell
@@ -87,7 +83,6 @@ export async function HomeBusinessShowcase() {
         {items.map((b) => (
           <div key={b.id} className="h-full w-[272px] sm:w-[296px] lg:w-[320px]">
             <BusinessPreviewCard
-              id={b.id}
               href={`/mzansi-business/${b.id}`}
               imageUrl={b.cover_video || b.video_thumbnail || b.cover_photo}
               posterUrl={b.video_thumbnail || b.cover_photo || undefined}
@@ -100,16 +95,6 @@ export async function HomeBusinessShowcase() {
               featured={b.featured_until ? new Date(b.featured_until) > new Date() : false}
               viewCount={
                 viewCountMap.ok ? (viewCountMap.data.get(b.id as string) ?? undefined) : undefined
-              }
-              likeCount={
-                likeSummaryMap.ok
-                  ? (likeSummaryMap.data.get(b.id as string)?.likeCount ?? undefined)
-                  : undefined
-              }
-              viewerHasLiked={
-                likeSummaryMap.ok
-                  ? (likeSummaryMap.data.get(b.id as string)?.viewerHasLiked ?? false)
-                  : false
               }
               priority={false}
               focalX={b.focal_x as number | null | undefined}

@@ -333,7 +333,9 @@ export function ShowroomCardCarousel({
         return;
       }
 
-      if (e.pointerType === "mouse") {
+      const startedOnCarouselLink = Boolean(target?.closest('[data-carousel-link="true"]'));
+
+      if (e.pointerType === "mouse" && !startedOnCarouselLink) {
         e.preventDefault();
       }
 
@@ -357,12 +359,14 @@ export function ShowroomCardCarousel({
       pauseAutoSwipe();
       setIsDragging(true);
 
-      try {
-        if (!e.currentTarget.hasPointerCapture(e.pointerId)) {
-          e.currentTarget.setPointerCapture(e.pointerId);
+      if (e.pointerType !== "mouse") {
+        try {
+          if (!e.currentTarget.hasPointerCapture(e.pointerId)) {
+            e.currentTarget.setPointerCapture(e.pointerId);
+          }
+        } catch {
+          /* noop */
         }
-      } catch {
-        /* noop */
       }
     },
     [pauseAutoSwipe, setCarouselLinkInteractivity]
@@ -375,7 +379,10 @@ export function ShowroomCardCarousel({
         return;
       }
 
-      e.preventDefault();
+      const startedOnCarouselLink = Boolean(target?.closest('[data-carousel-link="true"]'));
+      if (!startedOnCarouselLink) {
+        e.preventDefault();
+      }
 
       if (dragResetTimeoutRef.current) {
         clearTimeout(dragResetTimeoutRef.current);
