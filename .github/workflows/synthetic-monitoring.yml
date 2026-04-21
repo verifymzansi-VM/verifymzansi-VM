@@ -22,7 +22,7 @@ jobs:
         if: steps.check-url.outputs.skip != 'true'
       - uses: pnpm/action-setup@v5
         if: steps.check-url.outputs.skip != 'true'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         if: steps.check-url.outputs.skip != 'true'
         with:
           node-version: "22"
