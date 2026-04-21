@@ -187,11 +187,11 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
                     Submitted {formatRelativeTime(item.created_at)}
                   </p>
                 </div>
-                <div className="col-span-2 flex flex-wrap gap-1 border-t border-border/60 pt-3 sm:justify-end">
+                <div className="col-span-2 min-w-0 w-full max-w-full flex flex-wrap justify-start gap-1 border-t border-border/60 pt-3 lg:justify-end">
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-8 text-xs gap-1"
+                    className="h-8 min-w-0 text-xs gap-1"
                     onClick={(e) => {
                       e.stopPropagation();
                       openPreview(item);
@@ -203,7 +203,7 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
+                    className="h-8 min-w-0 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
                     onClick={(e) => {
                       e.stopPropagation();
                       openReview(item, "approve");
@@ -215,7 +215,7 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-8 text-destructive hover:bg-destructive/10"
+                    className="h-8 min-w-0 text-destructive hover:bg-destructive/10"
                     onClick={(e) => {
                       e.stopPropagation();
                       openReview(item, "reject");

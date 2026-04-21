@@ -163,4 +163,17 @@ describe("ModerationQueueClient", () => {
     expect(wrapper).toHaveClass("overflow-x-auto");
     expect(wrapper).not.toHaveClass("overflow-hidden");
   });
+
+  it("keeps the moderation action row width-constrained so buttons stay visible", () => {
+    render(<ModerationQueueClient items={items} />);
+
+    const reviewButton = screen.getAllByRole("button", { name: /review/i })[0];
+    const actionRow = reviewButton.parentElement;
+
+    expect(actionRow).toHaveClass("min-w-0");
+    expect(actionRow).toHaveClass("w-full");
+    expect(actionRow).toHaveClass("max-w-full");
+    expect(actionRow).toHaveClass("justify-start");
+    expect(actionRow).toHaveClass("lg:justify-end");
+  });
 });
