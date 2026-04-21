@@ -7,6 +7,7 @@ import { VideoPlaybackProvider } from "@/contexts/video-playback-context";
 import { Toaster } from "@/components/ui/toaster";
 import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
+import { DesktopPageShell } from "@/components/layout/desktop-page-shell";
 import "@/styles/globals.css";
 
 const TURBOPACK_NAME_POLYFILL =
@@ -154,12 +155,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           disableTransitionOnChange
           nonce={nonce}
         >
-          <div className="desktop-page-scale">
+          <DesktopPageShell>
             <VideoPlaybackProvider>{children}</VideoPlaybackProvider>
             <Toaster />
             <PwaInstallPrompt />
             <ServiceWorkerRegistrar />
-          </div>
+          </DesktopPageShell>
         </ThemeProvider>
         <noscript>
           <div className="mx-auto max-w-[600px] p-8 text-center font-sans">

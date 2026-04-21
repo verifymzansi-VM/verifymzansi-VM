@@ -20,6 +20,10 @@ vi.mock("@/components/providers/public-runtime-config", () => ({
   PublicRuntimeConfigBridge: () => <div data-testid="runtime-config" />,
 }));
 
+vi.mock("@/components/layout/desktop-page-shell", () => ({
+  DesktopPageShell: ({ children }: { children: ReactNode }) => children,
+}));
+
 vi.mock("@/components/ui/toaster", () => ({
   Toaster: () => <div data-testid="toaster" />,
 }));
