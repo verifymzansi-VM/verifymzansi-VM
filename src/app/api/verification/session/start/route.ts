@@ -77,12 +77,13 @@ export async function POST(_request: NextRequest) {
       );
     }
 
-    // Fetch the most recent non-finalized verification session
+    // Fetch the most recent verification session, including finalized ones.
+    // Finalized sessions must stay finalized on revisit so the UI can keep the
+    // user in the completed state until a real resubmission reopens the session.
     const { data: existingSession, error: sessionFetchErr } = await supabase
       .from("verification_sessions")
       .select("*")
       .eq("user_id", user.id)
-      .is("finalized_at", null)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -98,7 +99,7 @@ export async function POST(_request: NextRequest) {
     let session = existingSession;
 
     // If the existing session is expired, reset it for reuse (UNIQUE(user_id) allows only one row)
-    if (session) {
+    if (session && !session.finalized_at) {
       const expiresAt = new Date(new Date(session.created_at).getTime() + 24 * 60 * 60 * 1000);
       if (expiresAt < new Date()) {
         // Check which steps are already approved to preserve their state

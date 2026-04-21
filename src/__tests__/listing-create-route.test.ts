@@ -764,6 +764,126 @@ describe("POST /api/listings", () => {
     );
   });
 
+  it("retries listing creation without compatibility-only columns when the live schema is behind", async () => {
+    const insertCalls: Array<Record<string, unknown>> = [];
+    const insertSpy = vi.fn().mockImplementation((payload: Record<string, unknown>) => {
+      insertCalls.push(payload);
+
+      return {
+        select: () => ({
+          single: vi.fn().mockResolvedValue(
+            insertCalls.length === 1
+              ? {
+                  data: null,
+                  error: {
+                    code: "42703",
+                    message:
+                      "Could not find the 'video_thumbnail' column of 'listings' in the schema cache",
+                  },
+                }
+              : { data: { id: "listing-compat-1" }, error: null }
+          ),
+        }),
+      };
+    });
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
+        if (table === "free_posts_used") {
+          return {
+            insert: vi.fn().mockResolvedValue({ error: null }),
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    is: vi.fn().mockReturnValue({
+                      select: vi.fn().mockReturnValue({
+                        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                      }),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
+        if (table === "listings") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gte: vi.fn().mockReturnThis(),
+            neq: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+            insert: insertSpy,
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const res = await POST(
+      createRequest({
+        ...VALID_BODY,
+        town: "Midrand",
+        address: "123 Market Street",
+        logo_url: "https://media.verifymzansi.com/listings/logo.jpg",
+        videoThumbnail: "https://media.verifymzansi.com/listings/thumb.jpg",
+        media_width: 1080,
+        media_height: 1350,
+        focal_x: 0.35,
+        focal_y: 0.65,
+      })
+    );
+
+    expect(res.status).toBe(201);
+    expect(insertCalls).toHaveLength(2);
+    expect(insertCalls[0]).toMatchObject({
+      location_address: "123 Market Street",
+      location_suburb: "Midrand",
+      logo_url: "https://media.verifymzansi.com/listings/logo.jpg",
+      video_thumbnail: "https://media.verifymzansi.com/listings/thumb.jpg",
+      media_width: 1080,
+      media_height: 1350,
+      focal_x: 0.35,
+      focal_y: 0.65,
+    });
+    expect(insertCalls[1]).not.toHaveProperty("location_address");
+    expect(insertCalls[1]).not.toHaveProperty("location_suburb");
+    expect(insertCalls[1]).not.toHaveProperty("logo_url");
+    expect(insertCalls[1]).not.toHaveProperty("video_thumbnail");
+    expect(insertCalls[1]).not.toHaveProperty("media_width");
+    expect(insertCalls[1]).not.toHaveProperty("media_height");
+    expect(insertCalls[1]).not.toHaveProperty("focal_x");
+    expect(insertCalls[1]).not.toHaveProperty("focal_y");
+  });
+
   it("releases the claimed free-post slot by content id when listing insert fails", async () => {
     const claimRpc = vi.fn().mockResolvedValue({ data: true, error: null });
     const releaseMaybeSingle = vi.fn().mockResolvedValue({

@@ -44,6 +44,61 @@ const gpsLocationSchema = z.object({
   declaredCity: optionalTrimmedStringSchema,
 });
 
+async function finalizeVerificationSessionIfReady(
+  adminClient: ReturnType<typeof createAdminClient>,
+  userId: string
+) {
+  const { data: currentSession, error: sessionFetchErr } = await adminClient
+    .from("verification_sessions")
+    .select("id_artifact_id, selfie_artifact_id, location_submitted_at, finalized_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (sessionFetchErr) {
+    log.warn("Failed to fetch session for finalization check (non-fatal)", {
+      userId,
+      error: sessionFetchErr.message,
+    });
+    return;
+  }
+
+  const { data: phoneStep, error: phoneFetchErr } = await adminClient
+    .from("verification_steps")
+    .select("phone_verified_at")
+    .eq("user_id", userId)
+    .eq("step_type", "phone")
+    .maybeSingle();
+
+  if (phoneFetchErr) {
+    log.warn("Failed to fetch phone step for finalization check (non-fatal)", {
+      userId,
+      error: phoneFetchErr.message,
+    });
+  }
+
+  if (
+    currentSession &&
+    !currentSession.finalized_at &&
+    currentSession.id_artifact_id &&
+    currentSession.selfie_artifact_id &&
+    currentSession.location_submitted_at &&
+    phoneStep?.phone_verified_at
+  ) {
+    const { error: finalizeErr } = await adminClient
+      .from("verification_sessions")
+      .update({ finalized_at: new Date().toISOString() })
+      .eq("user_id", userId)
+      .is("finalized_at", null);
+
+    if (finalizeErr) {
+      log.error("Failed to finalize verification session (non-fatal)", {
+        error: finalizeErr.message,
+        userId,
+      });
+    }
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const originBlock = enforceSameOriginMutation(request, log);
@@ -450,6 +505,8 @@ export async function POST(request: NextRequest) {
         userId: user.id,
       });
     }
+
+    await finalizeVerificationSessionIfReady(adminClient, user.id);
 
     const profilePatch: Record<string, unknown> = {
       location_province: locationProvince,

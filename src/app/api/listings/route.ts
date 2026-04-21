@@ -86,6 +86,65 @@ type MarketQueryOps = {
   ) => MarketQueryOps;
 };
 
+type ListingInsertErrorLike = {
+  code?: string | null;
+  message?: string | null;
+} | null;
+
+type ListingCompatField =
+  | "location_address"
+  | "location_suburb"
+  | "logo_url"
+  | "media_height"
+  | "media_width"
+  | "focal_x"
+  | "focal_y"
+  | "video_thumbnail";
+
+const LISTING_INSERT_COMPAT_FIELDS: readonly ListingCompatField[] = [
+  "location_address",
+  "location_suburb",
+  "logo_url",
+  "media_height",
+  "media_width",
+  "focal_x",
+  "focal_y",
+  "video_thumbnail",
+];
+
+function canRetryListingInsertForCompat(
+  error: ListingInsertErrorLike,
+  omittedFields: readonly ListingCompatField[]
+) {
+  if (!error) return false;
+
+  const code = error.code ?? "";
+  const message = (error.message ?? "").toLowerCase();
+
+  if (/schema cache/.test(message)) {
+    return true;
+  }
+
+  const retryableCodes = new Set(["42703", "PGRST200", "PGRST202", "PGRST204", "XX000"]);
+
+  if (!retryableCodes.has(code) && !/does not exist|could not find/.test(message)) {
+    return false;
+  }
+
+  return omittedFields.some((field) => message.includes(field.toLowerCase()));
+}
+
+function omitListingCompatFields<T extends Record<string, unknown>>(
+  record: T,
+  omittedFields: readonly ListingCompatField[]
+) {
+  const next = { ...record };
+  for (const field of omittedFields) {
+    delete next[field];
+  }
+  return next;
+}
+
 function applyBaseMarketFilters<T>(
   query: T,
   filters: ReturnType<typeof parseMarketplaceFiltersFromSearchParams>
@@ -855,25 +914,36 @@ export async function POST(request: NextRequest) {
     );
 
     // ── Insert listing ───────────────────────────────────────
-    let { data: newListing, error: insertError } = await supabase
-      .from("listings")
-      .insert(listingRecord)
-      .select("id")
-      .single();
+    let newListing: { id: string } | null = null;
+    let insertError: ListingInsertErrorLike = null;
+    const insertAttempts = [[], LISTING_INSERT_COMPAT_FIELDS] as const;
 
-    if (insertError && /schema cache|logo_url/i.test(insertError.message)) {
-      log.warn("Retrying listing insert without logo_url due to schema mismatch", {
+    for (let attemptIndex = 0; attemptIndex < insertAttempts.length; attemptIndex += 1) {
+      const omittedFields = insertAttempts[attemptIndex];
+      const insertPayload = omitListingCompatFields(listingRecord, omittedFields);
+      const result = await supabase.from("listings").insert(insertPayload).select("id").single();
+
+      newListing = result.data;
+      insertError = result.error;
+
+      if (!insertError && newListing) {
+        break;
+      }
+
+      const nextOmittedFields = insertAttempts[attemptIndex + 1];
+      if (!nextOmittedFields) {
+        break;
+      }
+
+      if (!canRetryListingInsertForCompat(insertError, nextOmittedFields)) {
+        break;
+      }
+
+      log.warn("Retrying listing insert with compatibility payload", {
         userId: user.id,
-        error: insertError.message,
+        error: insertError?.message,
+        omittedFields: nextOmittedFields,
       });
-      const { logo_url: _ignoredLogoUrl, ...listingRecordWithoutLogo } = listingRecord;
-      const retry = await supabase
-        .from("listings")
-        .insert(listingRecordWithoutLogo)
-        .select("id")
-        .single();
-      newListing = retry.data;
-      insertError = retry.error;
     }
 
     if (insertError) {
@@ -898,7 +968,8 @@ export async function POST(request: NextRequest) {
         }
       }
       const details =
-        insertError.message.includes("schema cache") || insertError.message.includes("logo_url")
+        insertError.message.includes("schema cache") ||
+        LISTING_INSERT_COMPAT_FIELDS.some((field) => insertError?.message?.includes(field))
           ? "Listing could not be saved right now. Please try again shortly."
           : "Listing could not be saved. Please try again shortly.";
       return NextResponse.json({ error: "Failed to create listing", details }, { status: 500 });

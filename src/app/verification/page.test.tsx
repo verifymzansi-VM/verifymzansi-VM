@@ -229,6 +229,42 @@ describe("VerificationPage", () => {
     );
   });
 
+  it("keeps the completed state on revisit when the session is finalized after location submission", async () => {
+    sessionResponse = jsonResponse(
+      {
+        sessionId: "session-finalized",
+        completedSteps: ["phone", "location"],
+        pendingSteps: ["id_doc", "selfie"],
+        requiredSteps: ["phone", "id_doc", "selfie", "location"],
+        finalizedAt: "2026-04-21T12:00:00.000Z",
+        phoneVerifiedAt: "2026-04-21T11:50:00.000Z",
+      },
+      200
+    );
+    statusResponse = jsonResponse(
+      buildStatusPayload({
+        accountVerificationStatus: "incomplete",
+        steps: [
+          { step_type: "phone", status: "approved" },
+          { step_type: "id_doc", status: "pending" },
+          { step_type: "selfie", status: "pending" },
+          { step_type: "location", status: "approved" },
+        ],
+      }),
+      200
+    );
+
+    render(<VerificationPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: /Verification Submitted/i })).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText(/Your address is verified\. Your ID and selfie are under admin review\./i)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Step 1: Phone \+ OTP/i)).not.toBeInTheDocument();
+  });
+
   it("surfaces resubmission reasons on the affected step", async () => {
     sessionResponse = jsonResponse(
       {

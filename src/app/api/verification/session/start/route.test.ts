@@ -71,11 +71,9 @@ function mockSessionSelectChain(resolvedValue: { data: unknown; error: unknown }
   return {
     select: vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
-        is: vi.fn().mockReturnValue({
-          order: vi.fn().mockReturnValue({
-            limit: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue(resolvedValue),
-            }),
+        order: vi.fn().mockReturnValue({
+          limit: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue(resolvedValue),
           }),
         }),
       }),
@@ -296,6 +294,62 @@ describe("POST /api/verification/session/start", () => {
       degradedMode: "block",
     });
     // Should NOT log session started for existing sessions
+    expect(mockLogAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it("returns an existing finalized session without reopening it", async () => {
+    mockAuth({ id: "user-1" });
+
+    const finalizedSession = {
+      id: "session-finalized",
+      user_id: "user-1",
+      created_at: new Date().toISOString(),
+      phone_verified_at: "2026-04-21T10:00:00.000Z",
+      id_artifact_id: "artifact-id",
+      selfie_artifact_id: "artifact-selfie",
+      location_submitted_at: "2026-04-21T10:05:00.000Z",
+      finalized_at: "2026-04-21T10:06:00.000Z",
+    };
+
+    const upsert = vi.fn();
+    const update = vi.fn();
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "verification_sessions") {
+        return {
+          ...mockSessionSelectChain({ data: finalizedSession, error: null }),
+          upsert,
+          update,
+        };
+      }
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({
+              data: [
+                { step_type: "phone", status: "approved" },
+                { step_type: "id_doc", status: "pending" },
+                { step_type: "selfie", status: "pending" },
+                { step_type: "location", status: "approved" },
+              ],
+              error: null,
+            }),
+          }),
+        };
+      }
+      return {};
+    });
+
+    const response = await POST(createMockRequest());
+    expect(response.status).toBe(200);
+
+    const data = await response.json();
+    expect(data.sessionId).toBe("session-finalized");
+    expect(data.finalizedAt).toBe(finalizedSession.finalized_at);
+    expect(data.completedSteps).toEqual(["phone", "location"]);
+    expect(data.pendingSteps).toEqual(["id_doc", "selfie"]);
+    expect(upsert).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
     expect(mockLogAuditEvent).not.toHaveBeenCalled();
   });
 

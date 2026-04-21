@@ -89,6 +89,95 @@ function makeRequest(body: Record<string, unknown>) {
   } as unknown as NextRequest;
 }
 
+const DEFAULT_STEP_SUMMARY = [
+  { step_type: "phone", status: "approved" },
+  { step_type: "id_doc", status: "pending" },
+  { step_type: "selfie", status: "approved" },
+  { step_type: "location", status: "approved" },
+];
+
+function createVerificationSessionsTable({
+  existingSession = null,
+  currentSession = null,
+  upsert = vi.fn().mockResolvedValue({ error: null }),
+  update = vi.fn().mockReturnValue({
+    eq: vi.fn().mockReturnValue({
+      is: vi.fn().mockResolvedValue({ error: null }),
+    }),
+  }),
+}: {
+  existingSession?: Record<string, unknown> | null;
+  currentSession?: Record<string, unknown> | null;
+  upsert?: ReturnType<typeof vi.fn>;
+  update?: ReturnType<typeof vi.fn>;
+} = {}) {
+  return {
+    select: vi.fn().mockImplementation((columns: string) => ({
+      eq: vi.fn().mockReturnValue({
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: columns === "finalized_at" ? existingSession : currentSession,
+          error: null,
+        }),
+      }),
+    })),
+    upsert,
+    update,
+  };
+}
+
+function createVerificationStepsTable({
+  upsert = vi.fn().mockReturnValue({
+    select: vi.fn().mockReturnThis(),
+    single: vi.fn().mockResolvedValue({ data: { id: "step-1" }, error: null }),
+  }),
+  allSteps = DEFAULT_STEP_SUMMARY,
+  phoneVerifiedAt = null,
+  idDocDetail = null,
+}: {
+  upsert?: ReturnType<typeof vi.fn>;
+  allSteps?: Array<{ step_type: string; status: string }>;
+  phoneVerifiedAt?: string | null;
+  idDocDetail?: Record<string, unknown> | null;
+} = {}) {
+  return {
+    upsert,
+    select: vi.fn().mockImplementation((columns: string) => {
+      if (columns === "step_type, status") {
+        return {
+          eq: vi.fn().mockResolvedValue({ data: allSteps, error: null }),
+        };
+      }
+
+      if (columns === "phone_verified_at") {
+        return {
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: phoneVerifiedAt ? { phone_verified_at: phoneVerifiedAt } : null,
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+
+      if (columns === "first_name, last_name") {
+        return {
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: idDocDetail, error: null }),
+            }),
+          }),
+        };
+      }
+
+      return {
+        eq: vi.fn(),
+      };
+    }),
+  };
+}
+
 describe("POST /api/verification/location/gps", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -205,38 +294,13 @@ describe("POST /api/verification/location/gps", () => {
       }
 
       if (table === "verification_sessions") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-            }),
-          }),
-          upsert: vi.fn().mockResolvedValue({ error: null }),
-        };
+        return createVerificationSessionsTable();
       }
 
       if (table === "verification_steps") {
-        return {
+        return createVerificationStepsTable({
           upsert: upsertVerificationStep,
-          select: vi.fn().mockImplementation((columns: string) => {
-            if (columns === "step_type, status") {
-              return {
-                eq: vi.fn().mockResolvedValue({
-                  data: [
-                    { step_type: "phone", status: "approved" },
-                    { step_type: "id_doc", status: "pending" },
-                    { step_type: "selfie", status: "approved" },
-                    { step_type: "location", status: "approved" },
-                  ],
-                }),
-              };
-            }
-
-            return {
-              eq: vi.fn(),
-            };
-          }),
-        };
+        });
       }
 
       if (table === "kyc_risk_signals") {
@@ -297,6 +361,198 @@ describe("POST /api/verification/location/gps", () => {
     );
   });
 
+  it("finalizes the verification session when GPS location is the last missing step", async () => {
+    const finalizeSession = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        is: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    });
+
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },
+      error: null,
+    });
+    mockIsFeatureEnabled.mockResolvedValue(true);
+    mockParseAndValidateJsonRequest.mockResolvedValue({
+      success: true,
+      data: {
+        latitude: -26.2041,
+        longitude: 28.0473,
+        accuracy: 12,
+        timestamp: Date.now(),
+        declaredProvince: "Gauteng",
+        declaredCity: "Johannesburg",
+      },
+    });
+    mockReverseGeocode.mockResolvedValue({
+      province: "Gauteng",
+      city: "Johannesburg",
+      source: "nominatim",
+    });
+    mockComputeLocationConfidence.mockReturnValue("high");
+
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: "profile-1", account_verification_status: "incomplete" },
+                error: null,
+              }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
+        };
+      }
+
+      if (table === "verification_sessions") {
+        return createVerificationSessionsTable({
+          currentSession: {
+            id_artifact_id: "artifact-id",
+            selfie_artifact_id: "artifact-selfie",
+            location_submitted_at: "2026-04-21T12:01:00.000Z",
+            finalized_at: null,
+          },
+          update: finalizeSession,
+        });
+      }
+
+      if (table === "verification_steps") {
+        return createVerificationStepsTable({
+          phoneVerifiedAt: "2026-04-21T12:00:00.000Z",
+        });
+      }
+
+      if (table === "kyc_risk_signals") {
+        return { insert: vi.fn().mockResolvedValue({ error: null }) };
+      }
+
+      if (table === "kyc_artifacts") {
+        return {
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              is: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          }),
+        };
+      }
+
+      return {};
+    });
+
+    const res = await POST(
+      makeRequest({
+        latitude: -26.2041,
+        longitude: 28.0473,
+        accuracy: 12,
+        timestamp: Date.now(),
+        declaredProvince: "Gauteng",
+        declaredCity: "Johannesburg",
+      })
+    );
+
+    expect(res.status).toBe(200);
+    expect(finalizeSession).toHaveBeenCalledWith(
+      expect.objectContaining({ finalized_at: expect.any(String) })
+    );
+  });
+
+  it("does not finalize the GPS session when required verification artifacts are still missing", async () => {
+    const finalizeSession = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        is: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    });
+
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },
+      error: null,
+    });
+    mockIsFeatureEnabled.mockResolvedValue(true);
+    mockParseAndValidateJsonRequest.mockResolvedValue({
+      success: true,
+      data: {
+        latitude: -26.2041,
+        longitude: 28.0473,
+        accuracy: 12,
+        timestamp: Date.now(),
+        declaredProvince: "Gauteng",
+        declaredCity: "Johannesburg",
+      },
+    });
+    mockReverseGeocode.mockResolvedValue({
+      province: "Gauteng",
+      city: "Johannesburg",
+      source: "nominatim",
+    });
+    mockComputeLocationConfidence.mockReturnValue("high");
+
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: "profile-1", account_verification_status: "incomplete" },
+                error: null,
+              }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
+        };
+      }
+
+      if (table === "verification_sessions") {
+        return createVerificationSessionsTable({
+          currentSession: {
+            id_artifact_id: "artifact-id",
+            selfie_artifact_id: null,
+            location_submitted_at: "2026-04-21T12:01:00.000Z",
+            finalized_at: null,
+          },
+          update: finalizeSession,
+        });
+      }
+
+      if (table === "verification_steps") {
+        return createVerificationStepsTable({
+          phoneVerifiedAt: "2026-04-21T12:00:00.000Z",
+        });
+      }
+
+      if (table === "kyc_risk_signals") {
+        return { insert: vi.fn().mockResolvedValue({ error: null }) };
+      }
+
+      if (table === "kyc_artifacts") {
+        return {
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              is: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          }),
+        };
+      }
+
+      return {};
+    });
+
+    const res = await POST(
+      makeRequest({
+        latitude: -26.2041,
+        longitude: 28.0473,
+        accuracy: 12,
+        timestamp: Date.now(),
+        declaredProvince: "Gauteng",
+        declaredCity: "Johannesburg",
+      })
+    );
+
+    expect(res.status).toBe(200);
+    expect(finalizeSession).not.toHaveBeenCalled();
+  });
+
   it("treats canonical city aliases as a GPS match for the selected city", async () => {
     mockGetUser.mockResolvedValue({
       data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },
@@ -341,30 +597,13 @@ describe("POST /api/verification/location/gps", () => {
       }
 
       if (table === "verification_sessions") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-            }),
-          }),
-          upsert: vi.fn().mockResolvedValue({ error: null }),
-        };
+        return createVerificationSessionsTable();
       }
 
       if (table === "verification_steps") {
-        return {
+        return createVerificationStepsTable({
           upsert: upsertVerificationStep,
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockResolvedValue({
-              data: [
-                { step_type: "phone", status: "approved" },
-                { step_type: "id_doc", status: "pending" },
-                { step_type: "selfie", status: "approved" },
-                { step_type: "location", status: "approved" },
-              ],
-            }),
-          }),
-        };
+        });
       }
 
       if (table === "kyc_risk_signals") {
@@ -456,33 +695,16 @@ describe("POST /api/verification/location/gps", () => {
       }
 
       if (table === "verification_sessions") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-            }),
-          }),
-          upsert: vi.fn().mockResolvedValue({ error: null }),
-        };
+        return createVerificationSessionsTable();
       }
 
       if (table === "verification_steps") {
-        return {
+        return createVerificationStepsTable({
           upsert: vi.fn().mockReturnValue({
             select: vi.fn().mockReturnThis(),
             single: vi.fn().mockResolvedValue({ data: { id: "step-city-mismatch" }, error: null }),
           }),
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockResolvedValue({
-              data: [
-                { step_type: "phone", status: "approved" },
-                { step_type: "id_doc", status: "pending" },
-                { step_type: "selfie", status: "approved" },
-                { step_type: "location", status: "approved" },
-              ],
-            }),
-          }),
-        };
+        });
       }
 
       if (table === "kyc_risk_signals") {
@@ -598,34 +820,12 @@ describe("POST /api/verification/location/gps", () => {
         };
       }
       if (table === "verification_sessions") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-            }),
-          }),
-          upsert: vi.fn().mockResolvedValue({ error: null }),
-        };
+        return createVerificationSessionsTable();
       }
       if (table === "verification_steps") {
-        return {
+        return createVerificationStepsTable({
           upsert: upsertVerificationStep,
-          select: vi.fn().mockImplementation((columns: string) => {
-            if (columns === "step_type, status") {
-              return {
-                eq: vi.fn().mockResolvedValue({
-                  data: [
-                    { step_type: "phone", status: "approved" },
-                    { step_type: "id_doc", status: "pending" },
-                    { step_type: "selfie", status: "approved" },
-                    { step_type: "location", status: "approved" },
-                  ],
-                }),
-              };
-            }
-            return { eq: vi.fn() };
-          }),
-        };
+        });
       }
       if (table === "kyc_risk_signals") {
         return { insert: vi.fn().mockResolvedValue({ error: null }) };
@@ -817,29 +1017,12 @@ describe("POST /api/verification/location/gps", () => {
         };
       }
       if (table === "verification_sessions") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-            }),
-          }),
-          upsert: vi.fn().mockResolvedValue({ error: null }),
-        };
+        return createVerificationSessionsTable();
       }
       if (table === "verification_steps") {
-        return {
+        return createVerificationStepsTable({
           upsert: upsertVerificationStep,
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockResolvedValue({
-              data: [
-                { step_type: "phone", status: "approved" },
-                { step_type: "id_doc", status: "pending" },
-                { step_type: "selfie", status: "approved" },
-                { step_type: "location", status: "approved" },
-              ],
-            }),
-          }),
-        };
+        });
       }
       if (table === "kyc_risk_signals") {
         return {
