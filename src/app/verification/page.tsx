@@ -1159,6 +1159,14 @@ export default function VerificationPage() {
           });
           return payload;
         }
+        if (res.status === 409 && payload.code === "duplicate_pending_artifact") {
+          toast({
+            title: "Already submitted",
+            description: `Your ${label} is already pending review. You can continue without uploading it again.`,
+            variant: "success",
+          });
+          return payload;
+        }
         throw new SubmissionError(
           appendRequestId(
             mapUploadFailureMessage(

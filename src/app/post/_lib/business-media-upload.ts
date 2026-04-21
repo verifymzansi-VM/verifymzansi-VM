@@ -90,6 +90,20 @@ async function readUploadError(response: Response, fallback: string): Promise<st
   return appendTraceId(normalizeCreatePostRuntimeError(new Error(message), fallback), traceId);
 }
 
+function toBusinessMediaUploadError(
+  field: BusinessMediaField,
+  error: unknown
+): BusinessMediaUploadError {
+  if (error instanceof BusinessMediaUploadError) {
+    return error;
+  }
+
+  return new BusinessMediaUploadError(
+    field,
+    normalizeCreatePostRuntimeError(error, FIELD_MESSAGES[field])
+  );
+}
+
 async function uploadBusinessVideoViaServer({
   file,
   area,
@@ -172,34 +186,38 @@ export async function uploadRequiredBusinessMedia({
 }): Promise<string[]> {
   if (files.length === 0) return [];
 
-  const uploadData = new FormData();
-  uploadData.append("area", area);
-  files.forEach((file) => uploadData.append("files", file));
+  try {
+    const uploadData = new FormData();
+    uploadData.append("area", area);
+    files.forEach((file) => uploadData.append("files", file));
 
-  const response = await fetchWithRetry("/api/media/upload", {
-    method: "POST",
-    headers: withCsrfHeaders(),
-    body: uploadData,
-  });
-
-  const payload = await parseJson(response);
-  const { urls, errors } = parseUploadResponse(payload);
-  const uploadSucceeded = response.ok && errors.length === 0 && urls.length === files.length;
-
-  if (!uploadSucceeded) {
-    log.warn("Blocking business save because media upload failed", {
-      field,
-      area,
-      attemptedCount: files.length,
-      uploadedCount: urls.length,
-      status: response.status,
-      errors,
-      payloadError: getPayloadError(payload),
+    const response = await fetchWithRetry("/api/media/upload", {
+      method: "POST",
+      headers: withCsrfHeaders(),
+      body: uploadData,
     });
-    throw new BusinessMediaUploadError(field);
-  }
 
-  return urls;
+    const payload = await parseJson(response);
+    const { urls, errors } = parseUploadResponse(payload);
+    const uploadSucceeded = response.ok && errors.length === 0 && urls.length === files.length;
+
+    if (!uploadSucceeded) {
+      log.warn("Blocking business save because media upload failed", {
+        field,
+        area,
+        attemptedCount: files.length,
+        uploadedCount: urls.length,
+        status: response.status,
+        errors,
+        payloadError: getPayloadError(payload),
+      });
+      throw new BusinessMediaUploadError(field);
+    }
+
+    return urls;
+  } catch (error) {
+    throw toBusinessMediaUploadError(field, error);
+  }
 }
 
 export async function uploadRequiredBusinessVideo({
@@ -292,6 +310,10 @@ export async function uploadRequiredBusinessVideo({
       error: error instanceof Error ? error.message : String(error),
     });
 
-    return await uploadBusinessVideoViaServer({ file: compressed, area });
+    try {
+      return await uploadBusinessVideoViaServer({ file: compressed, area });
+    } catch (fallbackError) {
+      throw toBusinessMediaUploadError("cover_video", fallbackError);
+    }
   }
 }

@@ -1,9 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ACCOUNT_PROFILE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
+import { createLogger } from "@/lib/utils/logger";
 import {
   summarizeVerification,
   type VerificationSummary,
 } from "@/lib/account/verification-summary";
+
+const log = createLogger("ResolvedVerification");
 
 type VerificationClient = Pick<SupabaseClient, "from">;
 
@@ -36,6 +39,15 @@ type VerificationStepDbRow = Omit<
 > & {
   metadata?: Record<string, unknown> | null;
 };
+
+type PendingArtifactRow = {
+  step_type?: string | null;
+  status?: string | null;
+  created_at?: string | null;
+};
+
+const RECOVERABLE_PENDING_ARTIFACT_STEPS = ["id_doc", "selfie"] as const;
+const VERIFICATION_STEP_ORDER = ["phone", "id_doc", "selfie", "location"] as const;
 
 function readStringField(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value : null;
@@ -79,6 +91,63 @@ function mapVerificationStepRow(step: VerificationStepDbRow): VerificationStepRo
   };
 }
 
+function normalizeRecoverablePendingArtifactStep(
+  stepType: string | null | undefined
+): (typeof RECOVERABLE_PENDING_ARTIFACT_STEPS)[number] | null {
+  switch (stepType) {
+    case "id_doc":
+    case "selfie":
+      return stepType;
+    default:
+      return null;
+  }
+}
+
+function mergeRecoveredPendingArtifactSteps(
+  steps: VerificationStepRow[],
+  pendingArtifacts: PendingArtifactRow[]
+): { steps: VerificationStepRow[]; recoveredStepTypes: Array<"id_doc" | "selfie"> } {
+  const existingSteps = new Set(
+    steps
+      .map((step) => normalizeRecoverablePendingArtifactStep(step.step_type))
+      .filter((stepType): stepType is "id_doc" | "selfie" => stepType !== null)
+  );
+  const recoveredStepTypes: Array<"id_doc" | "selfie"> = [];
+
+  const recoveredSteps = pendingArtifacts.flatMap((artifact) => {
+    const stepType = normalizeRecoverablePendingArtifactStep(artifact.step_type);
+
+    if (!stepType || artifact.status !== "pending" || existingSteps.has(stepType)) {
+      return [];
+    }
+
+    existingSteps.add(stepType);
+    recoveredStepTypes.push(stepType);
+
+    return [
+      {
+        step_type: stepType,
+        status: "pending",
+        submitted_at: artifact.created_at ?? null,
+      } satisfies VerificationStepRow,
+    ];
+  });
+
+  return {
+    steps: [...steps, ...recoveredSteps].sort((left, right) => {
+      const leftIndex = VERIFICATION_STEP_ORDER.indexOf(
+        (left.step_type as (typeof VERIFICATION_STEP_ORDER)[number] | undefined) ?? "phone"
+      );
+      const rightIndex = VERIFICATION_STEP_ORDER.indexOf(
+        (right.step_type as (typeof VERIFICATION_STEP_ORDER)[number] | undefined) ?? "phone"
+      );
+
+      return leftIndex - rightIndex;
+    }),
+    recoveredStepTypes,
+  };
+}
+
 export interface ResolvedAccountVerification extends VerificationSummary {
   profile: ProfileRow;
   steps: VerificationStepRow[];
@@ -113,6 +182,27 @@ export async function resolveAccountVerification(
     steps = ((stepsResult.data as VerificationStepDbRow[] | null) ?? []).map(
       mapVerificationStepRow
     );
+
+    const pendingArtifactsResult = await client
+      .from("kyc_artifacts")
+      .select("step_type, status, created_at")
+      .eq("user_id", userId)
+      .eq("status", "pending")
+      .in("step_type", [...RECOVERABLE_PENDING_ARTIFACT_STEPS]);
+
+    const recoveredPendingSteps = mergeRecoveredPendingArtifactSteps(
+      steps,
+      (pendingArtifactsResult.data as PendingArtifactRow[] | null) ?? []
+    );
+
+    steps = recoveredPendingSteps.steps;
+
+    if (recoveredPendingSteps.recoveredStepTypes.length > 0) {
+      log.info("Recovered pending verification steps from artifacts", {
+        userId,
+        recoveredStepTypes: recoveredPendingSteps.recoveredStepTypes,
+      });
+    }
   }
 
   const summary = summarizeVerification(profile?.account_verification_status, steps);

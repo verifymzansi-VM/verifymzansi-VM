@@ -159,6 +159,34 @@ describe("CreatePostPage", () => {
     expect(screen.getByRole("button", { name: /Mzansi Market/i })).toBeInTheDocument();
   });
 
+  it("updates the posting gate copy when the verification status refresh resolves to pending review", async () => {
+    mockResolveAccountVerification.mockResolvedValue({
+      accountVerificationStatus: "incomplete",
+    });
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({ accountVerificationStatus: "pending_review" }),
+    });
+
+    render(await CreatePostPage());
+
+    await waitFor(() => {
+      expect(screen.getByText("Verification required before posting")).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "Your verification is under review. You can browse categories, but approval is needed before posting."
+        )
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Mzansi Market/i }));
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith("/verification?returnUrl=%2Fpost%2Fcreate-listing");
+    });
+  });
+
   it("shows pending loading feedback and blocks repeated category clicks", async () => {
     render(await CreatePostPage());
 

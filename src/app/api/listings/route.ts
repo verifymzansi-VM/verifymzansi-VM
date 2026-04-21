@@ -947,8 +947,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (insertError) {
+      const insertErrorMessage = insertError.message ?? "";
+
       log.error("Failed to insert listing", {
-        error: insertError.message,
+        error: insertErrorMessage,
         userId: user.id,
       });
       // Release free post slot if listing insert failed
@@ -968,8 +970,8 @@ export async function POST(request: NextRequest) {
         }
       }
       const details =
-        insertError.message.includes("schema cache") ||
-        LISTING_INSERT_COMPAT_FIELDS.some((field) => insertError?.message?.includes(field))
+        insertErrorMessage.includes("schema cache") ||
+        LISTING_INSERT_COMPAT_FIELDS.some((field) => insertErrorMessage.includes(field))
           ? "Listing could not be saved right now. Please try again shortly."
           : "Listing could not be saved. Please try again shortly.";
       return NextResponse.json({ error: "Failed to create listing", details }, { status: 500 });

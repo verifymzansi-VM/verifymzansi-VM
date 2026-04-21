@@ -637,6 +637,65 @@ describe("VerificationPage", () => {
     expect(verificationUploadCalls.length).toBeGreaterThanOrEqual(2);
   });
 
+  it("treats duplicate pending ID uploads as already submitted and advances to the selfie step", async () => {
+    sessionResponse = jsonResponse(
+      {
+        sessionId: "session-1",
+        completedSteps: ["phone"],
+        pendingSteps: [],
+        requiredSteps: ["phone", "id_doc", "selfie", "location"],
+        finalizedAt: null,
+        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
+      },
+      200
+    );
+    statusResponse = jsonResponse(
+      buildStatusPayload({
+        steps: [{ step_type: "phone", status: "approved" }],
+      }),
+      200
+    );
+    verificationUploadResponse = jsonResponse(
+      {
+        error: "Upload already in progress for this step",
+        code: "duplicate_pending_artifact",
+      },
+      409
+    );
+
+    render(<VerificationPage />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/13-digit SA ID number/i)).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText(/First name \(as shown on ID\)/i), {
+      target: { value: "Sipho" },
+    });
+    fireEvent.change(screen.getByLabelText(/Surname \(as shown on ID\)/i), {
+      target: { value: "Mokoena" },
+    });
+    fireEvent.change(screen.getByLabelText(/13-digit SA ID number/i), {
+      target: { value: "8001015009087" },
+    });
+
+    await openCameraAndUseFileFallback(new File(["fake-id"], "id.jpg", { type: "image/jpeg" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Step 3: Selfie/i)).toBeInTheDocument();
+    });
+
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Already submitted",
+        description:
+          "Your ID document is already pending review. You can continue without uploading it again.",
+      })
+    );
+  });
+
   it("shows the explicit email-confirmation blocker when manual location is rejected", async () => {
     sessionResponse = jsonResponse(
       {

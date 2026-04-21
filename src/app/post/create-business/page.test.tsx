@@ -527,6 +527,42 @@ describe("CreateBusinessPage", () => {
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("maps business image upload network failures back to the media step", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new TypeError("Failed to fetch")
+    );
+
+    render(<CreateBusinessPage />);
+
+    await completeStandaloneStepOne();
+    await completeLocationStep();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Business logo (optional)" }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+    });
+
+    await waitFor(
+      () => {
+        expect(
+          screen.getAllByText(
+            "We couldn't reach the upload service. Check your connection and try again."
+          ).length
+        ).toBeGreaterThan(0);
+        expect(
+          screen.getAllByText(
+            "Selected business media could not be uploaded. Retry the highlighted files and try again."
+          ).length
+        ).toBeGreaterThan(0);
+      },
+      { timeout: 3000 }
+    );
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
   it("starts uploads without waiting for the preflight check to finish", async () => {
     (checkUploadServiceReachable as unknown as ReturnType<typeof vi.fn>).mockReturnValueOnce(
       new Promise(() => undefined)

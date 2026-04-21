@@ -21,6 +21,18 @@ vi.mock("@/lib/utils/rate-limit", () => ({
 
 import { GET } from "./route";
 
+function createPendingArtifactsQuery(data: Array<Record<string, unknown>> = []) {
+  return {
+    select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          in: vi.fn().mockResolvedValue({ data }),
+        }),
+      }),
+    }),
+  };
+}
+
 describe("GET /api/verification/status", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -87,6 +99,10 @@ describe("GET /api/verification/status", () => {
         };
       }
 
+      if (table === "kyc_artifacts") {
+        return createPendingArtifactsQuery();
+      }
+
       return {};
     });
 
@@ -142,6 +158,10 @@ describe("GET /api/verification/status", () => {
         };
       }
 
+      if (table === "kyc_artifacts") {
+        return createPendingArtifactsQuery();
+      }
+
       return {};
     });
 
@@ -173,6 +193,10 @@ describe("GET /api/verification/status", () => {
             }),
           }),
         };
+      }
+
+      if (table === "kyc_artifacts") {
+        return createPendingArtifactsQuery();
       }
 
       return {};
@@ -217,6 +241,10 @@ describe("GET /api/verification/status", () => {
             }),
           }),
         };
+      }
+
+      if (table === "kyc_artifacts") {
+        return createPendingArtifactsQuery();
       }
 
       return {};
@@ -274,6 +302,10 @@ describe("GET /api/verification/status", () => {
         };
       }
 
+      if (table === "kyc_artifacts") {
+        return createPendingArtifactsQuery();
+      }
+
       return {};
     });
 
@@ -292,5 +324,72 @@ describe("GET /api/verification/status", () => {
       gps_resolved_city: "Pretoria",
       gps_confidence: "medium",
     });
+  });
+
+  it("returns recovered pending artifact steps when verification step rows are missing", async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: "profile-1",
+                  account_verification_status: "incomplete",
+                },
+              }),
+            }),
+          }),
+        };
+      }
+
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({
+              data: [{ step_type: "phone", status: "approved" }],
+            }),
+          }),
+        };
+      }
+
+      if (table === "kyc_artifacts") {
+        return createPendingArtifactsQuery([
+          {
+            step_type: "id_doc",
+            status: "pending",
+            created_at: "2026-04-21T10:05:00.000Z",
+          },
+          {
+            step_type: "selfie",
+            status: "pending",
+            created_at: "2026-04-21T10:06:00.000Z",
+          },
+        ]);
+      }
+
+      return {};
+    });
+
+    const response = await GET({} as unknown as NextRequest);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.accountVerificationStatus).toBe("incomplete");
+    expect(body.steps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ step_type: "phone", status: "approved" }),
+        expect.objectContaining({
+          step_type: "id_doc",
+          status: "pending",
+          submitted_at: "2026-04-21T10:05:00.000Z",
+        }),
+        expect.objectContaining({
+          step_type: "selfie",
+          status: "pending",
+          submitted_at: "2026-04-21T10:06:00.000Z",
+        }),
+      ])
+    );
   });
 });

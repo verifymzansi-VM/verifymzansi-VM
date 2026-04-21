@@ -84,6 +84,20 @@ async function readUploadError(response: Response, fallback: string): Promise<st
   return appendTraceId(normalizeCreatePostRuntimeError(new Error(message), fallback), traceId);
 }
 
+function toPromotionMediaUploadError(
+  field: PromotionMediaField,
+  error: unknown
+): PromotionMediaUploadError {
+  if (error instanceof PromotionMediaUploadError) {
+    return error;
+  }
+
+  return new PromotionMediaUploadError(
+    field,
+    normalizeCreatePostRuntimeError(error, FIELD_MESSAGES[field])
+  );
+}
+
 async function uploadPromotionVideosViaServer({
   files,
   area,
@@ -166,34 +180,38 @@ export async function uploadRequiredPromotionMedia({
 }): Promise<string[]> {
   if (files.length === 0) return [];
 
-  const uploadData = new FormData();
-  uploadData.append("area", area);
-  files.forEach((file) => uploadData.append("files", file));
+  try {
+    const uploadData = new FormData();
+    uploadData.append("area", area);
+    files.forEach((file) => uploadData.append("files", file));
 
-  const response = await fetchWithRetry("/api/media/upload", {
-    method: "POST",
-    headers: withCsrfHeaders(),
-    body: uploadData,
-  });
-
-  const payload = await parseJson(response);
-  const { urls, errors } = parseUploadResponse(payload);
-  const uploadSucceeded = response.ok && errors.length === 0 && urls.length === files.length;
-
-  if (!uploadSucceeded) {
-    log.warn("Blocking promotion-style save because media upload failed", {
-      field,
-      area,
-      attemptedCount: files.length,
-      uploadedCount: urls.length,
-      status: response.status,
-      errors,
-      payloadError: getPayloadError(payload),
+    const response = await fetchWithRetry("/api/media/upload", {
+      method: "POST",
+      headers: withCsrfHeaders(),
+      body: uploadData,
     });
-    throw new PromotionMediaUploadError(field);
-  }
 
-  return urls;
+    const payload = await parseJson(response);
+    const { urls, errors } = parseUploadResponse(payload);
+    const uploadSucceeded = response.ok && errors.length === 0 && urls.length === files.length;
+
+    if (!uploadSucceeded) {
+      log.warn("Blocking promotion-style save because media upload failed", {
+        field,
+        area,
+        attemptedCount: files.length,
+        uploadedCount: urls.length,
+        status: response.status,
+        errors,
+        payloadError: getPayloadError(payload),
+      });
+      throw new PromotionMediaUploadError(field);
+    }
+
+    return urls;
+  } catch (error) {
+    throw toPromotionMediaUploadError(field, error);
+  }
 }
 
 export async function uploadPromotionVideoFiles({
@@ -279,6 +297,10 @@ export async function uploadPromotionVideoFiles({
       error: error instanceof Error ? error.message : String(error),
     });
 
-    return await uploadPromotionVideosViaServer({ files: compressed, area });
+    try {
+      return await uploadPromotionVideosViaServer({ files: compressed, area });
+    } catch (fallbackError) {
+      throw toPromotionMediaUploadError("videos", fallbackError);
+    }
   }
 }

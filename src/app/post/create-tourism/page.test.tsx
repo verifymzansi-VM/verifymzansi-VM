@@ -857,6 +857,56 @@ describe("CreateTourismPage type switch behavior", () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it("maps photo upload network failures back to the tourism media step", async () => {
+    (fetchWithRetry as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new TypeError("Failed to fetch")
+    );
+
+    render(<CreateTourismPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Event/ }));
+    fireEvent.change(screen.getByLabelText("Event Title *"), {
+      target: { value: "Soweto Food Festival" },
+    });
+    fireEvent.change(screen.getByLabelText("Description *"), {
+      target: { value: "A detailed event description with enough content to pass validation." },
+    });
+    fireEvent.change(screen.getByLabelText("Event Type"), {
+      target: { value: "festival_concert" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText("Start Date *"), {
+      target: { value: "2099-12-01" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText("Province"), {
+      target: { value: "Gauteng" },
+    });
+    fireEvent.change(screen.getByLabelText("City"), {
+      target: { value: "Johannesburg" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByText(
+          "We couldn't reach the upload service. Check your connection and try again."
+        ).length
+      ).toBeGreaterThan(0);
+      expect(
+        screen.getAllByText(
+          "Selected media could not be uploaded. Retry the highlighted files and try again."
+        ).length
+      ).toBeGreaterThan(0);
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it("surfaces a direct video error when MOV transcode fails", async () => {
     mediaFilesByLabel.set("Upload video", [
       new File(["video"], "clip.mov", { type: "video/quicktime" }),

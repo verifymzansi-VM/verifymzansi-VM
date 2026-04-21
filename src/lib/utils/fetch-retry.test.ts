@@ -118,6 +118,58 @@ describe("fetchWithRetry", () => {
     const init = { method: "POST", body: "data" };
     await fetchWithRetry("/api/test", init);
 
-    expect(fetch).toHaveBeenCalledWith("/api/test", init);
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/test",
+      expect.objectContaining({ method: "POST", body: "data" })
+    );
+  });
+
+  it("aborts a stalled request after the per-attempt timeout and retries", async () => {
+    const mockResponse = new Response("ok", { status: 200 });
+
+    vi.mocked(fetch)
+      .mockImplementationOnce(
+        (_input, init) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener(
+              "abort",
+              () => reject(new DOMException("The operation was aborted", "AbortError")),
+              { once: true }
+            );
+          })
+      )
+      .mockResolvedValueOnce(mockResponse);
+
+    const promise = fetchWithRetry("/api/test", undefined, 1, 50);
+    await vi.runAllTimersAsync();
+
+    const result = await promise;
+    expect(result).toBe(mockResponse);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry when the caller aborts the request", async () => {
+    const controller = new AbortController();
+
+    vi.mocked(fetch).mockImplementation(
+      (_input, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener(
+            "abort",
+            () => reject(new DOMException("The operation was aborted", "AbortError")),
+            { once: true }
+          );
+        })
+    );
+
+    const promise = fetchWithRetry("/api/test", { signal: controller.signal }, 2, 50);
+    promise.catch(() => {});
+
+    await Promise.resolve();
+    controller.abort();
+    await vi.runAllTimersAsync();
+
+    await expect(promise).rejects.toThrow("The operation was aborted");
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
