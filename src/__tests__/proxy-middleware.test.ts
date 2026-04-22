@@ -14,7 +14,7 @@ vi.mock("@supabase/ssr", () => ({
   }),
 }));
 
-import { proxy } from "@/proxy";
+import { middleware } from "@/middleware";
 import { routeRequest } from "@/proxy-handler";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
@@ -109,7 +109,7 @@ describe("proxy security headers", () => {
   });
 
   it("adds the full security header set to successful responses", async () => {
-    const res = await proxy(createMockRequest("/"));
+    const res = await middleware(createMockRequest("/"));
     const csp = res.headers.get("Content-Security-Policy");
     const setCookie = res.headers.get("set-cookie");
 
@@ -125,7 +125,7 @@ describe("proxy security headers", () => {
   });
 
   it("uses a development-friendly CSP without x-nonce in development", async () => {
-    const res = await proxy(createMockRequest("/"));
+    const res = await middleware(createMockRequest("/"));
     const csp = res.headers.get("Content-Security-Policy");
 
     expect(csp).toContain("script-src 'self' 'unsafe-inline'");
@@ -137,7 +137,7 @@ describe("proxy security headers", () => {
   it("uses strict nonce CSP in production", async () => {
     vi.stubEnv("NODE_ENV", "production");
 
-    const res = await proxy(createMockRequest("/", { hostname: "verifymzansi.com" }));
+    const res = await middleware(createMockRequest("/", { hostname: "verifymzansi.com" }));
     const csp = res.headers.get("Content-Security-Policy");
     const nonce = res.headers.get("x-nonce");
 
@@ -148,7 +148,7 @@ describe("proxy security headers", () => {
   });
 
   it("keeps basic security headers on redirects", async () => {
-    const res = await proxy(createMockRequest("/dashboard"));
+    const res = await middleware(createMockRequest("/dashboard"));
 
     expect(res.status).toBe(307);
     expect(res.headers.get("Content-Security-Policy")).toBeNull();
@@ -162,7 +162,7 @@ describe("proxy security headers", () => {
     // its cookies yet, so proxy-handler must ensure the final response always
     // includes vm_csrf, either by extracting from temporary response or by
     // explicitly setting it with the computed token.
-    const res = await proxy(createMockRequest("/"));
+    const res = await middleware(createMockRequest("/"));
     const setCookie = res.headers.get("set-cookie");
 
     expect(res.status).toBe(200);
@@ -179,7 +179,7 @@ describe("proxy security headers", () => {
   });
 
   it("does not set a CSRF cookie on cacheable media proxy requests", async () => {
-    const res = await proxy(
+    const res = await middleware(
       createMockRequest("/api/media/serve/media/listing/example/photo.jpg", {
         hostname: "verifymzansi.com",
       })
@@ -190,14 +190,14 @@ describe("proxy security headers", () => {
   });
 
   it("does not set a CSRF cookie on cacheable public image requests", async () => {
-    const res = await proxy(createMockRequest("/images/logo-transparent.png"));
+    const res = await middleware(createMockRequest("/images/logo-transparent.png"));
 
     expect(res.status).toBe(200);
     expect(res.headers.get("set-cookie")).toBeNull();
   });
 
   it("clears stale Playwright session cookies outside stub mode", async () => {
-    const res = await proxy(
+    const res = await middleware(
       createMockRequest("/", { cookieHeader: "vmz_pw_session=persona%3Aold" })
     );
     const setCookie = res.headers.get("set-cookie") ?? "";

@@ -29,6 +29,7 @@
     "storybook": "storybook dev -p 6006",
     "storybook:build": "storybook build -o storybook-static",
     "knip": "knip --config knip.jsonc --tsConfig tsconfig.typecheck.json --reporter compact",
+    "jscpd": "jscpd --config .jscpd.json src",
     "depcruise": "depcruise --config .dependency-cruiser.cjs src",
     "security:audit": "tsx scripts/security-audit.ts",
     "payments:audit": "tsx scripts/payment-security-audit.ts",
@@ -48,6 +49,7 @@
     "test:contract": "tsx scripts/test-contract.ts",
     "test:db": "tsx scripts/test-db.ts",
     "test:perf": "tsx scripts/test-perf.ts",
+    "test:perf:k6": "tsx scripts/run-k6.ts",
     "test:mutation": "tsx scripts/test-mutation.ts",
     "safety:review": "tsx scripts/run-safety-gate.ts review",
     "safety:ci-review": "tsx scripts/run-safety-gate.ts ci-review",
@@ -80,7 +82,9 @@
     "validate:launch-env": "tsx scripts/validate-launch-env.ts --mode=production",
     "ozow:webhook:secret": "node scripts/fetch-ozow-webhook-secret.mjs",
     "prepare": "husky",
-    "generate:api-types": "openapi-typescript docs/openapi.json -o src/lib/api/v1.d.ts"
+    "generate:api-types": "openapi-typescript docs/openapi.json -o src/lib/api/v1.d.ts",
+    "quality:openapi-drift": "tsx scripts/check-openapi-drift.ts",
+    "quality:lighthouse": "lhci autorun --config=.lighthouserc.json"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1018.0",
@@ -123,6 +127,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.1",
+    "@lhci/cli": "^0.15.1",
     "@next/env": "16.2.3",
     "@opennextjs/cloudflare": "^1.18.0",
     "@playwright/test": "^1.58.2",
@@ -142,6 +147,7 @@
     "eslint-config-next": "16.2.3",
     "husky": "^9.1.7",
     "jimp": "0.22.10",
+    "jscpd": "^4.0.5",
     "jsdom": "^28.1.0",
     "knip": "^6.6.1",
     "lint-staged": "^16.4.0",

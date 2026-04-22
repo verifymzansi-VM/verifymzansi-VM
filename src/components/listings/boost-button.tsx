@@ -1,10 +1,7 @@
 "use client";
 
 import { Zap } from "lucide-react";
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
-import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { AddonCheckoutButton } from "@/components/listings/addon-checkout-button";
 
 interface BoostButtonProps {
   listingId: string;
@@ -22,83 +19,19 @@ export function BoostButton({
   itemTypeLabel = "listing",
   boostApiPath,
 }: BoostButtonProps) {
-  const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
-
-  if (isBoosted) {
-    return (
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-9 w-9"
-        disabled
-        title="Already boosted"
-        aria-label="Already boosted"
-      >
-        <Zap className="h-3.5 w-3.5 text-brand-blue fill-brand-blue" />
-      </Button>
-    );
-  }
-
-  if (!canBoost) {
-    return (
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-9 w-9"
-        disabled
-        title={`Upgrade to Growth or Pro to boost this ${itemTypeLabel}`}
-        aria-label={`Upgrade to Growth or Pro to boost this ${itemTypeLabel}`}
-      >
-        <Zap className="h-3.5 w-3.5 text-muted-foreground" />
-      </Button>
-    );
-  }
-
-  async function handleBoost() {
-    setLoading(true);
-    try {
-      const apiPath = boostApiPath || `/api/listings/${listingId}/boost`;
-      const res = await fetch(apiPath, {
-        method: "POST",
-        headers: withCsrfHeaders(),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        toast({
-          title: "Boost failed",
-          description: data.error || "Failed to create boost checkout",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      if (data.checkoutUrl) {
-        window.location.href = data.checkoutUrl;
-      }
-    } catch {
-      toast({
-        title: "Something went wrong",
-        description: "Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }
-
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      className="h-9 w-9 transition-colors hover:text-brand-blue"
-      onClick={handleBoost}
-      disabled={loading}
-      title={`Boost this ${itemTypeLabel} (R15 for 7 days)`}
-      aria-label={`Boost this ${itemTypeLabel}`}
-    >
-      <Zap className={`h-3.5 w-3.5 ${loading ? "animate-pulse" : ""}`} />
-    </Button>
+    <AddonCheckoutButton
+      apiPath={boostApiPath || `/api/listings/${listingId}/boost`}
+      isActive={isBoosted}
+      canUse={canBoost}
+      activeTitle="Already boosted"
+      unavailableTitle={`Upgrade to Growth or Pro to boost this ${itemTypeLabel}`}
+      actionTitle={`Boost this ${itemTypeLabel} (R15 for 7 days)`}
+      errorTitle="Boost failed"
+      errorFallbackDescription="Failed to create boost checkout"
+      hoverClassName="hover:text-brand-blue"
+      activeIconClassName="text-brand-blue fill-brand-blue"
+      Icon={Zap}
+    />
   );
 }

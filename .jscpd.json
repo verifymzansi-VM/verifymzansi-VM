@@ -1,0 +1,31 @@
+{
+  "threshold": 100,
+  "reporters": ["console", "json", "html"],
+  "output": "./tmp/jscpd",
+  "pattern": "**/*.{ts,tsx}",
+  "absolute": true,
+  "gitignore": true,
+  "minLines": 8,
+  "minTokens": 80,
+  "ignore": [
+    "**/.next/**",
+    "**/coverage/**",
+    "**/node_modules/**",
+    "**/playwright-report/**",
+    "**/test-results/**",
+    "**/tmp/**",
+    "**/*.d.ts",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx",
+    "**/__tests__/**",
+    "**/error.tsx",
+    "**/loading.tsx",
+    "**/privacy/page.tsx",
+    "**/terms/page.tsx",
+    "src/lib/account/compat.ts",
+    "src/lib/utils/phone.ts",
+    "src/proxy.ts"
+  ]
+}

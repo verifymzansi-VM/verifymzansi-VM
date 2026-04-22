@@ -54,8 +54,10 @@ type BlockerSummary = {
 const reviewSteps: Step[] = [
   { name: "Lint", args: ["lint"] },
   { name: "Typecheck", args: ["typecheck"] },
+  { name: "OpenAPI drift", args: ["quality:openapi-drift"] },
   { name: "Dead-code scan", args: ["knip"] },
   { name: "Import graph", args: ["depcruise"] },
+  { name: "Duplication scan", args: ["jscpd"], optional: true, nonBlocking: true },
   { name: "Blocking tests", args: ["test:blocking"] },
   { name: "Preflight", args: ["preflight"] },
   { name: "Secret scan", args: ["secret-scan"] },
@@ -67,8 +69,10 @@ const reviewSteps: Step[] = [
 const ciReviewSteps: Step[] = [
   { name: "Lint", args: ["lint"] },
   { name: "Typecheck", args: ["typecheck"] },
+  { name: "OpenAPI drift", args: ["quality:openapi-drift"] },
   { name: "Dead-code scan", args: ["knip"] },
   { name: "Import graph", args: ["depcruise"] },
+  { name: "Duplication scan", args: ["jscpd"], optional: true, nonBlocking: true },
   { name: "Blocking tests", args: ["test:blocking"] },
   { name: "Preflight", args: ["preflight"], nonBlocking: true },
   { name: "Secret scan", args: ["secret-scan"] },

@@ -16,39 +16,61 @@ import { check, sleep } from "k6";
 import { Rate, Trend } from "k6/metrics";
 
 const BASE = __ENV.BASE_URL || "http://localhost:3000";
+const selectedScenarioNames = (__ENV.K6_SCENARIOS || "")
+  .split(/[\s,]+/)
+  .map((name) => name.trim())
+  .filter(Boolean);
 
 // Custom metrics
 const errorRate = new Rate("errors");
 const homepageLatency = new Trend("homepage_latency", true);
 const apiLatency = new Trend("api_latency", true);
 
-export const options = {
-  scenarios: {
-    smoke: {
-      executor: "constant-vus",
-      vus: 5,
-      duration: "30s",
-      tags: { scenario: "smoke" },
-    },
-    average: {
-      executor: "constant-vus",
-      vus: 50,
-      duration: "60s",
-      startTime: "35s",
-      tags: { scenario: "average" },
-    },
-    stress: {
-      executor: "ramping-vus",
-      startVUs: 0,
-      stages: [
-        { duration: "30s", target: 200 },
-        { duration: "60s", target: 200 },
-        { duration: "30s", target: 0 },
-      ],
-      startTime: "100s",
-      tags: { scenario: "stress" },
-    },
+const allScenarios = {
+  smoke: {
+    executor: "constant-vus",
+    vus: 5,
+    duration: "30s",
+    tags: { scenario: "smoke" },
   },
+  average: {
+    executor: "constant-vus",
+    vus: 50,
+    duration: "60s",
+    startTime: "35s",
+    tags: { scenario: "average" },
+  },
+  stress: {
+    executor: "ramping-vus",
+    startVUs: 0,
+    stages: [
+      { duration: "30s", target: 200 },
+      { duration: "60s", target: 200 },
+      { duration: "30s", target: 0 },
+    ],
+    startTime: "100s",
+    tags: { scenario: "stress" },
+  },
+};
+
+if (
+  selectedScenarioNames.length > 0 &&
+  selectedScenarioNames.some((name) => !(name in allScenarios))
+) {
+  throw new Error(
+    `Unknown K6_SCENARIOS value: ${selectedScenarioNames.join(", ")}. Valid values: ${Object.keys(
+      allScenarios
+    ).join(", ")}`
+  );
+}
+
+const scenarios =
+  selectedScenarioNames.length > 0
+    ? Object.fromEntries(selectedScenarioNames.map((name) => [name, allScenarios[name]]))
+    : allScenarios;
+
+export const options = {
+  scenarios,
   thresholds: {
     http_req_duration: ["p(95)<2000", "p(99)<5000"], // 95th < 2s, 99th < 5s
     errors: ["rate<0.05"],                            // < 5% error rate

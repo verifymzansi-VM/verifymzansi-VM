@@ -1,0 +1,50 @@
+{
+  "ci": {
+    "collect": {
+      "url": [
+        "http://127.0.0.1:3000/",
+        "http://127.0.0.1:3000/mzansi-market",
+        "http://127.0.0.1:3000/pricing",
+        "http://127.0.0.1:3000/verify-buyer"
+      ],
+      "numberOfRuns": 1,
+      "startServerCommand": "pnpm exec next start --port 3000 --hostname 127.0.0.1",
+      "startServerReadyPattern": "Ready in|Local:|started server on",
+      "startServerReadyTimeout": 120000,
+      "settings": {
+        "chromeFlags": "--headless=new --no-sandbox --disable-dev-shm-usage"
+      }
+    },
+    "assert": {
+      "assertions": {
+        "categories:performance": [
+          "warn",
+          {
+            "minScore": 0.7
+          }
+        ],
+        "categories:accessibility": [
+          "warn",
+          {
+            "minScore": 0.9
+          }
+        ],
+        "categories:best-practices": [
+          "warn",
+          {
+            "minScore": 0.9
+          }
+        ],
+        "categories:seo": [
+          "warn",
+          {
+            "minScore": 0.9
+          }
+        ]
+      }
+    },
+    "upload": {
+      "target": "temporary-public-storage"
+    }
+  }
+}

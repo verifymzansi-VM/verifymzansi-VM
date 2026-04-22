@@ -5,7 +5,7 @@
     "src/app/**/{page,layout,template,error,loading,default}.{ts,tsx}",
     "src/app/**/route.ts",
     "src/instrumentation.ts",
-    "src/proxy.ts",
+    "src/middleware.ts",
     "workers/*.ts",
     "scripts/**/*.{ts,js,mjs,cjs}",
     "remotion/index.ts"
