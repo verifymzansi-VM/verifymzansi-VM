@@ -36,6 +36,66 @@ const notificationQuerySchema = z.object({
   }),
 });
 
+type NotificationMutationBody = z.infer<typeof notificationMutationSchema>;
+
+type NotificationMutationContext = {
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  userId: string;
+  body: NotificationMutationBody;
+};
+
+async function prepareNotificationMutation(
+  request: NextRequest,
+  options?: { rateLimitKey?: string }
+): Promise<
+  | { context: NotificationMutationContext; response?: never }
+  | { context?: never; response: Response }
+> {
+  const sameOriginFailure = enforceSameOriginMutation(request, log);
+  if (sameOriginFailure) {
+    return { response: sameOriginFailure };
+  }
+
+  const csrfBlock = enforceCsrfToken(request, log);
+  if (csrfBlock) {
+    return { response: csrfBlock };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { response: unauthorizedResponse() };
+  }
+
+  if (options?.rateLimitKey) {
+    const rl = checkLocalRateLimit(user.id, options.rateLimitKey);
+    if (rl.limited) {
+      return { response: rateLimitResponse(rl.retryAfter ?? 60) };
+    }
+  }
+
+  const parsedBody = await parseAndValidateJsonRequest(request, notificationMutationSchema, {
+    invalidJsonMessage: "Invalid JSON payload",
+    validationErrorMessage: "Must provide 'id' or 'all: true'",
+    includeValidationDetails: false,
+  });
+
+  if (!parsedBody.success) {
+    return { response: parsedBody.response };
+  }
+
+  return {
+    context: {
+      supabase,
+      userId: user.id,
+      body: parsedBody.data,
+    },
+  };
+}
+
 /**
  * GET /api/notifications
  * Fetch the authenticated user's notifications.
@@ -119,48 +179,28 @@ export async function GET(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
   try {
-    const sameOriginFailure = enforceSameOriginMutation(request, log);
-    if (sameOriginFailure) {
-      return sameOriginFailure;
-    }
-    const csrfBlock = enforceCsrfToken(request, log);
-    if (csrfBlock) return csrfBlock;
-
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return unauthorizedResponse();
-    }
-
-    const rl = checkLocalRateLimit(user.id, "notifications:update");
-    if (rl.limited) {
-      return rateLimitResponse(rl.retryAfter ?? 60);
-    }
-
-    const parsedBody = await parseAndValidateJsonRequest(request, notificationMutationSchema, {
-      invalidJsonMessage: "Invalid JSON payload",
-      validationErrorMessage: "Must provide 'id' or 'all: true'",
-      includeValidationDetails: false,
+    const mutation = await prepareNotificationMutation(request, {
+      rateLimitKey: "notifications:update",
     });
-
-    if (!parsedBody.success) {
-      return parsedBody.response;
+    if (mutation.response) {
+      return mutation.response;
     }
 
-    if ("all" in parsedBody.data && parsedBody.data.all === true) {
+    const {
+      context: { supabase, userId, body },
+    } = mutation;
+
+    if ("all" in body && body.all === true) {
       const { error } = await supabase
         .from("notifications")
         .update({ read: true })
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .eq("read", false);
 
       if (error) {
         log.error("Failed to mark all notifications as read", {
           error: error.message,
-          userId: user.id,
+          userId,
         });
         return NextResponse.json({ error: "Failed to update notifications" }, { status: 500 });
       }
@@ -172,13 +212,13 @@ export async function PATCH(request: NextRequest) {
     const { error } = await supabase
       .from("notifications")
       .update({ read: true })
-      .eq("id", (parsedBody.data as { id: string }).id)
-      .eq("user_id", user.id);
+      .eq("id", (body as { id: string }).id)
+      .eq("user_id", userId);
 
     if (error) {
       log.error("Failed to mark notification as read", {
         error: error.message,
-        userId: user.id,
+        userId,
       });
       return NextResponse.json({ error: "Failed to update notifications" }, { status: 500 });
     }
@@ -198,39 +238,22 @@ export async function PATCH(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const sameOriginFailure = enforceSameOriginMutation(request, log);
-    if (sameOriginFailure) {
-      return sameOriginFailure;
+    const mutation = await prepareNotificationMutation(request);
+    if (mutation.response) {
+      return mutation.response;
     }
-    const csrfBlock = enforceCsrfToken(request, log);
-    if (csrfBlock) return csrfBlock;
 
-    const supabase = await createClient();
     const {
-      data: { user },
-    } = await supabase.auth.getUser();
+      context: { supabase, userId, body },
+    } = mutation;
 
-    if (!user) {
-      return unauthorizedResponse();
-    }
-
-    const parsedBody = await parseAndValidateJsonRequest(request, notificationMutationSchema, {
-      invalidJsonMessage: "Invalid JSON payload",
-      validationErrorMessage: "Must provide 'id' or 'all: true'",
-      includeValidationDetails: false,
-    });
-
-    if (!parsedBody.success) {
-      return parsedBody.response;
-    }
-
-    if ("all" in parsedBody.data && parsedBody.data.all === true) {
-      const { error } = await supabase.from("notifications").delete().eq("user_id", user.id);
+    if ("all" in body && body.all === true) {
+      const { error } = await supabase.from("notifications").delete().eq("user_id", userId);
 
       if (error) {
         log.error("Failed to clear notifications", {
           error: error.message,
-          userId: user.id,
+          userId,
         });
         return NextResponse.json({ error: "Failed to delete notifications" }, { status: 500 });
       }
@@ -238,17 +261,17 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: true, message: "All notifications cleared" });
     }
 
-    if ("id" in parsedBody.data) {
+    if ("id" in body) {
       const { error } = await supabase
         .from("notifications")
         .delete()
-        .eq("id", parsedBody.data.id)
-        .eq("user_id", user.id);
+        .eq("id", body.id)
+        .eq("user_id", userId);
 
       if (error) {
         log.error("Failed to delete notification", {
           error: error.message,
-          userId: user.id,
+          userId,
         });
         return NextResponse.json({ error: "Failed to delete notifications" }, { status: 500 });
       }

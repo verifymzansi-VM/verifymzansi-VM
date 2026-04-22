@@ -45,8 +45,8 @@ jobs:
         run: pnpm run knip
 
   jscpd-advisory:
+    name: Duplication budget
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v5
@@ -55,13 +55,13 @@ jobs:
           node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
-      - name: Code duplication scan (advisory)
-        run: pnpm run jscpd
+      - name: Code duplication budget
+        run: pnpm run jscpd:check
       - name: Upload jscpd report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: jscpd-advisory-${{ github.run_id }}-${{ github.run_attempt }}
+          name: jscpd-budget-${{ github.run_id }}-${{ github.run_attempt }}
           path: tmp/jscpd/**
           if-no-files-found: warn
 

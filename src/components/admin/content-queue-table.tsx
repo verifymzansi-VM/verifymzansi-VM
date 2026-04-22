@@ -1,22 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import { formatRelativeTime } from "@/lib/utils/format";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { CheckCircle, XCircle, Package, Loader2 } from "lucide-react";
-import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { CheckCircle, XCircle, Package } from "lucide-react";
+import { ContentDecisionDialog } from "@/components/admin/content-decision-dialog";
+import { useContentDecision } from "@/components/admin/use-content-decision";
 
 interface ContentItem {
   id: string;
@@ -38,11 +28,21 @@ interface ContentQueueTableProps {
 }
 
 export function ContentQueueTable({ items, area, onDecisionComplete }: ContentQueueTableProps) {
-  const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null);
-  const [decision, setDecision] = useState<"approve" | "reject" | null>(null);
-  const [rejectReason, setRejectReason] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const {
+    selectedItem,
+    decision,
+    rejectReason,
+    loading,
+    error,
+    setRejectReason,
+    openReview,
+    closeDialog,
+    submitDecision,
+  } = useContentDecision<ContentItem>({
+    getArea: () => area,
+    onDecisionComplete,
+    rejectReasonRequiredMessage: "Please provide a reason for rejection.",
+  });
 
   if (!items.length) {
     return (
@@ -61,57 +61,6 @@ export function ContentQueueTable({ items, area, onDecisionComplete }: ContentQu
       item.mall_name ||
       `Item ${item.id.slice(0, 8)}`
     );
-  }
-
-  function openReview(item: ContentItem, d: "approve" | "reject") {
-    setSelectedItem(item);
-    setDecision(d);
-    setRejectReason("");
-    setError("");
-  }
-
-  function closeDialog() {
-    setSelectedItem(null);
-    setDecision(null);
-    setRejectReason("");
-    setError("");
-  }
-
-  async function submitDecision() {
-    if (!selectedItem || !decision) return;
-
-    if (decision === "reject" && !rejectReason.trim()) {
-      setError("Please provide a reason for rejection.");
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-
-    try {
-      const res = await fetch("/api/admin/content/decide", {
-        method: "POST",
-        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({
-          itemId: selectedItem.id,
-          area,
-          decision,
-          reason: decision === "reject" ? rejectReason : undefined,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to submit decision");
-      }
-
-      closeDialog();
-      onDecisionComplete?.();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-    } finally {
-      setLoading(false);
-    }
   }
 
   return (
@@ -165,56 +114,25 @@ export function ContentQueueTable({ items, area, onDecisionComplete }: ContentQu
         ))}
       </div>
 
-      <Dialog open={!!selectedItem} onOpenChange={(open: boolean) => !open && closeDialog()}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {decision === "approve" ? "Approve Content" : "Reject Content"}
-            </DialogTitle>
-            <DialogDescription>
-              {selectedItem && (
-                <>
-                  {decision === "approve"
-                    ? "This will publish the content and make it visible to the public."
-                    : "This will reject the content. The account holder will be notified."}
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-
-          {decision === "reject" && (
-            <div>
-              <Label htmlFor="reject-reason" className="text-sm font-medium">
-                Rejection Reason <span className="text-destructive">*</span>
-              </Label>
-              <Textarea
-                id="reject-reason"
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-                placeholder="Explain why this content is being rejected..."
-                rows={3}
-                className="mt-1.5"
-              />
-            </div>
-          )}
-
-          {error && <p className="text-sm text-destructive">{error}</p>}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={closeDialog} disabled={loading}>
-              Cancel
-            </Button>
-            <Button
-              onClick={submitDecision}
-              disabled={loading}
-              variant={decision === "approve" ? "default" : "destructive"}
-            >
-              {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {decision === "approve" ? "Confirm Approve" : "Confirm Reject"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ContentDecisionDialog
+        open={!!selectedItem}
+        decision={decision}
+        rejectReason={rejectReason}
+        error={error}
+        loading={loading}
+        onOpenChange={(open) => !open && closeDialog()}
+        onRejectReasonChange={setRejectReason}
+        onConfirm={submitDecision}
+        title={decision === "approve" ? "Approve Content" : "Reject Content"}
+        description={
+          selectedItem
+            ? decision === "approve"
+              ? "This will publish the content and make it visible to the public."
+              : "This will reject the content. The account holder will be notified."
+            : ""
+        }
+        confirmLabel={decision === "approve" ? "Confirm Approve" : "Confirm Reject"}
+      />
     </>
   );
 }

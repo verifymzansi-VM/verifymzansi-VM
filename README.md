@@ -216,6 +216,7 @@ pnpm wrangler secret put OZOW_WEBHOOK_SECRET
 | `pnpm brand:assets`                                                                    | Regenerate logo lockups, favicon, and app icons      |
 | `pnpm knip`                                                                            | Dead-code scan for unused files and exports          |
 | `pnpm jscpd`                                                                           | Advisory code-duplication scan with HTML/JSON report |
+| `pnpm jscpd:check`                                                                     | Regression-only duplication budget gate              |
 | `pnpm depcruise`                                                                       | Import-graph check for cycles and test-only leaks    |
 | `pnpm lint`                                                                            | ESLint                                               |
 | `pnpm typecheck`                                                                       | TypeScript typecheck                                 |

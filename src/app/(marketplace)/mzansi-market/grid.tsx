@@ -10,6 +10,7 @@ import { ListingGridSkeleton } from "@/components/listings/listing-skeleton";
 import { PackageOpen, Plus, AlertTriangle, LayoutGrid, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { MarketplacePaginationControls } from "@/components/listings/marketplace-pagination-controls";
 import Link from "next/link";
 import { CATEGORIES } from "@/lib/constants/categories";
 import { createLogger } from "@/lib/utils/logger";
@@ -463,68 +464,15 @@ export function MzansiMarketGrid() {
       )}
 
       {totalPages > 1 && (
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-4">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-11 w-full sm:h-10 sm:w-auto"
-            disabled={page <= 1}
-            onClick={() => {
-              triggerHaptic("light");
-              setPage(page - 1);
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-          >
-            Previous
-          </Button>
-
-          <span className="sm:hidden text-xs text-muted-foreground">
-            Page {page} of {totalPages}
-          </span>
-
-          <div className="hidden sm:flex items-center gap-1">
-            {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-              const pageNum =
-                totalPages <= 5
-                  ? i + 1
-                  : page <= 3
-                    ? i + 1
-                    : page >= totalPages - 2
-                      ? totalPages - 4 + i
-                      : page - 2 + i;
-
-              return (
-                <Button
-                  key={pageNum}
-                  variant={pageNum === page ? "default" : "ghost"}
-                  size="sm"
-                  className={`w-8 h-8 p-0 ${pageNum === page ? "pointer-events-none" : ""}`}
-                  onClick={() => {
-                    triggerHaptic("light");
-                    setPage(pageNum);
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                  }}
-                >
-                  {pageNum}
-                </Button>
-              );
-            })}
-          </div>
-
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-11 w-full sm:h-10 sm:w-auto"
-            disabled={page >= totalPages}
-            onClick={() => {
-              triggerHaptic("light");
-              setPage(page + 1);
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-          >
-            Next
-          </Button>
-        </div>
+        <MarketplacePaginationControls
+          page={page}
+          totalPages={totalPages}
+          onPageChange={(nextPage) => {
+            triggerHaptic("light");
+            setPage(nextPage);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+        />
       )}
     </div>
   );

@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, ArrowLeft, RefreshCw } from "lucide-react";
+import { Loader2, ArrowLeft } from "lucide-react";
 import { useCallback, useState, useEffect, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
+import { AuthEmailField } from "@/components/auth/auth-email-field";
+import { AuthTurnstileFeedback } from "@/components/auth/auth-turnstile-feedback";
 import {
   TURNSTILE_DOMAIN_MISCONFIGURED_MESSAGE,
   TURNSTILE_UNAVAILABLE_MESSAGE,
@@ -183,25 +183,7 @@ export default function ForgotPasswordPage() {
       </div>
 
       <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            type="email"
-            placeholder="you@example.com"
-            autoComplete="email"
-            spellCheck={false}
-            autoCapitalize="none"
-            aria-invalid={!!errors.email}
-            aria-describedby={errors.email ? "email-error" : undefined}
-            {...register("email")}
-          />
-          {errors.email && (
-            <p id="email-error" className="inline-form-error" role="alert">
-              {errors.email.message}
-            </p>
-          )}
-        </div>
+        <AuthEmailField inputProps={register("email")} errorMessage={errors.email?.message} />
 
         <TurnstileWidget
           retryToken={turnstileRetryToken}
@@ -210,37 +192,14 @@ export default function ForgotPasswordPage() {
           onLoad={handleTurnstileLoad}
           onUnavailable={handleTurnstileUnavailable}
         />
-        {errors.turnstileToken && !turnstileError && (
-          <p className="inline-form-error">{errors.turnstileToken.message}</p>
-        )}
-        {captchaUnavailable && (
-          <div className="flex items-center gap-2">
-            <p className="inline-form-error">{turnstileUnavailableMessage}</p>
-            {canRetryUnavailableCaptcha && (
-              <button
-                type="button"
-                onClick={handleRetry}
-                className="inline-flex items-center gap-1 text-xs font-medium text-brand-green underline hover:text-brand-green/80"
-              >
-                <RefreshCw className="h-3 w-3" />
-                Retry
-              </button>
-            )}
-          </div>
-        )}
-        {turnstileError && (
-          <div className="flex items-center gap-2">
-            <p className="inline-form-error">Security check failed to load. Please try again.</p>
-            <button
-              type="button"
-              onClick={handleRetry}
-              className="inline-flex items-center gap-1 text-xs font-medium text-brand-green underline hover:text-brand-green/80"
-            >
-              <RefreshCw className="h-3 w-3" />
-              Retry
-            </button>
-          </div>
-        )}
+        <AuthTurnstileFeedback
+          tokenErrorMessage={errors.turnstileToken?.message}
+          unavailableMessage={captchaUnavailable ? turnstileUnavailableMessage : null}
+          errorMessage={turnstileError ? "Security check failed to load. Please try again." : null}
+          canRetryUnavailable={canRetryUnavailableCaptcha}
+          canRetryError={Boolean(turnstileError)}
+          onRetry={handleRetry}
+        />
 
         <Button
           type="submit"

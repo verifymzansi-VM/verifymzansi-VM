@@ -3,6 +3,14 @@ import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { VideoTranscodeError, compressVideoForUpload } from "@/lib/media/compress-before-upload";
 import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-errors";
+import {
+  appendTraceId,
+  getPayloadError,
+  getPayloadTraceId,
+  parseUploadJson,
+  parseUploadResponse,
+  readUploadError,
+} from "@/app/post/_lib/media-upload-response";
 import type { UploadArea } from "@/types/enums";
 
 const log = createLogger("BusinessMediaUpload");
@@ -24,71 +32,6 @@ const FIELD_MESSAGES: Record<BusinessMediaField, string> = {
 
 const FORM_MESSAGE =
   "Selected business media could not be uploaded. Retry the highlighted files and try again.";
-
-type UploadResponse = {
-  urls?: unknown;
-  errors?: unknown;
-  error?: unknown;
-  message?: unknown;
-  traceId?: unknown;
-};
-
-function parseUploadResponse(payload: UploadResponse | null) {
-  const urls = Array.isArray(payload?.urls)
-    ? payload.urls.filter((value): value is string => typeof value === "string" && value.length > 0)
-    : [];
-  const errors = Array.isArray(payload?.errors)
-    ? payload.errors.filter(
-        (value): value is string => typeof value === "string" && value.trim().length > 0
-      )
-    : [];
-
-  return { urls, errors };
-}
-
-function getPayloadError(payload: UploadResponse | null): string | null {
-  if (!payload || typeof payload.error !== "string" || payload.error.trim().length === 0) {
-    if (typeof payload?.message !== "string" || payload.message.trim().length === 0) {
-      return null;
-    }
-
-    return payload.message.trim();
-  }
-
-  return payload.error.trim();
-}
-
-function getPayloadTraceId(payload: UploadResponse | null, response?: Response): string | null {
-  if (payload && typeof payload.traceId === "string" && payload.traceId.trim().length > 0) {
-    return payload.traceId.trim();
-  }
-
-  if (response && typeof response.headers?.get === "function") {
-    const traceId = response.headers.get("x-upload-trace-id");
-    if (traceId && traceId.trim().length > 0) {
-      return traceId.trim();
-    }
-  }
-
-  return null;
-}
-
-function appendTraceId(message: string, traceId: string | null): string {
-  if (!traceId || message.includes(traceId)) {
-    return message;
-  }
-
-  return `${message} (Trace: ${traceId})`;
-}
-
-async function readUploadError(response: Response, fallback: string): Promise<string> {
-  const payload = await parseJson(response);
-  const payloadError = getPayloadError(payload);
-  const traceId = getPayloadTraceId(payload, response);
-  const message = payloadError || `${fallback} (HTTP ${response.status})`;
-
-  return appendTraceId(normalizeCreatePostRuntimeError(new Error(message), fallback), traceId);
-}
 
 function toBusinessMediaUploadError(
   field: BusinessMediaField,
@@ -121,7 +64,7 @@ async function uploadBusinessVideoViaServer({
     body: uploadData,
   });
 
-  const payload = await parseJson(response);
+  const payload = await parseUploadJson(response);
   const { urls, errors } = parseUploadResponse(payload);
   const uploadSucceeded = response.ok && errors.length === 0 && urls.length === 1;
 
@@ -167,14 +110,6 @@ export function getBusinessMediaUploadErrorState(error: unknown): {
   };
 }
 
-async function parseJson(response: Response): Promise<UploadResponse | null> {
-  try {
-    return (await response.json()) as UploadResponse;
-  } catch {
-    return null;
-  }
-}
-
 export async function uploadRequiredBusinessMedia({
   files,
   area,
@@ -197,7 +132,7 @@ export async function uploadRequiredBusinessMedia({
       body: uploadData,
     });
 
-    const payload = await parseJson(response);
+    const payload = await parseUploadJson(response);
     const { urls, errors } = parseUploadResponse(payload);
     const uploadSucceeded = response.ok && errors.length === 0 && urls.length === files.length;
 
@@ -249,7 +184,7 @@ export async function uploadRequiredBusinessVideo({
       }),
     });
 
-    const urlPayload = await parseJson(urlResponse);
+    const urlPayload = await parseUploadJson(urlResponse);
 
     if (!urlResponse.ok) {
       log.warn("Direct business video upload URL generation failed; retrying via server upload", {

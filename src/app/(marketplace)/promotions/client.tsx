@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, TreePalm, CalendarDays } from "lucide-react";
 import { PageHeader } from "@/components/layout";
 import { BusinessCard } from "@/components/listings/business-card";
+import { MarketplacePaginationControls } from "@/components/listings/marketplace-pagination-controls";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { PromotionFilterPanel } from "@/components/listings/promotion-filter-panel";
 import { PromotionFilterDrawer } from "@/components/listings/promotion-filter-drawer";
@@ -395,6 +396,21 @@ export function PromotionsExplorer() {
   /* ── Events data ── */
   const promotions = eventsResponse.promotions ?? [];
   const now = new Date();
+  const filterPanelProps = {
+    filters,
+    activeTab,
+    cities,
+    businessMap,
+    onTypeChange: handleTypeChange,
+    onCategoryChange: (value: string | undefined) => updateFilters({ category: value }),
+    onSubcategoryChange: handleSubcategoryChange,
+    onEventTypeChange: handleEventTypeChange,
+    onProvinceChange: handleProvinceChange,
+    onCityChange: (value: string | undefined) => updateFilters({ city: value }),
+    onEventStateChange: handleEventStateChange,
+    onClearQuery: clearQueryFilter,
+    onClearAll: clearAllFilters,
+  };
 
   return (
     <div className="container-page py-8 space-y-6">
@@ -483,40 +499,12 @@ export function PromotionsExplorer() {
       </div>
 
       {/* Mobile filter drawer (FAB visible < lg only) */}
-      <PromotionFilterDrawer
-        filters={filters}
-        activeTab={activeTab}
-        cities={cities}
-        businessMap={businessMap}
-        onTypeChange={handleTypeChange}
-        onCategoryChange={(value) => updateFilters({ category: value })}
-        onSubcategoryChange={handleSubcategoryChange}
-        onEventTypeChange={handleEventTypeChange}
-        onProvinceChange={handleProvinceChange}
-        onCityChange={(value) => updateFilters({ city: value })}
-        onEventStateChange={handleEventStateChange}
-        onClearQuery={clearQueryFilter}
-        onClearAll={clearAllFilters}
-      />
+      <PromotionFilterDrawer {...filterPanelProps} />
 
       <div className="lg:flex lg:gap-6">
         <aside className="hidden w-72 shrink-0 lg:block">
           <div className="sticky top-24 space-y-4">
-            <PromotionFilterPanel
-              filters={filters}
-              activeTab={activeTab}
-              cities={cities}
-              businessMap={businessMap}
-              onTypeChange={handleTypeChange}
-              onCategoryChange={(value) => updateFilters({ category: value })}
-              onSubcategoryChange={handleSubcategoryChange}
-              onEventTypeChange={handleEventTypeChange}
-              onProvinceChange={handleProvinceChange}
-              onCityChange={(value) => updateFilters({ city: value })}
-              onEventStateChange={handleEventStateChange}
-              onClearQuery={clearQueryFilter}
-              onClearAll={clearAllFilters}
-            />
+            <PromotionFilterPanel {...filterPanelProps} />
           </div>
         </aside>
 
@@ -641,7 +629,7 @@ export function PromotionsExplorer() {
               </div>
 
               {totalPages > 1 && (
-                <PaginationControls
+                <MarketplacePaginationControls
                   page={page}
                   totalPages={totalPages}
                   onPageChange={(p) => {
@@ -716,7 +704,7 @@ export function PromotionsExplorer() {
               </div>
 
               {totalPages > 1 && (
-                <PaginationControls
+                <MarketplacePaginationControls
                   page={page}
                   totalPages={totalPages}
                   onPageChange={(p) => {
@@ -730,69 +718,6 @@ export function PromotionsExplorer() {
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-function PaginationControls({
-  page,
-  totalPages,
-  onPageChange,
-}: {
-  page: number;
-  totalPages: number;
-  onPageChange: (page: number) => void;
-}) {
-  return (
-    <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-4">
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-11 w-full sm:h-10 sm:w-auto"
-        disabled={page <= 1}
-        onClick={() => onPageChange(page - 1)}
-      >
-        Previous
-      </Button>
-
-      <span className="sm:hidden text-xs text-muted-foreground">
-        Page {page} of {totalPages}
-      </span>
-
-      <div className="hidden sm:flex items-center gap-1">
-        {Array.from({ length: Math.min(totalPages, 5) }, (_, index) => {
-          const pageNumber =
-            totalPages <= 5
-              ? index + 1
-              : page <= 3
-                ? index + 1
-                : page >= totalPages - 2
-                  ? totalPages - 4 + index
-                  : page - 2 + index;
-
-          return (
-            <Button
-              key={pageNumber}
-              variant={pageNumber === page ? "default" : "ghost"}
-              size="sm"
-              className={`h-8 w-8 p-0 ${pageNumber === page ? "pointer-events-none" : ""}`}
-              onClick={() => onPageChange(pageNumber)}
-            >
-              {pageNumber}
-            </Button>
-          );
-        })}
-      </div>
-
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-11 w-full sm:h-10 sm:w-auto"
-        disabled={page >= totalPages}
-        onClick={() => onPageChange(page + 1)}
-      >
-        Next
-      </Button>
     </div>
   );
 }

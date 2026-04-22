@@ -8,14 +8,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
   Sheet,
   SheetContent,
   SheetHeader,
@@ -23,11 +15,10 @@ import {
   SheetDescription,
   SheetFooter,
 } from "@/components/ui/sheet";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { CheckCircle, XCircle, Package, Loader2, Eye } from "lucide-react";
-import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { CheckCircle, XCircle, Package, Eye } from "lucide-react";
 import { ModerationPreviewPanel, type ModerationItem } from "./moderation-preview-panel";
+import { ContentDecisionDialog } from "@/components/admin/content-decision-dialog";
+import { useContentDecision } from "@/components/admin/use-content-decision";
 
 interface ModerationQueueClientProps {
   items: ModerationItem[];
@@ -37,11 +28,24 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
   const router = useRouter();
   const [areaFilter, setAreaFilter] = useState<string>("all");
   const [previewItem, setPreviewItem] = useState<ModerationItem | null>(null);
-  const [selectedItem, setSelectedItem] = useState<ModerationItem | null>(null);
-  const [decision, setDecision] = useState<"approve" | "reject" | null>(null);
-  const [rejectReason, setRejectReason] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const {
+    selectedItem,
+    decision,
+    rejectReason,
+    loading,
+    error,
+    setRejectReason,
+    openReview,
+    closeDialog,
+    submitDecision,
+  } = useContentDecision<ModerationItem>({
+    getArea: (item) => item.area,
+    onDecisionComplete: () => {
+      closePreview();
+      router.refresh();
+    },
+    rejectReasonRequiredMessage: "Please provide a rejection reason.",
+  });
 
   const areas = ["all", ...Array.from(new Set(items.map((i) => i.area)))];
   const filtered = areaFilter === "all" ? items : items.filter((i) => i.area === areaFilter);
@@ -52,58 +56,6 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
 
   function closePreview() {
     setPreviewItem(null);
-  }
-
-  function openReview(item: ModerationItem, d: "approve" | "reject") {
-    setSelectedItem(item);
-    setDecision(d);
-    setRejectReason("");
-    setError("");
-  }
-
-  function closeDialog() {
-    setSelectedItem(null);
-    setDecision(null);
-    setRejectReason("");
-    setError("");
-  }
-
-  async function submitDecision() {
-    if (!selectedItem || !decision) return;
-
-    if (decision === "reject" && !rejectReason.trim()) {
-      setError("Please provide a rejection reason.");
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-
-    try {
-      const res = await fetch("/api/admin/content/decide", {
-        method: "POST",
-        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({
-          itemId: selectedItem.id,
-          area: selectedItem.area,
-          decision,
-          reason: decision === "reject" ? rejectReason : undefined,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to submit decision");
-      }
-
-      closeDialog();
-      closePreview();
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-    } finally {
-      setLoading(false);
-    }
   }
 
   if (!items.length) {
@@ -271,56 +223,25 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
         </SheetContent>
       </Sheet>
 
-      <Dialog open={!!selectedItem} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {decision === "approve" ? "Approve Content" : "Reject Content"}
-            </DialogTitle>
-            <DialogDescription>
-              {selectedItem && (
-                <>
-                  {decision === "approve"
-                    ? `This will publish "${selectedItem.title || "this item"}" and make it live.`
-                    : `This will reject "${selectedItem.title || "this item"}". The account holder will be notified.`}
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-
-          {decision === "reject" && (
-            <div>
-              <Label htmlFor="reject-reason" className="text-sm font-medium">
-                Rejection Reason <span className="text-destructive">*</span>
-              </Label>
-              <Textarea
-                id="reject-reason"
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-                placeholder="Explain why this content is being rejected..."
-                rows={3}
-                className="mt-1.5"
-              />
-            </div>
-          )}
-
-          {error && <p className="text-sm text-destructive">{error}</p>}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={closeDialog} disabled={loading}>
-              Cancel
-            </Button>
-            <Button
-              onClick={submitDecision}
-              disabled={loading}
-              variant={decision === "approve" ? "default" : "destructive"}
-            >
-              {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {decision === "approve" ? "Publish" : "Reject"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ContentDecisionDialog
+        open={!!selectedItem}
+        decision={decision}
+        rejectReason={rejectReason}
+        error={error}
+        loading={loading}
+        onOpenChange={(open) => !open && closeDialog()}
+        onRejectReasonChange={setRejectReason}
+        onConfirm={submitDecision}
+        title={decision === "approve" ? "Approve Content" : "Reject Content"}
+        description={
+          selectedItem
+            ? decision === "approve"
+              ? `This will publish "${selectedItem.title || "this item"}" and make it live.`
+              : `This will reject "${selectedItem.title || "this item"}". The account holder will be notified.`
+            : ""
+        }
+        confirmLabel={decision === "approve" ? "Publish" : "Reject"}
+      />
     </>
   );
 }

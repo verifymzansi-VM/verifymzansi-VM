@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Eye, EyeOff, Check, RefreshCw } from "lucide-react";
+import { Loader2, Eye, EyeOff, Check } from "lucide-react";
 import { type z } from "zod";
 
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
 import { GoogleOAuthButton } from "@/components/ui/google-oauth-button";
+import { AuthEmailField } from "@/components/auth/auth-email-field";
+import { AuthTurnstileFeedback } from "@/components/auth/auth-turnstile-feedback";
 import { registerSchema, type RegisterInput } from "@/lib/validations/auth";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -266,26 +268,11 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            type="email"
-            placeholder="you@example.com"
-            autoComplete="email"
-            spellCheck={false}
-            autoCapitalize="none"
-            disabled={!isInteractive}
-            aria-invalid={!!errors.email}
-            aria-describedby={errors.email ? "email-error" : undefined}
-            {...register("email")}
-          />
-          {errors.email && (
-            <p id="email-error" className="inline-form-error" role="alert">
-              {errors.email.message}
-            </p>
-          )}
-        </div>
+        <AuthEmailField
+          inputProps={register("email")}
+          errorMessage={errors.email?.message}
+          disabled={!isInteractive}
+        />
 
         <div className="space-y-2">
           <Label htmlFor="phone">SA mobile number</Label>
@@ -432,24 +419,12 @@ export default function RegisterPage() {
           onLoad={handleTurnstileLoad}
           onUnavailable={handleTurnstileUnavailable}
         />
-        {turnstileError && (
-          <div className="flex items-center gap-2">
-            <p className="inline-form-error">{turnstileError}</p>
-            {!captchaUnavailable || canRetryUnavailableCaptcha ? (
-              <button
-                type="button"
-                onClick={handleRetry}
-                className="inline-flex items-center gap-1 text-xs font-medium text-brand-green underline hover:text-brand-green/80"
-              >
-                <RefreshCw className="h-3 w-3" />
-                Retry
-              </button>
-            ) : null}
-          </div>
-        )}
-        {errors.turnstileToken && !turnstileError && (
-          <p className="inline-form-error">{errors.turnstileToken.message}</p>
-        )}
+        <AuthTurnstileFeedback
+          tokenErrorMessage={errors.turnstileToken?.message}
+          errorMessage={turnstileError}
+          canRetryError={!captchaUnavailable || canRetryUnavailableCaptcha}
+          onRetry={handleRetry}
+        />
 
         <Button
           type="submit"

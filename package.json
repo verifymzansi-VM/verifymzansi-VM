@@ -30,6 +30,7 @@
     "storybook:build": "storybook build -o storybook-static",
     "knip": "knip --config knip.jsonc --tsConfig tsconfig.typecheck.json --reporter compact",
     "jscpd": "jscpd --config .jscpd.json src",
+    "jscpd:check": "pnpm run jscpd && tsx scripts/check-jscpd-budget.ts",
     "depcruise": "depcruise --config .dependency-cruiser.cjs src",
     "security:audit": "tsx scripts/security-audit.ts",
     "payments:audit": "tsx scripts/payment-security-audit.ts",

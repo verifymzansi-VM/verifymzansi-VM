@@ -5,8 +5,6 @@ import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { parseAndValidateJsonRequest, parseAndValidateRouteParams } from "@/lib/utils/api";
 import { businessSchema } from "@/lib/validations/business-unified";
-import { getEntitlements } from "@/lib/services/entitlements";
-import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import {
   applyOwnerFilter,
   getOwnerColumn,
@@ -23,9 +21,7 @@ import {
   BUSINESS_SLUG_CONFLICT_RESPONSE,
   isBusinessSlugConflictError,
 } from "@/lib/businesses/slug-conflict";
-import type { PlanTier } from "@/types/enums";
 import type { BusinessDetails } from "@/types/business-details";
-import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { uuidSchema } from "@/lib/validations/shared";
@@ -35,8 +31,12 @@ import {
   buildViewerKey,
   createAnonymousViewerId,
   ENGAGEMENT_VIEWER_COOKIE,
-  ENGAGEMENT_VIEWER_COOKIE_MAX_AGE_SECONDS,
 } from "@/lib/engagement";
+import { createOwnedContentDeleteRoute } from "@/app/api/_lib/create-owned-content-delete-route";
+import { createViewerCookieJsonResponse } from "@/app/api/_lib/engagement-viewer-cookie-response";
+import { requireAuthenticatedLocalMutation } from "@/app/api/_lib/authenticated-local-mutation";
+import { getPostingEntitlementsOrResponse } from "@/app/api/_lib/posting-entitlements";
+import { buildBusinessMutationPayload } from "@/app/api/businesses/_lib/build-business-mutation-payload";
 
 const log = createLogger("BusinessDetail");
 const businessIdParamsSchema = z.object({
@@ -181,37 +181,21 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // Reuse the user fetched above for non-live checks; fetch lazily otherwise.
     if (!currentUser) {
       const { phone: _p, whatsapp: _w, email: _e, ...redactedBusiness } = publicBusiness;
-      const response = NextResponse.json({
-        business: redactedBusiness,
-        promotions: promotions ?? [],
-      });
-      if (!existingViewerId) {
-        response.cookies.set({
-          name: ENGAGEMENT_VIEWER_COOKIE,
-          value: nextViewerId,
-          maxAge: ENGAGEMENT_VIEWER_COOKIE_MAX_AGE_SECONDS,
-          httpOnly: true,
-          sameSite: "lax",
-          secure: process.env.NODE_ENV === "production",
-          path: "/",
-        });
-      }
-      return response;
+      return createViewerCookieJsonResponse(
+        {
+          business: redactedBusiness,
+          promotions: promotions ?? [],
+        },
+        existingViewerId,
+        nextViewerId
+      );
     }
 
-    const response = NextResponse.json({ business: publicBusiness, promotions: promotions ?? [] });
-    if (!existingViewerId) {
-      response.cookies.set({
-        name: ENGAGEMENT_VIEWER_COOKIE,
-        value: nextViewerId,
-        maxAge: ENGAGEMENT_VIEWER_COOKIE_MAX_AGE_SECONDS,
-        httpOnly: true,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-        path: "/",
-      });
-    }
-    return response;
+    return createViewerCookieJsonResponse(
+      { business: publicBusiness, promotions: promotions ?? [] },
+      existingViewerId,
+      nextViewerId
+    );
   } catch (err) {
     log.error("Unexpected error", {
       error: err instanceof Error ? err.message : "Unknown error",
@@ -243,21 +227,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { id } = parsedParams.data;
 
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const mutationAccess = await requireAuthenticatedLocalMutation(supabase, "business:update");
+    if (mutationAccess.response) {
+      return mutationAccess.response;
     }
-
-    const rl = checkLocalRateLimit(user.id, "business:update");
-    if (rl.limited) {
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
-      );
-    }
+    const { user } = mutationAccess;
 
     const ownerColumn = await getOwnerColumn(supabase, "businesses");
 
@@ -292,35 +266,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const data = parsedBody.data;
     const effectiveArea =
       existing.area === "PROMOTIONS_EVENTS" ? "PROMOTIONS_EVENTS" : "MZANSI_BUSINESS";
-    const { data: activeEntitlement, error: entitlementError } = await supabase
-      .from("entitlements")
-      .select("tier")
-      .eq("user_id", user.id)
-      .eq("area", effectiveArea)
-      .eq("status", "active")
-      .gt("expires_at", new Date().toISOString())
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (entitlementError) {
-      log.error("Failed to check entitlements", {
-        userId: user.id,
-        error: entitlementError.message,
-      });
-      return NextResponse.json({ error: "Unable to verify subscription status" }, { status: 503 });
+    const entitlementsResult = await getPostingEntitlementsOrResponse(
+      supabase,
+      user.id,
+      effectiveArea,
+      log
+    );
+    if (entitlementsResult.response) {
+      return entitlementsResult.response;
     }
-
-    const hasPaidPlan = !!activeEntitlement;
-    const activeTier = (activeEntitlement?.tier as string) || null;
-    const ent =
-      hasPaidPlan && activeTier
-        ? getEntitlements(activeTier as PlanTier, effectiveArea)
-        : {
-            maxPhotos: FREE_POST_CONFIG.maxPhotos,
-            maxVideos: FREE_POST_CONFIG.maxVideos,
-            videoAllowed: FREE_POST_CONFIG.videoAllowed,
-          };
+    const ent = entitlementsResult.entitlements;
 
     if ((data.gallery_photos?.length ?? 0) > ent.maxPhotos) {
       return NextResponse.json(
@@ -377,40 +332,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       supabase
         .from("businesses")
         .update({
-          business_type: data.business_type,
-          business_name: data.business_name,
-          slug: data.slug,
-          description: data.description,
-          category: data.category,
-          logo_url: data.logo_url || null,
-          cover_photo: data.cover_photo || null,
-          cover_video: data.cover_video || null,
-          video_thumbnail: data.video_thumbnail || null,
-          gallery_photos: data.gallery_photos || [],
-          location_province: data.location_province,
-          location_city: data.location_city,
-          location_town: data.location_town || null,
-          location_address: data.location_address || null,
-          store_number: data.store_number || null,
-          map_directions: data.map_directions || null,
-          phone: data.phone || null,
-          whatsapp: data.whatsapp || null,
-          email: data.email || null,
-          website: data.website || null,
-          social_links: data.social_links || null,
-          services_offered: data.services_offered,
-          service_areas: data.service_areas || null,
-          business_details: data.business_details || null,
-          operating_hours: data.operating_hours,
-          payment_methods_accepted: data.payment_methods_accepted,
-          delivery_options: data.delivery_options,
-          layout_template: data.layout_template || null,
-          media_width:
-            data.media_width !== undefined ? data.media_width : (existing.media_width ?? null),
-          media_height:
-            data.media_height !== undefined ? data.media_height : (existing.media_height ?? null),
-          focal_x: data.focal_x ?? existing.focal_x ?? 0.5,
-          focal_y: data.focal_y ?? existing.focal_y ?? 0.5,
+          ...buildBusinessMutationPayload(data, {
+            mediaFallbacks: existing,
+          }),
           // Re-trigger moderation only for live businesses so changed content is reviewed.
           // Draft and rejected businesses keep their current status.
           ...(existing.status === "live" ? { status: "pending_moderation" as const } : {}),
@@ -484,124 +408,32 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
  *
  * Delete a business. Only draft or rejected businesses can be deleted.
  */
-export async function DELETE(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const originBlock = enforceSameOriginMutation(_request, log);
-    if (originBlock) return originBlock;
-    const csrfBlock = enforceCsrfToken(_request, log);
-    if (csrfBlock) return csrfBlock;
-
-    const parsedParams = parseAndValidateRouteParams(await params, businessIdParamsSchema, {
-      validationErrorMessage: "Invalid business ID",
-      includeValidationDetails: false,
-    });
-    if (!parsedParams.success) {
-      return parsedParams.response;
-    }
-
-    const { id } = parsedParams.data;
-
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const rl = checkLocalRateLimit(user.id, "business:delete");
-    if (rl.limited) {
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
-      );
-    }
-
-    const ownerColumn = await getOwnerColumn(supabase, "businesses");
-
-    const { data: rawExisting } = await applyOwnerFilter(
-      supabase
-        .from("businesses")
-        .select(
-          withOwnerColumn(
-            "id, owner_id, status, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, business_details",
-            ownerColumn
-          )
-        )
-        .eq("id", id),
-      ownerColumn,
-      user.id
-    ).maybeSingle();
-    const existing = rawExisting as BusinessOwnerRow | null;
-
-    if (!existing) {
-      return NextResponse.json({ error: "Business not found" }, { status: 404 });
-    }
-
-    if (!["draft", "rejected"].includes(existing.status)) {
-      return NextResponse.json(
-        { error: "Only draft or rejected businesses can be deleted" },
-        { status: 400 }
-      );
-    }
-
-    const deleteQuery = applyOwnerFilter(
-      supabase.from("businesses").delete().eq("id", id),
-      ownerColumn,
-      user.id
-    );
-
-    const { error: deleteError } = await deleteQuery;
-
-    if (deleteError) {
-      log.error("Failed to delete business", { error: deleteError.message });
-      return NextResponse.json({ error: "Failed to delete business" }, { status: 500 });
-    }
-
-    const deletedMediaUrls = collectMediaUrls(
+export const DELETE = createOwnedContentDeleteRoute<{ id: string }, BusinessOwnerRow>({
+  log,
+  paramsSchema: businessIdParamsSchema,
+  validationErrorMessage: "Invalid business ID",
+  table: "businesses",
+  ownerSelect:
+    "id, owner_id, status, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, business_details",
+  rateLimitKey: "business:delete",
+  notFoundMessage: "Business not found",
+  invalidStatusMessage: "Only draft or rejected businesses can be deleted",
+  deleteErrorMessage: "Failed to delete business",
+  deleteErrorLogMessage: "Failed to delete business",
+  cleanupReason: "business_deleted",
+  cleanupErrorLogMessage: "Failed to queue deleted business media for cleanup",
+  cleanupErrorIdKey: "businessId",
+  auditTargetType: "business",
+  auditArea: "MZANSI_BUSINESS",
+  getEntityId: ({ id }) => id,
+  canDelete: (existing) => ["draft", "rejected"].includes(existing.status),
+  collectDeletedMediaUrls: (existing) =>
+    collectMediaUrls(
       existing.logo_url,
       existing.cover_photo,
       existing.cover_video,
       existing.video_thumbnail,
       existing.gallery_photos,
       getMallPhotoUrls(existing.business_details as BusinessDetails | null | undefined)
-    );
-
-    if (deletedMediaUrls.length > 0) {
-      try {
-        const admin = createAdminClient();
-        await queuePublicMediaCleanup(admin, deletedMediaUrls, "business_deleted");
-      } catch (cleanupError) {
-        log.error("Failed to queue deleted business media for cleanup", {
-          error: cleanupError instanceof Error ? cleanupError.message : "Unknown error",
-          businessId: id,
-        });
-      }
-    }
-
-    try {
-      await logAuditEvent({
-        actorId: user.id,
-        actorRole: "member",
-        action: "listing_deleted",
-        targetType: "business",
-        targetId: id,
-        area: "MZANSI_BUSINESS",
-      });
-    } catch {
-      // non-fatal
-    }
-
-    return NextResponse.json({ success: true });
-  } catch (err) {
-    log.error("Unexpected error", {
-      error: err instanceof Error ? err.message : "Unknown error",
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    return NextResponse.json({ error: "Failed to delete business" }, { status: 500 });
-  }
-}
+    ),
+});

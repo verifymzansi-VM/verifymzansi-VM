@@ -11,7 +11,6 @@ import { reverseGeocode, computeLocationConfidence } from "@/lib/services/geocod
 import { logAuditEvent } from "@/lib/services/audit";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { createLogger } from "@/lib/utils/logger";
-import { ACCOUNT_PROFILE_NOT_FOUND_ERROR, ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
@@ -28,12 +27,12 @@ import {
   GPS_PROVINCE_MISMATCH_RISK,
   GPS_CITY_MISMATCH_RISK,
 } from "@/lib/constants/verification";
-import {
-  buildVerificationStep,
-  buildVerificationSessionResumePatch,
-} from "@/lib/services/verification-state";
+import { buildVerificationStep } from "@/lib/services/verification-state";
 import { buildVerificationEmailConfirmationRequiredPayload } from "@/lib/constants/verification-email-confirmation";
-import { summarizeVerification } from "@/lib/account/verification-summary";
+import {
+  ensureLocationVerificationWritable,
+  persistLocationVerificationLifecycle,
+} from "../_lib/location-verification-lifecycle";
 
 const gpsLocationSchema = z.object({
   latitude: z.number().min(-35).max(-22),
@@ -43,61 +42,6 @@ const gpsLocationSchema = z.object({
   declaredProvince: optionalTrimmedStringSchema,
   declaredCity: optionalTrimmedStringSchema,
 });
-
-async function finalizeVerificationSessionIfReady(
-  adminClient: ReturnType<typeof createAdminClient>,
-  userId: string
-) {
-  const { data: currentSession, error: sessionFetchErr } = await adminClient
-    .from("verification_sessions")
-    .select("id_artifact_id, selfie_artifact_id, location_submitted_at, finalized_at")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (sessionFetchErr) {
-    log.warn("Failed to fetch session for finalization check (non-fatal)", {
-      userId,
-      error: sessionFetchErr.message,
-    });
-    return;
-  }
-
-  const { data: phoneStep, error: phoneFetchErr } = await adminClient
-    .from("verification_steps")
-    .select("phone_verified_at")
-    .eq("user_id", userId)
-    .eq("step_type", "phone")
-    .maybeSingle();
-
-  if (phoneFetchErr) {
-    log.warn("Failed to fetch phone step for finalization check (non-fatal)", {
-      userId,
-      error: phoneFetchErr.message,
-    });
-  }
-
-  if (
-    currentSession &&
-    !currentSession.finalized_at &&
-    currentSession.id_artifact_id &&
-    currentSession.selfie_artifact_id &&
-    currentSession.location_submitted_at &&
-    phoneStep?.phone_verified_at
-  ) {
-    const { error: finalizeErr } = await adminClient
-      .from("verification_sessions")
-      .update({ finalized_at: new Date().toISOString() })
-      .eq("user_id", userId)
-      .is("finalized_at", null);
-
-    if (finalizeErr) {
-      log.error("Failed to finalize verification session (non-fatal)", {
-        error: finalizeErr.message,
-        userId,
-      });
-    }
-  }
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -202,40 +146,14 @@ export async function POST(request: NextRequest) {
 
     const adminClient = createAdminClient();
 
-    // Reject if verification session is already finalized
-    const { data: existingSession, error: sessionFetchErr } = await adminClient
-      .from("verification_sessions")
-      .select("finalized_at")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    if (sessionFetchErr) {
-      log.error("Failed to fetch verification session", {
-        userId: user.id,
-        error: sessionFetchErr.message,
-      });
-      return NextResponse.json({ error: "Unable to check verification session" }, { status: 500 });
-    }
-    if (existingSession?.finalized_at) {
-      return NextResponse.json(
-        { error: "Verification session is already finalized" },
-        { status: 409 }
-      );
-    }
-
-    // Check account profile exists
-    const { data: profile, error: profileErr } = await supabase
-      .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .select("id, account_verification_status")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (profileErr) {
-      log.error("Failed to fetch account profile", { userId: user.id, error: profileErr.message });
-      return NextResponse.json({ error: "Unable to verify account" }, { status: 500 });
-    }
-
-    if (!profile) {
-      return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
+    const ensureWritable = await ensureLocationVerificationWritable({
+      adminClient,
+      profileClient: supabase,
+      userId: user.id,
+      logger: log,
+    });
+    if ("response" in ensureWritable) {
+      return ensureWritable.response;
     }
 
     // Reverse geocode
@@ -492,81 +410,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Update verification session
-    const { error: sessionErr } = await adminClient.from("verification_sessions").upsert(
-      buildVerificationSessionResumePatch(user.id, {
-        location_submitted_at: new Date().toISOString(),
-      }),
-      { onConflict: "user_id" }
-    );
-    if (sessionErr) {
-      log.error("Failed to update verification session (non-fatal)", {
-        error: sessionErr.message,
-        userId: user.id,
-      });
-    }
-
-    await finalizeVerificationSessionIfReady(adminClient, user.id);
-
-    const profilePatch: Record<string, unknown> = {
-      location_province: locationProvince,
-      location_city: locationCity,
-    };
-
-    const { data: allSteps } = await adminClient
-      .from("verification_steps")
-      .select("step_type, status")
-      .eq("user_id", user.id);
-
-    const verificationSummary = summarizeVerification(
-      profile.account_verification_status,
-      allSteps ?? []
-    );
-
-    profilePatch.account_verification_status = verificationSummary.accountVerificationStatus;
-
-    if (verificationSummary.accountVerificationStatus === "verified") {
-      const { data: idDocDetail } = await adminClient
-        .from("verification_steps")
-        .select("first_name, last_name")
-        .eq("user_id", user.id)
-        .eq("step_type", "id_doc")
-        .maybeSingle();
-
-      if (idDocDetail?.first_name && idDocDetail?.last_name) {
-        profilePatch.legal_first_name = idDocDetail.first_name;
-        profilePatch.legal_last_name = idDocDetail.last_name;
-        profilePatch.display_name = `${idDocDetail.first_name} ${idDocDetail.last_name}`;
-        profilePatch.legal_name_locked_at = new Date().toISOString();
-      }
-
-      const purgeAfter = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-      const { error: purgeErr } = await adminClient
-        .from("kyc_artifacts")
-        .update({ purge_after: purgeAfter })
-        .eq("user_id", user.id)
-        .is("purge_after", null);
-      if (purgeErr) {
-        log.error("Failed to schedule KYC artifact purge (non-fatal)", {
-          error: purgeErr.message,
-          userId: user.id,
-        });
-      }
-    }
-
-    const { error: profileUpdateErr } = await adminClient
-      .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .update(profilePatch)
-      .eq("user_id", user.id);
-    if (profileUpdateErr) {
-      log.error("Failed to update profile after GPS verification", {
-        userId: user.id,
-        error: profileUpdateErr.message,
-      });
-      return NextResponse.json(
-        { error: "GPS location saved but failed to update profile status" },
-        { status: 500 }
-      );
+    const lifecycleResponse = await persistLocationVerificationLifecycle({
+      adminClient,
+      userId: user.id,
+      logger: log,
+      locationProvince,
+      locationCity,
+      currentAccountVerificationStatus: ensureWritable.accountVerificationStatus,
+      profileUpdateErrorMessage: "GPS location saved but failed to update profile status",
+    });
+    if (lifecycleResponse) {
+      return lifecycleResponse;
     }
 
     // Audit log

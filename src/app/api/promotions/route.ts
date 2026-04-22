@@ -28,7 +28,6 @@ import { normalizeBusinessCategoryParam } from "@/lib/utils/marketplace-query";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import { EVENT_TYPES } from "@/lib/constants/categories";
 import {
-  ACCOUNT_PROFILE_NOT_FOUND_ERROR,
   applyOwnerFilter,
   getOwnerColumn,
   normalizeOwnerRecords,
@@ -37,12 +36,10 @@ import {
   withOwnerField,
 } from "@/lib/account/compat";
 import { userOwnsBusiness } from "@/lib/account/owned-business";
-import { resolveAccountVerification } from "@/lib/account/resolved-verification";
-import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
+import { enforceVerifiedPostingAccess } from "@/app/api/_lib/verified-posting-access";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
-import { hasPhoneNumber } from "@/lib/account/require-phone";
 import { parseAndValidateSearchParams, parseJsonRequest } from "@/lib/utils/api";
 import {
   createBoundedIntegerSchema,
@@ -263,24 +260,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check account profile exists
-    const verification = await resolveAccountVerification(supabase, user.id);
-    const profile = verification.profile;
-
-    if (!profile) {
-      return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
-    }
-
-    if (!isVerifiedMember(verification.accountVerificationStatus)) {
-      return NextResponse.json(createVerificationRequiredPayload(AREA), { status: 403 });
-    }
-
-    // Phone gate: prevent content creation without a verified phone number
-    if (!(await hasPhoneNumber(supabase, user.id))) {
-      return NextResponse.json(
-        { error: "Phone number required", redirectUrl: "/dashboard/complete-profile" },
-        { status: 403 }
-      );
+    const accessBlock = await enforceVerifiedPostingAccess(supabase, user.id, AREA);
+    if (accessBlock) {
+      return accessBlock;
     }
 
     // ── Check entitlement / plan limits ──────────────────────
