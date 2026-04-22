@@ -83,7 +83,7 @@
     "validate:launch-env": "tsx scripts/validate-launch-env.ts --mode=production",
     "ozow:webhook:secret": "node scripts/fetch-ozow-webhook-secret.mjs",
     "prepare": "husky",
-    "generate:api-types": "openapi-typescript docs/openapi.json -o src/lib/api/v1.d.ts",
+    "generate:api-types": "openapi-typescript docs/openapi.json -o src/lib/api/v1.d.ts && prettier --write src/lib/api/v1.d.ts",
     "quality:openapi-drift": "tsx scripts/check-openapi-drift.ts",
     "quality:lighthouse": "lhci autorun --config=.lighthouserc.json"
   },

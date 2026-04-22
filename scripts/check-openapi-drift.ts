@@ -3,6 +3,7 @@
 import { spawnSync } from "node:child_process";
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import * as prettier from "prettier";
 
 const openApiPath = path.join(process.cwd(), "docs", "openapi.json");
 const generatedTypesPath = path.join(process.cwd(), "src", "lib", "api", "v1.d.ts");
@@ -13,9 +14,7 @@ function normalizeLineEndings(value: string): string {
   return value.replace(/\r\n/g, "\n");
 }
 
-function runOpenApiGeneration(): void {
-  const args = ["exec", "openapi-typescript", openApiPath, "-o", tempTypesPath];
-
+function runPnpmCommand(args: string[]): void {
   const result =
     process.platform === "win32"
       ? spawnSync(process.env.ComSpec ?? "cmd.exe", ["/c", "pnpm", ...args], {
@@ -26,8 +25,12 @@ function runOpenApiGeneration(): void {
         });
 
   if (result.status !== 0) {
-    throw new Error(`openapi-typescript exited with code ${result.status ?? "unknown"}`);
+    throw new Error(`pnpm ${args.join(" ")} exited with code ${result.status ?? "unknown"}`);
   }
+}
+
+function runOpenApiGeneration(): void {
+  runPnpmCommand(["exec", "openapi-typescript", openApiPath, "-o", tempTypesPath]);
 }
 
 async function main(): Promise<void> {
@@ -41,7 +44,11 @@ async function main(): Promise<void> {
     readFile(tempTypesPath, "utf8"),
   ]);
 
-  if (normalizeLineEndings(checkedInTypes) !== normalizeLineEndings(generatedTypes)) {
+  const formattedGeneratedTypes = await prettier.format(generatedTypes, {
+    filepath: generatedTypesPath,
+  });
+
+  if (normalizeLineEndings(checkedInTypes) !== normalizeLineEndings(formattedGeneratedTypes)) {
     console.error("");
     console.error("OpenAPI drift detected: src/lib/api/v1.d.ts is out of date.");
     console.error("Run `pnpm run generate:api-types` and commit the updated generated types.");
