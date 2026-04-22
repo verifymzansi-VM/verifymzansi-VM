@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 import {
   ACCOUNT_PROFILE_WRITE_TABLE,
@@ -22,8 +22,7 @@ export function useAuth() {
   const { user, profile, trustLevel, isLoading, setUser, setProfile, setLoading, reset } =
     useAuthStore();
 
-  const supabaseRef = useRef(createClient());
-  const supabase = supabaseRef.current;
+  const [supabase] = useState(createClient);
   const fetchedRef = useRef(false);
 
   function readSessionRole(role: unknown): string {

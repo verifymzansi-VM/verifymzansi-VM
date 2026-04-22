@@ -47,8 +47,10 @@ export function useLeadsUnread(): UseLeadsUnreadResult {
 
   useEffect(() => {
     if (!isAuthenticated || !userId) {
-      setOwnerColumn(null);
-      setUnreadCount(0);
+      queueMicrotask(() => {
+        setOwnerColumn(null);
+        setUnreadCount(0);
+      });
       return;
     }
 

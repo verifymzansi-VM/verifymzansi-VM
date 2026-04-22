@@ -66,7 +66,6 @@ export function CommunicationHub() {
   const [loadingPreferences, setLoadingPreferences] = useState(true);
 
   const fetchNotifications = useCallback(async () => {
-    setLoadingNotifications(true);
     try {
       const response = await fetch("/api/notifications?limit=30", { cache: "no-store" });
       const data = await response.json();
@@ -89,7 +88,6 @@ export function CommunicationHub() {
   }, [toast]);
 
   const fetchPreferences = useCallback(async () => {
-    setLoadingPreferences(true);
     try {
       const response = await fetch("/api/communications/preferences", { cache: "no-store" });
       const data = await response.json();
@@ -116,7 +114,6 @@ export function CommunicationHub() {
   }, [toast]);
 
   const fetchEmailActivity = useCallback(async () => {
-    setLoadingEmailActivity(true);
     try {
       const response = await fetch("/api/communications/email-activity", { cache: "no-store" });
       const data = await response.json();
@@ -138,9 +135,11 @@ export function CommunicationHub() {
   }, [toast]);
 
   useEffect(() => {
-    void fetchNotifications();
-    void fetchPreferences();
-    void fetchEmailActivity();
+    queueMicrotask(() => {
+      void fetchNotifications();
+      void fetchPreferences();
+      void fetchEmailActivity();
+    });
   }, [fetchNotifications, fetchPreferences, fetchEmailActivity]);
 
   const sortedNotifications = useMemo(

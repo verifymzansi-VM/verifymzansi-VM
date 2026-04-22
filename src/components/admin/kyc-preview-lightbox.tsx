@@ -163,14 +163,17 @@ export function KycPreviewLightbox({
     if (!open) return;
 
     let cancelled = false;
-    setLoading(true);
-    setError(null);
-    setZoom(1);
-    setDeciding(false);
-    setDecision(null);
-    setReasonCode("");
-    setReasonNote("");
-    setDecisionError("");
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setLoading(true);
+      setError(null);
+      setZoom(1);
+      setDeciding(false);
+      setDecision(null);
+      setReasonCode("");
+      setReasonNote("");
+      setDecisionError("");
+    });
 
     async function loadBlob() {
       try {
@@ -274,8 +277,10 @@ export function KycPreviewLightbox({
   // Revoke blob when lightbox closes
   useEffect(() => {
     if (!open && blobUrl) {
-      URL.revokeObjectURL(blobUrl);
-      setBlobUrl(null);
+      queueMicrotask(() => {
+        URL.revokeObjectURL(blobUrl);
+        setBlobUrl(null);
+      });
     }
   }, [open, blobUrl]);
 

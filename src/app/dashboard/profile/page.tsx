@@ -113,7 +113,9 @@ export default function ProfilePage() {
   useEffect(() => {
     const hash = window.location.hash.replace("#", "") as TabValue;
     if (["profile", "security", "account"].includes(hash)) {
-      setActiveTab(hash);
+      queueMicrotask(() => {
+        setActiveTab(hash);
+      });
     }
   }, []);
 
@@ -124,6 +126,8 @@ export default function ProfilePage() {
   }
 
   useEffect(() => {
+    let cancelled = false;
+
     async function load() {
       const supabase = createClient();
       const {
@@ -133,8 +137,6 @@ export default function ProfilePage() {
         router.push("/login");
         return;
       }
-
-      setEmail(user.email ?? "");
 
       const [{ data: profile }, { data: verificationSteps }] = await Promise.all([
         supabase
@@ -156,29 +158,43 @@ export default function ProfilePage() {
         verificationSteps
       );
 
-      if (profile) {
-        setDisplayName(profile.display_name || "");
-        setLegalFirstName(profile.legal_first_name || "");
-        setLegalLastName(profile.legal_last_name || "");
-        setBio(profile.bio || "");
-        setProvince(profile.location_province || "");
-        setCity(profile.location_city || "");
-        setPhone(sanitizeSaPhoneInput(profile.phone || ""));
-        setAvatarUrl(profile.avatar_url || null);
-        setIsNameLocked(!!profile.legal_name_locked_at);
-        setIsLocationLocked(!!profile.location_verified_at);
-        setPhoneCooldownUntil(
-          checkCooldown(profile.contact_last_phone_change_at ?? null, PHONE_CHANGE_COOLDOWN_MS)
-        );
-        setEmailCooldownUntil(
-          checkCooldown(profile.contact_last_email_change_at ?? null, EMAIL_CHANGE_COOLDOWN_MS)
-        );
+      if (cancelled) {
+        return;
       }
-      setVerificationStatus(verificationSummary.accountVerificationStatus);
-      setIsLoading(false);
+
+      queueMicrotask(() => {
+        if (cancelled) {
+          return;
+        }
+
+        setEmail(user.email ?? "");
+        if (profile) {
+          setDisplayName(profile.display_name || "");
+          setLegalFirstName(profile.legal_first_name || "");
+          setLegalLastName(profile.legal_last_name || "");
+          setBio(profile.bio || "");
+          setProvince(profile.location_province || "");
+          setCity(profile.location_city || "");
+          setPhone(sanitizeSaPhoneInput(profile.phone || ""));
+          setAvatarUrl(profile.avatar_url || null);
+          setIsNameLocked(!!profile.legal_name_locked_at);
+          setIsLocationLocked(!!profile.location_verified_at);
+          setPhoneCooldownUntil(
+            checkCooldown(profile.contact_last_phone_change_at ?? null, PHONE_CHANGE_COOLDOWN_MS)
+          );
+          setEmailCooldownUntil(
+            checkCooldown(profile.contact_last_email_change_at ?? null, EMAIL_CHANGE_COOLDOWN_MS)
+          );
+        }
+        setVerificationStatus(verificationSummary.accountVerificationStatus);
+        setIsLoading(false);
+      });
     }
 
     void load();
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {

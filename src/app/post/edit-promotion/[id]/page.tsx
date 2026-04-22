@@ -210,10 +210,14 @@ export default function EditPromotionPage() {
   useEffect(() => {
     if (newLogoFile[0]) {
       const url = URL.createObjectURL(newLogoFile[0]);
-      setLogoBlobUrl(url);
+      queueMicrotask(() => {
+        setLogoBlobUrl(url);
+      });
       return () => URL.revokeObjectURL(url);
     }
-    setLogoBlobUrl(null);
+    queueMicrotask(() => {
+      setLogoBlobUrl(null);
+    });
   }, [newLogoFile]);
 
   function toggleContact(method: string) {

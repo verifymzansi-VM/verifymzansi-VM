@@ -35,8 +35,7 @@ export default function LoginPage() {
   const [turnstileUnavailableMessage, setTurnstileUnavailableMessage] = useState<string | null>(
     getTurnstileClientState().mode === "unavailable" ? TURNSTILE_UNAVAILABLE_MESSAGE : null
   );
-  const [justRegistered, setJustRegistered] = useState(false);
-  const [emailConfirmed, setEmailConfirmed] = useState(false);
+  const [resendPromptVisible, setResendPromptVisible] = useState(false);
   const [resendingEmail, setResendingEmail] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -60,37 +59,60 @@ export default function LoginPage() {
     },
   });
 
+  const loginPageFlags = isInteractive
+    ? (() => {
+        const params = new URLSearchParams(window.location.search);
+        return {
+          justRegistered: params.get("registered") === "true",
+          emailConfirmed: params.get("confirmed") === "true",
+          error: params.get("error"),
+          reason: params.get("reason"),
+        };
+      })()
+    : {
+        justRegistered: false,
+        emailConfirmed: false,
+        error: null as string | null,
+        reason: null as string | null,
+      };
+  const justRegistered = resendPromptVisible || loginPageFlags.justRegistered;
+  const emailConfirmed = loginPageFlags.emailConfirmed;
+
   // Read query params client-side to avoid useSearchParams + Suspense,
   // ensuring the full form renders on first paint for Playwright assertions.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("registered") === "true") {
-      setJustRegistered(true);
+    if (!isInteractive) {
+      return;
     }
-    if (params.get("confirmed") === "true") {
-      setEmailConfirmed(true);
+
+    if (loginPageFlags.emailConfirmed) {
       // Clean URL to prevent re-flash on refresh/back navigation
       window.history.replaceState({}, "", window.location.pathname);
     }
-    const error = params.get("error");
-    const reason = params.get("reason");
-    if (error === "auth_callback_failed") {
+
+    if (loginPageFlags.error === "auth_callback_failed") {
       toast({
         title: "Authentication failed",
         description:
-          reason === "missing_code"
+          loginPageFlags.reason === "missing_code"
             ? "Your verification link appears incomplete. Please request a new email and try again."
             : "Your sign-in link has expired or is invalid. Please try again.",
         variant: "destructive",
       });
-    } else if (error === "auth_unavailable") {
+    } else if (loginPageFlags.error === "auth_unavailable") {
       toast({
         title: "Service temporarily unavailable",
         description: "Authentication is currently unavailable. Please try again shortly.",
         variant: "destructive",
       });
     }
-  }, [toast, setValue]);
+  }, [
+    isInteractive,
+    loginPageFlags.emailConfirmed,
+    loginPageFlags.error,
+    loginPageFlags.reason,
+    toast,
+  ]);
 
   // Turnstile widget load timeout — show error if it doesn't load in 15s.
   // Skip in dev/test environments where the widget may be slow or unavailable,
@@ -303,7 +325,7 @@ export default function LoginPage() {
         resetTurnstileChallenge();
 
         if (result.code === "email_not_confirmed") {
-          setJustRegistered(true);
+          setResendPromptVisible(true);
         }
 
         toast({

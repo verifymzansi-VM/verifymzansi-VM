@@ -211,19 +211,21 @@ export function EvidenceDeskClient({
   // Auto-fetch if initial params provided
   useEffect(() => {
     if (initialStepId || initialUserId) {
-      fetchMetadata(initialStepId, initialUserId);
+      queueMicrotask(() => {
+        void fetchMetadata(initialStepId, initialUserId);
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
-    fetchMetadata();
+    void fetchMetadata();
   }
 
   function handleDecisionComplete() {
     // Refresh metadata after a decision
-    fetchMetadata();
+    void fetchMetadata();
     router.refresh();
   }
 
