@@ -47,6 +47,7 @@ cloudflare-env-vars.txt
 
 # ── Auto-generated types ─────────────────────────────────────
 src/lib/api/v1.d.ts
+!src/lib/api/v1.d.ts
 
 # lint reports
 eslint_*.txt
@@ -57,6 +58,9 @@ warnings_detail.txt
 
 # ── Documentation (exclude all .md except essential docs) ────
 docs/
+!docs/
+docs/*
+!docs/openapi.json
 *.md
 !README.md
 !CONTRIBUTING.md
