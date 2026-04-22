@@ -346,7 +346,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install chromium
       - name: Resolve Chromium path for Lighthouse
-        run: echo "CHROME_PATH=$(node -e \"process.stdout.write(require('playwright').chromium.executablePath())\")" >> "$GITHUB_ENV"
+        run: |
+          CHROME_PATH=$(node -e 'process.stdout.write(require("playwright").chromium.executablePath())')
+          echo "CHROME_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
       - name: Build Next.js app
         run: pnpm run build
       - name: Lighthouse quality audit

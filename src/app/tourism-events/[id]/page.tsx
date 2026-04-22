@@ -15,5 +15,5 @@ export async function generateMetadata({ params }: TourismEventDetailPageProps):
 
 export default async function TourismEventDetailPage({ params }: TourismEventDetailPageProps) {
   const { id } = await params;
-  return <PromotionDetailPageContent id={id} />;
+  return await PromotionDetailPageContent({ id });
 }

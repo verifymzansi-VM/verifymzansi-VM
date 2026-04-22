@@ -17,12 +17,12 @@ export async function generateMetadata({ params }: PromotionDetailPageProps): Pr
 
 export default async function PromotionDetailPage({ params }: PromotionDetailPageProps) {
   const { id } = await params;
+  const content = await PromotionDetailPageContent({ id });
+
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
-      <main className="flex-1">
-        <PromotionDetailPageContent id={id} />
-      </main>
+      <main className="flex-1">{content}</main>
 
       <Footer />
     </div>
