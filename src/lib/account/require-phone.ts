@@ -7,8 +7,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * users from bypassing the client-side complete-profile gate.
  */
 export async function hasPhoneNumber(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: SupabaseClient<any, any, any>,
+  supabase: Pick<SupabaseClient, "from">,
   userId: string
 ): Promise<boolean> {
   const { data } = await supabase

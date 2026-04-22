@@ -1,47 +1,12 @@
 import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import { getEntitlements } from "@/lib/services/entitlements";
 import type { AppLogger } from "@/lib/utils/logger";
-import type { PlanTier } from "@/types/enums";
+import type { MarketplaceArea, PlanTier } from "@/types/enums";
 
-type EntitlementQueryClient = {
-  from: (table: string) => {
-    select: (columns: string) => {
-      eq: (
-        column: string,
-        value: string
-      ) => {
-        eq: (
-          column: string,
-          value: string
-        ) => {
-          eq: (
-            column: string,
-            value: string
-          ) => {
-            gt: (
-              column: string,
-              value: string
-            ) => {
-              order: (
-                column: string,
-                options: { ascending: boolean }
-              ) => {
-                limit: (count: number) => {
-                  maybeSingle: () => Promise<{
-                    data: { tier?: string | null } | null;
-                    error: { message: string } | null;
-                  }>;
-                };
-              };
-            };
-          };
-        };
-      };
-    };
-  };
-};
+type EntitlementQueryClient = Pick<SupabaseClient, "from">;
 
 type PostingEntitlementsResult =
   | {
@@ -60,7 +25,7 @@ type PostingEntitlementsResult =
 export async function getPostingEntitlementsOrResponse(
   supabase: EntitlementQueryClient,
   userId: string,
-  area: string,
+  area: MarketplaceArea,
   log: AppLogger
 ): Promise<PostingEntitlementsResult> {
   const { data: activeEntitlement, error: entitlementError } = await supabase
@@ -88,7 +53,7 @@ export async function getPostingEntitlementsOrResponse(
   }
 
   const hasPaidPlan = !!activeEntitlement;
-  const activeTier = (activeEntitlement?.tier as string) || null;
+  const activeTier = (activeEntitlement?.tier as PlanTier | null | undefined) ?? null;
 
   return {
     entitlements:

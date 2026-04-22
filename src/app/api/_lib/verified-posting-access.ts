@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
 import { ACCOUNT_PROFILE_NOT_FOUND_ERROR } from "@/lib/account/compat";
@@ -6,9 +7,7 @@ import { resolveAccountVerification } from "@/lib/account/resolved-verification"
 import { hasPhoneNumber } from "@/lib/account/require-phone";
 import type { MarketplaceArea } from "@/types/enums";
 
-type VerificationClient = {
-  from: unknown;
-};
+type VerificationClient = Pick<SupabaseClient, "from">;
 
 export async function enforceVerifiedPostingAccess(
   supabase: VerificationClient,

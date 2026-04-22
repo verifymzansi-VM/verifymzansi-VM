@@ -5,13 +5,13 @@ import { env } from "@/lib/config/env";
 import { createHostedCheckout } from "@/lib/payments/checkout";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { logAuditEvent } from "@/lib/services/audit";
+import { logAuditEvent, type AuditAction } from "@/lib/services/audit";
 import { getActivePlanTierForArea } from "@/lib/services/plan-tier";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { parseAndValidateRouteParams } from "@/lib/utils/api";
 import { createLogger, type AppLogger } from "@/lib/utils/logger";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
-import type { MarketplaceArea } from "@/types/enums";
+import type { MarketplaceArea, PlanTier } from "@/types/enums";
 
 type AllowedResult = {
   allowed: boolean;
@@ -41,7 +41,7 @@ type PendingPaymentMatch = Record<string, string>;
 type AuditPayload = {
   targetType: "listing" | "business" | "promotion";
   targetId: string;
-  area?: "MZANSI_MARKET" | "MALL_SHOPS" | "BUSINESS_ADS" | "PROMOTIONS_EVENTS";
+  area?: MarketplaceArea;
 };
 
 type CheckoutPayload = {
@@ -67,7 +67,7 @@ type CoreConfig<
   itemDescription: string;
   amountCents: number;
   liveOnlyNoun: string;
-  auditAction: string;
+  auditAction: AuditAction;
   auditDurationKey: string;
   failureMessage: string;
   getEntityId: (params: Params) => string;
@@ -81,7 +81,7 @@ type CoreConfig<
   getNotFoundMessage: string;
   verifyOwnership: (entity: Entity, userId: string) => NextResponse | null;
   resolveArea: (entity: Entity) => MarketplaceArea;
-  entitlementCheck: (tier: string | null, area: MarketplaceArea) => AllowedResult;
+  entitlementCheck: (tier: PlanTier, area: MarketplaceArea) => AllowedResult;
   buildPendingPaymentMatch: (entityId: string) => PendingPaymentMatch;
   buildCheckoutPayload: (entity: Entity, entityId: string) => CheckoutPayload;
   buildAuditPayload: (entityId: string, area: MarketplaceArea) => AuditPayload;

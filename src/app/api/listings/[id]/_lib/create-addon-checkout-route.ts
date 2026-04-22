@@ -10,7 +10,7 @@ import {
 } from "@/lib/account/compat";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { uuidSchema } from "@/lib/validations/shared";
-import type { MarketplaceArea } from "@/types/enums";
+import type { MarketplaceArea, PlanTier } from "@/types/enums";
 import { createAddonCheckoutRouteCore } from "@/app/api/_lib/create-addon-checkout-route-core";
 
 const listingAddonParamsSchema = z.object({
@@ -50,7 +50,7 @@ type ListingAddonRouteConfig = {
   auditAction: "listing_featured" | "listing_boosted" | "listing_urgent";
   auditDurationKey: "featureDays" | "boostDays" | "urgentDays";
   failureMessage: string;
-  entitlementCheck: (tier: string | null, area: MarketplaceArea) => AllowedResult;
+  entitlementCheck: (tier: PlanTier, area: MarketplaceArea) => AllowedResult;
 };
 
 export function createListingAddonCheckoutRoute(config: ListingAddonRouteConfig) {
@@ -140,7 +140,7 @@ export function createListingAddonCheckoutRoute(config: ListingAddonRouteConfig)
     buildAuditPayload: (listingId, area) => ({
       targetType: "listing",
       targetId: listingId,
-      area: area as "MZANSI_MARKET" | "MALL_SHOPS" | "BUSINESS_ADS" | "PROMOTIONS_EVENTS",
+      area,
     }),
   });
 }

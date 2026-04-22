@@ -10,7 +10,7 @@ import {
 } from "@/lib/account/compat";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { uuidSchema } from "@/lib/validations/shared";
-import type { MarketplaceArea } from "@/types/enums";
+import type { MarketplaceArea, PlanTier } from "@/types/enums";
 import { createAddonCheckoutRouteCore } from "@/app/api/_lib/create-addon-checkout-route-core";
 
 const promotionAddonParamsSchema = z.object({
@@ -49,7 +49,7 @@ type PromotionAddonRouteConfig = {
   auditAction: "promotion_featured" | "promotion_boosted" | "promotion_urgent";
   auditDurationKey: "featureDays" | "boostDays" | "urgentDays";
   failureMessage: string;
-  entitlementCheck: (tier: string | null, area: MarketplaceArea) => AllowedResult;
+  entitlementCheck: (tier: PlanTier, area: MarketplaceArea) => AllowedResult;
   requireOwnerMatch?: boolean;
   includeAuditArea?: boolean;
 };
@@ -156,7 +156,7 @@ export function createPromotionAddonCheckoutRoute(config: PromotionAddonRouteCon
       targetId: promotionId,
       ...(config.includeAuditArea
         ? {
-            area: area as "MZANSI_MARKET" | "MALL_SHOPS" | "BUSINESS_ADS" | "PROMOTIONS_EVENTS",
+            area,
           }
         : {}),
     }),

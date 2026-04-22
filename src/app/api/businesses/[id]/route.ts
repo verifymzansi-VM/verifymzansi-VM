@@ -37,6 +37,7 @@ import { createViewerCookieJsonResponse } from "@/app/api/_lib/engagement-viewer
 import { requireAuthenticatedLocalMutation } from "@/app/api/_lib/authenticated-local-mutation";
 import { getPostingEntitlementsOrResponse } from "@/app/api/_lib/posting-entitlements";
 import { buildBusinessMutationPayload } from "@/app/api/businesses/_lib/build-business-mutation-payload";
+import type { MarketplaceArea } from "@/types/enums";
 
 const log = createLogger("BusinessDetail");
 const businessIdParamsSchema = z.object({
@@ -264,7 +265,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     const data = parsedBody.data;
-    const effectiveArea =
+    const effectiveArea: MarketplaceArea =
       existing.area === "PROMOTIONS_EVENTS" ? "PROMOTIONS_EVENTS" : "MZANSI_BUSINESS";
     const entitlementsResult = await getPostingEntitlementsOrResponse(
       supabase,

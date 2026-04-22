@@ -155,3 +155,4 @@ export function createLogger(context: string) {
 }
 
 export type Logger = ReturnType<typeof createLogger>;
+export type AppLogger = Logger;

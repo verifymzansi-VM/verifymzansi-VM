@@ -11,6 +11,7 @@ import { enforceCsrfToken } from "@/lib/utils/csrf";
 import type { AppLogger } from "@/lib/utils/logger";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
+import type { MarketplaceArea } from "@/types/enums";
 
 type DeleteRouteConfig<Params extends Record<string, string>, ExistingRow> = {
   log: AppLogger;
@@ -27,7 +28,7 @@ type DeleteRouteConfig<Params extends Record<string, string>, ExistingRow> = {
   cleanupErrorLogMessage: string;
   cleanupErrorIdKey: "businessId" | "promotionId";
   auditTargetType: "business" | "promotion";
-  auditArea?: string;
+  auditArea?: MarketplaceArea;
   getEntityId: (params: Params) => string;
   canDelete: (existing: ExistingRow) => boolean;
   collectDeletedMediaUrls: (existing: ExistingRow) => string[];

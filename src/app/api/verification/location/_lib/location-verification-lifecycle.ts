@@ -1,38 +1,10 @@
 import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { ACCOUNT_PROFILE_NOT_FOUND_ERROR, ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { summarizeVerification } from "@/lib/account/verification-summary";
 import { buildVerificationSessionResumePatch } from "@/lib/services/verification-state";
-
-type QueryError = { message: string } | null;
-
-type QueryClient = {
-  from: (table: string) => {
-    select: (columns: string) => {
-      eq: (
-        column: string,
-        value: string
-      ) => {
-        maybeSingle: () => Promise<{ data: unknown; error: QueryError }>;
-      };
-      maybeSingle?: () => Promise<{ data: unknown; error: QueryError }>;
-    };
-    update: (values: Record<string, unknown>) => {
-      eq: (
-        column: string,
-        value: string
-      ) =>
-        | Promise<{ error: QueryError }>
-        | {
-            is: (column: string, value: null) => Promise<{ error: QueryError }>;
-          };
-    };
-    upsert: (
-      values: Record<string, unknown>,
-      options: { onConflict: string }
-    ) => Promise<{ error: QueryError }>;
-  };
-};
+type QueryClient = Pick<SupabaseClient, "from">;
 
 type VerificationSessionRow = {
   id_artifact_id?: string | null;
