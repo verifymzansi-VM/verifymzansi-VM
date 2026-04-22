@@ -379,6 +379,21 @@ pnpm validate:launch-env
 pnpm preflight:prod
 ```
 
+### Sentry Bug Finding
+
+For live Sentry triage plus local in-app debugging, use
+[docs/playbooks/sentry-bug-finding.md](docs/playbooks/sentry-bug-finding.md).
+
+That playbook standardizes:
+
+- `NEXT_PUBLIC_SENTRY_DSN` for SDK event delivery
+- `SENTRY_ORG`, `SENTRY_PROJECT`, and `SENTRY_AUTH_TOKEN` for CLI or API issue
+  reads and release or source-map validation
+
+It also treats "Spotlight" as Sentry's current
+[Toolbar](https://docs.sentry.io/product/sentry-toolbar/) workflow for
+page-aware local debugging.
+
 ## Live Operator Bootstrap
 
 After a launch reset, the linked Supabase project can be left with zero auth
@@ -512,6 +527,7 @@ src/
   stores/              Zustand stores
   test/                shared test setup
 scripts/               preflight, validation, security, and release tooling
+docs/                  runbooks, playbooks, audits, and operator references
 supabase/              migrations and schema assets
 workers/               Cloudflare Workers
 e2e/                   Playwright suites

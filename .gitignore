@@ -56,7 +56,7 @@ lint_*.txt
 lint_*.json
 warnings_detail.txt
 
-# ── Documentation (exclude all .md except essential docs) ────
+# ── Documentation (exclude most .md except allowlisted operator docs) ────
 docs/
 !docs/
 docs/*
@@ -69,6 +69,9 @@ docs/*
 !LAUNCH-CHECKLIST.md
 !LAUNCH-HARDENING-PLAN.md
 !.github/**/*.md
+!docs/RUNBOOK.md
+!docs/playbooks/
+!docs/playbooks/sentry-bug-finding.md
 
 # ── QA evidence & temporary files ─────────────────────────────
 /evidence/
