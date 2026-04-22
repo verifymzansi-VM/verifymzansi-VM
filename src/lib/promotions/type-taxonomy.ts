@@ -2,11 +2,6 @@ import type { PromotionType } from "@/types/enums";
 
 export type PromotionFilterType = "event";
 
-export const PROMOTION_FILTER_TYPE_OPTIONS: Array<{
-  value: PromotionFilterType;
-  label: string;
-}> = [{ value: "event", label: "Events" }];
-
 export function getPromotionFilterTypeLabel(_value: PromotionFilterType): string {
   return "Events";
 }

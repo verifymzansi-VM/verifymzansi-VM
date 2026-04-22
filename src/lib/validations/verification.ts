@@ -53,7 +53,7 @@ export const verificationLocationSchema = z.object({
  * Extended schema used by POST /api/verification/location.
  * Accepts GPS coordinates and accuracy in addition to province/city.
  */
-export const verificationLocationSubmitSchema = z.object({
+const _verificationLocationSubmitSchema = z.object({
   province: z.string().trim().min(1, "Province is required").max(50),
   city: z.string().trim().min(1, "City is required").max(80),
   latitude: z.number().min(-35).max(-22).optional(),
@@ -62,7 +62,7 @@ export const verificationLocationSubmitSchema = z.object({
   gpsAccuracyMeters: z.number().positive().finite().optional(),
 });
 
-export const proofOfAddressLineSchema = z
+const _proofOfAddressLineSchema = z
   .string()
   .trim()
   .min(5, "Enter the residential address shown on your proof of residence")
@@ -78,10 +78,10 @@ export const buyerVerifySchema = z.object({
 
 // ── File upload validation ───────────────────────────────
 /** Allowed MIME types for image uploads (JPEG, PNG, WebP). */
-export const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 
 /** Allowed MIME types for document uploads (images + PDF). */
-export const ALLOWED_DOC_TYPES = [...ALLOWED_IMAGE_TYPES, "application/pdf"] as const;
+const ALLOWED_DOC_TYPES = [...ALLOWED_IMAGE_TYPES, "application/pdf"] as const;
 
 const EXTENSIONS_BY_TYPE: Record<string, readonly string[]> = {
   "image/jpeg": ["jpg", "jpeg"],
@@ -198,22 +198,22 @@ export function validateUploadedFile(
   });
 
 /** Inferred input type for {@link verificationPhoneSchema}. */
-export type VerificationPhoneInput = z.infer<typeof verificationPhoneSchema>;
+type _VerificationPhoneInput = z.infer<typeof verificationPhoneSchema>;
 /** Inferred input type for {@link verificationOtpSchema}. */
-export type VerificationOtpInput = z.infer<typeof verificationOtpSchema>;
+type _VerificationOtpInput = z.infer<typeof verificationOtpSchema>;
 /** Inferred input type for {@link verificationIdDocSchema}. */
-export type VerificationIdDocInput = z.infer<typeof verificationIdDocSchema>;
+type _VerificationIdDocInput = z.infer<typeof verificationIdDocSchema>;
 /** Inferred input type for {@link verificationSelfieSchema}. */
-export type VerificationSelfieInput = z.infer<typeof verificationSelfieSchema>;
+type _VerificationSelfieInput = z.infer<typeof verificationSelfieSchema>;
 /** Inferred input type for {@link verificationLocationSchema}. */
-export type VerificationLocationInput = z.infer<typeof verificationLocationSchema>;
+type _VerificationLocationInput = z.infer<typeof verificationLocationSchema>;
 /** Inferred input type for {@link verificationLocationSubmitSchema}. */
-export type VerificationLocationSubmitInput = z.infer<typeof verificationLocationSubmitSchema>;
+type _VerificationLocationSubmitInput = z.infer<typeof _verificationLocationSubmitSchema>;
 /** Inferred input type for {@link proofOfAddressLineSchema}. */
-export type ProofOfAddressLineInput = z.infer<typeof proofOfAddressLineSchema>;
+type _ProofOfAddressLineInput = z.infer<typeof _proofOfAddressLineSchema>;
 /** Inferred input type for {@link buyerVerifySchema}. */
-export type BuyerVerifyInput = z.infer<typeof buyerVerifySchema>;
+type _BuyerVerifyInput = z.infer<typeof buyerVerifySchema>;
 /** Inferred input type for {@link fileUploadSchema}. */
-export type FileUploadInput = z.infer<typeof fileUploadSchema>;
+type _FileUploadInput = z.infer<typeof fileUploadSchema>;
 /** Inferred input type for {@link dsarRequestSchema}. */
-export type DsarRequestInput = z.infer<typeof dsarRequestSchema>;
+type _DsarRequestInput = z.infer<typeof dsarRequestSchema>;

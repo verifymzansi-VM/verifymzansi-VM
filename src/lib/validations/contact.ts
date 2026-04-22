@@ -66,6 +66,6 @@ export const reportSchema = z.object({
 });
 
 /** Inferred input type for {@link contactAccountHolderSchema}. */
-export type ContactAccountHolderInput = z.infer<typeof contactAccountHolderSchema>;
+type _ContactAccountHolderInput = z.infer<typeof contactAccountHolderSchema>;
 /** Inferred input type for {@link reportSchema}. */
-export type ReportInput = z.infer<typeof reportSchema>;
+type _ReportInput = z.infer<typeof reportSchema>;

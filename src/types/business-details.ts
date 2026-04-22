@@ -1,5 +1,3 @@
-import type { BusinessType } from "./enums";
-
 export type WalkInPolicy = "walk_ins_welcome" | "appointments_preferred" | "appointment_only";
 
 export type PrimaryOrderChannel =
@@ -72,19 +70,4 @@ export type BusinessDetails =
   | OnlineOnlyBusinessDetails
   | MarketStallBusinessDetails;
 
-export type PhysicalBusinessType =
-  | "mall_store"
-  | "standalone_shop"
-  | "home_business"
-  | "market_stall";
-
-export const PHYSICAL_BUSINESS_TYPES: PhysicalBusinessType[] = [
-  "mall_store",
-  "standalone_shop",
-  "home_business",
-  "market_stall",
-];
-
-export function isPhysicalBusinessType(type: BusinessType): type is PhysicalBusinessType {
-  return PHYSICAL_BUSINESS_TYPES.includes(type as PhysicalBusinessType);
-}
+type _PhysicalBusinessType = "mall_store" | "standalone_shop" | "home_business" | "market_stall";

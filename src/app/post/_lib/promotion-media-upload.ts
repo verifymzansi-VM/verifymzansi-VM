@@ -143,7 +143,7 @@ async function parseJson(response: Response): Promise<UploadResponse | null> {
   }
 }
 
-export class PromotionMediaUploadError extends Error {
+class PromotionMediaUploadError extends Error {
   readonly field: PromotionMediaField;
 
   constructor(field: PromotionMediaField, message?: string) {

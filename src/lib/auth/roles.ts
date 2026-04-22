@@ -223,13 +223,6 @@ export function hasAnyCapability(user: MaybeUser, capabilities: readonly Capabil
 }
 
 /**
- * Return the full set of capabilities for a role.
- */
-export function getCapabilitiesForRole(role: StaffRole): ReadonlySet<Capability> {
-  return ROLE_CAPABILITIES[role];
-}
-
-/**
  * Verify that the user's role is included in `allowedRoles`.
  * @param user - The Supabase user (or null/undefined).
  * @param allowedRoles - A readonly list of permitted role strings.

@@ -19,13 +19,13 @@ export const profileUpdateSchema = z.object({
 });
 
 /** Inferred type for profile update payloads. */
-export type ProfileUpdateInput = z.infer<typeof profileUpdateSchema>;
+type _ProfileUpdateInput = z.infer<typeof profileUpdateSchema>;
 
 /**
  * Zod schema for settings page display name update.
  * Validates only the display name field.
  */
-export const settingsDisplayNameSchema = z.object({
+const _settingsDisplayNameSchema = z.object({
   displayName: z
     .string()
     .trim()
@@ -34,4 +34,4 @@ export const settingsDisplayNameSchema = z.object({
 });
 
 /** Inferred type for settings display name update. */
-export type SettingsDisplayNameInput = z.infer<typeof settingsDisplayNameSchema>;
+type _SettingsDisplayNameInput = z.infer<typeof _settingsDisplayNameSchema>;

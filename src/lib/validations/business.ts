@@ -60,6 +60,6 @@ export const businessPostSchema = z.object({
 });
 
 /** Inferred input type for {@link businessProfileSchema}. */
-export type BusinessProfileInput = z.infer<typeof businessProfileSchema>;
+type _BusinessProfileInput = z.infer<typeof businessProfileSchema>;
 /** Inferred input type for {@link businessPostSchema}. */
-export type BusinessPostInput = z.infer<typeof businessPostSchema>;
+type _BusinessPostInput = z.infer<typeof businessPostSchema>;

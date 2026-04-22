@@ -260,6 +260,6 @@ export const tourismSchema = z.discriminatedUnion("listing_type", [
 
 /* ── Inferred types ──────────────────────────────────────── */
 
-export type TourismBusinessInput = z.infer<typeof tourismBusinessSchema>;
-export type EventInput = z.infer<typeof eventSchema>;
-export type TourismInput = z.infer<typeof tourismSchema>;
+type _TourismBusinessInput = z.infer<typeof tourismBusinessSchema>;
+type _EventInput = z.infer<typeof eventSchema>;
+type _TourismInput = z.infer<typeof tourismSchema>;

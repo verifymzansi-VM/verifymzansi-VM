@@ -418,13 +418,6 @@ export function sanitizeBusinessDetailsForSubmission(
   };
 }
 
-export function parseCommaSeparatedList(value: string): string[] {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
 export function stringifyListValue(value: unknown): string {
   return Array.isArray(value) ? value.join(", ") : "";
 }

@@ -97,7 +97,7 @@ export function ActivityFeed({ entries, emptyMessage }: ActivityFeedProps) {
 }
 
 /** Card wrapper version of ActivityFeed for use in dashboards */
-export function ActivityFeedCard({
+function _ActivityFeedCard({
   entries,
   title = "Recent Activity",
 }: {

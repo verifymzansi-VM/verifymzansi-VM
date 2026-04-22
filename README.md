@@ -214,6 +214,8 @@ pnpm wrangler secret put OZOW_WEBHOOK_SECRET
 | `pnpm dev`                                                                             | Start the local Next.js dev server                   |
 | `pnpm build`                                                                           | Production Next.js build                             |
 | `pnpm brand:assets`                                                                    | Regenerate logo lockups, favicon, and app icons      |
+| `pnpm knip`                                                                            | Dead-code scan for unused files and exports          |
+| `pnpm depcruise`                                                                       | Import-graph check for cycles and test-only leaks    |
 | `pnpm lint`                                                                            | ESLint                                               |
 | `pnpm typecheck`                                                                       | TypeScript typecheck                                 |
 | `pnpm test`                                                                            | Blocking Vitest lane used for launch gating          |
@@ -310,6 +312,26 @@ pnpm safety:review
 pnpm safety:ci-review
 pnpm safety:release
 ```
+
+For dead-code analysis, run:
+
+```bash
+pnpm knip
+```
+
+For import-graph validation, run:
+
+```bash
+pnpm depcruise
+```
+
+Knip is now blocking in CI and included in the safety-review lane. Keep
+`knip.jsonc` aligned with convention-based entrypoints and generated type
+surfaces so regressions reflect real dead code instead of tooling noise.
+
+Dependency-cruiser is also blocking in CI and in the safety-review lane. The
+current baseline enforces a minimal rule set: no circular dependencies and no
+runtime imports from test-only modules.
 
 Use `-- --dry-run` to preview the command sequence without executing it.
 

@@ -112,7 +112,7 @@ function getGlobalStoreContainer(): Record<string, PlaywrightFixtureStore | unde
   return globalThis as unknown as Record<string, PlaywrightFixtureStore | undefined>;
 }
 
-export function getPlaywrightFixtureStore(): PlaywrightFixtureStore {
+function getPlaywrightFixtureStore(): PlaywrightFixtureStore {
   const container = getGlobalStoreContainer();
 
   if (!container[GLOBAL_KEY]) {

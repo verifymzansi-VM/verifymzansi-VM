@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AccountVerificationStatus, CompatibleUserRole, UserRole } from "@/types/enums";
+import type { AccountVerificationStatus, UserRole } from "@/types/enums";
 
 export const ACCOUNT_PROFILE_TABLE = "account_profiles";
 export const ACCOUNT_PROFILE_WRITE_TABLE = ACCOUNT_PROFILE_TABLE;
@@ -45,10 +45,6 @@ export function normalizeUserRole(role: string | null | undefined): UserRole | n
     default:
       return null;
   }
-}
-
-export function isCompatibleUserRole(role: string | null | undefined): role is CompatibleUserRole {
-  return normalizeUserRole(role) !== null;
 }
 
 export function normalizeAccountVerificationStatus(

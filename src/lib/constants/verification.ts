@@ -3,14 +3,6 @@
    Thresholds, templates, and limits used across verification flows.
    ══════════════════════════════════════════════════════════════ */
 
-/* ── Risk Thresholds ─────────────────────────────────────── */
-export const RISK_THRESHOLDS = {
-  LOW_MAX: 25,
-  MEDIUM_MAX: 50,
-  HIGH_MAX: 75,
-  // Above HIGH_MAX is critical
-} as const;
-
 /* ── GPS / Location ──────────────────────────────────────── */
 export const GPS_ACCURACY_WARN_METERS = 1000;
 export const GPS_ACCURACY_REJECT_METERS = 3000;
@@ -23,33 +15,13 @@ export const MANUAL_ONLY_BASELINE_RISK = 20;
 export const GPS_PROVINCE_MISMATCH_RISK = 50;
 export const GPS_CITY_MISMATCH_RISK = 25;
 
-/* ── File Upload Limits ──────────────────────────────────── */
-export const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
-export const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
-export const ALLOWED_DOC_TYPES = [...ALLOWED_IMAGE_TYPES, "application/pdf"] as const;
-
 /* ── Image Quality Requirements ──────────────────────────── */
 export const MIN_IMAGE_DIMENSION = 320;
 export const MAX_IMAGE_DIMENSION = 8000;
 export const BLUR_VARIANCE_THRESHOLD = 100;
 
-/* ── Retention ───────────────────────────────────────────── */
-export const APPROVED_ARTIFACT_RETENTION_DAYS = 30;
-
-/* ── Evidence URL ────────────────────────────────────────── */
-export const EVIDENCE_URL_TTL_SECONDS = 900; // 15 minutes
-
-/* ── Velocity Limits ─────────────────────────────────────── */
-export const MAX_UPLOADS_PER_24H = 3;
-
 /* ── Verification Steps ──────────────────────────────────── */
 export const REQUIRED_VERIFICATION_STEPS = ["phone", "id_doc", "selfie", "location"] as const;
-
-/**
- * Steps that require admin review. Location is self-service (auto-approved
- * via manual address selection + optional GPS confirmation).
- */
-export const ADMIN_REQUIRED_VERIFICATION_STEPS = ["phone", "id_doc", "selfie"] as const;
 
 /* ── Decision Reason Codes ───────────────────────────────── */
 export const REASON_CODES = [
@@ -65,7 +37,7 @@ export const REASON_CODES = [
   "other",
 ] as const;
 
-export type ReasonCode = (typeof REASON_CODES)[number];
+type _ReasonCode = (typeof REASON_CODES)[number];
 
 /* ── Override Reason Codes (for high-risk approvals) ─────── */
 export const OVERRIDE_REASON_CODES = [
@@ -76,7 +48,7 @@ export const OVERRIDE_REASON_CODES = [
   "supporting_evidence",
 ] as const;
 
-export type OverrideReasonCode = (typeof OVERRIDE_REASON_CODES)[number];
+type _OverrideReasonCode = (typeof OVERRIDE_REASON_CODES)[number];
 
 /* ── Decision Note Templates ─────────────────────────────── */
 export const DECISION_NOTE_TEMPLATES = [
@@ -92,7 +64,6 @@ export const DECISION_NOTE_TEMPLATES = [
 /* ── Provider Score Thresholds ───────────────────────────── */
 export const FACE_MATCH_THRESHOLD = 70;
 export const LIVENESS_THRESHOLD = 60;
-export const DOC_AUTH_THRESHOLD = 50;
 
 /* ── SA ID Constants ─────────────────────────────────────── */
 export const SA_ID_LENGTH = 13;

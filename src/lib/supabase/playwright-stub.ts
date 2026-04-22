@@ -10,7 +10,7 @@ import {
   resolvePlaywrightSession,
   writePlaywrightTableRows,
 } from "@/lib/supabase/playwright-fixture-store";
-import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
+import { isPlaywrightSupabaseStubMode as _isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
 
 type QueryResult<TData> = {
   data: TData;
@@ -732,9 +732,3 @@ export function createPlaywrightStubSupabaseClient(
     },
   } as unknown as SupabaseClient;
 }
-
-export function getPlaywrightStubUserFromToken(token: string | null | undefined) {
-  return resolvePlaywrightSession(token);
-}
-
-export { isPlaywrightSupabaseStubMode };

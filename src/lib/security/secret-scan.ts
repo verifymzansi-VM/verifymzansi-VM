@@ -91,7 +91,7 @@ export function isAllowedLine(line: string): boolean {
   return line.includes("secret-scan: allow");
 }
 
-export function isDeterministicFixtureMatch({
+function isDeterministicFixtureMatch({
   filePath,
   line,
   ruleName,
@@ -109,11 +109,7 @@ export function isDeterministicFixtureMatch({
   return FIXTURE_MARKERS.some((marker) => normalizedLine.includes(marker));
 }
 
-export function isAllowedComputedHashMatch({
-  filePath,
-  line,
-  ruleName,
-}: SecretScanMatchContext): boolean {
+function isAllowedComputedHashMatch({ filePath, line, ruleName }: SecretScanMatchContext): boolean {
   if (ruleName !== "64-char hex string (potential encryption key)") {
     return false;
   }

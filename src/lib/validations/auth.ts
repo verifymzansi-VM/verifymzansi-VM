@@ -95,8 +95,8 @@ export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 /** Inferred input type for {@link resetPasswordSchema}. */
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 /** Inferred input type for {@link otpVerifySchema}. */
-export type OtpVerifyInput = z.infer<typeof otpVerifySchema>;
+type _OtpVerifyInput = z.infer<typeof otpVerifySchema>;
 /** Inferred input type for {@link changePasswordSchema}. */
-export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+type _ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 /** Inferred input type for {@link googleOAuthInitSchema}. */
-export type GoogleOAuthInitInput = z.infer<typeof googleOAuthInitSchema>;
+type _GoogleOAuthInitInput = z.infer<typeof googleOAuthInitSchema>;

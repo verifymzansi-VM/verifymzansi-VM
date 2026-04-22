@@ -3,7 +3,7 @@ import { isTrustedPlatformMediaUrl } from "@/lib/utils/media-url";
 
 const saPhoneRegex = /^(\+27|0)[6-8][0-9]{8}$/;
 
-export const BUSINESS_TYPES = [
+const BUSINESS_TYPES = [
   "mall_store",
   "standalone_shop",
   "home_business",
@@ -114,7 +114,7 @@ const marketStallDetailsSchema = z.object({
   trading_hours: z.string().trim().min(1, "Trading hours are required.").max(120),
 });
 
-export const businessDetailsSchema = z.discriminatedUnion("type", [
+const businessDetailsSchema = z.discriminatedUnion("type", [
   mallStoreDetailsSchema,
   standaloneShopDetailsSchema,
   homeBusinessDetailsSchema,
@@ -290,4 +290,4 @@ export const businessSchema = z
   });
 
 /** Inferred input type for {@link businessSchema}. */
-export type BusinessInput = z.infer<typeof businessSchema>;
+type _BusinessInput = z.infer<typeof businessSchema>;

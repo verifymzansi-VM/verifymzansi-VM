@@ -5,7 +5,7 @@ export const CONTENT_TARGET_TYPES = ["listing", "promotion", "business"] as cons
 
 export type ContentTargetType = (typeof CONTENT_TARGET_TYPES)[number];
 
-export interface ContentEngagementSnapshot {
+interface _ContentEngagementSnapshot {
   viewCount?: number | null;
   likeCount?: number | null;
   viewerHasLiked?: boolean;

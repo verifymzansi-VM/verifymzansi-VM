@@ -131,4 +131,46 @@ describe("resolveAccountVerification", () => {
     expect(result.submittedStepCount).toBe(3);
     expect(result.accountVerificationStatus).toBe("incomplete");
   });
+
+  it("falls back to verification steps when pending artifact recovery fails", async () => {
+    const client = {
+      from(table: string) {
+        switch (table) {
+          case "account_profiles":
+            return createQueryBuilder(() => ({
+              data: {
+                id: "profile-1",
+                account_verification_status: "incomplete",
+              },
+              error: null,
+            }));
+          case "verification_steps":
+            return createQueryBuilder(() => ({
+              data: [
+                { user_id: "user-1", step_type: "phone", status: "approved" },
+                { user_id: "user-1", step_type: "id_doc", status: "approved" },
+                { user_id: "user-1", step_type: "selfie", status: "approved" },
+                { user_id: "user-1", step_type: "location", status: "approved" },
+              ],
+              error: null,
+            }));
+          case "kyc_artifacts":
+            throw new Error("query builder missing in()");
+          default:
+            throw new Error(`Unexpected table ${table}`);
+        }
+      },
+    };
+
+    const result = await resolveAccountVerification(client as never, "user-1");
+
+    expect(result.accountVerificationStatus).toBe("verified");
+    expect(result.approvedStepCount).toBe(4);
+    expect(result.steps).toEqual([
+      expect.objectContaining({ step_type: "phone", status: "approved" }),
+      expect.objectContaining({ step_type: "id_doc", status: "approved" }),
+      expect.objectContaining({ step_type: "selfie", status: "approved" }),
+      expect.objectContaining({ step_type: "location", status: "approved" }),
+    ]);
+  });
 });

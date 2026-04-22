@@ -10,7 +10,7 @@ export interface VehicleMake {
   models: string[];
 }
 
-export const SA_VEHICLE_MAKES: VehicleMake[] = [
+const SA_VEHICLE_MAKES: VehicleMake[] = [
   {
     make: "Toyota",
     models: [

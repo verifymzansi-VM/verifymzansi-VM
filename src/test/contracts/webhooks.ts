@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const KycWebhookStatusSchema = z.enum(["approved", "rejected", "needs_manual_review"]);
+const KycWebhookStatusSchema = z.enum(["approved", "rejected", "needs_manual_review"]);
 
 export const KycWebhookPayloadSchema = z
   .object({
@@ -19,7 +19,7 @@ export const KycWebhookPayloadSchema = z
   })
   .passthrough();
 
-export const SmsRecipientSchema = z.object({
+const SmsRecipientSchema = z.object({
   statusCode: z.number().int(),
   number: z.string().optional(),
   cost: z.string().optional(),
@@ -59,6 +59,6 @@ export const EmailProviderResponseSchema = z
     }
   });
 
-export type KycWebhookPayload = z.infer<typeof KycWebhookPayloadSchema>;
-export type SmsProviderResponse = z.infer<typeof SmsProviderResponseSchema>;
-export type EmailProviderResponse = z.infer<typeof EmailProviderResponseSchema>;
+type _KycWebhookPayload = z.infer<typeof KycWebhookPayloadSchema>;
+type _SmsProviderResponse = z.infer<typeof SmsProviderResponseSchema>;
+type _EmailProviderResponse = z.infer<typeof EmailProviderResponseSchema>;

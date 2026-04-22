@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 /* ------------------------------------------------------------------ */
 
 /** 30-minute intervals from 00:00 to 23:30 (48 slots). */
-export const TIME_SLOTS: string[] = Array.from({ length: 48 }, (_, i) => {
+const TIME_SLOTS: string[] = Array.from({ length: 48 }, (_, i) => {
   const h = String(Math.floor(i / 2)).padStart(2, "0");
   const m = i % 2 === 0 ? "00" : "30";
   return `${h}:${m}`;

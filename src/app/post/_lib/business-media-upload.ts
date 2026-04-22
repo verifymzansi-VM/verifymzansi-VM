@@ -141,7 +141,7 @@ async function uploadBusinessVideoViaServer({
   return urls[0] ?? "";
 }
 
-export class BusinessMediaUploadError extends Error {
+class BusinessMediaUploadError extends Error {
   readonly field: BusinessMediaField;
 
   constructor(field: BusinessMediaField, message?: string) {

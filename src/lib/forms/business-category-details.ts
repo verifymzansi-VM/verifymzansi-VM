@@ -23,9 +23,7 @@ import {
  * Not every category needs extra fields — categories without entries simply
  * don't show anything additional.
  */
-export const CATEGORY_DETAIL_FIELDS: Partial<
-  Record<BusinessCategory, BusinessDetailsFieldConfig[]>
-> = {
+const CATEGORY_DETAIL_FIELDS: Partial<Record<BusinessCategory, BusinessDetailsFieldConfig[]>> = {
   health_beauty: [
     {
       name: "practice_number",

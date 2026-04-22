@@ -183,24 +183,31 @@ export async function resolveAccountVerification(
       mapVerificationStepRow
     );
 
-    const pendingArtifactsResult = await client
-      .from("kyc_artifacts")
-      .select("step_type, status, created_at")
-      .eq("user_id", userId)
-      .eq("status", "pending")
-      .in("step_type", [...RECOVERABLE_PENDING_ARTIFACT_STEPS]);
+    try {
+      const pendingArtifactsResult = await client
+        .from("kyc_artifacts")
+        .select("step_type, status, created_at")
+        .eq("user_id", userId)
+        .eq("status", "pending")
+        .in("step_type", [...RECOVERABLE_PENDING_ARTIFACT_STEPS]);
 
-    const recoveredPendingSteps = mergeRecoveredPendingArtifactSteps(
-      steps,
-      (pendingArtifactsResult.data as PendingArtifactRow[] | null) ?? []
-    );
+      const recoveredPendingSteps = mergeRecoveredPendingArtifactSteps(
+        steps,
+        (pendingArtifactsResult.data as PendingArtifactRow[] | null) ?? []
+      );
 
-    steps = recoveredPendingSteps.steps;
+      steps = recoveredPendingSteps.steps;
 
-    if (recoveredPendingSteps.recoveredStepTypes.length > 0) {
-      log.info("Recovered pending verification steps from artifacts", {
+      if (recoveredPendingSteps.recoveredStepTypes.length > 0) {
+        log.info("Recovered pending verification steps from artifacts", {
+          userId,
+          recoveredStepTypes: recoveredPendingSteps.recoveredStepTypes,
+        });
+      }
+    } catch (error) {
+      log.warn("Failed to recover pending verification steps from artifacts", {
         userId,
-        recoveredStepTypes: recoveredPendingSteps.recoveredStepTypes,
+        error: error instanceof Error ? error.message : "unknown",
       });
     }
   }

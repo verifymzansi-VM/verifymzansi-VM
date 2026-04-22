@@ -1,7 +1,7 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
 
-export function ListingCardSkeleton() {
+function ListingCardSkeleton() {
   return (
     <Card className="overflow-hidden rounded-[1.75rem]">
       <div className="relative aspect-[9/16] w-full">

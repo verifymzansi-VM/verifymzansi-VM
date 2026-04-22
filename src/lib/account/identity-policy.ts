@@ -20,23 +20,6 @@ export const EMAIL_CHANGE_COOLDOWN_DAYS = 15;
 
 /* ── Immutability rules ───────────────────────────────────── */
 
-/**
- * Fields that become permanently locked once the legal-name lock is set
- * (after ID verification approval).  The user can never edit these again.
- */
-export const PERMANENTLY_LOCKED_FIELDS = [
-  "display_name",
-  "legal_first_name",
-  "legal_last_name",
-] as const;
-
-/**
- * Fields that lock once location has been verified.
- * Province and city are set from the verified address and cannot be
- * changed by the user afterward.
- */
-export const LOCATION_LOCKED_FIELDS = ["location_province", "location_city"] as const;
-
 /* ── Policy error codes ───────────────────────────────────── */
 
 export type IdentityPolicyCode =

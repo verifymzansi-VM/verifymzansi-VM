@@ -1,0 +1,55 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
+  "entry": [
+    "open-next.config.ts",
+    "src/app/**/{page,layout,template,error,loading,default}.{ts,tsx}",
+    "src/app/**/route.ts",
+    "src/instrumentation.ts",
+    "src/proxy.ts",
+    "workers/*.ts",
+    "scripts/**/*.{ts,js,mjs,cjs}",
+    "remotion/index.ts"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx}",
+    "scripts/**/*.{ts,js,mjs,cjs}",
+    "workers/*.ts",
+    "remotion/**/*.{ts,tsx}",
+    ".storybook/**/*.{ts,tsx,js,mjs,cjs}",
+    ".husky/*",
+    "*.{ts,js,mjs,cjs}",
+    ".github/workflows/*.{yml,yaml}"
+  ],
+  "ignoreFiles": [
+    "next-env.d.ts",
+    "src/lib/api/v1.d.ts",
+    "coverage/**",
+    "output/**",
+    "playwright-report/**",
+    "test-results/**"
+  ],
+  "ignoreDependencies": [
+    "@storybook/addon-a11y",
+    "@storybook/addon-essentials",
+    "@storybook/addon-interactions",
+    "@storybook/nextjs",
+    "canvas",
+    "k6",
+    "lint-staged"
+  ],
+  "ignoreBinaries": [
+    "lint-staged",
+    "storybook"
+  ],
+  "ignoreIssues": {
+    "src/lib/account/compat.ts": ["duplicates"],
+    "src/lib/utils/phone.ts": ["duplicates"],
+    "src/types/database.ts": ["types"],
+    ".husky/pre-commit": ["binaries"],
+    "src/lib/api/v1.d.ts": ["exports", "types"]
+  },
+  "ignoreExportsUsedInFile": {
+    "interface": true,
+    "type": true
+  }
+}

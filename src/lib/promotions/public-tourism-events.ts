@@ -2,7 +2,7 @@ import { type createClient } from "@/lib/supabase/server";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
-export const TOURISM_HOSPITALITY_CATEGORY = "tourism_hospitality" as const;
+const TOURISM_HOSPITALITY_CATEGORY = "tourism_hospitality" as const;
 
 export function buildPublicTourismBusinessesQuery(supabase: SupabaseServerClient, select = "*") {
   return supabase

@@ -1,4 +1,4 @@
-export type KycEvidenceErrorCode =
+type _KycEvidenceErrorCode =
   | "unauthorized"
   | "forbidden"
   | "no_active_case"

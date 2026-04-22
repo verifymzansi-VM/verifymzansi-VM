@@ -44,8 +44,6 @@ export const PROMOTION_FILTER_TYPE_PRESENTATIONS: Record<
   },
 };
 
-export const PROMOTION_FILTER_BAR_ORDER: Array<PromotionFilterType | "all"> = ["all", "event"];
-
 export function getPromotionFilterTypePresentation(
   value: PromotionFilterType | undefined
 ): PromotionTypePresentation {

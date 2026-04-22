@@ -104,11 +104,6 @@ export function getAuditFailureCount(): number {
   return auditFailureCount;
 }
 
-/** Reset the failure counter (for testing and after manual investigation). */
-export function resetAuditFailureCount(): void {
-  auditFailureCount = 0;
-}
-
 /**
  * Insert an audit log entry into the `audit_logs` table.
  * Failures are logged structurally and counted for monitoring.

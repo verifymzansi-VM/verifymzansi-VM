@@ -40,6 +40,6 @@ export const storefrontPostSchema = z.object({
 });
 
 /** Inferred input type for {@link storefrontSchema}. */
-export type StorefrontInput = z.infer<typeof storefrontSchema>;
+type _StorefrontInput = z.infer<typeof storefrontSchema>;
 /** Inferred input type for {@link storefrontPostSchema}. */
-export type StorefrontPostInput = z.infer<typeof storefrontPostSchema>;
+type _StorefrontPostInput = z.infer<typeof storefrontPostSchema>;

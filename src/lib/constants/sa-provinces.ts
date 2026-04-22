@@ -233,7 +233,7 @@ export const SA_PROVINCES: Province[] = [
  * any third-party geocoding calls.
  * Format: [latMin, latMax, lonMin, lonMax]
  */
-export const GPS_PROVINCE_BOUNDS: Record<string, [number, number, number, number]> = {
+const GPS_PROVINCE_BOUNDS: Record<string, [number, number, number, number]> = {
   Gauteng: [-26.8, -25.3, 27.4, 29.0],
   "Western Cape": [-34.8, -31.4, 17.9, 23.0],
   "KwaZulu-Natal": [-31.5, -26.8, 29.2, 32.9],

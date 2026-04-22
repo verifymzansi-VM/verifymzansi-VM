@@ -423,31 +423,6 @@ export async function recordRoleChange(params: {
 /* ── Query Helpers ─────────────────────────────────────── */
 
 /**
- * Get the full decision timeline for a case.
- */
-export async function getDecisionTimeline(caseType: string, caseId: string) {
-  const supabase = createAdminClient();
-
-  const { data, error } = await supabase
-    .from("decision_records")
-    .select(
-      `
-      *,
-      decision_record_events(*)
-    `
-    )
-    .eq("case_type", caseType)
-    .eq("case_id", caseId)
-    .order("created_at", { ascending: true });
-
-  if (error) {
-    throw new Error("Failed to fetch decision timeline");
-  }
-
-  return data;
-}
-
-/**
  * Get pending decisions awaiting governance approval.
  */
 export async function getPendingDecisions(limit = 50) {

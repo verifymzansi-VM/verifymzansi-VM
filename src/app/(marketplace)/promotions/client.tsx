@@ -115,7 +115,7 @@ interface BusinessesResponse {
   error?: string;
 }
 
-export function normalizeValue(value: string | null): string | undefined {
+function normalizeValue(value: string | null): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
 }

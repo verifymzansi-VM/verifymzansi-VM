@@ -83,7 +83,7 @@ export function detectMimeFromMagicBytes(buffer: Buffer | Uint8Array): string | 
 /**
  * Validate file integrity by comparing magic bytes against declared MIME type.
  */
-export async function validateFileIntegrity(
+async function _validateFileIntegrity(
   file: File | Blob,
   declaredMime: string
 ): Promise<{

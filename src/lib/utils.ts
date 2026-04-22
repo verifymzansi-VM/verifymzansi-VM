@@ -32,13 +32,6 @@ export function truncate(text: string, maxLength: number): string {
 }
 
 /**
- * Sleep for a given number of milliseconds.
- */
-export function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
  * Generate a random UUID v4 (client-side fallback).
  */
 export function generateId(): string {

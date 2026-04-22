@@ -156,7 +156,7 @@ async function getR2BucketBinding(bucketName: string): Promise<R2BucketBinding |
  * Falls back to process.env. This is more reliable than process.env alone because
  * OpenNext's populateProcessEnv only runs once and may miss values in some edge cases.
  */
-export async function getCloudflareEnvValue(key: string): Promise<string | undefined> {
+async function getCloudflareEnvValue(key: string): Promise<string | undefined> {
   // 1. Try the ALS-backed global scope symbol (set by OpenNext's init.js)
   const globalContext = getCloudflareContextFromGlobalScope();
   if (globalContext?.env) {

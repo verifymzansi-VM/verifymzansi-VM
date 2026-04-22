@@ -149,7 +149,7 @@ export function formatSaIdDob(idNumber: string): string | null {
  * Compare an ID number's embedded data against OCR payload from a provider.
  * Returns match status and any mismatches found.
  */
-export function matchIdAgainstOcr(
+function _matchIdAgainstOcr(
   idNumber: string,
   ocrPayload: Record<string, unknown>
 ): { matches: boolean; mismatches: string[] } {

@@ -20,14 +20,6 @@ export interface AdminDashboardStats {
   pendingModeration: number;
 }
 
-export interface AreaStats {
-  pendingFlags: number;
-  highSeverityOverdue: number;
-  actionsToday: Record<string, number>;
-  avgResolutionHours: number | null;
-  pendingContent: number;
-}
-
 export interface PendingVerification {
   id: string;
   user_id: string;
@@ -761,63 +753,6 @@ export async function getDashboardReports(limit = 30): Promise<DashboardReport[]
   });
 }
 
-export interface DashboardContentItem {
-  id: string;
-  title: string;
-  area: "MZANSI_MARKET" | "BUSINESS_ADS" | "MALL_SHOPS" | "MZANSI_BUSINESS";
-  areaLabel: string;
-  itemType: string;
-  category: string | null;
-  owner_id: string | null;
-  created_at: string;
-  status: string;
-}
-
-/** Get all pending-moderation content across all areas */
-export async function getDashboardContentQueue(): Promise<DashboardContentItem[]> {
-  const supabase = createAdminClient();
-
-  const [{ data: pendingListings }, { data: pendingBusinesses }] = await Promise.all([
-    supabase
-      .from("listings")
-      .select("id, title, status, created_at, category, owner_id")
-      .eq("status", "pending_moderation")
-      .order("created_at", { ascending: true })
-      .limit(30),
-    supabase
-      .from("businesses")
-      .select("id, business_name, business_type, status, created_at, category, owner_id")
-      .eq("status", "pending_moderation")
-      .order("created_at", { ascending: true })
-      .limit(30),
-  ]);
-
-  return [
-    ...(pendingListings || []).map((l) => ({
-      id: l.id,
-      title: l.title || `Listing ${l.id.slice(0, 8)}`,
-      area: "MZANSI_MARKET" as const,
-      areaLabel: "Mzansi Market",
-      itemType: "Listing",
-      category: l.category || null,
-      owner_id: l.owner_id || null,
-      created_at: l.created_at,
-      status: l.status,
-    })),
-    ...(pendingBusinesses || []).map((b) => ({
-      id: b.id,
-      title: b.business_name || `Business ${b.id.slice(0, 8)}`,
-      area: "MZANSI_BUSINESS" as const,
-      areaLabel: "Mzansi Business",
-      itemType: "Business",
-      category: b.category || null,
-      owner_id: b.owner_id || null,
-      created_at: b.created_at,
-      status: b.status,
-    })),
-  ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-}
-
 // ── Verification funnel & extended platform stats ─────────────
 
 export interface VerificationStepCounts {
@@ -915,26 +850,6 @@ export async function getActionsToday(area?: string): Promise<Record<string, num
   for (const row of data || []) {
     const action = (row as { action: string }).action;
     counts[action] = (counts[action] || 0) + 1;
-  }
-  return counts;
-}
-
-/** Count moderation actions taken today by a specific user */
-export async function getMyActionsToday(userId: string): Promise<Record<string, number>> {
-  const supabase = createAdminClient();
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-
-  const { data } = await supabase
-    .from("moderation_actions")
-    .select("action")
-    .eq("actor_id", userId)
-    .gte("created_at", todayStart.toISOString());
-
-  const counts: Record<string, number> = {};
-  for (const row of data || []) {
-    const a = (row as { action: string }).action;
-    counts[a] = (counts[a] || 0) + 1;
   }
   return counts;
 }

@@ -35,7 +35,7 @@ function getIpv4Octets(host: string): number[] | null {
     : null;
 }
 
-export function getHostnameFromUrl(url: string | null | undefined): string | null {
+function getHostnameFromUrl(url: string | null | undefined): string | null {
   if (typeof url !== "string" || !url.trim()) {
     return null;
   }
@@ -47,7 +47,7 @@ export function getHostnameFromUrl(url: string | null | undefined): string | nul
   }
 }
 
-export function isLocalDevelopmentHost(host: string | null | undefined): boolean {
+function isLocalDevelopmentHost(host: string | null | undefined): boolean {
   const normalizedHost = normalizeHost(host);
   if (!normalizedHost) {
     return false;

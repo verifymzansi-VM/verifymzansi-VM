@@ -207,7 +207,7 @@ function addCheck(
   checks.push({ name, status, detail });
 }
 
-export function getRequiredLaunchEnvKeys(
+function getRequiredLaunchEnvKeys(
   mode: LaunchValidationMode,
   env: EnvSource = process.env
 ): string[] {

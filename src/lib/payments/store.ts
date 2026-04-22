@@ -67,7 +67,7 @@ export type OzowNormalizedPayload = {
   rawPayload?: Record<string, unknown>;
 };
 
-export function asProviderData(value: unknown): Record<string, unknown> | null {
+function asProviderData(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;

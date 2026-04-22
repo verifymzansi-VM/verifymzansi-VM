@@ -26,7 +26,7 @@ type FlattenKeys<T, Prefix extends string = ""> = T extends object
     }[keyof T & string]
   : Prefix;
 
-export type MessageKey = FlattenKeys<Messages>;
+type _MessageKey = FlattenKeys<Messages>;
 
 /** Lazy-load message bundles to keep the initial bundle small. */
 const messageLoaders: Record<Locale, () => Promise<Messages>> = {

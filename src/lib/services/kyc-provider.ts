@@ -77,7 +77,7 @@ async function simulateKycVerification(
  * a real provider such as SmileID or Veriff, then update
  * getConfiguredProvider() to return the real implementation.
  */
-export class StubKycProvider implements IKycProvider {
+class StubKycProvider implements IKycProvider {
   readonly name = "stub";
 
   async submitIdentity(submission: KycProviderSubmission): Promise<KycProviderResult> {

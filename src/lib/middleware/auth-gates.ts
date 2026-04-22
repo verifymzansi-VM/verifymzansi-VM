@@ -16,7 +16,7 @@ export type CachedProfile = {
 
 // -- Cookie helpers ----------------------------------------------------------
 
-export function setPhoneOkCookie(response: NextResponse): void {
+function setPhoneOkCookie(response: NextResponse): void {
   response.cookies.set("x-phone-ok", "1", {
     httpOnly: true,
     sameSite: "lax",
@@ -26,7 +26,7 @@ export function setPhoneOkCookie(response: NextResponse): void {
   });
 }
 
-export function clearPhoneOkCookie(response: NextResponse): void {
+function clearPhoneOkCookie(response: NextResponse): void {
   response.cookies.delete("x-phone-ok");
 }
 

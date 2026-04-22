@@ -1387,19 +1387,6 @@ export const TOURISM_SUBCATEGORIES: BusinessSubcategoryOption[] = [
   { value: "tourist_attraction", label: "Tourist Attraction / Theme Park" },
 ];
 
-export const TOURISM_SERVICE_SUGGESTIONS = [
-  "Airport transfers",
-  "Game drives",
-  "Guided tours",
-  "Conference facilities",
-  "Wedding venue",
-  "Spa & wellness",
-  "Swimming pool",
-  "Free Wi-Fi",
-  "Breakfast included",
-  "Pet-friendly",
-] as const;
-
 export const TOURISM_AMENITIES = [
   "Swimming pool",
   "Free Wi-Fi",

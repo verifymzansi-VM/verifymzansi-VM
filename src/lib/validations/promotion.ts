@@ -125,4 +125,4 @@ export const promotionSchema = z
   );
 
 /** Inferred input type for {@link promotionSchema}. */
-export type PromotionInput = z.infer<typeof promotionSchema>;
+type _PromotionInput = z.infer<typeof promotionSchema>;

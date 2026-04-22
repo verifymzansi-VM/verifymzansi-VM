@@ -10,7 +10,7 @@ type VerificationStepRecord = {
   status?: string | null;
 };
 
-export const REVIEWABLE_VERIFICATION_STEPS: VerificationStepType[] = [
+const REVIEWABLE_VERIFICATION_STEPS: VerificationStepType[] = [
   "phone",
   "id_doc",
   "selfie",
