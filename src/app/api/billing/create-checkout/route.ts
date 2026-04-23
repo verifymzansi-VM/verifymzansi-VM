@@ -146,6 +146,8 @@ export async function POST(request: NextRequest) {
       .eq("type", "subscription")
       .in("status", ["active", "pending_verification"])
       .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (entitlementError) {
@@ -173,6 +175,8 @@ export async function POST(request: NextRequest) {
       .eq("user_id", user.id)
       .eq("area", plan.area)
       .in("status", ["pending", "processing"])
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (pendingError) {

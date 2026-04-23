@@ -138,6 +138,32 @@ function createPlansTableMock(
   };
 }
 
+function createEntitlementsTableMock(result: { data: unknown; error?: unknown | null }) {
+  return {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    in: vi.fn().mockReturnThis(),
+    gt: vi.fn().mockReturnThis(),
+    order: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue(result),
+  };
+}
+
+function createPaymentsSelectMock(result: { data: unknown; error?: unknown | null }) {
+  const chain = {
+    eq: vi.fn().mockReturnThis(),
+    in: vi.fn().mockReturnThis(),
+    order: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue(result),
+  };
+
+  return {
+    select: vi.fn().mockReturnValue(chain),
+  };
+}
+
 describe("POST /api/billing/create-checkout", () => {
   const CONFIRMED_USER = { id: "user-1", email_confirmed_at: "2024-01-01T00:00:00Z" };
 
@@ -179,26 +205,10 @@ describe("POST /api/billing/create-checkout", () => {
         ]);
       }
       if (table === "entitlements") {
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          in: vi.fn().mockReturnThis(),
-          gt: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-        };
+        return createEntitlementsTableMock({ data: null });
       }
       if (table === "payments") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                in: vi.fn().mockReturnValue({
-                  maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-                }),
-              }),
-            }),
-          }),
-        };
+        return createPaymentsSelectMock({ data: null });
       }
       return undefined;
     });
@@ -324,25 +334,11 @@ describe("POST /api/billing/create-checkout", () => {
         ]);
       }
       if (table === "entitlements") {
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          in: vi.fn().mockReturnThis(),
-          gt: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({ data: null }), // No active entitlement
-        };
+        return createEntitlementsTableMock({ data: null }); // No active entitlement
       }
       if (table === "payments") {
         return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                in: vi.fn().mockReturnValue({
-                  maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-                }),
-              }),
-            }),
-          }),
+          ...createPaymentsSelectMock({ data: null }),
           insert: vi.fn().mockReturnValue({
             select: vi.fn().mockReturnValue({
               single: vi.fn().mockResolvedValue({
@@ -407,26 +403,10 @@ describe("POST /api/billing/create-checkout", () => {
         );
       }
       if (table === "entitlements") {
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          in: vi.fn().mockReturnThis(),
-          gt: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-        };
+        return createEntitlementsTableMock({ data: null });
       }
       if (table === "payments") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                in: vi.fn().mockReturnValue({
-                  maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-                }),
-              }),
-            }),
-          }),
-        };
+        return createPaymentsSelectMock({ data: null });
       }
     });
 
@@ -547,13 +527,7 @@ describe("POST /api/billing/create-checkout", () => {
         ]);
       }
       if (table === "entitlements") {
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          in: vi.fn().mockReturnThis(),
-          gt: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({ data: { id: "ent-active" } }),
-        };
+        return createEntitlementsTableMock({ data: { id: "ent-active" } });
       }
     });
 
@@ -590,26 +564,10 @@ describe("POST /api/billing/create-checkout", () => {
         ]);
       }
       if (table === "entitlements") {
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          in: vi.fn().mockReturnThis(),
-          gt: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-        };
+        return createEntitlementsTableMock({ data: null });
       }
       if (table === "payments") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                in: vi.fn().mockReturnValue({
-                  maybeSingle: vi.fn().mockResolvedValue({ data: { id: "pay-pending" } }),
-                }),
-              }),
-            }),
-          }),
-        };
+        return createPaymentsSelectMock({ data: { id: "pay-pending" } });
       }
     });
 
@@ -670,16 +628,10 @@ describe("POST /api/billing/create-checkout", () => {
         ]);
       }
       if (table === "entitlements") {
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          in: vi.fn().mockReturnThis(),
-          gt: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({
-            data: null,
-            error: { message: "RLS policy violation" },
-          }),
-        };
+        return createEntitlementsTableMock({
+          data: null,
+          error: { message: "RLS policy violation" },
+        });
       }
     });
 
@@ -717,29 +669,13 @@ describe("POST /api/billing/create-checkout", () => {
         ]);
       }
       if (table === "entitlements") {
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          in: vi.fn().mockReturnThis(),
-          gt: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-        };
+        return createEntitlementsTableMock({ data: null, error: null });
       }
       if (table === "payments") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                in: vi.fn().mockReturnValue({
-                  maybeSingle: vi.fn().mockResolvedValue({
-                    data: null,
-                    error: { message: "timeout exceeded" },
-                  }),
-                }),
-              }),
-            }),
-          }),
-        };
+        return createPaymentsSelectMock({
+          data: null,
+          error: { message: "timeout exceeded" },
+        });
       }
     });
 
