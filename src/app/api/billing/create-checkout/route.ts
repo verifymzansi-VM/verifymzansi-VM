@@ -138,7 +138,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Prevent Duplicate Active Entitlements ─────────────
-    const { data: activeEntitlement, error: entitlementError } = await supabase
+    const { data: activeEntitlement, error: entitlementError } = await getAdmin()
       .from("entitlements")
       .select("id")
       .eq("user_id", user.id)
@@ -169,7 +169,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Prevent duplicate in-flight payments ─────────────
-    const { data: pendingPayment, error: pendingError } = await supabase
+    const { data: pendingPayment, error: pendingError } = await getAdmin()
       .from("payments")
       .select("id")
       .eq("user_id", user.id)
