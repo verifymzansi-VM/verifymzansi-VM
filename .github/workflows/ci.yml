@@ -284,20 +284,33 @@ jobs:
     continue-on-error: true
     needs: perf-baseline
     steps:
+      - name: Check staging URL is configured
+        id: check-url
+        run: |
+          if [ -z "$STAGING_URL" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "STAGING_APP_URL not set, skipping k6 advisory"
+          fi
+        env:
+          STAGING_URL: ${{ secrets.STAGING_APP_URL }}
       - uses: actions/checkout@v6
+        if: steps.check-url.outputs.skip != 'true'
       - name: Run k6 advisory profile
+        if: steps.check-url.outputs.skip != 'true'
         env:
           STAGING_URL: ${{ secrets.STAGING_APP_URL }}
         run: |
           mkdir -p tmp/k6
+          echo "Running k6 advisory against ${STAGING_URL}"
           docker run --rm \
+            --user "$(id -u):$(id -g)" \
             -e BASE_URL="$STAGING_URL" \
             -e K6_SCENARIOS="smoke,average" \
             -v "$PWD:/workspace" \
             -w /workspace \
-            grafana/k6:latest run --summary-export tmp/k6/summary.json scripts/load-test.js
+            grafana/k6:latest run --summary-export /workspace/tmp/k6/summary.json scripts/load-test.js
       - name: Upload k6 summary
-        if: always()
+        if: always() && steps.check-url.outputs.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: k6-advisory-${{ github.run_id }}-${{ github.run_attempt }}
