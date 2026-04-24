@@ -274,7 +274,7 @@ export function PosterCardShell({
           fill
           sizes={mediaSizes}
           priority={priority}
-          className="object-cover"
+          className="object-contain"
           aria-hidden="true"
           draggable={disableNativeDrag ? false : undefined}
           onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}

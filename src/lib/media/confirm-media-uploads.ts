@@ -43,19 +43,29 @@ export async function confirmMediaUploads({
     return;
   }
 
-  const { error } = await supabase
-    .from("media_uploads")
-    .update({ confirmed_at: new Date().toISOString() })
-    .eq("user_id", userId)
-    .in("url", uniqueUrls);
+  try {
+    const { error } = await supabase
+      .from("media_uploads")
+      .update({ confirmed_at: new Date().toISOString() })
+      .eq("user_id", userId)
+      .in("url", uniqueUrls);
 
-  if (error) {
-    log.error("Failed to confirm media uploads", {
+    if (error) {
+      log.error("Failed to confirm media uploads", {
+        userId,
+        contentType,
+        contentId,
+        urlCount: uniqueUrls.length,
+        error: error.message,
+      });
+    }
+  } catch (error) {
+    log.error("Media upload confirmation threw unexpectedly", {
       userId,
       contentType,
       contentId,
       urlCount: uniqueUrls.length,
-      error: error.message,
+      error: error instanceof Error ? error.message : "Unknown error",
     });
   }
 }
