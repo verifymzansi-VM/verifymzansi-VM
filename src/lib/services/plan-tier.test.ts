@@ -56,6 +56,14 @@ describe("getActivePlanTierForArea", () => {
     expect(tier).toBe("pro");
   });
 
+  it("queries active and pending_verification subscription statuses", async () => {
+    const chain = mockQueryChain([{ tier: "growth", expires_at: null }]);
+
+    await getActivePlanTierForArea("user-pending", "MZANSI_MARKET");
+
+    expect(chain.in).toHaveBeenCalledWith("status", ["active", "pending_verification"]);
+  });
+
   it("skips expired entitlements", async () => {
     const pastDate = new Date(Date.now() - 86_400_000).toISOString();
     mockQueryChain([

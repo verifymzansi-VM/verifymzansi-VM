@@ -75,6 +75,28 @@ describe("billing plan resolver", () => {
     expect(result.source).toBe("stable-token");
   });
 
+  it("resolves the Basic stable frontend token to the active database row", async () => {
+    const stableToken = getStablePlanId("MZANSI_MARKET", "basic");
+    const client = createPlanClient([
+      {
+        id: "plan-db-basic",
+        area: "MZANSI_MARKET",
+        tier: "basic",
+        name: "Mzansi Market Basic",
+        price_cents: 3000,
+        active: true,
+      },
+    ]);
+
+    const result = await resolveBillingPlanSelection(client as never, stableToken, {
+      requireActive: true,
+    });
+
+    expect(result.plan?.id).toBe("plan-db-basic");
+    expect(result.plan?.tier).toBe("basic");
+    expect(result.source).toBe("stable-token");
+  });
+
   it("rejects inactive direct plan ids when active plans are required", async () => {
     const client = createPlanClient([
       {

@@ -45,6 +45,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   }
 
+  const userRateCheck = await checkRateLimit({ key: user.id, action: "profile:avatar" });
+  if (userRateCheck.limited) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again later." },
+      { status: 429, headers: { "Retry-After": String(userRateCheck.retryAfter ?? 60) } }
+    );
+  }
+
   // Parse multipart form data
   let formData: FormData;
   try {

@@ -207,15 +207,21 @@ describe("POST /api/media/upload-url", () => {
 
   it("returns a signed upload URL for valid requests", async () => {
     process.env.R2_PUBLIC_URL = "https://media.verifymzansi.com";
+    const insert = vi.fn().mockResolvedValue({ error: null });
 
     mockCreateClient.mockResolvedValue({
       auth: {
         getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
       },
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
+      from: vi.fn((table: string) => {
+        if (table === "media_uploads") {
+          return { insert };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
+        };
       }),
     });
 
@@ -234,5 +240,15 @@ describe("POST /api/media/upload-url", () => {
       key: "media/listing/user-1/video.mp4",
       publicUrl: "https://media.verifymzansi.com/media/listing/user-1/video.mp4",
     });
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_id: "user-1",
+        r2_key: "media/listing/user-1/video.mp4",
+        url: "https://media.verifymzansi.com/media/listing/user-1/video.mp4",
+        content_type: "video/mp4",
+        file_size: 2048,
+        area: "listing_video",
+      })
+    );
   });
 });

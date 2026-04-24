@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { collectAppRouteBundles, type RouteBundle } from "../src/lib/build/bundle-budget";
 
 type BuildManifest = {
   pages?: Record<string, string[]>;
@@ -9,15 +10,10 @@ type AppBuildManifest = {
   pages?: Record<string, string[]>;
 };
 
-type RouteBundle = {
-  route: string;
-  sizeBytes: number;
-  files: string[];
-};
-
 const root = process.cwd();
 const nextDir = resolve(root, ".next");
 const staticChunksDir = resolve(nextDir, "static", "chunks");
+const appChunksDir = resolve(staticChunksDir, "app");
 
 const warnBudgetKb = Number(process.env.BUNDLE_BUDGET_WARN_KB ?? "275");
 const failBudgetKb = Number(process.env.BUNDLE_BUDGET_FAIL_KB ?? "325");
@@ -136,7 +132,17 @@ function main(): void {
 
   console.warn(`Bundle budget (warn/fail): ${warnBudgetKb}KB / ${failBudgetKb}KB`);
 
-  const routeBundles = collectRouteBundles().sort((a, b) => b.sizeBytes - a.sizeBytes);
+  let routeBundles = collectRouteBundles().sort((a, b) => b.sizeBytes - a.sizeBytes);
+  if (routeBundles.length === 0 && existsSync(appChunksDir)) {
+    routeBundles = collectAppRouteBundles(walkFiles(appChunksDir), appChunksDir, getFileSize).sort(
+      (a, b) => b.sizeBytes - a.sizeBytes
+    );
+
+    if (routeBundles.length > 0) {
+      console.warn("Using Next App Router page chunk budget fallback.");
+    }
+  }
+
   if (routeBundles.length === 0) {
     const chunks = walkFiles(staticChunksDir)
       .map((filePath) => ({ filePath, sizeBytes: getFileSize(filePath) }))

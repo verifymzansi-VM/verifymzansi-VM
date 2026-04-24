@@ -73,7 +73,7 @@ export default async function MzansiMarketPage() {
         background={mzansiMarketShowroomBackground}
       />
 
-      <TrustStrip variant="green" />
+      <TrustStrip variant="green" title="Latest on Mzansi Market" />
 
       {/* ── Main Content ─────────────────────────────────── */}
       <div className="container-page py-8 space-y-6">

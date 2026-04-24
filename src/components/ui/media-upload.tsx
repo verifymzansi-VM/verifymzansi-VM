@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { ImagePlus, X, Film } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -87,8 +87,22 @@ async function stabiliseFile(file: File): Promise<File | null> {
 }
 
 interface MediaUploadProps {
+  /** Stable id used to associate label, hint, error, and input */
+  id?: string;
   /** Label shown above the upload area */
   label?: string;
+  /** Helper text shown under the label */
+  description?: string;
+  /** Inline error shown under the upload control */
+  error?: string;
+  /** Human label for accepted types, overriding the default generated copy */
+  acceptedLabel?: string;
+  /** Recommended crop/aspect guidance */
+  recommendedAspect?: string;
+  /** Human label for the max file size */
+  maxSizeLabel?: string;
+  /** Called when files are rejected client-side */
+  onRejectedFiles?: (messages: string[]) => void;
   /** Maximum number of files allowed */
   maxFiles?: number;
   /** Currently selected files */
@@ -108,15 +122,29 @@ interface PreviewItem {
 }
 
 export function MediaUpload({
+  id,
   label = "Photos & Videos",
+  description,
+  error,
+  acceptedLabel,
+  recommendedAspect = "Recommended: 1080x1920 portrait (9:16)",
+  maxSizeLabel,
+  onRejectedFiles,
   maxFiles = 10,
   files,
   onChange,
   accept,
   disabled = false,
 }: MediaUploadProps) {
+  const generatedId = useId();
+  const inputId = id ?? `media-upload-${generatedId}`;
+  const descriptionId = `${inputId}-description`;
+  const countId = `${inputId}-count`;
+  const rejectedId = `${inputId}-rejected`;
+  const errorId = `${inputId}-error`;
   const [isDragOver, setIsDragOver] = useState(false);
   const [failedPreviews, setFailedPreviews] = useState<Set<number>>(new Set());
+  const [rejectedMessages, setRejectedMessages] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -143,30 +171,37 @@ export function MediaUpload({
       if (disabled) return;
 
       const valid: File[] = [];
+      const rejected: string[] = [];
       const incomingArr = Array.from(incoming);
+
+      const rejectFile = (title: string, description: string) => {
+        rejected.push(description);
+        toast({
+          title,
+          description,
+          variant: "destructive",
+        });
+      };
 
       for (const file of incomingArr) {
         // If specific accept is passed (e.g. image/*) do a loose check, else strict check
         if (accept && accept.startsWith("image/") && !IMAGE_TYPES.includes(file.type)) {
-          toast({
-            title: "Unsupported file type",
-            description: `"${file.name}" is not supported. Use JPG, PNG, WebP, GIF, or AVIF images up to 5 MB.`,
-            variant: "destructive",
-          });
+          rejectFile(
+            "Unsupported file type",
+            `"${file.name}" is not supported. Use JPG, PNG, WebP, GIF, or AVIF images up to 5 MB.`
+          );
           continue;
         } else if (accept && accept.startsWith("video/") && !VIDEO_TYPES.includes(file.type)) {
-          toast({
-            title: "Unsupported file type",
-            description: `"${file.name}" is not supported. Use MP4, WebM, or MOV videos up to 50 MB.`,
-            variant: "destructive",
-          });
+          rejectFile(
+            "Unsupported file type",
+            `"${file.name}" is not supported. Use MP4, WebM, or MOV videos up to 50 MB.`
+          );
           continue;
         } else if (!accept && ![...IMAGE_TYPES, ...VIDEO_TYPES].includes(file.type)) {
-          toast({
-            title: "Unsupported file type",
-            description: `"${file.name}" is not supported. Use JPG, PNG, WebP, GIF, or AVIF images, or MP4, WebM, or MOV videos.`,
-            variant: "destructive",
-          });
+          rejectFile(
+            "Unsupported file type",
+            `"${file.name}" is not supported. Use JPG, PNG, WebP, GIF, or AVIF images, or MP4, WebM, or MOV videos.`
+          );
           continue;
         }
 
@@ -174,11 +209,10 @@ export function MediaUpload({
         const isVideo = VIDEO_TYPES.includes(file.type);
         const maxSize = isVideo ? MAX_VIDEO_SIZE : MAX_IMAGE_SIZE;
         if (file.size > maxSize) {
-          toast({
-            title: "File too large",
-            description: `"${file.name}" exceeds the ${isVideo ? "50 MB video" : "5 MB image"} limit.`,
-            variant: "destructive",
-          });
+          rejectFile(
+            "File too large",
+            `"${file.name}" exceeds the ${isVideo ? "50 MB video" : "5 MB image"} limit.`
+          );
           continue;
         }
 
@@ -186,11 +220,10 @@ export function MediaUpload({
         // can't revoke the handle later, and normalize extensionless filenames.
         const stable = await stabiliseFile(normalizeFileName(file));
         if (!stable) {
-          toast({
-            title: "Could not read file",
-            description: `"${file.name}" is no longer accessible. Please re-select it.`,
-            variant: "destructive",
-          });
+          rejectFile(
+            "Could not read file",
+            `"${file.name}" is no longer accessible. Please re-select it.`
+          );
           continue;
         }
         let normalized = stable;
@@ -199,20 +232,18 @@ export function MediaUpload({
         if (HEIC_TYPES.has(normalized.type)) {
           const converted = await convertHeicToJpeg(normalized);
           if (!converted) {
-            toast({
-              title: "Conversion failed",
-              description: `"${file.name}" could not be converted. Please save it as JPEG and try again.`,
-              variant: "destructive",
-            });
+            rejectFile(
+              "Conversion failed",
+              `"${file.name}" could not be converted. Please save it as JPEG and try again.`
+            );
             continue;
           }
           // Re-check size after HEIC→JPEG conversion (JPEG is usually larger)
           if (converted.size > MAX_IMAGE_SIZE) {
-            toast({
-              title: "File too large",
-              description: `"${file.name}" exceeds the 5 MB image limit after conversion.`,
-              variant: "destructive",
-            });
+            rejectFile(
+              "File too large",
+              `"${file.name}" exceeds the 5 MB image limit after conversion.`
+            );
             continue;
           }
           normalized = converted;
@@ -224,19 +255,22 @@ export function MediaUpload({
       // Enforce max count
       const total = files.length + valid.length;
       if (total > maxFiles) {
-        toast({
-          title: "Too many files",
-          description: `You can upload at most ${maxFiles} files. ${total - maxFiles} file(s) were not added.`,
-          variant: "destructive",
-        });
+        rejectFile(
+          "Too many files",
+          `You can upload at most ${maxFiles} files. ${total - maxFiles} file(s) were not added.`
+        );
       }
 
       const allowed = valid.slice(0, maxFiles - files.length);
       if (allowed.length > 0) {
         onChange([...files, ...allowed]);
       }
+      setRejectedMessages(rejected.slice(-4));
+      if (rejected.length > 0) {
+        onRejectedFiles?.(rejected);
+      }
     },
-    [accept, files, maxFiles, onChange, toast, disabled]
+    [accept, files, maxFiles, onChange, onRejectedFiles, toast, disabled]
   );
 
   const handleDrop = useCallback(
@@ -272,12 +306,33 @@ export function MediaUpload({
   );
 
   const remaining = maxFiles - files.length;
+  const defaultAcceptedLabel = accept?.startsWith("video/")
+    ? "Videos (MP4, WebM) up to 50 MB"
+    : accept?.startsWith("image/")
+      ? "Images (JPG, PNG, WebP, GIF, AVIF, HEIC) up to 5 MB"
+      : "Images (JPG, PNG, WebP, GIF, AVIF, HEIC) up to 5 MB; videos (MP4, WebM) up to 50 MB";
+  const describedBy = [
+    description ? descriptionId : null,
+    countId,
+    rejectedMessages.length > 0 ? rejectedId : null,
+    error ? errorId : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div className="space-y-2">
-      <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+      <label
+        htmlFor={inputId}
+        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+      >
         {label}
       </label>
+      {description && (
+        <p id={descriptionId} className="text-xs text-muted-foreground">
+          {description}
+        </p>
+      )}
 
       {/* Preview grid */}
       {previews.length > 0 && (
@@ -344,6 +399,7 @@ export function MediaUpload({
         <div
           role="button"
           tabIndex={0}
+          aria-describedby={describedBy || undefined}
           onDragOver={(e) => {
             e.preventDefault();
             if (!disabled) setIsDragOver(true);
@@ -378,30 +434,48 @@ export function MediaUpload({
             {disabled ? "Uploads disabled for your current plan" : "Drag & drop or click to browse"}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            {accept?.startsWith("video/")
-              ? "Videos (MP4, WebM) up to 50 MB"
-              : accept?.startsWith("image/")
-                ? "Images (JPG, PNG, WebP, GIF, AVIF, HEIC) up to 5 MB"
-                : "Images (JPG, PNG, WebP, GIF, AVIF, HEIC) up to 5 MB • Videos (MP4, WebM) up to 50 MB"}
+            {acceptedLabel ?? defaultAcceptedLabel}
+            {maxSizeLabel ? `; ${maxSizeLabel}` : ""}
           </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {remaining} of {maxFiles} remaining
+          <p id={countId} className="text-xs text-muted-foreground mt-0.5">
+            {files.length} selected. {remaining} of {maxFiles} remaining.
           </p>
-          <p className="text-[10px] text-muted-foreground/70 mt-1.5">
-            Recommended: 1080×1920 portrait (9:16)
-          </p>
+          {recommendedAspect && (
+            <p className="text-[10px] text-muted-foreground/70 mt-1.5">{recommendedAspect}</p>
+          )}
 
           <input
+            id={inputId}
             ref={inputRef}
             type="file"
             accept={accept || ALL_ACCEPT}
-            multiple
+            multiple={maxFiles > 1}
             disabled={disabled}
             onChange={handleFileInput}
             className="hidden"
             aria-label="Upload photos and videos"
+            aria-describedby={describedBy || undefined}
+            aria-invalid={Boolean(error) || undefined}
           />
         </div>
+      )}
+      {rejectedMessages.length > 0 && (
+        <div
+          id={rejectedId}
+          className="rounded-md border border-destructive/30 bg-destructive/5 p-2"
+        >
+          <p className="text-xs font-medium text-destructive">Some files were not added</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-destructive">
+            {rejectedMessages.map((message, index) => (
+              <li key={`${message}-${index}`}>{message}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {error && (
+        <p id={errorId} className="inline-form-error">
+          {error}
+        </p>
       )}
     </div>
   );

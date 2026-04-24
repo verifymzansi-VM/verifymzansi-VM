@@ -37,6 +37,7 @@ export interface CarouselItem {
   trustLevel?: TrustLevel;
   mediaWidth?: number | null;
   mediaHeight?: number | null;
+  fallbackMediaUrl?: string | null;
 }
 
 export interface ShowroomCardCarouselProps {
@@ -74,11 +75,18 @@ const VIDEO_FALLBACK_MS = 45_000;
 const DEFAULT_PAUSE_MS = 20_000;
 const SWIPE_THRESHOLD = 50;
 const VELOCITY_THRESHOLD = 0.4; // px/ms — fast flick triggers swipe below distance threshold
+const FLICK_DISTANCE_THRESHOLD = 32;
 const DRAG_CLICK_THRESHOLD = 12; // px — tolerate small finger jitter so taps still open the active card
+const DRAG_PROGRESS_DISTANCE = 150;
 const VISIBILITY_THRESHOLD = 0.25;
 const DRAG_SUPPRESSION_RESET_MS = 160;
-const PREVIEW_TILT_DEG = 8;
+const PREVIEW_TILT_DEG = 9;
 const DESKTOP_SHOWROOM_ITEM_LIMIT = 15;
+const TYPE_FALLBACK_MEDIA: Record<CarouselItem["type"], string> = {
+  listing: "/images/fallbacks/hero-listing.svg",
+  business: "/images/fallbacks/hero-business.svg",
+  promotion: "/images/fallbacks/hero-shop.svg",
+};
 
 const CARD_W =
   "w-[72vw] max-w-[280px] sm:w-[58vw] sm:max-w-[360px] md:w-[34vw] lg:w-[280px] lg:max-w-none xl:w-[304px] 2xl:w-[320px]";
@@ -126,6 +134,18 @@ function getBackgroundOverlayClasses(preset: ShowroomBackgroundOverlayPreset = "
           "bg-[radial-gradient(circle,rgba(15,23,42,0.38)_0%,rgba(15,23,42,0.1)_40%,transparent_72%)]",
       };
   }
+}
+
+function getFallbackMediaUrl(item: CarouselItem): string {
+  return item.fallbackMediaUrl ?? TYPE_FALLBACK_MEDIA[item.type];
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function lerp(start: number, end: number, progress: number): number {
+  return start + (end - start) * progress;
 }
 
 /* ── SA flag section wrapper ───────────────────────────────── */
@@ -254,7 +274,6 @@ export function ShowroomCardCarousel({
   /* ── Drag / pointer state ──────────────────────────────── */
   const [isDragging, setIsDragging] = useState(false);
   const [dragDelta, setDragDelta] = useState(0);
-  const [previewStep, setPreviewStep] = useState<-1 | 0 | 1>(0);
   const dragStartXRef = useRef(0);
   const dragStartTimeRef = useRef(0);
   const didDragRef = useRef(false);
@@ -354,7 +373,6 @@ export function ShowroomCardCarousel({
       dragStartTimeRef.current = Date.now();
       didDragRef.current = false;
       setDragDelta(0);
-      setPreviewStep(0);
       setCarouselLinkInteractivity(true);
       pauseAutoSwipe();
       setIsDragging(true);
@@ -399,7 +417,6 @@ export function ShowroomCardCarousel({
       dragStartTimeRef.current = Date.now();
       didDragRef.current = false;
       setDragDelta(0);
-      setPreviewStep(0);
       setCarouselLinkInteractivity(true);
       pauseAutoSwipe();
       setIsDragging(true);
@@ -437,17 +454,17 @@ export function ShowroomCardCarousel({
       const elapsed = Math.max(Date.now() - dragStartTimeRef.current, 1);
       const absVelocity = Math.abs(rawDelta) / elapsed; // px/ms
       const shouldSuppressClick = didDragRef.current;
-      const previewStepAtRelease = previewStep;
 
       clearActiveDrag(coverflowRef.current, pointerId, { preserveDragFlag: shouldSuppressClick });
-      setPreviewStep(0);
 
+      const distance = Math.abs(rawDelta);
       const shouldSwipe =
-        Math.abs(rawDelta) >= SWIPE_THRESHOLD || absVelocity >= VELOCITY_THRESHOLD;
+        distance >= SWIPE_THRESHOLD ||
+        (distance >= FLICK_DISTANCE_THRESHOLD && absVelocity >= VELOCITY_THRESHOLD);
 
       if (shouldSwipe) {
         // Advance one card per swipe so users always move through the displayed sequence.
-        const direction = previewStepAtRelease !== 0 ? previewStepAtRelease : rawDelta > 0 ? -1 : 1;
+        const direction = rawDelta > 0 ? -1 : 1;
         pauseAutoSwipe();
         goTo(activeIndex + direction);
       }
@@ -456,14 +473,13 @@ export function ShowroomCardCarousel({
         queueDragReset();
       }
     },
-    [clearActiveDrag, previewStep, activeIndex, pauseAutoSwipe, goTo, queueDragReset]
+    [clearActiveDrag, activeIndex, pauseAutoSwipe, goTo, queueDragReset]
   );
 
   const cancelDrag = useCallback(
     (pointerId?: number) => {
       const shouldSuppressClick = didDragRef.current;
       clearActiveDrag(coverflowRef.current, pointerId, { preserveDragFlag: shouldSuppressClick });
-      setPreviewStep(0);
       if (shouldSuppressClick) {
         queueDragReset();
       }
@@ -487,7 +503,6 @@ export function ShowroomCardCarousel({
         didDragRef.current = true;
       }
       setDragDelta(delta);
-      setPreviewStep(delta >= SWIPE_THRESHOLD ? -1 : delta <= -SWIPE_THRESHOLD ? 1 : 0);
     };
 
     const handleWindowPointerUp = (event: PointerEvent) => {
@@ -520,7 +535,6 @@ export function ShowroomCardCarousel({
         didDragRef.current = true;
       }
       setDragDelta(delta);
-      setPreviewStep(delta >= SWIPE_THRESHOLD ? -1 : delta <= -SWIPE_THRESHOLD ? 1 : 0);
     };
 
     const handleWindowMouseUp = (event: MouseEvent) => {
@@ -563,7 +577,6 @@ export function ShowroomCardCarousel({
       activePointerIdRef.current = null;
       setIsDragging(false);
       setDragDelta(0);
-      setPreviewStep(0);
       if (!shouldSuppressClick) {
         didDragRef.current = false;
         return;
@@ -659,10 +672,7 @@ export function ShowroomCardCarousel({
     nextRef.current();
   }, []);
 
-  const displayIndex =
-    count <= 1
-      ? normalizedActiveIndex
-      : (((normalizedActiveIndex + previewStep) % count) + count) % count;
+  const displayIndex = normalizedActiveIndex;
   const activeIsVideo = isVideoUrl(carouselItems[displayIndex]?.mediaUrl);
 
   useEffect(() => {
@@ -717,13 +727,13 @@ export function ShowroomCardCarousel({
         : "transition-[transform,opacity,filter,box-shadow] duration-700 ease-out";
 
     const byOffset: Record<number, string> = {
-      [-3]: "hidden lg:block translate-x-[calc(-50%-106%)] translate-y-4 scale-[0.54] opacity-32 saturate-[0.72] blur-[1.4px] z-0 pointer-events-none",
-      [-2]: "hidden md:block translate-x-[calc(-50%-72%)] translate-y-2 scale-[0.7] opacity-48 saturate-[0.84] blur-[0.8px] z-10 pointer-events-none",
-      [-1]: "translate-x-[calc(-50%-39%)] lg:-translate-y-2 scale-[0.9] lg:scale-[0.85] opacity-84 saturate-[0.92] z-20",
-      0: "translate-x-[-50%] lg:-translate-y-3 scale-100 lg:scale-[1.02] opacity-100 z-40 shadow-[0_42px_116px_-52px_rgba(15,23,42,0.72)]",
-      1: "translate-x-[calc(-50%+39%)] lg:-translate-y-2 scale-[0.9] lg:scale-[0.85] opacity-84 saturate-[0.92] z-20",
-      2: "hidden md:block translate-x-[calc(-50%+72%)] translate-y-2 scale-[0.7] opacity-48 saturate-[0.84] blur-[0.8px] z-10 pointer-events-none",
-      3: "hidden lg:block translate-x-[calc(-50%+106%)] translate-y-4 scale-[0.54] opacity-32 saturate-[0.72] blur-[1.4px] z-0 pointer-events-none",
+      [-3]: "hidden lg:block translate-x-[calc(-50%-106%)] translate-y-4 scale-[0.55] opacity-35 saturate-[0.76] blur-[1px] z-0 pointer-events-none",
+      [-2]: "hidden md:block translate-x-[calc(-50%-72%)] translate-y-2 scale-[0.72] opacity-55 saturate-[0.86] blur-[0.6px] z-10 pointer-events-none",
+      [-1]: "translate-x-[calc(-50%-39%)] lg:-translate-y-2 scale-[0.91] lg:scale-[0.86] opacity-88 saturate-[0.94] z-20",
+      0: "translate-x-[-50%] lg:-translate-y-3 scale-100 lg:scale-[1.025] opacity-100 z-40 shadow-[0_50px_130px_-54px_rgba(15,23,42,0.8)]",
+      1: "translate-x-[calc(-50%+39%)] lg:-translate-y-2 scale-[0.91] lg:scale-[0.86] opacity-88 saturate-[0.94] z-20",
+      2: "hidden md:block translate-x-[calc(-50%+72%)] translate-y-2 scale-[0.72] opacity-55 saturate-[0.86] blur-[0.6px] z-10 pointer-events-none",
+      3: "hidden lg:block translate-x-[calc(-50%+106%)] translate-y-4 scale-[0.55] opacity-35 saturate-[0.76] blur-[1px] z-0 pointer-events-none",
     };
 
     const preset = byOffset[offset] ?? byOffset[Math.sign(offset) * 3] ?? byOffset[0];
@@ -732,15 +742,47 @@ export function ShowroomCardCarousel({
   }
 
   function cardStyle(offset: number): CSSProperties | undefined {
-    if (!isDragging || offset !== 0 || previewStep !== 0 || Math.abs(dragDelta) < 1) {
-      return reducedMotion || isDragging
-        ? undefined
-        : { transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" };
+    if (reducedMotion) return undefined;
+
+    if (!isDragging || Math.abs(dragDelta) < 1) {
+      return {
+        transitionTimingFunction: "cubic-bezier(0.18, 0.9, 0.22, 1)",
+      };
     }
 
-    const progress = Math.max(-1, Math.min(1, dragDelta / SWIPE_THRESHOLD));
+    const progress = clamp(dragDelta / DRAG_PROGRESS_DISTANCE, -1, 1);
+    const virtualOffset = clamp(offset + progress, -3, 3);
+    const depth = Math.min(Math.abs(virtualOffset), 3);
+    const sign = virtualOffset === 0 ? 0 : virtualOffset > 0 ? 1 : -1;
+    const floorDepth = Math.floor(depth);
+    const depthProgress = depth - floorDepth;
+    const xStops = [0, 39, 72, 106];
+    const yStops = [-12, -8, 8, 16];
+    const scaleStops = [1.045, 0.875, 0.72, 0.55];
+    const opacityStops = [1, 0.9, 0.55, 0.34];
+    const blurStops = [0, 0, 0.55, 1.05];
+    const saturationStops = [1.02, 0.95, 0.86, 0.76];
+    const currentStop = Math.min(floorDepth, xStops.length - 1);
+    const nextStop = Math.min(currentStop + 1, xStops.length - 1);
+    const x = lerp(xStops[currentStop], xStops[nextStop], depthProgress) * sign;
+    const y = lerp(yStops[currentStop], yStops[nextStop], depthProgress);
+    const scale = lerp(scaleStops[currentStop], scaleStops[nextStop], depthProgress);
+    const opacity = lerp(opacityStops[currentStop], opacityStops[nextStop], depthProgress);
+    const blur = lerp(blurStops[currentStop], blurStops[nextStop], depthProgress);
+    const saturation = lerp(saturationStops[currentStop], saturationStops[nextStop], depthProgress);
+    const activeTilt = offset === 0 ? progress * PREVIEW_TILT_DEG : 0;
+    const sideTilt = offset === 0 ? 0 : -sign * lerp(1.5, 5.5, clamp(depth, 0, 1));
+    const liftShadow = 1 - clamp(depth / 2, 0, 1);
+    const shadowAlpha = lerp(0.16, 0.82, liftShadow);
+
     return {
-      transform: `translateX(-50%) rotateY(${progress * PREVIEW_TILT_DEG}deg) scale(${1 - Math.abs(progress) * 0.02})`,
+      transform: `translateX(calc(-50% + ${x}%)) translateY(${y}px) rotateY(${activeTilt + sideTilt}deg) scale(${scale})`,
+      opacity,
+      filter: `saturate(${saturation}) blur(${blur}px)`,
+      zIndex: Math.round(50 - depth * 12),
+      boxShadow: `0 ${Math.round(44 + liftShadow * 18)}px ${Math.round(
+        92 + liftShadow * 48
+      )}px -56px rgba(15,23,42,${shadowAlpha})`,
     };
   }
 
@@ -801,7 +843,7 @@ export function ShowroomCardCarousel({
       <div
         ref={coverflowRef}
         className={cn(
-          "relative mx-auto max-w-[1680px] overflow-x-clip overflow-y-visible select-none touch-pan-y pb-0 lg:flex lg:min-h-[clamp(24rem,54vh,34rem)] lg:items-center lg:pb-0",
+          "relative mx-auto max-w-[1680px] overflow-x-clip overflow-y-visible select-none touch-pan-y pb-0 [perspective:1200px] lg:flex lg:min-h-[clamp(24rem,54vh,34rem)] lg:items-center lg:pb-0",
           isDragging ? "cursor-grabbing" : "cursor-grab"
         )}
         onPointerDown={handlePointerDown}
@@ -836,8 +878,11 @@ export function ShowroomCardCarousel({
           if (Math.abs(offset) > 3) return null;
           const sideMediaFallback =
             item.posterUrl ??
-            (isVideoUrl(item.mediaUrl) ? "/images/fallbacks/hero-shop.svg" : item.mediaUrl);
-          const cardMediaUrl = offset === 0 ? item.mediaUrl : sideMediaFallback;
+            (isVideoUrl(item.mediaUrl) ? getFallbackMediaUrl(item) : item.mediaUrl);
+          const activeVideoNeedsArtwork =
+            offset === 0 && isVideoUrl(item.mediaUrl) && !item.posterUrl;
+          const cardMediaUrl =
+            offset === 0 && !activeVideoNeedsArtwork ? item.mediaUrl : sideMediaFallback;
 
           return (
             <div
@@ -867,6 +912,7 @@ export function ShowroomCardCarousel({
                 location={item.location}
                 mediaUrl={cardMediaUrl}
                 posterUrl={item.posterUrl}
+                mediaFallbackUrl={getFallbackMediaUrl(item)}
                 logoUrl={item.logoUrl}
                 eyebrow={item.eyebrow}
                 statusLabel={item.statusLabel}

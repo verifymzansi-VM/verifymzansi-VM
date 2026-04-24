@@ -103,7 +103,7 @@ export type PlanTier = "basic" | "starter" | "growth" | "pro";
 
 export type EntitlementType = "subscription" | "trial" | "pay_per_post";
 
-export type EntitlementStatus = "active" | "expired" | "cancelled";
+export type EntitlementStatus = "active" | "pending_verification" | "expired" | "cancelled";
 
 export type PaymentStatus =
   | "pending"

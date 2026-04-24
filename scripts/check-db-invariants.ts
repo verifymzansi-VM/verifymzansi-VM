@@ -24,6 +24,24 @@ const INVARIANTS: Invariant[] = [
       /CREATE\s+UNIQUE\s+INDEX\s+IF\s+NOT\s+EXISTS\s+idx_businesses_slug_unique\s+ON\s+public\.businesses\s*\(\(lower\(slug\)\)\)/i,
     guidance: "Add a migration that enforces a unique normalized index for public.businesses.slug.",
   },
+  {
+    name: "Basic plan tier enum value",
+    regex: /ALTER\s+TYPE\s+public\.plan_tier\s+ADD\s+VALUE\s+IF\s+NOT\s+EXISTS\s+'basic'/i,
+    guidance: "Add a migration enabling the Basic package in public.plan_tier.",
+  },
+  {
+    name: "Pending verification entitlement status",
+    regex:
+      /ALTER\s+TYPE\s+public\.entitlement_status\s+ADD\s+VALUE\s+IF\s+NOT\s+EXISTS\s+'pending_verification'/i,
+    guidance:
+      "Add a migration enabling pending_verification entitlements for restricted paid accounts.",
+  },
+  {
+    name: "Mzansi Market Basic plan seed",
+    regex:
+      /INSERT\s+INTO\s+public\.plans[\s\S]+MZANSI_MARKET[\s\S]+basic[\s\S]+Mzansi Market Basic[\s\S]+3000/i,
+    guidance: "Seed the active Mzansi Market Basic plan row at R30.00.",
+  },
 ];
 
 export function getMigrationFiles(migrationsDir = MIGRATIONS_DIR): string[] {

@@ -88,7 +88,15 @@ vi.mock("@/components/billing/plan-gate", () => ({
 }));
 
 vi.mock("@/components/ui/media-upload", () => ({
-  MediaUpload: ({ label, onChange }: { label: string; onChange?: (files: File[]) => void }) => {
+  MediaUpload: ({
+    label,
+    error,
+    onChange,
+  }: {
+    label: string;
+    error?: string;
+    onChange?: (files: File[]) => void;
+  }) => {
     const normalizedLabel = label.toLowerCase();
     const isThumbnail = normalizedLabel.includes("thumbnail");
     const isVideo = normalizedLabel.includes("video") && !isThumbnail;
@@ -104,9 +112,12 @@ vi.mock("@/components/ui/media-upload", () => ({
           ];
 
     return (
-      <button type="button" onClick={() => onChange?.(files)}>
-        {label}
-      </button>
+      <div>
+        <button type="button" onClick={() => onChange?.(files)}>
+          {label}
+        </button>
+        {error ? <p>{error}</p> : null}
+      </div>
     );
   },
 }));

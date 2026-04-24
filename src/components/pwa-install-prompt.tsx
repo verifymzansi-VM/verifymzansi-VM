@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 
 const DISMISSED_STORAGE_KEY = "pwa-prompt-dismissed";
+const HOME_PROMPT_MIN_SCROLL_Y = 360;
 
 const PROMPT_BLOCKED_PATH_PREFIXES = [
   "/login",
@@ -96,8 +97,35 @@ export function PwaInstallPrompt() {
   const [showPrompt, setShowPrompt] = useState(false);
   const [showIOSHelp, setShowIOSHelp] = useState(false);
   const iosDialogRef = useRef<HTMLDivElement>(null);
+  const homePromptScrollHandlerRef = useRef<(() => void) | null>(null);
 
   const closeIOSHelp = useCallback(() => setShowIOSHelp(false), []);
+  const showInstallPrompt = useCallback(() => {
+    if (homePromptScrollHandlerRef.current) {
+      window.removeEventListener("scroll", homePromptScrollHandlerRef.current);
+      homePromptScrollHandlerRef.current = null;
+    }
+
+    if (pathname !== "/") {
+      setShowPrompt(true);
+      return;
+    }
+
+    const revealAfterHero = () => {
+      if (window.scrollY < HOME_PROMPT_MIN_SCROLL_Y) {
+        return;
+      }
+      window.removeEventListener("scroll", revealAfterHero);
+      homePromptScrollHandlerRef.current = null;
+      setShowPrompt(true);
+    };
+
+    revealAfterHero();
+    if (window.scrollY < HOME_PROMPT_MIN_SCROLL_Y) {
+      homePromptScrollHandlerRef.current = revealAfterHero;
+      window.addEventListener("scroll", revealAfterHero, { passive: true });
+    }
+  }, [pathname]);
 
   // Focus the dialog when it opens and handle Escape key
   useEffect(() => {
@@ -119,6 +147,10 @@ export function PwaInstallPrompt() {
     if (!promptSuppressed) {
       return;
     }
+    if (homePromptScrollHandlerRef.current) {
+      window.removeEventListener("scroll", homePromptScrollHandlerRef.current);
+      homePromptScrollHandlerRef.current = null;
+    }
     queueMicrotask(() => {
       setShowPrompt(false);
       setShowIOSHelp(false);
@@ -138,7 +170,7 @@ export function PwaInstallPrompt() {
     // iOS Safari does not fire beforeinstallprompt; show manual A2HS guidance.
     if (isIOSDevice && !isStandalone) {
       queueMicrotask(() => {
-        setShowPrompt(true);
+        showInstallPrompt();
       });
     }
 
@@ -148,7 +180,7 @@ export function PwaInstallPrompt() {
       // Stash the event so it can be triggered later.
       setDeferredPrompt(e as BeforeInstallPromptEvent);
       // Show the prompt UI
-      setShowPrompt(true);
+      showInstallPrompt();
     };
 
     const handleAppInstalled = () => {
@@ -163,8 +195,12 @@ export function PwaInstallPrompt() {
     return () => {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
       window.removeEventListener("appinstalled", handleAppInstalled);
+      if (homePromptScrollHandlerRef.current) {
+        window.removeEventListener("scroll", homePromptScrollHandlerRef.current);
+        homePromptScrollHandlerRef.current = null;
+      }
     };
-  }, [promptSuppressed]);
+  }, [promptSuppressed, showInstallPrompt]);
 
   const handleInstallClick = async () => {
     if (isIOSFallback) {

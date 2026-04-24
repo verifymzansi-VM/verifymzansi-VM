@@ -17,6 +17,7 @@ vi.mock("@/components/listings/poster-card-shell", () => ({
     description,
     videoMode,
     mediaUrl,
+    mediaFallbackUrl,
     showPlaybackControl,
     makeEntireCardClickable,
     deferVideoLoadUntilPlay,
@@ -26,6 +27,7 @@ vi.mock("@/components/listings/poster-card-shell", () => ({
     description?: string;
     videoMode?: string;
     mediaUrl?: string;
+    mediaFallbackUrl?: string;
     showPlaybackControl?: boolean;
     makeEntireCardClickable?: boolean;
     deferVideoLoadUntilPlay?: boolean;
@@ -34,6 +36,7 @@ vi.mock("@/components/listings/poster-card-shell", () => ({
       data-testid="poster-card"
       data-video-mode={videoMode}
       data-media-url={mediaUrl}
+      data-fallback-media-url={mediaFallbackUrl}
       data-defer={deferVideoLoadUntilPlay ? "yes" : "no"}
     >
       <div data-testid={`poster-card-surface-${title}`}>{title}</div>
@@ -297,6 +300,7 @@ describe("ShowroomCardCarousel", () => {
 
     fireEvent.pointerDown(group, { clientX: 240, pointerId: 1 });
     fireEvent.pointerMove(group, { clientX: 120, pointerId: 1 });
+    expect(screen.getByText("Slide 1 of 3")).toBeInTheDocument();
     fireEvent.pointerUp(group, { clientX: 120, pointerId: 1 });
 
     expect(screen.getByText("Slide 2 of 3")).toBeInTheDocument();
@@ -317,11 +321,25 @@ describe("ShowroomCardCarousel", () => {
 
     fireEvent.pointerDown(group, { clientX: 120, pointerId: 1 });
     fireEvent.pointerMove(group, { clientX: 250, pointerId: 1 });
+    expect(screen.getByText("Slide 1 of 3")).toBeInTheDocument();
     fireEvent.pointerUp(group, { clientX: 250, pointerId: 1 });
 
     expect(screen.getByText("Slide 3 of 3")).toBeInTheDocument();
     const dots = screen.getAllByRole("button", { name: /go to slide/i });
     expect(dots[2].innerHTML).toContain("bg-brand-green");
+  });
+
+  it("snaps back to the same card after a short drag", () => {
+    render(<ShowroomCardCarousel items={mockItems} />);
+    const group = screen.getByLabelText(/carousel slides/i);
+
+    fireEvent.pointerDown(group, { clientX: 240, pointerId: 1 });
+    fireEvent.pointerMove(group, { clientX: 216, pointerId: 1 });
+    fireEvent.pointerUp(group, { clientX: 216, pointerId: 1 });
+
+    expect(screen.getByText("Slide 1 of 3")).toBeInTheDocument();
+    const dots = screen.getAllByRole("button", { name: /go to slide/i });
+    expect(dots[0].innerHTML).toContain("bg-brand-green");
   });
 
   it("supports drag gestures that begin on the nested active card link surface", () => {
@@ -377,6 +395,7 @@ describe("ShowroomCardCarousel", () => {
         href: "/listing/v1",
         title: "Center Video",
         mediaUrl: "https://cdn.example.com/center.mp4",
+        posterUrl: "https://cdn.example.com/center.jpg",
       },
       {
         id: "v2",
@@ -404,8 +423,73 @@ describe("ShowroomCardCarousel", () => {
 
     const sideCards = realCards.filter((c) => c.getAttribute("data-video-mode") !== "ambient");
     expect(sideCards).toHaveLength(2);
-    expect(sideCards[0].getAttribute("data-media-url")).toBe("/images/fallbacks/hero-shop.svg");
+    expect(sideCards[0].getAttribute("data-media-url")).toBe("/images/fallbacks/hero-listing.svg");
     expect(sideCards[1].getAttribute("data-media-url")).toBe("https://cdn.example.com/side2.jpg");
+  });
+
+  it("uses branded artwork for active video cards without a poster", () => {
+    const videoItems: CarouselItem[] = [
+      {
+        id: "v1",
+        type: "listing",
+        href: "/listing/v1",
+        title: "Center Video Without Poster",
+        mediaUrl: "https://cdn.example.com/center.mp4",
+      },
+      mockItems[1],
+    ];
+
+    render(<ShowroomCardCarousel items={videoItems} />);
+    const cards = screen.getAllByTestId("poster-card");
+    const center = cards.slice(1).find((c) => c.getAttribute("data-video-mode") === "ambient");
+
+    expect(center).toHaveAttribute("data-media-url", "/images/fallbacks/hero-listing.svg");
+  });
+
+  it("passes type-aware branded fallback artwork to hero cards", () => {
+    render(<ShowroomCardCarousel items={mockItems} />);
+    const cards = screen.getAllByTestId("poster-card");
+    const realCards = cards.slice(1); // skip invisible placeholder card
+
+    expect(realCards[0]).toHaveAttribute(
+      "data-fallback-media-url",
+      "/images/fallbacks/hero-listing.svg"
+    );
+    expect(realCards[1]).toHaveAttribute(
+      "data-fallback-media-url",
+      "/images/fallbacks/hero-business.svg"
+    );
+    expect(realCards[2]).toHaveAttribute(
+      "data-fallback-media-url",
+      "/images/fallbacks/hero-shop.svg"
+    );
+  });
+
+  it("uses branded fallback artwork for side video cards without posters", () => {
+    const videoItems: CarouselItem[] = [
+      {
+        id: "v1",
+        type: "listing",
+        href: "/listing/v1",
+        title: "Center Video",
+        mediaUrl: "https://cdn.example.com/center.mp4",
+      },
+      {
+        id: "v2",
+        type: "business",
+        href: "/mzansi-business/v2",
+        title: "Side Business Video",
+        mediaUrl: "https://cdn.example.com/side.mp4",
+      },
+    ];
+
+    render(<ShowroomCardCarousel items={videoItems} />);
+    const cards = screen.getAllByTestId("poster-card");
+    const sideCards = cards
+      .slice(1)
+      .filter((card) => card.getAttribute("data-video-mode") !== "ambient");
+
+    expect(sideCards[0]).toHaveAttribute("data-media-url", "/images/fallbacks/hero-business.svg");
   });
 
   it("relies on swipe gestures and dots rather than a separate mobile button row", () => {

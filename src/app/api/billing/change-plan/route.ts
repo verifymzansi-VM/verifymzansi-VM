@@ -9,8 +9,8 @@ import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createHostedCheckout } from "@/lib/payments/checkout";
-import { env } from "@/lib/config/env";
 import { resolveBillingPlanSelection } from "@/lib/billing/plan-resolver";
+import { resolveSafeBillingAppUrl } from "@/lib/billing/app-url";
 
 const log = createLogger("BillingChangePlan");
 
@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Block downgrades — only upgrades are supported via self-service
-    const TIER_RANK: Record<string, number> = { starter: 0, growth: 1, pro: 2 };
+    const TIER_RANK: Record<string, number> = { basic: 0, starter: 1, growth: 2, pro: 3 };
     const currentRank = TIER_RANK[entitlement.tier];
     const newRank = TIER_RANK[newPlan.tier];
     if (currentRank === undefined || newRank === undefined) {
@@ -182,7 +182,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const appUrl = env("NEXT_PUBLIC_APP_URL") || "https://verifymzansi.com";
+    const appUrlResult = resolveSafeBillingAppUrl(log);
+    if (appUrlResult.response) return appUrlResult.response;
+    const appUrl = appUrlResult.appUrl;
     let checkoutUrl: string;
     let paymentId: string;
 

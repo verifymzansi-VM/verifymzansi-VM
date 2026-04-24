@@ -183,21 +183,32 @@ vi.mock("@/components/ui/location-selector", () => ({
 }));
 
 vi.mock("@/components/ui/media-upload", () => ({
-  MediaUpload: ({ label, onChange }: { label: string; onChange?: (files: File[]) => void }) => (
-    <button
-      type="button"
-      onClick={() => {
-        const configuredFiles = mediaFilesByLabel.get(label);
-        const files = configuredFiles ?? [
-          new File(["mock"], label.toLowerCase().includes("video") ? "clip.mp4" : "photo.png", {
-            type: label.toLowerCase().includes("video") ? "video/mp4" : "image/png",
-          }),
-        ];
-        onChange?.(files);
-      }}
-    >
-      Add media for {label}
-    </button>
+  MediaUpload: ({
+    label,
+    error,
+    onChange,
+  }: {
+    label: string;
+    error?: string;
+    onChange?: (files: File[]) => void;
+  }) => (
+    <div>
+      <button
+        type="button"
+        onClick={() => {
+          const configuredFiles = mediaFilesByLabel.get(label);
+          const files = configuredFiles ?? [
+            new File(["mock"], label.toLowerCase().includes("video") ? "clip.mp4" : "photo.png", {
+              type: label.toLowerCase().includes("video") ? "video/mp4" : "image/png",
+            }),
+          ];
+          onChange?.(files);
+        }}
+      >
+        Add media for {label}
+      </button>
+      {error ? <p>{error}</p> : null}
+    </div>
   ),
 }));
 

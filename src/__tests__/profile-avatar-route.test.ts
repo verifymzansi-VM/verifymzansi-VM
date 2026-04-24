@@ -77,6 +77,33 @@ describe("POST /api/profile/avatar", () => {
     expect(res.status).toBe(400);
   });
 
+  it("rate limits authenticated avatar uploads by user id", async () => {
+    mockCheckRateLimit
+      .mockResolvedValueOnce({ limited: false })
+      .mockResolvedValueOnce({ limited: true, retryAfter: 30 });
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
+      },
+    });
+
+    const formData = new FormData();
+    formData.set("file", new File(["hello"], "avatar.png", { type: "image/png" }));
+
+    const res = await POST(createRequest(formData));
+
+    expect(mockCheckRateLimit).toHaveBeenNthCalledWith(1, {
+      key: "127.0.0.1",
+      action: "profile:avatar",
+    });
+    expect(mockCheckRateLimit).toHaveBeenNthCalledWith(2, {
+      key: "user-1",
+      action: "profile:avatar",
+    });
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("30");
+  });
+
   it("uploads and persists the avatar URL", async () => {
     const upload = vi.fn().mockResolvedValue({ error: null });
     const getPublicUrl = vi.fn().mockReturnValue({
@@ -109,6 +136,10 @@ describe("POST /api/profile/avatar", () => {
     const res = await POST(createRequest(formData));
 
     expect(res.status).toBe(200);
+    expect(mockCheckRateLimit).toHaveBeenNthCalledWith(2, {
+      key: "user-1",
+      action: "profile:avatar",
+    });
     expect(upload).toHaveBeenCalled();
     expect(updateEq).toHaveBeenCalledWith("user_id", "user-1");
   });

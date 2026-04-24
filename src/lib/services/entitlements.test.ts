@@ -30,6 +30,15 @@ describe("entitlements service", () => {
       expect(ent.boostAllowed).toBe(false);
     });
 
+    it("returns Basic tier entitlements for Mzansi Market", () => {
+      const ent = getEntitlements("basic", "MZANSI_MARKET");
+      expect(ent.maxAllowed).toBe(1);
+      expect(ent.videoAllowed).toBe(false);
+      expect(ent.boostAllowed).toBe(false);
+      expect(ent.featuredAllowed).toBe(false);
+      expect(ent.urgentAllowed).toBe(false);
+    });
+
     it("returns pro tier entitlements capped at 27 listings", () => {
       const ent = getEntitlements("pro", "MZANSI_MARKET");
       expect(ent.maxAllowed).toBe(27);

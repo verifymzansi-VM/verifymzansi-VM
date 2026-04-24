@@ -164,6 +164,10 @@ describe("POST /api/profile/update", () => {
     );
 
     expect(res.status).toBe(200);
+    expect(mockCheckRateLimit).toHaveBeenNthCalledWith(2, {
+      key: "user-1",
+      action: "profile:update",
+    });
     await expect(res.json()).resolves.toMatchObject({
       success: true,
       profile: expect.objectContaining({ display_name: "Nomsa" }),

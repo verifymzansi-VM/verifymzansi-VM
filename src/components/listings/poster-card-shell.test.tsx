@@ -9,11 +9,13 @@ const { videoCardPlayerMock } = vi.hoisted(() => ({
       deferVideoLoadUntilPlay,
       fitStrategy,
       disableNativeDrag,
+      fallback,
     }: {
       showPlaybackControl?: boolean;
       deferVideoLoadUntilPlay?: boolean;
       fitStrategy?: string;
       disableNativeDrag?: boolean;
+      fallback?: React.ReactNode;
     }) => (
       <div
         data-testid="video-player"
@@ -21,7 +23,9 @@ const { videoCardPlayerMock } = vi.hoisted(() => ({
         data-defer={deferVideoLoadUntilPlay ? "yes" : "no"}
         data-fit={fitStrategy ?? ""}
         data-drag-disabled={disableNativeDrag ? "yes" : "no"}
-      />
+      >
+        {fallback}
+      </div>
     )
   ),
 }));
@@ -158,5 +162,19 @@ describe("PosterCardShell", () => {
       "/listing/plain"
     );
     expect(screen.queryByRole("button", { name: /like this card|unlike this card/i })).toBeNull();
+  });
+
+  it("renders branded fallback artwork for failed media when provided", () => {
+    render(
+      <PosterCardShell
+        href="/listing/fallback"
+        title="Fallback listing"
+        mediaUrl="https://example.com/missing.jpg"
+        mediaFallbackUrl="/images/fallbacks/hero-listing.svg"
+      />
+    );
+
+    expect(screen.getByText("Verified preview")).toBeInTheDocument();
+    expect(screen.getAllByText("Fallback listing")).toHaveLength(2);
   });
 });

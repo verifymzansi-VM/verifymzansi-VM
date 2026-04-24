@@ -10,7 +10,17 @@ vi.mock("@/hooks/use-toast", () => ({
 function Harness() {
   const [files, setFiles] = useState<File[]>([]);
 
-  return <MediaUpload label="Photos" files={files} onChange={setFiles} accept="image/*" />;
+  return (
+    <MediaUpload
+      id="photos-upload"
+      label="Photos"
+      description="Add clear photos of the item."
+      error="Upload at least one photo."
+      files={files}
+      onChange={setFiles}
+      accept="image/*"
+    />
+  );
 }
 
 describe("MediaUpload", () => {
@@ -47,5 +57,33 @@ describe("MediaUpload", () => {
 
     expect(screen.getByText(/Preview unavailable for "1000061870\.jpg"/i)).toBeInTheDocument();
     expect(screen.getByText("Preview unavailable")).toBeInTheDocument();
+  });
+
+  it("associates labels, guidance, counts, and errors with the file input", () => {
+    render(<Harness />);
+
+    const input = screen.getByLabelText("Photos");
+
+    expect(input).toHaveAttribute("id", "photos-upload");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input.getAttribute("aria-describedby")).toContain("photos-upload-description");
+    expect(input.getAttribute("aria-describedby")).toContain("photos-upload-count");
+    expect(input.getAttribute("aria-describedby")).toContain("photos-upload-error");
+    expect(screen.getByText("Add clear photos of the item.")).toBeInTheDocument();
+    expect(screen.getByText("Upload at least one photo.")).toBeInTheDocument();
+    expect(screen.getByText("0 selected. 10 of 10 remaining.")).toBeInTheDocument();
+  });
+
+  it("shows rejected files inline", async () => {
+    render(<Harness />);
+
+    const input = screen.getByLabelText("Upload photos and videos");
+    const file = new File(["plain"], "notes.txt", { type: "text/plain" });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByText("Some files were not added")).toBeInTheDocument();
+    });
+    expect(screen.getByText(/notes\.txt/)).toBeInTheDocument();
   });
 });

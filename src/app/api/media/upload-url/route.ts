@@ -195,6 +195,30 @@ export async function POST(request: NextRequest) {
     }
     const publicUrl = `${r2PublicUrl}/${key}`;
 
+    const { error: trackError } = await supabase.from("media_uploads").insert({
+      user_id: user.id,
+      r2_key: key,
+      bucket,
+      url: publicUrl,
+      content_type: contentType,
+      file_size: size,
+      area,
+    });
+
+    if (trackError) {
+      log.error("Failed to track presigned media upload", {
+        traceId,
+        userId: user.id,
+        area,
+        key,
+        error: trackError.message,
+      });
+      return NextResponse.json(
+        { error: "Failed to track upload", code: "upload_tracking_failed", traceId },
+        { status: 500, headers: { "x-upload-trace-id": traceId } }
+      );
+    }
+
     log.info("Generated presigned upload URL", {
       traceId,
       userId: user.id,

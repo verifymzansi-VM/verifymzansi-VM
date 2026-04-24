@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { ZodType } from "zod";
 
-import { env } from "@/lib/config/env";
+import { resolveSafeBillingAppUrl } from "@/lib/billing/app-url";
 import { createHostedCheckout } from "@/lib/payments/checkout";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -193,7 +193,9 @@ export function createAddonCheckoutRouteCore<
         return NextResponse.json({ error: addonCheck.reason }, { status: 403 });
       }
 
-      const appUrl = env("NEXT_PUBLIC_APP_URL") || "https://verifymzansi.com";
+      const appUrlResult = resolveSafeBillingAppUrl(log);
+      if (appUrlResult.response) return appUrlResult.response;
+      const appUrl = appUrlResult.appUrl;
       const { paymentId, checkoutUrl } = await createHostedCheckout({
         admin: admin as never,
         userId: user.id,

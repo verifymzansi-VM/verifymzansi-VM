@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createHostedCheckout } from "@/lib/payments/checkout";
 import { getStablePlanId } from "@/lib/constants/plan-ids";
+import { env } from "@/lib/config/env";
 
 const CSRF_TOKEN = "a".repeat(64);
 
@@ -112,6 +113,10 @@ describe("POST /api/billing/change-plan", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
+    vi.mocked(env).mockImplementation((key: string) =>
+      key === "NEXT_PUBLIC_APP_URL" ? "https://verifymzansi.com" : ""
+    );
     vi.mocked(createClient).mockResolvedValue(mockSupabase as never);
     vi.mocked(createAdminClient).mockReturnValue(mockAdmin as never);
   });
@@ -263,6 +268,125 @@ describe("POST /api/billing/change-plan", () => {
         }),
       })
     );
+  });
+
+  it("allows Basic subscriptions to upgrade to Starter", async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: CONFIRMED_USER } });
+
+    mockAdmin.from.mockImplementation((table: string) => {
+      if (table === "entitlements") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          gte: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: {
+              id: "ent-basic",
+              user_id: "user-1",
+              area: "MZANSI_MARKET",
+              tier: "basic",
+              status: "active",
+            },
+            error: null,
+          }),
+        };
+      }
+      if (table === "plans") {
+        return createPlansTableMock([
+          {
+            id: "550e8400-e29b-41d4-a716-446655440001",
+            name: "Market Starter",
+            area: "MZANSI_MARKET",
+            tier: "starter",
+            price_cents: 10000,
+            active: true,
+          },
+        ]);
+      }
+      if (table === "payments") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          in: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        };
+      }
+      throw new Error(`Unexpected table: ${table}`);
+    });
+
+    const res = await changePlanRoute(
+      createMockRequest({
+        currentEntitlementId: "550e8400-e29b-41d4-a716-446655440000",
+        newPlanId: "550e8400-e29b-41d4-a716-446655440001",
+      })
+    );
+
+    expect(res.status).toBe(200);
+    expect(vi.mocked(createHostedCheckout)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerData: expect.objectContaining({
+          previous_plan_tier: "basic",
+          plan_tier: "starter",
+        }),
+      })
+    );
+  });
+
+  it("fails safely when the billing app URL is invalid", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.mocked(env).mockReturnValue("https://evil.example");
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: CONFIRMED_USER } });
+
+    mockAdmin.from.mockImplementation((table: string) => {
+      if (table === "entitlements") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          gte: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: {
+              id: "ent-1",
+              user_id: "user-1",
+              area: "MZANSI_MARKET",
+              tier: "starter",
+              status: "active",
+            },
+            error: null,
+          }),
+        };
+      }
+      if (table === "plans") {
+        return createPlansTableMock([
+          {
+            id: "550e8400-e29b-41d4-a716-446655440001",
+            name: "Market Growth",
+            area: "MZANSI_MARKET",
+            tier: "growth",
+            price_cents: 25000,
+            active: true,
+          },
+        ]);
+      }
+      if (table === "payments") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          in: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        };
+      }
+      throw new Error(`Unexpected table: ${table}`);
+    });
+
+    const res = await changePlanRoute(
+      createMockRequest({
+        currentEntitlementId: "550e8400-e29b-41d4-a716-446655440000",
+        newPlanId: "550e8400-e29b-41d4-a716-446655440001",
+      })
+    );
+
+    expect(res.status).toBe(503);
+    expect(vi.mocked(createHostedCheckout)).not.toHaveBeenCalled();
   });
 
   it("resolves stable frontend plan tokens during plan changes", async () => {

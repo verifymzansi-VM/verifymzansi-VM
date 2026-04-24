@@ -89,6 +89,7 @@ vi.mock("@/lib/services/plan-tier", () => ({
 import { POST as featuredPOST } from "@/app/api/listings/[id]/featured/route";
 import { POST as boostPOST } from "@/app/api/listings/[id]/boost/route";
 import { POST as urgentPOST } from "@/app/api/listings/[id]/urgent/route";
+import { env } from "@/lib/config/env";
 
 // ── Helpers ───────────────────────────────────────────────────
 
@@ -155,6 +156,14 @@ describe.each([
 ])("POST /api/listings/[id]/$name", ({ name, handler, addonField }) => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
+    vi.mocked(env).mockImplementation((key: string) => {
+      const envMap: Record<string, string> = {
+        NEXT_PUBLIC_APP_URL: "https://verifymzansi.com",
+        OZOW_ENV: "staging",
+      };
+      return envMap[key] ?? "";
+    });
   });
 
   it("returns 400 for malformed listing ID", async () => {
@@ -171,6 +180,19 @@ describe.each([
     expect(res.status).toBe(401);
     const body = await res.json();
     expect(body.error).toBe("Unauthorized");
+  });
+
+  it("fails safely when the billing app URL is invalid", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.mocked(env).mockReturnValue("https://evil.example");
+    setupHappyPath(addonField);
+
+    const res = await handler()(makeRequest(), makeParams(VALID_UUID));
+    const body = await res.json();
+
+    expect(res.status).toBe(503);
+    expect(body.error).toBe("Billing is not yet configured. Please try again later.");
+    expect(mockCreateHostedCheckout).not.toHaveBeenCalled();
   });
 
   it("returns 404 when account profile is not found", async () => {

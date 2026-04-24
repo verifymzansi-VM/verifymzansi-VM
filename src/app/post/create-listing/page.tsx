@@ -27,7 +27,12 @@ import { MediaUpload } from "@/components/ui/media-upload";
 import { VideoFrameSelector } from "@/components/ui/video-frame-selector";
 import { MediaCropPreview, type CropPosition } from "@/components/ui/media-crop-preview";
 import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
-import { PlanGate, usePlanMaxPhotos, usePlanVideoAllowed } from "@/components/billing/plan-gate";
+import {
+  PlanGate,
+  usePlanMaxPhotos,
+  usePlanMaxVideos,
+  usePlanVideoAllowed,
+} from "@/components/billing/plan-gate";
 import { LocationSelector, type LocationValue } from "@/components/ui/location-selector";
 import type { ListingCategory, ListingCondition } from "@/types/enums";
 import { mapListingCategory } from "@/lib/utils/enum-compat";
@@ -232,6 +237,7 @@ export default function CreateListingPage() {
   } = usePostDraftAutosave<ListingDraftData>("listing", user?.id, !isLoading);
   const locationValue: LocationValue = { province, city, town, address };
   const maxPhotos = usePlanMaxPhotos("MZANSI_MARKET");
+  const maxVideos = usePlanMaxVideos("MZANSI_MARKET");
   const videoAllowed = usePlanVideoAllowed("MZANSI_MARKET");
   const logoPreviewUrl = useMemo(
     () => (logoFile.length > 0 ? URL.createObjectURL(logoFile[0]) : null),
@@ -506,6 +512,8 @@ export default function CreateListingPage() {
       }
       if (videoFile.length > 0 && !videoAllowed) {
         errors.videos = "Video upload is not available on your current plan.";
+      } else if (videoFile.length > maxVideos) {
+        errors.videos = `You can upload up to ${maxVideos} videos on this plan.`;
       }
     }
 
@@ -661,7 +669,7 @@ export default function CreateListingPage() {
 
       // Upload photos, video, and video cover in parallel after the logo upload settles.
       let compressedVideoFileRef: File | null = null;
-      const [photoUrls, videoUrl, videoThumbnailUrl] = await Promise.all([
+      const [photoUrls, videoUrls, videoThumbnailUrl] = await Promise.all([
         // Photos via server proxy (small files)
         photoFiles.length > 0
           ? (async () => {
@@ -698,33 +706,42 @@ export default function CreateListingPage() {
           ? (async () => {
               setSubmitProgress("Compressing video...");
               const { compressVideoForUpload } = await import("@/lib/media/compress-before-upload");
-              const file = await compressVideoForUpload(videoFile[0]);
-              compressedVideoFileRef = file;
+              const files = await Promise.all(
+                videoFile.map((file) => compressVideoForUpload(file))
+              );
+              compressedVideoFileRef = files[0] ?? null;
               setSubmitProgress("Uploading media...");
-              const urlRes = await fetchWithRetry("/api/media/upload-url", {
-                method: "POST",
-                headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-                body: JSON.stringify({
-                  filename: file.name,
-                  contentType: file.type,
-                  size: file.size,
-                  area: "listing_video",
-                }),
-              });
-              if (!urlRes.ok) {
-                throw new Error(await readUploadError(urlRes, "Failed to get video upload URL"));
-              }
-              const { uploadUrl, publicUrl } = await urlRes.json();
-              const putRes = await fetchWithRetry(uploadUrl, {
-                method: "PUT",
-                headers: { "Content-Type": file.type },
-                body: file,
-              });
-              if (!putRes.ok) throw new Error(`Failed to upload video (HTTP ${putRes.status})`);
+              const urls = await Promise.all(
+                files.map(async (file) => {
+                  const urlRes = await fetchWithRetry("/api/media/upload-url", {
+                    method: "POST",
+                    headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+                    body: JSON.stringify({
+                      filename: file.name,
+                      contentType: file.type,
+                      size: file.size,
+                      area: "listing_video",
+                    }),
+                  });
+                  if (!urlRes.ok) {
+                    throw new Error(
+                      await readUploadError(urlRes, "Failed to get video upload URL")
+                    );
+                  }
+                  const { uploadUrl, publicUrl } = await urlRes.json();
+                  const putRes = await fetchWithRetry(uploadUrl, {
+                    method: "PUT",
+                    headers: { "Content-Type": file.type },
+                    body: file,
+                  });
+                  if (!putRes.ok) throw new Error(`Failed to upload video (HTTP ${putRes.status})`);
+                  return publicUrl as string;
+                })
+              );
               setUploadStatuses((current) => ({ ...current, video: "done" }));
-              return publicUrl as string;
+              return urls;
             })()
-          : Promise.resolve(null as string | null),
+          : Promise.resolve([] as string[]),
 
         // Video cover image via server proxy
         videoCoverFile.length > 0
@@ -766,7 +783,7 @@ export default function CreateListingPage() {
           address,
           logo_url: logoUrls[0] || null,
           images: photoUrls,
-          videos: videoUrl ? [videoUrl] : [],
+          videos: videoUrls,
           videoThumbnail: videoThumbnailUrl,
           contactMethods,
           media_width: mediaDimensions?.width,
@@ -1300,11 +1317,14 @@ export default function CreateListingPage() {
                   <div className="space-y-5 animate-in fade-in-0 duration-300">
                     <div className="space-y-2">
                       <MediaUpload
+                        id="listing-logo-input"
                         label="Listing logo (optional)"
+                        description="Optional brand mark shown on listing cards when available."
                         maxFiles={1}
                         files={logoFile}
                         onChange={setLogoFile}
                         accept="image/*"
+                        recommendedAspect="Recommended: square image, at least 96 x 96."
                       />
                       <p className="text-xs text-muted-foreground">
                         If present, this logo will be shown on listing cards across the marketplace.
@@ -1313,7 +1333,10 @@ export default function CreateListingPage() {
 
                     <div id="listing-images" tabIndex={-1} className="space-y-2 rounded-lg">
                       <MediaUpload
+                        id="listing-images-input"
                         label={`Photos (max ${maxPhotos})`}
+                        description="Required. Your first photo becomes the public hero image and marketplace card cover."
+                        error={fieldErrors.images}
                         maxFiles={maxPhotos}
                         files={photoFiles}
                         onChange={(files) => {
@@ -1377,9 +1400,6 @@ export default function CreateListingPage() {
                           </div>
                         </div>
                       )}
-                      {fieldErrors.images && (
-                        <p className="inline-form-error">{fieldErrors.images}</p>
-                      )}
                     </div>
 
                     {photoFiles.length > 0 && videoFile.length === 0 && (
@@ -1392,8 +1412,11 @@ export default function CreateListingPage() {
 
                     <div id="listing-video" tabIndex={-1} className="space-y-2 rounded-lg">
                       <MediaUpload
-                        label={`Video (max 1)${!videoAllowed ? " — Upgrade to unlock" : ""}`}
-                        maxFiles={1}
+                        id="listing-video-input"
+                        label={`Video (max ${maxVideos})${!videoAllowed ? " — Upgrade to unlock" : ""}`}
+                        description="Optional. Use clear portrait clips that show the item, property, or service honestly."
+                        error={fieldErrors.videos}
+                        maxFiles={maxVideos}
                         files={videoFile}
                         onChange={(files) => {
                           setVideoFile(files);
@@ -1403,9 +1426,6 @@ export default function CreateListingPage() {
                         accept="video/*"
                         disabled={!videoAllowed}
                       />
-                      {fieldErrors.videos && (
-                        <p className="inline-form-error">{fieldErrors.videos}</p>
-                      )}
                       <p className="text-xs text-muted-foreground">
                         Use one clear vertical clip for the poster-style hero. Portrait 9:16 video
                         is the best fit.
@@ -1426,7 +1446,9 @@ export default function CreateListingPage() {
                           </summary>
                           <div className="mt-2">
                             <MediaUpload
+                              id="listing-video-cover-input"
                               label="Custom cover image"
+                              description="Optional poster image shown before the video plays."
                               maxFiles={1}
                               files={videoCoverFile}
                               onChange={setVideoCoverFile}

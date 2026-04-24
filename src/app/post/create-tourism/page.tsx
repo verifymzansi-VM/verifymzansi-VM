@@ -3290,7 +3290,10 @@ function CreateTourismContent() {
                         {listingType === "tourism_business" ? "Business Logo" : "Event Logo"}
                       </Label>
                       <MediaUpload
+                        id="tourism-logo-input"
                         label="Upload logo"
+                        description="Optional logo shown beside the tourism business or event name."
+                        error={fieldErrors.logo_url}
                         maxFiles={1}
                         files={logoFiles}
                         onChange={(files) => {
@@ -3298,10 +3301,8 @@ function CreateTourismContent() {
                           clearErrors("logo_url");
                         }}
                         accept="image/*"
+                        recommendedAspect="Recommended: square image, at least 96 x 96."
                       />
-                      {fieldErrors.logo_url && (
-                        <p className="text-sm text-destructive">{fieldErrors.logo_url}</p>
-                      )}
                     </div>
 
                     {/* Photos */}
@@ -3313,7 +3314,10 @@ function CreateTourismContent() {
                         events.
                       </p>
                       <MediaUpload
+                        id="tourism-images-input"
                         label="Upload photos"
+                        description="Required for tourism businesses. For events, add at least one photo or video."
+                        error={fieldErrors.images}
                         maxFiles={maxPhotos}
                         files={photoFiles}
                         onChange={(files) => {
@@ -3372,9 +3376,6 @@ function CreateTourismContent() {
                             ))}
                           </div>
                         </div>
-                      )}
-                      {fieldErrors.images && (
-                        <p className="text-sm text-destructive">{fieldErrors.images}</p>
                       )}
                     </div>
 
@@ -3455,7 +3456,10 @@ function CreateTourismContent() {
                           clip works best for the event or tourism hero.
                         </p>
                         <MediaUpload
+                          id="tourism-videos-input"
                           label="Upload video"
+                          description="Optional. Upload clips that clearly show the destination, venue, or experience."
+                          error={fieldErrors.videos}
                           maxFiles={maxVideos}
                           files={videoFiles}
                           onChange={(files) => {
@@ -3465,9 +3469,6 @@ function CreateTourismContent() {
                           }}
                           accept="video/*"
                         />
-                        {fieldErrors.videos && (
-                          <p className="text-sm text-destructive">{fieldErrors.videos}</p>
-                        )}
                       </div>
                     )}
 

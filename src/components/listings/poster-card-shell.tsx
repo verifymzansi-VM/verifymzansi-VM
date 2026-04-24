@@ -39,6 +39,8 @@ interface PosterCardShellProps {
   mediaSizes?: string;
   trustLevel?: TrustLevel;
   fallback?: ReactNode;
+  /** Branded artwork shown when the primary media fails or is missing. */
+  mediaFallbackUrl?: string | null;
   /** Business logo URL — rendered as circular overlay bottom-right */
   logoUrl?: string | null;
   /** Short description — 1-line clamp below title */
@@ -101,6 +103,7 @@ export function PosterCardShell({
   mediaSizes = "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw",
   trustLevel = 0,
   fallback,
+  mediaFallbackUrl,
   logoUrl,
   description,
   location,
@@ -126,6 +129,9 @@ export function PosterCardShell({
   const normalizedMediaUrl = mediaUrl ? normalizeMediaUrl(mediaUrl) : undefined;
   const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
   const normalizedLogoUrl = logoUrl ? normalizeMediaUrl(logoUrl) : undefined;
+  const normalizedMediaFallbackUrl = mediaFallbackUrl
+    ? normalizeMediaUrl(mediaFallbackUrl)
+    : undefined;
   const hasVideo = isVideo ?? isVideoUrl(mediaUrl);
   const frame = CARD_FRAME;
   const effectiveFitStrategy = fitStrategy;
@@ -258,17 +264,39 @@ export function PosterCardShell({
       </div>
     </div>
   );
-  const mediaFallback = fallback ?? (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.16),rgba(15,23,42,0)_55%),linear-gradient(180deg,rgba(15,23,42,0.12),rgba(15,23,42,0.24))] px-6 text-center text-white/88">
-      <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/12 bg-black/30 backdrop-blur-sm">
-        <ImageOff className="h-6 w-6" />
+  const mediaFallback =
+    fallback ??
+    (normalizedMediaFallbackUrl ? (
+      <div className="relative h-full w-full overflow-hidden bg-slate-100 dark:bg-slate-950">
+        <Image
+          src={normalizedMediaFallbackUrl}
+          alt=""
+          fill
+          sizes={mediaSizes}
+          priority={priority}
+          className="object-cover"
+          aria-hidden="true"
+          draggable={disableNativeDrag ? false : undefined}
+          onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
+        />
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/80 via-slate-950/34 to-transparent px-4 pb-4 pt-12 text-white">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
+            Verified preview
+          </p>
+          <p className="mt-1 line-clamp-2 text-sm font-semibold leading-tight">{title}</p>
+        </div>
       </div>
-      <div className="space-y-1">
-        <p className="text-sm font-semibold">Preview unavailable</p>
-        <p className="text-xs text-white/70">{title}</p>
+    ) : (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.16),rgba(15,23,42,0)_55%),linear-gradient(180deg,rgba(15,23,42,0.12),rgba(15,23,42,0.24))] px-6 text-center text-white/88">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/12 bg-black/30 backdrop-blur-sm">
+          <ImageOff className="h-6 w-6" />
+        </div>
+        <div className="space-y-1">
+          <p className="text-sm font-semibold">Preview unavailable</p>
+          <p className="text-xs text-white/70">{title}</p>
+        </div>
       </div>
-    </div>
-  );
+    ));
 
   const cardInner = (
     <Card className={cardClassName} trustLevel={trustLevel} data-card-variant={cardVariant}>

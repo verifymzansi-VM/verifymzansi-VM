@@ -164,7 +164,7 @@ export default async function PromotionsPage() {
         background={tourismEventsShowroomBackground}
       />
 
-      <TrustStrip variant="green" />
+      <TrustStrip variant="green" title="Latest Tourism & Events" />
 
       <Suspense fallback={null}>
         <PromotionsExplorer />

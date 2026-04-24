@@ -8,6 +8,7 @@ import { createLogger } from "@/lib/utils/logger";
 import { getPaymentMetadata, type PaymentRecordShape } from "./types";
 import { getOwnerColumn, type OwnerColumn } from "@/lib/account/compat";
 import { resolveBillingPlanSelection } from "@/lib/billing/plan-resolver";
+import { validateCanonicalPaidPlan, type CanonicalPlanRow } from "@/lib/billing/plan-catalog";
 
 const log = createLogger("PaymentFulfillment");
 const SYSTEM_ACTOR_ID = "00000000-0000-0000-0000-000000000000";
@@ -31,6 +32,37 @@ function buildInvoiceNumber(payment: PaymentRecordShape): string {
   const sastMs = utcMs + 2 * 60 * 60 * 1000;
   const date = new Date(sastMs).toISOString().slice(0, 10).replace(/-/g, "");
   return `INV-${date}-${payment.id.slice(0, 8).toUpperCase()}`;
+}
+
+function assertPaidPlanMatchesPayment(
+  payment: PaymentRecordShape,
+  meta: Record<string, unknown>,
+  plan: CanonicalPlanRow
+): void {
+  const catalogError = validateCanonicalPaidPlan(plan);
+  if (catalogError) {
+    throw new Error(`Paid plan validation failed: ${catalogError}`);
+  }
+
+  if (payment.area !== plan.area) {
+    throw new Error(
+      `Payment area mismatch: payment ${payment.area} does not match plan ${plan.area}`
+    );
+  }
+
+  if (payment.amount_cents !== plan.price_cents) {
+    throw new Error(
+      `Payment amount mismatch: payment ${payment.amount_cents} does not match plan ${plan.price_cents}`
+    );
+  }
+
+  if (meta.area !== plan.area) {
+    throw new Error("Payment metadata area does not match canonical plan");
+  }
+
+  if (meta.plan_tier !== plan.tier) {
+    throw new Error("Payment metadata tier does not match canonical plan");
+  }
 }
 
 type AdminClient = {
@@ -139,13 +171,23 @@ export async function fulfillPayment(
 
   const planId = typeof meta.plan_id === "string" ? meta.plan_id : null;
   if (planId) {
-    const { plan, error: planError } = await resolveBillingPlanSelection(supabase as never, planId);
+    const { plan, error: planError } = await resolveBillingPlanSelection(
+      supabase as never,
+      planId,
+      { requireActive: true }
+    );
 
     if (planError) {
       throw new Error(`Plan lookup failed: ${planError.message}`);
     }
 
-    if (plan?.tier && plan?.area) {
+    if (!plan?.tier || !plan?.area) {
+      throw new Error(`Plan ${planId} not found or inactive — cannot fulfil subscription`);
+    }
+
+    if (plan.tier && plan.area) {
+      assertPaidPlanMatchesPayment(payment, meta, plan as CanonicalPlanRow);
+
       // Check account status before creating active entitlements
       const { data: accountProfile } = await supabase
         .from("account_profiles")

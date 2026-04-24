@@ -427,6 +427,64 @@ describe("POST /api/billing/create-checkout", () => {
     );
   });
 
+  it("starts checkout for the Mzansi Market Basic package", async () => {
+    const canonicalPlanId = "b0cc0d82-b2ff-4cae-a0c2-3c7209925c98";
+    const stablePlanToken = getStablePlanId("MZANSI_MARKET", "basic");
+
+    mockSupabase.auth.getUser.mockResolvedValue({
+      data: { user: { ...CONFIRMED_USER, email: "member@test.com" } },
+    });
+
+    mockAdmin.from.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id: "profile-1", display_name: "Test Account" },
+          }),
+        };
+      }
+      if (table === "plans") {
+        return createPlansTableMock(
+          [
+            {
+              id: canonicalPlanId,
+              name: "Mzansi Market Basic",
+              area: "MZANSI_MARKET",
+              tier: "basic",
+              price_cents: 3000,
+              active: true,
+            },
+          ],
+          { requireDirectIdMiss: true }
+        );
+      }
+      if (table === "entitlements") {
+        return createEntitlementsTableMock({ data: null });
+      }
+      if (table === "payments") {
+        return createPaymentsSelectMock({ data: null });
+      }
+    });
+
+    const res = await createCheckout(createMockRequest({ planId: stablePlanToken }));
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(vi.mocked(createHostedCheckout)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amountCents: 3000,
+        providerData: expect.objectContaining({
+          plan_id: canonicalPlanId,
+          plan_tier: "basic",
+          area: "MZANSI_MARKET",
+        }),
+      })
+    );
+  });
+
   it("returns 503 when Ozow credentials are missing", async () => {
     vi.mocked(createHostedCheckout).mockRejectedValueOnce(
       new OzowConfigurationError("Ozow credentials are not configured")

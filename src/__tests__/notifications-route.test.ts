@@ -4,6 +4,9 @@ import type { NextRequest } from "next/server";
 const { mockCreateClient } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
 }));
+const { mockCheckLocalRateLimit } = vi.hoisted(() => ({
+  mockCheckLocalRateLimit: vi.fn().mockReturnValue({ limited: false }),
+}));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: mockCreateClient,
@@ -13,6 +16,9 @@ vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ error: vi.fn(), warn: vi.fn(), info: vi.fn() }),
 }));
 vi.mock("@/lib/utils/csrf", () => ({ enforceCsrfToken: vi.fn().mockReturnValue(null) }));
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkLocalRateLimit: mockCheckLocalRateLimit,
+}));
 
 import { DELETE, GET, PATCH } from "@/app/api/notifications/route";
 
@@ -37,6 +43,7 @@ function createRequest(
 describe("/api/notifications", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCheckLocalRateLimit.mockReturnValue({ limited: false });
   });
 
   it("rejects invalid GET limits", async () => {
@@ -150,5 +157,28 @@ describe("/api/notifications", () => {
 
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({ success: true });
+  });
+
+  it("rate limits notification deletes by authenticated user", async () => {
+    mockCheckLocalRateLimit.mockReturnValue({ limited: true, retryAfter: 45 });
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
+    });
+
+    const res = await DELETE(
+      createRequest("DELETE", "http://localhost:3000/api/notifications", {
+        id: "00000000-0000-4000-8000-000000000001",
+      })
+    );
+
+    expect(mockCheckLocalRateLimit).toHaveBeenCalledWith("user-1", "notifications:delete");
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("45");
+    await expect(res.json()).resolves.toEqual({
+      error: "Too many requests. Please try again later.",
+      retryAfter: 45,
+    });
   });
 });

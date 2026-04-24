@@ -17,6 +17,7 @@ import {
   diffRemovedMediaUrls,
   queuePublicMediaCleanup,
 } from "@/lib/services/media-cleanup";
+import { confirmMediaUploads } from "@/lib/media/confirm-media-uploads";
 import {
   BUSINESS_SLUG_CONFLICT_RESPONSE,
   isBusinessSlugConflictError,
@@ -355,6 +356,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       log.error("Failed to update business", { error: updateError.message });
       return NextResponse.json({ error: "Failed to update business" }, { status: 500 });
     }
+
+    await confirmMediaUploads({
+      supabase: admin,
+      userId: user.id,
+      urls: nextMediaUrls,
+      contentType: "business",
+      contentId: id,
+    });
 
     if (removedMediaUrls.length > 0) {
       try {

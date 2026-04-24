@@ -12,6 +12,7 @@ function createMockAdminClient(options?: {
   existingInvoice?: boolean;
   previousEntitlementStatus?: "active" | "cancelled" | null;
   planRows?: Array<Record<string, unknown>>;
+  accountStatus?: "active" | "restricted";
 }) {
   const invoiceInsert = vi.fn().mockResolvedValue({ error: null });
   const entitlementsUpsert = vi.fn().mockResolvedValue({ error: null });
@@ -23,7 +24,15 @@ function createMockAdminClient(options?: {
 
   const from = vi.fn((table: string) => {
     if (table === "plans") {
-      const rows = options?.planRows ?? [{ id: "plan-1", tier: "growth", area: "MZANSI_MARKET" }];
+      const rows = options?.planRows ?? [
+        {
+          id: "plan-1",
+          tier: "growth",
+          area: "MZANSI_MARKET",
+          price_cents: 25000,
+          active: true,
+        },
+      ];
       return {
         select: vi.fn().mockReturnValue({
           eq(column: string, value: unknown) {
@@ -105,7 +114,7 @@ function createMockAdminClient(options?: {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({
-          data: { account_status: "active" },
+          data: { account_status: options?.accountStatus ?? "active" },
         }),
       };
     }
@@ -149,6 +158,8 @@ describe("fulfillPayment invoice creation", () => {
       provider_data: {
         type: "subscription",
         plan_id: "plan-1",
+        plan_tier: "growth",
+        area: "MZANSI_MARKET",
       },
       created_at: "2026-03-26T10:00:00.000Z",
     });
@@ -181,6 +192,8 @@ describe("fulfillPayment invoice creation", () => {
       provider_data: {
         type: "subscription",
         plan_id: "plan-1",
+        plan_tier: "growth",
+        area: "MZANSI_MARKET",
       },
       created_at: "2026-03-26T10:00:00.000Z",
     });
@@ -193,14 +206,22 @@ describe("fulfillPayment invoice creation", () => {
     const mock = createMockAdminClient({
       existingInvoice: false,
       previousEntitlementStatus: "active",
-      planRows: [{ id: "plan-2", tier: "growth", area: "MZANSI_MARKET", active: true }],
+      planRows: [
+        {
+          id: "plan-2",
+          tier: "growth",
+          area: "MZANSI_MARKET",
+          price_cents: 25000,
+          active: true,
+        },
+      ],
     });
 
     await fulfillPayment(mock.client as never, {
       id: "pay-plan-change",
       user_id: "user-1",
       area: "MZANSI_MARKET",
-      amount_cents: 30000,
+      amount_cents: 25000,
       status: "processing",
       provider: "ozow",
       provider_payment_id: "ozow-plan-change",
@@ -208,6 +229,8 @@ describe("fulfillPayment invoice creation", () => {
       provider_data: {
         type: "subscription",
         plan_id: "plan-2",
+        plan_tier: "growth",
+        area: "MZANSI_MARKET",
         is_plan_change: true,
         previous_entitlement_id: "ent-prev-1",
       },
@@ -244,6 +267,8 @@ describe("fulfillPayment invoice creation", () => {
       provider_data: {
         type: "subscription",
         plan_id: getStablePlanId("MZANSI_MARKET", "growth"),
+        plan_tier: "growth",
+        area: "MZANSI_MARKET",
       },
       created_at: "2026-03-26T10:00:00.000Z",
     });
@@ -255,6 +280,160 @@ describe("fulfillPayment invoice creation", () => {
       }),
       { onConflict: "user_id,area,type" }
     );
+  });
+
+  it("fulfils the Mzansi Market Basic package", async () => {
+    const mock = createMockAdminClient({
+      planRows: [
+        {
+          id: "basic-plan",
+          area: "MZANSI_MARKET",
+          tier: "basic",
+          name: "Mzansi Market Basic",
+          price_cents: 3000,
+          active: true,
+        },
+      ],
+    });
+
+    await fulfillPayment(mock.client as never, {
+      id: "pay-basic",
+      user_id: "user-1",
+      area: "MZANSI_MARKET",
+      amount_cents: 3000,
+      status: "processing",
+      provider: "ozow",
+      provider_payment_id: "ozow-basic",
+      provider_reference: "pay-basic",
+      provider_data: {
+        type: "subscription",
+        plan_id: "basic-plan",
+        plan_tier: "basic",
+        area: "MZANSI_MARKET",
+      },
+      created_at: "2026-03-26T10:00:00.000Z",
+    });
+
+    expect(mock.spies.entitlementsUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        area: "MZANSI_MARKET",
+        tier: "basic",
+        status: "active",
+      }),
+      { onConflict: "user_id,area,type" }
+    );
+  });
+
+  it("keeps restricted accounts in pending_verification after payment", async () => {
+    const mock = createMockAdminClient({ accountStatus: "restricted" });
+
+    await fulfillPayment(mock.client as never, {
+      id: "pay-restricted",
+      user_id: "user-1",
+      area: "MZANSI_MARKET",
+      amount_cents: 25000,
+      status: "processing",
+      provider: "ozow",
+      provider_payment_id: "ozow-restricted",
+      provider_reference: "pay-restricted",
+      provider_data: {
+        type: "subscription",
+        plan_id: "plan-1",
+        plan_tier: "growth",
+        area: "MZANSI_MARKET",
+      },
+      created_at: "2026-03-26T10:00:00.000Z",
+    });
+
+    expect(mock.spies.entitlementsUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "pending_verification",
+      }),
+      { onConflict: "user_id,area,type" }
+    );
+  });
+
+  it("rejects subscription fulfillment when the paid amount does not match the plan", async () => {
+    const mock = createMockAdminClient();
+
+    await expect(
+      fulfillPayment(mock.client as never, {
+        id: "pay-amount-mismatch",
+        user_id: "user-1",
+        area: "MZANSI_MARKET",
+        amount_cents: 100,
+        status: "processing",
+        provider: "ozow",
+        provider_payment_id: "ozow-amount-mismatch",
+        provider_reference: "pay-amount-mismatch",
+        provider_data: {
+          type: "subscription",
+          plan_id: "plan-1",
+          plan_tier: "growth",
+          area: "MZANSI_MARKET",
+        },
+        created_at: "2026-03-26T10:00:00.000Z",
+      })
+    ).rejects.toThrow("Payment amount mismatch");
+  });
+
+  it("rejects subscription fulfillment when metadata tier is tampered", async () => {
+    const mock = createMockAdminClient();
+
+    await expect(
+      fulfillPayment(mock.client as never, {
+        id: "pay-tier-mismatch",
+        user_id: "user-1",
+        area: "MZANSI_MARKET",
+        amount_cents: 25000,
+        status: "processing",
+        provider: "ozow",
+        provider_payment_id: "ozow-tier-mismatch",
+        provider_reference: "pay-tier-mismatch",
+        provider_data: {
+          type: "subscription",
+          plan_id: "plan-1",
+          plan_tier: "pro",
+          area: "MZANSI_MARKET",
+        },
+        created_at: "2026-03-26T10:00:00.000Z",
+      })
+    ).rejects.toThrow("metadata tier");
+  });
+
+  it("rejects inactive plans during subscription fulfillment", async () => {
+    const mock = createMockAdminClient({
+      planRows: [
+        {
+          id: "inactive-plan",
+          area: "MZANSI_MARKET",
+          tier: "growth",
+          name: "Inactive Growth",
+          price_cents: 25000,
+          active: false,
+        },
+      ],
+    });
+
+    await expect(
+      fulfillPayment(mock.client as never, {
+        id: "pay-inactive-plan",
+        user_id: "user-1",
+        area: "MZANSI_MARKET",
+        amount_cents: 25000,
+        status: "processing",
+        provider: "ozow",
+        provider_payment_id: "ozow-inactive-plan",
+        provider_reference: "pay-inactive-plan",
+        provider_data: {
+          type: "subscription",
+          plan_id: "inactive-plan",
+          plan_tier: "growth",
+          area: "MZANSI_MARKET",
+        },
+        created_at: "2026-03-26T10:00:00.000Z",
+      })
+    ).rejects.toThrow("not found or inactive");
   });
 
   it("supports nested provider metadata for listing boosts", async () => {
@@ -324,6 +503,8 @@ describe("fulfillPayment invoice creation", () => {
         provider_data: {
           type: "subscription",
           plan_id: "plan-1",
+          plan_tier: "growth",
+          area: "MZANSI_MARKET",
         },
         created_at: "2026-03-26T10:00:00.000Z",
       })

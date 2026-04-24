@@ -51,6 +51,7 @@ import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
 import { getContentLikeSummaryMap, getContentViewCountMap } from "@/lib/engagement-server";
 import { enforceVerifiedPostingAccess } from "@/app/api/_lib/verified-posting-access";
 import { buildBusinessMutationPayload } from "@/app/api/businesses/_lib/build-business-mutation-payload";
+import { confirmMediaUploads } from "@/lib/media/confirm-media-uploads";
 
 const log = createLogger("BusinessesCRUD");
 const AREA: MarketplaceArea = "MZANSI_BUSINESS";
@@ -346,6 +347,20 @@ export async function POST(request: NextRequest) {
       }
       return NextResponse.json({ error: "Failed to create business" }, { status: 500 });
     }
+
+    await confirmMediaUploads({
+      supabase: getAdmin(),
+      userId: user.id,
+      contentType: "business",
+      contentId: business.id,
+      urls: [
+        data.logo_url,
+        data.cover_photo,
+        data.cover_video,
+        data.video_thumbnail,
+        ...(data.gallery_photos ?? []),
+      ],
+    });
 
     // Audit (best-effort)
     try {

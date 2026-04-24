@@ -34,7 +34,7 @@ vi.mock("@/lib/supabase/playwright-mode", () => ({
 import { PwaInstallPrompt } from "./pwa-install-prompt";
 
 describe("PwaInstallPrompt", () => {
-  let currentPath = "/";
+  let currentPath = "/advertise";
   let standaloneMode = false;
 
   beforeEach(() => {
@@ -42,7 +42,7 @@ describe("PwaInstallPrompt", () => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
 
-    currentPath = "/";
+    currentPath = "/advertise";
     standaloneMode = false;
 
     mockUsePathname.mockImplementation(() => currentPath);
@@ -149,6 +149,34 @@ describe("PwaInstallPrompt", () => {
 
     expect(screen.queryByText("Install App")).toBeNull();
     expect(screen.queryByRole("button", { name: "How To Install" })).toBeNull();
+  });
+
+  it("waits until the home hero has been scrolled past before showing the prompt", async () => {
+    currentPath = "/";
+    render(<PwaInstallPrompt />);
+
+    const beforeInstallPromptEvent = new Event("beforeinstallprompt");
+    Object.assign(beforeInstallPromptEvent, {
+      prompt: vi.fn().mockResolvedValue(undefined),
+      userChoice: Promise.resolve({ outcome: "dismissed", platform: "web" }),
+    });
+
+    await act(async () => {
+      window.dispatchEvent(beforeInstallPromptEvent);
+    });
+
+    expect(screen.queryByText("Install App")).toBeNull();
+
+    Object.defineProperty(window, "scrollY", {
+      configurable: true,
+      value: 420,
+    });
+
+    await act(async () => {
+      fireEvent.scroll(window);
+    });
+
+    expect(await screen.findByText("Install App")).toBeTruthy();
   });
 
   it.each([

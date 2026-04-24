@@ -15,6 +15,7 @@ import {
   diffRemovedMediaUrls,
   queuePublicMediaCleanup,
 } from "@/lib/services/media-cleanup";
+import { confirmMediaUploads } from "@/lib/media/confirm-media-uploads";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
 import {
   applyOwnerFilter,
@@ -295,9 +296,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       );
     }
 
+    const admin = createAdminClient();
+    await confirmMediaUploads({
+      supabase: admin,
+      userId: user.id,
+      urls: collectMediaUrls(data.images, videoUrls, nextVideoThumbnail, nextLogoUrl),
+      contentType: "listing",
+      contentId: listingId,
+    });
+
     if (removedMediaUrls.length > 0) {
       try {
-        const admin = createAdminClient();
         await queuePublicMediaCleanup(admin, removedMediaUrls, "listing_media_replaced");
       } catch (cleanupError) {
         log.error("Failed to queue replaced listing media for cleanup", {

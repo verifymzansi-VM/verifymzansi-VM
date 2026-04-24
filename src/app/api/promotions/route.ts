@@ -51,6 +51,7 @@ import { z } from "zod";
 import { claimFreePostSlot, releaseFreePostSlot } from "@/lib/billing/free-posts";
 import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
 import { getContentLikeSummaryMap, getContentViewCountMap } from "@/lib/engagement-server";
+import { confirmMediaUploads } from "@/lib/media/confirm-media-uploads";
 
 const log = createLogger("PromotionsCRUD");
 const AREA: MarketplaceArea = "PROMOTIONS_EVENTS";
@@ -525,6 +526,14 @@ export async function POST(request: NextRequest) {
         );
       }
     }
+
+    await confirmMediaUploads({
+      supabase: getAdmin(),
+      userId: user.id,
+      contentType: "promotion",
+      contentId: promotion.id,
+      urls: [...data.images, ...data.videos, data.video_thumbnail, data.logo_url],
+    });
 
     // Audit (best-effort)
     try {

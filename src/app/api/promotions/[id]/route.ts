@@ -11,6 +11,7 @@ import {
   diffRemovedMediaUrls,
   queuePublicMediaCleanup,
 } from "@/lib/services/media-cleanup";
+import { confirmMediaUploads } from "@/lib/media/confirm-media-uploads";
 import {
   applyOwnerFilter,
   getOwnerColumn,
@@ -56,6 +57,7 @@ type PromotionOwnerRow = {
   photos?: string[] | null;
   videos?: string[] | null;
   video_thumbnail?: string | null;
+  logo_url?: string | null;
   media_width?: number | null;
   media_height?: number | null;
   focal_x?: number | null;
@@ -201,7 +203,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         .from("promotions")
         .select(
           withOwnerColumn(
-            "id, owner_id, status, title, description, promotion_type, category, category_key, business_id, photos, videos, video_thumbnail, media_width, media_height, focal_x, focal_y, price_cents, price_negotiable, location_province, location_city, location_town, location_address, contact_methods, start_date, end_date, event_details",
+            "id, owner_id, status, title, description, promotion_type, category, category_key, business_id, photos, videos, video_thumbnail, logo_url, media_width, media_height, focal_x, focal_y, price_cents, price_negotiable, location_province, location_city, location_town, location_address, contact_methods, start_date, end_date, event_details",
             ownerColumn
           )
         )
@@ -267,8 +269,18 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const removedMediaUrls = diffRemovedMediaUrls(
-      collectMediaUrls(existing.photos, existing.videos, existing.video_thumbnail),
-      collectMediaUrls(data.images, data.videos, data.video_thumbnail || null)
+      collectMediaUrls(
+        existing.photos,
+        existing.videos,
+        existing.video_thumbnail,
+        existing.logo_url
+      ),
+      collectMediaUrls(
+        data.images,
+        data.videos,
+        data.video_thumbnail || null,
+        data.logo_url || null
+      )
     );
 
     const priceCents =
@@ -335,9 +347,22 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Failed to update promotion" }, { status: 500 });
     }
 
+    const admin = createAdminClient();
+    await confirmMediaUploads({
+      supabase: admin,
+      userId: user.id,
+      urls: collectMediaUrls(
+        data.images,
+        data.videos,
+        data.video_thumbnail || null,
+        data.logo_url || null
+      ),
+      contentType: "promotion",
+      contentId: id,
+    });
+
     if (removedMediaUrls.length > 0) {
       try {
-        const admin = createAdminClient();
         await queuePublicMediaCleanup(admin, removedMediaUrls, "promotion_media_replaced");
       } catch (cleanupError) {
         log.error("Failed to queue replaced promotion media for cleanup", {
@@ -397,7 +422,7 @@ export const DELETE = createOwnedContentDeleteRoute<{ id: string }, PromotionOwn
   paramsSchema: promotionIdParamsSchema,
   validationErrorMessage: "Invalid promotion ID",
   table: "promotions",
-  ownerSelect: "id, owner_id, status, photos, videos, video_thumbnail",
+  ownerSelect: "id, owner_id, status, photos, videos, video_thumbnail, logo_url",
   rateLimitKey: "promotion:delete",
   notFoundMessage: "Promotion not found",
   invalidStatusMessage: "Only draft or rejected promotions can be deleted",
@@ -410,5 +435,5 @@ export const DELETE = createOwnedContentDeleteRoute<{ id: string }, PromotionOwn
   getEntityId: ({ id }) => id,
   canDelete: (existing) => ["draft", "rejected"].includes(existing.status),
   collectDeletedMediaUrls: (existing) =>
-    collectMediaUrls(existing.photos, existing.videos, existing.video_thumbnail),
+    collectMediaUrls(existing.photos, existing.videos, existing.video_thumbnail, existing.logo_url),
 });

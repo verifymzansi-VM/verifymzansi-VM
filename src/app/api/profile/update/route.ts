@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
 
     // Secondary user-scoped rate limit to prevent bypass via IP rotation
     const userRateCheck = await checkRateLimit({
-      key: `${user.id}:${ip}`,
+      key: user.id,
       action: "profile:update",
     });
     if (userRateCheck.limited) {

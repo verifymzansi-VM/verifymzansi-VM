@@ -238,7 +238,9 @@ export async function PATCH(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const mutation = await prepareNotificationMutation(request);
+    const mutation = await prepareNotificationMutation(request, {
+      rateLimitKey: "notifications:delete",
+    });
     if (mutation.response) {
       return mutation.response;
     }

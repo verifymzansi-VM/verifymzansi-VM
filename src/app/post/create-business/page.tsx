@@ -2071,7 +2071,10 @@ function CreateBusinessContent() {
                     <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                       <div id="business-logo" tabIndex={-1} className="space-y-2 rounded-lg">
                         <MediaUpload
+                          id="business-logo-input"
                           label="Business logo (optional)"
+                          description="Optional square icon shown beside your business name in cards and search."
+                          error={fieldErrors.logo_url}
                           maxFiles={1}
                           files={logoFile}
                           onChange={(files) => {
@@ -2079,10 +2082,8 @@ function CreateBusinessContent() {
                             clearErrors("logo_url");
                           }}
                           accept="image/*"
+                          recommendedAspect="Recommended: square image, at least 96 x 96."
                         />
-                        {fieldErrors.logo_url && (
-                          <p className="inline-form-error">{fieldErrors.logo_url}</p>
-                        )}
                         <p className="text-xs text-muted-foreground">
                           Square icon (96×96) shown beside your business name on cards and search
                           results.
@@ -2090,7 +2091,10 @@ function CreateBusinessContent() {
                       </div>
                       <div id="business-cover-photo" tabIndex={-1} className="space-y-2 rounded-lg">
                         <MediaUpload
+                          id="business-cover-photo-input"
                           label="Cover photo (optional)"
+                          description="Optional wide brand backdrop for your public profile."
+                          error={fieldErrors.cover_photo}
                           maxFiles={1}
                           files={coverFile}
                           onChange={(files) => {
@@ -2098,10 +2102,8 @@ function CreateBusinessContent() {
                             clearErrors("cover_photo");
                           }}
                           accept="image/*"
+                          recommendedAspect="Recommended: wide landscape image around 4:1."
                         />
-                        {fieldErrors.cover_photo && (
-                          <p className="inline-form-error">{fieldErrors.cover_photo}</p>
-                        )}
                         <p className="text-xs text-muted-foreground">
                           This still supports a banner, but the public profile now gives stronger
                           focus to portrait lead media. Use this for a broad brand backdrop only.
@@ -2171,7 +2173,10 @@ function CreateBusinessContent() {
 
                     <div id="business-gallery" className="space-y-2 rounded-lg">
                       <MediaUpload
+                        id="business-gallery-input"
                         label={`Profile photos (up to ${maxPhotos})`}
+                        description="Optional but recommended. The first image appears on cards when no video is used."
+                        error={fieldErrors.gallery_photos}
                         maxFiles={maxPhotos}
                         files={galleryFiles}
                         onChange={(files) => {
@@ -2237,15 +2242,14 @@ function CreateBusinessContent() {
                           </div>
                         </div>
                       )}
-                      {fieldErrors.gallery_photos && (
-                        <p className="inline-form-error">{fieldErrors.gallery_photos}</p>
-                      )}
                     </div>
 
                     {businessType === "mall_store" && (
                       <div className="space-y-2 rounded-lg">
                         <MediaUpload
+                          id="business-mall-photos-input"
                           label="Mall photos (optional, up to 10)"
+                          description="Optional wayfinding photos that help customers find your store."
                           maxFiles={10}
                           files={mallPhotoFiles}
                           onChange={setMallPhotoFiles}
@@ -2261,7 +2265,10 @@ function CreateBusinessContent() {
 
                     <div id="business-cover-video" className="space-y-2 rounded-lg">
                       <MediaUpload
+                        id="business-cover-video-input"
                         label={`Video (optional)${!videoAllowed ? " — Upgrade to unlock" : ""}`}
+                        description="Optional single intro video. Business profiles support one cover video."
+                        error={fieldErrors.cover_video}
                         maxFiles={1}
                         files={promoVideoFile}
                         onChange={(files) => {
@@ -2276,9 +2283,6 @@ function CreateBusinessContent() {
                         <Film className="h-3 w-3" />A short intro video works best. Portrait 9:16 is
                         recommended because the public profile now uses a poster-style hero.
                       </p>
-                      {fieldErrors.cover_video && (
-                        <p className="inline-form-error">{fieldErrors.cover_video}</p>
-                      )}
                     </div>
 
                     {promoVideoFile.length > 0 && (
@@ -2300,7 +2304,10 @@ function CreateBusinessContent() {
                           </summary>
                           <div className="mt-2">
                             <MediaUpload
+                              id="business-video-thumbnail-input"
                               label="Custom thumbnail"
+                              description="Optional poster image shown before the video starts."
+                              error={fieldErrors.video_thumbnail}
                               maxFiles={1}
                               files={videoThumbnailFile}
                               onChange={(files) => {
@@ -2314,9 +2321,6 @@ function CreateBusinessContent() {
                             </p>
                           </div>
                         </details>
-                        {fieldErrors.video_thumbnail && (
-                          <p className="inline-form-error">{fieldErrors.video_thumbnail}</p>
-                        )}
                       </div>
                     )}
 

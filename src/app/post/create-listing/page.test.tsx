@@ -73,6 +73,7 @@ vi.mock("next/link", () => ({
 vi.mock("@/components/billing/plan-gate", () => ({
   PlanGate: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   usePlanMaxPhotos: () => 5,
+  usePlanMaxVideos: () => 1,
   usePlanVideoAllowed: () => true,
 }));
 
@@ -117,19 +118,30 @@ vi.mock("@/components/listings/category-picker", () => ({
 }));
 
 vi.mock("@/components/ui/media-upload", () => ({
-  MediaUpload: ({ label, onChange }: { label: string; onChange?: (files: File[]) => void }) => (
-    <button
-      type="button"
-      onClick={() =>
-        onChange?.([
-          new File(["mock"], label.toLowerCase().includes("video") ? "clip.mp4" : "logo.png", {
-            type: label.toLowerCase().includes("video") ? "video/mp4" : "image/png",
-          }),
-        ])
-      }
-    >
-      {label}
-    </button>
+  MediaUpload: ({
+    label,
+    error,
+    onChange,
+  }: {
+    label: string;
+    error?: string;
+    onChange?: (files: File[]) => void;
+  }) => (
+    <div>
+      <button
+        type="button"
+        onClick={() =>
+          onChange?.([
+            new File(["mock"], label.toLowerCase().includes("video") ? "clip.mp4" : "logo.png", {
+              type: label.toLowerCase().includes("video") ? "video/mp4" : "image/png",
+            }),
+          ])
+        }
+      >
+        {label}
+      </button>
+      {error ? <p>{error}</p> : null}
+    </div>
   ),
 }));
 

@@ -7,8 +7,9 @@ const { mockCreateClient, mockCookies } = vi.hoisted(() => ({
   mockCookies: vi.fn(),
 }));
 
-const { carouselSpy } = vi.hoisted(() => ({
+const { carouselSpy, trustStripSpy } = vi.hoisted(() => ({
   carouselSpy: vi.fn(),
+  trustStripSpy: vi.fn(),
 }));
 
 vi.mock("next/headers", () => ({
@@ -30,7 +31,10 @@ vi.mock("@/components/showrooms/showroom-card-carousel", () => ({
 }));
 
 vi.mock("@/components/layout/trust-strip", () => ({
-  TrustStrip: () => <div data-testid="trust-strip" />,
+  TrustStrip: (props: { title?: string; variant?: string }) => {
+    trustStripSpy(props);
+    return <div data-testid="trust-strip" />;
+  },
 }));
 
 vi.mock("./grid", () => ({
@@ -103,9 +107,20 @@ describe("MzansiBusinessPage", () => {
     expect(carouselSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         background: expect.objectContaining({
-          src: "/images/showrooms/mzansi-business-cafe.jpg",
+          src: "/images/showrooms/mzansi-business-cafe.webp",
           overlayPreset: "business",
         }),
+      })
+    );
+  });
+
+  it("labels the trust strip for the business route", async () => {
+    render(await MzansiBusinessPage());
+
+    expect(trustStripSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variant: "blue",
+        title: "Latest Mzansi Businesses",
       })
     );
   });

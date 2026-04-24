@@ -52,6 +52,7 @@ import {
 import { claimFreePostSlot, releaseFreePostSlot } from "@/lib/billing/free-posts";
 import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
 import { getContentLikeSummaryMap, getContentViewCountMap } from "@/lib/engagement-server";
+import { confirmMediaUploads } from "@/lib/media/confirm-media-uploads";
 
 const log = createLogger("ListingCreate");
 const AREA: MarketplaceArea = "MZANSI_MARKET";
@@ -1038,6 +1039,14 @@ export async function POST(request: NextRequest) {
         );
       }
     }
+
+    await confirmMediaUploads({
+      supabase: getAdmin(),
+      userId: user.id,
+      contentType: "listing",
+      contentId: newListing.id,
+      urls: [...data.images, ...data.videos, data.videoThumbnail, data.logo_url],
+    });
 
     // ── Audit log (best-effort) ────────────────────────────────
     try {
