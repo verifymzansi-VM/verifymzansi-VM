@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [main]
   pull_request:
-    branches: [master]
+    branches: [main]
   workflow_dispatch:
 
 env:
@@ -81,7 +81,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Coverage gate
         env:
-          STRICT_COVERAGE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && 'true' || 'false' }}
+          STRICT_COVERAGE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}
         run: pnpm run test:coverage
       - name: Preflight (non-blocking in CI)
         run: pnpm run preflight || echo "::warning::Preflight checks failed (expected in CI without production secrets)"
@@ -216,7 +216,7 @@ jobs:
   e2e-full-matrix:
     runs-on: ubuntu-latest
     continue-on-error: true
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     needs: [e2e-smoke, launch-flows-bundle, db-rls]
     strategy:
       fail-fast: false
@@ -245,7 +245,7 @@ jobs:
 
   perf-baseline:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: e2e-full-matrix
     steps:
       - name: Check staging URL is configured
@@ -280,7 +280,7 @@ jobs:
 
   k6-advisory:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     continue-on-error: true
     needs: perf-baseline
     steps:
