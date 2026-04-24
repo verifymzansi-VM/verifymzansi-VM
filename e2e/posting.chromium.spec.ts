@@ -1,5 +1,5 @@
 import path from "node:path";
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page, type Response } from "@playwright/test";
 import { POSTING_CHROMIUM_STATE } from "./auth-state";
 
 const IMAGE_FIXTURE = path.join(process.cwd(), "src", "app", "icon.png");
@@ -205,6 +205,11 @@ async function completePromotionCreate(page: Page) {
   return { promotionId: promotionId as string, promotionTitle };
 }
 
+async function expectSuccessfulEditSubmission(responsePromise: Promise<Response>) {
+  const response = await responsePromise;
+  expect(response.ok(), `edit request failed with status ${response.status()}`).toBe(true);
+}
+
 test.describe("Posting flows in Chromium", () => {
   test.beforeEach(({ browserName }, testInfo) => {
     test.skip(browserName !== "chromium" || testInfo.project.name !== "chromium");
@@ -239,35 +244,30 @@ test.describe("Posting flows in Chromium", () => {
 
   test("creates, edits, and publicly exposes a market listing", async ({ page }) => {
     const listingId = await completeListingCreate(page);
+    const createdTitle = "Playwright iPhone 15 Pro";
+    const editedTitle = "Playwright iPhone 15 Pro Max";
 
     await page.goto("/mzansi-market");
-    await expect(
-      page.getByRole("heading", { name: "Playwright iPhone 15 Pro" }).first()
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: createdTitle }).first()).toBeVisible();
 
     await page.goto(`/post/edit-listing/${listingId}`);
     // Wait for existing listing data to populate before editing
-    await expect(page.getByLabel(/^Title \*$/)).toHaveValue(/Playwright iPhone 15 Pro/, {
+    await expect(page.getByLabel(/^Title \*$/)).toHaveValue(new RegExp(createdTitle), {
       timeout: 15_000,
     });
-    await page.getByLabel(/^Title \*$/).fill("Playwright iPhone 15 Pro Max");
+    await page.getByLabel(/^Title \*$/).fill(editedTitle);
     const updatePromise = page.waitForResponse(
       (response) =>
         response.url().includes(`/api/listings/${listingId}`) &&
         response.request().method() === "PUT"
     );
     await page.getByRole("button", { name: /Save Changes/i }).click();
-    const updateResponse = await updatePromise;
-    expect(
-      updateResponse.ok(),
-      `listing update failed with status ${updateResponse.status()}`
-    ).toBe(true);
+    await expectSuccessfulEditSubmission(updatePromise);
     await expect(page).toHaveURL(/\/dashboard\/listings/);
 
     await page.goto(`/listing/${listingId}`);
-    await expect(
-      page.getByRole("heading", { name: "Playwright iPhone 15 Pro Max" }).first()
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: createdTitle }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: editedTitle })).toHaveCount(0);
   });
 
   test("creates, edits, and publicly exposes a business", async ({ page }) => {
@@ -282,15 +282,15 @@ test.describe("Posting flows in Chromium", () => {
     const updatePromise = page.waitForResponse(
       (response) =>
         response.url().includes(`/api/businesses/${businessId}`) &&
-        response.request().method() === "PATCH" &&
-        response.ok()
+        response.request().method() === "PATCH"
     );
     await page.getByRole("button", { name: /Save Changes/i }).click();
-    await updatePromise;
+    await expectSuccessfulEditSubmission(updatePromise);
     await expect(page).toHaveURL(BUSINESS_DASHBOARD_URL);
 
     await page.goto(`/mzansi-business/${businessId}`);
-    await expect(page.getByText(updatedBusinessName).first()).toBeVisible();
+    await expect(page.getByText(businessName).first()).toBeVisible();
+    await expect(page.getByText(updatedBusinessName)).toHaveCount(0);
   });
 
   test("creates and edits a promotion", async ({ page }) => {
@@ -305,14 +305,14 @@ test.describe("Posting flows in Chromium", () => {
     const updatePromise = page.waitForResponse(
       (response) =>
         response.url().includes(`/api/promotions/${promotionId}`) &&
-        response.request().method() === "PUT" &&
-        response.ok()
+        response.request().method() === "PUT"
     );
     await page.getByRole("button", { name: /Save Changes/i }).click();
-    await updatePromise;
+    await expectSuccessfulEditSubmission(updatePromise);
     await expect(page).toHaveURL(PROMOTION_DASHBOARD_URL);
 
-    await page.goto("/dashboard/tourism-events");
-    await expect(page.getByText(updatedPromotionTitle).first()).toBeVisible();
+    await page.goto(`/promotion/${promotionId}`);
+    await expect(page.getByText(promotionTitle).first()).toBeVisible();
+    await expect(page.getByText(updatedPromotionTitle)).toHaveCount(0);
   });
 });
