@@ -20,7 +20,7 @@
     "brand:assets": "node scripts/generate-brand-assets.js && node scripts/generate-final-icons.js",
     "build:cloudflare": "node scripts/preflight-cloudflare.js && pnpm exec opennextjs-cloudflare build && node scripts/patch-opennext-og-paths.js",
     "preview:cloudflare": "node scripts/preflight-cloudflare.js && pnpm exec opennextjs-cloudflare build && pnpm exec wrangler dev",
-    "deploy": "pnpm validate:launch-env && node scripts/preflight-cloudflare.js && pnpm exec opennextjs-cloudflare build && pnpm exec opennextjs-cloudflare deploy",
+    "deploy": "pnpm validate:launch-env && node scripts/preflight-cloudflare.js && pnpm exec opennextjs-cloudflare build && pnpm exec opennextjs-cloudflare deploy --env production",
     "start": "next start",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",

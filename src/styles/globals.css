@@ -16,7 +16,7 @@
     /* Local font stacks keep builds deterministic when external font fetches are unavailable. */
     --font-display: "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
     --font-body: "Segoe UI", system-ui, sans-serif;
-    --desktop-page-scale: 0.9;
+    --desktop-page-scale: 1;
 
     --background: 0 0% 100%;
     --foreground: 30 20% 12%;
@@ -123,24 +123,24 @@
 
   @media (min-width: 1024px) {
     .desktop-page-scale {
-      width: calc(100% / var(--desktop-page-scale));
-      margin-inline: calc((100% - (100% / var(--desktop-page-scale))) / 2);
+      width: 100%;
+      margin-inline: 0;
       overflow-x: hidden;
       overflow-x: clip;
-      zoom: var(--desktop-page-scale);
+      zoom: 1;
     }
   }
 
   @supports not (zoom: 1) {
     @media (min-width: 1024px) {
       .desktop-page-scale {
-        width: calc(100% / var(--desktop-page-scale));
-        min-height: calc(100vh / var(--desktop-page-scale));
-        margin-inline: calc((100% - (100% / var(--desktop-page-scale))) / 2);
+        width: 100%;
+        min-height: 100vh;
+        margin-inline: 0;
         overflow-x: hidden;
         overflow-x: clip;
-        transform: scale(var(--desktop-page-scale));
-        transform-origin: top center;
+        transform: none;
+        transform-origin: top left;
       }
     }
   }

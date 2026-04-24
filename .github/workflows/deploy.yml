@@ -111,7 +111,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: pnpm exec opennextjs-cloudflare deploy
+        run: pnpm exec opennextjs-cloudflare deploy --env production
 
       - name: Deploy Rate Limiter Worker
         env:
@@ -187,7 +187,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           echo "::warning::Health check failed — rolling back main worker to previous deployment"
-          pnpm exec wrangler rollback --message "Auto-rollback: health check failed" || echo "::error::Rollback failed — manual intervention required"
+          pnpm exec wrangler rollback --env production --message "Auto-rollback: health check failed" || echo "::error::Rollback failed — manual intervention required"
 
       - name: Install Chromium for post-deploy verification
         run: npx playwright install --with-deps chromium

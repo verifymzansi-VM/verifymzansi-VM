@@ -125,11 +125,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="flex min-h-screen flex-col">
       <Header isAuthenticated />
 
-      <div className="flex flex-1">
+      <div className="flex min-w-0 flex-1">
         <DashboardSidebar badges={sidebarBadges} onSignOut={handleSignOut} />
 
         {/* Main content */}
-        <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
+        <main className="min-w-0 flex-1 overflow-y-auto pb-20 md:pb-0">
           <div className="container-page py-6">{children}</div>
         </main>
       </div>
