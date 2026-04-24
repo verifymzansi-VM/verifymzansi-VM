@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
-const { mockCreateClient, mockCheckRateLimit } = vi.hoisted(() => ({
+const { mockCreateClient, mockCreateAdminClient, mockCheckRateLimit } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
+  mockCreateAdminClient: vi.fn(),
   mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: mockCheckRateLimit,
   getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
@@ -45,6 +47,11 @@ describe("POST /api/profile/update", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCheckRateLimit.mockResolvedValue({ limited: false });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        insert: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    });
   });
 
   it("rejects cross-site profile updates", async () => {
@@ -126,15 +133,35 @@ describe("POST /api/profile/update", () => {
   });
 
   it("updates the profile successfully", async () => {
+    const auditInsert = vi.fn().mockResolvedValue({ error: null });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({ insert: auditInsert }),
+    });
     const updateSingle = vi.fn().mockResolvedValue({
-      data: { user_id: "user-1", display_name: "Nomsa" },
+      data: {
+        user_id: "user-1",
+        display_name: "Nomsa",
+        location_province: "Gauteng",
+        location_city: "Johannesburg",
+      },
       error: null,
     });
     const from = vi.fn().mockReturnValue({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       neq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: {
+          legal_name_locked_at: null,
+          location_verified_at: null,
+          account_verification_status: "verified",
+          phone: null,
+          contact_last_phone_change_at: null,
+          location_province: "Free State",
+          location_city: "Sasolburg",
+        },
+        error: null,
+      }),
       update: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
           select: vi.fn().mockReturnValue({
@@ -170,8 +197,79 @@ describe("POST /api/profile/update", () => {
     });
     await expect(res.json()).resolves.toMatchObject({
       success: true,
-      profile: expect.objectContaining({ display_name: "Nomsa" }),
+      profile: expect.objectContaining({
+        display_name: "Nomsa",
+        location_province: "Gauteng",
+        location_city: "Johannesburg",
+      }),
     });
+    expect(auditInsert).toHaveBeenCalledWith({
+      user_id: "user-1",
+      change_type: "location",
+      old_value: { province: "Free State", city: "Sasolburg" },
+      new_value: { province: "Gauteng", city: "Johannesburg" },
+      source: "user",
+    });
+  });
+
+  it("does not update or log location changes after location verification", async () => {
+    const auditInsert = vi.fn().mockResolvedValue({ error: null });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({ insert: auditInsert }),
+    });
+    const update = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: {
+              user_id: "user-1",
+              display_name: "Nomsa",
+              location_province: "Free State",
+              location_city: "Sasolburg",
+            },
+            error: null,
+          }),
+        }),
+      }),
+    });
+
+    const from = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: {
+          legal_name_locked_at: null,
+          location_verified_at: "2026-04-20T10:00:00.000Z",
+          account_verification_status: "verified",
+          phone: null,
+          contact_last_phone_change_at: null,
+          location_province: "Free State",
+          location_city: "Sasolburg",
+        },
+        error: null,
+      }),
+      update,
+    });
+
+    mockCreateClient.mockResolvedValue({
+      from,
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
+      },
+    });
+
+    const res = await POST(
+      createRequest({ displayName: "Nomsa", province: "Gauteng", city: "Johannesburg" })
+    );
+
+    expect(res.status).toBe(200);
+    expect(update).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        location_province: expect.anything(),
+        location_city: expect.anything(),
+      })
+    );
+    expect(auditInsert).not.toHaveBeenCalled();
   });
 
   it("falls back to legacy profile select when policy columns are missing", async () => {

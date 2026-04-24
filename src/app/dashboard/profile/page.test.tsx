@@ -10,13 +10,14 @@ const mockGetUser = vi.fn();
 const mockSignOut = vi.fn();
 const mockSignInWithPassword = vi.fn();
 const mockFrom = vi.fn();
+const mockToast = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush, refresh: mockRefresh }),
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
-  useToast: () => ({ toast: vi.fn() }),
+  useToast: () => ({ toast: mockToast }),
 }));
 
 vi.mock("@/lib/account/verification-summary", () => ({
@@ -41,10 +42,24 @@ vi.mock("@/lib/supabase/client", () => ({
 describe("ProfilePage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true }),
+      })
+    );
     mockSignInWithPassword.mockResolvedValue({ error: null });
 
     mockGetUser.mockResolvedValue({
-      data: { user: { id: "user-1", email: "user@example.com" } },
+      data: {
+        user: {
+          id: "user-1",
+          email: "user@example.com",
+          identities: [{ provider: "email" }],
+          app_metadata: { provider: "email" },
+        },
+      },
     });
 
     mockFrom.mockImplementation((table: string) => {
@@ -193,6 +208,104 @@ describe("ProfilePage", () => {
     });
 
     expect(continueButton).toBeEnabled();
+    window.location.hash = "";
+  });
+
+  it("shows password setup flow for Google-only users", async () => {
+    window.location.hash = "#security";
+    mockGetUser.mockResolvedValue({
+      data: {
+        user: {
+          id: "user-1",
+          email: "user@gmail.com",
+          identities: [{ provider: "google" }],
+          app_metadata: { provider: "google" },
+        },
+      },
+    });
+
+    render(<ProfilePage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Set Password/i })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByLabelText("Current password")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Set Password/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/auth/forgot-password",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ email: "user@gmail.com" }),
+        })
+      );
+    });
+    window.location.hash = "";
+  });
+
+  it("does not require a current password before deleting Google-only accounts", async () => {
+    window.location.hash = "#account";
+    mockGetUser.mockResolvedValue({
+      data: {
+        user: {
+          id: "user-1",
+          email: "user@gmail.com",
+          identities: [{ provider: "google" }],
+          app_metadata: { provider: "google" },
+        },
+      },
+    });
+
+    render(<ProfilePage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "My Profile" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^Delete$/i }));
+    expect(screen.queryByLabelText("Current password")).not.toBeInTheDocument();
+
+    const continueButton = screen.getByRole("button", { name: /^Continue$/i });
+    expect(continueButton).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Type DELETE to confirm"), {
+      target: { value: "DELETE" },
+    });
+    expect(continueButton).toBeEnabled();
+    window.location.hash = "";
+  });
+
+  it("calls account delete API from the delete dialog", async () => {
+    window.location.hash = "#account";
+    render(<ProfilePage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "My Profile" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^Delete$/i }));
+    fireEvent.change(screen.getByLabelText("Type DELETE to confirm"), {
+      target: { value: "DELETE" },
+    });
+    fireEvent.change(screen.getByLabelText("Current password"), {
+      target: { value: "MyPassword123!" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/account/delete",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            confirmation: "DELETE",
+            currentPassword: "MyPassword123!",
+          }),
+        })
+      );
+    });
+    expect(mockPush).toHaveBeenCalledWith("/");
     window.location.hash = "";
   });
 });

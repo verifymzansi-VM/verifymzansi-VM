@@ -85,6 +85,9 @@ export interface ModerationItem {
   service_areas?: { areas?: string[] } | null;
   map_directions?: string | null;
   business_details?: BusinessDetails | null;
+  isEditRequest?: boolean;
+  targetId?: string;
+  current_snapshot?: Record<string, unknown>;
 }
 
 interface ModerationPreviewPanelProps {
@@ -423,6 +426,40 @@ function BusinessModerationPreview({ item }: ModerationPreviewPanelProps) {
   return (
     <ScrollArea className="h-full min-h-0">
       <div className="space-y-5 pr-2 sm:pr-4">
+        {item.isEditRequest && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+            <p className="font-medium">Edit review</p>
+            <p className="mt-1">
+              The live business profile stays public with its current approved details until this
+              edit is approved.
+            </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div className="rounded-md bg-white/70 p-2">
+                <p className="text-xs font-medium text-amber-900">Current live version</p>
+                <p className="mt-1 font-medium">
+                  {typeof item.current_snapshot?.business_name === "string"
+                    ? item.current_snapshot.business_name
+                    : "Untitled business"}
+                </p>
+                {typeof item.current_snapshot?.description === "string" && (
+                  <p className="mt-1 line-clamp-3 text-xs text-amber-800">
+                    {item.current_snapshot.description}
+                  </p>
+                )}
+              </div>
+              <div className="rounded-md bg-white/70 p-2">
+                <p className="text-xs font-medium text-amber-900">Proposed edit</p>
+                <p className="mt-1 font-medium">
+                  {item.business_name || item.title || "Untitled business"}
+                </p>
+                {item.description && (
+                  <p className="mt-1 line-clamp-3 text-xs text-amber-800">{item.description}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -827,6 +864,21 @@ function BusinessModerationPreview({ item }: ModerationPreviewPanelProps) {
 export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
   const [activeIndex, setActiveIndex] = useState(0);
 
+  const currentTitle =
+    typeof item.current_snapshot?.title === "string"
+      ? item.current_snapshot.title
+      : typeof item.current_snapshot?.business_name === "string"
+        ? item.current_snapshot.business_name
+        : null;
+  const currentDescription =
+    typeof item.current_snapshot?.description === "string"
+      ? item.current_snapshot.description
+      : null;
+  const currentPrice =
+    typeof item.current_snapshot?.price_cents === "number"
+      ? item.current_snapshot.price_cents
+      : null;
+
   if (item.area === "MZANSI_BUSINESS") {
     return <BusinessModerationPreview item={item} />;
   }
@@ -869,6 +921,38 @@ export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
   return (
     <div className="h-full min-h-0 overflow-auto">
       <div className="space-y-5 pr-4">
+        {item.isEditRequest && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+            <p className="font-medium">Edit review</p>
+            <p className="mt-1">
+              The live post stays public with its current approved details until this edit is
+              approved.
+            </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div className="rounded-md bg-white/70 p-2">
+                <p className="text-xs font-medium text-amber-900">Current live version</p>
+                <p className="mt-1 font-medium">{currentTitle || "Untitled post"}</p>
+                {currentPrice != null && (
+                  <p className="text-xs text-amber-800">{formatZAR(currentPrice)}</p>
+                )}
+                {currentDescription && (
+                  <p className="mt-1 line-clamp-3 text-xs text-amber-800">{currentDescription}</p>
+                )}
+              </div>
+              <div className="rounded-md bg-white/70 p-2">
+                <p className="text-xs font-medium text-amber-900">Proposed edit</p>
+                <p className="mt-1 font-medium">{item.title || "Untitled post"}</p>
+                {item.price_cents != null && (
+                  <p className="text-xs text-amber-800">{formatZAR(item.price_cents)}</p>
+                )}
+                {item.description && (
+                  <p className="mt-1 line-clamp-3 text-xs text-amber-800">{item.description}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── Media Gallery ─────────────────────────── */}
         {allMedia.length > 0 ? (
           <div className="space-y-2">

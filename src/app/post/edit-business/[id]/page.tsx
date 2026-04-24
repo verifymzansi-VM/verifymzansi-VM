@@ -616,13 +616,18 @@ export default function EditBusinessPage() {
             ? (data.details as Record<string, string>)
             : {}
         );
-        setError(data.error || "Failed to update business");
+        if (data?.code === "edit_limit_reached") {
+          setError("This business profile has already used its two approved edit chances.");
+        } else if (data?.code === "pending_edit_exists") {
+          setError("This business profile already has an edit pending admin review.");
+        } else {
+          setError(data.error || "Failed to update business");
+        }
         return;
       }
 
       toast({
-        title:
-          existingStatus === "live" ? "Updated and resubmitted for review" : "Business updated!",
+        title: existingStatus === "live" ? "Edit submitted for review" : "Business updated!",
         variant: "success",
       });
       setUploadStatuses((c) => ({ ...c, saving: "done" }));

@@ -14,6 +14,7 @@ const { mockCreateClient, mockCreateAdminClient, mockRedirect, mockLoggerError }
 let listingQuery: ReturnType<typeof createQuery> | undefined;
 let businessQuery: ReturnType<typeof createQuery> | undefined;
 let promotionQuery: ReturnType<typeof createQuery> | undefined;
+let editQuery: ReturnType<typeof createQuery> | undefined;
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: mockCreateClient,
@@ -64,6 +65,7 @@ describe("AdminModerationPage", () => {
     listingQuery = undefined;
     businessQuery = undefined;
     promotionQuery = undefined;
+    editQuery = undefined;
 
     mockCreateClient.mockResolvedValue({
       auth: {
@@ -118,6 +120,28 @@ describe("AdminModerationPage", () => {
           return promotionQuery;
         }
 
+        if (table === "content_edit_requests") {
+          editQuery = createQuery([
+            {
+              id: "edit-1",
+              target_type: "listing",
+              target_id: "listing-live-1",
+              owner_id: "user-1",
+              area: "MZANSI_MARKET",
+              status: "pending",
+              created_at: "2026-03-20T11:00:00.000Z",
+              proposed_data: {
+                title: "Used iPhone 15 - updated",
+                category: "electronics",
+              },
+              current_snapshot: {
+                title: "Used iPhone 15",
+              },
+            },
+          ]);
+          return editQuery;
+        }
+
         throw new Error(`Unexpected table ${table}`);
       },
     });
@@ -126,11 +150,12 @@ describe("AdminModerationPage", () => {
   it("aggregates listings, businesses, and promotions into a single moderation queue", async () => {
     render(await AdminModerationPage());
 
-    expect(screen.getByText("3 Pending")).toBeInTheDocument();
-    expect(screen.getByText("queue-size:3")).toBeInTheDocument();
+    expect(screen.getByText("4 Pending")).toBeInTheDocument();
+    expect(screen.getByText("queue-size:4")).toBeInTheDocument();
     expect(screen.getByText("Listing:Used iPhone 15")).toBeInTheDocument();
     expect(screen.getByText("Business:Nomsa Beauty Studio")).toBeInTheDocument();
     expect(screen.getByText("Promotion:Weekend Sale")).toBeInTheDocument();
+    expect(screen.getByText("Listing edit:Used iPhone 15 - updated")).toBeInTheDocument();
     expect(listingQuery?.select).toHaveBeenCalledWith(expect.stringContaining("video_thumbnail"));
     expect(businessQuery?.select).toHaveBeenCalledWith(expect.stringContaining("business_details"));
     expect(businessQuery?.select).toHaveBeenCalledWith(expect.stringContaining("cover_photo"));
@@ -171,6 +196,10 @@ describe("AdminModerationPage", () => {
 
         if (table === "promotions") {
           return createQuery([], { message: "column promotions.logo_url does not exist" });
+        }
+
+        if (table === "content_edit_requests") {
+          return createQuery([]);
         }
 
         throw new Error(`Unexpected table ${table}`);

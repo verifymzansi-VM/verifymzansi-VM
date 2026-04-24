@@ -242,6 +242,7 @@ export interface Listing {
   expires_at: string | null;
   created_at: string;
   updated_at: string;
+  approved_edit_count: number;
 }
 
 /* ── Businesses (Mzansi Business — unified) ────────────── */
@@ -289,6 +290,7 @@ export interface Business {
   published_at: string | null;
   created_at: string;
   updated_at: string;
+  approved_edit_count: number;
 }
 
 /* ── Promotions ─────────────────────────────────────────── */
@@ -336,6 +338,26 @@ export interface Promotion {
   click_count: number;
   entitlement_id: string | null;
   published_at: string | null;
+  created_at: string;
+  updated_at: string;
+  approved_edit_count: number;
+}
+
+export type ContentEditTargetType = "listing" | "business" | "promotion";
+export type ContentEditStatus = "pending" | "approved" | "rejected";
+
+export interface ContentEditRequest {
+  id: string;
+  target_type: ContentEditTargetType;
+  target_id: string;
+  owner_id: string;
+  area: MarketplaceArea;
+  status: ContentEditStatus;
+  proposed_data: Record<string, unknown>;
+  current_snapshot: Record<string, unknown>;
+  reason: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -556,6 +578,17 @@ export interface ContactChangeHistory {
   new_value_hash: string | null;
   requested_at: string;
   applied_at: string | null;
+  source: "user" | "admin" | "system";
+  created_at: string;
+}
+
+/* ── Profile Change History ───────────────────────────────── */
+export interface ProfileChangeHistory {
+  id: string;
+  user_id: string;
+  change_type: "location";
+  old_value: Record<string, unknown>;
+  new_value: Record<string, unknown>;
   source: "user" | "admin" | "system";
   created_at: string;
 }

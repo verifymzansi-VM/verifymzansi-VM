@@ -534,6 +534,14 @@ export default function EditListingPage() {
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         if (res.status === 409) {
+          if (data?.code === "edit_limit_reached") {
+            setFormError("This listing has already used its two approved edit chances.");
+            return;
+          }
+          if (data?.code === "pending_edit_exists") {
+            setFormError("This listing already has an edit pending admin review.");
+            return;
+          }
           setFormError(
             "This listing was modified in another tab or session. Please reload the page and try again."
           );
@@ -546,8 +554,7 @@ export default function EditListingPage() {
       }
 
       toast({
-        title:
-          existingStatus === "live" ? "Updated and resubmitted for review" : "Listing updated!",
+        title: existingStatus === "live" ? "Edit submitted for review" : "Listing updated!",
         variant: "success",
       });
       setUploadStatuses((c) => ({ ...c, saving: "done" }));

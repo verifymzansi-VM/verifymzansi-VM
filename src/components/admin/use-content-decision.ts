@@ -6,10 +6,14 @@ export type ContentDecision = "approve" | "reject";
 
 export function useContentDecision<T extends { id: string }>({
   getArea,
+  getEndpoint = () => "/api/admin/content/decide",
+  getItemId = (item) => item.id,
   onDecisionComplete,
   rejectReasonRequiredMessage,
 }: {
   getArea: (item: T) => string;
+  getEndpoint?: (item: T) => string;
+  getItemId?: (item: T) => string;
   onDecisionComplete?: () => void;
   rejectReasonRequiredMessage: string;
 }) {
@@ -45,12 +49,13 @@ export function useContentDecision<T extends { id: string }>({
     setError("");
 
     try {
-      const res = await fetch("/api/admin/content/decide", {
+      const itemId = getItemId(selectedItem);
+      const isContentEdit = getEndpoint(selectedItem).includes("/content-edits/");
+      const res = await fetch(getEndpoint(selectedItem), {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
-          itemId: selectedItem.id,
-          area: getArea(selectedItem),
+          ...(isContentEdit ? { requestId: itemId } : { itemId, area: getArea(selectedItem) }),
           decision,
           reason: decision === "reject" ? rejectReason : undefined,
         }),

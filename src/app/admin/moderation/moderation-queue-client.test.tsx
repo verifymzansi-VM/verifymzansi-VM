@@ -61,6 +61,19 @@ const items: ModerationItem[] = [
     areaLabel: "Tourism & Events",
     itemType: "Promotion",
   },
+  {
+    id: "edit-1",
+    targetId: "listing-1",
+    title: "Used iPhone 15 - updated",
+    status: "pending",
+    created_at: "2026-03-20T11:00:00.000Z",
+    owner_id: "user-1",
+    area: "MZANSI_MARKET",
+    areaLabel: "Mzansi Market",
+    itemType: "Listing edit",
+    isEditRequest: true,
+    current_snapshot: { title: "Used iPhone 15" },
+  },
 ];
 
 describe("ModerationQueueClient", () => {
@@ -149,6 +162,28 @@ describe("ModerationQueueClient", () => {
     expect(mockRefresh).toHaveBeenCalledTimes(2);
     expect(mockWithCsrfHeaders).toHaveBeenNthCalledWith(2, {
       "Content-Type": "application/json",
+    });
+  });
+
+  it("submits edit review decisions to the content edit endpoint", async () => {
+    render(<ModerationQueueClient items={items} />);
+
+    fireEvent.click(screen.getAllByRole("button", { name: /approve/i })[3]);
+    fireEvent.click(screen.getByRole("button", { name: /^Publish$/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/admin/content-edits/decide",
+        expect.objectContaining({
+          method: "POST",
+          headers: expect.any(Headers),
+          body: JSON.stringify({
+            requestId: "edit-1",
+            decision: "approve",
+            reason: undefined,
+          }),
+        })
+      );
     });
   });
 

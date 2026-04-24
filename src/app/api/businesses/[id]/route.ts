@@ -39,6 +39,13 @@ import { requireAuthenticatedLocalMutation } from "@/app/api/_lib/authenticated-
 import { getPostingEntitlementsOrResponse } from "@/app/api/_lib/posting-entitlements";
 import { buildBusinessMutationPayload } from "@/app/api/businesses/_lib/build-business-mutation-payload";
 import type { MarketplaceArea } from "@/types/enums";
+import {
+  contentEditSubmittedResponse,
+  createContentEditRequest,
+  editLimitReachedResponse,
+  hasPendingContentEdit,
+  isEditLimitReached,
+} from "@/lib/content-edit-requests";
 
 const log = createLogger("BusinessDetail");
 const businessIdParamsSchema = z.object({
@@ -71,6 +78,7 @@ type BusinessOwnerRow = {
   phone?: string | null;
   whatsapp?: string | null;
   email?: string | null;
+  approved_edit_count?: number | null;
 };
 
 function getMallPhotoUrls(details: BusinessDetails | null | undefined): string[] {
@@ -243,7 +251,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         .from("businesses")
         .select(
           withOwnerColumn(
-            "id, owner_id, status, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, media_width, media_height, focal_x, focal_y, business_details",
+            "id, owner_id, status, area, business_name, slug, business_type, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, location_town, location_address, store_number, map_directions, phone, whatsapp, email, website, social_links, operating_hours, services_offered, service_areas, business_details, payment_methods_accepted, delivery_options, layout_template, media_width, media_height, focal_x, focal_y, approved_edit_count",
             ownerColumn
           )
         )
@@ -310,6 +318,36 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json(BUSINESS_SLUG_CONFLICT_RESPONSE, { status: 409 });
     }
 
+    const proposedPayload = buildBusinessMutationPayload(data, {
+      mediaFallbacks: existing,
+    });
+
+    if (existing.status === "live") {
+      if (isEditLimitReached(existing.approved_edit_count)) {
+        return editLimitReachedResponse();
+      }
+
+      try {
+        if (await hasPendingContentEdit(admin, "business", id)) {
+          return NextResponse.json(
+            {
+              error: "This business profile already has an edit pending admin review.",
+              code: "pending_edit_exists",
+              pendingEditExists: true,
+            },
+            { status: 409 }
+          );
+        }
+      } catch (pendingEditError) {
+        log.error("Failed to check pending business edit request", {
+          businessId: id,
+          userId: user.id,
+          error: pendingEditError instanceof Error ? pendingEditError.message : "Unknown error",
+        });
+        return NextResponse.json({ error: "Unable to verify edit review status" }, { status: 503 });
+      }
+    }
+
     const nextMediaUrls = collectMediaUrls(
       data.logo_url || null,
       data.cover_photo || null,
@@ -330,13 +368,70 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       nextMediaUrls
     );
 
+    if (existing.status === "live") {
+      try {
+        await confirmMediaUploads({
+          supabase: admin,
+          userId: user.id,
+          urls: nextMediaUrls,
+          contentType: "business",
+          contentId: id,
+        });
+
+        const editRequest = await createContentEditRequest({
+          supabase: admin,
+          targetType: "business",
+          targetId: id,
+          ownerId: user.id,
+          area: effectiveArea,
+          proposedData: { ...proposedPayload, status: "live" },
+          currentSnapshot: existing as unknown as Record<string, unknown>,
+        });
+
+        if (editRequest.response) {
+          return editRequest.response;
+        }
+      } catch (editRequestError) {
+        log.error("Failed to create business edit request", {
+          businessId: id,
+          userId: user.id,
+          error: editRequestError instanceof Error ? editRequestError.message : "Unknown error",
+        });
+        return NextResponse.json({ error: "Failed to submit edit for review" }, { status: 500 });
+      }
+
+      try {
+        await logAuditEvent({
+          actorId: user.id,
+          actorRole: "member",
+          action: "listing_updated",
+          targetType: "business",
+          targetId: id,
+          area: effectiveArea,
+          metadata: { business_name: data.business_name, pendingReview: true },
+        });
+      } catch {
+        // non-fatal
+      }
+
+      if (shouldSendOwnerLifecycleNotifications()) {
+        void createNotification({
+          userId: user.id,
+          type: "warning",
+          title: "Business profile edit submitted for review",
+          message: `\"${data.business_name}\" will stay live with its current approved details until this edit is approved.`,
+          href: "/dashboard/businesses",
+        });
+      }
+
+      return contentEditSubmittedResponse(id, existing.approved_edit_count);
+    }
+
     const updateQuery = applyOwnerFilter(
       supabase
         .from("businesses")
         .update({
-          ...buildBusinessMutationPayload(data, {
-            mediaFallbacks: existing,
-          }),
+          ...proposedPayload,
           // Re-trigger moderation only for live businesses so changed content is reviewed.
           // Draft and rejected businesses keep their current status.
           ...(existing.status === "live" ? { status: "pending_moderation" as const } : {}),

@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { profileUpdateSchema } from "@/lib/validations/profile";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { ACCOUNT_PHONE_IN_USE_ERROR, normalizeSaPhone } from "@/lib/utils/phone";
@@ -18,7 +19,7 @@ import {
 const log = createLogger("ProfileUpdate");
 
 const PROFILE_POLICY_SELECT =
-  "legal_name_locked_at, location_verified_at, account_verification_status, phone, contact_last_phone_change_at";
+  "legal_name_locked_at, location_verified_at, account_verification_status, phone, contact_last_phone_change_at, location_province, location_city";
 const PROFILE_POLICY_LEGACY_SELECT = "account_verification_status, phone";
 
 function isMissingPolicyColumnError(error: {
@@ -117,6 +118,8 @@ export async function POST(request: NextRequest) {
           account_verification_status: legacyProfile?.account_verification_status ?? null,
           phone: legacyProfile?.phone ?? null,
           contact_last_phone_change_at: null,
+          location_province: null,
+          location_city: null,
         };
       } else {
         log.error("Failed legacy fallback profile fetch for policy check", {
@@ -191,6 +194,19 @@ export async function POST(request: NextRequest) {
       updatePayload.location_city = parsedBody.data.city || null;
     }
 
+    const nextLocationProvince =
+      !policyProfile?.location_verified_at && "province" in parsedBody.data
+        ? parsedBody.data.province || null
+        : (policyProfile?.location_province ?? null);
+    const nextLocationCity =
+      !policyProfile?.location_verified_at && "city" in parsedBody.data
+        ? parsedBody.data.city || null
+        : (policyProfile?.location_city ?? null);
+    const locationChanged =
+      !policyProfile?.location_verified_at &&
+      ((policyProfile?.location_province ?? null) !== nextLocationProvince ||
+        (policyProfile?.location_city ?? null) !== nextLocationCity);
+
     if (typeof parsedBody.data.avatarUrl === "string") {
       updatePayload.avatar_url = parsedBody.data.avatarUrl || null;
     }
@@ -229,6 +245,38 @@ export async function POST(request: NextRequest) {
 
     if (!updatedProfile) {
       return NextResponse.json({ error: "Profile not found" }, { status: 404 });
+    }
+
+    if (locationChanged) {
+      try {
+        const { error: historyError } = await createAdminClient()
+          .from("profile_change_history")
+          .insert({
+            user_id: user.id,
+            change_type: "location",
+            old_value: {
+              province: policyProfile?.location_province ?? null,
+              city: policyProfile?.location_city ?? null,
+            },
+            new_value: {
+              province: nextLocationProvince,
+              city: nextLocationCity,
+            },
+            source: "user",
+          });
+
+        if (historyError) {
+          log.warn("Failed to write profile location change history", {
+            userId: user.id,
+            error: historyError.message,
+          });
+        }
+      } catch (historyError) {
+        log.warn("Failed to initialize profile location change history writer", {
+          userId: user.id,
+          error: historyError instanceof Error ? historyError.message : "Unknown",
+        });
+      }
     }
 
     const res = NextResponse.json({ success: true, profile: updatedProfile });

@@ -26,6 +26,13 @@ import {
 import { uuidSchema } from "@/lib/validations/shared";
 import { z } from "zod";
 import { createNotification, shouldSendOwnerLifecycleNotifications } from "@/lib/notifications";
+import {
+  contentEditSubmittedResponse,
+  createContentEditRequest,
+  editLimitReachedResponse,
+  hasPendingContentEdit,
+  isEditLimitReached,
+} from "@/lib/content-edit-requests";
 
 const log = createLogger("ListingUpdate");
 const listingIdParamsSchema = z.object({
@@ -47,6 +54,7 @@ type ListingUpdateRow = {
   owner_id?: string | null;
   seller_id?: string | null;
   updated_at?: string | null;
+  approved_edit_count?: number | null;
 };
 
 /**
@@ -131,7 +139,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         .from("listings")
         .select(
           withOwnerColumn(
-            "id, owner_id, status, area, photos, videos, video_thumbnail, logo_url, media_width, media_height, focal_x, focal_y, updated_at",
+            "id, owner_id, status, area, title, description, price_cents, price_negotiable, category, attributes, condition, location_province, location_city, location_town, location_suburb, location_address, photos, videos, video_thumbnail, logo_url, contact_methods, media_width, media_height, focal_x, focal_y, updated_at, approved_edit_count",
             ownerColumn
           )
         )
@@ -258,6 +266,100 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       // Re-submit for moderation on edit (covers both live and approved listings)
       status: ["live", "approved"].includes(listing.status) ? "pending_moderation" : listing.status,
     };
+    const admin = createAdminClient();
+
+    if (listing.status === "live") {
+      if (isEditLimitReached(listing.approved_edit_count)) {
+        return editLimitReachedResponse();
+      }
+
+      try {
+        if (await hasPendingContentEdit(admin, "listing", listingId)) {
+          return NextResponse.json(
+            {
+              error: "This listing already has an edit pending admin review.",
+              code: "pending_edit_exists",
+              pendingEditExists: true,
+            },
+            { status: 409 }
+          );
+        }
+      } catch (pendingEditError) {
+        log.error("Failed to check pending listing edit request", {
+          listingId,
+          userId: user.id,
+          error: pendingEditError instanceof Error ? pendingEditError.message : "Unknown error",
+        });
+        return NextResponse.json({ error: "Unable to verify edit review status" }, { status: 503 });
+      }
+
+      const proposedData = { ...updateRecord, status: "live" };
+
+      try {
+        await confirmMediaUploads({
+          supabase: admin,
+          userId: user.id,
+          urls: collectMediaUrls(data.images, videoUrls, nextVideoThumbnail, nextLogoUrl),
+          contentType: "listing",
+          contentId: listingId,
+        });
+
+        const editRequest = await createContentEditRequest({
+          supabase: admin,
+          targetType: "listing",
+          targetId: listingId,
+          ownerId: user.id,
+          area: AREA,
+          proposedData,
+          currentSnapshot: listing as unknown as Record<string, unknown>,
+        });
+
+        if (editRequest.response) {
+          return editRequest.response;
+        }
+      } catch (editRequestError) {
+        log.error("Failed to create listing edit request", {
+          listingId,
+          userId: user.id,
+          error: editRequestError instanceof Error ? editRequestError.message : "Unknown error",
+        });
+        return NextResponse.json({ error: "Failed to submit edit for review" }, { status: 500 });
+      }
+
+      try {
+        await logAuditEvent({
+          actorId: user.id,
+          actorRole: "member",
+          action: "listing_updated",
+          targetType: "listing",
+          targetId: listingId,
+          area: AREA,
+          metadata: {
+            category: data.category,
+            priceCents,
+            previousStatus: listing.status,
+            pendingReview: true,
+          },
+        });
+      } catch (auditErr) {
+        log.error("Audit log failed (non-fatal)", {
+          error: auditErr instanceof Error ? auditErr.message : "Unknown",
+        });
+      }
+
+      if (shouldSendOwnerLifecycleNotifications()) {
+        void createNotification({
+          userId: user.id,
+          type: "warning",
+          title: "Listing edit submitted for review",
+          message: `\"${data.title}\" will stay live with its current approved details until this edit is approved.`,
+          href: "/dashboard/listings",
+        });
+      }
+
+      return contentEditSubmittedResponse(listingId, listing.approved_edit_count);
+    }
+
     const removedMediaUrls = diffRemovedMediaUrls(
       collectMediaUrls(listing.photos, listing.videos, listing.video_thumbnail, listing.logo_url),
       collectMediaUrls(updateRecord.photos, videoUrls, nextVideoThumbnail, nextLogoUrl)
@@ -296,7 +398,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       );
     }
 
-    const admin = createAdminClient();
     await confirmMediaUploads({
       supabase: admin,
       userId: user.id,

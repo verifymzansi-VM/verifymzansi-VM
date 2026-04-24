@@ -29,6 +29,7 @@ jobs:
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     env:
       NODE_ENV: production
+      WRANGLER_SEND_ERROR_REPORTS: "false"
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -106,6 +107,46 @@ jobs:
         run: |
           echo "::notice::Known warning classes on the current Cloudflare/OpenNext path: Durable Object startup warnings from wrangler.toml and generated duplicate-object-key warnings from .open-next/server-functions."
           echo "::notice::Treat new warning patterns outside those classes as actionable."
+
+      - name: Validate Cloudflare deploy credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          node <<'NODE'
+          const checks = [
+            { name: "CLOUDFLARE_API_TOKEN", value: process.env.CLOUDFLARE_API_TOKEN, pattern: /^[\x21-\x7e]+$/ },
+            { name: "CLOUDFLARE_ACCOUNT_ID", value: process.env.CLOUDFLARE_ACCOUNT_ID, pattern: /^[a-f0-9]{32}$/i },
+          ];
+
+          let failed = false;
+
+          for (const check of checks) {
+            if (!check.value) {
+              console.error(`::error::${check.name} is required for Cloudflare deploys.`);
+              failed = true;
+              continue;
+            }
+
+            for (let index = 0; index < check.value.length; index += 1) {
+              const code = check.value.charCodeAt(index);
+              if (code > 255) {
+                console.error(`::error::${check.name} contains a non-ByteString character at index ${index} (code ${code}). Recreate the GitHub secret with the raw Cloudflare value only.`);
+                failed = true;
+                break;
+              }
+            }
+
+            if (!check.pattern.test(check.value)) {
+              console.error(`::error::${check.name} has an invalid format for a Cloudflare deploy secret.`);
+              failed = true;
+            }
+          }
+
+          if (failed) {
+            process.exit(1);
+          }
+          NODE
 
       - name: Deploy to Cloudflare
         env:

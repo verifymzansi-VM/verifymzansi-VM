@@ -40,6 +40,8 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
     submitDecision,
   } = useContentDecision<ModerationItem>({
     getArea: (item) => item.area,
+    getEndpoint: (item) =>
+      item.isEditRequest ? "/api/admin/content-edits/decide" : "/api/admin/content/decide",
     onDecisionComplete: () => {
       closePreview();
       router.refresh();
@@ -126,6 +128,11 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
                     <Badge variant="outline" className="text-[10px]">
                       {item.itemType}
                     </Badge>
+                    {item.isEditRequest && (
+                      <Badge variant="outline" className="text-[10px]">
+                        Edit review
+                      </Badge>
+                    )}
                     <Badge variant="secondary" className="text-[10px]">
                       {item.areaLabel}
                     </Badge>

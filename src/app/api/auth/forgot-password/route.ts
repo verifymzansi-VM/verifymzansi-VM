@@ -11,6 +11,7 @@ import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("ForgotPassword");
+const forgotPasswordRequestSchema = forgotPasswordSchema.partial({ turnstileToken: true });
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const parsedBody = await parseAndValidateJsonRequest(request, forgotPasswordSchema, {
+    const parsedBody = await parseAndValidateJsonRequest(request, forgotPasswordRequestSchema, {
       invalidJsonMessage: "Invalid JSON payload",
       validationErrorMessage: "Invalid request",
       includeValidationDetails: false,
@@ -42,6 +43,17 @@ export async function POST(request: NextRequest) {
     if (!parsedBody.success) {
       return parsedBody.response;
     }
+
+    const supabase = await createClient();
+    const {
+      data: { user: sessionUser },
+    } =
+      typeof supabase.auth.getUser === "function"
+        ? await supabase.auth.getUser()
+        : { data: { user: null } };
+    const isAuthenticatedOwnReset =
+      !!sessionUser?.email &&
+      sessionUser.email.trim().toLowerCase() === parsedBody.data.email.trim().toLowerCase();
 
     // Rate limit password resets by IP to prevent email spam (before Turnstile
     // to avoid triggering outbound Turnstile requests for spammy clients)
@@ -68,7 +80,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (turnstileStatus.configured) {
+    if (turnstileStatus.configured && !isAuthenticatedOwnReset) {
+      if (!parsedBody.data.turnstileToken) {
+        return NextResponse.json({ error: "Complete the CAPTCHA" }, { status: 400 });
+      }
+
       const captcha = await verifyTurnstileToken({
         token: parsedBody.data.turnstileToken,
         remoteIp: getClientIp(request),
@@ -103,7 +119,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
-    const supabase = await createClient();
     const callbackUrl = buildAuthCallbackUrl(request, "/reset-password");
 
     // Always return a generic success response to reduce account enumeration.

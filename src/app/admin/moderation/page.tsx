@@ -26,40 +26,51 @@ export default async function AdminModerationPage() {
   const admin = createAdminClient();
 
   // Fetch all content pending moderation across all areas
-  const [listingsResult, businessesResult, promotionsResult] = await Promise.all([
-    admin
-      .from("listings")
-      .select(
-        "id, title, status, created_at, category, owner_id, description, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, location_suburb, attributes, contact_methods, buyer_verification_required"
-      )
-      .eq("status", "pending_moderation")
-      .order("created_at", { ascending: true })
-      .limit(50),
-    admin
-      .from("businesses")
-      .select(
-        "id, business_name, business_type, status, created_at, owner_id, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, map_directions, phone, whatsapp, email, website, social_links, operating_hours, services_offered, payment_methods_accepted, delivery_options, service_areas, business_details"
-      )
-      .eq("status", "pending_moderation")
-      .order("created_at", { ascending: true })
-      .limit(50),
-    admin
-      .from("promotions")
-      .select(
-        "id, title, status, created_at, category, owner_id, description, photos, videos, video_thumbnail, logo_url, price_cents, price_negotiable, location_province, location_city, contact_methods, promotion_type"
-      )
-      .eq("status", "pending_moderation")
-      .order("created_at", { ascending: true })
-      .limit(50),
-  ]);
+  const [listingsResult, businessesResult, promotionsResult, editRequestsResult] =
+    await Promise.all([
+      admin
+        .from("listings")
+        .select(
+          "id, title, status, created_at, category, owner_id, description, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, location_suburb, attributes, contact_methods, buyer_verification_required"
+        )
+        .eq("status", "pending_moderation")
+        .order("created_at", { ascending: true })
+        .limit(50),
+      admin
+        .from("businesses")
+        .select(
+          "id, business_name, business_type, status, created_at, owner_id, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, map_directions, phone, whatsapp, email, website, social_links, operating_hours, services_offered, payment_methods_accepted, delivery_options, service_areas, business_details"
+        )
+        .eq("status", "pending_moderation")
+        .order("created_at", { ascending: true })
+        .limit(50),
+      admin
+        .from("promotions")
+        .select(
+          "id, title, status, created_at, category, owner_id, description, photos, videos, video_thumbnail, logo_url, price_cents, price_negotiable, location_province, location_city, contact_methods, promotion_type"
+        )
+        .eq("status", "pending_moderation")
+        .order("created_at", { ascending: true })
+        .limit(50),
+      admin
+        .from("content_edit_requests")
+        .select(
+          "id, target_type, target_id, owner_id, area, status, proposed_data, current_snapshot, created_at"
+        )
+        .eq("status", "pending")
+        .order("created_at", { ascending: true })
+        .limit(50),
+    ]);
 
   const pendingListings = listingsResult.data ?? [];
   const pendingBusinesses = businessesResult.data ?? [];
   const pendingPromotions = promotionsResult.data ?? [];
+  const pendingEditRequests = editRequestsResult.data ?? [];
   const failedAreas = [
     listingsResult.error ? "Mzansi Market" : null,
     businessesResult.error ? "Mzansi Business" : null,
     promotionsResult.error ? "Tourism & Events" : null,
+    editRequestsResult.error ? "Pending edits" : null,
   ].filter((value): value is string => Boolean(value));
 
   if (failedAreas.length > 0) {
@@ -68,8 +79,53 @@ export default async function AdminModerationPage() {
       listingsError: listingsResult.error?.message,
       businessesError: businessesResult.error?.message,
       promotionsError: promotionsResult.error?.message,
+      editRequestsError: editRequestsResult.error?.message,
     });
   }
+
+  const editItems = pendingEditRequests.map((request) => {
+    const proposed = (request.proposed_data ?? {}) as Record<string, unknown>;
+    const currentSnapshot = (request.current_snapshot ?? {}) as Record<string, unknown>;
+    const targetType = request.target_type as string;
+    const title =
+      typeof proposed.title === "string"
+        ? proposed.title
+        : typeof proposed.business_name === "string"
+          ? proposed.business_name
+          : typeof currentSnapshot.title === "string"
+            ? currentSnapshot.title
+            : typeof currentSnapshot.business_name === "string"
+              ? currentSnapshot.business_name
+              : `Edit ${String(request.id).slice(0, 8)}`;
+    const area = request.area as "MZANSI_MARKET" | "MZANSI_BUSINESS" | "PROMOTIONS_EVENTS";
+    const areaLabel =
+      area === "MZANSI_MARKET"
+        ? "Mzansi Market"
+        : area === "MZANSI_BUSINESS"
+          ? "Mzansi Business"
+          : "Tourism & Events";
+    const itemType =
+      targetType === "business"
+        ? "Business edit"
+        : targetType === "promotion"
+          ? "Promotion edit"
+          : "Listing edit";
+
+    return {
+      ...proposed,
+      id: request.id,
+      targetId: request.target_id,
+      title,
+      status: request.status,
+      created_at: request.created_at,
+      owner_id: request.owner_id,
+      area,
+      areaLabel,
+      itemType,
+      isEditRequest: true,
+      current_snapshot: currentSnapshot,
+    };
+  });
 
   const allItems = [
     ...(pendingListings || []).map((l) => ({
@@ -91,6 +147,7 @@ export default async function AdminModerationPage() {
       areaLabel: "Tourism & Events",
       itemType: "Promotion",
     })),
+    ...editItems,
   ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
   const totalPending = allItems.length;

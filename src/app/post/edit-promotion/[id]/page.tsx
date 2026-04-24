@@ -433,14 +433,25 @@ export default function EditPromotionPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || "Failed to update tourism and events listing");
+        if (data?.code === "edit_limit_reached") {
+          setError("This tourism and events post has already used its two approved edit chances.");
+        } else if (data?.code === "pending_edit_exists") {
+          setError("This tourism and events post already has an edit pending admin review.");
+        } else {
+          setError(data.error || "Failed to update tourism and events listing");
+        }
         if (data?.details && typeof data.details === "object") {
           setFieldErrors(data.details as Record<string, string>);
         }
         return;
       }
 
-      toast({ title: "Tourism & Events listing updated!", variant: "success" });
+      toast({
+        title: data?.pendingReview
+          ? "Edit submitted for review"
+          : "Tourism & Events listing updated!",
+        variant: "success",
+      });
       setUploadStatuses((c) => ({ ...c, saving: "done" }));
       router.push("/dashboard/listings?area=PROMOTIONS_EVENTS&updated=promotion");
     } catch (error: unknown) {

@@ -34,6 +34,13 @@ import { createOwnedContentDeleteRoute } from "@/app/api/_lib/create-owned-conte
 import { createViewerCookieJsonResponse } from "@/app/api/_lib/engagement-viewer-cookie-response";
 import { requireAuthenticatedLocalMutation } from "@/app/api/_lib/authenticated-local-mutation";
 import { getPostingEntitlementsOrResponse } from "@/app/api/_lib/posting-entitlements";
+import {
+  contentEditSubmittedResponse,
+  createContentEditRequest,
+  editLimitReachedResponse,
+  hasPendingContentEdit,
+  isEditLimitReached,
+} from "@/lib/content-edit-requests";
 
 const log = createLogger("PromotionDetail");
 const promotionIdParamsSchema = z.object({
@@ -64,6 +71,7 @@ type PromotionOwnerRow = {
   focal_y?: number | null;
   view_count?: number | null;
   event_details?: Record<string, unknown> | null;
+  approved_edit_count?: number | null;
 };
 
 /**
@@ -203,7 +211,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         .from("promotions")
         .select(
           withOwnerColumn(
-            "id, owner_id, status, title, description, promotion_type, category, category_key, business_id, photos, videos, video_thumbnail, logo_url, media_width, media_height, focal_x, focal_y, price_cents, price_negotiable, location_province, location_city, location_town, location_address, contact_methods, start_date, end_date, event_details",
+            "id, owner_id, status, title, description, promotion_type, category, category_key, business_id, photos, videos, video_thumbnail, logo_url, media_width, media_height, focal_x, focal_y, price_cents, price_negotiable, location_province, location_city, location_town, location_address, contact_methods, start_date, end_date, event_details, approved_edit_count",
             ownerColumn
           )
         )
@@ -303,36 +311,129 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       (existing.video_thumbnail ?? null) !== (data.video_thumbnail || null) ||
       JSON.stringify(existing.event_details ?? null) !== JSON.stringify(data.event_details ?? null);
 
+    const proposedPayload = {
+      title: data.title,
+      description: data.description,
+      promotion_type: data.promotion_type,
+      category: data.category || null,
+      category_key: categoryKey,
+      business_id: data.business_id || null,
+      photos: data.images,
+      videos: data.videos,
+      video_thumbnail: data.video_thumbnail || null,
+      media_width:
+        data.media_width !== undefined ? data.media_width : (existing.media_width ?? null),
+      media_height:
+        data.media_height !== undefined ? data.media_height : (existing.media_height ?? null),
+      focal_x: data.focal_x ?? existing.focal_x ?? 0.5,
+      focal_y: data.focal_y ?? existing.focal_y ?? 0.5,
+      price_cents: priceCents,
+      price_negotiable: data.negotiable,
+      location_province: data.province,
+      location_city: data.city,
+      location_town: data.location_town || null,
+      location_address: data.location_address || null,
+      contact_methods: data.contact_methods,
+      start_date: data.start_date || null,
+      end_date: data.end_date || null,
+      logo_url: data.logo_url || null,
+      event_details: data.event_details ?? existing.event_details ?? null,
+    };
+
+    const admin = createAdminClient();
+
+    if (existing.status === "live" && contentChanged) {
+      if (isEditLimitReached(existing.approved_edit_count)) {
+        return editLimitReachedResponse();
+      }
+
+      try {
+        if (await hasPendingContentEdit(admin, "promotion", id)) {
+          return NextResponse.json(
+            {
+              error: "This tourism and events post already has an edit pending admin review.",
+              code: "pending_edit_exists",
+              pendingEditExists: true,
+            },
+            { status: 409 }
+          );
+        }
+      } catch (pendingEditError) {
+        log.error("Failed to check pending promotion edit request", {
+          promotionId: id,
+          userId: user.id,
+          error: pendingEditError instanceof Error ? pendingEditError.message : "Unknown error",
+        });
+        return NextResponse.json({ error: "Unable to verify edit review status" }, { status: 503 });
+      }
+
+      try {
+        await confirmMediaUploads({
+          supabase: admin,
+          userId: user.id,
+          urls: collectMediaUrls(
+            data.images,
+            data.videos,
+            data.video_thumbnail || null,
+            data.logo_url || null
+          ),
+          contentType: "promotion",
+          contentId: id,
+        });
+
+        const editRequest = await createContentEditRequest({
+          supabase: admin,
+          targetType: "promotion",
+          targetId: id,
+          ownerId: user.id,
+          area: "PROMOTIONS_EVENTS",
+          proposedData: { ...proposedPayload, status: "live" },
+          currentSnapshot: existing as unknown as Record<string, unknown>,
+        });
+
+        if (editRequest.response) {
+          return editRequest.response;
+        }
+      } catch (editRequestError) {
+        log.error("Failed to create promotion edit request", {
+          promotionId: id,
+          userId: user.id,
+          error: editRequestError instanceof Error ? editRequestError.message : "Unknown error",
+        });
+        return NextResponse.json({ error: "Failed to submit edit for review" }, { status: 500 });
+      }
+
+      try {
+        await logAuditEvent({
+          actorId: user.id,
+          actorRole: "member",
+          action: "listing_updated",
+          targetType: "promotion",
+          targetId: id,
+          metadata: { title: data.title, pendingReview: true },
+        });
+      } catch {
+        // non-fatal
+      }
+
+      if (shouldSendOwnerLifecycleNotifications()) {
+        void createNotification({
+          userId: user.id,
+          type: "warning",
+          title: "Tourism & Event edit submitted for review",
+          message: `\"${data.title}\" will stay live with its current approved details until this edit is approved.`,
+          href: "/dashboard/tourism-events",
+        });
+      }
+
+      return contentEditSubmittedResponse(id, existing.approved_edit_count);
+    }
+
     const updateQuery = applyOwnerFilter(
       supabase
         .from("promotions")
         .update({
-          title: data.title,
-          description: data.description,
-          promotion_type: data.promotion_type,
-          category: data.category || null,
-          category_key: categoryKey,
-          business_id: data.business_id || null,
-          photos: data.images,
-          videos: data.videos,
-          video_thumbnail: data.video_thumbnail || null,
-          media_width:
-            data.media_width !== undefined ? data.media_width : (existing.media_width ?? null),
-          media_height:
-            data.media_height !== undefined ? data.media_height : (existing.media_height ?? null),
-          focal_x: data.focal_x ?? existing.focal_x ?? 0.5,
-          focal_y: data.focal_y ?? existing.focal_y ?? 0.5,
-          price_cents: priceCents,
-          price_negotiable: data.negotiable,
-          location_province: data.province,
-          location_city: data.city,
-          location_town: data.location_town || null,
-          location_address: data.location_address || null,
-          contact_methods: data.contact_methods,
-          start_date: data.start_date || null,
-          end_date: data.end_date || null,
-          logo_url: data.logo_url || null,
-          event_details: data.event_details ?? existing.event_details ?? null,
+          ...proposedPayload,
           ...(contentChanged ? { status: "pending_moderation" } : {}),
         })
         .eq("id", id),
@@ -347,7 +448,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Failed to update promotion" }, { status: 500 });
     }
 
-    const admin = createAdminClient();
     await confirmMediaUploads({
       supabase: admin,
       userId: user.id,

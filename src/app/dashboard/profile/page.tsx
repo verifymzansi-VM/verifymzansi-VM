@@ -52,6 +52,32 @@ import type { AccountVerificationStatus } from "@/types/enums";
 
 type TabValue = "profile" | "security" | "account";
 
+function getIdentityProviders(user: { app_metadata?: unknown; identities?: unknown }): string[] {
+  const providers = new Set<string>();
+  const appMetadata = (user.app_metadata ?? {}) as Record<string, unknown>;
+  if (typeof appMetadata.provider === "string") {
+    providers.add(appMetadata.provider);
+  }
+
+  if (Array.isArray(user.identities)) {
+    for (const identity of user.identities) {
+      if (identity && typeof identity === "object") {
+        const provider = (identity as Record<string, unknown>).provider;
+        if (typeof provider === "string") {
+          providers.add(provider);
+        }
+      }
+    }
+  }
+
+  return [...providers];
+}
+
+function hasPasswordProvider(user: { app_metadata?: unknown; identities?: unknown }): boolean {
+  const providers = getIdentityProviders(user);
+  return providers.length === 0 || providers.includes("email");
+}
+
 export default function ProfilePage() {
   const [email, setEmail] = useState("");
   const [verificationStatus, setVerificationStatus] = useState<AccountVerificationStatus | null>(
@@ -74,6 +100,7 @@ export default function ProfilePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [isSendingPasswordSetup, setIsSendingPasswordSetup] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [activeTab, setActiveTab] = useState<TabValue>("profile");
   const [isNameLocked, setIsNameLocked] = useState(false);
@@ -86,6 +113,7 @@ export default function ProfilePage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleteCurrentPassword, setDeleteCurrentPassword] = useState("");
+  const [isPasswordAccount, setIsPasswordAccount] = useState(true);
   const [isDeleteVerifying, setIsDeleteVerifying] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -168,6 +196,7 @@ export default function ProfilePage() {
         }
 
         setEmail(user.email ?? "");
+        setIsPasswordAccount(hasPasswordProvider(user));
         if (profile) {
           setDisplayName(profile.display_name || "");
           setLegalFirstName(profile.legal_first_name || "");
@@ -394,6 +423,46 @@ export default function ProfilePage() {
     }
   }
 
+  async function handlePasswordSetupEmail() {
+    if (!email) {
+      toast({
+        title: "Email unavailable",
+        description: "Please reload the page and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSendingPasswordSetup(true);
+    try {
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast({
+          title: "Password setup failed",
+          description: data.error || "Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: "Password setup email sent",
+        description: "Check your Gmail inbox for the secure password setup link.",
+        variant: "success",
+      });
+    } catch {
+      toast({ title: "Something went wrong", variant: "destructive" });
+    } finally {
+      setIsSendingPasswordSetup(false);
+    }
+  }
+
   async function handleEmailChange(e: React.FormEvent) {
     e.preventDefault();
     if (!newEmail) return;
@@ -456,7 +525,7 @@ export default function ProfilePage() {
       return;
     }
 
-    if (!deleteCurrentPassword) {
+    if (isPasswordAccount && !deleteCurrentPassword) {
       toast({
         title: "Current password required",
         description: "Enter your current password to confirm this request.",
@@ -466,37 +535,39 @@ export default function ProfilePage() {
     }
 
     setIsDeleteVerifying(true);
-    const supabase = createClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password: deleteCurrentPassword,
-    });
-
-    if (signInError) {
-      setIsDeleteVerifying(false);
-      toast({
-        title: "Password verification failed",
-        description: "Please enter your current password to continue.",
-        variant: "destructive",
+    try {
+      const res = await fetch("/api/account/delete", {
+        method: "POST",
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          confirmation: deleteConfirmation,
+          currentPassword: isPasswordAccount ? deleteCurrentPassword : undefined,
+        }),
       });
-      return;
-    }
+      const data = await res.json();
 
-    handleDeleteDialogOpenChange(false);
-    const subject = encodeURIComponent("Account deletion request");
-    const body = encodeURIComponent(
-      [
-        "Hello Information Officer,",
-        "",
-        "I want to request permanent deletion of my account.",
-        `Account email: ${email || "(enter your account email)"}`,
-        "",
-        "I understand this request may require identity verification and review.",
-        "Please advise next steps.",
-      ].join("\n")
-    );
-    setIsDeleteVerifying(false);
-    window.location.href = `mailto:privacy@verifymzansi.com?subject=${subject}&body=${body}`;
+      if (!res.ok) {
+        toast({
+          title: "Account deletion failed",
+          description: data.error || "Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      handleDeleteDialogOpenChange(false);
+      toast({
+        title: "Account deleted",
+        description: "Your account has been permanently deleted.",
+        variant: "success",
+      });
+      router.push("/");
+      router.refresh();
+    } catch {
+      toast({ title: "Something went wrong", variant: "destructive" });
+    } finally {
+      setIsDeleteVerifying(false);
+    }
   }
 
   function getVerificationBadge() {
@@ -778,10 +849,12 @@ export default function ProfilePage() {
                 <div>
                   <p className="text-sm font-medium">Password</p>
                   <p className="text-xs text-muted-foreground">
-                    Update your password to keep your account secure.
+                    {isPasswordAccount
+                      ? "Update your password to keep your account secure."
+                      : "Set a password so you can also sign in with email."}
                   </p>
                 </div>
-                {!showPasswordForm && (
+                {isPasswordAccount && !showPasswordForm && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -792,9 +865,25 @@ export default function ProfilePage() {
                     Change
                   </Button>
                 )}
+                {!isPasswordAccount && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handlePasswordSetupEmail}
+                    disabled={isSendingPasswordSetup}
+                    className="h-11 gap-1.5 px-3"
+                  >
+                    {isSendingPasswordSetup ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <KeyRound className="h-3.5 w-3.5" />
+                    )}
+                    {isSendingPasswordSetup ? "Sending..." : "Set Password"}
+                  </Button>
+                )}
               </div>
 
-              {showPasswordForm && (
+              {isPasswordAccount && showPasswordForm && (
                 <>
                   <Separator />
                   <form noValidate onSubmit={handlePasswordChange} className="space-y-3">
@@ -1048,10 +1137,10 @@ export default function ProfilePage() {
               <Dialog open={isDeleteDialogOpen} onOpenChange={handleDeleteDialogOpenChange}>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Confirm account deletion request</DialogTitle>
+                    <DialogTitle>Confirm account deletion</DialogTitle>
                     <DialogDescription>
-                      For security, account deletion requests are handled manually. This action will
-                      not open the data access request page, and verification may be required.
+                      This permanently deletes your account and personal data. This action cannot be
+                      undone.
                     </DialogDescription>
                   </DialogHeader>
 
@@ -1060,19 +1149,21 @@ export default function ProfilePage() {
                       Type <strong>DELETE</strong> to continue.
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      We will draft an email to the Information Officer to start your request.
+                      Your account will be removed immediately after confirmation.
                     </p>
-                    <div className="space-y-1">
-                      <Label htmlFor="deleteCurrentPassword">Current password</Label>
-                      <Input
-                        id="deleteCurrentPassword"
-                        type="password"
-                        autoComplete="current-password"
-                        value={deleteCurrentPassword}
-                        onChange={(e) => setDeleteCurrentPassword(e.target.value)}
-                        placeholder="Enter current password"
-                      />
-                    </div>
+                    {isPasswordAccount && (
+                      <div className="space-y-1">
+                        <Label htmlFor="deleteCurrentPassword">Current password</Label>
+                        <Input
+                          id="deleteCurrentPassword"
+                          type="password"
+                          autoComplete="current-password"
+                          value={deleteCurrentPassword}
+                          onChange={(e) => setDeleteCurrentPassword(e.target.value)}
+                          placeholder="Enter current password"
+                        />
+                      </div>
+                    )}
                     <Input
                       value={deleteConfirmation}
                       onChange={(e) => setDeleteConfirmation(e.target.value)}
@@ -1095,7 +1186,7 @@ export default function ProfilePage() {
                       disabled={
                         isDeleteVerifying ||
                         deleteConfirmation.trim().toUpperCase() !== "DELETE" ||
-                        !deleteCurrentPassword
+                        (isPasswordAccount && !deleteCurrentPassword)
                       }
                       className="h-11 gap-1.5"
                     >
