@@ -10,7 +10,7 @@
   "scripts": {
     "preinstall": "npx only-allow pnpm",
     "dev": "next dev",
-    "build": "node scripts/run-build.js",
+    "build": "next build --webpack",
     "capture:live-site": "tsx scripts/capture-live-site.ts",
     "assets:refresh:live": "tsx scripts/generate-live-assets.ts",
     "media:refresh:live": "pnpm capture:live-site && pnpm assets:refresh:live",
