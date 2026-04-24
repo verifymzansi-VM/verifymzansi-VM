@@ -205,7 +205,7 @@ describe("EditBusinessPage", () => {
     const payload = JSON.parse(secondCall[1].body as string);
 
     expect(mockToast).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "Updated and resubmitted for review", variant: "success" })
+      expect.objectContaining({ title: "Edit submitted for review", variant: "success" })
     );
     expect(mockPush).toHaveBeenCalledWith(
       "/dashboard/listings?area=MZANSI_BUSINESS&updated=business"

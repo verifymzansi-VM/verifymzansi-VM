@@ -84,13 +84,13 @@ describe("PATCH /api/businesses/[id]", () => {
               return {
                 eq: vi.fn().mockReturnThis(),
                 maybeSingle: vi.fn().mockResolvedValue({
-                  data: { id: BUSINESS_ID, owner_id: USER_ID, status: "live" },
+                  data: { id: BUSINESS_ID, owner_id: USER_ID, status: "draft" },
                 }),
               };
             }),
             eq: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: BUSINESS_ID, owner_id: USER_ID, status: "live" },
+              data: { id: BUSINESS_ID, owner_id: USER_ID, status: "draft" },
             }),
             update: updateSpy,
           };
@@ -347,13 +347,13 @@ describe("PATCH /api/businesses/[id]", () => {
               return {
                 eq: vi.fn().mockReturnThis(),
                 maybeSingle: vi.fn().mockResolvedValue({
-                  data: { id: BUSINESS_ID, owner_id: USER_ID, status: "live" },
+                  data: { id: BUSINESS_ID, owner_id: USER_ID, status: "draft" },
                 }),
               };
             }),
             eq: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: BUSINESS_ID, owner_id: USER_ID, status: "live" },
+              data: { id: BUSINESS_ID, owner_id: USER_ID, status: "draft" },
             }),
             update: updateSpy,
           };

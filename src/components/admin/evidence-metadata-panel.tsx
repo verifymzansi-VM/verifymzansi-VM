@@ -3,59 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Info, Shield, Clock, User } from "lucide-react";
-
-interface EvidenceStep {
-  id: string;
-  step_type: string;
-  status: string;
-  risk_level: string | null;
-  risk_score: number | null;
-  auto_status: string | null;
-  location_method: string | null;
-  location_province: string | null;
-  location_city: string | null;
-  location_address_line: string | null;
-  gps_lat: number | null;
-  gps_lon: number | null;
-  reason_code: string | null;
-  reviewed_by: string | null;
-  reviewed_at: string | null;
-  created_at: string;
-  metadata: Record<string, unknown> | null;
-  first_name: string | null;
-  last_name: string | null;
-}
-
-interface Artifact {
-  id: string;
-  step_type: string;
-  artifact_kind: string;
-  r2_key: string;
-  content_type: string;
-  file_size_bytes: number;
-  status: string;
-  created_at: string;
-  purge_after: string | null;
-  sha256: string | null;
-}
-
-interface ProviderResult {
-  id: string;
-  provider_name: string;
-  check_type: string;
-  raw_status: string;
-  normalized_decision: string;
-  created_at: string;
-}
-
-interface AccessLog {
-  id: string;
-  actor_id: string;
-  actor_role: string;
-  artifact_id: string;
-  ip_hash: string | null;
-  accessed_at: string;
-}
+import type { AccessLog, Artifact, EvidenceStep, ProviderResult } from "./evidence-types";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString("en-ZA", {

@@ -235,7 +235,7 @@ describe("content media cleanup queueing", () => {
             data: {
               id: VALID_UUID,
               owner_id: USER_ID,
-              status: "live",
+              status: "draft",
               area: "MZANSI_MARKET",
               photos: ["https://media.verifymzansi.com/listings/old-photo.jpg"],
               videos: ["https://media.verifymzansi.com/listings/old-video.mp4"],
@@ -351,7 +351,7 @@ describe("content media cleanup queueing", () => {
             data: {
               id: VALID_UUID,
               owner_id: USER_ID,
-              status: "live",
+              status: "draft",
               photos: ["https://media.verifymzansi.com/promotions/old-photo.jpg"],
               videos: ["https://media.verifymzansi.com/promotions/old-video.mp4"],
               video_thumbnail: "https://media.verifymzansi.com/promotions/old-thumb.jpg",
@@ -547,7 +547,7 @@ describe("content media cleanup queueing", () => {
               data: {
                 id: VALID_UUID,
                 owner_id: USER_ID,
-                status: "live",
+                status: "draft",
                 logo_url: null,
                 cover_photo: "https://media.verifymzansi.com/business/old-cover.jpg",
                 cover_video: null,

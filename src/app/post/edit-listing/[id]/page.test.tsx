@@ -182,7 +182,7 @@ describe("EditListingPage", () => {
     });
 
     expect(mockToast).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "Updated and resubmitted for review", variant: "success" })
+      expect.objectContaining({ title: "Edit submitted for review", variant: "success" })
     );
     expect(mockPush).toHaveBeenCalledWith("/dashboard/listings");
 

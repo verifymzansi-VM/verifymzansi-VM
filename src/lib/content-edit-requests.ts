@@ -1,26 +1,10 @@
 import { NextResponse } from "next/server";
+import type { ContentEditTargetType } from "@/types/database";
 import type { MarketplaceArea } from "@/types/enums";
 
+export type { ContentEditRequest, ContentEditTargetType } from "@/types/database";
+
 export const MAX_APPROVED_CONTENT_EDITS = 2;
-
-export type ContentEditTargetType = "listing" | "business" | "promotion";
-export type ContentEditStatus = "pending" | "approved" | "rejected";
-
-export interface ContentEditRequest {
-  id: string;
-  target_type: ContentEditTargetType;
-  target_id: string;
-  owner_id: string;
-  area: MarketplaceArea;
-  status: ContentEditStatus;
-  proposed_data: Record<string, unknown>;
-  current_snapshot: Record<string, unknown>;
-  reason: string | null;
-  reviewed_by: string | null;
-  reviewed_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
 
 type QueryableClient = {
   from: (table: string) => unknown;
@@ -56,7 +40,7 @@ export function isEditLimitReached(approvedEditCount: number | null | undefined)
   return (approvedEditCount ?? 0) >= MAX_APPROVED_CONTENT_EDITS;
 }
 
-export function getRemainingApprovedEdits(approvedEditCount: number | null | undefined) {
+function getRemainingApprovedEdits(approvedEditCount: number | null | undefined) {
   return Math.max(0, MAX_APPROVED_CONTENT_EDITS - (approvedEditCount ?? 0));
 }
 
@@ -72,7 +56,7 @@ export function editLimitReachedResponse() {
   );
 }
 
-export function pendingEditExistsResponse() {
+function pendingEditExistsResponse() {
   return NextResponse.json(
     {
       error: "This post already has an edit pending admin review.",

@@ -1210,7 +1210,7 @@ describe("PUT /api/promotions/[id]", () => {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
           maybeSingle: vi.fn().mockResolvedValue({
-            data: { id: VALID_UUID, owner_id: USER_ID, status: "live" },
+            data: { id: VALID_UUID, owner_id: USER_ID, status: "draft" },
           }),
           update: vi.fn().mockReturnValue({
             eq: updateEq,
