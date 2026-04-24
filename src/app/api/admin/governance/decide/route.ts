@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
+import { verifyCapabilityRoleFromDb } from "@/lib/auth/admin-access";
 import { approveDecision, rejectDecision, escalateDecision } from "@/lib/services/decision-ledger";
 import { createLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
@@ -16,8 +16,6 @@ import {
 } from "@/lib/utils/api";
 import { z } from "zod";
 import { uuidSchema } from "@/lib/validations/shared";
-import { getRoleFromUser } from "@/lib/auth/roles";
-import type { StaffRole } from "@/types/enums";
 
 const log = createLogger("GovernanceDecide");
 
@@ -65,8 +63,8 @@ export async function POST(request: Request) {
     }
 
     const capability = "decision:approve";
-    const verified = await verifyCapabilityFromDb(user, capability);
-    if (!verified) {
+    const actorRole = await verifyCapabilityRoleFromDb(user, capability);
+    if (!actorRole) {
       return forbiddenResponse();
     }
 
@@ -85,7 +83,6 @@ export async function POST(request: Request) {
     }
 
     const { decisionId, action, rationale, afterState, secondaryApproverId } = bodyResult.data;
-    const actorRole = getRoleFromUser(user) as StaffRole;
 
     // ── Dual approval enforcement for high-stakes actions ────
     if (action === "approve" || action === "reject") {

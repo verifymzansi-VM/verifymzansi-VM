@@ -296,51 +296,10 @@ function convertToWebP(file: File): Promise<File> {
 }
 
 /**
- * Upload a file directly to R2 using a presigned URL with real progress tracking.
- * Used for large video files to avoid proxying through the server.
- */
-function uploadWithPresignedUrl(
-  file: File,
-  presignedUrl: string,
-  onProgress: (pct: number) => void
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-
-    xhr.upload.addEventListener("progress", (e) => {
-      if (e.lengthComputable) {
-        const pct = Math.round((e.loaded / e.total) * 100);
-        onProgress(pct);
-      }
-    });
-
-    xhr.addEventListener("load", () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        resolve();
-      } else {
-        reject(new Error(`Upload failed with status ${xhr.status}`));
-      }
-    });
-
-    xhr.addEventListener("error", () => {
-      reject(new Error("Network error during upload"));
-    });
-
-    xhr.addEventListener("abort", () => {
-      reject(new Error("Upload was aborted"));
-    });
-
-    xhr.open("PUT", presignedUrl);
-    xhr.setRequestHeader("Content-Type", file.type);
-    xhr.send(file);
-  });
-}
-
-/**
  * Hook for uploading files to R2 storage.
  *
- * - Videos: uses presigned URL for direct client→R2 upload with real progress
- * - Images: uses the /api/media/upload proxy (files are small)
+ * Images and videos use the /api/media/upload proxy so the server can validate
+ * magic bytes, scan content, and track orphan cleanup consistently.
  */
 export function useMediaUpload(options: UploadOptions = {}) {
   const {
@@ -458,7 +417,7 @@ export function useMediaUpload(options: UploadOptions = {}) {
       }
 
       try {
-        // ── Video: compress + presigned direct upload to R2 ──────────
+        // ── Video: compress + validated server upload ──────────
         if (isVideo) {
           // ── Compress video before upload ─────────────────────────
           compressionAbortRef.current?.abort();
@@ -502,25 +461,25 @@ export function useMediaUpload(options: UploadOptions = {}) {
 
           setState((prev) => ({ ...prev, isCompressing: false, compressionProgress: 100 }));
 
-          // 1. Get presigned URL from our API
+          // 1. Upload through the validated server endpoint
           setState((prev) => ({ ...prev, progress: 2 }));
 
-          const urlResponse = await fetchWithRetry("/api/media/upload-url", {
+          const videoForm = new FormData();
+          videoForm.append("files", uploadFile);
+          videoForm.append("area", area);
+          videoForm.append("bucket", bucket);
+
+          const uploadResponse = await fetchWithRetry("/api/media/upload", {
             method: "POST",
-            headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-            body: JSON.stringify({
-              filename: uploadFile.name,
-              contentType: uploadFile.type,
-              size: uploadFile.size,
-              area,
-            }),
+            headers: withCsrfHeaders(),
+            body: videoForm,
           });
 
-          if (!urlResponse.ok) {
-            const data = await urlResponse.json().catch(() => ({}));
+          if (!uploadResponse.ok) {
+            const data = await uploadResponse.json().catch(() => ({}));
             const errorMsg =
               ((data as Record<string, unknown>).error as string) ||
-              `Failed to get upload URL (${urlResponse.status})`;
+              `Upload failed (${uploadResponse.status})`;
             setState({
               isUploading: false,
               isCompressing: false,
@@ -532,19 +491,28 @@ export function useMediaUpload(options: UploadOptions = {}) {
             return null;
           }
 
-          const { uploadUrl, publicUrl } = (await urlResponse.json()) as {
-            uploadUrl: string;
-            key: string;
-            publicUrl: string;
+          const uploadResult = (await uploadResponse.json()) as {
+            urls?: string[];
+            errors?: string[];
+            success?: boolean;
           };
+          const publicUrl = uploadResult.urls?.[0] ?? null;
+          if (!publicUrl) {
+            const errorMsg = uploadResult.errors?.[0] ?? "Upload failed";
+            setState({
+              isUploading: false,
+              isCompressing: false,
+              compressionProgress: 0,
+              progress: 0,
+              error: errorMsg,
+              url: null,
+            });
+            return null;
+          }
 
-          // 2. Upload directly to R2 with real progress
-          await uploadWithPresignedUrl(uploadFile, uploadUrl, (pct) => {
-            // Reserve last 5% for poster extraction
-            setState((prev) => ({ ...prev, progress: Math.round(pct * 0.95) }));
-          });
+          setState((prev) => ({ ...prev, progress: 95 }));
 
-          // 3. Extract poster frame and upload it (non-blocking for main result)
+          // 2. Extract poster frame and upload it (non-blocking for main result)
           extractVideoFrame(uploadFile).then(async (posterFile) => {
             if (!posterFile) return;
             try {

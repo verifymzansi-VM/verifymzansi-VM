@@ -9,7 +9,6 @@ import {
   getPayloadTraceId,
   parseUploadJson,
   parseUploadResponse,
-  readUploadError,
 } from "@/app/post/_lib/media-upload-response";
 import type { UploadArea } from "@/types/enums";
 
@@ -171,71 +170,13 @@ export async function uploadPromotionVideoFiles({
   }
 
   try {
-    return await Promise.all(
-      compressed.map(async (file) => {
-        const urlResponse = await fetchWithRetry("/api/media/upload-url", {
-          method: "POST",
-          headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-          body: JSON.stringify({
-            filename: file.name,
-            contentType: file.type,
-            size: file.size,
-            area,
-          }),
-        });
-
-        const payload = await parseUploadJson(urlResponse);
-        if (!urlResponse.ok) {
-          log.warn(
-            "Direct promotion-style video upload URL generation failed; retrying via server upload",
-            {
-              area,
-              filename: file.name,
-              contentType: file.type,
-              status: urlResponse.status,
-              payloadError: getPayloadError(payload),
-            }
-          );
-          throw new Error(await readUploadError(urlResponse, "Failed to get video upload URL"));
-        }
-
-        const uploadUrl =
-          payload && typeof (payload as Record<string, unknown>).uploadUrl === "string"
-            ? ((payload as Record<string, unknown>).uploadUrl as string)
-            : null;
-        const publicUrl =
-          payload && typeof (payload as Record<string, unknown>).publicUrl === "string"
-            ? ((payload as Record<string, unknown>).publicUrl as string)
-            : null;
-
-        if (!uploadUrl || !publicUrl) {
-          throw new Error("Failed to get video upload URL");
-        }
-
-        const putResponse = await fetchWithRetry(uploadUrl, {
-          method: "PUT",
-          headers: { "Content-Type": file.type },
-          body: file,
-        });
-
-        if (!putResponse.ok) {
-          throw new Error(`Failed to upload video (HTTP ${putResponse.status})`);
-        }
-
-        return publicUrl;
-      })
-    );
+    return await uploadPromotionVideosViaServer({ files: compressed, area });
   } catch (error) {
-    log.warn("Direct promotion-style video upload failed; retrying via server upload", {
+    log.warn("Validated promotion-style video upload failed", {
       area,
       fileCount: compressed.length,
       error: error instanceof Error ? error.message : String(error),
     });
-
-    try {
-      return await uploadPromotionVideosViaServer({ files: compressed, area });
-    } catch (fallbackError) {
-      throw toPromotionMediaUploadError("videos", fallbackError);
-    }
+    throw toPromotionMediaUploadError("videos", error);
   }
 }

@@ -63,19 +63,30 @@ export async function verifyCapabilityFromDb(
   user: MaybeUserWithId,
   capability: Capability
 ): Promise<boolean> {
-  if (!user) return false;
+  return (await verifyCapabilityRoleFromDb(user, capability)) !== null;
+}
+
+/**
+ * Verify that the user holds a specific capability with DB re-verification,
+ * returning the DB-verified role for audit logs and decision records.
+ */
+export async function verifyCapabilityRoleFromDb(
+  user: MaybeUserWithId,
+  capability: Capability
+): Promise<StaffRole | null> {
+  if (!user) return null;
 
   // First check JWT for fast rejection
-  if (!hasCapability(user, capability)) return false;
+  if (!hasCapability(user, capability)) return null;
 
   // Re-verify role from DB
   const dbRole = await verifyStaffActorRoleFromDb(user);
-  if (!dbRole) return false;
+  if (!dbRole) return null;
 
   // Build a synthetic user-like object with the DB-verified role
   const dbUser = {
     app_metadata: { role: dbRole },
     is_anonymous: false,
   };
-  return hasCapability(dbUser, capability);
+  return hasCapability(dbUser, capability) ? dbRole : null;
 }

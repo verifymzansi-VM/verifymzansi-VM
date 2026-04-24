@@ -148,7 +148,11 @@ export async function POST(request: Request) {
     // Sensitive actions (ban/suspend) require governance approval unless
     // the actor already has the decision:approve capability.
     const SENSITIVE_ACTIONS = ["ban", "suspend"];
-    if (SENSITIVE_ACTIONS.includes(action) && !hasCapability(user, "decision:approve")) {
+    const dbVerifiedActor = {
+      app_metadata: { role: adminRole },
+      is_anonymous: false,
+    };
+    if (SENSITIVE_ACTIONS.includes(action) && !hasCapability(dbVerifiedActor, "decision:approve")) {
       let record: { id: string } | null = null;
       try {
         record = await createDecisionRecord({
@@ -169,7 +173,7 @@ export async function POST(request: Request) {
           },
         });
       } catch (err) {
-        log.warn("Decision record creation failed; continuing with direct enforcement", {
+        log.error("Decision record creation failed; blocking direct sensitive enforcement", {
           reportId,
           action,
           error: err instanceof Error ? err.message : String(err),
@@ -216,8 +220,14 @@ export async function POST(request: Request) {
           message: `${action} recommended. Awaiting governance approval.`,
         });
       }
-      // If decision record creation fails, fall through to direct execution
-      // (graceful degradation) — logged by the ledger service
+
+      return NextResponse.json(
+        {
+          error: "Decision approval workflow unavailable",
+          code: "decision_workflow_unavailable",
+        },
+        { status: 503 }
+      );
     }
 
     // Execute action

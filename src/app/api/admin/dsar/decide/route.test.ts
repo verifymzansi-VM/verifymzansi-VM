@@ -5,6 +5,7 @@ const {
   mockCreateAdminClient,
   mockLogAuditEvent,
   mockCheckLocalRateLimit,
+  mockVerifyCapabilityRoleFromDb,
   mockEnforceSameOriginMutation,
   mockEnforceCsrfToken,
 } = vi.hoisted(() => ({
@@ -12,6 +13,9 @@ const {
   mockCreateAdminClient: vi.fn(),
   mockLogAuditEvent: vi.fn(),
   mockCheckLocalRateLimit: vi.fn(),
+  mockVerifyCapabilityRoleFromDb: vi.fn<
+    () => Promise<"moderator" | "governance_controller" | "admin" | null>
+  >(async () => "admin"),
   mockEnforceSameOriginMutation: vi.fn<(request: Request) => Response | null>(() => null),
   mockEnforceCsrfToken: vi.fn<(request: Request) => Response | null>(() => null),
 }));
@@ -33,13 +37,7 @@ vi.mock("@/lib/utils/rate-limit", () => ({
 }));
 
 vi.mock("@/lib/auth/admin-access", () => ({
-  verifyCapabilityFromDb: vi.fn(async () => true),
-}));
-
-import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
-
-vi.mock("@/lib/auth/roles", () => ({
-  getRoleFromUser: vi.fn(() => "admin"),
+  verifyCapabilityRoleFromDb: mockVerifyCapabilityRoleFromDb,
 }));
 
 vi.mock("@/lib/utils/logger", () => ({
@@ -78,6 +76,7 @@ describe("POST /api/admin/dsar/decide", () => {
       },
     });
     mockCheckLocalRateLimit.mockReturnValue({ limited: false });
+    mockVerifyCapabilityRoleFromDb.mockResolvedValue("admin");
     mockEnforceSameOriginMutation.mockReturnValue(null);
     mockEnforceCsrfToken.mockReturnValue(null);
     mockLogAuditEvent.mockResolvedValue(undefined);
@@ -172,7 +171,7 @@ describe("POST /api/admin/dsar/decide", () => {
   });
 
   it("returns 403 when user lacks dsar:manage capability", async () => {
-    vi.mocked(verifyCapabilityFromDb).mockResolvedValueOnce(false);
+    mockVerifyCapabilityRoleFromDb.mockResolvedValueOnce(null);
 
     const response = await POST(
       createMockRequest({
@@ -183,6 +182,28 @@ describe("POST /api/admin/dsar/decide", () => {
 
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toEqual({ error: "Forbidden" });
+  });
+
+  it("uses the DB-verified role in the DSAR audit log", async () => {
+    const requestId = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
+    mockVerifyCapabilityRoleFromDb.mockResolvedValueOnce("governance_controller");
+
+    const response = await POST(
+      createMockRequest({
+        requestId,
+        decision: "approve",
+        notes: "DB role should be logged",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockLogAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "dsar_started",
+        actorRole: "governance_controller",
+        targetId: requestId,
+      })
+    );
   });
 
   it("returns 429 when rate limited", async () => {

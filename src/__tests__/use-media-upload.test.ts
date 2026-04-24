@@ -133,15 +133,13 @@ describe("useMediaUpload", () => {
     );
   });
 
-  it("should upload video via presigned URL", async () => {
-    // Mock the presigned URL endpoint response
+  it("should upload video via the validated media endpoint", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: () =>
         Promise.resolve({
-          uploadUrl: "https://r2.example.com/presigned-put",
-          key: "media/listing/user1/video.mp4",
-          publicUrl: "https://media.verifymzansi.com/media/listing/user1/video.mp4",
+          urls: ["https://media.verifymzansi.com/media/listing/user1/video.mp4"],
+          success: true,
         }),
     });
 
@@ -158,21 +156,16 @@ describe("useMediaUpload", () => {
       uploadResult = await result.current.upload(videoFile);
     });
 
-    // The first fetch call should be to /api/media/upload-url
+    // The first fetch call should be to the validated media upload endpoint.
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
-        "/api/media/upload-url",
+        "/api/media/upload",
         expect.objectContaining({
           method: "POST",
           headers: expect.any(Headers),
         })
       );
     });
-
-    // Verify Content-Type was forwarded through withCsrfHeaders
-    const urlCall = mockFetch.mock.calls.find((c: unknown[]) => c[0] === "/api/media/upload-url");
-    const urlCallHeaders = urlCall?.[1]?.headers as Headers | undefined;
-    expect(urlCallHeaders?.get("Content-Type")).toBe("application/json");
 
     expect(uploadResult).toBe("https://media.verifymzansi.com/media/listing/user1/video.mp4");
     expect(result.current.isUploading).toBe(false);

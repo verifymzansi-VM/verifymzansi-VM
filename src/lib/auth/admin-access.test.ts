@@ -126,6 +126,25 @@ describe("admin access helpers", () => {
     ).resolves.toBe(true);
   });
 
+  it("returns the DB-verified role for capability checks", async () => {
+    mockGetUserById.mockResolvedValue({
+      data: { user: { app_metadata: { role: "admin" }, is_anonymous: false } },
+      error: null,
+    });
+    const { verifyCapabilityRoleFromDb } = await import("./admin-access");
+
+    await expect(
+      verifyCapabilityRoleFromDb(
+        {
+          id: "user-1",
+          app_metadata: { role: "governance_controller" },
+          is_anonymous: false,
+        } as never,
+        "decision:approve"
+      )
+    ).resolves.toBe("admin");
+  });
+
   it("rejects capability checks when the DB role has changed", async () => {
     mockGetUserById.mockResolvedValue({
       data: { user: { app_metadata: { role: "moderator" }, is_anonymous: false } },

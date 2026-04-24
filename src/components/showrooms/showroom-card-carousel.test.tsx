@@ -160,12 +160,12 @@ describe("ShowroomCardCarousel", () => {
     expect(section.className).toContain("lg:py-8");
   });
 
-  it("uses the larger mobile showroom card width while preserving desktop card sizing", () => {
+  it("uses mobile-safe showroom card width while preserving desktop card sizing", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
 
     const centerSlide = screen.getByRole("group", { name: "1 of 3" });
-    expect(centerSlide.className).toContain("w-[72vw]");
-    expect(centerSlide.className).toContain("max-w-[280px]");
+    expect(centerSlide.className).toContain("w-[60vw]");
+    expect(centerSlide.className).toContain("max-w-[235px]");
     expect(centerSlide.className).toContain("sm:w-[58vw]");
     expect(centerSlide.className).toContain("sm:max-w-[360px]");
     expect(centerSlide.className).toContain("lg:w-[280px]");
@@ -205,8 +205,8 @@ describe("ShowroomCardCarousel", () => {
     const section = screen.getByLabelText("Showroom carousel");
     const emptyStateCard = Array.from(container.querySelectorAll("div")).find(
       (node) =>
-        node.className.includes("w-[72vw]") &&
-        node.className.includes("max-w-[280px]") &&
+        node.className.includes("w-[60vw]") &&
+        node.className.includes("max-w-[235px]") &&
         node.className.includes("sm:w-[58vw]") &&
         node.className.includes("sm:max-w-[360px]") &&
         node.className.includes("lg:w-[280px]") &&

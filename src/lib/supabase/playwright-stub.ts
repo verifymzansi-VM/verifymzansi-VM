@@ -6,6 +6,7 @@ import {
   createPlaywrightSession,
   createPlaywrightTableRow,
   ensurePlaywrightVerifiedMember,
+  listPlaywrightUsers,
   listPlaywrightTableRows,
   resolvePlaywrightSession,
   writePlaywrightTableRows,
@@ -654,6 +655,20 @@ export function createPlaywrightStubSupabaseClient(
         };
       },
       admin: {
+        async listUsers(params?: { page?: number; perPage?: number }) {
+          const page = Math.max(1, Number(params?.page ?? 1));
+          const perPage = Math.max(1, Number(params?.perPage ?? 50));
+          const users = listPlaywrightUsers();
+          const from = (page - 1) * perPage;
+
+          return {
+            data: {
+              users: users.slice(from, from + perPage),
+              aud: "authenticated",
+            },
+            error: null,
+          };
+        },
         async deleteUser(userId: string) {
           const tables = [
             "account_profiles",

@@ -404,18 +404,14 @@ describe("CreatePromotionPage", () => {
 
   it("allows video-only submit", async () => {
     vi.mocked(fetchWithRetry).mockImplementation(async (input: RequestInfo | URL) => {
-      if (input === "/api/media/upload-url") {
+      if (input === "/api/media/upload") {
         return {
           ok: true,
           json: async () => ({
-            uploadUrl: "https://upload.example.com/promo-video",
-            publicUrl: "https://media.verifymzansi.com/promotions/video.mp4",
+            urls: ["https://media.verifymzansi.com/promotions/video.mp4"],
+            errors: [],
           }),
         } as Response;
-      }
-
-      if (input === "https://upload.example.com/promo-video") {
-        return { ok: true, status: 200, json: async () => ({}) } as Response;
       }
 
       return fetch(input);

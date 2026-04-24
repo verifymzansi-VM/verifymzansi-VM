@@ -459,28 +459,25 @@ export default function EditListingPage() {
               const file = await compressVideoForUpload(newVideoFile[0]);
               compressedVideoFileRef = file;
               setSubmitProgress("Uploading media...");
-              const urlRes = await fetchWithRetry("/api/media/upload-url", {
+              const uploadData = new FormData();
+              uploadData.append("area", "listing_video");
+              uploadData.append("files", file);
+              const uploadRes = await fetchWithRetry("/api/media/upload", {
                 method: "POST",
-                headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-                body: JSON.stringify({
-                  filename: file.name,
-                  contentType: file.type,
-                  size: file.size,
-                  area: "listing_video",
-                }),
+                headers: withCsrfHeaders(),
+                body: uploadData,
               });
-              if (!urlRes.ok) {
-                throw new Error(await readUploadError(urlRes, "Failed to get video upload URL"));
+              if (!uploadRes.ok) {
+                throw new Error(await readUploadError(uploadRes, "Failed to upload video"));
               }
-              const { uploadUrl, publicUrl } = await urlRes.json();
-              const putRes = await fetchWithRetry(uploadUrl, {
-                method: "PUT",
-                headers: { "Content-Type": file.type },
-                body: file,
-              });
-              if (!putRes.ok) throw new Error(`Failed to upload video (HTTP ${putRes.status})`);
+              const uploadJson = await uploadRes.json();
+              const publicUrl = (uploadJson.urls?.[0] || null) as string | null;
+              if (!publicUrl) {
+                const errors = (uploadJson.errors || []) as string[];
+                throw new Error(errors[0] ?? "Failed to upload video");
+              }
               setUploadStatuses((c) => ({ ...c, video: "done" }));
-              return publicUrl as string;
+              return publicUrl;
             })()
           : Promise.resolve(null as string | null),
         uploadMedia(newVideoCoverFile, "listing"),

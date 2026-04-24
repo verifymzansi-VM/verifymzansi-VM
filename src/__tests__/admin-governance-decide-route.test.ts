@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   mockCreateClient,
-  mockVerifyCapabilityFromDb,
+  mockVerifyCapabilityRoleFromDb,
   mockApproveDecision,
   mockRejectDecision,
   mockEscalateDecision,
@@ -13,7 +13,7 @@ const {
   mockAdminFrom,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
-  mockVerifyCapabilityFromDb: vi.fn(),
+  mockVerifyCapabilityRoleFromDb: vi.fn(),
   mockApproveDecision: vi.fn(),
   mockRejectDecision: vi.fn(),
   mockEscalateDecision: vi.fn(),
@@ -33,7 +33,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 }));
 
 vi.mock("@/lib/auth/admin-access", () => ({
-  verifyCapabilityFromDb: mockVerifyCapabilityFromDb,
+  verifyCapabilityRoleFromDb: mockVerifyCapabilityRoleFromDb,
 }));
 
 vi.mock("@/lib/services/decision-ledger", () => ({
@@ -52,10 +52,6 @@ vi.mock("@/lib/utils/csrf", () => ({
 
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkLocalRateLimit: mockCheckLocalRateLimit,
-}));
-
-vi.mock("@/lib/auth/roles", () => ({
-  getRoleFromUser: vi.fn(() => "governance_controller"),
 }));
 
 vi.mock("@/lib/utils/logger", () => ({
@@ -93,7 +89,7 @@ describe("POST /api/admin/governance/decide", () => {
     mockEnforceSameOriginMutation.mockReturnValue(null);
     mockEnforceCsrfToken.mockReturnValue(null);
     mockCheckLocalRateLimit.mockReturnValue({ limited: false });
-    mockVerifyCapabilityFromDb.mockResolvedValue(true);
+    mockVerifyCapabilityRoleFromDb.mockResolvedValue("governance_controller");
     mockCreateClient.mockResolvedValue({
       auth: {
         getUser: vi.fn().mockResolvedValue({
@@ -136,7 +132,7 @@ describe("POST /api/admin/governance/decide", () => {
   });
 
   it("returns 403 when capability verification fails", async () => {
-    mockVerifyCapabilityFromDb.mockResolvedValue(false);
+    mockVerifyCapabilityRoleFromDb.mockResolvedValue(null);
 
     const res = await POST(
       createRequest({
@@ -147,6 +143,29 @@ describe("POST /api/admin/governance/decide", () => {
     );
 
     expect(res.status).toBe(403);
+  });
+
+  it("uses the DB-verified role for approval records", async () => {
+    mockVerifyCapabilityRoleFromDb.mockResolvedValue("admin");
+    mockApproveDecision.mockResolvedValue({
+      decisionId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+      status: "approved",
+    });
+
+    const res = await POST(
+      createRequest({
+        decisionId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        action: "approve",
+        rationale: "DB role wins",
+      })
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockApproveDecision).toHaveBeenCalledWith(
+      expect.objectContaining({
+        approverRole: "admin",
+      })
+    );
   });
 
   it("returns 429 when locally rate limited", async () => {

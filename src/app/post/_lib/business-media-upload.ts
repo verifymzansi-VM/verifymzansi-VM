@@ -9,7 +9,6 @@ import {
   getPayloadTraceId,
   parseUploadJson,
   parseUploadResponse,
-  readUploadError,
 } from "@/app/post/_lib/media-upload-response";
 import type { UploadArea } from "@/types/enums";
 
@@ -173,82 +172,14 @@ export async function uploadRequiredBusinessVideo({
   }
 
   try {
-    const urlResponse = await fetchWithRetry("/api/media/upload-url", {
-      method: "POST",
-      headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({
-        filename: compressed.name,
-        contentType: compressed.type,
-        size: compressed.size,
-        area,
-      }),
-    });
-
-    const urlPayload = await parseUploadJson(urlResponse);
-
-    if (!urlResponse.ok) {
-      log.warn("Direct business video upload URL generation failed; retrying via server upload", {
-        field: "cover_video",
-        area,
-        filename: file.name,
-        contentType: file.type,
-        status: urlResponse.status,
-        payloadError: getPayloadError(urlPayload),
-      });
-      throw new Error(await readUploadError(urlResponse, "Failed to get video upload URL"));
-    }
-
-    const uploadUrl =
-      urlPayload && typeof (urlPayload as Record<string, unknown>).uploadUrl === "string"
-        ? ((urlPayload as Record<string, unknown>).uploadUrl as string)
-        : null;
-    const publicUrl =
-      urlPayload && typeof (urlPayload as Record<string, unknown>).publicUrl === "string"
-        ? ((urlPayload as Record<string, unknown>).publicUrl as string)
-        : null;
-
-    if (!uploadUrl || !publicUrl) {
-      log.warn(
-        "Direct business video upload returned incomplete payload; retrying via server upload",
-        {
-          field: "cover_video",
-          area,
-          hasUploadUrl: Boolean(uploadUrl),
-          hasPublicUrl: Boolean(publicUrl),
-        }
-      );
-      throw new Error("Failed to get video upload URL");
-    }
-
-    const putResponse = await fetchWithRetry(uploadUrl, {
-      method: "PUT",
-      headers: { "Content-Type": compressed.type },
-      body: compressed,
-    });
-
-    if (!putResponse.ok) {
-      log.warn("Direct business video upload PUT failed; retrying via server upload", {
-        field: "cover_video",
-        area,
-        filename: compressed.name,
-        status: putResponse.status,
-      });
-      throw new Error(`Failed to upload video (HTTP ${putResponse.status})`);
-    }
-
-    return publicUrl;
+    return await uploadBusinessVideoViaServer({ file: compressed, area });
   } catch (error) {
-    log.warn("Direct business video upload failed; retrying via server upload", {
+    log.warn("Validated business video upload failed", {
       field: "cover_video",
       area,
       filename: compressed.name,
       error: error instanceof Error ? error.message : String(error),
     });
-
-    try {
-      return await uploadBusinessVideoViaServer({ file: compressed, area });
-    } catch (fallbackError) {
-      throw toBusinessMediaUploadError("cover_video", fallbackError);
-    }
+    throw toBusinessMediaUploadError("cover_video", error);
   }
 }

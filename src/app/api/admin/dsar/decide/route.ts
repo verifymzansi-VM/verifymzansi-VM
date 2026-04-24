@@ -4,8 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { adminDsarDecideSchema } from "@/lib/validations/admin";
-import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
-import { getRoleFromUser } from "@/lib/auth/roles";
+import { verifyCapabilityRoleFromDb } from "@/lib/auth/admin-access";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
@@ -34,14 +33,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const hasDsarCapability = await verifyCapabilityFromDb(user, "dsar:manage");
-    if (!hasDsarCapability) {
+    const actorRole = await verifyCapabilityRoleFromDb(user, "dsar:manage");
+    if (!actorRole) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    const actorRole = (getRoleFromUser(user) ?? "admin") as
-      | "moderator"
-      | "governance_controller"
-      | "admin";
 
     const rl = checkLocalRateLimit(user.id, "admin:dsar:decide");
     if (rl.limited) {

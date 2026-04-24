@@ -615,20 +615,9 @@ describe("CreateBusinessPage", () => {
     });
   });
 
-  it("falls back to the server upload path when direct promo video upload fails", async () => {
+  it("uploads promo video through the validated server upload path", async () => {
     (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
       async (input: RequestInfo | URL) => {
-        if (input === "/api/media/upload-url") {
-          return jsonResponse({
-            uploadUrl: "https://upload.example.com/business-video",
-            publicUrl: "https://media.verifymzansi.com/media/business_cover/user/video.mp4",
-          });
-        }
-
-        if (input === "https://upload.example.com/business-video") {
-          return { ok: false, status: 500, json: async () => ({}) };
-        }
-
         if (input === "/api/media/upload") {
           return jsonResponse({
             urls: ["https://media.verifymzansi.com/media/business_cover/user/video-fallback.mp4"],

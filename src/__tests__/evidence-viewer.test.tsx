@@ -90,7 +90,11 @@ describe("EvidenceViewer", () => {
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/admin/verification/evidence")
+        "/api/admin/verification/evidence",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ artifactId: artifact.id }),
+        })
       );
     });
   });

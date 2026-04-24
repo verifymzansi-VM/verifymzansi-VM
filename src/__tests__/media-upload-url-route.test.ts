@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
 const {
@@ -33,6 +33,8 @@ vi.mock("@/lib/utils/rate-limit", () => ({
 
 import { POST } from "@/app/api/media/upload-url/route";
 
+const ORIGINAL_ENABLE_DIRECT_R2_UPLOADS = process.env.ENABLE_DIRECT_R2_UPLOADS;
+
 function createRequest(body: unknown): NextRequest {
   return {
     method: "POST",
@@ -43,9 +45,32 @@ function createRequest(body: unknown): NextRequest {
 describe("POST /api/media/upload-url", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.ENABLE_DIRECT_R2_UPLOADS = "1";
     mockCheckRateLimit.mockResolvedValue({ limited: false });
     mockGenerateStorageKey.mockReturnValue("media/listing/user-1/video.mp4");
     mockGeneratePresignedUploadUrl.mockResolvedValue("https://upload.example.com/signed");
+  });
+
+  afterEach(() => {
+    process.env.ENABLE_DIRECT_R2_UPLOADS = ORIGINAL_ENABLE_DIRECT_R2_UPLOADS;
+  });
+
+  it("disables direct uploads by default", async () => {
+    delete process.env.ENABLE_DIRECT_R2_UPLOADS;
+
+    const res = await POST(
+      createRequest({
+        filename: "clip.mp4",
+        contentType: "video/mp4",
+        size: 1024,
+      })
+    );
+
+    expect(res.status).toBe(410);
+    await expect(res.json()).resolves.toMatchObject({
+      code: "direct_media_uploads_disabled",
+    });
+    expect(mockCreateClient).not.toHaveBeenCalled();
   });
 
   it("rate limits abusive callers", async () => {

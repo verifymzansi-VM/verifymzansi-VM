@@ -420,17 +420,6 @@ describe("EditBusinessPage", () => {
           return jsonResponse(existingBusiness, { status: 200 });
         }
 
-        if (input === "/api/media/upload-url") {
-          return jsonResponse({
-            uploadUrl: "https://upload.example.com/business-video",
-            publicUrl: "https://media.verifymzansi.com/media/business_cover/user/video.mp4",
-          });
-        }
-
-        if (input === "https://upload.example.com/business-video") {
-          return { ok: false, status: 500, json: async () => ({}) };
-        }
-
         if (input === "/api/media/upload") {
           return jsonResponse({
             urls: ["https://media.verifymzansi.com/media/business_cover/user/video-fallback.mp4"],

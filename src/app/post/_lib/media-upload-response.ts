@@ -1,5 +1,3 @@
-import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-errors";
-
 type UploadResponse = {
   urls?: unknown;
   errors?: unknown;
@@ -65,13 +63,4 @@ export async function parseUploadJson(response: Response): Promise<UploadRespons
   } catch {
     return null;
   }
-}
-
-export async function readUploadError(response: Response, fallback: string): Promise<string> {
-  const payload = await parseUploadJson(response);
-  const payloadError = getPayloadError(payload);
-  const traceId = getPayloadTraceId(payload, response);
-  const message = payloadError || `${fallback} (HTTP ${response.status})`;
-
-  return appendTraceId(normalizeCreatePostRuntimeError(new Error(message), fallback), traceId);
 }

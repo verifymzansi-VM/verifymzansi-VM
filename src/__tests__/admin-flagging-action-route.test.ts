@@ -302,7 +302,7 @@ describe("POST /api/admin/flagging/action", () => {
     });
   });
 
-  it("falls back to direct enforcement when decision record creation fails", async () => {
+  it("fails closed for sensitive enforcement when decision record creation fails", async () => {
     const reportsEq = vi.fn().mockReturnValue({
       single: vi.fn().mockResolvedValue({
         data: {
@@ -381,20 +381,86 @@ describe("POST /api/admin/flagging/action", () => {
       })
     );
 
+    expect(res.status).toBe(503);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Decision approval workflow unavailable",
+      code: "decision_workflow_unavailable",
+    });
+    expect(mockCreateDecisionRecord).toHaveBeenCalled();
+    expect(moderationInsert).not.toHaveBeenCalled();
+    expect(accountUpdateEq).not.toHaveBeenCalled();
+  });
+
+  it("uses the DB-verified role, not a stale JWT role, for sensitive enforcement approval", async () => {
+    const reportsEq = vi.fn().mockReturnValue({
+      single: vi.fn().mockResolvedValue({
+        data: {
+          id: "report-1",
+          area: "MZANSI_MARKET",
+          target_type: "account_profile",
+          target_id: "owner-1",
+          status: "open",
+        },
+        error: null,
+      }),
+    });
+    const recommendedInsert = vi.fn().mockResolvedValue({ error: null });
+
+    mockVerifyStaffActorRoleFromDb.mockResolvedValue("moderator");
+    mockCreateDecisionRecord.mockResolvedValue({ id: "decision-1" });
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: "mod-1", app_metadata: { role: "admin" } } },
+        }),
+      },
+    });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "reports") {
+          return {
+            select: vi.fn().mockReturnValue({ eq: reportsEq }),
+          };
+        }
+
+        if (table === "moderation_actions") {
+          return {
+            insert: recommendedInsert,
+          };
+        }
+
+        throw new Error(`Unexpected table ${table}`);
+      }),
+      auth: { admin: { getUserById: mockGetUserById } },
+      rpc: vi.fn().mockResolvedValue({ error: null }),
+    });
+
+    const res = await POST(
+      createRequest({
+        reportId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        action: "ban",
+        reason: "Stale JWT should not approve",
+      })
+    );
+
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toMatchObject({
       success: true,
-      action: "suspend",
-      reportStatus: "resolved",
+      action: "ban_recommended",
+      status: "pending_approval",
+      decisionRecordId: "decision-1",
     });
-    expect(mockCreateDecisionRecord).toHaveBeenCalled();
-    expect(moderationInsert).toHaveBeenCalledWith(
+    expect(mockCreateDecisionRecord).toHaveBeenCalledWith(
       expect.objectContaining({
-        action: "suspend",
+        recommenderRole: "moderator",
+      })
+    );
+    expect(recommendedInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "ban_recommended",
         target_owner_id: "owner-1",
       })
     );
-    expect(accountUpdateEq).toHaveBeenCalledWith("user_id", "owner-1");
   });
 
   it("returns 500 when moderation_actions audit trail insert fails", async () => {

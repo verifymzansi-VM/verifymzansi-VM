@@ -105,6 +105,10 @@ e2e/visual-regression.spec.ts-snapshots/*
 
 # ── Cloudflare Wrangler state ─────────────────────────────────
 .wrangler/
+.wrangler-dry-run/
+
+# ── Local E2E uploaded media fixtures ─────────────────────────
+/public/e2e-media/media/
 
 # ── Claude IDE / planning ────────────────────────────────────
 .claude/

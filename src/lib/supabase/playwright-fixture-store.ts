@@ -271,6 +271,11 @@ export function resolvePlaywrightSession(token: string | null | undefined): Stub
   return cloneValue(store.users.get(userId) ?? null);
 }
 
+export function listPlaywrightUsers(): StubUser[] {
+  const store = getPlaywrightFixtureStore();
+  return cloneValue([...store.users.values()]);
+}
+
 export function listPlaywrightTableRows(table: string): StoreTableRow[] {
   const store = getPlaywrightFixtureStore();
   return cloneValue(ensureTable(store, table));

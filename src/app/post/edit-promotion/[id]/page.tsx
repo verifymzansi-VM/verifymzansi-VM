@@ -308,7 +308,7 @@ export default function EditPromotionPage() {
             })()
           : Promise.resolve([] as string[]),
 
-        // Videos via presigned URL (direct to R2)
+        // Videos via validated server upload
         newVideoFiles.length > 0
           ? (async () => {
               setSubmitProgress("Compressing video...");
@@ -321,35 +321,23 @@ export default function EditPromotionPage() {
               }
               compressedVideoFileRef = compressed[0] ?? null;
               setSubmitProgress("Uploading media...");
-              const result = await Promise.all(
-                compressed.map(async (file) => {
-                  const urlRes = await fetchWithRetry("/api/media/upload-url", {
-                    method: "POST",
-                    headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-                    body: JSON.stringify({
-                      filename: file.name,
-                      contentType: file.type,
-                      size: file.size,
-                      area: "promotion",
-                    }),
-                  });
-                  if (!urlRes.ok) {
-                    throw new Error(
-                      await readUploadError(urlRes, "Failed to get video upload URL")
-                    );
-                  }
-                  const { uploadUrl, publicUrl } = await urlRes.json();
-                  const putRes = await fetchWithRetry(uploadUrl, {
-                    method: "PUT",
-                    headers: { "Content-Type": file.type },
-                    body: file,
-                  });
-                  if (!putRes.ok) {
-                    throw new Error(`Failed to upload video (HTTP ${putRes.status})`);
-                  }
-                  return publicUrl as string;
-                })
-              );
+              const uploadData = new FormData();
+              uploadData.append("area", "promotion");
+              compressed.forEach((file) => uploadData.append("files", file));
+              const uploadRes = await fetchWithRetry("/api/media/upload", {
+                method: "POST",
+                headers: withCsrfHeaders(),
+                body: uploadData,
+              });
+              if (!uploadRes.ok) {
+                throw new Error(await readUploadError(uploadRes, "Failed to upload video"));
+              }
+              const uploadJson = await uploadRes.json();
+              const result = (uploadJson.urls || []) as string[];
+              const fileErrors = (uploadJson.errors || []) as string[];
+              if (result.length === 0 && fileErrors.length > 0) {
+                throw new Error(fileErrors[0] ?? "Failed to upload video");
+              }
               setUploadStatuses((c) => ({ ...c, videos: "done" }));
               return result;
             })()

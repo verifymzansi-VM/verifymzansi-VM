@@ -24,6 +24,20 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+async function fetchEvidenceBlob(artifactId: string): Promise<Blob> {
+  const res = await fetch("/api/admin/verification/evidence", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ artifactId }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${res.status}`);
+  }
+
+  return res.blob();
+}
+
 export function EvidenceViewer({ artifact }: { artifact: Artifact }) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -39,16 +53,7 @@ export function EvidenceViewer({ artifact }: { artifact: Artifact }) {
       setBlobUrl(null);
 
       try {
-        const params = new URLSearchParams({
-          artifactId: artifact.id,
-        });
-        const res = await fetch(`/api/admin/verification/evidence?${params}`);
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || `HTTP ${res.status}`);
-        }
-
-        const blob = await res.blob();
+        const blob = await fetchEvidenceBlob(artifact.id);
         if (!cancelled) {
           const url = URL.createObjectURL(blob);
           setBlobUrl((prev) => {
@@ -144,15 +149,7 @@ export function EvidenceViewer({ artifact }: { artifact: Artifact }) {
                 // Trigger re-fetch
                 setLoading(true);
                 setError(null);
-                const params = new URLSearchParams({
-                  artifactId: artifact.id,
-                  r2Key: artifact.r2_key,
-                });
-                fetch(`/api/admin/verification/evidence?${params}`)
-                  .then((res) => {
-                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                    return res.blob();
-                  })
+                fetchEvidenceBlob(artifact.id)
                   .then((blob) => {
                     const url = URL.createObjectURL(blob);
                     setBlobUrl(url);

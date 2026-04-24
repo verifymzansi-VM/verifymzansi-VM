@@ -20,6 +20,9 @@ const VIDEO_EXTENSIONS_BY_TYPE: Record<string, string[]> = {
   "video/mp4": ["mp4"],
   "video/webm": ["webm"],
 };
+function directR2UploadsEnabled(): boolean {
+  return process.env.ENABLE_DIRECT_R2_UPLOADS === "1";
+}
 
 const uploadUrlRequestSchema = z
   .object({
@@ -57,8 +60,9 @@ const uploadUrlRequestSchema = z
 /**
  * POST /api/media/upload-url
  *
- * Returns a presigned R2 upload URL for direct client-to-R2 video uploads.
- * This avoids proxying large video files through the server.
+ * Returns a presigned R2 upload URL for direct client-to-R2 video uploads
+ * only when explicitly enabled. The default product upload path uses
+ * /api/media/upload so the server can validate bytes and scan content.
  *
  * Request body (JSON):
  * - filename: string (original filename for extension extraction)
@@ -86,6 +90,16 @@ export async function POST(request: NextRequest) {
       }
       const csrfBlock = enforceCsrfToken(request, log);
       if (csrfBlock) return csrfBlock;
+    }
+
+    if (!directR2UploadsEnabled()) {
+      return NextResponse.json(
+        {
+          error: "Direct media uploads are disabled. Use the validated media upload endpoint.",
+          code: "direct_media_uploads_disabled",
+        },
+        { status: 410 }
+      );
     }
 
     // ── Authenticate ─────────────────────────────────────────
