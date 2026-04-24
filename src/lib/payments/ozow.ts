@@ -408,7 +408,6 @@ export async function createOzowHostedPayment(
       });
     }
     const paymentScope = env("OZOW_PAYMENT_OAUTH_SCOPE") || "payment";
-    const token = await getOzowAccessToken(paymentScope);
 
     const requestBody = {
       siteCode,
@@ -424,17 +423,30 @@ export async function createOzowHostedPayment(
       returnUrl: input.returnUrl,
     };
 
-    const response = await fetch(`${baseUrl}/v1/payments`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-        "Idempotency-Key": idempotencyKey,
-        "X-Correlation-ID": correlationId,
-      },
-      body: JSON.stringify(requestBody),
-      signal: AbortSignal.timeout(15_000),
-    });
+    const createPaymentRequest = async (token: string) =>
+      fetch(`${baseUrl}/v1/payments`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey,
+          "X-Correlation-ID": correlationId,
+        },
+        body: JSON.stringify(requestBody),
+        signal: AbortSignal.timeout(15_000),
+      });
+
+    let response = await createPaymentRequest(await getOzowAccessToken(paymentScope));
+
+    if (response.status === 401 || response.status === 403) {
+      log.warn("Ozow payment request was rejected with cached token; retrying once", {
+        status: response.status,
+        correlationId,
+        ozowEnv,
+        baseUrlHost,
+      });
+      response = await createPaymentRequest(await getOzowAccessToken(paymentScope, true));
+    }
 
     if (!response.ok) {
       const body = await response.text();

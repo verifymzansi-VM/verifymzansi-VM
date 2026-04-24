@@ -69,36 +69,48 @@ vi.mock("@/components/billing/plan-gate", () => ({
 
 describe("EditPromotionPage", () => {
   const mockPush = vi.fn();
+  const createDefaultPromotion = (
+    overrides: Partial<{
+      photos: string[];
+      videos: string[];
+      video_thumbnail: string;
+      business_id: string | null;
+    }> = {}
+  ) => ({
+    id: "promotion-1",
+    title: "Night Market",
+    description: "Community event with food, music, and stalls.",
+    promotion_type: "event",
+    category: "Live Music",
+    category_key: "events_entertainment",
+    price_cents: 5000,
+    price_negotiable: false,
+    location_province: "Gauteng",
+    location_city: "Johannesburg",
+    contact_methods: ["call", "form"],
+    start_date: "2099-03-10T00:00:00.000Z",
+    end_date: "2099-03-12T00:00:00.000Z",
+    photos: ["https://example.com/promo.jpg"],
+    videos: [],
+    video_thumbnail: "",
+    business_id: "business-1",
+    ...overrides,
+  });
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    (useRouter as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ push: mockPush });
-    (useParams as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ id: "promotion-1" });
-
+  function mockEditPromotionFetch(
+    promotionOverrides: Partial<{
+      photos: string[];
+      videos: string[];
+      video_thumbnail: string;
+      business_id: string | null;
+    }> = {}
+  ) {
     global.fetch = vi
       .fn()
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          promotion: {
-            id: "promotion-1",
-            title: "Night Market",
-            description: "Community event with food, music, and stalls.",
-            promotion_type: "event",
-            category: "Live Music",
-            category_key: "events_entertainment",
-            price_cents: 5000,
-            price_negotiable: false,
-            location_province: "Gauteng",
-            location_city: "Johannesburg",
-            contact_methods: ["call", "form"],
-            start_date: "2099-03-10T00:00:00.000Z",
-            end_date: "2099-03-12T00:00:00.000Z",
-            photos: ["https://example.com/promo.jpg"],
-            videos: [],
-            video_thumbnail: "",
-            business_id: "business-1",
-          },
+          promotion: createDefaultPromotion(promotionOverrides),
         }),
       })
       .mockResolvedValueOnce({
@@ -111,6 +123,13 @@ describe("EditPromotionPage", () => {
         ok: true,
         json: async () => ({ success: true }),
       }) as unknown as typeof fetch;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (useRouter as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ push: mockPush });
+    (useParams as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ id: "promotion-1" });
+    mockEditPromotionFetch();
   });
 
   it("hydrates saved promotion details and sends normalized payload on save", async () => {
@@ -159,5 +178,45 @@ describe("EditPromotionPage", () => {
     });
 
     expect(screen.queryByLabelText("Promotion Type")).not.toBeInTheDocument();
+  });
+
+  it("allows saving a live promotion that only has video media", async () => {
+    mockEditPromotionFetch({
+      photos: [],
+      videos: ["https://example.com/promo-video.mp4"],
+      video_thumbnail: "https://example.com/promo-video-thumb.jpg",
+    });
+
+    render(<EditPromotionPage />);
+
+    const saveButton = await screen.findByRole("button", { name: /Save Changes/i });
+    expect(saveButton).toBeEnabled();
+    expect(screen.queryByText("At least one photo or video is required.")).not.toBeInTheDocument();
+
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(3);
+    });
+
+    const request = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[2];
+    const payload = JSON.parse(request[1].body as string);
+
+    expect(payload.images).toEqual([]);
+    expect(payload.videos).toEqual(["https://example.com/promo-video.mp4"]);
+    expect(payload.video_thumbnail).toBe("https://example.com/promo-video-thumb.jpg");
+  });
+
+  it("shows a photo-or-video validation message when no media exists", async () => {
+    mockEditPromotionFetch({
+      photos: [],
+      videos: [],
+      video_thumbnail: "",
+    });
+
+    render(<EditPromotionPage />);
+
+    expect(await screen.findByText("At least one photo or video is required.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Save Changes/i })).toBeDisabled();
   });
 });

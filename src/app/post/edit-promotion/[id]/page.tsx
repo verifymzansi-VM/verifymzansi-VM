@@ -453,6 +453,8 @@ export default function EditPromotionPage() {
   }
 
   const totalImages = existingImages.length + newPhotoFiles.length;
+  const totalVideos = existingVideos.length + newVideoFiles.length;
+  const hasAnyMedia = totalImages > 0 || totalVideos > 0;
   const previewImages = previewPhotoUrls.length > 0 ? previewPhotoUrls : existingImages;
   const previewVideos = previewVideoUrls.length > 0 ? previewVideoUrls : existingVideos;
   const linkedBusiness = businessId
@@ -1033,14 +1035,14 @@ export default function EditPromotionPage() {
               </div>
 
               {!isSubmitting &&
-                (totalImages === 0 ||
+                (!hasAnyMedia ||
                   title.length < 5 ||
                   description.length < 20 ||
                   !province ||
                   !city) && (
                   <p className="text-xs text-destructive text-right">
-                    {totalImages === 0
-                      ? "At least one photo is required."
+                    {!hasAnyMedia
+                      ? "At least one photo or video is required."
                       : title.length < 5
                         ? "Title must be at least 5 characters."
                         : description.length < 20
@@ -1091,7 +1093,7 @@ export default function EditPromotionPage() {
                   onClick={handleSubmit}
                   disabled={
                     isSubmitting ||
-                    totalImages === 0 ||
+                    !hasAnyMedia ||
                     title.length < 5 ||
                     description.length < 20 ||
                     !province ||

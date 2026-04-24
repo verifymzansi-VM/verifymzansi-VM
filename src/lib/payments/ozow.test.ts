@@ -176,6 +176,54 @@ describe("ozow payments", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("refreshes the access token once when payment creation gets an auth failure", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ access_token: "token-1", expires_in: 3600 }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        text: async () => "token expired",
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ access_token: "token-2", expires_in: 3600 }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: "req-1", redirectUrl: "https://pay.ozow.test/recovered" }),
+      });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { createOzowHostedPayment, resetOzowTokenCacheForTesting } = await import("./ozow");
+    resetOzowTokenCacheForTesting();
+
+    const result = await createOzowHostedPayment({
+      paymentId: "payment-1",
+      merchantReference: "payment1",
+      amountCents: 2500,
+      returnUrl: "https://verifymzansi.com/billing/success?payment=payment-1",
+      cancelUrl: "https://verifymzansi.com/billing/cancel?payment=payment-1",
+    });
+
+    expect(result.redirectUrl).toBe("https://pay.ozow.test/recovered");
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock.mock.calls[0][0]).toContain("/v1/token");
+    expect(fetchMock.mock.calls[1][0]).toContain("/v1/payments");
+    expect(fetchMock.mock.calls[2][0]).toContain("/v1/token");
+    expect(fetchMock.mock.calls[3][0]).toContain("/v1/payments");
+    expect((fetchMock.mock.calls[1][1] as RequestInit).headers).toMatchObject({
+      Authorization: "Bearer token-1",
+    });
+    expect((fetchMock.mock.calls[3][1] as RequestInit).headers).toMatchObject({
+      Authorization: "Bearer token-2",
+    });
+  });
+
   it("falls back to the mock checkout flow when the Ozow client is unknown outside production", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce({
       ok: false,
