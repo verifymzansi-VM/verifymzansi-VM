@@ -54,9 +54,10 @@ vi.mock("@/lib/utils/logger", () => ({
 
 import { GET } from "./route";
 
-function createRequest(url: string) {
+function createRequest(url: string, headers?: HeadersInit) {
   return {
     nextUrl: new URL(url),
+    headers: new Headers(headers),
   } as unknown as Request;
 }
 
@@ -188,6 +189,20 @@ describe("GET /api/admin/dsar/export", () => {
     );
 
     expect(response.status).toBe(400);
+  });
+
+  it("rejects cross-site browser export requests before resolving admin state", async () => {
+    const response = await GET(
+      createRequest(
+        "http://localhost:3000/api/admin/dsar/export?requestId=a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        { "sec-fetch-site": "cross-site" }
+      ) as never
+    );
+
+    expect(response.status).toBe(403);
+    expect(mockCreateClient).not.toHaveBeenCalled();
+    expect(mockCreateAdminClient).not.toHaveBeenCalled();
+    expect(mockLogAuditEvent).not.toHaveBeenCalled();
   });
 
   it("caps auth user lookup to five pages", async () => {

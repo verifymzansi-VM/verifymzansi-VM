@@ -17,6 +17,16 @@ const dsarExportQuerySchema = z.object({
   requestId: uuidSchema,
 });
 
+function rejectCrossSiteExport(request: NextRequest): NextResponse | null {
+  const fetchSite = request.headers.get("sec-fetch-site")?.toLowerCase();
+  if (fetchSite === "cross-site") {
+    log.warn("Blocked cross-site DSAR export request");
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  return null;
+}
+
 type AuthListUser = {
   id: string;
   email?: string | null;
@@ -86,6 +96,9 @@ async function resolveUserIdByEmail(
 // be audited. The endpoint is protected by admin auth, mitigating CSRF risk.
 export async function GET(request: NextRequest) {
   try {
+    const crossSiteBlock = rejectCrossSiteExport(request);
+    if (crossSiteBlock) return crossSiteBlock;
+
     const parsedQuery = parseAndValidateSearchParams(
       request.nextUrl.searchParams,
       dsarExportQuerySchema,
