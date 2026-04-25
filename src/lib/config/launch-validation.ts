@@ -120,6 +120,8 @@ const PRODUCTION_SECRET_KEYS = [
   "TURNSTILE_SECRET_KEY",
 ] as const;
 
+const DEFAULT_OZOW_PAYMENT_OAUTH_SCOPE = "payments";
+
 function normalizeMode(value?: string): LaunchValidationMode | null {
   if (!value) return null;
   const normalized = value.trim().toLowerCase();
@@ -355,6 +357,9 @@ export function validateLaunchConfiguration(
   const ozowSiteCode = env.OZOW_SITE_CODE;
   const ozowWebhookSecret = env.OZOW_WEBHOOK_SECRET;
   const ozowApiBaseUrl = env.OZOW_API_BASE_URL;
+  const ozowPaymentScope = hasValue(env.OZOW_PAYMENT_OAUTH_SCOPE)
+    ? env.OZOW_PAYMENT_OAUTH_SCOPE.trim()
+    : DEFAULT_OZOW_PAYMENT_OAUTH_SCOPE;
   const kycWebhookSecretRequired = requiresKycWebhookSecret(mode, env);
   const kycProvider = getConfiguredKycProvider(env);
   if (mode === "production") {
@@ -373,12 +378,19 @@ export function validateLaunchConfiguration(
       );
     } else if (ozowEnv !== "production") {
       addCheck(checks, "Ozow", "fail", "OZOW_ENV must be set to production for live checkout");
+    } else if (ozowPaymentScope !== DEFAULT_OZOW_PAYMENT_OAUTH_SCOPE) {
+      addCheck(
+        checks,
+        "Ozow",
+        "fail",
+        "OZOW_PAYMENT_OAUTH_SCOPE must be payments for Ozow One checkout"
+      );
     } else {
       addCheck(
         checks,
         "Ozow",
         "pass",
-        `env=${ozowEnv} site=${ozowSiteCode}${hasValue(ozowApiBaseUrl) ? " custom-base-url" : ""}`
+        `env=${ozowEnv} site=${ozowSiteCode} scope=${ozowPaymentScope}${hasValue(ozowApiBaseUrl) ? " custom-base-url" : ""}`
       );
 
       if (hasValue(ozowApiBaseUrl) && !isAllowedOzowApiBaseUrl(ozowApiBaseUrl, mode)) {
@@ -396,11 +408,12 @@ export function validateLaunchConfiguration(
     hasValue(ozowSiteCode) &&
     hasValue(ozowWebhookSecret)
   ) {
+    const scopeStatus = ozowPaymentScope === DEFAULT_OZOW_PAYMENT_OAUTH_SCOPE ? "pass" : "warn";
     addCheck(
       checks,
       "Ozow",
-      "pass",
-      `env=${ozowEnv ?? "staging"} site=${ozowSiteCode}${hasValue(ozowApiBaseUrl) ? " custom-base-url" : ""}`
+      scopeStatus,
+      `env=${ozowEnv ?? "staging"} site=${ozowSiteCode} scope=${ozowPaymentScope}${hasValue(ozowApiBaseUrl) ? " custom-base-url" : ""}`
     );
 
     if (hasValue(ozowApiBaseUrl) && !isAllowedOzowApiBaseUrl(ozowApiBaseUrl, mode)) {

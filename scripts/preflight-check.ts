@@ -125,6 +125,7 @@ export function classifyOzowPreflightCheck({
   clientSecret,
   siteCode,
   webhookSecret,
+  paymentScope = "payments",
 }: {
   mode: LaunchValidationMode;
   ozowEnv?: string;
@@ -132,11 +133,12 @@ export function classifyOzowPreflightCheck({
   clientSecret: string;
   siteCode: string;
   webhookSecret: string;
+  paymentScope?: string;
 }): Pick<CheckResult, "status" | "detail"> {
   if (mode !== "production") {
     return {
       status: "warn",
-      detail: `Non-production mode allows OZOW_ENV=${ozowEnv ?? "unset"}`,
+      detail: `Non-production mode allows OZOW_ENV=${ozowEnv ?? "unset"} scope=${paymentScope}`,
     };
   }
 
@@ -159,9 +161,16 @@ export function classifyOzowPreflightCheck({
     };
   }
 
+  if (paymentScope !== "payments") {
+    return {
+      status: "fail",
+      detail: "OZOW_PAYMENT_OAUTH_SCOPE must be payments in production mode",
+    };
+  }
+
   return {
     status: "pass",
-    detail: `env=production site=${siteCode}`,
+    detail: `env=production site=${siteCode} scope=${paymentScope}`,
   };
 }
 
@@ -262,6 +271,7 @@ function checkOzow(mode: LaunchValidationMode): void {
     const clientSecret = requireEnv("OZOW_CLIENT_SECRET");
     const siteCode = requireEnv("OZOW_SITE_CODE");
     const webhookSecret = requireEnv("OZOW_WEBHOOK_SECRET");
+    const paymentScope = optionalEnv("OZOW_PAYMENT_OAUTH_SCOPE") ?? "payments";
     const result = classifyOzowPreflightCheck({
       mode,
       ozowEnv,
@@ -269,6 +279,7 @@ function checkOzow(mode: LaunchValidationMode): void {
       clientSecret,
       siteCode,
       webhookSecret,
+      paymentScope,
     });
 
     addResult("Ozow", result.status, result.detail);

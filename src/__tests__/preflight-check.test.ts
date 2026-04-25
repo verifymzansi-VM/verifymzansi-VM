@@ -64,6 +64,22 @@ describe("preflight-check", () => {
 
     expect(result.status).toBe("pass");
     expect(result.detail).toContain("site-code");
+    expect(result.detail).toContain("scope=payments");
+  });
+
+  it("fails production Ozow validation when the payment scope is singular", () => {
+    const result = classifyOzowPreflightCheck({
+      mode: "production",
+      ozowEnv: "production",
+      clientId: "client-id",
+      clientSecret: "client-secret",
+      siteCode: "site-code",
+      webhookSecret: "webhook-secret",
+      paymentScope: "payment",
+    });
+
+    expect(result.status).toBe("fail");
+    expect(result.detail).toContain("OZOW_PAYMENT_OAUTH_SCOPE");
   });
 
   it("resolves withTimeout when promise settles before deadline", async () => {

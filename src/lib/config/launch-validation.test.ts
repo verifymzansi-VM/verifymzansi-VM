@@ -132,6 +132,24 @@ describe("launch validation", () => {
     );
   });
 
+  it("fails production mode when the Ozow payment scope uses the legacy singular value", () => {
+    const summary = validateLaunchConfiguration(
+      {
+        ...BASE_ENV,
+        OZOW_PAYMENT_OAUTH_SCOPE: "payment",
+      },
+      { mode: "production" }
+    );
+
+    expect(summary.isValid).toBe(false);
+    expect(summary.errors).toContainEqual(
+      expect.objectContaining({
+        name: "Ozow",
+        detail: "OZOW_PAYMENT_OAUTH_SCOPE must be payments for Ozow One checkout",
+      })
+    );
+  });
+
   it("allows missing KYC webhook secret when KYC_PROVIDER=stub", () => {
     const summary = validateLaunchConfiguration(
       {

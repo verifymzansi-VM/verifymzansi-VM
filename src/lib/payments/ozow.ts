@@ -55,6 +55,7 @@ const MAX_CACHED_TOKENS = 20;
 const cachedTokens = new Map<string, CachedToken>();
 const pendingTokenFetches = new Map<string, Promise<string>>();
 const OZOW_REFERENCE_FIELD_MAX_LENGTH = 14;
+const DEFAULT_OZOW_PAYMENT_OAUTH_SCOPE = "payments";
 
 const OZOW_ALLOWED_HOSTS = {
   production: new Set(["one.ozow.com"]),
@@ -407,7 +408,7 @@ export async function createOzowHostedPayment(
         baseUrlHost,
       });
     }
-    const paymentScope = env("OZOW_PAYMENT_OAUTH_SCOPE") || "payment";
+    const paymentScope = env("OZOW_PAYMENT_OAUTH_SCOPE") || DEFAULT_OZOW_PAYMENT_OAUTH_SCOPE;
 
     const requestBody = {
       siteCode,
