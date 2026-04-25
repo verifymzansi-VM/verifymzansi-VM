@@ -15,7 +15,7 @@ import { checkLocalRateLimit, getClientRateLimitKey } from "@/lib/utils/rate-lim
 import type { Logger } from "@/lib/utils/logger";
 import { uuidSchema } from "@/lib/validations/shared";
 
-export const engagementRequestSchema = z.object({
+const engagementRequestSchema = z.object({
   targetId: uuidSchema,
   targetType: z.string().refine(isContentTargetType, "Invalid target type"),
 });
