@@ -1,5 +1,6 @@
 /* eslint-disable no-console */
 
+import crypto from "crypto";
 import { HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
 import { loadEnvConfig } from "@next/env";
 import { verifySupabaseSchema } from "./check-supabase-schema";
@@ -21,6 +22,7 @@ const results: CheckResult[] = [];
 const SUPABASE_SCHEMA_TIMEOUT_MS = 12_000;
 const R2_HEAD_BUCKET_TIMEOUT_MS = 10_000;
 const R2_HEAD_BUCKET_MAX_ATTEMPTS = 3;
+const OZOW_CONNECTIVITY_TIMEOUT_MS = 10_000;
 
 function parseModeArg(argv: string[]): LaunchValidationMode | undefined {
   const modeArg = argv.find((arg) => arg.startsWith("--mode="));
@@ -174,6 +176,121 @@ export function classifyOzowPreflightCheck({
   };
 }
 
+async function readOzowErrorDetail(response: Response): Promise<string> {
+  const body = await response.text();
+  try {
+    const parsed = JSON.parse(body) as Record<string, unknown>;
+    const detail = parsed.detail;
+    const title = parsed.title;
+    if (typeof detail === "string" && detail.trim()) return detail;
+    if (typeof title === "string" && title.trim()) return title;
+  } catch {
+    // Fall through to the raw body preview.
+  }
+
+  return body.slice(0, 200) || `HTTP ${response.status}`;
+}
+
+function getOzowApiBaseUrl(ozowEnv?: string, configuredBaseUrl?: string): string {
+  if (configuredBaseUrl) {
+    return configuredBaseUrl.replace(/\/$/, "");
+  }
+
+  return ozowEnv === "production" ? "https://one.ozow.com" : "https://stagingone.ozow.com";
+}
+
+export async function checkOzowPaymentApiAccess({
+  ozowEnv,
+  clientId,
+  clientSecret,
+  siteCode,
+  paymentScope = "payments",
+  configuredBaseUrl,
+  fetchImpl = fetch,
+}: {
+  ozowEnv?: string;
+  clientId: string;
+  clientSecret: string;
+  siteCode: string;
+  paymentScope?: string;
+  configuredBaseUrl?: string;
+  fetchImpl?: typeof fetch;
+}): Promise<Pick<CheckResult, "status" | "detail">> {
+  const baseUrl = getOzowApiBaseUrl(ozowEnv, configuredBaseUrl);
+  const tokenResponse = await fetchImpl(`${baseUrl}/v1/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: clientId,
+      client_secret: clientSecret,
+      scope: paymentScope,
+    }),
+    signal: AbortSignal.timeout(OZOW_CONNECTIVITY_TIMEOUT_MS),
+  });
+
+  if (!tokenResponse.ok) {
+    const detail = await readOzowErrorDetail(tokenResponse);
+    return {
+      status: "fail",
+      detail: `Ozow token request failed with HTTP ${tokenResponse.status}: ${detail}`,
+    };
+  }
+
+  const tokenPayload = (await tokenResponse.json()) as Record<string, unknown>;
+  const accessToken =
+    typeof tokenPayload.access_token === "string"
+      ? tokenPayload.access_token
+      : typeof tokenPayload.token === "string"
+        ? tokenPayload.token
+        : "";
+
+  if (!accessToken) {
+    return {
+      status: "fail",
+      detail: "Ozow token response did not include an access token",
+    };
+  }
+
+  const paymentMethodsUrl = new URL(`${baseUrl}/v1/paymentmethods`);
+  paymentMethodsUrl.searchParams.set("siteCode", siteCode);
+  paymentMethodsUrl.searchParams.set("region", "ZA");
+
+  const accessResponse = await fetchImpl(paymentMethodsUrl, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "X-Correlation-ID": crypto.randomUUID(),
+    },
+    signal: AbortSignal.timeout(OZOW_CONNECTIVITY_TIMEOUT_MS),
+  });
+
+  if (accessResponse.ok) {
+    return {
+      status: "pass",
+      detail: `OAuth consumer can access Ozow payment methods for site=${siteCode} scope=${paymentScope}`,
+    };
+  }
+
+  const detail = await readOzowErrorDetail(accessResponse);
+  if (
+    (accessResponse.status === 401 || accessResponse.status === 403) &&
+    /consumer does not have access|access is denied/i.test(detail)
+  ) {
+    return {
+      status: "fail",
+      detail:
+        `Ozow OAuth consumer is not authorized for site=${siteCode}. ` +
+        "Link this client to the site in Ozow or update OZOW_CLIENT_ID, " +
+        "OZOW_CLIENT_SECRET, and OZOW_SITE_CODE to a matching set.",
+    };
+  }
+
+  return {
+    status: "fail",
+    detail: `Ozow payment API access check failed with HTTP ${accessResponse.status}: ${detail}`,
+  };
+}
+
 async function checkSupabaseSchema(mode: LaunchValidationMode): Promise<void> {
   try {
     const result = await withTimeout(
@@ -264,7 +381,7 @@ async function checkR2Access(mode: LaunchValidationMode): Promise<void> {
   }
 }
 
-function checkOzow(mode: LaunchValidationMode): void {
+async function checkOzow(mode: LaunchValidationMode): Promise<void> {
   try {
     const ozowEnv = optionalEnv("OZOW_ENV");
     const clientId = requireEnv("OZOW_CLIENT_ID");
@@ -272,7 +389,7 @@ function checkOzow(mode: LaunchValidationMode): void {
     const siteCode = requireEnv("OZOW_SITE_CODE");
     const webhookSecret = requireEnv("OZOW_WEBHOOK_SECRET");
     const paymentScope = optionalEnv("OZOW_PAYMENT_OAUTH_SCOPE") ?? "payments";
-    const result = classifyOzowPreflightCheck({
+    const staticResult = classifyOzowPreflightCheck({
       mode,
       ozowEnv,
       clientId,
@@ -282,7 +399,20 @@ function checkOzow(mode: LaunchValidationMode): void {
       paymentScope,
     });
 
-    addResult("Ozow", result.status, result.detail);
+    if (staticResult.status !== "pass" || mode !== "production") {
+      addResult("Ozow", staticResult.status, staticResult.detail);
+      return;
+    }
+
+    const liveResult = await checkOzowPaymentApiAccess({
+      ozowEnv,
+      clientId,
+      clientSecret,
+      siteCode,
+      paymentScope,
+      configuredBaseUrl: optionalEnv("OZOW_API_BASE_URL"),
+    });
+    addResult("Ozow API access", liveResult.status, liveResult.detail);
   } catch (error) {
     addResult("Ozow", "fail", (error as Error).message);
   }
@@ -399,7 +529,7 @@ async function main(): Promise<void> {
   appendLaunchChecks(mode);
   await checkSupabaseSchema(mode);
   await checkR2Access(mode);
-  checkOzow(mode);
+  await checkOzow(mode);
   checkAfricasTalking(mode);
   await checkResend(mode);
   await checkTurnstile(mode);

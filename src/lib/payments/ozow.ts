@@ -172,6 +172,12 @@ function extractOzowErrorDetail(body: string): string {
   }
 }
 
+function isOzowAccessDeniedDetail(detail: string): boolean {
+  return /consumer does not have access|access is denied to resource|appropriate scopes/i.test(
+    detail
+  );
+}
+
 function createMockHostedPaymentResponse(
   input: OzowHostedPaymentRequest
 ): OzowHostedPaymentResponse {
@@ -284,6 +290,10 @@ async function fetchOzowAccessToken(normalizedScope: string): Promise<string> {
         status: response.status,
         ozowEnv,
         baseUrlHost,
+        reason: isOzowAccessDeniedDetail(errorDetail)
+          ? "consumer_resource_access_denied"
+          : "authentication_failed",
+        detail: errorDetail,
       });
     }
 
@@ -473,6 +483,9 @@ export async function createOzowHostedPayment(
           status: response.status,
           ozowEnv,
           baseUrlHost,
+          reason: isOzowAccessDeniedDetail(errorDetail)
+            ? "consumer_resource_access_denied"
+            : "authentication_failed",
           detail: errorDetail,
         });
       }

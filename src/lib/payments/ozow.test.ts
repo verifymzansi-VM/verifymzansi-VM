@@ -268,6 +268,7 @@ describe("ozow payments", () => {
       code: "ozow_authentication_error",
       context: expect.objectContaining({
         status: 401,
+        reason: "consumer_resource_access_denied",
         detail: "Consumer does not have access to the requested resource.",
       }),
     });

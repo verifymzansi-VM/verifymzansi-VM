@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  checkOzowPaymentApiAccess,
   classifyOzowPreflightCheck,
   classifySupabaseSchemaPreflightError,
   retryWithBackoff,
@@ -80,6 +81,85 @@ describe("preflight-check", () => {
 
     expect(result.status).toBe("fail");
     expect(result.detail).toContain("OZOW_PAYMENT_OAUTH_SCOPE");
+  });
+
+  it("passes the live Ozow access check when token and site access succeed", async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: "token-1", expires_in: "14400" }), {
+          status: 200,
+        })
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [] }), { status: 200 }));
+
+    const result = await checkOzowPaymentApiAccess({
+      ozowEnv: "production",
+      clientId: "client-id",
+      clientSecret: "client-secret",
+      siteCode: "site-code",
+      fetchImpl,
+    });
+
+    expect(result.status).toBe("pass");
+    expect(result.detail).toContain("site-code");
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(String(fetchImpl.mock.calls[1]?.[0])).toContain("/v1/paymentmethods");
+  });
+
+  it("fails the live Ozow access check when the OAuth consumer is not linked to the site", async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: "token-1", expires_in: "14400" }), {
+          status: 200,
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            code: "Unauthorized",
+            detail: "Consumer does not have access to the requested resource.",
+          }),
+          { status: 401 }
+        )
+      );
+
+    const result = await checkOzowPaymentApiAccess({
+      ozowEnv: "production",
+      clientId: "client-id",
+      clientSecret: "client-secret",
+      siteCode: "site-code",
+      fetchImpl,
+    });
+
+    expect(result.status).toBe("fail");
+    expect(result.detail).toContain("not authorized");
+    expect(result.detail).toContain("OZOW_CLIENT_ID");
+  });
+
+  it("fails the live Ozow access check when token creation is rejected", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          code: "Unauthorized",
+          detail: "invalid client credentials",
+        }),
+        { status: 401 }
+      )
+    );
+
+    const result = await checkOzowPaymentApiAccess({
+      ozowEnv: "production",
+      clientId: "client-id",
+      clientSecret: "client-secret",
+      siteCode: "site-code",
+      fetchImpl,
+    });
+
+    expect(result.status).toBe("fail");
+    expect(result.detail).toContain("token request failed");
+    expect(result.detail).toContain("invalid client credentials");
   });
 
   it("resolves withTimeout when promise settles before deadline", async () => {
