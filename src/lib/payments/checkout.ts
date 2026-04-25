@@ -59,6 +59,18 @@ function getOzowFailureCode(error: unknown): string | undefined {
   return undefined;
 }
 
+function getOzowFailureContext(error: unknown): Record<string, unknown> | undefined {
+  if (
+    error instanceof OzowConfigurationError ||
+    error instanceof OzowAuthenticationError ||
+    error instanceof OzowProviderError
+  ) {
+    return error.context;
+  }
+
+  return undefined;
+}
+
 export async function createHostedCheckout(
   input: PaymentCheckoutInput
 ): Promise<PaymentCheckoutResult> {
@@ -153,6 +165,7 @@ export async function createHostedCheckout(
     };
   } catch (error) {
     const errorCode = getOzowFailureCode(error);
+    const errorContext = getOzowFailureContext(error);
     if (!paymentMarkedFailed) {
       await input.admin
         .from("payments")
@@ -162,6 +175,7 @@ export async function createHostedCheckout(
             ...providerData,
             last_error: error instanceof Error ? error.message : "Unknown checkout error",
             ...(errorCode ? { last_error_code: errorCode } : {}),
+            ...(errorContext ? { last_error_context: errorContext } : {}),
           },
         })
         .eq("id", paymentId)

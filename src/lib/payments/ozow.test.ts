@@ -224,6 +224,55 @@ describe("ozow payments", () => {
     });
   });
 
+  it("includes the provider detail on payment creation auth failures", async () => {
+    const providerError = JSON.stringify({
+      code: "Unauthorized",
+      detail: "Consumer does not have access to the requested resource.",
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ access_token: "token-1", expires_in: 3600 }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        text: async () => providerError,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ access_token: "token-2", expires_in: 3600 }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        text: async () => providerError,
+      });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { createOzowHostedPayment, resetOzowTokenCacheForTesting } = await import("./ozow");
+    resetOzowTokenCacheForTesting();
+
+    await expect(
+      createOzowHostedPayment({
+        paymentId: "payment-1",
+        merchantReference: "payment1",
+        amountCents: 2500,
+        returnUrl: "https://verifymzansi.com/billing/success?payment=payment-1",
+        cancelUrl: "https://verifymzansi.com/billing/cancel?payment=payment-1",
+      })
+    ).rejects.toMatchObject({
+      name: "OzowAuthenticationError",
+      code: "ozow_authentication_error",
+      context: expect.objectContaining({
+        status: 401,
+        detail: "Consumer does not have access to the requested resource.",
+      }),
+    });
+  });
+
   it("falls back to the mock checkout flow when the Ozow client is unknown outside production", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce({
       ok: false,

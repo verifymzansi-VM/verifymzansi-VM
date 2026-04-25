@@ -473,6 +473,7 @@ export async function createOzowHostedPayment(
           status: response.status,
           ozowEnv,
           baseUrlHost,
+          detail: errorDetail,
         });
       }
 

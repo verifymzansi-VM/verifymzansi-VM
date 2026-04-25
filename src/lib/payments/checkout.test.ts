@@ -228,7 +228,10 @@ describe("createHostedCheckout", () => {
 
   it("stores an Ozow error code when checkout fails with a typed provider error", async () => {
     vi.mocked(createOzowHostedPayment).mockRejectedValue(
-      new OzowAuthenticationError("Payment provider authentication failed")
+      new OzowAuthenticationError("Payment provider authentication failed", {
+        status: 401,
+        detail: "Consumer does not have access to the requested resource.",
+      })
     );
     const mock = createMockAdminClient();
 
@@ -252,6 +255,10 @@ describe("createHostedCheckout", () => {
         provider_data: expect.objectContaining({
           last_error: "Payment provider authentication failed",
           last_error_code: "ozow_authentication_error",
+          last_error_context: {
+            status: 401,
+            detail: "Consumer does not have access to the requested resource.",
+          },
         }),
       })
     );
