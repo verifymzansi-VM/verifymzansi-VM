@@ -509,7 +509,7 @@ describe("POST /api/billing/create-checkout", () => {
 
     expect(res.status).toBe(503);
     expect(data.error).toBe(
-      "Payment provider authentication failed. This is a temporary issue — please try again in a few minutes."
+      "Payment provider account is not authorized for this Ozow site. Please contact support."
     );
   });
 
