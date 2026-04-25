@@ -1,26 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { prepareEngagementMutation, setEngagementViewerCookie } from "@/lib/engagement-route";
 import { createLogger } from "@/lib/utils/logger";
-import { parseAndValidateJsonRequest } from "@/lib/utils/api";
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
-import { checkLocalRateLimit, getClientRateLimitKey } from "@/lib/utils/rate-limit";
-import {
-  buildViewerKey,
-  createAnonymousViewerId,
-  ENGAGEMENT_VIEWER_COOKIE,
-  ENGAGEMENT_VIEWER_COOKIE_MAX_AGE_SECONDS,
-  isContentTargetType,
-} from "@/lib/engagement";
-import { uuidSchema } from "@/lib/validations/shared";
 
 const log = createLogger("EngagementLikeRoute");
-
-const likeRequestSchema = z.object({
-  targetId: uuidSchema,
-  targetType: z.string().refine(isContentTargetType, "Invalid target type"),
-});
 
 type ToggleContentLikeRow = {
   liked: boolean;
@@ -29,51 +12,26 @@ type ToggleContentLikeRow = {
 
 export async function POST(request: NextRequest) {
   try {
-    const originBlock = enforceSameOriginMutation(request, log);
-    if (originBlock) {
-      return originBlock;
-    }
-
-    const parsedBody = await parseAndValidateJsonRequest(request, likeRequestSchema, {
-      invalidJsonMessage: "Invalid engagement payload",
-      validationErrorMessage: "Invalid engagement payload",
-      includeValidationDetails: false,
+    const prepared = await prepareEngagementMutation(request, {
+      log,
+      rateLimitBucket: "engagement:like",
+      rateLimitMax: 40,
+      missingViewerResponse: NextResponse.json(
+        { error: "Missing viewer identity" },
+        { status: 400 }
+      ),
     });
-    if (!parsedBody.success) {
-      return parsedBody.response;
+    if (!prepared.success) {
+      return prepared.response;
     }
 
-    const rateLimit = checkLocalRateLimit(getClientRateLimitKey(request), "engagement:like", 40);
-    if (rateLimit.limited) {
-      return NextResponse.json(
-        { error: "Too many requests. Please try again later." },
-        {
-          status: 429,
-          headers: { "Retry-After": String(rateLimit.retryAfter ?? 60) },
-        }
-      );
-    }
-
-    const { targetId, targetType } = parsedBody.data;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    const existingViewerId = request.cookies.get(ENGAGEMENT_VIEWER_COOKIE)?.value ?? null;
-    const nextViewerId = existingViewerId ?? createAnonymousViewerId();
-    const viewerKey = buildViewerKey(nextViewerId, user?.id);
-
-    if (!viewerKey) {
-      return NextResponse.json({ error: "Missing viewer identity" }, { status: 400 });
-    }
-
+    const { targetId, targetType, viewerKey, userId } = prepared.data;
     const admin = createAdminClient();
     const { data, error } = await admin.rpc("toggle_content_like", {
       p_target_id: targetId,
       p_target_type: targetType,
       p_viewer_key: viewerKey,
-      p_viewer_user_id: user?.id ?? null,
+      p_viewer_user_id: userId,
     });
 
     if (error) {
@@ -94,17 +52,7 @@ export async function POST(request: NextRequest) {
       liked: Boolean(result.liked),
       likeCount: Number(result.like_count) || 0,
     });
-    if (!existingViewerId) {
-      response.cookies.set({
-        name: ENGAGEMENT_VIEWER_COOKIE,
-        value: nextViewerId,
-        maxAge: ENGAGEMENT_VIEWER_COOKIE_MAX_AGE_SECONDS,
-        httpOnly: true,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-        path: "/",
-      });
-    }
+    setEngagementViewerCookie(response, prepared.data);
 
     return response;
   } catch (error) {
