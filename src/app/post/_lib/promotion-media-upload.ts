@@ -1,7 +1,8 @@
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { createLogger } from "@/lib/utils/logger";
-import { VideoTranscodeError, compressVideoForUpload } from "@/lib/media/compress-before-upload";
+import { VideoTranscodeError } from "@/lib/media/compress-before-upload";
+import { uploadVideoWithFastPath } from "@/app/post/_lib/video-fast-upload";
 import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-errors";
 import {
   appendTraceId,
@@ -157,24 +158,26 @@ export async function uploadPromotionVideoFiles({
 }): Promise<string[]> {
   if (files.length === 0) return [];
 
-  const compressed: File[] = [];
   try {
-    for (const file of files) {
-      compressed.push(await compressVideoForUpload(file, { requireCompatibleOutput: true }));
-    }
+    return await Promise.all(
+      files.map((file) =>
+        uploadVideoWithFastPath({
+          file,
+          area,
+          uploadViaServer: (uploadFile) =>
+            uploadPromotionVideosViaServer({ files: [uploadFile], area }).then(
+              (urls) => urls[0] ?? ""
+            ),
+        })
+      )
+    );
   } catch (error) {
     if (error instanceof VideoTranscodeError) {
       throw new PromotionMediaUploadError("videos", error.message);
     }
-    throw error;
-  }
-
-  try {
-    return await uploadPromotionVideosViaServer({ files: compressed, area });
-  } catch (error) {
     log.warn("Validated promotion-style video upload failed", {
       area,
-      fileCount: compressed.length,
+      fileCount: files.length,
       error: error instanceof Error ? error.message : String(error),
     });
     throw toPromotionMediaUploadError("videos", error);

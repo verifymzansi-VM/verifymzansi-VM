@@ -57,6 +57,7 @@ import {
   uploadRequiredBusinessMedia,
   uploadRequiredBusinessVideo,
 } from "@/app/post/_lib/business-media-upload";
+import { prewarmVideosForFastUpload } from "@/app/post/_lib/video-fast-upload";
 import { parseServiceAreas, validateBusinessForm } from "@/lib/forms/business-form";
 import {
   coerceBusinessDetails,
@@ -2273,6 +2274,7 @@ function CreateBusinessContent() {
                         files={promoVideoFile}
                         onChange={(files) => {
                           setPromoVideoFile(files);
+                          prewarmVideosForFastUpload(files);
                           if (files.length === 0) setVideoThumbnailFile([]);
                           clearErrors("cover_video", "video_thumbnail");
                         }}

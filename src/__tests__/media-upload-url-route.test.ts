@@ -55,8 +55,8 @@ describe("POST /api/media/upload-url", () => {
     process.env.ENABLE_DIRECT_R2_UPLOADS = ORIGINAL_ENABLE_DIRECT_R2_UPLOADS;
   });
 
-  it("disables direct uploads by default", async () => {
-    delete process.env.ENABLE_DIRECT_R2_UPLOADS;
+  it("can disable direct uploads by configuration", async () => {
+    process.env.ENABLE_DIRECT_R2_UPLOADS = "0";
 
     const res = await POST(
       createRequest({

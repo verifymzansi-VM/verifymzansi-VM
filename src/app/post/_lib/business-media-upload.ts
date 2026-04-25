@@ -1,7 +1,8 @@
 import { createLogger } from "@/lib/utils/logger";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
-import { VideoTranscodeError, compressVideoForUpload } from "@/lib/media/compress-before-upload";
+import { VideoTranscodeError } from "@/lib/media/compress-before-upload";
+import { uploadVideoWithFastPath } from "@/app/post/_lib/video-fast-upload";
 import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-errors";
 import {
   appendTraceId,
@@ -161,23 +162,20 @@ export async function uploadRequiredBusinessVideo({
   file: File;
   area: UploadArea;
 }): Promise<string> {
-  let compressed: File;
   try {
-    compressed = await compressVideoForUpload(file, { requireCompatibleOutput: true });
+    return await uploadVideoWithFastPath({
+      file,
+      area,
+      uploadViaServer: (uploadFile) => uploadBusinessVideoViaServer({ file: uploadFile, area }),
+    });
   } catch (error) {
     if (error instanceof VideoTranscodeError) {
       throw new BusinessMediaUploadError("cover_video", error.message);
     }
-    throw error;
-  }
-
-  try {
-    return await uploadBusinessVideoViaServer({ file: compressed, area });
-  } catch (error) {
     log.warn("Validated business video upload failed", {
       field: "cover_video",
       area,
-      filename: compressed.name,
+      filename: file.name,
       error: error instanceof Error ? error.message : String(error),
     });
     throw toBusinessMediaUploadError("cover_video", error);

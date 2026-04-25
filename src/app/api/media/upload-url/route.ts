@@ -21,7 +21,7 @@ const VIDEO_EXTENSIONS_BY_TYPE: Record<string, string[]> = {
   "video/webm": ["webm"],
 };
 function directR2UploadsEnabled(): boolean {
-  return process.env.ENABLE_DIRECT_R2_UPLOADS === "1";
+  return process.env.ENABLE_DIRECT_R2_UPLOADS !== "0";
 }
 
 const uploadUrlRequestSchema = z
@@ -60,9 +60,9 @@ const uploadUrlRequestSchema = z
 /**
  * POST /api/media/upload-url
  *
- * Returns a presigned R2 upload URL for direct client-to-R2 video uploads
- * only when explicitly enabled. The default product upload path uses
- * /api/media/upload so the server can validate bytes and scan content.
+ * Returns a presigned R2 upload URL for direct client-to-R2 video uploads.
+ * Set ENABLE_DIRECT_R2_UPLOADS=0 to disable this fast path and force the
+ * server-validated /api/media/upload endpoint.
  *
  * Request body (JSON):
  * - filename: string (original filename for extension extraction)

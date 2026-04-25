@@ -64,6 +64,7 @@ import {
   uploadPromotionVideoFiles,
   uploadRequiredPromotionMedia,
 } from "@/app/post/_lib/promotion-media-upload";
+import { prewarmVideosForFastUpload } from "@/app/post/_lib/video-fast-upload";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { usePostDraftAutosave } from "@/hooks/use-post-draft-autosave";
@@ -1009,11 +1010,9 @@ function CreateTourismContent() {
         setFormError("Security check failed. Please refresh the page and try again.");
         return;
       }
-      try {
-        await checkUploadServiceReachable();
-      } catch {
-        /* logged inside */
-      }
+      // Best-effort preflight only; do not make submit wait through slow-network
+      // retries before the real upload starts.
+      void checkUploadServiceReachable().catch(() => undefined);
 
       setSubmitProgress("Uploading media...");
 
@@ -3464,6 +3463,7 @@ function CreateTourismContent() {
                           files={videoFiles}
                           onChange={(files) => {
                             setVideoFiles(files);
+                            prewarmVideosForFastUpload(files);
                             setVideoThumbnailFile([]);
                             clearErrors("videos");
                           }}

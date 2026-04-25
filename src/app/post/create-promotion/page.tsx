@@ -33,6 +33,7 @@ import {
   uploadPromotionVideoFiles,
   uploadRequiredPromotionMedia,
 } from "@/app/post/_lib/promotion-media-upload";
+import { prewarmVideosForFastUpload } from "@/app/post/_lib/video-fast-upload";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { usePostDraftAutosave } from "@/hooks/use-post-draft-autosave";
@@ -449,12 +450,9 @@ function CreatePromotionContent() {
         return;
       }
 
-      // Best-effort preflight — never block the form on a health check.
-      try {
-        await checkUploadServiceReachable();
-      } catch {
-        // logged inside checkUploadServiceReachable; continue to real upload
-      }
+      // Best-effort preflight only; do not make submit wait through slow-network
+      // retries before the real upload starts.
+      void checkUploadServiceReachable().catch(() => undefined);
       setSubmitProgress("Uploading media...");
 
       const primaryMediaFile = videoFiles[0] ?? photoFiles[0] ?? null;
@@ -1050,6 +1048,7 @@ function CreatePromotionContent() {
                         files={videoFiles}
                         onChange={(files) => {
                           setVideoFiles(files);
+                          prewarmVideosForFastUpload(files);
                           if (files.length === 0) setVideoThumbnailFile([]);
                           clearErrors("videos");
                         }}
