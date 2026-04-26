@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
 import { ShowroomCardCarousel } from "@/components/showrooms/showroom-card-carousel";
+import { generatedMzansiShowroomBackground } from "@/components/showrooms/showroom-backgrounds";
 import {
   listingToCarouselItem,
   businessToCarouselItem,
@@ -92,6 +93,7 @@ export async function HeroBannerWithData() {
       items={carouselItems}
       emptyTitle="Welcome to VerifyMzansi"
       emptyDescription="Explore verified businesses, listings, and events across South Africa."
+      background={generatedMzansiShowroomBackground}
     />
   );
 }

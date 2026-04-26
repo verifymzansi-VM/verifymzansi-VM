@@ -89,7 +89,7 @@ const TYPE_FALLBACK_MEDIA: Record<CarouselItem["type"], string> = {
 };
 
 const CARD_W =
-  "w-[60vw] max-w-[235px] sm:w-[58vw] sm:max-w-[360px] md:w-[34vw] lg:w-[280px] lg:max-w-none xl:w-[304px] 2xl:w-[320px]";
+  "w-[72vw] max-w-[292px] [@media(max-height:700px)]:w-[68vw] sm:w-[58vw] sm:max-w-[360px] md:w-[34vw] lg:w-[280px] lg:max-w-none xl:w-[304px] 2xl:w-[320px]";
 const SECTION_SPACING =
   "pt-0 pb-2 sm:pt-0 sm:pb-4 md:pt-4 md:pb-8 lg:min-h-[clamp(30rem,62vh,40rem)] lg:py-8";
 const SECTION_SURFACE = "bg-[linear-gradient(180deg,#f8f5ec_0%,#f1e8da_48%,#e8decd_100%)]";
@@ -98,11 +98,11 @@ function getBackgroundOverlayClasses(preset: ShowroomBackgroundOverlayPreset = "
   switch (preset) {
     case "business":
       return {
-        wash: "bg-[linear-gradient(180deg,rgba(246,246,244,0.88)_0%,rgba(229,234,240,0.54)_38%,rgba(15,23,42,0.46)_100%)]",
+        wash: "bg-[linear-gradient(180deg,rgba(246,246,244,0.24)_0%,rgba(229,234,240,0.12)_38%,rgba(15,23,42,0.18)_100%)]",
         accent:
-          "bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.18),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(148,163,184,0.14),transparent_32%)]",
-        edgeLeft: "bg-gradient-to-r from-slate-950/22 via-slate-950/6 to-transparent",
-        edgeRight: "bg-gradient-to-l from-slate-950/18 via-slate-950/4 to-transparent",
+          "bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.08),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(148,163,184,0.06),transparent_32%)]",
+        edgeLeft: "bg-gradient-to-r from-slate-950/10 via-slate-950/2 to-transparent",
+        edgeRight: "bg-gradient-to-l from-slate-950/8 via-slate-950/2 to-transparent",
         topGlow:
           "bg-[radial-gradient(circle,rgba(255,255,255,0.32)_0%,rgba(219,234,254,0.12)_45%,transparent_72%)]",
         bottomGlow:
@@ -110,11 +110,11 @@ function getBackgroundOverlayClasses(preset: ShowroomBackgroundOverlayPreset = "
       };
     case "tourism":
       return {
-        wash: "bg-[linear-gradient(180deg,rgba(238,246,255,0.52)_0%,rgba(234,239,244,0.18)_32%,rgba(15,23,42,0.34)_100%)]",
+        wash: "bg-[linear-gradient(180deg,rgba(238,246,255,0.2)_0%,rgba(234,239,244,0.08)_32%,rgba(15,23,42,0.16)_100%)]",
         accent:
-          "bg-[radial-gradient(circle_at_top_right,rgba(125,211,252,0.18),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(251,191,36,0.16),transparent_32%)]",
-        edgeLeft: "bg-gradient-to-r from-slate-950/16 via-slate-950/4 to-transparent",
-        edgeRight: "bg-gradient-to-l from-slate-950/12 via-slate-950/3 to-transparent",
+          "bg-[radial-gradient(circle_at_top_right,rgba(125,211,252,0.08),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(251,191,36,0.07),transparent_32%)]",
+        edgeLeft: "bg-gradient-to-r from-slate-950/8 via-slate-950/2 to-transparent",
+        edgeRight: "bg-gradient-to-l from-slate-950/6 via-slate-950/1 to-transparent",
         topGlow:
           "bg-[radial-gradient(circle,rgba(219,234,254,0.34)_0%,rgba(255,255,255,0.08)_45%,transparent_72%)]",
         bottomGlow:
@@ -123,11 +123,11 @@ function getBackgroundOverlayClasses(preset: ShowroomBackgroundOverlayPreset = "
     case "market":
     default:
       return {
-        wash: "bg-[linear-gradient(180deg,rgba(250,246,239,0.82)_0%,rgba(241,232,218,0.5)_38%,rgba(15,23,42,0.4)_100%)]",
+        wash: "bg-[linear-gradient(180deg,rgba(250,246,239,0.24)_0%,rgba(241,232,218,0.12)_38%,rgba(15,23,42,0.18)_100%)]",
         accent:
-          "bg-[radial-gradient(circle_at_top_right,rgba(34,197,94,0.16),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.12),transparent_30%)]",
-        edgeLeft: "bg-gradient-to-r from-slate-950/18 via-slate-950/4 to-transparent",
-        edgeRight: "bg-gradient-to-l from-slate-950/16 via-slate-950/4 to-transparent",
+          "bg-[radial-gradient(circle_at_top_right,rgba(34,197,94,0.07),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.05),transparent_30%)]",
+        edgeLeft: "bg-gradient-to-r from-slate-950/8 via-slate-950/2 to-transparent",
+        edgeRight: "bg-gradient-to-l from-slate-950/7 via-slate-950/2 to-transparent",
         topGlow:
           "bg-[radial-gradient(circle,rgba(255,255,255,0.36)_0%,rgba(255,255,255,0.08)_45%,transparent_72%)]",
         bottomGlow:
@@ -727,13 +727,13 @@ export function ShowroomCardCarousel({
         : "transition-[transform,opacity,filter,box-shadow] duration-700 ease-out";
 
     const byOffset: Record<number, string> = {
-      [-3]: "hidden lg:block translate-x-[calc(-50%-106%)] translate-y-4 scale-[0.55] opacity-35 saturate-[0.76] blur-[1px] z-0 pointer-events-none",
-      [-2]: "hidden md:block translate-x-[calc(-50%-72%)] translate-y-2 scale-[0.72] opacity-55 saturate-[0.86] blur-[0.6px] z-10 pointer-events-none",
-      [-1]: "translate-x-[calc(-50%-39%)] lg:-translate-y-2 scale-[0.91] lg:scale-[0.86] opacity-88 saturate-[0.94] z-20",
+      [-3]: "hidden lg:block translate-x-[calc(-50%-106%)] translate-y-4 scale-[0.55] opacity-100 saturate-[0.86] blur-[0.35px] z-0 pointer-events-none",
+      [-2]: "hidden md:block translate-x-[calc(-50%-72%)] translate-y-2 scale-[0.72] opacity-100 saturate-[0.92] blur-[0.2px] z-10 pointer-events-none",
+      [-1]: "translate-x-[calc(-50%-23%)] md:translate-x-[calc(-50%-39%)] lg:-translate-y-2 scale-[0.91] lg:scale-[0.86] opacity-100 saturate-[0.98] z-20",
       0: "translate-x-[-50%] lg:-translate-y-3 scale-100 lg:scale-[1.025] opacity-100 z-40 shadow-[0_50px_130px_-54px_rgba(15,23,42,0.8)]",
-      1: "translate-x-[calc(-50%+39%)] lg:-translate-y-2 scale-[0.91] lg:scale-[0.86] opacity-88 saturate-[0.94] z-20",
-      2: "hidden md:block translate-x-[calc(-50%+72%)] translate-y-2 scale-[0.72] opacity-55 saturate-[0.86] blur-[0.6px] z-10 pointer-events-none",
-      3: "hidden lg:block translate-x-[calc(-50%+106%)] translate-y-4 scale-[0.55] opacity-35 saturate-[0.76] blur-[1px] z-0 pointer-events-none",
+      1: "translate-x-[calc(-50%+23%)] md:translate-x-[calc(-50%+39%)] lg:-translate-y-2 scale-[0.91] lg:scale-[0.86] opacity-100 saturate-[0.98] z-20",
+      2: "hidden md:block translate-x-[calc(-50%+72%)] translate-y-2 scale-[0.72] opacity-100 saturate-[0.92] blur-[0.2px] z-10 pointer-events-none",
+      3: "hidden lg:block translate-x-[calc(-50%+106%)] translate-y-4 scale-[0.55] opacity-100 saturate-[0.86] blur-[0.35px] z-0 pointer-events-none",
     };
 
     const preset = byOffset[offset] ?? byOffset[Math.sign(offset) * 3] ?? byOffset[0];
@@ -756,10 +756,12 @@ export function ShowroomCardCarousel({
     const sign = virtualOffset === 0 ? 0 : virtualOffset > 0 ? 1 : -1;
     const floorDepth = Math.floor(depth);
     const depthProgress = depth - floorDepth;
-    const xStops = [0, 39, 72, 106];
+    const isMobileViewport =
+      typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
+    const xStops = [0, isMobileViewport ? 23 : 39, 72, 106];
     const yStops = [-12, -8, 8, 16];
     const scaleStops = [1.045, 0.875, 0.72, 0.55];
-    const opacityStops = [1, 0.9, 0.55, 0.34];
+    const opacityStops = [1, 1, 1, 1];
     const blurStops = [0, 0, 0.55, 1.05];
     const saturationStops = [1.02, 0.95, 0.86, 0.76];
     const currentStop = Math.min(floorDepth, xStops.length - 1);

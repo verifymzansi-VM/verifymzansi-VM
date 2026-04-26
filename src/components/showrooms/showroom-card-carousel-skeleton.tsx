@@ -7,11 +7,15 @@ import { cn } from "@/lib/utils";
  */
 export function ShowroomCardCarouselSkeleton() {
   return (
-    <section className="w-full bg-[linear-gradient(180deg,#f8f5ec_0%,#f1e8da_48%,#e8decd_100%)] pt-0 pb-1 sm:pt-0 sm:pb-3 lg:h-[calc(100svh-4rem)] lg:py-0">
-      <div className="relative mx-auto flex items-center justify-center overflow-hidden px-4 lg:h-full">
+    <section className="relative w-full overflow-hidden bg-[linear-gradient(180deg,#f8f5ec_0%,#f1e8da_48%,#e8decd_100%)] pt-0 pb-1 sm:pt-0 sm:pb-3 lg:h-[calc(100svh-4rem)] lg:py-0">
+      <div
+        className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(250,246,239,0.22)_0%,rgba(241,232,218,0.08)_42%,rgba(15,23,42,0.14)_100%),url('/images/showrooms/generated-mzansi-showroom.webp')] bg-cover bg-center"
+        aria-hidden="true"
+      />
+      <div className="relative z-10 mx-auto flex items-center justify-center overflow-hidden px-4 lg:h-full">
         {/* Left card (scaled down) */}
         <div
-          className="absolute left-[3%] sm:left-[8%] lg:left-[15%] w-[72vw] max-w-[292px] sm:w-[46vw] sm:max-w-[310px] lg:w-[280px] xl:w-[304px] origin-center scale-[0.82] opacity-50"
+          className="absolute left-[3%] sm:left-[8%] lg:left-[15%] w-[72vw] max-w-[292px] sm:w-[46vw] sm:max-w-[310px] lg:w-[280px] xl:w-[304px] origin-center scale-[0.82] opacity-100"
           aria-hidden="true"
         >
           <CardSkeleton />
@@ -24,7 +28,7 @@ export function ShowroomCardCarouselSkeleton() {
 
         {/* Right card (scaled down) */}
         <div
-          className="absolute right-[3%] sm:right-[8%] lg:right-[15%] w-[72vw] max-w-[292px] sm:w-[46vw] sm:max-w-[310px] lg:w-[280px] xl:w-[304px] origin-center scale-[0.82] opacity-50"
+          className="absolute right-[3%] sm:right-[8%] lg:right-[15%] w-[72vw] max-w-[292px] sm:w-[46vw] sm:max-w-[310px] lg:w-[280px] xl:w-[304px] origin-center scale-[0.82] opacity-100"
           aria-hidden="true"
         >
           <CardSkeleton />
@@ -32,7 +36,7 @@ export function ShowroomCardCarouselSkeleton() {
       </div>
 
       {/* Dot indicators skeleton */}
-      <div className="absolute inset-x-0 bottom-2 flex items-center justify-center gap-1.5 lg:bottom-4">
+      <div className="absolute inset-x-0 bottom-2 z-20 flex items-center justify-center gap-1.5 lg:bottom-4">
         {Array.from({ length: 5 }).map((_, i) => (
           <Skeleton
             key={i}

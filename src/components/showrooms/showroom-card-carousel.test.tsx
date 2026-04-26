@@ -160,12 +160,13 @@ describe("ShowroomCardCarousel", () => {
     expect(section.className).toContain("lg:py-8");
   });
 
-  it("uses mobile-safe showroom card width while preserving desktop card sizing", () => {
+  it("uses larger mobile showroom card width while preserving desktop card sizing", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
 
     const centerSlide = screen.getByRole("group", { name: "1 of 3" });
-    expect(centerSlide.className).toContain("w-[60vw]");
-    expect(centerSlide.className).toContain("max-w-[235px]");
+    expect(centerSlide.className).toContain("w-[72vw]");
+    expect(centerSlide.className).toContain("max-w-[292px]");
+    expect(centerSlide.className).toContain("[@media(max-height:700px)]:w-[68vw]");
     expect(centerSlide.className).toContain("sm:w-[58vw]");
     expect(centerSlide.className).toContain("sm:max-w-[360px]");
     expect(centerSlide.className).toContain("lg:w-[280px]");
@@ -205,8 +206,9 @@ describe("ShowroomCardCarousel", () => {
     const section = screen.getByLabelText("Showroom carousel");
     const emptyStateCard = Array.from(container.querySelectorAll("div")).find(
       (node) =>
-        node.className.includes("w-[60vw]") &&
-        node.className.includes("max-w-[235px]") &&
+        node.className.includes("w-[72vw]") &&
+        node.className.includes("max-w-[292px]") &&
+        node.className.includes("[@media(max-height:700px)]:w-[68vw]") &&
         node.className.includes("sm:w-[58vw]") &&
         node.className.includes("sm:max-w-[360px]") &&
         node.className.includes("lg:w-[280px]") &&
@@ -511,6 +513,17 @@ describe("ShowroomCardCarousel", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
     fireEvent.click(screen.getByText("Open Test Business"));
     expect(screen.getByText("Slide 2 of 3")).toBeInTheDocument();
+  });
+
+  it("keeps mobile side cards inside the viewport by using tighter side offsets", () => {
+    render(<ShowroomCardCarousel items={mockItems} />);
+
+    expect(screen.getByRole("group", { name: "2 of 3" }).className).toContain(
+      "translate-x-[calc(-50%+23%)]"
+    );
+    expect(screen.getByRole("group", { name: "3 of 3" }).className).toContain(
+      "translate-x-[calc(-50%-23%)]"
+    );
   });
 
   it("does not navigate when playback controls are tapped", () => {
