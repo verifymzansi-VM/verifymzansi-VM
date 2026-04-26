@@ -37,6 +37,28 @@ interface PermissionLookupResult {
   queryFailed: boolean;
 }
 
+function shouldTryRelaxedCameraConstraints(errorName: string): boolean {
+  return [
+    "OverconstrainedError",
+    "ConstraintNotSatisfiedError",
+    "NotFoundError",
+    "DevicesNotFoundError",
+  ].includes(errorName);
+}
+
+function getCameraErrorName(error: unknown): string {
+  if (error instanceof Error) {
+    return error.name;
+  }
+
+  if (error && typeof error === "object" && "name" in error) {
+    const name = (error as { name?: unknown }).name;
+    return typeof name === "string" ? name : "";
+  }
+
+  return "";
+}
+
 export function CameraCapture({
   onCapture,
   facingMode,
@@ -204,12 +226,10 @@ export function CameraCapture({
           stream = await getUserMediaWithTimeout(constraints);
           break;
         } catch (innerErr) {
-          const innerName = innerErr instanceof Error ? innerErr.name : "";
-          // Only retry on constraint-related failures
-          if (innerName !== "OverconstrainedError" && innerName !== "ConstraintNotSatisfiedError") {
+          const innerName = getCameraErrorName(innerErr);
+          if (!shouldTryRelaxedCameraConstraints(innerName)) {
             throw innerErr;
           }
-          // Continue to next (relaxed) constraint set
         }
       }
 
@@ -231,7 +251,7 @@ export function CameraCapture({
       setState("streaming");
     } catch (err) {
       stopStream();
-      const name = err instanceof Error ? err.name : "";
+      const name = getCameraErrorName(err);
       const permissionLookup =
         name === "NotAllowedError"
           ? await getPermissionState()

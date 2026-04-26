@@ -766,7 +766,7 @@ describe("POST /api/businesses", () => {
       p_user_id: USER_ID,
       p_area: "MZANSI_BUSINESS",
       p_content_id: generatedBusinessId,
-      p_max_allowed: 2,
+      p_max_allowed: 1,
     });
     expect(releaseUserEq).toHaveBeenCalledWith("user_id", USER_ID);
     expect(releaseAreaEq).toHaveBeenCalledWith("area", "MZANSI_BUSINESS");

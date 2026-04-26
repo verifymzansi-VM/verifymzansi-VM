@@ -66,6 +66,19 @@ function isPromptDismissed() {
   return safeGetLocalStorageItem(DISMISSED_STORAGE_KEY) === "true";
 }
 
+function isIOSLikeDevice() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+
+  const userAgent = navigator.userAgent;
+  const platform = navigator.platform;
+
+  return (
+    /iPad|iPhone|iPod/.test(userAgent) || (platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
+}
+
 function getIOSFallbackSnapshot(suppressed: boolean) {
   if (typeof window === "undefined" || suppressed) {
     return false;
@@ -76,8 +89,7 @@ function getIOSFallbackSnapshot(suppressed: boolean) {
     return false;
   }
 
-  const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  return isIOSDevice && !window.matchMedia("(display-mode: standalone)").matches;
+  return isIOSLikeDevice() && !window.matchMedia("(display-mode: standalone)").matches;
 }
 
 export function PwaInstallPrompt() {
@@ -163,12 +175,10 @@ export function PwaInstallPrompt() {
       return;
     }
 
-    const userAgent = window.navigator.userAgent;
-    const isIOSDevice = /iPad|iPhone|iPod/.test(userAgent);
     const isStandalone = window.matchMedia("(display-mode: standalone)").matches;
 
     // iOS Safari does not fire beforeinstallprompt; show manual A2HS guidance.
-    if (isIOSDevice && !isStandalone) {
+    if (isIOSLikeDevice() && !isStandalone) {
       queueMicrotask(() => {
         showInstallPrompt();
       });

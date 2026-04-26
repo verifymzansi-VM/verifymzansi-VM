@@ -2,7 +2,7 @@
  * Entitlement engine — check what an account holder's plan allows.
  */
 
-import { PLANS, type PlanDefinition } from "@/lib/constants/pricing";
+import { FREE_POST_CONFIG, PLANS, type PlanDefinition } from "@/lib/constants/pricing";
 import type { PlanTier, MarketplaceArea } from "@/types/enums";
 
 export interface Entitlements {
@@ -21,11 +21,11 @@ export interface Entitlements {
 }
 
 const FREE_ENTITLEMENTS: Entitlements = {
-  maxAllowed: 2,
-  maxPhotos: 10,
-  maxVideos: 1,
-  maxPostsPerMonth: 2,
-  videoAllowed: true,
+  maxAllowed: FREE_POST_CONFIG.maxAllowed,
+  maxPhotos: FREE_POST_CONFIG.maxPhotos,
+  maxVideos: FREE_POST_CONFIG.maxVideos,
+  maxPostsPerMonth: FREE_POST_CONFIG.maxAllowed,
+  videoAllowed: FREE_POST_CONFIG.videoAllowed,
   boostAllowed: false,
   featuredAllowed: false,
   urgentAllowed: false,

@@ -99,7 +99,7 @@ describe("Active-area pricing parity", () => {
     expect(screen.queryByText("Business Ads")).not.toBeInTheDocument();
     expect(
       screen.getByText(
-        new RegExp(`2 free posts per area every ${FREE_POST_CONFIG.durationDays} days`, "i")
+        new RegExp(`1 free post per area every ${FREE_POST_CONFIG.durationDays} days`, "i")
       )
     ).toBeInTheDocument();
     expect(

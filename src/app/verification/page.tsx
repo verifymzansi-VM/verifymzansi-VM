@@ -86,6 +86,8 @@ const EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION =
   "Check your inbox for the confirmation link, then return here to continue. You can still verify your phone while waiting.";
 const VERIFICATION_TEMPORARILY_UNAVAILABLE_DESCRIPTION =
   "Verification is temporarily unavailable right now. Please try again later.";
+const GPS_TARGET_ACCURACY_METERS = 50;
+const GPS_WATCH_SETTLE_MS = 4000;
 
 type VerificationApiResponse = {
   success?: boolean;
@@ -118,6 +120,119 @@ const STEP_COPY: Record<Exclude<WizardStep, "complete">, string> = {
 };
 
 const GEOLOCATION_PERMISSION_DENIED = 1;
+
+function isBetterGpsFix(
+  nextPosition: GeolocationPosition,
+  currentBest: GeolocationPosition | null
+): boolean {
+  if (!currentBest) return true;
+
+  const nextAccuracy = nextPosition.coords.accuracy;
+  const currentAccuracy = currentBest.coords.accuracy;
+  if (nextAccuracy !== currentAccuracy) {
+    return nextAccuracy < currentAccuracy;
+  }
+
+  return nextPosition.timestamp > currentBest.timestamp;
+}
+
+function isGeolocationPermissionDenied(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === GEOLOCATION_PERMISSION_DENIED
+  );
+}
+
+async function requestDeviceGpsPosition(): Promise<GeolocationPosition> {
+  if (!navigator.geolocation) {
+    throw new Error("GPS is not supported in this browser");
+  }
+
+  if (navigator.permissions?.query) {
+    try {
+      const permission = await navigator.permissions.query({ name: "geolocation" });
+      if (permission.state === "denied") {
+        const deniedError = new Error("GPS permission denied") as Error & { code?: number };
+        deniedError.code = GEOLOCATION_PERMISSION_DENIED;
+        throw deniedError;
+      }
+    } catch (error) {
+      if (isGeolocationPermissionDenied(error)) {
+        throw error;
+      }
+    }
+  }
+
+  const options: PositionOptions = {
+    enableHighAccuracy: true,
+    timeout: GPS_REQUEST_TIMEOUT_MS,
+    maximumAge: 0,
+  };
+
+  return new Promise<GeolocationPosition>((resolve, reject) => {
+    let settled = false;
+    let watchId: number | null = null;
+    let bestPosition: GeolocationPosition | null = null;
+
+    const cleanup = () => {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+      window.clearTimeout(timeoutId);
+      window.clearTimeout(settleId);
+    };
+
+    const finish = (position: GeolocationPosition) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(position);
+    };
+
+    const fail = (error: GeolocationPositionError | Error) => {
+      if (settled) return;
+      if (bestPosition) {
+        finish(bestPosition);
+        return;
+      }
+      settled = true;
+      cleanup();
+      reject(error);
+    };
+
+    const acceptPosition = (position: GeolocationPosition) => {
+      if (isBetterGpsFix(position, bestPosition)) {
+        bestPosition = position;
+      }
+
+      if (position.coords.accuracy <= GPS_TARGET_ACCURACY_METERS) {
+        finish(position);
+      }
+    };
+
+    const timeoutId = window.setTimeout(() => {
+      fail(new Error("GPS request timed out"));
+    }, GPS_REQUEST_TIMEOUT_MS);
+
+    const settleId = window.setTimeout(
+      () => {
+        if (bestPosition) {
+          finish(bestPosition);
+        }
+      },
+      Math.min(GPS_WATCH_SETTLE_MS, GPS_REQUEST_TIMEOUT_MS)
+    );
+
+    navigator.geolocation.getCurrentPosition(acceptPosition, fail, options);
+
+    if (navigator.geolocation.watchPosition) {
+      watchId = navigator.geolocation.watchPosition(acceptPosition, fail, options);
+    }
+  });
+}
 
 class SubmissionError extends Error {
   code?: string;
@@ -750,141 +865,134 @@ export default function VerificationPage() {
     setGpsCoords(null);
     setGpsStatus("requesting");
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude, accuracy } = position.coords;
-        setGpsCoords({ lat: latitude, lon: longitude, accuracy });
-        setGpsStatus("success");
+    try {
+      const position = await requestDeviceGpsPosition();
+      const { latitude, longitude, accuracy } = position.coords;
+      setGpsCoords({ lat: latitude, lon: longitude, accuracy });
+      setGpsStatus("success");
 
-        try {
-          const gpsBody: Record<string, unknown> = {
-            latitude,
-            longitude,
-            accuracy,
-            timestamp: position.timestamp,
-          };
-          // Pass declared values for GPS confirmation mode
-          if (manualSubmitted && province) {
-            gpsBody.declaredProvince = province;
-            if (city) gpsBody.declaredCity = city;
-          }
-          const res = await fetch("/api/verification/location/gps", {
-            method: "POST",
-            headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-            body: JSON.stringify(gpsBody),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.persisted === false) {
-              setGpsStatus("idle");
-              setGpsApproved(false);
-              toast({
-                title: "GPS check not saved",
-                description:
-                  data.warning ||
-                  "Your saved address remains in place. GPS confirmation is optional, so you can continue or try again.",
-                variant: "default",
-              });
-              return;
-            }
-            if (!manualSubmitted) {
-              setProvince(data.resolvedProvince ?? "");
-              setCity(data.resolvedCity ?? "");
-            }
-            setGpsConfidence(data.confidence);
-            setGpsProvince(data.resolvedProvince ?? null);
-            setGpsMismatch(data.mismatch ?? null);
-            setGpsApproved(Boolean(data.verified));
-            await syncVerificationStatus();
-
-            const gpsMismatchDescription = data.mismatch?.province
-              ? `GPS detected a different province${data.resolvedProvince ? ` (${data.resolvedProvince})` : ""}. Your saved address stays in place, but it was not GPS-verified.`
-              : data.mismatch?.city
-                ? "GPS detected a different city. Your saved address stays in place, but it was not GPS-verified."
-                : "Your saved address was kept, but GPS could not verify it for automatic approval.";
-
-            toast({
-              title: data.verified ? "Address verified by GPS" : "GPS check recorded",
-              description: data.verified
-                ? "GPS matched the province and city you selected."
-                : gpsMismatchDescription,
-              variant: data.verified ? "success" : "default",
-            });
-          } else if (res.status === 404) {
-            setGpsFeatureAvailable(false);
+      try {
+        const gpsBody: Record<string, unknown> = {
+          latitude,
+          longitude,
+          accuracy,
+          timestamp: position.timestamp,
+        };
+        // Pass declared values for GPS confirmation mode
+        if (manualSubmitted && province) {
+          gpsBody.declaredProvince = province;
+          if (city) gpsBody.declaredCity = city;
+        }
+        const res = await fetch("/api/verification/location/gps", {
+          method: "POST",
+          headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify(gpsBody),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.persisted === false) {
             setGpsStatus("idle");
             setGpsApproved(false);
             toast({
-              title: "GPS verification unavailable",
-              description: "GPS verification is temporarily unavailable. Please try again later.",
-              variant: "destructive",
+              title: "GPS check not saved",
+              description:
+                data.warning ||
+                "Your saved address remains in place. GPS confirmation is optional, so you can continue or try again.",
+              variant: "default",
             });
-          } else {
-            const data = (await res.json().catch(() => ({}))) as VerificationApiResponse;
-            if (applyEmailConfirmationBlocker(data)) {
-              setGpsStatus("idle");
-              setGpsApproved(false);
-              toast({
-                title: "Confirm your email first",
-                description: EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION,
-                variant: "destructive",
-              });
-              return;
-            }
-            const optionalGpsPersistenceFailure =
-              manualSubmitted &&
-              (res.status >= 500 || data.error === "Failed to save location verification");
+            return;
+          }
+          if (!manualSubmitted) {
+            setProvince(data.resolvedProvince ?? "");
+            setCity(data.resolvedCity ?? "");
+          }
+          setGpsConfidence(data.confidence);
+          setGpsProvince(data.resolvedProvince ?? null);
+          setGpsMismatch(data.mismatch ?? null);
+          setGpsApproved(Boolean(data.verified));
+          await syncVerificationStatus();
 
-            if (optionalGpsPersistenceFailure) {
-              setGpsStatus("idle");
-              setGpsApproved(false);
-              toast({
-                title: "GPS check not saved",
-                description:
-                  "Your saved address remains in place. GPS confirmation is optional, so you can continue or try again.",
-                variant: "default",
-              });
-              return;
-            }
+          const gpsMismatchDescription = data.mismatch?.province
+            ? `GPS detected a different province${data.resolvedProvince ? ` (${data.resolvedProvince})` : ""}. Your saved address stays in place, but it was not GPS-verified.`
+            : data.mismatch?.city
+              ? "GPS detected a different city. Your saved address stays in place, but it was not GPS-verified."
+              : "Your saved address was kept, but GPS could not verify it for automatic approval.";
 
-            setGpsStatus("error");
+          toast({
+            title: data.verified ? "Address verified by GPS" : "GPS check recorded",
+            description: data.verified
+              ? "GPS matched the province and city you selected."
+              : gpsMismatchDescription,
+            variant: data.verified ? "success" : "default",
+          });
+        } else if (res.status === 404) {
+          setGpsFeatureAvailable(false);
+          setGpsStatus("idle");
+          setGpsApproved(false);
+          toast({
+            title: "GPS verification unavailable",
+            description: "GPS verification is temporarily unavailable. Please try again later.",
+            variant: "destructive",
+          });
+        } else {
+          const data = (await res.json().catch(() => ({}))) as VerificationApiResponse;
+          if (applyEmailConfirmationBlocker(data)) {
+            setGpsStatus("idle");
             setGpsApproved(false);
             toast({
-              title: "GPS could not verify this location",
-              description:
-                data.error ||
-                "Please allow location access, then request your current location again.",
+              title: "Confirm your email first",
+              description: EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION,
               variant: "destructive",
             });
+            return;
           }
-        } catch (err) {
-          setGpsApproved(false);
-          setGpsMismatch(null);
+          const optionalGpsPersistenceFailure =
+            manualSubmitted &&
+            (res.status >= 500 || data.error === "Failed to save location verification");
+
+          if (optionalGpsPersistenceFailure) {
+            setGpsStatus("idle");
+            setGpsApproved(false);
+            toast({
+              title: "GPS check not saved",
+              description:
+                "Your saved address remains in place. GPS confirmation is optional, so you can continue or try again.",
+              variant: "default",
+            });
+            return;
+          }
+
           setGpsStatus("error");
+          setGpsApproved(false);
           toast({
-            title: "GPS verification failed",
-            description: err instanceof Error ? err.message : "Please try again.",
+            title: "GPS could not verify this location",
+            description:
+              data.error ||
+              "Please allow location access, then request your current location again.",
             variant: "destructive",
           });
         }
-      },
-      (err) => {
+      } catch (err) {
         setGpsApproved(false);
         setGpsMismatch(null);
-        const permissionDenied = err.code === GEOLOCATION_PERMISSION_DENIED;
-        setGpsStatus(permissionDenied ? "denied" : "error");
+        setGpsStatus("error");
         toast({
-          title: permissionDenied ? "GPS permission denied" : "GPS error",
-          description: "Your saved address stays in place. GPS confirmation is optional.",
+          title: "GPS verification failed",
+          description: err instanceof Error ? err.message : "Please try again.",
           variant: "destructive",
         });
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: GPS_REQUEST_TIMEOUT_MS,
-        maximumAge: 0,
       }
-    );
+    } catch (err) {
+      setGpsApproved(false);
+      setGpsMismatch(null);
+      const permissionDenied = isGeolocationPermissionDenied(err);
+      setGpsStatus(permissionDenied ? "denied" : "error");
+      toast({
+        title: permissionDenied ? "GPS permission denied" : "GPS error",
+        description: "Your saved address stays in place. GPS confirmation is optional.",
+        variant: "destructive",
+      });
+    }
   }, [
     applyEmailConfirmationBlocker,
     gpsStatus,

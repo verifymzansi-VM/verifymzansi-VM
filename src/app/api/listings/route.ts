@@ -846,7 +846,7 @@ export async function POST(request: NextRequest) {
           {
             error: "Free post limit reached",
             reason:
-              "You have already used all 2 free posts for Mzansi Market. Subscribe to a plan to post more.",
+              "You have already used your free post for Mzansi Market. Subscribe to a plan to post more.",
             upgradeUrl: "/billing",
           },
           { status: 403 }

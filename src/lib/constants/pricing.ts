@@ -390,7 +390,7 @@ export const TRIAL_CONFIG = {
 /* ── Free Post Config ────────────────────────────────────── */
 /**
  * Free posts per marketplace area.
- * Each account gets up to 2 free posts in each area.
+ * Each account gets one free post in each area.
  * Free posts expire after the configured duration.
  */
 export const FREE_POST_CONFIG = {
@@ -398,7 +398,7 @@ export const FREE_POST_CONFIG = {
   maxPhotos: 10,
   maxVideos: 1,
   videoAllowed: true,
-  maxAllowed: 2, // 2 posts per area
+  maxAllowed: 1, // 1 post per area
 } as const;
 
 export function formatPlanPrice(priceCents: number): string {

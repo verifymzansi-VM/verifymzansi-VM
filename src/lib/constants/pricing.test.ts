@@ -92,7 +92,7 @@ describe("pricing constants", () => {
     expect(FREE_POST_CONFIG.maxPhotos).toBe(10);
     expect(FREE_POST_CONFIG.maxVideos).toBe(1);
     expect(FREE_POST_CONFIG.videoAllowed).toBe(true);
-    expect(FREE_POST_CONFIG.maxAllowed).toBe(2);
+    expect(FREE_POST_CONFIG.maxAllowed).toBe(1);
   });
 });
 

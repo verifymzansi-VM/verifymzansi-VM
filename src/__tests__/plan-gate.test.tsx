@@ -78,7 +78,7 @@ vi.mock("@/lib/constants/pricing", () => ({
     maxPhotos: 5,
     maxVideos: 1,
     videoAllowed: true,
-    maxAllowed: 2,
+    maxAllowed: 1,
   },
   getPlanCheckoutId: (plan: { tier: string; area: string }) => `${plan.area}-${plan.tier}`,
 }));
@@ -174,7 +174,7 @@ describe("PlanGate", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              neq: vi.fn().mockResolvedValue({ count: 1, error: null }),
+              neq: vi.fn().mockResolvedValue({ count: 0, error: null }),
             }),
           }),
         };
@@ -298,7 +298,7 @@ describe("PlanGate", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              neq: vi.fn().mockResolvedValue({ count: 1, error: null }),
+              neq: vi.fn().mockResolvedValue({ count: 0, error: null }),
             }),
           }),
         };
@@ -308,7 +308,7 @@ describe("PlanGate", () => {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                is: vi.fn().mockResolvedValue({ count: 2, error: null }),
+                is: vi.fn().mockResolvedValue({ count: 1, error: null }),
               }),
             }),
           }),
@@ -392,7 +392,7 @@ describe("PlanGate", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              neq: vi.fn().mockResolvedValue({ count: 1, error: null }),
+              neq: vi.fn().mockResolvedValue({ count: 0, error: null }),
             }),
           }),
         };
@@ -402,7 +402,7 @@ describe("PlanGate", () => {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                is: vi.fn().mockResolvedValue({ count: 1, error: null }),
+                is: vi.fn().mockResolvedValue({ count: 0, error: null }),
               }),
             }),
           }),
@@ -419,9 +419,9 @@ describe("PlanGate", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/1\/2 free posts left/i)).toBeTruthy();
+      expect(screen.getByText(/1\/1 free post left/i)).toBeTruthy();
     });
-    expect(screen.getByRole("button", { name: /use your free posts/i })).toBeTruthy();
-    expect(screen.queryByText(/used all 2 free posts/i)).toBeNull();
+    expect(screen.getByRole("button", { name: /use your free post/i })).toBeTruthy();
+    expect(screen.queryByText(/used your free post/i)).toBeNull();
   });
 });

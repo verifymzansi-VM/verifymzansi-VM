@@ -532,7 +532,7 @@ describe("POST /api/promotions", () => {
       p_user_id: USER_ID,
       p_area: "PROMOTIONS_EVENTS",
       p_content_id: generatedPromotionId,
-      p_max_allowed: 2,
+      p_max_allowed: 1,
     });
     expect(releaseUserEq).toHaveBeenCalledWith("user_id", USER_ID);
     expect(releaseAreaEq).toHaveBeenCalledWith("area", "PROMOTIONS_EVENTS");

@@ -45,8 +45,42 @@ describe("free-post helpers", () => {
       p_user_id: "user-1",
       p_area: "MZANSI_MARKET",
       p_content_id: "listing-1",
-      p_max_allowed: 2,
+      p_max_allowed: 1,
     });
+  });
+
+  it("queries usage by user and area so each category remains separate", async () => {
+    const calls: Array<{ column: string; value: unknown }> = [];
+    const client = {
+      from: vi.fn(() => ({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn((column: string, value: unknown) => {
+            calls.push({ column, value });
+            return {
+              eq: vi.fn((nestedColumn: string, nestedValue: unknown) => {
+                calls.push({ column: nestedColumn, value: nestedValue });
+                return {
+                  is: vi.fn().mockResolvedValue({ count: 1, error: null }),
+                };
+              }),
+            };
+          }),
+        }),
+      })),
+    };
+
+    await expect(
+      getActiveFreePostUsage(client as never, "user-1", "MZANSI_BUSINESS")
+    ).resolves.toEqual({
+      used: 1,
+      remaining: 0,
+      available: false,
+    });
+
+    expect(calls).toEqual([
+      { column: "user_id", value: "user-1" },
+      { column: "area", value: "MZANSI_BUSINESS" },
+    ]);
   });
 
   it("falls back to insert and returns false on duplicate exhaustion", async () => {

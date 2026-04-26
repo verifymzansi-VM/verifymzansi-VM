@@ -52,6 +52,14 @@ describe("PwaInstallPrompt", () => {
       configurable: true,
       value: "Mozilla/5.0 (Linux; Android 14)",
     });
+    Object.defineProperty(window.navigator, "platform", {
+      configurable: true,
+      value: "Linux armv8l",
+    });
+    Object.defineProperty(window.navigator, "maxTouchPoints", {
+      configurable: true,
+      value: 0,
+    });
 
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => null);
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => undefined);
@@ -133,6 +141,26 @@ describe("PwaInstallPrompt", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog", { name: "Install on iPhone" })).toBeNull();
     });
+  });
+
+  it("shows iOS install help for iPadOS desktop-mode Safari", async () => {
+    Object.defineProperty(window.navigator, "userAgent", {
+      configurable: true,
+      value:
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+    });
+    Object.defineProperty(window.navigator, "platform", {
+      configurable: true,
+      value: "MacIntel",
+    });
+    Object.defineProperty(window.navigator, "maxTouchPoints", {
+      configurable: true,
+      value: 5,
+    });
+
+    render(<PwaInstallPrompt />);
+
+    expect(await screen.findByRole("button", { name: "How To Install" })).toBeTruthy();
   });
 
   it("suppresses rendering when the prompt was previously dismissed", () => {

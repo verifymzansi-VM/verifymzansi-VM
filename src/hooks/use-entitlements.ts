@@ -1,15 +1,16 @@
 "use client";
 
 import { useMemo } from "react";
+import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import { getEntitlements, type Entitlements } from "@/lib/services/entitlements";
 import type { PlanTier, MarketplaceArea } from "@/types/enums";
 
 const DEFAULT_ENTITLEMENTS: Entitlements = {
-  maxAllowed: 2,
-  maxPhotos: 10,
-  maxVideos: 0,
-  maxPostsPerMonth: 2,
-  videoAllowed: false,
+  maxAllowed: FREE_POST_CONFIG.maxAllowed,
+  maxPhotos: FREE_POST_CONFIG.maxPhotos,
+  maxVideos: FREE_POST_CONFIG.maxVideos,
+  maxPostsPerMonth: FREE_POST_CONFIG.maxAllowed,
+  videoAllowed: FREE_POST_CONFIG.videoAllowed,
   boostAllowed: false,
   featuredAllowed: false,
   urgentAllowed: false,

@@ -980,7 +980,7 @@ describe("POST /api/listings", () => {
       p_user_id: USER_ID,
       p_area: "MZANSI_MARKET",
       p_content_id: generatedListingId,
-      p_max_allowed: 2,
+      p_max_allowed: 1,
     });
     expect(releaseMaybeSingle).toHaveBeenCalled();
     randomUuidSpy.mockRestore();

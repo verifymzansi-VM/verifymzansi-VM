@@ -735,7 +735,9 @@ function PlanPickerWithTrial({
               onClick={() => setShowForm(true)}
             >
               <ArrowRight className="h-4 w-4" />
-              {planInfo.postingLimitBypassEnabled ? "Start Posting" : "Use Your Free Posts"}
+              {planInfo.postingLimitBypassEnabled
+                ? "Start Posting"
+                : `Use Your Free ${FREE_POST_LABEL}`}
             </Button>
           </div>
         </div>

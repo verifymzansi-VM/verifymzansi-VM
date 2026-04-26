@@ -27,6 +27,8 @@ const _mockToBlob = vi.fn();
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockGetUserMedia.mockReset();
+  mockStop.mockReset();
 
   Object.defineProperty(global.navigator, "mediaDevices", {
     configurable: true,
@@ -242,7 +244,7 @@ describe("CameraCapture", () => {
   it("shows error message when no camera found", async () => {
     const err = new Error("not found");
     err.name = "NotFoundError";
-    mockGetUserMedia.mockRejectedValueOnce(err);
+    mockGetUserMedia.mockRejectedValue(err);
 
     render(<CameraCapture onCapture={vi.fn()} facingMode="environment" />);
     await clickOpenCameraAndConfirm();
@@ -250,6 +252,37 @@ describe("CameraCapture", () => {
     await waitFor(() => {
       expect(screen.getByText(/no camera found/i)).toBeInTheDocument();
     });
+
+    expect(mockGetUserMedia).toHaveBeenCalledTimes(3);
+  });
+
+  it("falls back to any available camera when the requested facing mode is missing", async () => {
+    const err = new Error("not found");
+    err.name = "NotFoundError";
+    const stream = createMockStream();
+    mockGetUserMedia.mockRejectedValueOnce(err);
+    mockGetUserMedia.mockRejectedValueOnce(err);
+    mockGetUserMedia.mockResolvedValueOnce(stream);
+
+    render(<CameraCapture onCapture={vi.fn()} facingMode="environment" />);
+    await clickOpenCameraAndConfirm();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /take photo/i })).toBeInTheDocument();
+    });
+
+    expect(mockGetUserMedia).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        video: expect.objectContaining({ facingMode: "environment" }),
+      })
+    );
+    expect(mockGetUserMedia).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        video: true,
+      })
+    );
   });
 
   it("shows file upload fallback on camera error", async () => {
