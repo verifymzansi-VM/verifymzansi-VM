@@ -151,9 +151,26 @@ export async function POST(request: NextRequest) {
       profileClient: supabase,
       userId: user.id,
       logger: log,
+      allowFinalizedLocationConfirmation: isConfirmationMode,
     });
     if ("response" in ensureWritable) {
       return ensureWritable.response;
+    }
+
+    if (isConfirmationMode && ensureWritable.finalizedLocationConfirmation) {
+      const savedProvince = normalizeProvinceName(ensureWritable.savedLocationProvince);
+      const savedCity = ensureWritable.savedLocationCity;
+      const provinceMatches =
+        savedProvince !== null && savedProvince === normalizedDeclaredProvince;
+      const cityMatches =
+        !!savedCity && !!declaredCity && citiesMatch(savedProvince, declaredCity, savedCity);
+
+      if (!provinceMatches || !cityMatches) {
+        return NextResponse.json(
+          { error: "GPS confirmation must match your saved address" },
+          { status: 409 }
+        );
+      }
     }
 
     // Reverse geocode
@@ -283,14 +300,18 @@ export async function POST(request: NextRequest) {
     const riskLevel =
       riskScore <= 25 ? "low" : riskScore <= 50 ? "medium" : riskScore <= 75 ? "high" : "critical";
     const gpsVerified = isConfirmationMode ? !mismatch.province && !mismatch.city : true;
-    const locationProvince = isConfirmationMode
-      ? (normalizedDeclaredProvince ?? declaredProvince!)
-      : resolvedProvince;
-    const locationCity = isConfirmationMode
-      ? (resolveCityName(normalizedDeclaredProvince, declaredCity ?? resolvedCity ?? null) ??
-        declaredCity ??
-        resolvedCity)
-      : (resolveCityName(resolvedProvince, resolvedCity ?? null) ?? resolvedCity);
+    const locationProvince = ensureWritable.finalizedLocationConfirmation
+      ? (ensureWritable.savedLocationProvince ?? normalizedDeclaredProvince ?? declaredProvince!)
+      : isConfirmationMode
+        ? (normalizedDeclaredProvince ?? declaredProvince!)
+        : resolvedProvince;
+    const locationCity = ensureWritable.finalizedLocationConfirmation
+      ? (ensureWritable.savedLocationCity ?? declaredCity ?? resolvedCity)
+      : isConfirmationMode
+        ? (resolveCityName(normalizedDeclaredProvince, declaredCity ?? resolvedCity ?? null) ??
+          declaredCity ??
+          resolvedCity)
+        : (resolveCityName(resolvedProvince, resolvedCity ?? null) ?? resolvedCity);
 
     // Upsert verification step — always auto-approved (location is self-service)
     const stepStatus = "approved" as const;
@@ -418,6 +439,7 @@ export async function POST(request: NextRequest) {
       locationCity,
       currentAccountVerificationStatus: ensureWritable.accountVerificationStatus,
       profileUpdateErrorMessage: "GPS location saved but failed to update profile status",
+      preserveFinalizedSession: ensureWritable.finalizedLocationConfirmation,
     });
     if (lifecycleResponse) {
       return lifecycleResponse;

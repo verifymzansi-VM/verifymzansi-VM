@@ -93,7 +93,7 @@ function createVerificationSessionsTable({
     select: vi.fn().mockImplementation((columns: string) => ({
       eq: vi.fn().mockReturnValue({
         maybeSingle: vi.fn().mockResolvedValue({
-          data: columns === "finalized_at" ? existingSession : currentSession,
+          data: columns.trim().startsWith("finalized_at") ? existingSession : currentSession,
           error: null,
         }),
       }),

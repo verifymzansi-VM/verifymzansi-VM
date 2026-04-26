@@ -115,7 +115,7 @@ function createVerificationSessionsTable({
     select: vi.fn().mockImplementation((columns: string) => ({
       eq: vi.fn().mockReturnValue({
         maybeSingle: vi.fn().mockResolvedValue({
-          data: columns === "finalized_at" ? existingSession : currentSession,
+          data: columns.trim().startsWith("finalized_at") ? existingSession : currentSession,
           error: null,
         }),
       }),
@@ -133,15 +133,30 @@ function createVerificationStepsTable({
   allSteps = DEFAULT_STEP_SUMMARY,
   phoneVerifiedAt = null,
   idDocDetail = null,
+  locationStep = null,
 }: {
   upsert?: ReturnType<typeof vi.fn>;
   allSteps?: Array<{ step_type: string; status: string }>;
   phoneVerifiedAt?: string | null;
   idDocDetail?: Record<string, unknown> | null;
+  locationStep?: Record<string, unknown> | null;
 } = {}) {
   return {
     upsert,
     select: vi.fn().mockImplementation((columns: string) => {
+      if (columns === "status, location_method, location_province, location_city") {
+        return {
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: locationStep,
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+
       if (columns === "step_type, status") {
         return {
           eq: vi.fn().mockResolvedValue({ data: allSteps, error: null }),
@@ -359,6 +374,281 @@ describe("POST /api/verification/location/gps", () => {
         account_verification_status: "pending_review",
       })
     );
+  });
+
+  it("allows GPS confirmation after a manual location has already finalized the session", async () => {
+    const upsertVerificationStep = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: { id: "step-1" }, error: null }),
+    });
+    const upsertSession = vi.fn().mockResolvedValue({ error: null });
+    const finalizeSession = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        is: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    });
+
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },
+      error: null,
+    });
+    mockIsFeatureEnabled.mockResolvedValue(true);
+    mockParseAndValidateJsonRequest.mockResolvedValue({
+      success: true,
+      data: {
+        latitude: -26.2041,
+        longitude: 28.0473,
+        accuracy: 12,
+        timestamp: Date.now(),
+        declaredProvince: "Gauteng",
+        declaredCity: "Johannesburg",
+      },
+    });
+    mockReverseGeocode.mockResolvedValue({
+      province: "Gauteng",
+      city: "Johannesburg",
+      source: "nominatim",
+    });
+    mockComputeLocationConfidence.mockReturnValue("high");
+
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: "profile-1", account_verification_status: "pending_review" },
+                error: null,
+              }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
+        };
+      }
+
+      if (table === "verification_sessions") {
+        return createVerificationSessionsTable({
+          existingSession: {
+            finalized_at: "2026-04-21T12:02:00.000Z",
+            location_submitted_at: "2026-04-21T12:01:00.000Z",
+          },
+          currentSession: {
+            id_artifact_id: "artifact-id",
+            selfie_artifact_id: "artifact-selfie",
+            location_submitted_at: "2026-04-21T12:01:00.000Z",
+            finalized_at: "2026-04-21T12:02:00.000Z",
+          },
+          upsert: upsertSession,
+          update: finalizeSession,
+        });
+      }
+
+      if (table === "verification_steps") {
+        return createVerificationStepsTable({
+          upsert: upsertVerificationStep,
+          phoneVerifiedAt: "2026-04-21T12:00:00.000Z",
+          locationStep: {
+            status: "approved",
+            location_method: "manual",
+            location_province: "Gauteng",
+            location_city: "Johannesburg",
+          },
+        });
+      }
+
+      if (table === "kyc_risk_signals") {
+        return { insert: vi.fn().mockResolvedValue({ error: null }) };
+      }
+
+      if (table === "kyc_artifacts") {
+        return {
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              is: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          }),
+        };
+      }
+
+      return {};
+    });
+
+    const res = await POST(
+      makeRequest({
+        latitude: -26.2041,
+        longitude: 28.0473,
+        accuracy: 12,
+        timestamp: Date.now(),
+        declaredProvince: "Gauteng",
+        declaredCity: "Johannesburg",
+      })
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual(
+      expect.objectContaining({
+        success: true,
+        verified: true,
+      })
+    );
+    expect(upsertVerificationStep).toHaveBeenCalledWith(
+      expect.objectContaining({
+        location_method: "manual_with_gps",
+        location_province: "Gauteng",
+        location_city: "Johannesburg",
+      }),
+      expect.objectContaining({ onConflict: "user_id,step_type" })
+    );
+    expect(upsertSession).toHaveBeenCalledWith(
+      expect.not.objectContaining({ finalized_at: null }),
+      expect.objectContaining({ onConflict: "user_id" })
+    );
+    expect(finalizeSession).not.toHaveBeenCalled();
+  });
+
+  it("rejects finalized GPS confirmation when it does not match the saved manual address", async () => {
+    const upsertVerificationStep = vi.fn();
+
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },
+      error: null,
+    });
+    mockIsFeatureEnabled.mockResolvedValue(true);
+    mockParseAndValidateJsonRequest.mockResolvedValue({
+      success: true,
+      data: {
+        latitude: -26.2041,
+        longitude: 28.0473,
+        accuracy: 12,
+        timestamp: Date.now(),
+        declaredProvince: "Western Cape",
+        declaredCity: "Cape Town",
+      },
+    });
+
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: "profile-1", account_verification_status: "pending_review" },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+
+      if (table === "verification_sessions") {
+        return createVerificationSessionsTable({
+          existingSession: {
+            finalized_at: "2026-04-21T12:02:00.000Z",
+            location_submitted_at: "2026-04-21T12:01:00.000Z",
+          },
+        });
+      }
+
+      if (table === "verification_steps") {
+        return createVerificationStepsTable({
+          upsert: upsertVerificationStep,
+          locationStep: {
+            status: "approved",
+            location_method: "manual",
+            location_province: "Gauteng",
+            location_city: "Johannesburg",
+          },
+        });
+      }
+
+      return {};
+    });
+
+    const res = await POST(
+      makeRequest({
+        latitude: -26.2041,
+        longitude: 28.0473,
+        accuracy: 12,
+        timestamp: Date.now(),
+        declaredProvince: "Western Cape",
+        declaredCity: "Cape Town",
+      })
+    );
+
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toEqual(
+      expect.objectContaining({
+        error: "GPS confirmation must match your saved address",
+      })
+    );
+    expect(mockReverseGeocode).not.toHaveBeenCalled();
+    expect(upsertVerificationStep).not.toHaveBeenCalled();
+  });
+
+  it("does not allow finalized GPS confirmation to mutate a GPS-only location step", async () => {
+    const upsertVerificationStep = vi.fn();
+
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },
+      error: null,
+    });
+    mockIsFeatureEnabled.mockResolvedValue(true);
+    mockParseAndValidateJsonRequest.mockResolvedValue({
+      success: true,
+      data: {
+        latitude: -26.2041,
+        longitude: 28.0473,
+        accuracy: 12,
+        timestamp: Date.now(),
+        declaredProvince: "Gauteng",
+        declaredCity: "Johannesburg",
+      },
+    });
+
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === "verification_sessions") {
+        return createVerificationSessionsTable({
+          existingSession: {
+            finalized_at: "2026-04-21T12:02:00.000Z",
+            location_submitted_at: "2026-04-21T12:01:00.000Z",
+          },
+        });
+      }
+
+      if (table === "verification_steps") {
+        return createVerificationStepsTable({
+          upsert: upsertVerificationStep,
+          locationStep: {
+            status: "approved",
+            location_method: "gps",
+            location_province: "Gauteng",
+            location_city: "Johannesburg",
+          },
+        });
+      }
+
+      return {};
+    });
+
+    const res = await POST(
+      makeRequest({
+        latitude: -26.2041,
+        longitude: 28.0473,
+        accuracy: 12,
+        timestamp: Date.now(),
+        declaredProvince: "Gauteng",
+        declaredCity: "Johannesburg",
+      })
+    );
+
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toEqual(
+      expect.objectContaining({
+        error: "Verification session is already finalized",
+      })
+    );
+    expect(mockReverseGeocode).not.toHaveBeenCalled();
+    expect(upsertVerificationStep).not.toHaveBeenCalled();
   });
 
   it("finalizes the verification session when GPS location is the last missing step", async () => {
