@@ -19,6 +19,7 @@ interface CameraCaptureProps {
 
 type CameraState = "idle" | "streaming" | "captured" | "error";
 const DEFAULT_CAMERA_START_TIMEOUT_MS = 15_000;
+const PERMISSION_QUERY_TIMEOUT_MS = 1_000;
 const BLOCKED_FOR_SITE_MESSAGE =
   "Camera is blocked for this site. Your browser may not show the camera prompt again until you allow camera access in site settings. Please enable camera permission, then try again, or use the file upload below.";
 
@@ -118,7 +119,20 @@ export function CameraCapture({
     }
 
     try {
-      const status = await navigator.permissions.query({ name: "camera" as PermissionName });
+      let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutHandle = setTimeout(() => {
+          reject(new Error("Camera permission lookup timed out."));
+        }, PERMISSION_QUERY_TIMEOUT_MS);
+      });
+      const status = await Promise.race([
+        navigator.permissions.query({ name: "camera" as PermissionName }),
+        timeoutPromise,
+      ]).finally(() => {
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle);
+        }
+      });
       return { state: status.state, supported: true, queryFailed: false };
     } catch {
       return { state: null, supported: true, queryFailed: true };
@@ -191,10 +205,6 @@ export function CameraCapture({
       setState("idle");
       setErrorMessage("");
       stopStream();
-
-      // Pre-check permission for diagnostics only. We still call getUserMedia
-      // so the browser always receives a camera access request after user consent.
-      await getPermissionState();
 
       // Try with full constraints first, then progressively relax
       let stream: MediaStream | null = null;

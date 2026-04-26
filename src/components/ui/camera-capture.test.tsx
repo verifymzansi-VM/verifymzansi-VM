@@ -84,6 +84,30 @@ describe("CameraCapture", () => {
     });
   });
 
+  it("requests camera access even if the Permissions API lookup stalls", async () => {
+    const stream = createMockStream();
+    mockGetUserMedia.mockResolvedValueOnce(stream);
+
+    Object.defineProperty(global.navigator, "permissions", {
+      configurable: true,
+      value: {
+        query: vi.fn(
+          () =>
+            new Promise(() => {
+              // Intentionally unresolved: getUserMedia must still run.
+            })
+        ),
+      },
+    });
+
+    render(<CameraCapture onCapture={vi.fn()} facingMode="user" telemetryContext="selfie" />);
+    await clickOpenCamera();
+
+    await waitFor(() => {
+      expect(mockGetUserMedia).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("starts camera stream after browser permission is granted", async () => {
     const stream = createMockStream();
     mockGetUserMedia.mockResolvedValueOnce(stream);
@@ -153,6 +177,36 @@ describe("CameraCapture", () => {
     await waitFor(() => {
       expect(screen.getByText(/camera access was denied/i)).toBeInTheDocument();
     });
+
+    expect(query).toHaveBeenCalled();
+    expect(mockGetUserMedia).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows denied guidance when permission query stalls after camera access is denied", async () => {
+    const err = new Error("denied");
+    err.name = "NotAllowedError";
+    mockGetUserMedia.mockRejectedValueOnce(err);
+
+    const query = vi.fn(
+      () =>
+        new Promise(() => {
+          // Intentionally unresolved to verify the error UI is not blocked.
+        })
+    );
+    Object.defineProperty(global.navigator, "permissions", {
+      configurable: true,
+      value: { query },
+    });
+
+    render(<CameraCapture onCapture={vi.fn()} facingMode="user" />);
+    await clickOpenCamera();
+
+    await waitFor(
+      () => {
+        expect(screen.getByText(/camera access was denied/i)).toBeInTheDocument();
+      },
+      { timeout: 2_000 }
+    );
 
     expect(query).toHaveBeenCalled();
     expect(mockGetUserMedia).toHaveBeenCalledTimes(1);
