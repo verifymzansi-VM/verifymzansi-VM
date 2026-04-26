@@ -11,12 +11,16 @@ const { mockCreateClient, mockVerifyTurnstile } = vi.hoisted(() => ({
 const {
   mockCreateAdminClient,
   mockProfileUpsert,
+  mockPhoneUniquenessMaybeSingle,
+  mockPendingEmailMaybeSingle,
   mockDeleteUser,
   mockCheckRateLimit,
   mockGetClientRateLimitIdentity,
 } = vi.hoisted(() => ({
   mockCreateAdminClient: vi.fn(),
   mockProfileUpsert: vi.fn().mockResolvedValue({ error: null }),
+  mockPhoneUniquenessMaybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+  mockPendingEmailMaybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
   mockDeleteUser: vi.fn().mockResolvedValue({ error: null }),
   mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
   mockGetClientRateLimitIdentity: vi.fn().mockReturnValue({
@@ -105,6 +109,18 @@ function createAdminMock() {
       },
     },
     from: vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        or: vi.fn().mockReturnValue({
+          limit: vi.fn().mockReturnValue({
+            maybeSingle: mockPhoneUniquenessMaybeSingle,
+          }),
+        }),
+        eq: vi.fn().mockReturnValue({
+          limit: vi.fn().mockReturnValue({
+            maybeSingle: mockPendingEmailMaybeSingle,
+          }),
+        }),
+      }),
       upsert: mockProfileUpsert,
     }),
   };
@@ -123,6 +139,8 @@ describe("POST /api/auth/register", () => {
       ip: "127.0.0.1",
     });
     mockCreateAdminClient.mockReturnValue(createAdminMock() as never);
+    mockPhoneUniquenessMaybeSingle.mockResolvedValue({ data: null, error: null });
+    mockPendingEmailMaybeSingle.mockResolvedValue({ data: null, error: null });
     mockDeleteUser.mockResolvedValue({ error: null });
   });
 
@@ -236,6 +254,77 @@ describe("POST /api/auth/register", () => {
       }),
       { onConflict: "user_id" }
     );
+  });
+
+  it("does not create an auth user when the submitted phone is already claimed", async () => {
+    mockPhoneUniquenessMaybeSingle.mockResolvedValueOnce({
+      data: { id: "profile-existing" },
+      error: null,
+    });
+    const mockSignUp = vi.fn();
+    mockCreateClient.mockResolvedValue({ auth: { signUp: mockSignUp } });
+
+    const res = await POST(createRequest(validBody));
+
+    expect(res.status).toBe(200);
+    expect(mockSignUp).not.toHaveBeenCalled();
+    expect(mockProfileUpsert).not.toHaveBeenCalled();
+    await expect(res.json()).resolves.toMatchObject({ success: true });
+  });
+
+  it("does not create an auth user when the submitted email is already pending elsewhere", async () => {
+    mockPendingEmailMaybeSingle.mockResolvedValueOnce({
+      data: { id: "profile-existing" },
+      error: null,
+    });
+    const mockSignUp = vi.fn();
+    mockCreateClient.mockResolvedValue({ auth: { signUp: mockSignUp } });
+
+    const res = await POST(createRequest(validBody));
+
+    expect(res.status).toBe(200);
+    expect(mockSignUp).not.toHaveBeenCalled();
+    expect(mockProfileUpsert).not.toHaveBeenCalled();
+    await expect(res.json()).resolves.toMatchObject({ success: true });
+  });
+
+  it("normalizes email before checking and creating the auth user", async () => {
+    const mockSignUp = vi.fn().mockResolvedValue({
+      data: { user: { id: "u1", identities: [{ id: "identity-1" }] } },
+      error: null,
+    });
+    mockCreateClient.mockResolvedValue({ auth: { signUp: mockSignUp } });
+
+    const res = await POST(
+      createRequest({
+        ...validBody,
+        email: "USER@Example.COM",
+      })
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockSignUp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "user@example.com",
+      })
+    );
+  });
+
+  it("fails closed when phone uniqueness cannot be checked", async () => {
+    mockPhoneUniquenessMaybeSingle.mockResolvedValueOnce({
+      data: null,
+      error: { message: "database unavailable", code: "57014" },
+    });
+    const mockSignUp = vi.fn();
+    mockCreateClient.mockResolvedValue({ auth: { signUp: mockSignUp } });
+
+    const res = await POST(createRequest(validBody));
+
+    expect(res.status).toBe(503);
+    expect(mockSignUp).not.toHaveBeenCalled();
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Registration temporarily unavailable. Please try again.",
+    });
   });
 
   it("validates Turnstile when configured", async () => {

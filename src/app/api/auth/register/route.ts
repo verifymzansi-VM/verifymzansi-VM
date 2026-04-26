@@ -16,6 +16,7 @@ import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 const log = createLogger("Register");
 
 const ORPHANED_AUTH_USER_DELETE_RETRY_DELAYS_MS = [150, 400] as const;
+const REGISTRATION_UNAVAILABLE_ERROR = "Registration temporarily unavailable. Please try again.";
 
 async function deleteOrphanedAuthUser(userId: string, admin: ReturnType<typeof createAdminClient>) {
   for (let attempt = 0; attempt <= ORPHANED_AUTH_USER_DELETE_RETRY_DELAYS_MS.length; attempt += 1) {
@@ -44,6 +45,40 @@ async function deleteOrphanedAuthUser(userId: string, admin: ReturnType<typeof c
       setTimeout(resolve, ORPHANED_AUTH_USER_DELETE_RETRY_DELAYS_MS[attempt]);
     });
   }
+}
+
+async function isRegistrationContactAlreadyClaimed(
+  admin: ReturnType<typeof createAdminClient>,
+  normalizedEmail: string,
+  normalizedPhone: string
+) {
+  const { data: phoneClaim, error: phoneClaimError } = await admin
+    .from(ACCOUNT_PROFILE_WRITE_TABLE)
+    .select("id")
+    .or(`phone.eq.${normalizedPhone},pending_phone.eq.${normalizedPhone}`)
+    .limit(1)
+    .maybeSingle();
+
+  if (phoneClaimError) {
+    throw phoneClaimError;
+  }
+
+  if (phoneClaim) {
+    return true;
+  }
+
+  const { data: pendingEmailClaim, error: pendingEmailClaimError } = await admin
+    .from(ACCOUNT_PROFILE_WRITE_TABLE)
+    .select("id")
+    .eq("pending_email", normalizedEmail)
+    .limit(1)
+    .maybeSingle();
+
+  if (pendingEmailClaimError) {
+    throw pendingEmailClaimError;
+  }
+
+  return Boolean(pendingEmailClaim);
 }
 
 export async function POST(request: NextRequest) {
@@ -140,16 +175,32 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const normalizedEmail = parsedBody.data.email.trim().toLowerCase();
     const normalizedPhone = normalizeSaPhone(parsedBody.data.phone);
     const displayName = `${parsedBody.data.firstName} ${parsedBody.data.lastName}`.trim();
     // Phone is NOT canonical at registration time — requires OTP verification.
     // Store as pending_phone so the complete-profile OTP step can pre-fill it.
     const admin = createAdminClient();
 
+    try {
+      if (await isRegistrationContactAlreadyClaimed(admin, normalizedEmail, normalizedPhone)) {
+        log.warn("Registration blocked for already claimed contact information", {
+          ip,
+          rateLimitKeySource: clientIdentity.source,
+        });
+        return NextResponse.json({ success: true });
+      }
+    } catch (contactCheckError) {
+      log.error("Failed to check contact uniqueness before registration", {
+        error: contactCheckError instanceof Error ? contactCheckError.message : "Unknown",
+      });
+      return NextResponse.json({ error: REGISTRATION_UNAVAILABLE_ERROR }, { status: 503 });
+    }
+
     const supabase = await createClient();
     const callbackUrl = buildAuthCallbackUrl(request, "/login?confirmed=true");
     const { data: signUpData, error } = await supabase.auth.signUp({
-      email: parsedBody.data.email,
+      email: normalizedEmail,
       password: parsedBody.data.password,
       options: {
         emailRedirectTo: callbackUrl,
@@ -190,7 +241,7 @@ export async function POST(request: NextRequest) {
       // Non-blocking: notify the existing account owner so they have
       // an actionable path (sign in or reset password) without leaking
       // account existence to the requester.
-      sendAlreadyRegisteredEmail(parsedBody.data.email).catch((err) => {
+      sendAlreadyRegisteredEmail(normalizedEmail).catch((err) => {
         log.warn("Failed to send already-registered email", {
           error: err instanceof Error ? err.message : "Unknown",
         });
