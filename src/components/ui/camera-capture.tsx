@@ -29,6 +29,19 @@ interface PermissionLookupResult {
   queryFailed: boolean;
 }
 
+type LegacyGetUserMedia = (
+  constraints: MediaStreamConstraints,
+  onSuccess: (stream: MediaStream) => void,
+  onError: (error: unknown) => void
+) => void;
+
+type CameraNavigator = Navigator & {
+  getUserMedia?: LegacyGetUserMedia;
+  webkitGetUserMedia?: LegacyGetUserMedia;
+  mozGetUserMedia?: LegacyGetUserMedia;
+  msGetUserMedia?: LegacyGetUserMedia;
+};
+
 function shouldTryRelaxedCameraConstraints(errorName: string): boolean {
   return [
     "OverconstrainedError",
@@ -49,6 +62,30 @@ function getCameraErrorName(error: unknown): string {
   }
 
   return "";
+}
+
+function getCameraRequest():
+  | ((constraints: MediaStreamConstraints) => Promise<MediaStream>)
+  | null {
+  if (navigator.mediaDevices?.getUserMedia) {
+    return (constraints) => navigator.mediaDevices.getUserMedia(constraints);
+  }
+
+  const cameraNavigator = navigator as CameraNavigator;
+  const legacyGetUserMedia =
+    cameraNavigator.getUserMedia ??
+    cameraNavigator.webkitGetUserMedia ??
+    cameraNavigator.mozGetUserMedia ??
+    cameraNavigator.msGetUserMedia;
+
+  if (!legacyGetUserMedia) {
+    return null;
+  }
+
+  return (constraints) =>
+    new Promise<MediaStream>((resolve, reject) => {
+      legacyGetUserMedia.call(navigator, constraints, resolve, reject);
+    });
 }
 
 export function CameraCapture({
@@ -100,7 +137,7 @@ export function CameraCapture({
             facingMode,
             isSecureContext,
             topLevelFrame,
-            mediaDevicesAvailable: Boolean(navigator.mediaDevices?.getUserMedia),
+            mediaDevicesAvailable: Boolean(getCameraRequest()),
             platform: uaData?.platform ?? navigator.platform ?? "unknown",
             mobile: uaData?.mobile ?? /Android|iPhone|iPad|iPod/i.test(navigator.userAgent),
           });
@@ -142,6 +179,14 @@ export function CameraCapture({
   const getUserMediaWithTimeout = useCallback(
     (constraints: MediaStreamConstraints) => {
       return new Promise<MediaStream>((resolve, reject) => {
+        const requestCamera = getCameraRequest();
+        if (!requestCamera) {
+          const unavailableError = new Error("Camera API is unavailable.");
+          unavailableError.name = "MediaDevicesUnavailable";
+          reject(unavailableError);
+          return;
+        }
+
         let settled = false;
         const timeoutHandle = setTimeout(() => {
           settled = true;
@@ -150,8 +195,17 @@ export function CameraCapture({
           reject(timeoutError);
         }, cameraStartTimeoutMs);
 
-        navigator.mediaDevices
-          .getUserMedia(constraints)
+        let cameraPromise: Promise<MediaStream>;
+        try {
+          cameraPromise = requestCamera(constraints);
+        } catch (error) {
+          clearTimeout(timeoutHandle);
+          settled = true;
+          reject(error);
+          return;
+        }
+
+        cameraPromise
           .then((stream) => {
             clearTimeout(timeoutHandle);
             if (settled) {
@@ -190,8 +244,8 @@ export function CameraCapture({
       return;
     }
 
-    // Guard: mediaDevices API requires a secure context (HTTPS)
-    if (!navigator.mediaDevices?.getUserMedia) {
+    // Guard: camera APIs require a secure context in modern browsers.
+    if (!getCameraRequest()) {
       reportCameraInitFailure("MediaDevicesUnavailable", null);
       setErrorMessage(
         "Camera is not available. Please make sure you are using HTTPS and a modern browser, or use the file upload below."

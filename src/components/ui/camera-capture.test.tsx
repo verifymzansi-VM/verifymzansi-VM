@@ -41,6 +41,22 @@ beforeEach(() => {
       query: vi.fn().mockResolvedValue({ state: "prompt" }),
     },
   });
+  Object.defineProperty(global.navigator, "getUserMedia", {
+    configurable: true,
+    value: undefined,
+  });
+  Object.defineProperty(global.navigator, "webkitGetUserMedia", {
+    configurable: true,
+    value: undefined,
+  });
+  Object.defineProperty(global.navigator, "mozGetUserMedia", {
+    configurable: true,
+    value: undefined,
+  });
+  Object.defineProperty(global.navigator, "msGetUserMedia", {
+    configurable: true,
+    value: undefined,
+  });
 
   vi.stubGlobal(
     "URL",
@@ -82,6 +98,37 @@ describe("CameraCapture", () => {
     await waitFor(() => {
       expect(mockGetUserMedia).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it("requests camera access through the legacy API when mediaDevices is unavailable", async () => {
+    const stream = createMockStream();
+    const legacyGetUserMedia = vi.fn(
+      (
+        _constraints: MediaStreamConstraints,
+        onSuccess: (stream: MediaStream) => void,
+        _onError: (error: unknown) => void
+      ) => {
+        onSuccess(stream);
+      }
+    );
+
+    Object.defineProperty(global.navigator, "mediaDevices", {
+      configurable: true,
+      value: undefined,
+    });
+    Object.defineProperty(global.navigator, "webkitGetUserMedia", {
+      configurable: true,
+      value: legacyGetUserMedia,
+    });
+
+    render(<CameraCapture onCapture={vi.fn()} facingMode="user" telemetryContext="selfie" />);
+    await clickOpenCamera();
+
+    await waitFor(() => {
+      expect(legacyGetUserMedia).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole("button", { name: /take photo/i })).toBeInTheDocument();
+    });
+    expect(mockGetUserMedia).not.toHaveBeenCalled();
   });
 
   it("requests camera access even if the Permissions API lookup stalls", async () => {
@@ -226,6 +273,22 @@ describe("CameraCapture", () => {
     await waitFor(() => {
       expect(screen.getByText(/camera took too long to start/i)).toBeInTheDocument();
     });
+  });
+
+  it("handles a synchronous camera API failure without waiting for timeout", async () => {
+    const err = new Error("sync failure");
+    err.name = "NotReadableError";
+    mockGetUserMedia.mockImplementationOnce(() => {
+      throw err;
+    });
+
+    render(<CameraCapture onCapture={vi.fn()} facingMode="user" cameraStartTimeoutMs={60_000} />);
+    await clickOpenCamera();
+
+    await waitFor(() => {
+      expect(screen.getByText(/no camera found/i)).toBeInTheDocument();
+    });
+    expect(mockGetUserMedia).toHaveBeenCalledTimes(1);
   });
 
   it("stops late camera stream after timeout", async () => {
