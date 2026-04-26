@@ -354,20 +354,20 @@
 
   @media (min-width: 1024px) {
     .showroom-card-frame {
-      width: 320px;
+      width: min(320px, calc((100dvh - 96px) / 2.08));
       max-width: none;
     }
   }
 
   @media (min-width: 1280px) {
     .showroom-card-frame {
-      width: 380px;
+      width: min(380px, calc((100dvh - 96px) / 2.08));
     }
   }
 
   @media (min-width: 1536px) {
     .showroom-card-frame {
-      width: 416px;
+      width: min(416px, calc((100dvh - 96px) / 2.08));
     }
   }
 
