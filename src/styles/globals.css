@@ -330,6 +330,47 @@
    ══════════════════════════════════════════════════════════════ */
 
 @layer components {
+  .showroom-card-frame {
+    width: min(72vw, 292px);
+  }
+
+  @media (max-height: 700px) {
+    .showroom-card-frame {
+      width: min(68vw, 292px);
+    }
+  }
+
+  @media (min-width: 640px) {
+    .showroom-card-frame {
+      width: min(58vw, 360px);
+    }
+  }
+
+  @media (min-width: 768px) {
+    .showroom-card-frame {
+      width: clamp(220px, 26vw, 264px);
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .showroom-card-frame {
+      width: 320px;
+      max-width: none;
+    }
+  }
+
+  @media (min-width: 1280px) {
+    .showroom-card-frame {
+      width: 380px;
+    }
+  }
+
+  @media (min-width: 1536px) {
+    .showroom-card-frame {
+      width: 416px;
+    }
+  }
+
   /* SA flag mini icon — horizontal stripe gradient */
   .sa-flag-mini {
     background: linear-gradient(

@@ -88,8 +88,7 @@ const TYPE_FALLBACK_MEDIA: Record<CarouselItem["type"], string> = {
   promotion: "/images/fallbacks/hero-shop.svg",
 };
 
-const CARD_W =
-  "w-[72vw] max-w-[292px] [@media(max-height:700px)]:w-[68vw] sm:w-[58vw] sm:max-w-[360px] md:w-[clamp(220px,26vw,264px)] lg:w-[248px] lg:max-w-none xl:w-[264px] 2xl:w-[280px]";
+const CARD_W = "showroom-card-frame";
 const SECTION_SPACING =
   "pt-0 pb-2 sm:pt-0 sm:pb-4 md:pt-4 md:pb-8 lg:min-h-[clamp(27rem,58vh,36rem)] lg:py-8";
 const SECTION_SURFACE = "bg-[linear-gradient(180deg,#f8f5ec_0%,#f1e8da_48%,#e8decd_100%)]";
