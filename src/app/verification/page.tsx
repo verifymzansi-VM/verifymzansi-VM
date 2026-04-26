@@ -564,17 +564,20 @@ export default function VerificationPage() {
         : null;
   const isPhoneValid = isValidSaPhone(phone);
   const isOtpValid = otp.length === 6;
-  const isIdReady =
+  const isIdFormReady =
     /^\d{13}$/.test(idNumber) &&
     !idFileError &&
     !idAgeError &&
     idChecksumValid !== false &&
     !firstNameError &&
     !lastNameError;
-  const isSelfieReady = !selfieFileError;
+  const isSelfieFormReady = !selfieFileError;
   const serverStepMap = useMemo(
     () => new Map(serverSteps.map((entry) => [entry.step_type, entry] as const)),
     [serverSteps]
+  );
+  const persistedPhoneVerified = ["approved", "pending"].includes(
+    serverStepMap.get("phone")?.status ?? ""
   );
   const persistedIdUploaded = ["approved", "pending"].includes(
     serverStepMap.get("id_doc")?.status ?? ""
@@ -582,6 +585,9 @@ export default function VerificationPage() {
   const persistedSelfieUploaded = ["approved", "pending"].includes(
     serverStepMap.get("selfie")?.status ?? ""
   );
+  const isPhoneReady = phoneVerified || persistedPhoneVerified || completedSteps.includes("phone");
+  const isIdReady = persistedIdUploaded || isIdFormReady;
+  const isSelfieReady = persistedSelfieUploaded || isSelfieFormReady;
   const persistedLocationSubmitted = ["approved", "pending"].includes(
     serverStepMap.get("location")?.status ?? ""
   );
@@ -673,11 +679,13 @@ export default function VerificationPage() {
         .map((entry) => entry.step_type);
       setCompletedSteps(approvedSteps);
       setPhoneVerified(
-        nextSteps.some(
-          (entry) =>
-            entry.step_type === "phone" &&
-            (entry.status === "approved" || entry.status === "pending")
-        )
+        (previouslyVerified) =>
+          previouslyVerified ||
+          nextSteps.some(
+            (entry) =>
+              entry.step_type === "phone" &&
+              (entry.status === "approved" || entry.status === "pending")
+          )
       );
 
       // Hydrate upload receipts from server so they survive page refresh
@@ -1442,7 +1450,7 @@ export default function VerificationPage() {
       return;
     }
 
-    if (!phoneVerified) {
+    if (!isPhoneReady) {
       setStep("phone");
       toast({ title: "Verify your phone first", variant: "destructive" });
       return;

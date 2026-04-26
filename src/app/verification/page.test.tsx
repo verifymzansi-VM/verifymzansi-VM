@@ -92,7 +92,6 @@ function fetchCalls() {
 
 async function openCameraAndUseFileFallback(file: File) {
   fireEvent.click(screen.getByRole("button", { name: /Open Camera/i }));
-  fireEvent.click(await screen.findByRole("button", { name: /Allow Camera/i }));
 
   await waitFor(() => {
     expect(document.querySelector('input[type="file"]')).toBeInTheDocument();
@@ -960,5 +959,54 @@ describe("VerificationPage", () => {
       );
     });
     expect(screen.getByRole("button", { name: /Verify Address with GPS/i })).toBeDisabled();
+  });
+
+  it("stays on completion after final submit when prior document steps are already persisted", async () => {
+    sessionResponse = jsonResponse(
+      {
+        sessionId: "session-ready-for-location",
+        completedSteps: ["phone", "id_doc", "selfie"],
+        pendingSteps: [],
+        requiredSteps: ["phone", "id_doc", "selfie", "location"],
+        finalizedAt: null,
+        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
+      },
+      200
+    );
+    statusResponse = jsonResponse(
+      buildStatusPayload({
+        steps: [
+          { step_type: "id_doc", status: "pending", submitted_at: "2026-03-08T11:05:00.000Z" },
+          { step_type: "selfie", status: "pending", submitted_at: "2026-03-08T11:06:00.000Z" },
+        ],
+      }),
+      200
+    );
+    manualLocationResponse = jsonResponse({ success: true }, 200);
+
+    render(<VerificationPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Step 4: Verify Your Address/i)).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText(/^Province$/i), {
+      target: { value: "Gauteng" },
+    });
+    fireEvent.change(screen.getByLabelText(/^City$/i), {
+      target: { value: "Johannesburg" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Save Address/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/^Saved address$/i)).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Submit Verification/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: /Verification Submitted/i })).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/Step 1: Phone \+ OTP/i)).not.toBeInTheDocument();
   });
 });
