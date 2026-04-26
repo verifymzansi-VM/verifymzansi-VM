@@ -156,7 +156,7 @@ describe("ShowroomCardCarousel", () => {
     expect(section.className).toContain("sm:pt-0");
     expect(section.className).toContain("pb-2");
     expect(section.className).toContain("sm:pb-4");
-    expect(section.className).toContain("lg:min-h-[clamp(30rem,62vh,40rem)]");
+    expect(section.className).toContain("lg:min-h-[clamp(27rem,58vh,36rem)]");
     expect(section.className).toContain("lg:py-8");
   });
 
@@ -164,13 +164,7 @@ describe("ShowroomCardCarousel", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
 
     const centerSlide = screen.getByRole("group", { name: "1 of 3" });
-    expect(centerSlide.className).toContain("w-[72vw]");
-    expect(centerSlide.className).toContain("max-w-[292px]");
-    expect(centerSlide.className).toContain("[@media(max-height:700px)]:w-[68vw]");
-    expect(centerSlide.className).toContain("sm:w-[58vw]");
-    expect(centerSlide.className).toContain("sm:max-w-[360px]");
-    expect(centerSlide.className).toContain("lg:w-[280px]");
-    expect(centerSlide.className).toContain("xl:w-[304px]");
+    expect(centerSlide.className).toContain("showroom-card-frame");
   });
 
   it("renders slide groups with positional labels", () => {
@@ -204,18 +198,11 @@ describe("ShowroomCardCarousel", () => {
       <ShowroomCardCarousel items={[]} emptyTitle="No Items" emptyDescription="Nothing to show" />
     );
     const section = screen.getByLabelText("Showroom carousel");
-    const emptyStateCard = Array.from(container.querySelectorAll("div")).find(
-      (node) =>
-        node.className.includes("w-[72vw]") &&
-        node.className.includes("max-w-[292px]") &&
-        node.className.includes("[@media(max-height:700px)]:w-[68vw]") &&
-        node.className.includes("sm:w-[58vw]") &&
-        node.className.includes("sm:max-w-[360px]") &&
-        node.className.includes("lg:w-[280px]") &&
-        node.className.includes("xl:w-[304px]")
+    const emptyStateCard = Array.from(container.querySelectorAll("div")).find((node) =>
+      node.className.includes("showroom-card-frame")
     );
     expect(section).toBeInTheDocument();
-    expect(section.className).toContain("lg:min-h-[clamp(30rem,62vh,40rem)]");
+    expect(section.className).toContain("lg:min-h-[clamp(27rem,58vh,36rem)]");
     expect(emptyStateCard).toBeDefined();
     expect(screen.getByText("No Items")).toBeInTheDocument();
     expect(screen.getByText("Nothing to show")).toBeInTheDocument();

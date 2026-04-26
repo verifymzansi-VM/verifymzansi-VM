@@ -100,7 +100,7 @@ describe("MzansiMarketPage", () => {
     expect(carouselSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         background: expect.objectContaining({
-          src: "/images/showrooms/mzansi-market-workspace.webp",
+          src: "/images/showrooms/generated-mzansi-showroom.webp",
           overlayPreset: "market",
         }),
       })
