@@ -61,11 +61,9 @@ function createMockStream() {
   } as unknown as MediaStream;
 }
 
-/** Click "Open Camera" then confirm via the permission dialog. */
-async function clickOpenCameraAndConfirm() {
+/** Click "Open Camera", which should directly call getUserMedia. */
+async function clickOpenCamera() {
   fireEvent.click(screen.getByRole("button", { name: /open camera/i }));
-  const allowBtn = await screen.findByRole("button", { name: /allow camera/i });
-  fireEvent.click(allowBtn);
 }
 
 describe("CameraCapture", () => {
@@ -74,44 +72,24 @@ describe("CameraCapture", () => {
     expect(screen.getByRole("button", { name: /open camera/i })).toBeInTheDocument();
   });
 
-  it("shows permission dialog when Open Camera is clicked", async () => {
+  it("requests browser camera access when Open Camera is clicked", async () => {
+    const stream = createMockStream();
+    mockGetUserMedia.mockResolvedValueOnce(stream);
+
     render(<CameraCapture onCapture={vi.fn()} facingMode="user" telemetryContext="selfie" />);
-    fireEvent.click(screen.getByRole("button", { name: /open camera/i }));
-
-    expect(await screen.findByText(/camera access required/i)).toBeInTheDocument();
-    expect(screen.getByText(/capture your selfie/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /allow camera/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /cancel/i })).toBeInTheDocument();
-  });
-
-  it("shows id_doc context message in permission dialog", async () => {
-    render(
-      <CameraCapture onCapture={vi.fn()} facingMode="environment" telemetryContext="id_doc" />
-    );
-    fireEvent.click(screen.getByRole("button", { name: /open camera/i }));
-
-    expect(await screen.findByText(/capture your ID document photo/i)).toBeInTheDocument();
-  });
-
-  it("closes permission dialog on Cancel without opening camera", async () => {
-    render(<CameraCapture onCapture={vi.fn()} facingMode="user" />);
-    fireEvent.click(screen.getByRole("button", { name: /open camera/i }));
-
-    const cancelBtn = await screen.findByRole("button", { name: /cancel/i });
-    fireEvent.click(cancelBtn);
+    await clickOpenCamera();
 
     await waitFor(() => {
-      expect(screen.queryByText(/camera access required/i)).not.toBeInTheDocument();
+      expect(mockGetUserMedia).toHaveBeenCalledTimes(1);
     });
-    expect(mockGetUserMedia).not.toHaveBeenCalled();
   });
 
-  it("starts camera stream after confirming permission dialog", async () => {
+  it("starts camera stream after browser permission is granted", async () => {
     const stream = createMockStream();
     mockGetUserMedia.mockResolvedValueOnce(stream);
 
     render(<CameraCapture onCapture={vi.fn()} facingMode="user" />);
-    await clickOpenCameraAndConfirm();
+    await clickOpenCamera();
 
     await waitFor(() => {
       expect(mockGetUserMedia).toHaveBeenCalledWith(
@@ -128,7 +106,7 @@ describe("CameraCapture", () => {
     mockGetUserMedia.mockRejectedValueOnce(err);
 
     render(<CameraCapture onCapture={vi.fn()} facingMode="user" />);
-    await clickOpenCameraAndConfirm();
+    await clickOpenCamera();
 
     await waitFor(() => {
       expect(screen.getByText(/camera access was denied/i)).toBeInTheDocument();
@@ -147,7 +125,7 @@ describe("CameraCapture", () => {
     });
 
     render(<CameraCapture onCapture={vi.fn()} facingMode="user" />);
-    await clickOpenCameraAndConfirm();
+    await clickOpenCamera();
 
     await waitFor(() => {
       expect(screen.getByText(/camera is blocked for this site/i)).toBeInTheDocument();
@@ -170,7 +148,7 @@ describe("CameraCapture", () => {
     });
 
     render(<CameraCapture onCapture={vi.fn()} facingMode="user" />);
-    await clickOpenCameraAndConfirm();
+    await clickOpenCamera();
 
     await waitFor(() => {
       expect(screen.getByText(/camera access was denied/i)).toBeInTheDocument();
@@ -189,7 +167,7 @@ describe("CameraCapture", () => {
     );
 
     render(<CameraCapture onCapture={vi.fn()} facingMode="user" cameraStartTimeoutMs={1} />);
-    await clickOpenCameraAndConfirm();
+    await clickOpenCamera();
 
     await waitFor(() => {
       expect(screen.getByText(/camera took too long to start/i)).toBeInTheDocument();
@@ -206,7 +184,7 @@ describe("CameraCapture", () => {
     );
 
     render(<CameraCapture onCapture={vi.fn()} facingMode="user" cameraStartTimeoutMs={1} />);
-    await clickOpenCameraAndConfirm();
+    await clickOpenCamera();
 
     await waitFor(() => {
       expect(screen.getByText(/camera took too long to start/i)).toBeInTheDocument();
@@ -232,8 +210,7 @@ describe("CameraCapture", () => {
     );
 
     render(<CameraCapture onCapture={vi.fn()} facingMode="environment" />);
-    // First: open dialog and confirm
-    await clickOpenCameraAndConfirm();
+    await clickOpenCamera();
 
     // Wait for getUserMedia to be called once
     await waitFor(() => {
@@ -247,7 +224,7 @@ describe("CameraCapture", () => {
     mockGetUserMedia.mockRejectedValue(err);
 
     render(<CameraCapture onCapture={vi.fn()} facingMode="environment" />);
-    await clickOpenCameraAndConfirm();
+    await clickOpenCamera();
 
     await waitFor(() => {
       expect(screen.getByText(/no camera found/i)).toBeInTheDocument();
@@ -265,7 +242,7 @@ describe("CameraCapture", () => {
     mockGetUserMedia.mockResolvedValueOnce(stream);
 
     render(<CameraCapture onCapture={vi.fn()} facingMode="environment" />);
-    await clickOpenCameraAndConfirm();
+    await clickOpenCamera();
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /take photo/i })).toBeInTheDocument();
@@ -291,7 +268,7 @@ describe("CameraCapture", () => {
     mockGetUserMedia.mockRejectedValueOnce(err);
 
     render(<CameraCapture onCapture={vi.fn()} facingMode="user" />);
-    await clickOpenCameraAndConfirm();
+    await clickOpenCamera();
 
     await waitFor(() => {
       const input = document.querySelector("input[type='file']");
@@ -310,7 +287,7 @@ describe("CameraCapture", () => {
     const onFallback = vi.fn();
 
     render(<CameraCapture onCapture={onCapture} facingMode="user" onFallback={onFallback} />);
-    await clickOpenCameraAndConfirm();
+    await clickOpenCamera();
 
     await waitFor(() => {
       expect(screen.getByText(/camera access was denied/i)).toBeInTheDocument();
@@ -332,7 +309,7 @@ describe("CameraCapture", () => {
     mockGetUserMedia.mockResolvedValueOnce(stream);
 
     const { unmount } = render(<CameraCapture onCapture={vi.fn()} facingMode="user" />);
-    await clickOpenCameraAndConfirm();
+    await clickOpenCamera();
 
     await waitFor(() => {
       expect(mockGetUserMedia).toHaveBeenCalled();
@@ -347,13 +324,13 @@ describe("CameraCapture", () => {
     expect(screen.getByRole("button", { name: /open camera/i })).toBeDisabled();
   });
 
-  it("shows Try Again button on camera error and retries on click", async () => {
+  it("shows Try Again button on camera error and requests camera again on click", async () => {
     const err = new Error("denied");
     err.name = "NotAllowedError";
     mockGetUserMedia.mockRejectedValueOnce(err);
 
     render(<CameraCapture onCapture={vi.fn()} facingMode="user" />);
-    await clickOpenCameraAndConfirm();
+    await clickOpenCamera();
 
     await waitFor(() => {
       expect(screen.getByText(/camera access was denied/i)).toBeInTheDocument();
@@ -362,19 +339,16 @@ describe("CameraCapture", () => {
     const retryBtn = screen.getByRole("button", { name: /try again/i });
     expect(retryBtn).toBeInTheDocument();
 
-    // Second attempt goes through permission dialog again
     const stream = createMockStream();
     mockGetUserMedia.mockResolvedValueOnce(stream);
     fireEvent.click(retryBtn);
-    const allowBtn = await screen.findByRole("button", { name: /allow camera/i });
-    fireEvent.click(allowBtn);
 
     await waitFor(() => {
       expect(mockGetUserMedia).toHaveBeenCalledTimes(2);
     });
   });
 
-  it("shows permission dialog on Retake and requests camera again after confirm", async () => {
+  it("requests camera again when Retake is clicked", async () => {
     const stream = createMockStream();
     mockGetUserMedia.mockResolvedValueOnce(stream);
     mockGetUserMedia.mockResolvedValueOnce(stream);
@@ -392,16 +366,13 @@ describe("CameraCapture", () => {
       });
 
     render(<CameraCapture onCapture={vi.fn()} facingMode="user" />);
-    await clickOpenCameraAndConfirm();
+    await clickOpenCamera();
 
     const takePhotoBtn = await screen.findByRole("button", { name: /take photo/i });
     fireEvent.click(takePhotoBtn);
 
     const retakeBtn = await screen.findByRole("button", { name: /retake/i });
     fireEvent.click(retakeBtn);
-
-    const allowBtn = await screen.findByRole("button", { name: /allow camera/i });
-    fireEvent.click(allowBtn);
 
     await waitFor(() => {
       expect(mockGetUserMedia).toHaveBeenCalledTimes(2);
