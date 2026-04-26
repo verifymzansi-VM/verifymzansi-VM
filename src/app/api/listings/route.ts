@@ -688,7 +688,9 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Get account profile ──────────────────────────────────
-    const verification = await resolveAccountVerification(supabase, user.id);
+    const verification = await resolveAccountVerification(supabase, user.id, {
+      includeStepsWhenVerified: true,
+    });
     let profile = verification.profile;
 
     if (!profile) {

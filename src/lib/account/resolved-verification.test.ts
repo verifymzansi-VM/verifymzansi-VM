@@ -173,4 +173,32 @@ describe("resolveAccountVerification", () => {
       expect.objectContaining({ step_type: "location", status: "approved" }),
     ]);
   });
+
+  it("loads steps for verified profiles when requested so action steps are not hidden", async () => {
+    const client = createMockClient({
+      profile: {
+        id: "profile-1",
+        account_verification_status: "verified",
+      },
+      steps: [
+        { user_id: "user-1", step_type: "phone", status: "approved" },
+        { user_id: "user-1", step_type: "id_doc", status: "needs_resubmission" },
+        { user_id: "user-1", step_type: "selfie", status: "approved" },
+        { user_id: "user-1", step_type: "location", status: "approved" },
+      ],
+      artifacts: [],
+    });
+
+    const result = await resolveAccountVerification(client as never, "user-1", {
+      includeStepsWhenVerified: true,
+    });
+
+    expect(result.accountVerificationStatus).toBe("incomplete");
+    expect(result.needsResubmissionCount).toBe(1);
+    expect(result.steps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ step_type: "id_doc", status: "needs_resubmission" }),
+      ])
+    );
+  });
 });

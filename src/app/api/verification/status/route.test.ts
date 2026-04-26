@@ -258,6 +258,57 @@ describe("GET /api/verification/status", () => {
     expect(body.overallStatus).toBe("verified");
   });
 
+  it("returns an actionable status when a stale verified profile has a step needing attention", async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: "profile-1",
+                  account_verification_status: "verified",
+                },
+              }),
+            }),
+          }),
+        };
+      }
+
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({
+              data: [
+                { step_type: "phone", status: "approved" },
+                { step_type: "id_doc", status: "needs_resubmission" },
+                { step_type: "selfie", status: "approved" },
+                { step_type: "location", status: "approved" },
+              ],
+            }),
+          }),
+        };
+      }
+
+      if (table === "kyc_artifacts") {
+        return createPendingArtifactsQuery();
+      }
+
+      return {};
+    });
+
+    const response = await GET({} as unknown as NextRequest);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.accountVerificationStatus).toBe("incomplete");
+    expect(body.steps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ step_type: "id_doc", status: "needs_resubmission" }),
+      ])
+    );
+  });
+
   it("returns persisted GPS mismatch and confidence context for the location step", async () => {
     mockFrom.mockImplementation((table: string) => {
       if (table === ACCOUNT_PROFILE_WRITE_TABLE) {

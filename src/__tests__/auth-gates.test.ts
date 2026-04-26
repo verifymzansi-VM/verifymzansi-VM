@@ -20,9 +20,17 @@ vi.mock("@/lib/account/verification-summary", () => ({
     status: string | null | undefined,
     steps: Array<{ step_type: string; status: string }>
   ) => {
+    const hasRejected = steps.some((s) => s.status === "rejected");
+    const hasResubmission = steps.some((s) => s.status === "needs_resubmission");
     const allApproved = steps.length > 0 && steps.every((s) => s.status === "approved");
     return {
-      accountVerificationStatus: status === "verified" || allApproved ? "verified" : "incomplete",
+      accountVerificationStatus: hasRejected
+        ? "rejected"
+        : hasResubmission
+          ? "incomplete"
+          : status === "verified" || allApproved
+            ? "verified"
+            : "incomplete",
     };
   },
 }));
@@ -404,6 +412,7 @@ describe("checkPostingGate", () => {
         account_verification_status: "verified",
         account_status: "active",
       },
+      stepsData: [],
     });
     const result = await checkPostingGate(
       createRequest("/post/create-business"),
@@ -412,6 +421,30 @@ describe("checkPostingGate", () => {
       null
     );
     expect(result.response).toBeNull();
+  });
+
+  it("blocks posting when a stale verified account has a resubmission step", async () => {
+    const supabase = mockSupabase({
+      profileData: {
+        account_verification_status: "verified",
+        account_status: "active",
+      },
+      stepsData: [
+        { step_type: "phone", status: "approved" },
+        { step_type: "id_doc", status: "needs_resubmission" },
+        { step_type: "selfie", status: "approved" },
+        { step_type: "location", status: "approved" },
+      ],
+    });
+    const result = await checkPostingGate(
+      createRequest("/post/create-business"),
+      supabase,
+      "user-1",
+      null
+    );
+    expect(result.response).not.toBeNull();
+    expect(result.response!.status).toBe(307);
+    expect(new URL(result.response!.headers.get("location")!).pathname).toBe("/verification");
   });
 
   it("redirects unverified users to /verification with returnUrl", async () => {

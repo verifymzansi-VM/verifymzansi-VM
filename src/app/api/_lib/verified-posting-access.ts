@@ -14,7 +14,9 @@ export async function enforceVerifiedPostingAccess(
   userId: string,
   area: MarketplaceArea
 ): Promise<NextResponse | null> {
-  const verification = await resolveAccountVerification(supabase, userId);
+  const verification = await resolveAccountVerification(supabase, userId, {
+    includeStepsWhenVerified: true,
+  });
   const profile = verification.profile;
 
   if (!profile) {

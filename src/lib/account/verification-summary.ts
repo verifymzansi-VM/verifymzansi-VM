@@ -101,17 +101,17 @@ export function summarizeVerification(
 
   let accountVerificationStatus: AccountVerificationStatus;
 
-  if (normalizedProfileStatus === "verified" || allStepsApproved) {
-    accountVerificationStatus = "verified";
-  } else if (normalizedProfileStatus === "rejected" || rejectedStepCount > 0) {
+  if (normalizedProfileStatus === "rejected" || rejectedStepCount > 0) {
     // Only hard rejections set the overall status to "rejected"
     // needs_resubmission steps are treated as incomplete — the user can still fix and resubmit
     accountVerificationStatus = "rejected";
+  } else if (needsResubmissionCount > 0) {
+    // Actionable resubmission steps must win over stale profile state so users see the fix path.
+    accountVerificationStatus = "incomplete";
+  } else if (normalizedProfileStatus === "verified" || allStepsApproved) {
+    accountVerificationStatus = "verified";
   } else if (normalizedProfileStatus === "pending_review" || allStepsSubmitted) {
     accountVerificationStatus = "pending_review";
-  } else if (needsResubmissionCount > 0) {
-    // Steps need resubmission — treat as incomplete so the user sees actionable UI
-    accountVerificationStatus = "incomplete";
   } else {
     accountVerificationStatus = normalizedProfileStatus ?? "incomplete";
   }

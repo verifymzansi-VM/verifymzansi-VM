@@ -264,6 +264,41 @@ describe("VerificationPage", () => {
     expect(screen.queryByText(/Step 1: Phone \+ OTP/i)).not.toBeInTheDocument();
   });
 
+  it("opens approved accounts on the completion view even when old step records are incomplete", async () => {
+    sessionResponse = jsonResponse(
+      {
+        sessionId: "session-verified-legacy",
+        completedSteps: ["phone"],
+        pendingSteps: [],
+        requiredSteps: ["phone", "id_doc", "selfie", "location"],
+        finalizedAt: null,
+        phoneVerifiedAt: "2026-04-21T11:50:00.000Z",
+      },
+      200
+    );
+    statusResponse = jsonResponse(
+      buildStatusPayload({
+        accountVerificationStatus: "verified",
+        steps: [{ step_type: "phone", status: "approved" }],
+      }),
+      200
+    );
+
+    render(<VerificationPage />);
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("heading", { name: /Verification Approved/i }).length).toBe(2);
+    });
+
+    expect(screen.getAllByText(/Your account is verified/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/4 of 4 steps submitted/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/^Approved$/i)).toHaveLength(4);
+    expect(screen.queryByText(/Step 2: ID details/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/First name as shown on your ID is required/i)
+    ).not.toBeInTheDocument();
+  });
+
   it("surfaces resubmission reasons on the affected step", async () => {
     sessionResponse = jsonResponse(
       {

@@ -64,6 +64,30 @@ describe("summarizeVerification", () => {
     expect(summary.needsResubmissionCount).toBe(0);
   });
 
+  it("does not let a stale verified profile hide a hard-rejected step", () => {
+    const summary = summarizeVerification("verified", [
+      { step_type: "phone", status: "approved" },
+      { step_type: "id_doc", status: "rejected" },
+      { step_type: "selfie", status: "approved" },
+      { step_type: "location", status: "approved" },
+    ]);
+
+    expect(summary.accountVerificationStatus).toBe("rejected");
+    expect(summary.rejectedStepCount).toBe(1);
+  });
+
+  it("does not let a stale verified profile hide a resubmission step", () => {
+    const summary = summarizeVerification("verified", [
+      { step_type: "phone", status: "approved" },
+      { step_type: "id_doc", status: "needs_resubmission" },
+      { step_type: "selfie", status: "approved" },
+      { step_type: "location", status: "approved" },
+    ]);
+
+    expect(summary.accountVerificationStatus).toBe("incomplete");
+    expect(summary.needsResubmissionCount).toBe(1);
+  });
+
   it("returns needsResubmissionCount of 0 when no steps need resubmission", () => {
     const summary = summarizeVerification("incomplete", [
       { step_type: "phone", status: "approved" },

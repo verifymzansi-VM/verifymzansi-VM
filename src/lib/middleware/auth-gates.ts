@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
-import { ACCOUNT_PROFILE_WRITE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
+import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { summarizeVerification } from "@/lib/account/verification-summary";
 import { isStaff } from "@/lib/auth/roles";
 import { createLogger } from "@/lib/utils/logger";
@@ -277,27 +277,23 @@ export async function checkPostingGate(
     }
   }
 
-  let canPost = readAccountVerificationStatus(profile) === "verified";
+  const { data: verificationSteps, error: verificationStepsError } = await supabase
+    .from("verification_steps")
+    .select("step_type, status")
+    .eq("user_id", userId);
 
-  if (!canPost) {
-    const { data: verificationSteps, error: verificationStepsError } = await supabase
-      .from("verification_steps")
-      .select("step_type, status")
-      .eq("user_id", userId);
-
-    if (verificationStepsError) {
-      logger.error("Verification step lookup failed in posting gate", {
-        path: pathname,
-        userId,
-        error: verificationStepsError.message,
-        code: verificationStepsError.code,
-      });
-    }
-
-    canPost =
-      summarizeVerification(profile?.account_verification_status, verificationSteps ?? [])
-        .accountVerificationStatus === "verified";
+  if (verificationStepsError) {
+    logger.error("Verification step lookup failed in posting gate", {
+      path: pathname,
+      userId,
+      error: verificationStepsError.message,
+      code: verificationStepsError.code,
+    });
   }
+
+  const canPost =
+    summarizeVerification(profile?.account_verification_status, verificationSteps ?? [])
+      .accountVerificationStatus === "verified";
 
   if (!canPost) {
     if (isApiRoute) {

@@ -25,8 +25,10 @@ export function DashboardOnboarding({
 }: DashboardOnboardingProps) {
   const steps: OnboardingStep[] = [
     {
-      label: "Complete your verification",
-      description: "Build trust with buyers by verifying your identity",
+      label: isVerified ? "Verification approved" : "Complete your verification",
+      description: isVerified
+        ? "Your identity is verified. You can review it any time."
+        : "Build trust with buyers by verifying your identity",
       href: "/verification",
       icon: ShieldCheck,
       completed: isVerified,
@@ -87,7 +89,7 @@ export function DashboardOnboarding({
                 <p
                   className={cn(
                     "text-sm font-medium",
-                    step.completed && "line-through text-muted-foreground"
+                    step.completed && "text-brand-green-800 dark:text-brand-green-100"
                   )}
                 >
                   {step.label}

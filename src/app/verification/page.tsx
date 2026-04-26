@@ -361,6 +361,10 @@ function getInitialWizardStep({
     return needsAttention;
   }
 
+  if (accountVerificationStatus === "verified") {
+    return "complete";
+  }
+
   const nonPhoneSubmitted = REVIEWABLE_STEP_ORDER.filter((stepType) => stepType !== "phone").every(
     (stepType) => {
       const status = stepStatusMap.get(stepType);
@@ -371,9 +375,7 @@ function getInitialWizardStep({
   if (
     phoneDone &&
     nonPhoneSubmitted &&
-    (allSubmitted ||
-      accountVerificationStatus === "pending_review" ||
-      accountVerificationStatus === "verified")
+    (allSubmitted || accountVerificationStatus === "pending_review")
   ) {
     return "complete";
   }
@@ -1507,7 +1509,24 @@ export default function VerificationPage() {
     }
   }
 
+  const reviewAttentionStep = useMemo(
+    () =>
+      REVIEWABLE_STEP_ORDER.find((stepType) => {
+        const status = serverStepMap.get(stepType)?.status;
+        return status === "rejected" || status === "needs_resubmission";
+      }) ?? null,
+    [serverStepMap]
+  );
+  const accountVerified = accountVerificationStatus === "verified" && !reviewAttentionStep;
+
   const progressSteps = useMemo(() => {
+    if (accountVerified) {
+      return REVIEWABLE_STEP_ORDER.map((stepType) => ({
+        type: stepType,
+        status: "approved" as const,
+      }));
+    }
+
     // Find the first step that is incomplete, rejected, or needs resubmission
     // Steps after this one should not appear "approved" even if the server says so,
     // because the earlier step blocks the flow.
@@ -1551,18 +1570,10 @@ export default function VerificationPage() {
     }
 
     return entries;
-  }, [completedSteps, serverStepMap, step]);
+  }, [accountVerified, completedSteps, serverStepMap, step]);
 
   const currentStepNumber = step === "complete" ? 4 : STEP_ORDER.indexOf(step) + 1;
   const currentStepStatus = step === "complete" ? null : serverStepMap.get(step);
-  const reviewAttentionStep = useMemo(
-    () =>
-      REVIEWABLE_STEP_ORDER.find((stepType) => {
-        const status = serverStepMap.get(stepType)?.status;
-        return status === "rejected" || status === "needs_resubmission";
-      }) ?? null,
-    [serverStepMap]
-  );
 
   return (
     <div className="flex min-h-screen flex-col bg-warm-50/30 dark:bg-background">
@@ -1571,8 +1582,12 @@ export default function VerificationPage() {
         <div className="container-page py-6">
           <div className="mx-auto w-full max-w-4xl space-y-6">
             <PageHeader
-              title="Get Verified"
-              description="Complete all checks, then submit once for final review."
+              title={accountVerified ? "Verification Approved" : "Get Verified"}
+              description={
+                accountVerified
+                  ? "Your account is verified. Keep these details current if anything changes."
+                  : "Complete each check once, then submit for final review."
+              }
               breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Verification" }]}
             />
 
@@ -2419,6 +2434,9 @@ export default function VerificationPage() {
                   <div className="mx-auto w-full max-w-lg space-y-2 text-left">
                     {REVIEWABLE_STEP_ORDER.map((stepType) => {
                       const statusEntry = serverStepMap.get(stepType);
+                      const displayStatus = accountVerified
+                        ? "approved"
+                        : (statusEntry?.status ?? "pending");
                       return (
                         <div
                           key={stepType}
@@ -2428,9 +2446,7 @@ export default function VerificationPage() {
                             <span className="font-medium capitalize">
                               {stepType.replace("_", " ")}
                             </span>
-                            <Badge variant="outline">
-                              {formatStatusLabel(statusEntry?.status ?? "pending")}
-                            </Badge>
+                            <Badge variant="outline">{formatStatusLabel(displayStatus)}</Badge>
                           </div>
                           {statusEntry?.reason_note && (
                             <p className="mt-1 text-xs text-muted-foreground">
