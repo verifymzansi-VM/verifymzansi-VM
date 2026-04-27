@@ -216,7 +216,7 @@ describe("withSecurityHeaders", () => {
     expect(response.headers.get("X-Frame-Options")).toBe("DENY");
   });
 
-  it("uses relaxed camera policy on /verification pages", () => {
+  it("allows same-origin camera access on /verification pages", () => {
     const request = createRequest("/verification/step-1");
     const proxyResponse = NextResponse.next();
     const response = withSecurityHeaders(request, proxyResponse);
@@ -224,12 +224,12 @@ describe("withSecurityHeaders", () => {
     expect(response.headers.get("Permissions-Policy")).toContain("camera=(self)");
   });
 
-  it("uses default restrictive camera policy on non-verification pages", () => {
-    const request = createRequest("/dashboard");
+  it("keeps same-origin camera access available on non-verification app documents", () => {
+    const request = createRequest("/login?returnUrl=%2Fverification");
     const proxyResponse = NextResponse.next();
     const response = withSecurityHeaders(request, proxyResponse);
 
-    expect(response.headers.get("Permissions-Policy")).toContain("camera=()");
+    expect(response.headers.get("Permissions-Policy")).toContain("camera=(self)");
   });
 
   it("pins immutable caching on public media proxy responses", () => {

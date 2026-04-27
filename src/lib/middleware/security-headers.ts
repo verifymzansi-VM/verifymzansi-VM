@@ -93,7 +93,11 @@ export function buildCsp(
 // -- Permissions policy ------------------------------------------------------
 
 export const DEFAULT_PERMISSIONS_POLICY =
-  "camera=(), microphone=(), geolocation=(self), payment=(), usb=(), magnetometer=(), gyroscope=()";
+  // Permissions Policy is bound to the top-level document for the lifetime of
+  // the SPA session. Users often enter verification after loading /login or
+  // another route first, so camera must be allowed for same-origin documents up
+  // front or the browser blocks getUserMedia without showing a prompt.
+  "camera=(self), microphone=(), geolocation=(self), payment=(), usb=(), magnetometer=(), gyroscope=()";
 
 // -- Header application -----------------------------------------------------
 
@@ -199,12 +203,7 @@ export function withSecurityHeaders(
       clearPlaywrightSessionCookie(proxyResponse);
     }
 
-    const isVerificationPage = pathname.startsWith("/verification");
-    const permissionsPolicy = isVerificationPage
-      ? "camera=(self), microphone=(), geolocation=(self), payment=(), usb=(), magnetometer=(), gyroscope=()"
-      : DEFAULT_PERMISSIONS_POLICY;
-
-    applySecurityHeaders(proxyResponse, csp, permissionsPolicy);
+    applySecurityHeaders(proxyResponse, csp);
     const assetCacheControl = getAssetCacheControl(pathname);
     if (assetCacheControl) {
       proxyResponse.headers.set("Cache-Control", assetCacheControl);
@@ -277,12 +276,7 @@ export function withSecurityHeaders(
     response.headers.set(headerName, headerValue);
   }
 
-  const isVerificationPage = request.nextUrl.pathname.startsWith("/verification");
-  const permissionsPolicy = isVerificationPage
-    ? "camera=(self), microphone=(), geolocation=(self), payment=(), usb=(), magnetometer=(), gyroscope=()"
-    : DEFAULT_PERMISSIONS_POLICY;
-
-  applySecurityHeaders(response, csp, permissionsPolicy);
+  applySecurityHeaders(response, csp);
   if (
     shouldRelaxDocumentCache(request.nextUrl.pathname) &&
     !response.headers.has("Cache-Control") &&

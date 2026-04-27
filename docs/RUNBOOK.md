@@ -670,8 +670,11 @@ permission prompt appears, or the UI shows camera denied/blocked messages.
 
 1. Reproduce on `/verification` with a test account and confirm route reaches
    Step 2 (ID) or Step 3 (Selfie).
-2. Confirm browser receives `Permissions-Policy` with `camera=(self)` on
-   verification routes.
+2. Confirm the browser receives `Permissions-Policy` with `camera=(self)` on the
+   first app document the user loads, especially
+   `/login?returnUrl=/verification`, `/dashboard`, and `/verification`. In-app
+   navigation keeps the original document policy, so a stale `camera=()` policy
+   can block the prompt after the user reaches verification.
 3. Ask user to open in-flow verification help (`/help/verification`) from the
    error panel and reset camera permission in browser/site settings.
 4. Verify fallback upload path works immediately for both ID document and selfie
