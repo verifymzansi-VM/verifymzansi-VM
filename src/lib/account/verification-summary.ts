@@ -8,6 +8,7 @@ import { normalizeAccountVerificationStatus } from "@/lib/account/compat";
 type VerificationStepRecord = {
   step_type?: string | null;
   status?: string | null;
+  reviewed_at?: string | null;
 };
 
 const REVIEWABLE_VERIFICATION_STEPS: VerificationStepType[] = [
@@ -41,6 +42,20 @@ function normalizeStepType(stepType: string | null | undefined): VerificationSte
   }
 }
 
+function mergeStepStatus(
+  current: VerificationStatus | undefined,
+  next: VerificationStatus
+): VerificationStatus {
+  const priority: Record<VerificationStatus, number> = {
+    rejected: 4,
+    needs_resubmission: 3,
+    pending: 2,
+    approved: 1,
+  };
+
+  return !current || priority[next] > priority[current] ? next : current;
+}
+
 export interface VerificationSummary {
   accountVerificationStatus: AccountVerificationStatus;
   stepsRemaining: number;
@@ -67,7 +82,7 @@ export function summarizeVerification(
       continue;
     }
 
-    stepMap.set(stepType, status);
+    stepMap.set(stepType, mergeStepStatus(stepMap.get(stepType), status));
   }
 
   let approvedStepCount = 0;
@@ -98,6 +113,15 @@ export function summarizeVerification(
 
   const allStepsApproved = approvedStepCount === REVIEWABLE_VERIFICATION_STEPS.length;
   const allStepsSubmitted = submittedStepCount === REVIEWABLE_VERIFICATION_STEPS.length;
+  const adminReviewedIdentitySteps = ["id_doc", "selfie"].every((stepType) =>
+    (steps ?? []).some(
+      (step) =>
+        step.step_type === stepType &&
+        step.status === "approved" &&
+        typeof step.reviewed_at === "string" &&
+        step.reviewed_at.trim().length > 0
+    )
+  );
 
   let accountVerificationStatus: AccountVerificationStatus;
 
@@ -108,7 +132,10 @@ export function summarizeVerification(
   } else if (needsResubmissionCount > 0) {
     // Actionable resubmission steps must win over stale profile state so users see the fix path.
     accountVerificationStatus = "incomplete";
-  } else if (normalizedProfileStatus === "verified" || allStepsApproved) {
+  } else if (
+    normalizedProfileStatus === "verified" ||
+    (allStepsApproved && adminReviewedIdentitySteps)
+  ) {
     accountVerificationStatus = "verified";
   } else if (normalizedProfileStatus === "pending_review" || allStepsSubmitted) {
     accountVerificationStatus = "pending_review";

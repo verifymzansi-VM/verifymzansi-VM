@@ -56,7 +56,46 @@ const PII_FIELDS = new Set([
   "pin",
   "verification_code",
   "verificationCode",
+  "authorization",
+  "Authorization",
+  "cookie",
+  "Cookie",
+  "set-cookie",
+  "Set-Cookie",
+  "client_secret",
+  "clientSecret",
+  "refresh_token",
+  "refreshToken",
+  "access_token",
+  "accessToken",
+  "service_role_key",
+  "serviceRoleKey",
 ]);
+
+const SENSITIVE_KEY_PARTS = [
+  "password",
+  "secret",
+  "token",
+  "authorization",
+  "cookie",
+  "api_key",
+  "apikey",
+  "otp",
+  "pin",
+  "passphrase",
+  "service_role",
+];
+
+function isSensitiveFieldName(key: string): boolean {
+  if (PII_FIELDS.has(key)) return true;
+
+  const normalized = key
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/[-\s.]+/g, "_")
+    .toLowerCase();
+
+  return SENSITIVE_KEY_PARTS.some((part) => normalized.includes(part));
+}
 
 function maskValue(value: unknown): string {
   if (typeof value !== "string") return "***";
@@ -71,7 +110,7 @@ function maskValue(value: unknown): string {
 function scrubPii(obj: Record<string, unknown>): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
-    if (PII_FIELDS.has(key)) {
+    if (isSensitiveFieldName(key)) {
       result[key] = maskValue(value);
     } else if (Array.isArray(value)) {
       result[key] = value.map((item) =>

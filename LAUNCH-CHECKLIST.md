@@ -96,7 +96,9 @@ deployed Cloudflare/Wrangler runtime secrets:
 - `OZOW_WEBHOOK_SECRET`
 - Optional `OZOW_API_BASE_URL` only when explicitly required. In production, it
   must be `https://one.ozow.com`.
-- `KYC_WEBHOOK_SECRET` when `KYC_PROVIDER` is set to a non-`stub` provider
+- `KYC_PROVIDER` set to a real signed provider; production launch validation
+  blocks `stub`
+- `KYC_WEBHOOK_SECRET` for signed provider callbacks
 
 Failing any of the above should block deploy.
 
@@ -133,8 +135,8 @@ it the same as other dev bypass flags.
   OTP, and DSAR launch paths in one command.
 - Confirm the KYC provider webhook secret is configured before enabling live
   provider callbacks at `/api/webhooks/kyc/provider`.
-- Confirm `KYC_PROVIDER` is set intentionally. When it remains `stub`, live
-  provider callbacks are disabled even if `KYC_WEBHOOK_SECRET` is present.
+- Confirm `KYC_PROVIDER` is set to the live provider. Production launch
+  validation now blocks `stub`, even when `KYC_WEBHOOK_SECRET` is present.
 - Confirm Africa's Talking sender approval is complete for the live sender ID.
 - Confirm Resend domain verification is complete for the production sender
   domain.

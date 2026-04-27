@@ -28,6 +28,7 @@ const validProductionEnv: Record<string, string> = {
   OZOW_CLIENT_SECRET: "client-secret", // secret-scan: allow deterministic fixture
   OZOW_SITE_CODE: "site-code",
   OZOW_WEBHOOK_SECRET: "webhook-secret", // secret-scan: allow deterministic fixture
+  KYC_PROVIDER: "veriff",
   KYC_WEBHOOK_SECRET: "kyc-webhook-secret", // secret-scan: allow deterministic fixture
   RESEND_API_KEY: "re_live_123456789",
   R2_ACCOUNT_ID: "account-12345678",
@@ -88,18 +89,18 @@ describe("launch env validation", () => {
     );
   });
 
-  it("allows launch validation when KYC webhook secret is missing in stub mode", () => {
+  it("fails launch validation when KYC provider is still stub in production", () => {
     const summary = validateLaunchConfiguration({
       ...validProductionEnv,
       KYC_WEBHOOK_SECRET: undefined,
       KYC_PROVIDER: "stub",
     });
 
-    expect(summary.isValid).toBe(true);
-    expect(summary.checks).toContainEqual(
+    expect(summary.isValid).toBe(false);
+    expect(summary.errors).toContainEqual(
       expect.objectContaining({
-        name: "KYC webhook",
-        status: "pass",
+        name: "KYC provider",
+        status: "fail",
       })
     );
   });

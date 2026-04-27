@@ -47,6 +47,10 @@ import {
   normalizeCreatePostError,
   normalizeCreatePostRuntimeError,
 } from "@/app/post/_lib/create-post-errors";
+import {
+  getListingMediaUploadErrorState,
+  uploadListingVideoFiles,
+} from "@/app/post/_lib/listing-media-upload";
 import { coerceListingAttributes, validateListingAttributes } from "@/lib/forms/listing-form";
 import { CATEGORIES } from "@/lib/constants/categories";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
@@ -668,7 +672,6 @@ export default function CreateListingPage() {
       }
 
       // Upload photos, video, and video cover in parallel after the logo upload settles.
-      let compressedVideoFileRef: File | null = null;
       const [photoUrls, videoUrls, videoThumbnailUrl] = await Promise.all([
         // Photos via server proxy (small files)
         photoFiles.length > 0
@@ -701,33 +704,14 @@ export default function CreateListingPage() {
             })()
           : Promise.resolve([] as string[]),
 
-        // Video via validated server upload
+        // Video via shared fast path with validated server fallback.
         videoFile.length > 0
           ? (async () => {
-              setSubmitProgress("Compressing video...");
-              const { compressVideoForUpload } = await import("@/lib/media/compress-before-upload");
-              const files = await Promise.all(
-                videoFile.map((file) => compressVideoForUpload(file))
-              );
-              compressedVideoFileRef = files[0] ?? null;
               setSubmitProgress("Uploading media...");
-              const uploadData = new FormData();
-              uploadData.append("area", "listing_video");
-              files.forEach((file) => uploadData.append("files", file));
-              const uploadRes = await fetchWithRetry("/api/media/upload", {
-                method: "POST",
-                headers: withCsrfHeaders(),
-                body: uploadData,
+              const urls = await uploadListingVideoFiles({
+                files: videoFile,
+                area: "listing_video",
               });
-              if (!uploadRes.ok) {
-                throw new Error(await readUploadError(uploadRes, "Failed to upload video"));
-              }
-              const uploadJson = await uploadRes.json();
-              const urls = (uploadJson.urls || []) as string[];
-              const fileErrors = (uploadJson.errors || []) as string[];
-              if (urls.length === 0 && fileErrors.length > 0) {
-                throw new Error(fileErrors[0] ?? "Failed to upload video");
-              }
               setUploadStatuses((current) => ({ ...current, video: "done" }));
               return urls;
             })()
@@ -753,7 +737,7 @@ export default function CreateListingPage() {
 
       setSubmitProgress("Saving listing...");
       setUploadStatuses((current) => ({ ...current, saving: "uploading" }));
-      const primaryMediaFile = compressedVideoFileRef ?? videoFile[0] ?? photoFiles[0] ?? null;
+      const primaryMediaFile = videoFile[0] ?? photoFiles[0] ?? null;
       const mediaDimensions = primaryMediaFile ? await readMediaDimensions(primaryMediaFile) : null;
 
       const res = await fetch("/api/listings", {
@@ -859,6 +843,14 @@ export default function CreateListingPage() {
       setUploadStatuses((current) => ({ ...current, saving: "done" }));
       router.push("/dashboard/listings");
     } catch (error: unknown) {
+      const uploadFailure = getListingMediaUploadErrorState(error);
+      if (uploadFailure) {
+        setStep(2);
+        setFieldErrors(uploadFailure.fieldErrors);
+        setFormError(uploadFailure.formError);
+        focusFirstError(uploadFailure.fieldErrors, 2);
+        return;
+      }
       setFormError(normalizeCreatePostRuntimeError(error, "Something went wrong."));
     } finally {
       setIsSubmitting(false);

@@ -17,7 +17,6 @@ import { MIN_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION } from "@/lib/constants/verifi
 import { validateBufferIntegrity } from "@/lib/utils/file-validation";
 import {
   buildPendingVerificationStep,
-  buildVerificationStep,
   buildVerificationSessionResumePatch,
 } from "@/lib/services/verification-state";
 import crypto from "crypto";
@@ -680,34 +679,19 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Build verification step data ──────────────────────────
-    // Auto-approve low-risk steps where the provider approved and no
-    // block-level signals fired (R1: streamline verification for low-risk users).
-    const isAutoApproved =
-      engineResult.autoStatus === "approved" && engineResult.riskLevel === "low";
+    // Provider/risk output is stored as auto_status for admin context, but
+    // user-submitted identity steps remain pending until staff review them.
+    const stepData = buildPendingVerificationStep({
+      user_id: user.id,
+      step_type: stepType,
+      auto_status: engineResult.autoStatus,
+      risk_score: engineResult.riskScore,
+      risk_level: engineResult.riskLevel,
+      submitted_at: new Date().toISOString(),
+    });
 
-    const stepData = isAutoApproved
-      ? buildVerificationStep(
-          {
-            user_id: user.id,
-            step_type: stepType,
-            auto_status: engineResult.autoStatus,
-            risk_score: engineResult.riskScore,
-            risk_level: engineResult.riskLevel,
-            submitted_at: new Date().toISOString(),
-          },
-          "approved"
-        )
-      : buildPendingVerificationStep({
-          user_id: user.id,
-          step_type: stepType,
-          auto_status: engineResult.autoStatus,
-          risk_score: engineResult.riskScore,
-          risk_level: engineResult.riskLevel,
-          submitted_at: new Date().toISOString(),
-        });
-
-    if (isAutoApproved) {
-      log.info("Low-risk step auto-approved by engine", {
+    if (engineResult.autoStatus === "approved" && engineResult.riskLevel === "low") {
+      log.info("Low-risk step approved by engine and queued for admin review", {
         userId: user.id,
         stepType,
         riskScore: engineResult.riskScore,
@@ -1069,52 +1053,6 @@ export async function POST(request: NextRequest) {
         autoStatus: engineResult.autoStatus,
         riskScore: engineResult.riskScore,
       });
-    }
-
-    // ── Auto-promote to verified when all steps are approved ──
-    // If this step was auto-approved, check whether every required step
-    // (phone, id_doc, selfie, location) is now approved. If so, skip
-    // the admin queue entirely and promote the account to "verified".
-    if (isAutoApproved) {
-      const { data: allSteps, error: allStepsErr } = await admin
-        .from("verification_steps")
-        .select("step_type, status")
-        .eq("user_id", user.id);
-
-      if (allStepsErr) {
-        log.error("Failed to read verification steps for auto-promote", {
-          error: allStepsErr.message,
-          userId: user.id,
-        });
-      }
-
-      const stepMap = new Map((allSteps ?? []).map((s) => [s.step_type, s.status]));
-      const allApproved =
-        stepMap.get("phone") === "approved" &&
-        stepMap.get("id_doc") === "approved" &&
-        stepMap.get("selfie") === "approved" &&
-        stepMap.get("location") === "approved";
-
-      if (allApproved) {
-        const { data: promoted, error: promoteErr } = await admin
-          .from(ACCOUNT_PROFILE_WRITE_TABLE)
-          .update({ account_verification_status: "verified" })
-          .eq("id", profile.id)
-          .in("account_verification_status", ["incomplete", "pending_review"])
-          .select("id");
-
-        if (promoteErr) {
-          log.error("Failed to auto-promote account to verified (non-fatal)", {
-            error: promoteErr.message,
-            profileId: profile.id,
-          });
-        } else if (promoted?.length) {
-          log.info("Account auto-promoted to verified — all steps approved by engine", {
-            profileId: profile.id,
-            userId: user.id,
-          });
-        }
-      }
     }
 
     // ── Audit log (best-effort) ────────────────────────────────

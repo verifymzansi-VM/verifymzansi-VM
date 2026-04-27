@@ -136,7 +136,7 @@ function createVerificationStepsTable({
   locationStep = null,
 }: {
   upsert?: ReturnType<typeof vi.fn>;
-  allSteps?: Array<{ step_type: string; status: string }>;
+  allSteps?: Array<{ step_type: string; status: string; reviewed_at?: string | null }>;
   phoneVerifiedAt?: string | null;
   idDocDetail?: Record<string, unknown> | null;
   locationStep?: Record<string, unknown> | null;
@@ -157,7 +157,7 @@ function createVerificationStepsTable({
         };
       }
 
-      if (columns === "step_type, status") {
+      if (columns === "step_type, status" || columns === "step_type, status, reviewed_at") {
         return {
           eq: vi.fn().mockResolvedValue({ data: allSteps, error: null }),
         };

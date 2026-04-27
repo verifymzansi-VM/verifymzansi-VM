@@ -272,7 +272,7 @@ export async function persistLocationVerificationLifecycle({
 
   const { data: allSteps, error: allStepsErr } = await adminClient
     .from("verification_steps")
-    .select("step_type, status")
+    .select("step_type, status, reviewed_at")
     .eq("user_id", userId);
 
   if (allStepsErr) {

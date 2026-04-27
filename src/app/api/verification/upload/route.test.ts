@@ -818,6 +818,7 @@ describe("POST /api/verification/upload", () => {
     const accountStatusSelect = vi
       .fn()
       .mockResolvedValue({ data: [{ id: "profile-1" }], error: null });
+    const stepUpdatePayloads: Array<Record<string, unknown>> = [];
 
     mockFrom.mockImplementation((table: string) => {
       if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
@@ -885,18 +886,21 @@ describe("POST /api/verification/upload", () => {
               }),
             }),
           }),
-          update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
+          update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
+            stepUpdatePayloads.push(payload);
+            return {
               eq: vi.fn().mockReturnValue({
-                neq: vi.fn().mockReturnValue({
-                  select: vi.fn().mockReturnValue({
-                    maybeSingle: vi
-                      .fn()
-                      .mockResolvedValue({ data: { id: "step-1", risk_score: 0 }, error: null }),
+                eq: vi.fn().mockReturnValue({
+                  neq: vi.fn().mockReturnValue({
+                    select: vi.fn().mockReturnValue({
+                      maybeSingle: vi
+                        .fn()
+                        .mockResolvedValue({ data: { id: "step-1", risk_score: 0 }, error: null }),
+                    }),
                   }),
                 }),
               }),
-            }),
+            };
           }),
           insert: vi.fn().mockReturnValue({
             select: vi.fn().mockReturnValue({
@@ -939,7 +943,7 @@ describe("POST /api/verification/upload", () => {
       riskScore: 0,
       riskLevel: "low",
       providerRef: "ref",
-      autoStatus: "needs_manual_review",
+      autoStatus: "approved",
     });
     mockLogAuditEvent.mockResolvedValue(undefined);
 
@@ -959,6 +963,15 @@ describe("POST /api/verification/upload", () => {
       { onConflict: "user_id" }
     );
     expect(accountStatusSelect).toHaveBeenCalled();
+    expect(stepUpdatePayloads).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          status: "pending",
+          auto_status: "approved",
+          reviewed_at: null,
+        }),
+      ])
+    );
   });
 
   it("clears prior review metadata and reopens the verification session on resubmission", async () => {

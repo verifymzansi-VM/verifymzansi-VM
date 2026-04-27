@@ -76,7 +76,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           ),
           supabase
             .from("verification_steps")
-            .select("step_type, status")
+            .select("step_type, status, reviewed_at")
             .eq("user_id", user.id)
             .in("status", ["approved", "pending", "rejected", "needs_resubmission"]),
           supabase

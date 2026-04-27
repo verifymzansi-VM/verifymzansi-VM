@@ -23,6 +23,21 @@ function Harness() {
   );
 }
 
+function SingleVideoHarness() {
+  const [files, setFiles] = useState<File[]>([]);
+
+  return (
+    <MediaUpload
+      id="video-upload"
+      label="Video"
+      files={files}
+      onChange={setFiles}
+      accept="video/*"
+      maxFiles={1}
+    />
+  );
+}
+
 describe("MediaUpload", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -85,5 +100,43 @@ describe("MediaUpload", () => {
       expect(screen.getByText("Some files were not added")).toBeInTheDocument();
     });
     expect(screen.getByText(/notes\.txt/)).toBeInTheDocument();
+  });
+
+  it("keeps visible remove and replace controls when a maxFiles=1 video is selected", async () => {
+    render(<SingleVideoHarness />);
+
+    const input = screen.getByLabelText("Upload photos and videos");
+    const file = new File(["video"], "clip.mp4", { type: "video/mp4" });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Remove clip.mp4" })).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole("button", { name: "Replace clip.mp4" })).toBeInTheDocument();
+    expect(screen.getByText("Replace selected file")).toBeInTheDocument();
+    expect(screen.getByText(/MP4, WebM, MOV/)).toBeInTheDocument();
+  });
+
+  it("can remove and re-select the same maxFiles=1 video", async () => {
+    render(<SingleVideoHarness />);
+
+    const input = screen.getByLabelText("Upload photos and videos");
+    const file = new File(["video"], "clip.mp4", { type: "video/mp4" });
+
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Remove clip.mp4" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove clip.mp4" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Remove clip.mp4" })).not.toBeInTheDocument();
+    });
+
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Remove clip.mp4" })).toBeInTheDocument();
+    });
   });
 });

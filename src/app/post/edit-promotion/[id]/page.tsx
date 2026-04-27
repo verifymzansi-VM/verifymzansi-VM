@@ -29,6 +29,10 @@ import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { useToast } from "@/hooks/use-toast";
 import {
+  getPromotionMediaUploadErrorState,
+  uploadPromotionVideoFiles,
+} from "@/app/post/_lib/promotion-media-upload";
+import {
   BUSINESS_CATEGORIES,
   EVENT_TYPES,
   EVENT_AGE_RESTRICTIONS,
@@ -286,7 +290,6 @@ export default function EditPromotionPage() {
       };
 
       // Upload new photos and videos in parallel
-      let compressedVideoFileRef: File | null = null;
       const [newImageUrls, newVideoUrls] = await Promise.all([
         // Photos via server proxy
         newPhotoFiles.length > 0
@@ -308,36 +311,14 @@ export default function EditPromotionPage() {
             })()
           : Promise.resolve([] as string[]),
 
-        // Videos via validated server upload
+        // Videos via shared fast path with validated server fallback.
         newVideoFiles.length > 0
           ? (async () => {
-              setSubmitProgress("Compressing video...");
-              const { compressVideoForUpload } = await import("@/lib/media/compress-before-upload");
-              // Compress sequentially — parallel would spawn multiple ~25 MB FFmpeg
-              // WASM instances and risk OOM on mobile devices.
-              const compressed: File[] = [];
-              for (const f of newVideoFiles) {
-                compressed.push(await compressVideoForUpload(f));
-              }
-              compressedVideoFileRef = compressed[0] ?? null;
               setSubmitProgress("Uploading media...");
-              const uploadData = new FormData();
-              uploadData.append("area", "promotion");
-              compressed.forEach((file) => uploadData.append("files", file));
-              const uploadRes = await fetchWithRetry("/api/media/upload", {
-                method: "POST",
-                headers: withCsrfHeaders(),
-                body: uploadData,
+              const result = await uploadPromotionVideoFiles({
+                files: newVideoFiles,
+                area: "promotion",
               });
-              if (!uploadRes.ok) {
-                throw new Error(await readUploadError(uploadRes, "Failed to upload video"));
-              }
-              const uploadJson = await uploadRes.json();
-              const result = (uploadJson.urls || []) as string[];
-              const fileErrors = (uploadJson.errors || []) as string[];
-              if (result.length === 0 && fileErrors.length > 0) {
-                throw new Error(fileErrors[0] ?? "Failed to upload video");
-              }
               setUploadStatuses((c) => ({ ...c, videos: "done" }));
               return result;
             })()
@@ -346,8 +327,7 @@ export default function EditPromotionPage() {
 
       const allImages = [...existingImages, ...newImageUrls];
       const allVideos = [...existingVideos, ...newVideoUrls];
-      const primaryMediaFile =
-        compressedVideoFileRef ?? newVideoFiles[0] ?? newPhotoFiles[0] ?? null;
+      const primaryMediaFile = newVideoFiles[0] ?? newPhotoFiles[0] ?? null;
       const mediaDimensions = primaryMediaFile ? await readMediaDimensions(primaryMediaFile) : null;
 
       // Upload logo if a new one was selected
@@ -443,6 +423,12 @@ export default function EditPromotionPage() {
       setUploadStatuses((c) => ({ ...c, saving: "done" }));
       router.push("/dashboard/listings?area=PROMOTIONS_EVENTS&updated=promotion");
     } catch (error: unknown) {
+      const uploadFailure = getPromotionMediaUploadErrorState(error);
+      if (uploadFailure) {
+        setFieldErrors(uploadFailure.fieldErrors);
+        setError(uploadFailure.formError);
+        return;
+      }
       setError(normalizeCreatePostRuntimeError(error, "Something went wrong. Please try again."));
     } finally {
       setIsSubmitting(false);

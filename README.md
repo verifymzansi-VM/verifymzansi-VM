@@ -172,9 +172,9 @@ pnpm supabase:cli -- --env-file=.env.local migration list
 - `NEXT_PUBLIC_APP_URL` must be public HTTPS
 - `AFRICASTALKING_SENDER_ID`, `IP_HASH_SECRET`, Ozow credentials, Turnstile, R2,
   Resend, and encryption keys must all be populated
-- `KYC_PROVIDER` defaults to `stub`; when you switch to a real provider,
-  `KYC_WEBHOOK_SECRET` becomes a launch-blocking requirement for signed KYC
-  callbacks
+- `KYC_PROVIDER=stub` is allowed for local development only. Production launch
+  validation requires a real provider and a populated `KYC_WEBHOOK_SECRET` for
+  signed KYC callbacks.
 - If `OZOW_API_BASE_URL` is set, it must target an official Ozow HTTPS host.
   Production accepts only `https://one.ozow.com`.
 - If you set `RATE_LIMITER_API_KEY`, you must also set `OTP_RATE_LIMITER_URL`

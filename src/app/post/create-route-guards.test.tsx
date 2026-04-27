@@ -28,7 +28,7 @@ describe("create route guards", () => {
 
   function mockServerProfile(
     status: string,
-    steps: Array<{ step_type: string; status: string }> = []
+    steps: Array<{ step_type: string; status: string; reviewed_at?: string | null }> = []
   ) {
     mockCreateClient.mockResolvedValue({
       auth: {
@@ -94,8 +94,8 @@ describe("create route guards", () => {
     async (key) => {
       mockServerProfile("incomplete", [
         { step_type: "phone", status: "approved" },
-        { step_type: "id_doc", status: "approved" },
-        { step_type: "selfie", status: "approved" },
+        { step_type: "id_doc", status: "approved", reviewed_at: "2026-04-27T08:00:00.000Z" },
+        { step_type: "selfie", status: "approved", reviewed_at: "2026-04-27T08:05:00.000Z" },
         { step_type: "location", status: "approved" },
       ]);
 

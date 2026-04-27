@@ -222,7 +222,7 @@ export async function POST(request: Request) {
     if (decision === "approved") {
       const { data: allSteps, error: allStepsErr } = await admin
         .from("verification_steps")
-        .select("step_type, status")
+        .select("step_type, status, reviewed_at")
         .eq("user_id", step.user_id);
 
       if (allStepsErr) {
@@ -239,8 +239,16 @@ export async function POST(request: Request) {
       const allApproved = requiredSteps.every((reqStep) =>
         approvedSteps.some((s) => s.step_type === reqStep)
       );
+      const identityAdminReviewed = ["id_doc", "selfie"].every((identityStep) =>
+        approvedSteps.some(
+          (s) =>
+            s.step_type === identityStep &&
+            typeof s.reviewed_at === "string" &&
+            s.reviewed_at.trim().length > 0
+        )
+      );
 
-      if (allApproved) {
+      if (allApproved && identityAdminReviewed) {
         // ── Propagate legal name from id_doc step → seller_profiles ──
         const idDocStep = (allSteps || []).find(
           (s) => s.step_type === "id_doc" && s.status === "approved"

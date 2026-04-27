@@ -164,7 +164,7 @@ describe("resolveAccountVerification", () => {
 
     const result = await resolveAccountVerification(client as never, "user-1");
 
-    expect(result.accountVerificationStatus).toBe("verified");
+    expect(result.accountVerificationStatus).toBe("pending_review");
     expect(result.approvedStepCount).toBe(4);
     expect(result.steps).toEqual([
       expect.objectContaining({ step_type: "phone", status: "approved" }),

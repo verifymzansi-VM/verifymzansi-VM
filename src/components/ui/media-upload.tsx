@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ImagePlus, X, Film } from "lucide-react";
+import { ImagePlus, X, Film, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -147,6 +147,7 @@ export function MediaUpload({
   const [rejectedMessages, setRejectedMessages] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const isSingleFileMode = maxFiles === 1;
 
   // Derive previews from files — no setState-in-effect needed
   const previews = useMemo<PreviewItem[]>(
@@ -253,7 +254,8 @@ export function MediaUpload({
       }
 
       // Enforce max count
-      const total = files.length + valid.length;
+      const existingFiles = isSingleFileMode ? [] : files;
+      const total = existingFiles.length + valid.length;
       if (total > maxFiles) {
         rejectFile(
           "Too many files",
@@ -261,16 +263,16 @@ export function MediaUpload({
         );
       }
 
-      const allowed = valid.slice(0, maxFiles - files.length);
+      const allowed = valid.slice(0, maxFiles - existingFiles.length);
       if (allowed.length > 0) {
-        onChange([...files, ...allowed]);
+        onChange([...existingFiles, ...allowed]);
       }
       setRejectedMessages(rejected.slice(-4));
       if (rejected.length > 0) {
         onRejectedFiles?.(rejected);
       }
     },
-    [accept, files, maxFiles, onChange, onRejectedFiles, toast, disabled]
+    [accept, files, isSingleFileMode, maxFiles, onChange, onRejectedFiles, toast, disabled]
   );
 
   const handleDrop = useCallback(
@@ -301,16 +303,19 @@ export function MediaUpload({
     (index: number) => {
       const next = files.filter((_, i) => i !== index);
       onChange(next);
+      if (inputRef.current) {
+        inputRef.current.value = "";
+      }
     },
     [files, onChange]
   );
 
   const remaining = maxFiles - files.length;
   const defaultAcceptedLabel = accept?.startsWith("video/")
-    ? "Videos (MP4, WebM) up to 50 MB"
+    ? "Videos (MP4, WebM, MOV) up to 50 MB"
     : accept?.startsWith("image/")
       ? "Images (JPG, PNG, WebP, GIF, AVIF, HEIC) up to 5 MB"
-      : "Images (JPG, PNG, WebP, GIF, AVIF, HEIC) up to 5 MB; videos (MP4, WebM) up to 50 MB";
+      : "Images (JPG, PNG, WebP, GIF, AVIF, HEIC) up to 5 MB; videos (MP4, WebM, MOV) up to 50 MB";
   const describedBy = [
     description ? descriptionId : null,
     countId,
@@ -381,21 +386,35 @@ export function MediaUpload({
                   Main
                 </span>
               )}
-              <button
-                type="button"
-                onClick={() => removeFile(idx)}
-                className="absolute top-1 right-1 rounded-full bg-black/60 p-1 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
-                aria-label={`Remove ${item.file.name}`}
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
+              <div className="absolute right-1 top-1 flex gap-1">
+                {isSingleFileMode && (
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => inputRef.current?.click()}
+                    className="rounded-full bg-black/70 p-1 text-white transition-colors hover:bg-black/85 disabled:opacity-50"
+                    aria-label={`Replace ${item.file.name}`}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => removeFile(idx)}
+                  className="rounded-full bg-black/70 p-1 text-white transition-colors hover:bg-black/85 disabled:opacity-50 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                  aria-label={`Remove ${item.file.name}`}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
           ))}
         </div>
       )}
 
       {/* Drop zone */}
-      {remaining > 0 && (
+      {(remaining > 0 || isSingleFileMode) && (
         <div
           role="button"
           tabIndex={0}
@@ -431,7 +450,11 @@ export function MediaUpload({
             <ImagePlus className="h-6 w-6 mx-auto mb-1.5 text-muted-foreground" />
           )}
           <p className="text-sm font-medium text-muted-foreground">
-            {disabled ? "Uploads disabled for your current plan" : "Drag & drop or click to browse"}
+            {disabled
+              ? "Uploads disabled for your current plan"
+              : remaining > 0
+                ? "Drag & drop or click to browse"
+                : "Replace selected file"}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
             {acceptedLabel ?? defaultAcceptedLabel}

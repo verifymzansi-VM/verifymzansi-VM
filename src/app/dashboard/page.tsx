@@ -80,7 +80,10 @@ export default async function DashboardPage() {
   // Fetch dashboard data in parallel — allSettled for resilience on slow connections
   const results = await Promise.allSettled([
     /* 0 */ supabase.from(ACCOUNT_PROFILE_TABLE).select("*").eq("user_id", user.id).maybeSingle(),
-    /* 1 */ supabase.from("verification_steps").select("step_type, status").eq("user_id", user.id),
+    /* 1 */ supabase
+      .from("verification_steps")
+      .select("step_type, status, reviewed_at")
+      .eq("user_id", user.id),
     /* 2 — recent listings (broader fetch: 10 items with all statuses for mini-manager) */
     applyOwnerFilter(
       supabase

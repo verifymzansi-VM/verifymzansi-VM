@@ -54,6 +54,16 @@ vi.mock("@/lib/utils/upload-preflight", () => ({
   checkUploadServiceReachable: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("@/lib/media/compress-before-upload", () => ({
+  compressVideoForUpload: vi.fn(async (file: File) => file),
+  VideoTranscodeError: class VideoTranscodeError extends Error {
+    constructor(message = "Video transcode failed") {
+      super(message);
+      this.name = "VideoTranscodeError";
+    }
+  },
+}));
+
 vi.mock("next/link", () => ({
   default: ({
     children,
@@ -143,6 +153,10 @@ vi.mock("@/components/ui/media-upload", () => ({
       {error ? <p>{error}</p> : null}
     </div>
   ),
+}));
+
+vi.mock("@/components/ui/video-frame-selector", () => ({
+  VideoFrameSelector: () => <div data-testid="video-frame-selector" />,
 }));
 
 vi.mock("@/components/listings/listing-card", () => ({
@@ -417,6 +431,162 @@ describe("CreateListingPage", () => {
       ).toBeGreaterThan(0);
       expect(screen.getByText(/Please fix 1 field on Step 3/i)).toBeInTheDocument();
     });
+  });
+
+  it("uploads listing videos through the shared direct path with validated fallback", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (input === "/api/media/upload-url") {
+          return {
+            ok: false,
+            status: 410,
+            json: async () => ({ code: "direct_media_uploads_disabled" }),
+          };
+        }
+
+        if (input === "/api/media/upload") {
+          const area = init?.body instanceof FormData ? init.body.get("area") : null;
+          return {
+            ok: true,
+            status: 200,
+            json: async () =>
+              area === "listing_video"
+                ? { urls: ["https://media.verifymzansi.com/listings/clip.mp4"], errors: [] }
+                : { urls: ["https://media.verifymzansi.com/listings/photo.jpg"], errors: [] },
+          };
+        }
+
+        if (input === "/api/listings") {
+          return {
+            ok: true,
+            json: async () => ({ id: "listing-1" }),
+          };
+        }
+
+        return {
+          ok: true,
+          json: async () => ({ success: true }),
+        };
+      }
+    );
+
+    render(<CreateListingPage />);
+
+    fireEvent.click(screen.getByText("Select Electronics"));
+    fireEvent.change(screen.getByLabelText("Title *"), { target: { value: "Used iPhone 15" } });
+    fireEvent.change(screen.getByLabelText("Description *"), {
+      target: { value: "A clean listing description with enough detail to continue." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText(/(Asking Price|Monthly Rent) \(ZAR\) \*/), {
+      target: { value: "1500" },
+    });
+    fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Photos (max 5)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Video (max 1)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
+
+    await waitFor(() => {
+      const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+      expect(calls.some((call) => call[0] === "/api/listings")).toBe(true);
+    });
+
+    const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.some((call) => call[0] === "/api/media/upload-url")).toBe(true);
+    expect(
+      calls.some(
+        (call) =>
+          call[0] === "/api/media/upload" &&
+          call[1]?.body instanceof FormData &&
+          call[1].body.get("area") === "listing_video"
+      )
+    ).toBe(true);
+
+    const request = calls.find((call) => call[0] === "/api/listings");
+    expect(request).toBeDefined();
+    if (!request) {
+      throw new Error("Expected /api/listings submission call");
+    }
+    const payload = JSON.parse(request[1].body as string);
+    expect(payload.videos).toEqual(["https://media.verifymzansi.com/listings/clip.mp4"]);
+  });
+
+  it("keeps users on the media step with a videos field error when listing video upload fails", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (input === "/api/media/upload-url") {
+          return {
+            ok: false,
+            status: 410,
+            json: async () => ({ code: "direct_media_uploads_disabled" }),
+          };
+        }
+
+        if (input === "/api/media/upload") {
+          const area = init?.body instanceof FormData ? init.body.get("area") : null;
+          if (area === "listing_video") {
+            return {
+              ok: false,
+              status: 400,
+              json: async () => ({
+                success: false,
+                urls: [],
+                errors: ['"clip.mp4": unable to verify video file type'],
+                traceId: "trace-video-1",
+              }),
+              headers: new Headers(),
+            };
+          }
+
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              urls: ["https://media.verifymzansi.com/listings/photo.jpg"],
+              errors: [],
+            }),
+          };
+        }
+
+        return {
+          ok: true,
+          json: async () => ({ success: true }),
+        };
+      }
+    );
+
+    render(<CreateListingPage />);
+
+    fireEvent.click(screen.getByText("Select Electronics"));
+    fireEvent.change(screen.getByLabelText("Title *"), { target: { value: "Used iPhone 15" } });
+    fireEvent.change(screen.getByLabelText("Description *"), {
+      target: { value: "A clean listing description with enough detail to continue." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText(/(Asking Price|Monthly Rent) \(ZAR\) \*/), {
+      target: { value: "1500" },
+    });
+    fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Photos (max 5)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Video (max 1)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByText(/unable to verify video file type.*trace-video-1/i).length
+      ).toBeGreaterThan(0);
+    });
+    expect(screen.getByText(/Selected listing media could not be uploaded/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Submit for review" })).toBeInTheDocument();
+    expect(mockPush).not.toHaveBeenCalledWith("/dashboard/listings");
   });
 
   it("redirects to complete profile when API returns phone-gate 403 redirectUrl", async () => {

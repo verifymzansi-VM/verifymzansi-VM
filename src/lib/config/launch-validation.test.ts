@@ -29,6 +29,7 @@ const BASE_ENV: EnvSource = {
   IP_HASH_SECRET: "p".repeat(32),
   NEXT_PUBLIC_TURNSTILE_SITE_KEY: "0x4AAAAAAA_test_site_key",
   TURNSTILE_SECRET_KEY: "0x4AAAAAAA_test_secret_key", // secret-scan: allow deterministic fixture
+  KYC_PROVIDER: "smileid",
   NODE_ENV: "production",
 };
 
@@ -150,7 +151,7 @@ describe("launch validation", () => {
     );
   });
 
-  it("allows missing KYC webhook secret when KYC_PROVIDER=stub", () => {
+  it("fails production mode when KYC_PROVIDER=stub", () => {
     const summary = validateLaunchConfiguration(
       {
         ...BASE_ENV,
@@ -160,11 +161,11 @@ describe("launch validation", () => {
       { mode: "production" }
     );
 
-    expect(summary.isValid).toBe(true);
-    expect(summary.checks).toContainEqual(
+    expect(summary.isValid).toBe(false);
+    expect(summary.errors).toContainEqual(
       expect.objectContaining({
-        name: "KYC webhook",
-        status: "pass",
+        name: "KYC provider",
+        status: "fail",
       })
     );
   });

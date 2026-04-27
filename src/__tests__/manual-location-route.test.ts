@@ -112,7 +112,7 @@ function createVerificationStepsTable({
     single: vi.fn().mockResolvedValue({ data: { id: "step-1" }, error: null }),
   }),
 }: {
-  allSteps?: Array<{ step_type: string; status: string }>;
+  allSteps?: Array<{ step_type: string; status: string; reviewed_at?: string | null }>;
   phoneVerifiedAt?: string | null;
   idDocDetail?: Record<string, unknown> | null;
   upsert?: ReturnType<typeof vi.fn>;
@@ -120,7 +120,7 @@ function createVerificationStepsTable({
   return {
     upsert,
     select: vi.fn().mockImplementation((columns: string) => {
-      if (columns === "step_type, status") {
+      if (columns === "step_type, status" || columns === "step_type, status, reviewed_at") {
         return {
           eq: vi.fn().mockResolvedValue({ data: allSteps, error: null }),
         };

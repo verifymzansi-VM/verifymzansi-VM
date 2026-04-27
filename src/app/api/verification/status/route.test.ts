@@ -211,7 +211,7 @@ describe("GET /api/verification/status", () => {
     expect(body.steps[0].step_type).toBe("phone");
   });
 
-  it("returns verified when all verification steps are approved but the profile is stale", async () => {
+  it("returns verified when admin-reviewed verification steps are approved but the profile is stale", async () => {
     mockFrom.mockImplementation((table: string) => {
       if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
@@ -234,8 +234,16 @@ describe("GET /api/verification/status", () => {
             eq: vi.fn().mockResolvedValue({
               data: [
                 { step_type: "phone", status: "approved" },
-                { step_type: "id_doc", status: "approved" },
-                { step_type: "selfie", status: "approved" },
+                {
+                  step_type: "id_doc",
+                  status: "approved",
+                  reviewed_at: "2026-04-20T10:00:00.000Z",
+                },
+                {
+                  step_type: "selfie",
+                  status: "approved",
+                  reviewed_at: "2026-04-20T10:05:00.000Z",
+                },
                 { step_type: "location", status: "approved" },
               ],
             }),
@@ -256,6 +264,53 @@ describe("GET /api/verification/status", () => {
     expect(response.status).toBe(200);
     expect(body.accountVerificationStatus).toBe("verified");
     expect(body.overallStatus).toBe("verified");
+  });
+
+  it("keeps fully submitted engine-approved steps pending until admin reviews identity", async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: "profile-1",
+                  account_verification_status: "pending_review",
+                },
+              }),
+            }),
+          }),
+        };
+      }
+
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({
+              data: [
+                { step_type: "phone", status: "approved" },
+                { step_type: "id_doc", status: "approved", reviewed_at: null },
+                { step_type: "selfie", status: "approved", reviewed_at: null },
+                { step_type: "location", status: "approved" },
+              ],
+            }),
+          }),
+        };
+      }
+
+      if (table === "kyc_artifacts") {
+        return createPendingArtifactsQuery();
+      }
+
+      return {};
+    });
+
+    const response = await GET({} as unknown as NextRequest);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.accountVerificationStatus).toBe("pending_review");
+    expect(body.overallStatus).toBe("pending_review");
   });
 
   it("returns an actionable status when a stale verified profile has a step needing attention", async () => {

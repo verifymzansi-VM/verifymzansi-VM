@@ -129,4 +129,26 @@ describe("logger", () => {
     const parsed = JSON.parse(output);
     expect(parsed.meta.token).toBe("***");
   });
+
+  it("scrubs sensitive key variants and headers recursively", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const log = createLogger("Webhook");
+    log.warn("provider callback failed", {
+      headers: {
+        authorization: "Bearer live-token-value",
+        "set-cookie": "session=super-secret-cookie",
+      },
+      ozowClientSecret: "client-secret-value",
+      refreshToken: "refresh-token-value",
+      safeTraceId: "trace-123",
+    });
+
+    const output = vi.mocked(console.warn).mock.calls[0][0] as string;
+    const parsed = JSON.parse(output);
+    expect(JSON.stringify(parsed.meta)).not.toContain("live-token-value");
+    expect(JSON.stringify(parsed.meta)).not.toContain("super-secret-cookie");
+    expect(JSON.stringify(parsed.meta)).not.toContain("client-secret-value");
+    expect(JSON.stringify(parsed.meta)).not.toContain("refresh-token-value");
+    expect(parsed.meta.safeTraceId).toBe("trace-123");
+  });
 });

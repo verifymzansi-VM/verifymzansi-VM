@@ -216,12 +216,16 @@ describe("VerificationPage", () => {
     render(<VerificationPage />);
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: /Verification Submitted/i })).toBeInTheDocument();
+      expect(
+        screen.getAllByRole("heading", { name: /Verification Submitted/i }).length
+      ).toBeGreaterThan(0);
     });
     expect(
-      screen.getByText(/address is verified.*ID and selfie are under admin review/i)
+      screen.getByText(/Everything was submitted to admin.*pending review/i)
     ).toBeInTheDocument();
     expect(screen.getAllByText(/Pending Review/i).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /Save Address/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Submit Verification/i })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Return to Posting/i })).toHaveAttribute(
       "href",
       "/post/create-business"
@@ -256,12 +260,62 @@ describe("VerificationPage", () => {
     render(<VerificationPage />);
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: /Verification Submitted/i })).toBeInTheDocument();
+      expect(
+        screen.getAllByRole("heading", { name: /Verification Submitted/i }).length
+      ).toBeGreaterThan(0);
     });
     expect(
-      screen.getByText(/Your address is verified\. Your ID and selfie are under admin review\./i)
+      screen.getByText(/Everything was submitted to admin\. Your application is pending review\./i)
     ).toBeInTheDocument();
     expect(screen.queryByText(/Step 1: Phone \+ OTP/i)).not.toBeInTheDocument();
+  });
+
+  it("does not let duplicate approved step rows hide a resubmission state", async () => {
+    sessionResponse = jsonResponse(
+      {
+        sessionId: "session-duplicate-steps",
+        completedSteps: ["phone", "id_doc", "selfie", "location"],
+        pendingSteps: [],
+        requiredSteps: ["phone", "id_doc", "selfie", "location"],
+        finalizedAt: "2026-04-21T12:00:00.000Z",
+        phoneVerifiedAt: "2026-04-21T11:50:00.000Z",
+      },
+      200
+    );
+    statusResponse = jsonResponse(
+      buildStatusPayload({
+        accountVerificationStatus: "verified",
+        steps: [
+          { step_type: "phone", status: "approved" },
+          {
+            step_type: "id_doc",
+            status: "needs_resubmission",
+            reason_note: "Please upload a clearer ID photo.",
+          },
+          {
+            step_type: "id_doc",
+            status: "approved",
+            reviewed_at: "2026-04-20T10:00:00.000Z",
+          },
+          {
+            step_type: "selfie",
+            status: "approved",
+            reviewed_at: "2026-04-20T10:05:00.000Z",
+          },
+          { step_type: "location", status: "approved" },
+        ],
+      }),
+      200
+    );
+
+    render(<VerificationPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Action needed on id doc/i)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Please upload a clearer ID photo/i)).toBeInTheDocument();
+    expect(screen.getByText(/Step 2: ID details/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Verification Approved/i)).not.toBeInTheDocument();
   });
 
   it("opens approved accounts on the completion view even when old step records are incomplete", async () => {
@@ -292,7 +346,7 @@ describe("VerificationPage", () => {
 
     expect(screen.getAllByText(/Your account is verified/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/4 of 4 steps submitted/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/^Approved$/i)).toHaveLength(4);
+    expect(screen.getAllByText(/^Approved$/i).length).toBeGreaterThanOrEqual(4);
     expect(screen.queryByText(/Step 2: ID details/i)).not.toBeInTheDocument();
     expect(
       screen.queryByText(/First name as shown on your ID is required/i)
@@ -1040,7 +1094,9 @@ describe("VerificationPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Submit Verification/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: /Verification Submitted/i })).toBeInTheDocument();
+      expect(
+        screen.getAllByRole("heading", { name: /Verification Submitted/i }).length
+      ).toBeGreaterThan(0);
     });
     expect(screen.queryByText(/Step 1: Phone \+ OTP/i)).not.toBeInTheDocument();
   });

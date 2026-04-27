@@ -26,6 +26,7 @@ const VALID_PRODUCTION_ENV = {
   OZOW_CLIENT_SECRET: "client-secret-value", // secret-scan: allow deterministic fixture
   OZOW_SITE_CODE: "site-code",
   OZOW_WEBHOOK_SECRET: "webhook-secret-value", // secret-scan: allow deterministic fixture
+  KYC_PROVIDER: "smileid",
   KYC_WEBHOOK_SECRET: "kyc-webhook-secret-value", // secret-scan: allow deterministic fixture
   RESEND_API_KEY: "re_test_1234567890",
   R2_ACCOUNT_ID: "cloudflare-account-id",

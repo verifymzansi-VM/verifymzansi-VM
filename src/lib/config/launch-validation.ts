@@ -435,7 +435,14 @@ export function validateLaunchConfiguration(
 
   const kycWebhookSecret = env.KYC_WEBHOOK_SECRET;
   if (mode === "production") {
-    if (kycWebhookSecretRequired) {
+    if (kycProvider === "stub") {
+      addCheck(
+        checks,
+        "KYC provider",
+        "fail",
+        "KYC_PROVIDER=stub is not allowed in production; configure a signed provider integration"
+      );
+    } else if (kycWebhookSecretRequired) {
       if (!hasValue(kycWebhookSecret)) {
         addCheck(
           checks,

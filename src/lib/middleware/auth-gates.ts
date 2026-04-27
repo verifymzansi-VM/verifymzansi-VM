@@ -279,7 +279,7 @@ export async function checkPostingGate(
 
   const { data: verificationSteps, error: verificationStepsError } = await supabase
     .from("verification_steps")
-    .select("step_type, status")
+    .select("step_type, status, reviewed_at")
     .eq("user_id", userId);
 
   if (verificationStepsError) {

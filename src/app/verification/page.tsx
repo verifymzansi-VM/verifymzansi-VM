@@ -76,6 +76,12 @@ type StepStatusEntry = {
 
 const STEP_ORDER: Exclude<WizardStep, "complete">[] = ["phone", "id_doc", "selfie", "location"];
 const REVIEWABLE_STEP_ORDER: VerificationStepType[] = ["phone", "id_doc", "selfie", "location"];
+const STEP_STATUS_PRIORITY: Record<VerificationStatus, number> = {
+  rejected: 4,
+  needs_resubmission: 3,
+  pending: 2,
+  approved: 1,
+};
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -340,6 +346,37 @@ function getStatusBannerClasses(status: VerificationStatus): string {
   }
 }
 
+function shouldReplaceStepStatus(
+  current: VerificationStatus | undefined,
+  next: VerificationStatus
+) {
+  return !current || STEP_STATUS_PRIORITY[next] > STEP_STATUS_PRIORITY[current];
+}
+
+function buildStepStatusMap(statusSteps: StepStatusEntry[]) {
+  const stepStatusMap = new Map<VerificationStepType, VerificationStatus>();
+
+  for (const entry of statusSteps) {
+    if (shouldReplaceStepStatus(stepStatusMap.get(entry.step_type), entry.status)) {
+      stepStatusMap.set(entry.step_type, entry.status);
+    }
+  }
+
+  return stepStatusMap;
+}
+
+function buildServerStepMap(statusSteps: StepStatusEntry[]) {
+  const stepStatusMap = new Map<VerificationStepType, StepStatusEntry>();
+
+  for (const entry of statusSteps) {
+    if (shouldReplaceStepStatus(stepStatusMap.get(entry.step_type)?.status, entry.status)) {
+      stepStatusMap.set(entry.step_type, entry);
+    }
+  }
+
+  return stepStatusMap;
+}
+
 function getInitialWizardStep({
   statusSteps,
   phoneDone,
@@ -351,7 +388,7 @@ function getInitialWizardStep({
   allSubmitted: boolean;
   accountVerificationStatus: AccountVerificationStatus | null;
 }): WizardStep {
-  const stepStatusMap = new Map(statusSteps.map((entry) => [entry.step_type, entry.status]));
+  const stepStatusMap = buildStepStatusMap(statusSteps);
   const needsAttention = REVIEWABLE_STEP_ORDER.find((stepType) => {
     const status = stepStatusMap.get(stepType);
     return status === "rejected" || status === "needs_resubmission";
@@ -574,10 +611,7 @@ export default function VerificationPage() {
     !firstNameError &&
     !lastNameError;
   const isSelfieFormReady = !selfieFileError;
-  const serverStepMap = useMemo(
-    () => new Map(serverSteps.map((entry) => [entry.step_type, entry] as const)),
-    [serverSteps]
-  );
+  const serverStepMap = useMemo(() => buildServerStepMap(serverSteps), [serverSteps]);
   const persistedPhoneVerified = ["approved", "pending"].includes(
     serverStepMap.get("phone")?.status ?? ""
   );
@@ -613,7 +647,24 @@ export default function VerificationPage() {
       }),
     [serverStepMap]
   );
-  const verificationSubmissionBlocked = emailConfirmationRequired || verificationUnavailable;
+  const reviewAttentionStep = useMemo(
+    () =>
+      REVIEWABLE_STEP_ORDER.find((stepType) => {
+        const status = serverStepMap.get(stepType)?.status;
+        return status === "rejected" || status === "needs_resubmission";
+      }) ?? null,
+    [serverStepMap]
+  );
+  const verificationInAdminReview =
+    !reviewAttentionStep && accountVerificationStatus === "pending_review" && allStepsResolved;
+  const verificationSubmissionBlocked =
+    emailConfirmationRequired || verificationUnavailable || verificationInAdminReview;
+  const blockedSubmissionTitle = verificationInAdminReview
+    ? "Verification already submitted"
+    : "Confirm your email first";
+  const blockedSubmissionDescription = verificationInAdminReview
+    ? "Your verification is pending admin review. You can edit only if admin asks you to resubmit."
+    : EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION;
 
   const applyEmailConfirmationBlocker = useCallback((payload?: VerificationApiResponse | null) => {
     if (!isVerificationEmailConfirmationRequired(payload)) {
@@ -1173,8 +1224,8 @@ export default function VerificationPage() {
   async function goToSelfieStep() {
     if (verificationSubmissionBlocked) {
       toast({
-        title: "Confirm your email first",
-        description: EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION,
+        title: blockedSubmissionTitle,
+        description: blockedSubmissionDescription,
         variant: "destructive",
       });
       return;
@@ -1217,8 +1268,8 @@ export default function VerificationPage() {
   async function goToLocationStep() {
     if (verificationSubmissionBlocked) {
       toast({
-        title: "Confirm your email first",
-        description: EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION,
+        title: blockedSubmissionTitle,
+        description: blockedSubmissionDescription,
         variant: "destructive",
       });
       return;
@@ -1382,8 +1433,8 @@ export default function VerificationPage() {
   async function handleManualLocationSubmit() {
     if (verificationSubmissionBlocked) {
       toast({
-        title: "Confirm your email first",
-        description: EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION,
+        title: blockedSubmissionTitle,
+        description: blockedSubmissionDescription,
         variant: "destructive",
       });
       return;
@@ -1445,8 +1496,8 @@ export default function VerificationPage() {
   async function handleFinalize() {
     if (verificationSubmissionBlocked) {
       toast({
-        title: "Confirm your email first",
-        description: EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION,
+        title: blockedSubmissionTitle,
+        description: blockedSubmissionDescription,
         variant: "destructive",
       });
       return;
@@ -1491,7 +1542,7 @@ export default function VerificationPage() {
         title: verificationComplete ? "Verification approved" : "Verification submitted",
         description: verificationComplete
           ? "Your account is verified."
-          : "Your address is verified. Your ID and selfie have been sent for admin review.",
+          : "Everything was submitted to admin. Your application is pending review.",
         variant: "success",
       });
       setStep("complete");
@@ -1509,14 +1560,6 @@ export default function VerificationPage() {
     }
   }
 
-  const reviewAttentionStep = useMemo(
-    () =>
-      REVIEWABLE_STEP_ORDER.find((stepType) => {
-        const status = serverStepMap.get(stepType)?.status;
-        return status === "rejected" || status === "needs_resubmission";
-      }) ?? null,
-    [serverStepMap]
-  );
   const accountVerified = accountVerificationStatus === "verified" && !reviewAttentionStep;
 
   const progressSteps = useMemo(() => {
@@ -1524,6 +1567,13 @@ export default function VerificationPage() {
       return REVIEWABLE_STEP_ORDER.map((stepType) => ({
         type: stepType,
         status: "approved" as const,
+      }));
+    }
+
+    if (verificationInAdminReview) {
+      return REVIEWABLE_STEP_ORDER.map((stepType) => ({
+        type: stepType,
+        status: "pending" as const,
       }));
     }
 
@@ -1570,7 +1620,7 @@ export default function VerificationPage() {
     }
 
     return entries;
-  }, [accountVerified, completedSteps, serverStepMap, step]);
+  }, [accountVerified, completedSteps, serverStepMap, step, verificationInAdminReview]);
 
   const currentStepNumber = step === "complete" ? 4 : STEP_ORDER.indexOf(step) + 1;
   const currentStepStatus = step === "complete" ? null : serverStepMap.get(step);
@@ -1582,11 +1632,19 @@ export default function VerificationPage() {
         <div className="container-page py-6">
           <div className="mx-auto w-full max-w-4xl space-y-6">
             <PageHeader
-              title={accountVerified ? "Verification Approved" : "Get Verified"}
+              title={
+                accountVerified
+                  ? "Verification Approved"
+                  : verificationInAdminReview
+                    ? "Verification Submitted"
+                    : "Get Verified"
+              }
               description={
                 accountVerified
                   ? "Your account is verified. Keep these details current if anything changes."
-                  : "Complete each check once, then submit for final review."
+                  : verificationInAdminReview
+                    ? "Your application is pending admin review."
+                    : "Complete each check once, then submit for final review."
               }
               breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Verification" }]}
             />
@@ -1596,7 +1654,13 @@ export default function VerificationPage() {
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-medium">Verification progress</p>
                   <Badge variant="secondary">
-                    {step === "complete" ? "Complete ✓" : `Step ${currentStepNumber} of 4`}
+                    {accountVerified
+                      ? "Approved"
+                      : verificationInAdminReview
+                        ? "Pending Review"
+                        : step === "complete"
+                          ? "Submitted"
+                          : `Step ${currentStepNumber} of 4`}
                   </Badge>
                 </div>
                 <VerificationProgress steps={progressSteps} />
@@ -1653,12 +1717,16 @@ export default function VerificationPage() {
                     <p className="font-medium">
                       {verificationUnavailable
                         ? "Verification temporarily unavailable."
-                        : "Confirm your email before submitting documents and location."}
+                        : verificationInAdminReview
+                          ? "Verification pending admin review."
+                          : "Confirm your email before submitting documents and location."}
                     </p>
                     <p className="mt-1 text-xs">
                       {verificationUnavailable
                         ? VERIFICATION_TEMPORARILY_UNAVAILABLE_DESCRIPTION
-                        : EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION}
+                        : verificationInAdminReview
+                          ? blockedSubmissionDescription
+                          : EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION}
                     </p>
                   </div>
                 </CardContent>
@@ -2416,7 +2484,13 @@ export default function VerificationPage() {
             )}
 
             {step === "complete" && (
-              <Card className="border-brand-green/40 bg-brand-green-50/30 dark:bg-brand-green-950/30">
+              <Card
+                className={
+                  accountVerified
+                    ? "border-brand-green/40 bg-brand-green-50/30 dark:bg-brand-green-950/30"
+                    : "border-brand-gold/40 bg-brand-gold-50/40 dark:bg-brand-gold-950/20"
+                }
+              >
                 <CardContent className="space-y-3 py-6 text-center">
                   <div className="mx-auto inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand-green-100 text-brand-green dark:bg-brand-green-900">
                     <ShieldCheck className="h-5 w-5" />
@@ -2429,14 +2503,16 @@ export default function VerificationPage() {
                   <p className="mx-auto max-w-sm text-sm text-muted-foreground">
                     {accountVerificationStatus === "verified"
                       ? "Your account is verified."
-                      : "Your address is verified. Your ID and selfie are under admin review."}
+                      : "Everything was submitted to admin. Your application is pending review."}
                   </p>
                   <div className="mx-auto w-full max-w-lg space-y-2 text-left">
                     {REVIEWABLE_STEP_ORDER.map((stepType) => {
                       const statusEntry = serverStepMap.get(stepType);
                       const displayStatus = accountVerified
                         ? "approved"
-                        : (statusEntry?.status ?? "pending");
+                        : verificationInAdminReview
+                          ? "pending"
+                          : (statusEntry?.status ?? "pending");
                       return (
                         <div
                           key={stepType}
