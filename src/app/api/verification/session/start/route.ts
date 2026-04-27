@@ -102,22 +102,25 @@ export async function POST(_request: NextRequest) {
     if (session && !session.finalized_at) {
       const expiresAt = new Date(new Date(session.created_at).getTime() + 24 * 60 * 60 * 1000);
       if (expiresAt < new Date()) {
-        // Check which steps are already approved to preserve their state
-        const { data: approvedSteps, error: approvedStepsErr } = await supabase
+        // Check which steps are already submitted to preserve their state.
+        // Pending identity/location steps are still valid user submissions while admin reviews them.
+        const { data: submittedSteps, error: submittedStepsErr } = await supabase
           .from("verification_steps")
-          .select("step_type, phone_verified_at")
+          .select("step_type, status, phone_verified_at")
           .eq("user_id", user.id)
-          .eq("status", "approved");
+          .in("status", ["approved", "pending"]);
 
-        if (approvedStepsErr) {
-          log.warn("Failed to fetch approved steps during session reset (non-fatal)", {
+        if (submittedStepsErr) {
+          log.warn("Failed to fetch submitted steps during session reset (non-fatal)", {
             userId: user.id,
-            error: approvedStepsErr.message,
+            error: submittedStepsErr.message,
           });
         }
 
-        const approvedTypes = new Set((approvedSteps || []).map((s) => s.step_type));
-        const phoneStep = (approvedSteps || []).find((s) => s.step_type === "phone");
+        const submittedTypes = new Set((submittedSteps || []).map((s) => s.step_type));
+        const phoneStep = (submittedSteps || []).find(
+          (s) => s.step_type === "phone" && s.phone_verified_at
+        );
 
         // Reset the expired session in-place instead of finalize + insert
         // (inserting would violate the UNIQUE(user_id) constraint)
@@ -128,9 +131,9 @@ export async function POST(_request: NextRequest) {
             finalized_at: null,
             created_at: new Date().toISOString(),
             phone_verified_at: phoneStep?.phone_verified_at ?? null,
-            id_artifact_id: approvedTypes.has("id_doc") ? session.id_artifact_id : null,
-            selfie_artifact_id: approvedTypes.has("selfie") ? session.selfie_artifact_id : null,
-            location_submitted_at: approvedTypes.has("location")
+            id_artifact_id: submittedTypes.has("id_doc") ? session.id_artifact_id : null,
+            selfie_artifact_id: submittedTypes.has("selfie") ? session.selfie_artifact_id : null,
+            location_submitted_at: submittedTypes.has("location")
               ? session.location_submitted_at
               : null,
           })

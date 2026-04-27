@@ -1624,6 +1624,9 @@ export default function VerificationPage() {
 
   const currentStepNumber = step === "complete" ? 4 : STEP_ORDER.indexOf(step) + 1;
   const currentStepStatus = step === "complete" ? null : serverStepMap.get(step);
+  const idDocumentStatus = serverStepMap.get("id_doc")?.status;
+  const selfieStatus = serverStepMap.get("selfie")?.status;
+  const locationStatus = serverStepMap.get("location")?.status;
 
   return (
     <div className="flex min-h-screen flex-col bg-warm-50/30 dark:bg-background">
@@ -2430,6 +2433,7 @@ export default function VerificationPage() {
                       <p className="font-medium">ID Document</p>
                       {uploadReceipts.id_doc ? (
                         <p className="mt-1 text-muted-foreground">
+                          {idDocumentStatus ? `${formatStatusLabel(idDocumentStatus)} - ` : ""}
                           Uploaded at {formatUploadedTime(uploadReceipts.id_doc.uploadedAtIso)}
                         </p>
                       ) : (
@@ -2449,6 +2453,7 @@ export default function VerificationPage() {
                       <p className="font-medium">Selfie</p>
                       {uploadReceipts.selfie ? (
                         <p className="mt-1 text-muted-foreground">
+                          {selfieStatus ? `${formatStatusLabel(selfieStatus)} - ` : ""}
                           Uploaded at {formatUploadedTime(uploadReceipts.selfie.uploadedAtIso)}
                         </p>
                       ) : (
@@ -2466,7 +2471,11 @@ export default function VerificationPage() {
                           <div className="flex items-center gap-1 text-xs">
                             <span className="text-brand-green flex items-center gap-1">
                               <CheckCircle2 className="h-3 w-3" />
-                              {locationVerified ? "GPS verified" : "Address saved"}
+                              {locationVerified
+                                ? "GPS verified"
+                                : locationStatus
+                                  ? formatStatusLabel(locationStatus)
+                                  : "Address saved"}
                               {locationVerified && gpsConfidence ? ` (GPS: ${gpsConfidence})` : ""}
                             </span>
                           </div>

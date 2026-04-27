@@ -33,6 +33,16 @@ function createPendingArtifactsQuery(data: Array<Record<string, unknown>> = []) 
   };
 }
 
+function createVerificationSessionQuery(data: Record<string, unknown> | null = null) {
+  return {
+    select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        maybeSingle: vi.fn().mockResolvedValue({ data }),
+      }),
+    }),
+  };
+}
+
 describe("GET /api/verification/status", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -494,6 +504,70 @@ describe("GET /api/verification/status", () => {
           step_type: "selfie",
           status: "pending",
           submitted_at: "2026-04-21T10:06:00.000Z",
+        }),
+      ])
+    );
+  });
+
+  it("returns a recovered location step when the saved address exists but the step row is missing", async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: "profile-1",
+                  account_verification_status: "pending_review",
+                  location_province: "Gauteng",
+                  location_city: "Johannesburg",
+                },
+              }),
+            }),
+          }),
+        };
+      }
+
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({
+              data: [
+                { step_type: "phone", status: "approved" },
+                { step_type: "id_doc", status: "pending" },
+                { step_type: "selfie", status: "pending" },
+              ],
+            }),
+          }),
+        };
+      }
+
+      if (table === "kyc_artifacts") {
+        return createPendingArtifactsQuery();
+      }
+
+      if (table === "verification_sessions") {
+        return createVerificationSessionQuery({
+          location_submitted_at: "2026-04-21T10:10:00.000Z",
+        });
+      }
+
+      return {};
+    });
+
+    const response = await GET({} as unknown as NextRequest);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.accountVerificationStatus).toBe("pending_review");
+    expect(body.steps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          step_type: "location",
+          status: "approved",
+          submitted_at: "2026-04-21T10:10:00.000Z",
+          location_province: "Gauteng",
+          location_city: "Johannesburg",
         }),
       ])
     );

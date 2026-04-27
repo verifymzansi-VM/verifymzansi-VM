@@ -41,6 +41,7 @@ function createMockClient(params: {
   profile: Record<string, unknown> | null;
   steps: Array<Record<string, unknown>>;
   artifacts: Array<Record<string, unknown>>;
+  session?: Record<string, unknown> | null;
 }) {
   return {
     from(table: string) {
@@ -73,6 +74,8 @@ function createMockClient(params: {
               error: null,
             };
           });
+        case "verification_sessions":
+          return createQueryBuilder(() => ({ data: params.session ?? null, error: null }));
         default:
           throw new Error(`Unexpected table ${table}`);
       }
@@ -109,6 +112,7 @@ describe("resolveAccountVerification", () => {
           created_at: "2026-04-21T10:06:00.000Z",
         },
       ],
+      session: null,
     });
 
     const result = await resolveAccountVerification(client as never, "user-1");
@@ -187,6 +191,7 @@ describe("resolveAccountVerification", () => {
         { user_id: "user-1", step_type: "location", status: "approved" },
       ],
       artifacts: [],
+      session: null,
     });
 
     const result = await resolveAccountVerification(client as never, "user-1", {
@@ -200,5 +205,42 @@ describe("resolveAccountVerification", () => {
         expect.objectContaining({ step_type: "id_doc", status: "needs_resubmission" }),
       ])
     );
+  });
+
+  it("recovers a submitted location from the profile and verification session when the step row is missing", async () => {
+    const client = createMockClient({
+      profile: {
+        id: "profile-1",
+        account_verification_status: "pending_review",
+        location_province: "Gauteng",
+        location_city: "Johannesburg",
+      },
+      steps: [
+        { user_id: "user-1", step_type: "phone", status: "approved" },
+        { user_id: "user-1", step_type: "id_doc", status: "pending" },
+        { user_id: "user-1", step_type: "selfie", status: "pending" },
+      ],
+      artifacts: [],
+      session: {
+        user_id: "user-1",
+        location_submitted_at: "2026-04-21T10:10:00.000Z",
+      },
+    });
+
+    const result = await resolveAccountVerification(client as never, "user-1");
+
+    expect(result.steps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          step_type: "location",
+          status: "approved",
+          submitted_at: "2026-04-21T10:10:00.000Z",
+          location_province: "Gauteng",
+          location_city: "Johannesburg",
+        }),
+      ])
+    );
+    expect(result.submittedStepCount).toBe(4);
+    expect(result.accountVerificationStatus).toBe("pending_review");
   });
 });

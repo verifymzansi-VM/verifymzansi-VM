@@ -13,6 +13,8 @@ type VerificationClient = Pick<SupabaseClient, "from">;
 type ProfileRow = {
   id?: string;
   account_verification_status?: string | null;
+  location_province?: string | null;
+  location_city?: string | null;
 } | null;
 
 type VerificationStepRow = {
@@ -45,6 +47,10 @@ type PendingArtifactRow = {
   status?: string | null;
   created_at?: string | null;
 };
+
+type VerificationSessionRow = {
+  location_submitted_at?: string | null;
+} | null;
 
 const RECOVERABLE_PENDING_ARTIFACT_STEPS = ["id_doc", "selfie"] as const;
 const VERIFICATION_STEP_ORDER = ["phone", "id_doc", "selfie", "location"] as const;
@@ -148,6 +154,19 @@ function mergeRecoveredPendingArtifactSteps(
   };
 }
 
+function sortVerificationSteps(steps: VerificationStepRow[]): VerificationStepRow[] {
+  return [...steps].sort((left, right) => {
+    const leftIndex = VERIFICATION_STEP_ORDER.indexOf(
+      (left.step_type as (typeof VERIFICATION_STEP_ORDER)[number] | undefined) ?? "phone"
+    );
+    const rightIndex = VERIFICATION_STEP_ORDER.indexOf(
+      (right.step_type as (typeof VERIFICATION_STEP_ORDER)[number] | undefined) ?? "phone"
+    );
+
+    return leftIndex - rightIndex;
+  });
+}
+
 export interface ResolvedAccountVerification extends VerificationSummary {
   profile: ProfileRow;
   steps: VerificationStepRow[];
@@ -160,7 +179,7 @@ export async function resolveAccountVerification(
 ): Promise<ResolvedAccountVerification> {
   const profileResult = await client
     .from(ACCOUNT_PROFILE_TABLE)
-    .select("id, account_verification_status")
+    .select("id, account_verification_status, location_province, location_city")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -209,6 +228,50 @@ export async function resolveAccountVerification(
         userId,
         error: error instanceof Error ? error.message : "unknown",
       });
+    }
+
+    const profileHasSavedLocation =
+      readStringField(profile?.location_province) !== null &&
+      readStringField(profile?.location_city) !== null;
+    const profileImpliesSubmittedLocation =
+      readAccountVerificationStatus(profile) === "pending_review" ||
+      readAccountVerificationStatus(profile) === "verified";
+    const hasLocationStep = steps.some((step) => step.step_type === "location");
+
+    if (!hasLocationStep && profileHasSavedLocation) {
+      try {
+        const sessionResult = await client
+          .from("verification_sessions")
+          .select("location_submitted_at")
+          .eq("user_id", userId)
+          .maybeSingle();
+        const session = (sessionResult.data ?? null) as VerificationSessionRow;
+        const submittedAt = readStringField(session?.location_submitted_at);
+
+        if (submittedAt || profileImpliesSubmittedLocation) {
+          steps = sortVerificationSteps([
+            ...steps,
+            {
+              step_type: "location",
+              status: "approved",
+              submitted_at: submittedAt,
+              location_method: "manual",
+              location_province: profile?.location_province ?? null,
+              location_city: profile?.location_city ?? null,
+            },
+          ]);
+
+          log.info("Recovered submitted verification location from profile/session", {
+            userId,
+            source: submittedAt ? "verification_session" : "account_profile",
+          });
+        }
+      } catch (error) {
+        log.warn("Failed to recover submitted verification location from session", {
+          userId,
+          error: error instanceof Error ? error.message : "unknown",
+        });
+      }
     }
   }
 

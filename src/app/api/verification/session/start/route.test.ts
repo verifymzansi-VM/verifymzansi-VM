@@ -95,6 +95,13 @@ function mockStepsTable({
 }) {
   return {
     select: vi.fn().mockImplementation((cols: string) => {
+      if (cols.includes("step_type") && cols.includes("phone_verified_at")) {
+        return {
+          eq: vi.fn().mockReturnValue({
+            in: vi.fn().mockResolvedValue({ data: allSteps, error: null }),
+          }),
+        };
+      }
       if (cols.includes("phone_verified_at")) {
         // Phone step lookup chain
         return {
@@ -488,6 +495,76 @@ describe("POST /api/verification/session/start", () => {
         actorId: "user-1",
       })
     );
+  });
+
+  it("preserves pending submitted artifacts and location when resetting an expired session", async () => {
+    mockAuth({ id: "user-1" });
+
+    const expiredCreatedAt = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
+    const phoneVerifiedAt = "2026-04-21T10:00:00.000Z";
+    const expiredSession = {
+      id: "session-expired-pending",
+      user_id: "user-1",
+      created_at: expiredCreatedAt,
+      phone_verified_at: null,
+      id_artifact_id: "artifact-id",
+      selfie_artifact_id: "artifact-selfie",
+      location_submitted_at: "2026-04-21T10:15:00.000Z",
+      finalized_at: null,
+    };
+
+    const resetSession = {
+      ...expiredSession,
+      created_at: new Date().toISOString(),
+      phone_verified_at: phoneVerifiedAt,
+      finalized_at: null,
+    };
+
+    const mockUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue({ data: resetSession, error: null }),
+        }),
+      }),
+    });
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "verification_sessions") {
+        return {
+          ...mockSessionSelectChain({ data: expiredSession, error: null }),
+          update: mockUpdate,
+        };
+      }
+      if (table === "verification_steps") {
+        return mockStepsTable({
+          allSteps: [
+            { step_type: "phone", status: "approved", phone_verified_at: phoneVerifiedAt },
+            { step_type: "id_doc", status: "pending" },
+            { step_type: "selfie", status: "pending" },
+            { step_type: "location", status: "pending" },
+          ],
+        });
+      }
+      return {};
+    });
+
+    const response = await POST(createMockRequest());
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phone_verified_at: phoneVerifiedAt,
+        id_artifact_id: "artifact-id",
+        selfie_artifact_id: "artifact-selfie",
+        location_submitted_at: "2026-04-21T10:15:00.000Z",
+      })
+    );
+    expect(data.completedSteps).toEqual(["phone"]);
+    expect(data.pendingSteps).toEqual(["id_doc", "selfie", "location"]);
+    expect(data.idArtifactId).toBe("artifact-id");
+    expect(data.selfieArtifactId).toBe("artifact-selfie");
+    expect(data.locationSubmittedAt).toBe("2026-04-21T10:15:00.000Z");
   });
 
   it("includes expiresAt as 24h after session creation", async () => {
