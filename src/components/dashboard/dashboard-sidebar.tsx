@@ -95,17 +95,29 @@ export function DashboardSidebar({ badges = {}, onSignOut }: DashboardSidebarPro
         {badges.verificationProgress &&
           badges.verificationProgress.approved < badges.verificationProgress.total &&
           (() => {
-            const pct = Math.round(
-              (badges.verificationProgress!.approved / badges.verificationProgress!.total) * 100
+            const progressCount = Math.max(
+              badges.verificationProgress!.approved,
+              badges.verificationProgress!.submitted
             );
+            const pct = Math.round((progressCount / badges.verificationProgress!.total) * 100);
             // Map to nearest Tailwind width utility
             const widthClass =
-              pct === 0 ? "w-0" : pct <= 25 ? "w-1/4" : pct <= 50 ? "w-1/2" : "w-3/4";
+              pct === 0
+                ? "w-0"
+                : pct <= 25
+                  ? "w-1/4"
+                  : pct <= 50
+                    ? "w-1/2"
+                    : pct < 100
+                      ? "w-3/4"
+                      : "w-full";
             return (
               <div className="mt-3 rounded-lg border bg-muted/40 px-3 py-2">
                 <p className="text-xs font-medium text-muted-foreground mb-1">
-                  Verification: {badges.verificationProgress!.approved}/
-                  {badges.verificationProgress!.total} steps
+                  Verification: {progressCount}/{badges.verificationProgress!.total}{" "}
+                  {badges.verificationProgress!.submitted > badges.verificationProgress!.approved
+                    ? "submitted"
+                    : "steps"}
                 </p>
                 <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
                   <div

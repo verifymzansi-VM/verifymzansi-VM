@@ -21,6 +21,7 @@ import {
   sendVerificationRejectedEmail,
   sendVerificationResubmissionEmail,
 } from "@/lib/services/email";
+import { summarizeVerification } from "@/lib/account/verification-summary";
 
 const log = createLogger("AdminVerification");
 const ID_NUMBER_IN_USE_ERROR = "This ID number is already linked to another account.";
@@ -332,17 +333,22 @@ export async function POST(request: Request) {
           }
         }
       } else {
+        const nextVerificationStatus = summarizeVerification(
+          "incomplete",
+          allSteps ?? []
+        ).accountVerificationStatus;
         const { error: pendingErr } = await admin
           .from(ACCOUNT_PROFILE_WRITE_TABLE)
           .update({
-            account_verification_status: "pending_review",
+            account_verification_status: nextVerificationStatus,
           })
           .eq("user_id", step.user_id)
           .in("account_verification_status", ["incomplete", "pending_review", "rejected"]);
         if (pendingErr) {
-          log.error("Failed to promote account to pending_review", {
+          log.error("Failed to update account verification status after approval", {
             error: pendingErr.message,
             userId: step.user_id,
+            nextVerificationStatus,
           });
         }
       }
@@ -372,12 +378,12 @@ export async function POST(request: Request) {
         );
       }
     } else {
-      // needs_resubmission — keep as pending_review so the user isn't shown "rejected".
+      // needs_resubmission should become incomplete/actionable so the user sees the fix path.
       // Include "verified" so re-review of a step on a verified account is handled.
       const { error: resubErr } = await admin
         .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .update({
-          account_verification_status: "pending_review",
+          account_verification_status: "incomplete",
         })
         .eq("user_id", step.user_id)
         .in("account_verification_status", [
@@ -387,7 +393,7 @@ export async function POST(request: Request) {
           "verified",
         ]);
       if (resubErr) {
-        log.error("Failed to set account to pending_review for resubmission", {
+        log.error("Failed to set account to incomplete for resubmission", {
           error: resubErr.message,
           userId: step.user_id,
         });

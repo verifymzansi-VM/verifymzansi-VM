@@ -323,6 +323,7 @@ export default async function DashboardPage() {
         {showDashboardOnboarding ? (
           <DashboardOnboarding
             isVerified={isVerified}
+            verificationStatus={verificationSummary.accountVerificationStatus}
             hasListings={hasAnyPosts}
             hasBusinesses={businessCount > 0}
           />

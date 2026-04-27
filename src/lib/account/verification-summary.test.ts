@@ -41,6 +41,18 @@ describe("summarizeVerification", () => {
     expect(summary.allStepsSubmitted).toBe(true);
   });
 
+  it("does not let stale pending review hide missing required steps", () => {
+    const summary = summarizeVerification("pending_review", [
+      { step_type: "phone", status: "approved" },
+      { step_type: "id_doc", status: "pending" },
+      { step_type: "selfie", status: "pending" },
+    ]);
+
+    expect(summary.accountVerificationStatus).toBe("incomplete");
+    expect(summary.stepsRemaining).toBe(1);
+    expect(summary.allStepsSubmitted).toBe(false);
+  });
+
   it("counts only unresolved steps as remaining for incomplete verification", () => {
     const summary = summarizeVerification("incomplete", [
       { step_type: "phone", status: "approved" },

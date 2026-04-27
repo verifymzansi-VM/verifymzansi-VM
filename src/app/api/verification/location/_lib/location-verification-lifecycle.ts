@@ -43,6 +43,7 @@ type EnsureResult =
   | {
       accountVerificationStatus: string | null;
       finalizedLocationConfirmation: boolean;
+      preserveFinalizedSession: boolean;
       savedLocationProvince: string | null;
       savedLocationCity: string | null;
     }
@@ -153,57 +154,9 @@ export async function ensureLocationVerificationWritable({
   }
 
   let finalizedLocationConfirmation = false;
+  let preserveFinalizedSession = false;
   let savedLocationProvince: string | null = null;
   let savedLocationCity: string | null = null;
-
-  if (existingVerificationSession?.finalized_at) {
-    const allowFinalizedConfirmation =
-      allowFinalizedLocationConfirmation && existingVerificationSession.location_submitted_at;
-
-    if (allowFinalizedConfirmation) {
-      const { data: locationStep, error: locationStepErr } = await adminClient
-        .from("verification_steps")
-        .select("status, location_method, location_province, location_city")
-        .eq("user_id", userId)
-        .eq("step_type", "location")
-        .maybeSingle();
-      const existingLocationStep = locationStep as VerificationStepLocationRow | null;
-
-      if (locationStepErr) {
-        logger.error("Failed to fetch finalized location step", {
-          userId,
-          error: locationStepErr.message,
-        });
-        return {
-          response: NextResponse.json(
-            { error: "Unable to check location verification" },
-            { status: 500 }
-          ),
-        };
-      }
-
-      const locationIsSubmitted =
-        existingLocationStep?.status === "approved" || existingLocationStep?.status === "pending";
-      const locationCanReceiveGpsConfirmation =
-        existingLocationStep?.location_method === "manual" ||
-        existingLocationStep?.location_method === "manual_with_gps";
-
-      if (locationIsSubmitted && locationCanReceiveGpsConfirmation) {
-        finalizedLocationConfirmation = true;
-        savedLocationProvince = existingLocationStep.location_province ?? null;
-        savedLocationCity = existingLocationStep.location_city ?? null;
-      }
-    }
-
-    if (!finalizedLocationConfirmation) {
-      return {
-        response: NextResponse.json(
-          { error: "Verification session is already finalized" },
-          { status: 409 }
-        ),
-      };
-    }
-  }
 
   const { data: profile, error: profileErr } = await profileClient
     .from(ACCOUNT_PROFILE_WRITE_TABLE)
@@ -225,9 +178,61 @@ export async function ensureLocationVerificationWritable({
     };
   }
 
+  if (existingVerificationSession?.finalized_at) {
+    const { data: locationStep, error: locationStepErr } = await adminClient
+      .from("verification_steps")
+      .select("status, location_method, location_province, location_city")
+      .eq("user_id", userId)
+      .eq("step_type", "location")
+      .maybeSingle();
+    const existingLocationStep = locationStep as VerificationStepLocationRow | null;
+
+    if (locationStepErr) {
+      logger.error("Failed to fetch finalized location step", {
+        userId,
+        error: locationStepErr.message,
+      });
+      return {
+        response: NextResponse.json(
+          { error: "Unable to check location verification" },
+          { status: 500 }
+        ),
+      };
+    }
+
+    const locationIsSubmitted =
+      existingLocationStep?.status === "approved" || existingLocationStep?.status === "pending";
+
+    if (!locationIsSubmitted && accountProfile.account_verification_status !== "verified") {
+      preserveFinalizedSession = true;
+    } else {
+      const allowFinalizedConfirmation =
+        allowFinalizedLocationConfirmation && existingVerificationSession.location_submitted_at;
+      const locationCanReceiveGpsConfirmation =
+        existingLocationStep?.location_method === "manual" ||
+        existingLocationStep?.location_method === "manual_with_gps";
+
+      if (allowFinalizedConfirmation && locationIsSubmitted && locationCanReceiveGpsConfirmation) {
+        finalizedLocationConfirmation = true;
+        savedLocationProvince = existingLocationStep.location_province ?? null;
+        savedLocationCity = existingLocationStep.location_city ?? null;
+      }
+    }
+
+    if (!finalizedLocationConfirmation && !preserveFinalizedSession) {
+      return {
+        response: NextResponse.json(
+          { error: "Verification session is already finalized" },
+          { status: 409 }
+        ),
+      };
+    }
+  }
+
   return {
     accountVerificationStatus: accountProfile.account_verification_status ?? null,
     finalizedLocationConfirmation,
+    preserveFinalizedSession,
     savedLocationProvince,
     savedLocationCity,
   };

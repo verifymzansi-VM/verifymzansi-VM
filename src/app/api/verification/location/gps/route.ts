@@ -439,7 +439,8 @@ export async function POST(request: NextRequest) {
       locationCity,
       currentAccountVerificationStatus: ensureWritable.accountVerificationStatus,
       profileUpdateErrorMessage: "GPS location saved but failed to update profile status",
-      preserveFinalizedSession: ensureWritable.finalizedLocationConfirmation,
+      preserveFinalizedSession:
+        ensureWritable.finalizedLocationConfirmation || ensureWritable.preserveFinalizedSession,
     });
     if (lifecycleResponse) {
       return lifecycleResponse;

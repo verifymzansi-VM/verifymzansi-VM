@@ -107,6 +107,7 @@ function createVerificationStepsTable({
   allSteps = [{ step_type: "location", status: "approved" }],
   phoneVerifiedAt = null,
   idDocDetail = null,
+  locationStep = null,
   upsert = vi.fn().mockReturnValue({
     select: vi.fn().mockReturnThis(),
     single: vi.fn().mockResolvedValue({ data: { id: "step-1" }, error: null }),
@@ -115,6 +116,7 @@ function createVerificationStepsTable({
   allSteps?: Array<{ step_type: string; status: string; reviewed_at?: string | null }>;
   phoneVerifiedAt?: string | null;
   idDocDetail?: Record<string, unknown> | null;
+  locationStep?: Record<string, unknown> | null;
   upsert?: ReturnType<typeof vi.fn>;
 } = {}) {
   return {
@@ -134,6 +136,16 @@ function createVerificationStepsTable({
                 data: phoneVerifiedAt ? { phone_verified_at: phoneVerifiedAt } : null,
                 error: null,
               }),
+            }),
+          }),
+        };
+      }
+
+      if (columns === "status, location_method, location_province, location_city") {
+        return {
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: locationStep, error: null }),
             }),
           }),
         };
@@ -354,6 +366,86 @@ describe("POST /api/verification/location/manual", () => {
     expect(finalizedAtUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ finalized_at: expect.any(String) })
     );
+  });
+
+  it("backfills a missing location step without reopening an already-finalized session", async () => {
+    const sessionUpsert = vi.fn().mockResolvedValue({ error: null });
+    const finalizedAtUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        is: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    });
+
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },
+      error: null,
+    });
+    mockParseAndValidateJsonRequest.mockResolvedValue({
+      success: true,
+      data: {
+        province: "Gauteng",
+        city: "Johannesburg",
+      },
+    });
+
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === "verification_steps") {
+        return createVerificationStepsTable({
+          allSteps: [
+            { step_type: "phone", status: "approved" },
+            { step_type: "id_doc", status: "pending" },
+            { step_type: "selfie", status: "pending" },
+            { step_type: "location", status: "approved" },
+          ],
+          phoneVerifiedAt: "2026-04-21T12:00:00.000Z",
+          locationStep: null,
+        });
+      }
+
+      if (table === "kyc_risk_signals") {
+        return { insert: vi.fn().mockResolvedValue({ error: null }) };
+      }
+
+      if (table === "verification_sessions") {
+        return createVerificationSessionsTable({
+          existingSession: {
+            finalized_at: "2026-04-21T12:02:00.000Z",
+            location_submitted_at: null,
+          },
+          currentSession: {
+            id_artifact_id: "artifact-id",
+            selfie_artifact_id: "artifact-selfie",
+            location_submitted_at: "2026-04-21T12:01:00.000Z",
+            finalized_at: "2026-04-21T12:02:00.000Z",
+          },
+          upsert: sessionUpsert,
+          update: finalizedAtUpdate,
+        });
+      }
+
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: "profile-1", account_verification_status: "pending_review" },
+              error: null,
+            }),
+          }),
+        }),
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ error: null }),
+        }),
+      };
+    });
+
+    const res = await POST(makeRequest({ province: "Gauteng", city: "Johannesburg" }));
+
+    expect(res.status).toBe(200);
+    expect(sessionUpsert).toHaveBeenCalledWith(
+      expect.not.objectContaining({ finalized_at: null }),
+      expect.objectContaining({ onConflict: "user_id" })
+    );
+    expect(finalizedAtUpdate).not.toHaveBeenCalled();
   });
 
   it("does not finalize the verification session when prerequisites are still missing", async () => {

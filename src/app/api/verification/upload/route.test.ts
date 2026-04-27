@@ -811,7 +811,7 @@ describe("POST /api/verification/upload", () => {
     expect(mockUploadKycDocument).not.toHaveBeenCalled();
   });
 
-  it("promotes account status to pending_review and links the artifact into the session", async () => {
+  it("keeps account incomplete until all required verification steps are submitted", async () => {
     mockAuth({ id: "user-1", email: "test@example.com" });
 
     const sessionUpsert = vi.fn().mockResolvedValue({ error: null });
@@ -819,6 +819,7 @@ describe("POST /api/verification/upload", () => {
       .fn()
       .mockResolvedValue({ data: [{ id: "profile-1" }], error: null });
     const stepUpdatePayloads: Array<Record<string, unknown>> = [];
+    const statusUpdatePayloads: Array<Record<string, unknown>> = [];
 
     mockFrom.mockImplementation((table: string) => {
       if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
@@ -835,6 +836,7 @@ describe("POST /api/verification/upload", () => {
           select: vi.fn().mockImplementation(() => profileChain()),
           update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
             if (payload.account_verification_status || payload.account_verification_status) {
+              statusUpdatePayloads.push(payload);
               return {
                 eq: vi.fn().mockReturnValue({
                   in: vi.fn().mockReturnValue({
@@ -963,6 +965,11 @@ describe("POST /api/verification/upload", () => {
       { onConflict: "user_id" }
     );
     expect(accountStatusSelect).toHaveBeenCalled();
+    expect(statusUpdatePayloads).toEqual([
+      expect.objectContaining({
+        account_verification_status: "incomplete",
+      }),
+    ]);
     expect(stepUpdatePayloads).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

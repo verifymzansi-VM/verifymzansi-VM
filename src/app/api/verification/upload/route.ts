@@ -19,6 +19,7 @@ import {
   buildPendingVerificationStep,
   buildVerificationSessionResumePatch,
 } from "@/lib/services/verification-state";
+import { summarizeVerification } from "@/lib/account/verification-summary";
 import crypto from "crypto";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
@@ -1022,29 +1023,48 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── Update account verification status based on risk engine result ─
-    // Only promote to pending_review if the artifact was NOT hard-rejected
-    // by the risk engine. This prevents the account from showing
-    // "pending_review" when all steps have actually been rejected.
+    // ── Update account verification status based on the full step summary ─
+    // A single uploaded artifact should not make the account look fully under
+    // review while required steps like location are still missing.
     const isHardReject = engineResult.autoStatus === "rejected";
     if (!isHardReject) {
+      const { data: allSteps, error: allStepsErr } = await admin
+        .from("verification_steps")
+        .select("step_type, status, reviewed_at")
+        .eq("user_id", user.id);
+
+      if (allStepsErr) {
+        log.error("Failed to summarize verification status after upload", {
+          error: allStepsErr.message,
+          profileId: profile.id,
+          userId: user.id,
+        });
+      }
+
+      const nextVerificationStatus = summarizeVerification(
+        "incomplete",
+        allSteps ?? []
+      ).accountVerificationStatus;
+
       const { data: statusUpdated, error: statusErr } = await admin
         .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .update({
-          account_verification_status: "pending_review",
+          account_verification_status: nextVerificationStatus,
         })
         .eq("id", profile.id)
         .in("account_verification_status", ["incomplete", "rejected"])
         .select("id");
 
       if (statusErr) {
-        log.error("Failed to promote account to pending_review", {
+        log.error("Failed to update account verification status after upload", {
           error: statusErr.message,
           profileId: profile.id,
+          nextVerificationStatus,
         });
       } else if (statusUpdated?.length) {
-        log.info("Account verification status promoted to pending_review", {
+        log.info("Account verification status updated after upload", {
           profileId: profile.id,
+          nextVerificationStatus,
         });
       }
     } else {

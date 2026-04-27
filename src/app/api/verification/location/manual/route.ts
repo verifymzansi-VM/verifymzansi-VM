@@ -210,6 +210,7 @@ export async function POST(request: NextRequest) {
       locationCity: normalizedCity,
       currentAccountVerificationStatus: ensureWritable.accountVerificationStatus,
       profileUpdateErrorMessage: "Location saved but failed to update profile status",
+      preserveFinalizedSession: ensureWritable.preserveFinalizedSession,
     });
     if (lifecycleResponse) {
       return lifecycleResponse;

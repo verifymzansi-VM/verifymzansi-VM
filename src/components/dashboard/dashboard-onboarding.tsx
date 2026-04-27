@@ -3,6 +3,7 @@ import { ShieldCheck, PlusCircle, Building2, CheckCircle2, ArrowRight } from "lu
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type { AccountVerificationStatus } from "@/types/enums";
 
 interface OnboardingStep {
   label: string;
@@ -14,24 +15,34 @@ interface OnboardingStep {
 
 interface DashboardOnboardingProps {
   isVerified: boolean;
+  verificationStatus: AccountVerificationStatus;
   hasListings: boolean;
   hasBusinesses: boolean;
 }
 
 export function DashboardOnboarding({
   isVerified,
+  verificationStatus,
   hasListings,
   hasBusinesses,
 }: DashboardOnboardingProps) {
+  const verificationSubmitted = isVerified || verificationStatus === "pending_review";
+
   const steps: OnboardingStep[] = [
     {
-      label: isVerified ? "Verification approved" : "Complete your verification",
+      label: isVerified
+        ? "Verification approved"
+        : verificationSubmitted
+          ? "Verification under review"
+          : "Complete your verification",
       description: isVerified
         ? "Your identity is verified. You can review it any time."
-        : "Build trust with buyers by verifying your identity",
+        : verificationSubmitted
+          ? "Admin is reviewing your submitted documents."
+          : "Build trust with buyers by verifying your identity",
       href: "/verification",
       icon: ShieldCheck,
-      completed: isVerified,
+      completed: verificationSubmitted,
     },
     {
       label: "Post your first listing",

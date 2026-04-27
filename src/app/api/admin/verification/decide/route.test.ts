@@ -460,6 +460,72 @@ describe("POST /api/admin/verification/decide", () => {
     );
   });
 
+  it("keeps account incomplete when approval does not complete all required steps", async () => {
+    mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
+
+    const profileUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        in: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    });
+    const updateMock = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        in: vi.fn().mockReturnValue({
+          select: vi.fn().mockResolvedValue({ data: [{ id: STEP_UUID }], error: null }),
+        }),
+      }),
+    });
+
+    let artifactLookupReturned = false;
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockImplementation((...args: unknown[]) => {
+            if (args[0] === "*") {
+              return {
+                eq: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({ data: baseStep, error: null }),
+                }),
+              };
+            }
+
+            return {
+              eq: vi.fn().mockResolvedValue({
+                data: [
+                  { step_type: "phone", status: "approved" },
+                  { step_type: "id_doc", status: "approved", reviewed_at: null },
+                ],
+                error: null,
+              }),
+            };
+          }),
+          update: updateMock,
+        };
+      }
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          update: profileUpdate,
+        };
+      }
+      if (table === "kyc_artifacts") {
+        if (!artifactLookupReturned) {
+          artifactLookupReturned = true;
+          return artifactLookupChain();
+        }
+
+        return artifactStatusUpdateChain();
+      }
+      return {};
+    });
+
+    const response = await POST(createMockRequest({ stepId: STEP_UUID, decision: "approved" }));
+
+    expect(response.status).toBe(200);
+    expect(profileUpdate).toHaveBeenCalledWith({
+      account_verification_status: "incomplete",
+    });
+  });
+
   it("rejects step with reason code", async () => {
     mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
 
@@ -750,13 +816,13 @@ describe("POST /api/admin/verification/decide", () => {
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(data.decision).toBe("needs_resubmission");
-    // needs_resubmission should set account status to pending_review, not rejected
+    // needs_resubmission should set account status to incomplete so the user sees the fix path.
     expect(profileUpdate).toHaveBeenCalledWith({
-      account_verification_status: "pending_review",
+      account_verification_status: "incomplete",
     });
   });
 
-  it("sets account status to pending_review (not rejected) for needs_resubmission", async () => {
+  it("sets account status to incomplete for needs_resubmission", async () => {
     mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
     const profileUpdate = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
@@ -812,7 +878,7 @@ describe("POST /api/admin/verification/decide", () => {
     const data = await response.json();
     expect(data.decision).toBe("needs_resubmission");
     expect(profileUpdate).toHaveBeenCalledWith({
-      account_verification_status: "pending_review",
+      account_verification_status: "incomplete",
     });
     expect(mockSendVerificationResubmissionEmail).toHaveBeenCalledWith(
       "member@example.com",

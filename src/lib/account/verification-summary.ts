@@ -137,10 +137,13 @@ export function summarizeVerification(
     (allStepsApproved && adminReviewedIdentitySteps)
   ) {
     accountVerificationStatus = "verified";
-  } else if (normalizedProfileStatus === "pending_review" || allStepsSubmitted) {
+  } else if (allStepsSubmitted) {
     accountVerificationStatus = "pending_review";
   } else {
-    accountVerificationStatus = normalizedProfileStatus ?? "incomplete";
+    accountVerificationStatus =
+      normalizedProfileStatus === "pending_review"
+        ? "incomplete"
+        : (normalizedProfileStatus ?? "incomplete");
   }
 
   return {

@@ -103,13 +103,6 @@ export function NeedsAttention({
       icon: ShieldAlert,
       variant: "warning",
     });
-  } else if (verificationStatus === "pending_review") {
-    items.push({
-      label: "Verification under review",
-      href: "/verification",
-      icon: Clock,
-      variant: "info",
-    });
   }
 
   // Nothing to show — hide completely to save space
