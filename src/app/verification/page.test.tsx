@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import VerificationPage from "./page";
 import { useSearchParams } from "next/navigation";
@@ -230,6 +230,46 @@ describe("VerificationPage", () => {
       "href",
       "/post/create-business"
     );
+  });
+
+  it("keeps a verified phone approved on the completion card when status rows omit phone", async () => {
+    sessionResponse = jsonResponse(
+      {
+        sessionId: "session-sparse-phone-status",
+        completedSteps: ["phone"],
+        pendingSteps: [],
+        requiredSteps: ["phone", "id_doc", "selfie", "location"],
+        finalizedAt: "2026-04-21T12:00:00.000Z",
+        phoneVerifiedAt: "2026-04-21T11:50:00.000Z",
+      },
+      200
+    );
+    statusResponse = jsonResponse(
+      buildStatusPayload({
+        accountVerificationStatus: "incomplete",
+        steps: [
+          { step_type: "id_doc", status: "pending" },
+          { step_type: "selfie", status: "pending" },
+          { step_type: "location", status: "approved" },
+        ],
+      }),
+      200
+    );
+
+    render(<VerificationPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByRole("heading", { name: /Verification Submitted/i }).length
+      ).toBeGreaterThan(0);
+    });
+
+    expect(screen.getByText(/4 of 4 steps submitted/i)).toBeInTheDocument();
+    const phoneRows = screen
+      .getAllByText(/^Phone$/i)
+      .map((element) => element.closest("div"))
+      .filter((element): element is HTMLDivElement => element !== null);
+    expect(phoneRows.some((row) => within(row).queryByText(/^Approved$/i) !== null)).toBe(true);
   });
 
   it("keeps the completed state on revisit when the session is finalized after location submission", async () => {

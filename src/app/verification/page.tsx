@@ -730,7 +730,19 @@ export default function VerificationPage() {
       const approvedSteps = nextSteps
         .filter((entry) => entry.status === "approved" || entry.status === "pending")
         .map((entry) => entry.step_type);
-      setCompletedSteps(approvedSteps);
+      const attentionStepTypes = new Set(
+        nextSteps
+          .filter((entry) => entry.status === "rejected" || entry.status === "needs_resubmission")
+          .map((entry) => entry.step_type)
+      );
+      setCompletedSteps((previousSteps) =>
+        Array.from(
+          new Set([
+            ...previousSteps.filter((stepType) => !attentionStepTypes.has(stepType)),
+            ...approvedSteps,
+          ])
+        )
+      );
       setPhoneVerified(
         (previouslyVerified) =>
           previouslyVerified ||
@@ -2519,9 +2531,11 @@ export default function VerificationPage() {
                       const statusEntry = serverStepMap.get(stepType);
                       const displayStatus = accountVerified
                         ? "approved"
-                        : verificationInAdminReview
-                          ? "pending"
-                          : (statusEntry?.status ?? "pending");
+                        : stepType === "phone" && isPhoneReady
+                          ? "approved"
+                          : verificationInAdminReview
+                            ? "pending"
+                            : (statusEntry?.status ?? "pending");
                       return (
                         <div
                           key={stepType}

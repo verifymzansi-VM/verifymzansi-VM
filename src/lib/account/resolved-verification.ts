@@ -29,6 +29,7 @@ type VerificationStepRow = {
   location_province?: string | null;
   location_city?: string | null;
   location_town?: string | null;
+  phone_verified_at?: string | null;
   gps_mismatch?: { province: boolean; city: boolean } | null;
   gps_resolved_province?: string | null;
   gps_resolved_city?: string | null;
@@ -49,6 +50,7 @@ type PendingArtifactRow = {
 };
 
 type VerificationSessionRow = {
+  phone_verified_at?: string | null;
   location_submitted_at?: string | null;
 } | null;
 
@@ -77,10 +79,11 @@ function readGpsMismatch(value: unknown): { province: boolean; city: boolean } |
 
 function mapVerificationStepRow(step: VerificationStepDbRow): VerificationStepRow {
   const metadata = step.metadata ?? null;
+  const phoneVerifiedAt = readStringField(step.phone_verified_at);
 
   return {
     step_type: step.step_type,
-    status: step.status,
+    status: step.step_type === "phone" && phoneVerifiedAt ? "approved" : step.status,
     reviewed_at: step.reviewed_at,
     reason_code: step.reason_code,
     reason_note: step.reason_note,
@@ -90,6 +93,7 @@ function mapVerificationStepRow(step: VerificationStepDbRow): VerificationStepRo
     location_province: step.location_province,
     location_city: step.location_city,
     location_town: step.location_town,
+    phone_verified_at: step.phone_verified_at,
     gps_mismatch: readGpsMismatch(metadata?.mismatch),
     gps_resolved_province: readStringField(metadata?.gps_province),
     gps_resolved_city: readStringField(metadata?.gps_city),
@@ -194,7 +198,7 @@ export async function resolveAccountVerification(
     const stepsResult = await client
       .from("verification_steps")
       .select(
-        "step_type, status, reviewed_at, reason_code, reason_note, risk_level, submitted_at, location_method, location_province, location_city, location_town, metadata"
+        "step_type, status, reviewed_at, reason_code, reason_note, risk_level, submitted_at, location_method, location_province, location_city, location_town, phone_verified_at, metadata"
       )
       .eq("user_id", userId);
 
@@ -228,6 +232,40 @@ export async function resolveAccountVerification(
         userId,
         error: error instanceof Error ? error.message : "unknown",
       });
+    }
+
+    const hasPhoneStep = steps.some((step) => step.step_type === "phone");
+
+    if (!hasPhoneStep) {
+      try {
+        const sessionResult = await client
+          .from("verification_sessions")
+          .select("phone_verified_at")
+          .eq("user_id", userId)
+          .maybeSingle();
+        const session = (sessionResult.data ?? null) as VerificationSessionRow;
+        const phoneVerifiedAt = readStringField(session?.phone_verified_at);
+
+        if (phoneVerifiedAt) {
+          steps = sortVerificationSteps([
+            ...steps,
+            {
+              step_type: "phone",
+              status: "approved",
+              submitted_at: phoneVerifiedAt,
+            },
+          ]);
+
+          log.info("Recovered approved verification phone step from session", {
+            userId,
+          });
+        }
+      } catch (error) {
+        log.warn("Failed to recover approved verification phone from session", {
+          userId,
+          error: error instanceof Error ? error.message : "unknown",
+        });
+      }
     }
 
     const profileHasSavedLocation =

@@ -509,6 +509,125 @@ describe("GET /api/verification/status", () => {
     );
   });
 
+  it("recovers an approved phone step from the verification session when the step row is missing", async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: "profile-1",
+                  account_verification_status: "pending_review",
+                },
+              }),
+            }),
+          }),
+        };
+      }
+
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({
+              data: [
+                { step_type: "id_doc", status: "pending" },
+                { step_type: "selfie", status: "pending" },
+                { step_type: "location", status: "approved" },
+              ],
+            }),
+          }),
+        };
+      }
+
+      if (table === "kyc_artifacts") {
+        return createPendingArtifactsQuery();
+      }
+
+      if (table === "verification_sessions") {
+        return createVerificationSessionQuery({
+          phone_verified_at: "2026-04-21T11:50:00.000Z",
+        });
+      }
+
+      return {};
+    });
+
+    const response = await GET({} as unknown as NextRequest);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.accountVerificationStatus).toBe("pending_review");
+    expect(body.steps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          step_type: "phone",
+          status: "approved",
+          submitted_at: "2026-04-21T11:50:00.000Z",
+        }),
+      ])
+    );
+  });
+
+  it("normalizes legacy pending phone rows with a verification timestamp to approved", async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: "profile-1",
+                  account_verification_status: "pending_review",
+                },
+              }),
+            }),
+          }),
+        };
+      }
+
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({
+              data: [
+                {
+                  step_type: "phone",
+                  status: "pending",
+                  phone_verified_at: "2026-04-21T11:50:00.000Z",
+                },
+                { step_type: "id_doc", status: "pending" },
+                { step_type: "selfie", status: "pending" },
+                { step_type: "location", status: "approved" },
+              ],
+            }),
+          }),
+        };
+      }
+
+      if (table === "kyc_artifacts") {
+        return createPendingArtifactsQuery();
+      }
+
+      return {};
+    });
+
+    const response = await GET({} as unknown as NextRequest);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.accountVerificationStatus).toBe("pending_review");
+    expect(body.steps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          step_type: "phone",
+          status: "approved",
+          phone_verified_at: "2026-04-21T11:50:00.000Z",
+        }),
+      ])
+    );
+  });
+
   it("returns a recovered location step when the saved address exists but the step row is missing", async () => {
     mockFrom.mockImplementation((table: string) => {
       if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
