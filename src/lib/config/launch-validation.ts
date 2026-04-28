@@ -34,7 +34,8 @@ function getConfiguredKycProvider(env: EnvSource): string {
 }
 
 function requiresKycWebhookSecret(mode: LaunchValidationMode, env: EnvSource): boolean {
-  return mode === "production" && getConfiguredKycProvider(env) !== "stub";
+  const provider = getConfiguredKycProvider(env);
+  return mode === "production" && provider !== "stub" && provider !== "manual";
 }
 
 /**
@@ -440,7 +441,14 @@ export function validateLaunchConfiguration(
         checks,
         "KYC provider",
         "fail",
-        "KYC_PROVIDER=stub is not allowed in production; configure a signed provider integration"
+        "KYC_PROVIDER=stub is not allowed in production; use KYC_PROVIDER=manual or configure a signed provider integration"
+      );
+    } else if (kycProvider === "manual") {
+      addCheck(
+        checks,
+        "KYC provider",
+        "pass",
+        "KYC_PROVIDER=manual routes submissions to human review"
       );
     } else if (kycWebhookSecretRequired) {
       if (!hasValue(kycWebhookSecret)) {
@@ -477,7 +485,7 @@ export function validateLaunchConfiguration(
         checks,
         "KYC webhook",
         "pass",
-        "KYC_PROVIDER=stub, signed provider callbacks are not enabled"
+        `KYC_PROVIDER=${kycProvider}, signed provider callbacks are not enabled`
       );
     }
   }

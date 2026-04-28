@@ -196,6 +196,13 @@ describe("proxy security headers", () => {
     expect(res.headers.get("set-cookie")).toBeNull();
   });
 
+  it("does not bootstrap a CSRF cookie for /api/csrf", async () => {
+    const res = await middleware(createMockRequest("/api/csrf"));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("set-cookie")).toBeNull();
+  });
+
   it("clears stale Playwright session cookies outside stub mode", async () => {
     const res = await middleware(
       createMockRequest("/", { cookieHeader: "vmz_pw_session=persona%3Aold" })
@@ -246,6 +253,25 @@ describe("proxy — authenticated routing", () => {
     // but /api/admin is a protected admin prefix
     const res = await routeRequest(createMockRequest("/api/admin/stats"));
     expect(res.status).toBe(401);
+  });
+
+  it("clears stale Supabase auth cookies when refresh tokens are invalid", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: null },
+      error: { message: "Invalid Refresh Token: Refresh Token Not Found" },
+    });
+
+    const res = await routeRequest(
+      createMockRequest("/dashboard", {
+        cookieHeader: "sb-example-auth-token=stale; sb-example-auth-token.0=stale",
+      })
+    );
+    const setCookie = res.headers.get("set-cookie") ?? "";
+
+    expect(res.status).toBe(307);
+    expect(new URL(res.headers.get("location")!).pathname).toBe("/login");
+    expect(setCookie).toContain("sb-example-auth-token=");
+    expect(setCookie).toContain("Max-Age=0");
   });
 
   it("returns 403 for non-admin users on admin routes", async () => {

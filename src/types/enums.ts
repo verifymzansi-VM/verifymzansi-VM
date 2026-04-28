@@ -215,7 +215,7 @@ export const AREA_LABELS: Record<MarketplaceArea, string> = {
 export const AREA_SLUGS: Record<MarketplaceArea, string> = {
   MZANSI_MARKET: "mzansi-market",
   MZANSI_BUSINESS: "mzansi-business",
-  PROMOTIONS_EVENTS: "promotions-events",
+  PROMOTIONS_EVENTS: "tourism-events",
   BUSINESS_ADS: "business-ads",
   MALL_SHOPS: "mall-shops",
 };

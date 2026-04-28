@@ -148,7 +148,7 @@ export default async function PromotionsPage() {
       href: "/post/create-tourism",
       title: "Tourism & Events",
       description:
-        "Discover tourism destinations, accommodations, and events from verified South African businesses.",
+        "Discover tourism destinations, accommodations, and events from South African hosts and businesses.",
       location: "South Africa",
       mediaUrl: "/images/fallbacks/hero-shop.svg",
     });
@@ -160,7 +160,7 @@ export default async function PromotionsPage() {
       <ShowroomCardCarousel
         items={carouselItems}
         emptyTitle="Tourism & Events"
-        emptyDescription="Discover tourism destinations, accommodations, and events from verified South African businesses."
+        emptyDescription="Discover tourism destinations, accommodations, and events from South African hosts and businesses."
         background={tourismEventsShowroomBackground}
       />
 

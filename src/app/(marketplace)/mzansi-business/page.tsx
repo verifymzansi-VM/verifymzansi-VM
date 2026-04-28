@@ -30,7 +30,7 @@ import {
 export const metadata = {
   title: "Mzansi Business",
   description:
-    "Build trusted business visibility and discover verified South African brands, shops, and services on VerifyMzansi.",
+    "Build business visibility and discover South African brands, shops, and services on VerifyMzansi.",
   alternates: {
     canonical: "/mzansi-business",
   },
@@ -72,7 +72,7 @@ export default async function MzansiBusinessPage() {
             type: "business",
             href: "/post/create-business",
             title: "Mzansi Business",
-            description: "Discover verified South African businesses and services.",
+            description: "Discover South African business profiles, shops, and services.",
             location: "South Africa",
             mediaUrl: "/images/fallbacks/hero-shop.svg",
           },
@@ -88,7 +88,7 @@ export default async function MzansiBusinessPage() {
       <ShowroomCardCarousel
         items={carouselItems}
         emptyTitle="Mzansi Business"
-        emptyDescription="Discover verified South African businesses and services."
+        emptyDescription="Discover South African business profiles, shops, and services."
         background={mzansiBusinessShowroomBackground}
       />
 
@@ -131,7 +131,7 @@ export default async function MzansiBusinessPage() {
           <section className="min-w-0 flex-1 space-y-6">
             <PageHeader
               title="Mzansi Business"
-              description="Browse verified South African businesses, build visibility for your brand, and help customers discover trusted services."
+              description="Browse South African business profiles, build visibility for your brand, and help customers discover local services."
               breadcrumbs={[{ label: "Mzansi Business" }]}
               className="hidden lg:block"
             >

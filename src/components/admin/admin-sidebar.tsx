@@ -78,7 +78,7 @@ function buildModeratorSections(
       items: [
         { href: "/admin/mzansi-market", label: "Mzansi Market", icon: ShoppingBag },
         { href: "/admin/businesses", label: "Mzansi Business", icon: Building2 },
-        { href: "/admin/promotions-events", label: "Tourism & Events", icon: TreePalm },
+        { href: "/admin/tourism-events", label: "Tourism & Events", icon: TreePalm },
       ],
     },
     {
@@ -211,7 +211,7 @@ function buildAdminSections(
           : []),
         { href: "/admin/mzansi-market", label: "Mzansi Market", icon: ShoppingBag },
         { href: "/admin/businesses", label: "Mzansi Business", icon: Building2 },
-        { href: "/admin/promotions-events", label: "Tourism & Events", icon: TreePalm },
+        { href: "/admin/tourism-events", label: "Tourism & Events", icon: TreePalm },
         {
           href: "/admin/moderation",
           label: "Moderation",

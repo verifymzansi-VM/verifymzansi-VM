@@ -266,7 +266,7 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
           description={
             isOwnerPreview
               ? "Previewing a business profile that is still pending moderation."
-              : "Verified business profile."
+              : "Business profile."
           }
           breadcrumbs={breadcrumbs}
         />

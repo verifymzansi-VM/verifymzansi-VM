@@ -20,11 +20,11 @@ import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 export const metadata: Metadata = {
   title: "VerifyMzansi — Mzansi's Proudly Trusted Market",
   description:
-    "South Africa's verified marketplace. Post products, services & promotions with photos and videos. Request social media promotion across our channels.",
+    "South Africa's trusted marketplace. Post products, services, tourism experiences, and events with photos and videos.",
   openGraph: {
     title: "VerifyMzansi — Mzansi's Proudly Trusted Market",
     description:
-      "South Africa's verified marketplace. Post products, services & promotions with photos and videos. Request social media promotion across our channels.",
+      "South Africa's trusted marketplace. Post products, services, tourism experiences, and events with photos and videos.",
     images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "VerifyMzansi" }],
   },
 };
@@ -49,7 +49,7 @@ export default async function HomePage() {
     {
       id: "mzansi-business",
       title: "Mzansi Business",
-      description: "Verified local businesses you can trust.",
+      description: "Local business profiles, shops, and services.",
       href: "/mzansi-business",
       iconKey: "business",
       accentClass: "text-brand-blue",
@@ -58,7 +58,7 @@ export default async function HomePage() {
     {
       id: "mzansi-market",
       title: "Mzansi Market",
-      description: "Products and listings from verified sellers.",
+      description: "Products and listings from local sellers.",
       href: "/mzansi-market",
       iconKey: "market",
       accentClass: "text-brand-green",
@@ -80,7 +80,7 @@ export default async function HomePage() {
         name: "VerifyMzansi",
         url,
         description:
-          "South Africa's verified marketplace for products, services, and promotions with photos and videos.",
+          "South Africa's trusted marketplace for products, services, tourism experiences, and events with photos and videos.",
         potentialAction: {
           "@type": "SearchAction",
           target: {

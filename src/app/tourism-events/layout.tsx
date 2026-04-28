@@ -5,7 +5,7 @@ import { MobileNav } from "@/components/layout/mobile-nav";
 
 export const metadata: Metadata = {
   title: "Tourism & Events",
-  description: "Browse verified tourism destinations, accommodations, and events on VerifyMzansi.",
+  description: "Browse tourism destinations, accommodations, and events on VerifyMzansi.",
 };
 
 export default function TourismEventsLayout({ children }: { children: React.ReactNode }) {

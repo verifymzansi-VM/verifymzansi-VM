@@ -43,4 +43,36 @@ describe("kyc-provider", () => {
       expect(result.providerReference).toMatch(/^sim_rev_/);
     });
   });
+
+  describe("ManualKycProvider via getConfiguredProvider", () => {
+    it("routes directly to manual review with null scores", async () => {
+      const originalProvider = process.env.KYC_PROVIDER;
+      process.env.KYC_PROVIDER = "manual";
+
+      try {
+        const provider = getConfiguredProvider();
+        const result = await provider.submitIdentity({
+          idImageR2Key: "kyc/some-key.jpg",
+          selfieImageR2Key: "kyc/selfie.jpg",
+          idNumber: "9901015009088",
+          artifactId: "art-4",
+          userId: "user-1",
+        });
+
+        expect(provider.name).toBe("manual");
+        expect(result.status).toBe("needs_manual_review");
+        expect(result.providerReference).toMatch(/^manual_/);
+        expect(result.scores).toEqual({
+          faceMatchScore: null,
+          livenessScore: null,
+          docAuthScore: null,
+          ocrPayload: {},
+          rawResponse: {},
+        });
+      } finally {
+        if (originalProvider) process.env.KYC_PROVIDER = originalProvider;
+        else delete process.env.KYC_PROVIDER;
+      }
+    });
+  });
 });

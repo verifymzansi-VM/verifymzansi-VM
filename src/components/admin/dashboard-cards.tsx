@@ -150,7 +150,7 @@ const AREA_CONFIG = {
     title: "Tourism & Events",
     description: "Tourism businesses & events",
     icon: TreePalm,
-    href: "/admin/promotions-events",
+    href: "/admin/tourism-events",
     accentBg: "bg-teal-50/50 dark:bg-teal-950/20",
     iconBg: "bg-teal-100 dark:bg-teal-900/50",
     iconColor: "text-teal-600 dark:text-teal-400",

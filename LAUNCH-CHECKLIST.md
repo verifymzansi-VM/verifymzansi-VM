@@ -96,9 +96,14 @@ deployed Cloudflare/Wrangler runtime secrets:
 - `OZOW_WEBHOOK_SECRET`
 - Optional `OZOW_API_BASE_URL` only when explicitly required. In production, it
   must be `https://one.ozow.com`.
-- `KYC_PROVIDER` set to a real signed provider; production launch validation
-  blocks `stub`
-- `KYC_WEBHOOK_SECRET` for signed provider callbacks
+- `KYC_PROVIDER` set to `manual` for human review launch mode, or to a real
+  signed provider; production launch validation blocks `stub`
+- `KYC_WEBHOOK_SECRET` for signed provider callbacks only
+- Temporary audit exception: the remaining `uuid` moderate advisory is accepted
+  until 2026-05-28, owned by VerifyMzansi engineering. It is transitive through
+  Sentry/Resend/Svix, and the vulnerable v3/v5/v6 buffer APIs are not called
+  directly by VerifyMzansi. Do not force a global `uuid@14` override until
+  upstream packages update or compatibility is proven.
 
 Failing any of the above should block deploy.
 
@@ -135,8 +140,9 @@ it the same as other dev bypass flags.
   OTP, and DSAR launch paths in one command.
 - Confirm the KYC provider webhook secret is configured before enabling live
   provider callbacks at `/api/webhooks/kyc/provider`.
-- Confirm `KYC_PROVIDER` is set to the live provider. Production launch
-  validation now blocks `stub`, even when `KYC_WEBHOOK_SECRET` is present.
+- Confirm `KYC_PROVIDER` is set to `manual` for human review launch mode or the
+  live signed provider. Production launch validation blocks `stub`, even when
+  `KYC_WEBHOOK_SECRET` is present.
 - Confirm Africa's Talking sender approval is complete for the live sender ID.
 - Confirm Resend domain verification is complete for the production sender
   domain.

@@ -571,7 +571,7 @@ export async function POST(request: NextRequest) {
       capability: "queue:view",
       title: "New tourism or event submission",
       message: `\"${data.title}\" is waiting in the moderation queue.`,
-      href: "/admin/promotions-events",
+      href: "/admin/tourism-events",
       excludeUserId: user.id,
     });
 

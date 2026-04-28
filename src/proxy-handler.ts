@@ -153,17 +153,70 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     return redir;
   }
 
+  function clearStaleSupabaseAuthCookies(target: NextResponse): void {
+    for (const cookie of request.cookies.getAll()) {
+      const name = cookie.name;
+      if (!name.startsWith("sb-") || !name.includes("auth-token")) {
+        continue;
+      }
+
+      target.cookies.set({
+        name,
+        value: "",
+        path: "/",
+        maxAge: 0,
+      });
+      pendingCookies.push({ name, value: "", options: { path: "/", maxAge: 0 } });
+    }
+  }
+
+  function isInvalidRefreshTokenError(error: unknown): boolean {
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === "object" && error && "message" in error
+          ? String((error as { message?: unknown }).message)
+          : String(error ?? "");
+
+    const normalized = message.toLowerCase();
+    return (
+      normalized.includes("refresh token") ||
+      normalized.includes("authsessionmissing") ||
+      normalized.includes("auth session missing")
+    );
+  }
+
   let user = null;
   try {
-    const { data } = await supabase.auth.getUser();
-    user = data.user;
-  } catch {
+    const { data, error } = await supabase.auth.getUser();
+    if (error) {
+      if (isInvalidRefreshTokenError(error)) {
+        clearStaleSupabaseAuthCookies(response);
+        user = null;
+      } else {
+        throw error;
+      }
+    } else {
+      user = data.user;
+    }
+  } catch (error) {
     const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
     if (isProtected) {
       if (isApiRoute) {
-        return NextResponse.json({ error: "Authentication service unavailable" }, { status: 503 });
+        const unavailable = NextResponse.json(
+          { error: "Authentication service unavailable" },
+          { status: 503 }
+        );
+        if (isInvalidRefreshTokenError(error)) {
+          clearStaleSupabaseAuthCookies(unavailable);
+        }
+        return unavailable;
       }
-      return redirectWithCookies(new URL("/login?error=auth_unavailable", request.url));
+      const redirect = redirectWithCookies(new URL("/login?error=auth_unavailable", request.url));
+      if (isInvalidRefreshTokenError(error)) {
+        clearStaleSupabaseAuthCookies(redirect);
+      }
+      return redirect;
     }
     return response;
   }

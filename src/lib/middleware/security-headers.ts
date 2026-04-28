@@ -105,6 +105,10 @@ function isCacheableAssetRequest(pathname: string): boolean {
   return pathname.startsWith("/api/media/serve/") || pathname.startsWith("/images/");
 }
 
+function shouldSkipCsrfBootstrap(pathname: string): boolean {
+  return pathname === "/api/csrf" || isCacheableAssetRequest(pathname);
+}
+
 function getAssetCacheControl(pathname: string): string | null {
   if (pathname.startsWith("/api/media/serve/")) {
     return "public, max-age=31536000, immutable";
@@ -198,7 +202,7 @@ export function withSecurityHeaders(
   // Cacheable asset routes should not receive a CSRF bootstrap cookie from middleware.
   // A Set-Cookie on media/image responses forces browsers and CDNs to treat them as
   // private, overriding the immutable cache policy these routes are meant to serve.
-  if (isCacheableAssetRequest(pathname)) {
+  if (shouldSkipCsrfBootstrap(pathname)) {
     if (shouldClearPlaywrightSession) {
       clearPlaywrightSessionCookie(proxyResponse);
     }

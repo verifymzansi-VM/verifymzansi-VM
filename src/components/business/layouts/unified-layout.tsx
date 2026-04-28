@@ -330,7 +330,7 @@ function MediaColumn({
                     {family === "tourism"
                       ? "Tourism & Hospitality"
                       : family === "professional"
-                        ? "Verified Business"
+                        ? "Business Profile"
                         : "Featured Profile"}
                   </p>
                   <h1 className="line-clamp-2 font-display text-2xl font-semibold leading-tight">

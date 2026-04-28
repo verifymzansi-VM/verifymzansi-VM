@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 export const metadata: Metadata = {
   title: "Advertise",
   description:
-    "Advertise products, services, and events with verification-first visibility that helps South African customers discover your brand with confidence.",
+    "Advertise products, services, tourism experiences, and events with visibility that helps South African customers discover your brand with confidence.",
   alternates: {
     canonical: "https://verifymzansi.com/advertise",
   },
@@ -68,7 +68,7 @@ export default function AdvertisePage() {
           <div className="container-page py-10 space-y-6 sm:py-14">
             <PageHeader
               title="Advertise on VerifyMzansi"
-              description="Promote products, services, and campaigns with verification-first visibility that helps customers discover your brand with more confidence."
+              description="Promote products, services, tourism experiences, and events with visibility that helps customers discover your brand with more confidence."
               breadcrumbs={[{ label: "Advertise" }]}
             >
               <Button asChild className="gap-2">
@@ -81,8 +81,8 @@ export default function AdvertisePage() {
 
             <div className="max-w-3xl space-y-4 text-sm text-muted-foreground sm:text-base">
               <p>
-                Reach verified buyers with video-powered listings, trusted business profiles, and
-                event campaigns that can be boosted after approval.
+                Reach local buyers with video-powered listings, trusted business profiles, tourism
+                posts, and event campaigns that can be boosted after approval.
               </p>
               <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <Button asChild size="lg" className="gap-2">

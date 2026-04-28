@@ -54,12 +54,13 @@ export const metadata: Metadata = {
     template: "%s | VerifyMzansi",
   },
   description:
-    "Promote your products, services, and events across South Africa with verification-first visibility that helps customers discover brands with more confidence.",
+    "Promote your products, services, tourism experiences, and events across South Africa with visibility that helps customers discover brands with more confidence.",
   keywords: [
     "South Africa",
     "business promotion",
     "brand visibility",
-    "verified businesses",
+    "business profiles",
+    "tourism events",
     "digital marketing",
     "advertise your business",
     "Mzansi",
@@ -75,7 +76,7 @@ export const metadata: Metadata = {
     siteName: "VerifyMzansi",
     title: "VerifyMzansi — Promote With Trust",
     description:
-      "Promote your products, services, and events across South Africa with verification-first visibility.",
+      "Promote your products, services, tourism experiences, and events across South Africa.",
     images: [
       {
         url: "/opengraph-image",
@@ -89,7 +90,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "VerifyMzansi — Promote With Trust",
     description:
-      "Promote your products, services, and events across South Africa with verification-first visibility.",
+      "Promote your products, services, tourism experiences, and events across South Africa.",
     images: ["/twitter-image"],
   },
   robots: {

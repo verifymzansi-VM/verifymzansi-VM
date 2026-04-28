@@ -107,12 +107,12 @@ describe("HomePage", () => {
     expect(screen.getByRole("link", { name: /Pricing/i })).toHaveAttribute("href", "/pricing");
     expect(
       screen.getByRole("link", {
-        name: /Mzansi Market Products and listings from verified sellers\./i,
+        name: /Mzansi Market Products and listings from local sellers\./i,
       })
     ).toHaveAttribute("href", "/mzansi-market");
     expect(
       screen.getByRole("link", {
-        name: /Mzansi Business Verified local businesses you can trust\./i,
+        name: /Mzansi Business Local business profiles, shops, and services\./i,
       })
     ).toHaveAttribute("href", "/mzansi-business");
     expect(

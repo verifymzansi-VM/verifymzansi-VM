@@ -627,7 +627,7 @@ describe("POST /api/promotions", () => {
       capability: "queue:view",
       title: "New tourism or event submission",
       message: '"Great Deal on Electronics" is waiting in the moderation queue.',
-      href: "/admin/promotions-events",
+      href: "/admin/tourism-events",
       excludeUserId: USER_ID,
     });
   });

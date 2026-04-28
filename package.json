@@ -176,7 +176,8 @@
     ],
     "overrides": {
       "tailwindcss": "3.4.19",
-      "fast-xml-parser": ">=5.5.7",
+      "fast-xml-parser": ">=5.7.0",
+      "postcss": "8.5.10",
       "yaml@>=2.0.0 <2.8.3": "2.8.3",
       "picomatch@<2.3.2": "2.3.2",
       "picomatch@>=4.0.0 <4.0.4": "4.0.4",
@@ -187,7 +188,8 @@
   "overrides": {
     "tailwindcss": "3.4.19",
     "@aws-sdk/xml-builder": "^3.972.5",
-    "fast-xml-parser": ">=5.5.7"
+    "fast-xml-parser": ">=5.7.0",
+    "postcss": "$postcss"
   },
   "lint-staged": {
     "*.{ts,tsx}": [

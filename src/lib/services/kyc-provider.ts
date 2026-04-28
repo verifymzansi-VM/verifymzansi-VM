@@ -111,6 +111,19 @@ class StubKycProvider implements IKycProvider {
   }
 }
 
+class ManualKycProvider implements IKycProvider {
+  readonly name = "manual";
+
+  async submitIdentity(_submission: KycProviderSubmission): Promise<KycProviderResult> {
+    return {
+      status: "needs_manual_review",
+      reason: "Manual KYC mode: routed to human review.",
+      providerReference: `manual_${crypto.randomUUID()}`,
+      scores: NULL_SCORES,
+    };
+  }
+}
+
 /**
  * Returns the currently active IKycProvider.
  * Change this function to switch providers without touching call sites.
@@ -120,6 +133,9 @@ class StubKycProvider implements IKycProvider {
  */
 export function getConfiguredProvider(): IKycProvider {
   const provider = process.env.KYC_PROVIDER || "stub";
+  if (provider === "manual") {
+    return new ManualKycProvider();
+  }
   if (provider === "stub") {
     log.warn("KYC_PROVIDER=stub: All verifications route to manual review");
   }

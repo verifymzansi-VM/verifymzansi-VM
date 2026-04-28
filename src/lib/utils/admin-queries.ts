@@ -336,7 +336,7 @@ export async function getDashboardAreaSummary(): Promise<
 
   const bizCatBreakdown = buildCategoryBreakdown(bizCategories || []);
 
-  // ── Promotions & Events ─────────────────────────────────────
+  // ── Tourism & Events ─────────────────────────────────────
   const [
     { count: promoTotal },
     { count: promoPending },

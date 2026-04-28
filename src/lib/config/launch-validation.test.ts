@@ -170,6 +170,26 @@ describe("launch validation", () => {
     );
   });
 
+  it("accepts production manual KYC without a webhook secret", () => {
+    const summary = validateLaunchConfiguration(
+      {
+        ...BASE_ENV,
+        KYC_WEBHOOK_SECRET: undefined,
+        KYC_PROVIDER: "manual",
+      },
+      { mode: "production" }
+    );
+
+    expect(summary.isValid).toBe(true);
+    expect(summary.errors).toHaveLength(0);
+    expect(summary.checks).toContainEqual(
+      expect.objectContaining({
+        name: "KYC provider",
+        status: "pass",
+      })
+    );
+  });
+
   it("fails production mode when non-stub provider is enabled without KYC webhook secret", () => {
     const summary = validateLaunchConfiguration(
       {

@@ -92,7 +92,7 @@ export async function HeroBannerWithData() {
     <ShowroomCardCarousel
       items={carouselItems}
       emptyTitle="Welcome to VerifyMzansi"
-      emptyDescription="Explore verified businesses, listings, and events across South Africa."
+      emptyDescription="Explore business profiles, listings, tourism, and events across South Africa."
       background={generatedMzansiShowroomBackground}
     />
   );

@@ -23,7 +23,7 @@ import { getOptionalContentViewCountMap } from "@/lib/engagement-server";
 export const metadata = {
   title: "Events",
   description:
-    "Discover upcoming events, gatherings, and happenings from verified businesses and members across South Africa.",
+    "Discover upcoming events, gatherings, and happenings from South African hosts, businesses, and members.",
 };
 
 export const revalidate = 60;
@@ -177,7 +177,7 @@ export default async function EventsPage() {
     <div className="container-page py-8 space-y-6">
       <PageHeader
         title="Events"
-        description="Upcoming events from verified businesses."
+        description="Upcoming events from South African hosts and businesses."
         breadcrumbs={[
           { label: "Home", href: "/" },
           { label: "Tourism & Events", href: "/tourism-events" },
@@ -277,7 +277,8 @@ export default async function EventsPage() {
             <Calendar className="mx-auto h-8 w-8 text-muted-foreground" />
             <h3 className="font-display text-lg font-semibold">No upcoming events</h3>
             <p className="mx-auto max-w-md text-sm text-muted-foreground">
-              Check back soon for events from verified businesses! Past events may appear below.
+              Check back soon for events from South African hosts and businesses. Past events may
+              appear below.
             </p>
             <Button asChild size="sm" className="mx-auto h-11 w-fit gap-1">
               <Link href="/post/create-tourism?type=event">Create Event</Link>

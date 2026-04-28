@@ -50,14 +50,14 @@ export async function HomeMzansiMarketShowcase() {
       <HomeShowcaseShell
         badge="Mzansi Market"
         title="Latest on Mzansi Market"
-        description="Verified sellers. Real products. Video and photos arranged in a calmer, more premium browsing surface."
+        description="Local sellers. Real products. Video and photos arranged in a calmer, more premium browsing surface."
         href="/mzansi-market"
         ctaLabel="View All Listings"
         tone="green"
       >
         <HomeShowcaseEmptyState
           title="No listings yet."
-          description="The marketplace is clean. Publish the first verified ad and this rail will fill with fresh posts."
+          description="The marketplace is clean. Publish the first ad and this rail will fill with fresh posts."
           ctaHref="/post/create-listing"
           ctaLabel="Post First Listing"
           tone="green"
@@ -71,7 +71,7 @@ export async function HomeMzansiMarketShowcase() {
     <HomeShowcaseShell
       badge="Mzansi Market"
       title="Latest on Mzansi Market"
-      description="Verified sellers. Real products. Video and photos arranged in a calmer, more premium browsing surface."
+      description="Local sellers. Real products. Video and photos arranged in a calmer, more premium browsing surface."
       href="/mzansi-market"
       ctaLabel="View All Listings"
       tone="green"

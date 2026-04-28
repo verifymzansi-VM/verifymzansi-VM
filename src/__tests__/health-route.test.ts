@@ -41,7 +41,10 @@ describe("Health route", () => {
       "private, no-store, no-cache, must-revalidate"
     );
     expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
-    await expect(response.json()).resolves.toMatchObject({ status: "ok" });
+    await expect(response.json()).resolves.toEqual({
+      status: "ok",
+      timestamp: expect.any(String),
+    });
   });
 
   it("returns HTTP 503 when the launch snapshot is degraded", async () => {
@@ -61,7 +64,10 @@ describe("Health route", () => {
     const response = await GET();
 
     expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toMatchObject({ status: "degraded" });
+    await expect(response.json()).resolves.toEqual({
+      status: "degraded",
+      timestamp: expect.any(String),
+    });
   });
 
   it("returns a controlled degraded payload when health snapshot generation throws", async () => {
@@ -72,23 +78,9 @@ describe("Health route", () => {
     const payload = await response.json();
 
     expect(response.status).toBe(503);
-    expect(payload).toMatchObject({
+    expect(payload).toEqual({
       status: "degraded",
-      checks: {
-        config: {
-          status: "degraded",
-          failedChecks: ["health_snapshot_generation"],
-        },
-        supabase: {
-          status: "skipped",
-        },
-        schema: {
-          status: "skipped",
-        },
-        audit: {
-          status: "skipped",
-        },
-      },
+      timestamp: expect.any(String),
     });
     expect(mockError).toHaveBeenCalledWith("Health snapshot generation failed", {
       error: "schema probe timed out",

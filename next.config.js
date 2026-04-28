@@ -113,6 +113,11 @@ const nextConfig = {
         destination: "/dashboard/tourism-events",
         permanent: true,
       },
+      {
+        source: "/admin/promotions-events",
+        destination: "/admin/tourism-events",
+        permanent: true,
+      },
     ];
   },
   async headers() {

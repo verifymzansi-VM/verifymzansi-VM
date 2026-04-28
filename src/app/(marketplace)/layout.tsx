@@ -6,7 +6,7 @@ import { MobileNav } from "@/components/layout/mobile-nav";
 export const metadata: Metadata = {
   title: "Marketplace",
   description:
-    "Browse verified listings, businesses, and promotions on VerifyMzansi's marketplace.",
+    "Browse listings, business profiles, tourism experiences, and events on VerifyMzansi's marketplace.",
 };
 
 export default function MarketplaceLayout({ children }: { children: React.ReactNode }) {

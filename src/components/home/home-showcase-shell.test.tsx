@@ -26,7 +26,7 @@ describe("HomeShowcaseShell", () => {
       <HomeShowcaseShell
         badge="Mzansi Market"
         title="Latest on Mzansi Market"
-        description="Verified sellers. Real products."
+        description="Local sellers. Real products."
         href="/mzansi-market"
         ctaLabel="View All Listings"
         tone="green"
@@ -37,7 +37,7 @@ describe("HomeShowcaseShell", () => {
 
     expect(screen.getByText("Mzansi Market")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Latest on Mzansi Market" })).toBeInTheDocument();
-    expect(screen.getByText("Verified sellers. Real products.")).toBeInTheDocument();
+    expect(screen.getByText("Local sellers. Real products.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /View All Listings/i })).toHaveAttribute(
       "href",
       "/mzansi-market"

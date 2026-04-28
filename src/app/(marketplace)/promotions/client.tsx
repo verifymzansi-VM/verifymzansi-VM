@@ -416,7 +416,7 @@ export function PromotionsExplorer() {
     <div className="container-page py-8 space-y-6">
       <PageHeader
         title="Tourism & Events"
-        description="Tourism destinations, accommodations, and events from verified South African businesses and members."
+        description="Tourism destinations, accommodations, and events from South African hosts, businesses, and members."
         breadcrumbs={[{ label: "Home", href: "/" }, { label: "Tourism & Events" }]}
       >
         <Button asChild size="sm" className="h-11 gap-1">

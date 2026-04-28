@@ -1,8 +1,8 @@
 # VerifyMzansi
 
-Verification-first South African marketplace built on Next.js, Supabase, and
-Cloudflare. The main business surface is `Mzansi Business`, with legacy
-`business-ads` and `mall-shops` routes preserved for compatibility.
+South African marketplace built on Next.js, Supabase, and Cloudflare. The main
+business surface is `Mzansi Business`, with legacy `business-ads` and
+`mall-shops` routes preserved for compatibility.
 
 [![CI](https://github.com/verifymzansi/verifymzansi/actions/workflows/ci.yml/badge.svg)](https://github.com/verifymzansi/verifymzansi/actions/workflows/ci.yml)
 
@@ -11,8 +11,8 @@ Cloudflare. The main business surface is `Mzansi Business`, with legacy
 VerifyMzansi combines:
 
 - `Mzansi Market` for classified listings
-- `Mzansi Business` for verified businesses, shops, and services
-- `Promotions & Events` for deals, campaigns, and business posts
+- `Mzansi Business` for business profiles, shops, and services
+- `Tourism & Events` for destinations, accommodation, experiences, and events
 - KYC, moderation, audit logging, and POPIA-sensitive data handling
 - Ozow billing, Africa's Talking OTP, Resend email, Turnstile CAPTCHA, and
   Cloudflare R2 file storage
@@ -172,9 +172,9 @@ pnpm supabase:cli -- --env-file=.env.local migration list
 - `NEXT_PUBLIC_APP_URL` must be public HTTPS
 - `AFRICASTALKING_SENDER_ID`, `IP_HASH_SECRET`, Ozow credentials, Turnstile, R2,
   Resend, and encryption keys must all be populated
-- `KYC_PROVIDER=stub` is allowed for local development only. Production launch
-  validation requires a real provider and a populated `KYC_WEBHOOK_SECRET` for
-  signed KYC callbacks.
+- `KYC_PROVIDER=manual` is the launch mode for human review. `KYC_PROVIDER=stub`
+  is allowed for local development only. Signed third-party KYC providers
+  require a populated `KYC_WEBHOOK_SECRET`.
 - If `OZOW_API_BASE_URL` is set, it must target an official Ozow HTTPS host.
   Production accepts only `https://one.ozow.com`.
 - If you set `RATE_LIMITER_API_KEY`, you must also set `OTP_RATE_LIMITER_URL`
@@ -536,7 +536,8 @@ e2e/                   Playwright suites
 ## Launch Notes
 
 - `Mzansi Business` is the primary business experience.
-- Legacy public routes remain available for compatibility.
+- Legacy public routes remain available for compatibility, including old
+  promotions URLs that now redirect into Tourism & Events.
 - `/api/health` now reports config, Supabase, and audit status without exposing
   secrets.
 

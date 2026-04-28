@@ -258,7 +258,7 @@ export function ShowroomCardCarousel({
   pauseOnInteractionMs = DEFAULT_PAUSE_MS,
   className,
   emptyTitle = "Welcome to VerifyMzansi",
-  emptyDescription = "Explore verified businesses, listings, and events.",
+  emptyDescription = "Explore business profiles, listings, tourism, and events.",
   background,
 }: ShowroomCardCarouselProps) {
   const carouselItems = items.slice(0, DESKTOP_SHOWROOM_ITEM_LIMIT);
@@ -863,7 +863,7 @@ export function ShowroomCardCarousel({
         <div className={cn("invisible mx-auto lg:-translate-y-1", CARD_W)} aria-hidden="true">
           <PosterCardShell
             href="#"
-            title="Verified Marketplace Listing Placeholder"
+            title="Marketplace Listing Placeholder"
             description="Placeholder description"
             location="South Africa"
             eyebrow="R 0"

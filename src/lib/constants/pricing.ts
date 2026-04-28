@@ -192,7 +192,7 @@ export const PLANS: PlanDefinition[] = [
   {
     area: "PROMOTIONS_EVENTS",
     tier: "starter",
-    name: "Promotions Starter",
+    name: "Tourism & Events Starter",
     priceCents: 15000,
     billingFrequency: "30_days",
     features: {
@@ -209,7 +209,7 @@ export const PLANS: PlanDefinition[] = [
   {
     area: "PROMOTIONS_EVENTS",
     tier: "growth",
-    name: "Promotions Growth",
+    name: "Tourism & Events Growth",
     priceCents: 40000,
     billingFrequency: "30_days",
     features: {
@@ -226,7 +226,7 @@ export const PLANS: PlanDefinition[] = [
   {
     area: "PROMOTIONS_EVENTS",
     tier: "pro",
-    name: "Promotions Pro",
+    name: "Tourism & Events Pro",
     priceCents: 100000,
     billingFrequency: "30_days",
     features: {

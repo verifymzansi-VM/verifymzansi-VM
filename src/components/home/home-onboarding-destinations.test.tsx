@@ -36,7 +36,7 @@ const destinations: HomeOnboardingDestination[] = [
   {
     id: "mzansi-business",
     title: "Mzansi Business",
-    description: "Verified local businesses you can trust.",
+    description: "Local business profiles, shops, and services.",
     href: "/mzansi-business",
     iconKey: "business",
     accentClass: "text-brand-blue",
@@ -45,7 +45,7 @@ const destinations: HomeOnboardingDestination[] = [
   {
     id: "mzansi-market",
     title: "Mzansi Market",
-    description: "Products and listings from verified sellers.",
+    description: "Products and listings from local sellers.",
     href: "/mzansi-market",
     iconKey: "market",
     accentClass: "text-brand-green",
