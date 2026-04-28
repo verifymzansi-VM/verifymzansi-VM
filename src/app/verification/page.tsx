@@ -677,7 +677,7 @@ export default function VerificationPage() {
 
   const syncVerificationStatus = useCallback(async () => {
     try {
-      const res = await fetch("/api/verification/status");
+      const res = await fetch("/api/verification/status", { cache: "no-store" });
       if (!res.ok) {
         if (res.status === 404) {
           setServerSteps([]);
@@ -1639,6 +1639,38 @@ export default function VerificationPage() {
   const idDocumentStatus = serverStepMap.get("id_doc")?.status;
   const selfieStatus = serverStepMap.get("selfie")?.status;
   const locationStatus = serverStepMap.get("location")?.status;
+
+  if (_sessionLoading) {
+    return (
+      <div className="flex min-h-screen flex-col bg-warm-50/30 dark:bg-background">
+        <Header isAuthenticated />
+        <main className="flex-1">
+          <div className="container-page py-6">
+            <div className="mx-auto w-full max-w-4xl space-y-6">
+              <PageHeader
+                title="Checking verification status"
+                description="Loading your latest verification details before showing the next step."
+                breadcrumbs={[
+                  { label: "Dashboard", href: "/dashboard" },
+                  { label: "Verification" },
+                ]}
+              />
+
+              <Card
+                className="border-warm-200/70 bg-background/95 dark:border-warm-700/70"
+                aria-busy="true"
+              >
+                <CardContent className="flex items-center gap-3 p-4 text-sm text-muted-foreground sm:p-5">
+                  <Loader2 className="h-4 w-4 animate-spin text-brand-green" />
+                  <span>Loading your latest verification status...</span>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-warm-50/30 dark:bg-background">

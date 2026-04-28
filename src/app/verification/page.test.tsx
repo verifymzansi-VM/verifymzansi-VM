@@ -90,6 +90,15 @@ function fetchCalls() {
   return (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+
+  return { promise, resolve };
+}
+
 async function openCameraAndUseFileFallback(file: File) {
   fireEvent.click(screen.getByRole("button", { name: /Open Camera/i }));
 
@@ -230,6 +239,50 @@ describe("VerificationPage", () => {
       "href",
       "/post/create-business"
     );
+  });
+
+  it("shows a neutral status check before rendering any verification step", async () => {
+    render(<VerificationPage />);
+
+    expect(screen.getByText(/Loading your latest verification status/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Step 1: Phone \+ OTP/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Verification Submitted/i)).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/SA mobile number/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/Loading your latest verification status/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps verification steps hidden while status is slow to load", async () => {
+    const slowStatus = deferred<ReturnType<typeof jsonResponse>>();
+    global.fetch = vi.fn((input: string | URL) => {
+      const url = String(input);
+      if (url.includes("/api/verification/session/start")) {
+        return Promise.resolve(sessionResponse);
+      }
+      if (url.includes("/api/verification/status")) {
+        return slowStatus.promise;
+      }
+      return Promise.resolve(jsonResponse({}, 200));
+    }) as unknown as typeof fetch;
+
+    render(<VerificationPage />);
+
+    await waitFor(() => {
+      expect(
+        fetchCalls().some(([input]) => String(input).includes("/api/verification/status"))
+      ).toBe(true);
+    });
+    expect(screen.getByText(/Loading your latest verification status/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/SA mobile number/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Step 1: Phone \+ OTP/i)).not.toBeInTheDocument();
+
+    slowStatus.resolve(statusResponse);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/SA mobile number/i)).toBeInTheDocument();
+    });
   });
 
   it("keeps a verified phone approved on the completion card when status rows omit phone", async () => {
@@ -435,7 +488,7 @@ describe("VerificationPage", () => {
   it("never renders OTP helper hints after sending a real OTP", async () => {
     render(<VerificationPage />);
 
-    fireEvent.change(screen.getByLabelText(/SA mobile number/i), {
+    fireEvent.change(await screen.findByLabelText(/SA mobile number/i), {
       target: { value: "0712345678" },
     });
 
@@ -457,7 +510,7 @@ describe("VerificationPage", () => {
   it("shows resend cooldown guidance after a successful OTP send", async () => {
     render(<VerificationPage />);
 
-    fireEvent.change(screen.getByLabelText(/SA mobile number/i), {
+    fireEvent.change(await screen.findByLabelText(/SA mobile number/i), {
       target: { value: "0712345678" },
     });
 
@@ -488,7 +541,7 @@ describe("VerificationPage", () => {
 
     render(<VerificationPage />);
 
-    fireEvent.change(screen.getByLabelText(/SA mobile number/i), {
+    fireEvent.change(await screen.findByLabelText(/SA mobile number/i), {
       target: { value: "0712345678" },
     });
 
