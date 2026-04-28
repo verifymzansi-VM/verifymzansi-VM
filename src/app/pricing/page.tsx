@@ -4,6 +4,7 @@ import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 import { FREE_POST_CONFIG, getActivePlansByArea } from "@/lib/constants/pricing";
 import { PricingPlanGrid } from "@/components/billing/plan-grid";
+import { getTrustPublicConfig } from "@/lib/trust-public-config";
 
 export const metadata = {
   title: "Pricing",
@@ -13,6 +14,7 @@ export const metadata = {
 
 export default function PricingPage() {
   const { marketPlans, businessPlans, promotionPlans } = getActivePlansByArea();
+  const trustConfig = getTrustPublicConfig();
   const freePostCount = Number(FREE_POST_CONFIG.maxAllowed);
   const summaryPoints = [
     `${freePostCount} free ${freePostCount === 1 ? "post" : "posts"} per area every ${FREE_POST_CONFIG.durationDays} days`,
@@ -113,6 +115,31 @@ export default function PricingPage() {
             Compare a surface, choose a plan, then continue to secure Ozow checkout after
             sign-in.{" "}
           </p>
+
+          <section className="mx-auto grid max-w-5xl gap-3 rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground md:grid-cols-2">
+            <div>
+              <h2 className="font-display text-base font-semibold text-foreground">
+                Payment transparency
+              </h2>
+              <p className="mt-1">
+                Paid features are processed in ZAR through secure hosted checkout.{" "}
+                {trustConfig.ozowMerchantName
+                  ? `Your bank or Ozow record may show ${trustConfig.ozowMerchantName}.`
+                  : "Your bank or payment-provider record should identify VerifyMzansi or its checkout provider."}
+              </p>
+            </div>
+            <div>
+              <h2 className="font-display text-base font-semibold text-foreground">
+                Moderation and refunds
+              </h2>
+              <p className="mt-1">
+                Paid visibility does not bypass moderation. If a paid listing or campaign is
+                rejected, support can review correction, resubmission, credit, or refund options
+                under the Terms of Service and applicable South African consumer law.
+              </p>
+              {trustConfig.vatStatus && <p className="mt-2">VAT status: {trustConfig.vatStatus}</p>}
+            </div>
+          </section>
 
           <p className="text-center text-sm text-muted-foreground">
             Have questions?{" "}

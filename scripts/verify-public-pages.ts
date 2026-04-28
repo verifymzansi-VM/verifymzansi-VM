@@ -24,6 +24,7 @@ type Target = {
   device?: (typeof devices)["Pixel 7"];
   expectAuthUi?: boolean;
   expectMobileFooter?: boolean;
+  bodyIncludes?: string[];
 };
 
 const targets: Target[] = [
@@ -31,6 +32,16 @@ const targets: Target[] = [
   { name: "login-desktop", path: "/login", expectAuthUi: true },
   { name: "register-desktop", path: "/register", expectAuthUi: true },
   { name: "pricing-desktop", path: "/pricing" },
+  {
+    name: "trust-safety-desktop",
+    path: "/trust-safety",
+    bodyIncludes: ["Trust & Safety", "Verification helps reduce risk"],
+  },
+  {
+    name: "safety-centre-desktop",
+    path: "/safety",
+    bodyIncludes: ["Safety Centre", "Reports, disputes, and appeals"],
+  },
   { name: "market-desktop", path: "/mzansi-market" },
   {
     name: "business-mobile",
@@ -173,6 +184,19 @@ async function assertMobileFooter(page: Page) {
   }
 }
 
+async function assertBodyIncludes(page: Page, target: Target) {
+  if (!target.bodyIncludes?.length) {
+    return;
+  }
+
+  const bodyText = (await page.locator("body").innerText()).toLowerCase();
+  for (const expected of target.bodyIncludes) {
+    if (!bodyText.includes(expected.toLowerCase())) {
+      throw new Error(`Body text did not include ${JSON.stringify(expected)}`);
+    }
+  }
+}
+
 async function openTarget(target: Target) {
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext(target.device ?? {});
@@ -257,6 +281,8 @@ async function verifyTarget(target: Target) {
     if (target.expectMobileFooter) {
       await assertMobileFooter(page);
     }
+
+    await assertBodyIncludes(page, target);
 
     report(`[OK] ${target.name}`);
   } catch (error) {

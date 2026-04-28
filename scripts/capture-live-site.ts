@@ -31,6 +31,8 @@ const targets: PublicTarget[] = [
   { slug: "pricing", pagePath: "/pricing", fullPage: true },
   { slug: "verify-buyer", pagePath: "/verify-buyer", fullPage: true },
   { slug: "contact", pagePath: "/contact", fullPage: true },
+  { slug: "trust-safety", pagePath: "/trust-safety", fullPage: true },
+  { slug: "safety-centre", pagePath: "/safety", fullPage: true },
   { slug: "privacy", pagePath: "/privacy", fullPage: true },
   { slug: "terms", pagePath: "/terms", fullPage: true },
   { slug: "safety-scam-alerts", pagePath: "/safety/scam-alerts", fullPage: true },

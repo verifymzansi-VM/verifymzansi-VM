@@ -2,6 +2,7 @@ import { Mail } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import Link from "next/link";
+import { getTrustPublicConfig } from "@/lib/trust-public-config";
 
 export const metadata = {
   title: "Privacy Policy",
@@ -10,6 +11,7 @@ export const metadata = {
 };
 
 export default function PrivacyPolicyPage() {
+  const trustConfig = getTrustPublicConfig();
   const sections = [
     {
       title: "1. Information We Collect",
@@ -18,24 +20,24 @@ export default function PrivacyPolicyPage() {
         "• Account information (name, email, phone number)",
         "• Verification documents (ID number, selfie, location)",
         "• Listing content (titles, descriptions, images, pricing)",
-        "• Communication records and payment information (via Ozow and our payment providers)",
+        "• Communication records and payment information handled by Ozow and payment providers",
         "We also collect device/browser info, IP address, and usage data automatically.",
       ],
     },
     {
-      title: "2. How We Use Your Information",
+      title: "2. How Verification Data Is Used",
       content: [
-        "• To verify your identity and build your trust profile",
-        "• To display your listings and process transactions",
-        "• To communicate service updates and safety alerts",
-        "• To prevent fraud, scams, and abuse",
-        "• To comply with legal obligations",
+        "ID numbers, ID document images, selfies, phone numbers, and location data are used to run verification checks, reduce fraud, review account safety, and support legal compliance.",
+        "Verification may include internal review, automated validation checks, SMS delivery providers, secure file storage, and third-party KYC or infrastructure providers where needed to deliver the service.",
+        "Verification does not guarantee that a person, business, product, rental, event, job, or transaction is safe. It only means specific platform checks were completed or reviewed.",
       ],
     },
     {
-      title: "3. Data Retention",
+      title: "3. Data Retention and Deletion",
       content: [
-        "We retain your data while your account is active. After deletion, certain data is kept for up to 90 days for fraud prevention, then permanently erased. Verification documents are purged after successful verification per POPIA's data minimisation principle.",
+        "We retain account and listing data while your account is active. After account deletion, some records may be retained for fraud prevention, accounting, dispute handling, legal obligations, or platform integrity before deletion or anonymisation.",
+        "Verification documents should be kept only for as long as needed for verification, fraud prevention, dispute review, or legal compliance. Users can request deletion through the data-rights process.",
+        "After account closure, public listings and profile content may be removed or anonymised, while limited operational records may remain where required by law, accounting rules, abuse prevention, or unresolved disputes.",
       ],
     },
     {
@@ -45,13 +47,23 @@ export default function PrivacyPolicyPage() {
         "• Access your personal information we hold",
         "• Request correction or deletion of your data",
         "• Object to processing of your data",
+        "• Request information about the parties who received your personal information",
         "• Lodge a complaint with the Information Regulator",
       ],
     },
     {
-      title: "5. Data Security",
+      title: "5. Data Security and Access",
       content: [
-        "We implement industry-standard security: encryption in transit (TLS 1.3), encryption at rest, and regular security audits. Access is restricted to authorised personnel only.",
+        "We use encryption in transit, restricted verification storage, signed access paths, audit controls, and operational access limits for sensitive verification files.",
+        "Only authorised personnel with a platform safety, support, verification, legal, or security reason should access ID, selfie, or location evidence.",
+        "If we discover a data breach that may affect your personal information, we will investigate, contain the incident, preserve evidence, notify affected users and/or regulators where required, and publish follow-up guidance when appropriate.",
+      ],
+    },
+    {
+      title: "6. Third Parties",
+      content: [
+        "We may use trusted providers for hosting, storage, identity/KYC workflows, SMS delivery, email, payments, security tooling, analytics, and operational support.",
+        "Providers should receive only the information needed to deliver their service and are expected to protect it under appropriate contractual, security, and POPIA-aligned obligations.",
       ],
     },
   ];
@@ -105,7 +117,7 @@ export default function PrivacyPolicyPage() {
               <section className="space-y-1.5 pt-1">
                 <h2 className="font-display text-base font-bold flex items-center gap-2">
                   <span className="text-brand-green text-sm font-mono" aria-hidden="true">
-                    06
+                    07
                   </span>
                   Data Subjects & Contact
                 </h2>
@@ -117,11 +129,11 @@ export default function PrivacyPolicyPage() {
 
                   <div className="flex flex-col sm:flex-row gap-3">
                     <a
-                      href="mailto:privacy@verifymzansi.com"
+                      href={`mailto:${trustConfig.informationOfficerEmail}`}
                       className="group flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-green/10 hover:bg-brand-green/20 text-brand-green transition-colors text-sm font-medium w-fit border border-brand-green/20"
                     >
                       <Mail className="h-4 w-4" />
-                      privacy@verifymzansi.com
+                      {trustConfig.informationOfficerEmail}
                     </a>
 
                     <Link

@@ -2,6 +2,7 @@ import { Mail, ArrowRight } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import Link from "next/link";
+import { getTrustPublicConfig } from "@/lib/trust-public-config";
 
 export const metadata = {
   title: "Terms of Service",
@@ -10,6 +11,7 @@ export const metadata = {
 };
 
 export default function TermsPage() {
+  const trustConfig = getTrustPublicConfig();
   const sections = [
     {
       title: "1. Acceptance of Terms",
@@ -50,19 +52,37 @@ export default function TermsPage() {
       ],
     },
     {
-      title: "5. Payments & Billing",
+      title: "5. Verification Signals",
       content: [
-        "Paid features are billed via secure hosted checkout in ZAR (incl. VAT). Subscriptions auto-renew unless cancelled. Refunds follow CPA guidelines.",
+        "Verification badges and trust signals mean specific platform checks were completed, submitted, or reviewed.",
+        "Verification does not guarantee that a user, business, product, rental, job, event, price, payment, or transaction is safe, lawful, available, or free from risk.",
+        "Users must still follow safe trading practices, inspect goods, verify ownership, keep records, and report suspicious behaviour.",
       ],
     },
     {
-      title: "6. Promotion & Distribution Rights",
+      title: "6. Payments & Billing",
+      content: [
+        `Paid features are billed via secure hosted checkout in ZAR. ${
+          trustConfig.ozowMerchantName
+            ? `The checkout or bank record may show ${trustConfig.ozowMerchantName} as the Ozow merchant name.`
+            : "The checkout or bank record should identify VerifyMzansi or its payment provider."
+        }`,
+        trustConfig.vatStatus
+          ? `VAT status: ${trustConfig.vatStatus}.`
+          : "Prices are shown in South African rand. VAT treatment will be shown on the checkout or invoice where applicable.",
+        "Paid placements may be once-off, 30-day listing features, or recurring subscriptions depending on the selected plan and checkout terms.",
+        "If paid content is rejected after moderation, VerifyMzansi may correct, resubmit, credit, or refund according to the Consumer Protection Act, the plan terms, and the payment provider record.",
+        "Invoices or payment records are issued from the billing flow or support channel after successful payment confirmation.",
+      ],
+    },
+    {
+      title: "7. Promotion & Distribution Rights",
       content: [
         "When you create a promotion, advertisement, event, or campaign on VerifyMzansi, you confirm that you own it or are authorised to market it.",
       ],
     },
     {
-      title: "7. Limitation of Liability",
+      title: "8. Limitation of Liability",
       content: [
         "VerifyMzansi connects buyers, account holders, businesses, and advertisers — we are not a party to transactions. We do not guarantee quality, safety, or legality of listed items or promotions. Liability is limited to the maximum extent permitted by SA law.",
       ],
@@ -118,7 +138,7 @@ export default function TermsPage() {
               <section className="space-y-1.5 pt-1">
                 <h2 className="font-display text-base font-bold flex items-center gap-2">
                   <span className="text-brand-green text-sm font-mono" aria-hidden="true">
-                    08
+                    09
                   </span>
                   Privacy & Contact
                 </h2>

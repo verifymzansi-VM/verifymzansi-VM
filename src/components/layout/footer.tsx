@@ -49,6 +49,12 @@ export function Footer() {
           <div className="space-y-2">
             <h3 className="font-display font-semibold text-xs">Safety</h3>
             <nav aria-label="Safety" className="flex flex-col gap-1.5">
+              <Link href="/trust-safety" prefetch={false} className={footerLinkClassName}>
+                Trust & Safety
+              </Link>
+              <Link href="/safety" prefetch={false} className={footerLinkClassName}>
+                Safety Centre
+              </Link>
               <Link href="/safety/scam-alerts" prefetch={false} className={footerLinkClassName}>
                 Scam Alerts
               </Link>
@@ -74,6 +80,9 @@ export function Footer() {
               </Link>
               <Link href="/terms" prefetch={false} className={footerLinkClassName}>
                 Terms of Service
+              </Link>
+              <Link href="/contact" prefetch={false} className={footerLinkClassName}>
+                Contact
               </Link>
             </nav>
           </div>

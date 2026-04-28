@@ -27,4 +27,15 @@ describe("Footer", () => {
     );
     expect(screen.queryByRole("link", { name: "X" })).not.toBeInTheDocument();
   });
+
+  it("exposes public trust and safety routes", () => {
+    render(<Footer />);
+
+    expect(screen.getByRole("link", { name: "Trust & Safety" })).toHaveAttribute(
+      "href",
+      "/trust-safety"
+    );
+    expect(screen.getByRole("link", { name: "Safety Centre" })).toHaveAttribute("href", "/safety");
+    expect(screen.getByRole("link", { name: "Contact" })).toHaveAttribute("href", "/contact");
+  });
 });

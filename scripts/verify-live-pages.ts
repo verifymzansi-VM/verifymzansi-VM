@@ -213,6 +213,22 @@ const PUBLIC_ROUTE_TARGETS: RouteTarget[] = [
     bodyIncludes: ["Contact Us"],
   },
   {
+    name: "trust-safety-desktop",
+    path: "/trust-safety",
+    scope: "public",
+    readySelectors: ["main", 'h1:has-text("Trust & Safety")'],
+    titleIncludes: ["Trust & Safety"],
+    bodyIncludes: ["Trust & Safety", "Verification helps reduce risk"],
+  },
+  {
+    name: "safety-centre-desktop",
+    path: "/safety",
+    scope: "public",
+    readySelectors: ["main", 'h1:has-text("Safety Centre")'],
+    titleIncludes: ["Safety Centre"],
+    bodyIncludes: ["Safety Centre", "Reports, disputes, and appeals"],
+  },
+  {
     name: "privacy-desktop",
     path: "/privacy",
     scope: "public",
