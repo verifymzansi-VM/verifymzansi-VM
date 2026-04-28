@@ -1807,7 +1807,8 @@ function CreateBusinessContent() {
                             maxLength={30}
                           />
                           <p className="text-xs text-muted-foreground">
-                            Optional. Adds a trust badge to your profile.
+                            Optional public business detail. This does not mean VerifyMzansi has
+                            verified the business or CIPC record; verification remains person-level.
                           </p>
                         </div>
 

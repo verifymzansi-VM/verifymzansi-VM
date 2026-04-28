@@ -174,7 +174,7 @@ describe("PosterCardShell", () => {
       />
     );
 
-    expect(screen.getByText("Verified preview")).toBeInTheDocument();
+    expect(screen.getByText("Public preview")).toBeInTheDocument();
     expect(screen.getAllByText("Fallback listing")).toHaveLength(2);
   });
 });

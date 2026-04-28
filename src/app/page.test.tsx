@@ -112,7 +112,7 @@ describe("HomePage", () => {
     ).toHaveAttribute("href", "/mzansi-market");
     expect(
       screen.getByRole("link", {
-        name: /Mzansi Business Local business profiles, shops, and services\./i,
+        name: /Mzansi Business Profiles posted by identity-reviewed representatives\./i,
       })
     ).toHaveAttribute("href", "/mzansi-business");
     expect(

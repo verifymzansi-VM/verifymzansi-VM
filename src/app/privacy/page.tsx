@@ -12,6 +12,51 @@ export const metadata = {
 
 export default function PrivacyPolicyPage() {
   const trustConfig = getTrustPublicConfig();
+  const dataHandlingRows = [
+    {
+      dataType: "ID number",
+      purpose: "Identity verification, duplicate-account checks, fraud prevention",
+      recipients: "Internal reviewers and KYC/infrastructure providers where required",
+      retention: "Kept only while needed for verification, disputes, fraud prevention, or law",
+      deletion: "Request through privacy contact or signed-in data-rights form",
+    },
+    {
+      dataType: "ID document image",
+      purpose: "Evidence review and identity matching",
+      recipients: "Restricted verification reviewers and secure storage/KYC providers",
+      retention: "Restricted evidence storage; removed or anonymised when no longer required",
+      deletion: "Reviewed against fraud, dispute, accounting, and legal-hold obligations",
+    },
+    {
+      dataType: "Selfie image",
+      purpose: "Selfie-to-ID comparison and liveness-style review where enabled",
+      recipients: "Restricted verification reviewers and KYC/infrastructure providers",
+      retention: "Kept only for verification, appeal, fraud, or legal-compliance needs",
+      deletion:
+        "Request deletion; failed submissions may be retained briefly for appeal or abuse checks",
+    },
+    {
+      dataType: "Phone number",
+      purpose: "OTP checks, account recovery, safety contact, and posting accountability",
+      recipients: "SMS provider, internal platform systems, and support reviewers",
+      retention: "Kept while account is active and as required for fraud or legal records",
+      deletion: "Update or delete through account/data-rights workflow where legally allowed",
+    },
+    {
+      dataType: "GPS/location",
+      purpose: "Location verification and marketplace location display",
+      recipients: "Internal platform systems and infrastructure providers",
+      retention: "Kept while profile/listing uses the location or while needed for disputes",
+      deletion: "Remove from profile/listing or request correction/deletion",
+    },
+    {
+      dataType: "Payment data",
+      purpose: "Checkout, paid placement, accounting, refunds, and dispute handling",
+      recipients: "Ozow/payment provider, accounting records, and platform support",
+      retention: "Accounting and payment records are retained for required legal periods",
+      deletion: "Handled under provider rules and platform legal/accounting obligations",
+    },
+  ] as const;
   const sections = [
     {
       title: "1. Information We Collect",
@@ -29,7 +74,8 @@ export default function PrivacyPolicyPage() {
       content: [
         "ID numbers, ID document images, selfies, phone numbers, and location data are used to run verification checks, reduce fraud, review account safety, and support legal compliance.",
         "Verification may include internal review, automated validation checks, SMS delivery providers, secure file storage, and third-party KYC or infrastructure providers where needed to deliver the service.",
-        "Verification does not guarantee that a person, business, product, rental, event, job, or transaction is safe. It only means specific platform checks were completed or reviewed.",
+        "VerifyMzansi verifies people and account evidence. We do not verify that a business itself is official; business-profile trust signals refer to the person posting or managing the profile unless stated otherwise.",
+        "Verification does not guarantee that a person, business profile, product, rental, event, job, or transaction is safe. It only means specific platform checks were completed or reviewed.",
       ],
     },
     {
@@ -114,10 +160,47 @@ export default function PrivacyPolicyPage() {
                 </section>
               ))}
 
-              <section className="space-y-1.5 pt-1">
+              <section className="space-y-2 pt-1">
                 <h2 className="font-display text-base font-bold flex items-center gap-2">
                   <span className="text-brand-green text-sm font-mono" aria-hidden="true">
                     07
+                  </span>
+                  Sensitive Data Handling
+                </h2>
+                <div className="overflow-x-auto pl-0 sm:pl-6">
+                  <table className="w-full min-w-[720px] border-collapse text-left text-xs">
+                    <thead>
+                      <tr className="border-b bg-muted/50 text-foreground">
+                        <th className="p-2 font-semibold">Data type</th>
+                        <th className="p-2 font-semibold">Why collected</th>
+                        <th className="p-2 font-semibold">Who receives it</th>
+                        <th className="p-2 font-semibold">Storage period</th>
+                        <th className="p-2 font-semibold">Deletion process</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dataHandlingRows.map((row) => (
+                        <tr key={row.dataType} className="border-b align-top text-muted-foreground">
+                          <td className="p-2 font-medium text-foreground">{row.dataType}</td>
+                          <td className="p-2">{row.purpose}</td>
+                          <td className="p-2">{row.recipients}</td>
+                          <td className="p-2">{row.retention}</td>
+                          <td className="p-2">{row.deletion}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="pl-0 text-sm text-muted-foreground sm:pl-6">
+                  Selfie and ID-image processing may involve biometric-style comparison. Any such
+                  processing is used for verification and fraud prevention, not for public display.
+                </p>
+              </section>
+
+              <section className="space-y-1.5 pt-1">
+                <h2 className="font-display text-base font-bold flex items-center gap-2">
+                  <span className="text-brand-green text-sm font-mono" aria-hidden="true">
+                    08
                   </span>
                   Data Subjects & Contact
                 </h2>

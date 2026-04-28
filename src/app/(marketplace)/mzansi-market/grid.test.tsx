@@ -91,7 +91,7 @@ describe("MzansiMarketGrid", () => {
     });
 
     expect(
-      screen.getByText("Be the first to post a verified ad on Mzansi Market.")
+      screen.getByText("Be the first identity-reviewed seller to post on Mzansi Market.")
     ).toBeInTheDocument();
   });
 });

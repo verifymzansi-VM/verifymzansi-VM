@@ -4,6 +4,36 @@ import { Separator } from "@/components/ui/separator";
 import { getServerPublicRuntimeConfig } from "@/lib/public-runtime-config";
 import { OfficialSocialLinks } from "@/components/shared/official-social-links";
 
+const footerSections = [
+  {
+    title: "Marketplace",
+    links: [
+      { href: "/mzansi-market", label: "Mzansi Market" },
+      { href: "/mzansi-business", label: "Mzansi Business" },
+      { href: "/tourism-events", label: "Tourism & Events" },
+      { href: "/advertise", label: "Advertise" },
+    ],
+  },
+  {
+    title: "Safety",
+    links: [
+      { href: "/trust-safety", label: "Trust & Safety" },
+      { href: "/safety", label: "Safety Centre" },
+      { href: "/safety/scam-alerts", label: "Scam Alerts" },
+      { href: "/safety/meeting-checklist", label: "Meeting Safety" },
+      { href: "/verify-buyer", label: "Verify a Buyer" },
+    ],
+  },
+  {
+    title: "Legal",
+    links: [
+      { href: "/privacy", label: "Privacy Policy" },
+      { href: "/terms", label: "Terms of Service" },
+      { href: "/contact", label: "Contact" },
+    ],
+  },
+] as const;
+
 export function Footer() {
   const currentYear = new Date().getFullYear();
   const runtimeConfig = getServerPublicRuntimeConfig();
@@ -26,66 +56,23 @@ export function Footer() {
             </p>
           </div>
 
-          {/* Marketplace */}
-          <div className="space-y-2">
-            <h3 className="font-display font-semibold text-xs">Marketplace</h3>
-            <nav aria-label="Marketplace" className="flex flex-col gap-1.5">
-              <Link href="/mzansi-market" prefetch={false} className={footerLinkClassName}>
-                Mzansi Market
-              </Link>
-              <Link href="/mzansi-business" prefetch={false} className={footerLinkClassName}>
-                Mzansi Business
-              </Link>
-              <Link href="/tourism-events" prefetch={false} className={footerLinkClassName}>
-                Tourism & Events
-              </Link>
-              <Link href="/advertise" prefetch={false} className={footerLinkClassName}>
-                Advertise
-              </Link>
-            </nav>
-          </div>
-
-          {/* Safety */}
-          <div className="space-y-2">
-            <h3 className="font-display font-semibold text-xs">Safety</h3>
-            <nav aria-label="Safety" className="flex flex-col gap-1.5">
-              <Link href="/trust-safety" prefetch={false} className={footerLinkClassName}>
-                Trust & Safety
-              </Link>
-              <Link href="/safety" prefetch={false} className={footerLinkClassName}>
-                Safety Centre
-              </Link>
-              <Link href="/safety/scam-alerts" prefetch={false} className={footerLinkClassName}>
-                Scam Alerts
-              </Link>
-              <Link
-                href="/safety/meeting-checklist"
-                prefetch={false}
-                className={footerLinkClassName}
-              >
-                Meeting Safety
-              </Link>
-              <Link href="/verify-buyer" prefetch={false} className={footerLinkClassName}>
-                Verify a Buyer
-              </Link>
-            </nav>
-          </div>
-
-          {/* Legal */}
-          <div className="space-y-2">
-            <h3 className="font-display font-semibold text-xs">Legal</h3>
-            <nav aria-label="Legal" className="flex flex-col gap-1.5">
-              <Link href="/privacy" prefetch={false} className={footerLinkClassName}>
-                Privacy Policy
-              </Link>
-              <Link href="/terms" prefetch={false} className={footerLinkClassName}>
-                Terms of Service
-              </Link>
-              <Link href="/contact" prefetch={false} className={footerLinkClassName}>
-                Contact
-              </Link>
-            </nav>
-          </div>
+          {footerSections.map((section) => (
+            <div key={section.title} className="space-y-2">
+              <h3 className="font-display font-semibold text-xs">{section.title}</h3>
+              <nav aria-label={section.title} className="flex flex-col gap-1.5">
+                {section.links.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    prefetch={false}
+                    className={footerLinkClassName}
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+              </nav>
+            </div>
+          ))}
 
           <OfficialSocialLinks
             links={runtimeConfig.officialSocialLinks}

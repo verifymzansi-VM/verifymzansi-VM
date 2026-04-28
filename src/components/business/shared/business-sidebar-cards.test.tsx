@@ -45,7 +45,7 @@ describe("ManagedByCard", () => {
 
   it("shows fallback text when no owner profile", () => {
     render(<ManagedByCard ownerProfile={null} trustLevel={null} />);
-    expect(screen.getByText("Verified Owner")).toBeInTheDocument();
+    expect(screen.getByText("Reviewed Representative")).toBeInTheDocument();
   });
 
   it("renders trust badge when trust level is set", () => {

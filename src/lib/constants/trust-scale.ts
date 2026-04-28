@@ -50,8 +50,8 @@ export const TRUST_TIERS: Record<TrustLevel, TrustTier> = {
   },
   3: {
     level: 3,
-    label: "Verified",
-    description: "Identity verified to help customers trust this profile",
+    label: "ID Reviewed",
+    description: "The person behind this profile completed identity evidence review",
     badgeClass: "trust-badge-3",
     cardClass: "trust-card-3",
     borderColor: "border-brand-green-400",
@@ -60,8 +60,8 @@ export const TRUST_TIERS: Record<TrustLevel, TrustTier> = {
   },
   4: {
     level: 4,
-    label: "Verified Pro",
-    description: "Verified profile with Pro visibility and stronger brand presence",
+    label: "ID Reviewed Pro",
+    description: "Person-level identity evidence review with Pro visibility",
     badgeClass: "trust-badge-4",
     cardClass: "trust-card-4",
     borderColor: "border-brand-green-400",

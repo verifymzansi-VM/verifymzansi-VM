@@ -15,9 +15,49 @@ import { useToast } from "@/hooks/use-toast";
 import { getPublicRuntimeConfig } from "@/lib/public-runtime-config";
 import { OfficialSocialLinks } from "@/components/shared/official-social-links";
 
+const contactCategories = [
+  {
+    value: "fraud_report",
+    label: "Fraud report",
+    response: "Fraud reports are reviewed within 24-48 hours.",
+  },
+  {
+    value: "verification_appeal",
+    label: "Verification appeal",
+    response: "Verification appeals are reviewed within 2-3 business days.",
+  },
+  {
+    value: "privacy_popia",
+    label: "Privacy/POPIA request",
+    response: "Privacy requests are acknowledged within 2 business days.",
+  },
+  {
+    value: "payment_refund",
+    label: "Payment/refund issue",
+    response: "Payment issues are reviewed within 2 business days.",
+  },
+  {
+    value: "security_vulnerability",
+    label: "Security vulnerability",
+    response: "Security reports are triaged as soon as possible.",
+  },
+  {
+    value: "business_claim",
+    label: "Business claim request",
+    response: "Business claim requests require proof of authority and are reviewed manually.",
+  },
+  {
+    value: "general_support",
+    label: "General support",
+    response: "General messages are answered within 1-2 business days.",
+  },
+] as const;
+
 export default function ContactPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [category, setCategory] =
+    useState<(typeof contactCategories)[number]["value"]>("general_support");
   const [message, setMessage] = useState("");
   const [turnstileToken, setTurnstileToken] = useState("");
   const [turnstileUnavailable, setTurnstileUnavailable] = useState(false);
@@ -26,6 +66,7 @@ export default function ContactPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
   const runtimeConfig = getPublicRuntimeConfig();
+  const selectedCategory = contactCategories.find((item) => item.value === category);
 
   const handleTurnstileSuccess = useCallback((token: string) => {
     setTurnstileToken(token);
@@ -56,6 +97,7 @@ export default function ContactPage() {
         body: JSON.stringify({
           name: name.trim(),
           email: email.trim(),
+          category,
           message: message.trim(),
           turnstileToken: turnstileToken || undefined,
         }),
@@ -102,7 +144,7 @@ export default function ContactPage() {
                   <p className="text-muted-foreground">
                     Thank you for reaching out! Our team will get back to you at{" "}
                     <strong>{email}</strong> within 1–2 business days (South African business
-                    hours).
+                    hours). Fraud and security reports are prioritised.
                   </p>
                   <Button
                     variant="outline"
@@ -111,6 +153,7 @@ export default function ContactPage() {
                       setIsSubmitted(false);
                       setName("");
                       setEmail("");
+                      setCategory("general_support");
                       setMessage("");
                       setTurnstileToken("");
                     }}
@@ -146,6 +189,28 @@ export default function ContactPage() {
                         <p id="name-error" role="alert" className="inline-form-error">
                           {fieldErrors.name}
                         </p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="category">Contact category *</Label>
+                      <select
+                        id="category"
+                        name="category"
+                        value={category}
+                        onChange={(e) =>
+                          setCategory(e.target.value as (typeof contactCategories)[number]["value"])
+                        }
+                        className="h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      >
+                        {contactCategories.map((item) => (
+                          <option key={item.value} value={item.value}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
+                      {selectedCategory && (
+                        <p className="text-xs text-muted-foreground">{selectedCategory.response}</p>
                       )}
                     </div>
 

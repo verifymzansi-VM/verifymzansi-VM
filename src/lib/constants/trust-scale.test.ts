@@ -86,7 +86,7 @@ describe("computeTrustLevel", () => {
 describe("getTrustTier", () => {
   it("returns correct tier for each level", () => {
     expect(getTrustTier(0).label).toBe("Unregistered");
-    expect(getTrustTier(3).label).toBe("Verified");
-    expect(getTrustTier(4).label).toBe("Verified Pro");
+    expect(getTrustTier(3).label).toBe("ID Reviewed");
+    expect(getTrustTier(4).label).toBe("ID Reviewed Pro");
   });
 });

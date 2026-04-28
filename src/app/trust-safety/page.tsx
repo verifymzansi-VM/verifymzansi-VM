@@ -37,17 +37,18 @@ const verificationLevels = [
     meaning: "The account has confirmed access to its email address.",
   },
   {
-    name: "ID verified",
-    meaning: "The user submitted identity evidence for review against platform checks.",
+    name: "ID evidence reviewed",
+    meaning:
+      "The person posting submitted an ID number, ID evidence, and selfie for platform review.",
   },
   {
     name: "Location verified",
     meaning: "The user saved a South African location and may have matched it with device GPS.",
   },
   {
-    name: "Business verified",
+    name: "Official representative reviewed",
     meaning:
-      "The business profile supplied details that can be reviewed before trust signals appear.",
+      "VerifyMzansi does not verify that a business itself is official. We review the person posting on behalf of that business using their phone number, ID evidence, and selfie.",
   },
   {
     name: "Payment verified",
@@ -60,7 +61,7 @@ const safetyRules = [
   "Meet in safe public places and tell someone where you are going.",
   "Avoid courier, EFT, e-wallet, and OTP pressure tactics.",
   "Keep records of chats, payment references, listings, and profile links.",
-  "Report suspicious listings, accounts, or businesses before continuing a deal.",
+  "Report suspicious listings, accounts, representatives, or business profiles before continuing a deal.",
 ] as const;
 
 const dataPractices = [
@@ -105,7 +106,7 @@ export default function TrustSafetyPage() {
         <div className="container-page py-4 space-y-5">
           <PageHeader
             title="Trust & Safety"
-            description="Clear answers about who VerifyMzansi is, how verification works, and what users should still do to stay safe."
+            description="Clear answers about who VerifyMzansi is, how person-level verification works, and what users should still do to stay safe."
             breadcrumbs={[{ label: "Trust & Safety" }]}
           />
 
@@ -117,8 +118,9 @@ export default function TrustSafetyPage() {
                   Verification helps reduce risk, but it does not guarantee safety.
                 </h2>
                 <p className="text-sm text-muted-foreground">
-                  A verified badge means the account completed specific platform checks. It does not
-                  mean every seller, buyer, product, job, rental, event, or business is guaranteed
+                  A verified badge means a person or account completed specific platform checks. It
+                  does not mean VerifyMzansi has verified the business itself, nor that every
+                  seller, buyer, product, job, rental, event, or business profile is guaranteed
                   safe, lawful, available, or fairly priced.
                 </p>
               </div>
@@ -127,22 +129,14 @@ export default function TrustSafetyPage() {
 
           <div className="grid gap-4 lg:grid-cols-2">
             <TrustCard title="Business identity" icon={Building2}>
-              {legalIdentityRows.length > 0 ? (
-                <dl className="grid gap-2">
-                  {legalIdentityRows.map((row) => (
-                    <div key={row.label} className="rounded-md border bg-background px-3 py-2">
-                      <dt className="text-xs font-medium text-foreground">{row.label}</dt>
-                      <dd className="mt-1 break-words">{row.value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              ) : (
-                <p>
-                  Official company identity fields are shown here once verified public records are
-                  configured. Until then, use the accountability contacts below for privacy, safety,
-                  support, and security requests.
-                </p>
-              )}
+              <dl className="grid gap-2">
+                {legalIdentityRows.map((row) => (
+                  <div key={row.label} className="rounded-md border bg-background px-3 py-2">
+                    <dt className="text-xs font-medium text-foreground">{row.label}</dt>
+                    <dd className="mt-1 break-words">{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
               <dl className="grid gap-2">
                 {contactRows.map((row) => (
                   <div key={row.label} className="rounded-md border bg-background px-3 py-2">
@@ -151,6 +145,11 @@ export default function TrustSafetyPage() {
                   </div>
                 ))}
               </dl>
+              <p>
+                VerifyMzansi verifies people who post or manage content on the platform. Business
+                profiles are content records and should not be treated as an official endorsement of
+                the business unless the page clearly says the official representative was reviewed.
+              </p>
             </TrustCard>
 
             <TrustCard title="POPIA and identity data" icon={FileLock2}>

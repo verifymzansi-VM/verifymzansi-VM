@@ -25,6 +25,17 @@ const contactFormSchema = z.object({
       .min(10, "Message must be at least 10 characters")
       .max(2000, "Message cannot exceed 2000 characters")
   ),
+  category: z
+    .enum([
+      "fraud_report",
+      "verification_appeal",
+      "privacy_popia",
+      "payment_refund",
+      "security_vulnerability",
+      "business_claim",
+      "general_support",
+    ])
+    .default("general_support"),
   turnstileToken: trimmedStringSchema.pipe(turnstileTokenSchema),
 });
 
@@ -48,7 +59,7 @@ export async function POST(request: NextRequest) {
       return bodyResult.response;
     }
 
-    const { name, email, message, turnstileToken } = bodyResult.data;
+    const { name, email, category, message, turnstileToken } = bodyResult.data;
 
     // ── CAPTCHA verification ─────────────────────────────────
     if (process.env.TURNSTILE_SECRET_KEY) {
@@ -74,7 +85,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Sanitize message: escape HTML entities + strip tags to prevent stored XSS ──
-    const sanitizedMessage = sanitizeUserMessage(message);
+    const sanitizedMessage = sanitizeUserMessage(`[${category}] ${message}`);
 
     // ── Store inquiry ────────────────────────────────────────
     const admin = createAdminClient();
@@ -90,7 +101,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to submit message" }, { status: 500 });
     }
 
-    log.info("Contact form submission received", { name, email: email.slice(0, 3) + "***" });
+    log.info("Contact form submission received", {
+      name,
+      category,
+      email: email.slice(0, 3) + "***",
+    });
 
     return NextResponse.json({ success: true });
   } catch (err) {

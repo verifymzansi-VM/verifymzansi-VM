@@ -13,15 +13,32 @@ describe("trust public config", () => {
     vi.unstubAllEnvs();
   });
 
-  it("hides unavailable legal identity fields", () => {
+  it("renders default legal identity fields", () => {
     const rows = getConfiguredIdentityRows(getTrustPublicConfig());
     const legalRows = getConfiguredLegalIdentityRows(getTrustPublicConfig());
     const contactRows = getConfiguredContactRows(getTrustPublicConfig());
 
-    expect(rows.some((row) => row.label === "Registered name")).toBe(false);
-    expect(rows.some((row) => row.label === "CIPC registration number")).toBe(false);
-    expect(rows.some((row) => row.label === "Business address")).toBe(false);
-    expect(legalRows).toHaveLength(0);
+    expect(rows).toContainEqual({
+      label: "Registered name",
+      value: "VERIFYMZANSI (PTY) LTD",
+    });
+    expect(rows).toContainEqual({
+      label: "CIPC registration number",
+      value: "2026/155305/07",
+    });
+    expect(rows).toContainEqual({
+      label: "Registered address",
+      value: "Kwadlangezwa, Khandisa, Empangeni, KwaZulu-Natal, 3886",
+    });
+    expect(rows).toContainEqual({
+      label: "Information Officer phone",
+      value: "0717484185",
+    });
+    expect(rows).toContainEqual({
+      label: "Information Officer WhatsApp",
+      value: "0717484185",
+    });
+    expect(legalRows.length).toBeGreaterThan(0);
     expect(contactRows).toContainEqual({
       label: "Security contact",
       value: "security@verifymzansi.com",
@@ -48,7 +65,7 @@ describe("trust public config", () => {
       value: "2026/123456/07",
     });
     expect(rows).toContainEqual({
-      label: "Business address",
+      label: "Registered address",
       value: "1 Main Road, Cape Town",
     });
   });

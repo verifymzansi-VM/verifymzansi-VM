@@ -150,7 +150,11 @@ function ContactCard({
   return (
     <Card className="border-t-4 border-t-brand-blue shadow-md">
       <CardContent className="space-y-5 p-6">
-        <h3 className="font-display text-lg font-bold">Contact Business</h3>
+        <h3 className="font-display text-lg font-bold">Contact Representative</h3>
+        <p className="text-xs text-muted-foreground">
+          Contact details were submitted by the person managing this profile. VerifyMzansi reviews
+          the poster, not the business itself.
+        </p>
 
         <address className="space-y-3 not-italic">
           {business.phone && (
@@ -1092,6 +1096,12 @@ export function BusinessDetailContent({
           <Card>
             <CardContent className="space-y-4 p-6">
               <h2 className="font-display text-xl font-bold">About {business.business_name}</h2>
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
+                Public business-profile information is not an official VerifyMzansi endorsement. We
+                verify the person posting with phone, ID evidence, and selfie checks. Report
+                inaccurate information or ask the business directly whether this profile is
+                officially claimed.
+              </div>
               <p className="whitespace-pre-wrap leading-relaxed text-muted-foreground">
                 {business.description || "No description provided."}
               </p>
@@ -1352,15 +1362,20 @@ export function BusinessDetailContent({
           <Card>
             <CardContent className="space-y-4 p-5">
               <h3 className="font-display text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                Managed By
+                Posted By
               </h3>
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
                   <ShieldCheck className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="font-medium">{ownerProfile?.display_name || "Verified Owner"}</p>
+                  <p className="font-medium">
+                    {ownerProfile?.display_name || "Reviewed Representative"}
+                  </p>
                   {trustLevel && <TrustBadge level={trustLevel} size="sm" />}
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Person-level verification only.
+                  </p>
                 </div>
               </div>
             </CardContent>

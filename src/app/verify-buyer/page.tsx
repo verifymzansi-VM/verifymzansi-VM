@@ -15,6 +15,25 @@ type VerifyResult = "valid" | "expired" | "revoked" | "not_found" | null;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+const buyerTokenGuidance = [
+  {
+    title: "Where the token comes from",
+    text: "A buyer shares the token from their VerifyMzansi account or buyer-verification screen. Do not trust screenshots alone; paste the token here.",
+  },
+  {
+    title: "What a valid token means",
+    text: "The token only confirms that the buyer account had completed platform checks when the token was issued. It is not a payment guarantee.",
+  },
+  {
+    title: "Expiry and reuse",
+    text: "Tokens may expire or be revoked. Ask for a fresh token if the result is expired, revoked, not found, or the deal details changed.",
+  },
+  {
+    title: "Keep trading safely",
+    text: "Meet safely, inspect goods, avoid OTP/payment pressure, and keep records even when a token is valid.",
+  },
+] as const;
+
 export default function VerifyBuyerPage() {
   const [token, setToken] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -90,11 +109,11 @@ export default function VerifyBuyerPage() {
         <div className="container-page py-4 space-y-4">
           <PageHeader
             title="Verify a Buyer"
-            description="Check a buyer's verification status using their token."
+            description="Check a buyer's current token directly instead of relying on screenshots or forwarded messages."
             breadcrumbs={[{ label: "Verify a Buyer" }]}
           />
 
-          <div className="mx-auto max-w-md">
+          <div className="mx-auto grid max-w-5xl gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
@@ -116,7 +135,8 @@ export default function VerifyBuyerPage() {
                       }}
                     />
                     <p className="text-xs text-muted-foreground">
-                      Paste the buyer token from their profile.
+                      Paste the buyer token from their VerifyMzansi account. Tokens are UUIDs and
+                      may expire or be revoked.
                     </p>
                   </div>
 
@@ -139,6 +159,10 @@ export default function VerifyBuyerPage() {
                         Verified Buyer
                       </p>
                     </div>
+                    <p className="text-xs text-muted-foreground">
+                      This confirms the token check, not that a payment, transfer, courier, or deal
+                      is safe.
+                    </p>
                     <p className="text-sm">
                       <strong>{buyerInfo.displayName}</strong>
                     </p>
@@ -162,7 +186,7 @@ export default function VerifyBuyerPage() {
                       </p>
                     </div>
                     <p className="text-xs text-amber-900/90 dark:text-amber-100/90">
-                      Ask the buyer to generate a fresh token.
+                      Ask the buyer to generate a fresh token and verify it here before continuing.
                     </p>
                   </div>
                 )}
@@ -173,7 +197,9 @@ export default function VerifyBuyerPage() {
                       <XCircle className="h-4 w-4 text-destructive" />
                       <p className="font-semibold text-sm text-destructive">Token revoked</p>
                     </div>
-                    <p className="text-xs text-muted-foreground">This token has been revoked.</p>
+                    <p className="text-xs text-muted-foreground">
+                      This token has been revoked. Do not rely on a screenshot of it.
+                    </p>
                   </div>
                 )}
 
@@ -190,6 +216,17 @@ export default function VerifyBuyerPage() {
                 )}
               </CardContent>
             </Card>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+              {buyerTokenGuidance.map((item) => (
+                <Card key={item.title}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">{item.title}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground">{item.text}</CardContent>
+                </Card>
+              ))}
+            </div>
           </div>
         </div>
       </main>

@@ -21,12 +21,12 @@ export default function AdvertisePage() {
   const pillars = [
     {
       title: "List your tourism business",
-      description: "Showcase accommodations, tours, and experiences on a trusted platform.",
+      description: "Showcase accommodations, tours, and experiences with accountable posting.",
       icon: TreePalm,
     },
     {
       title: "Build customer confidence",
-      description: "Trust badges help buyers engage with confidence.",
+      description: "Person-level trust badges help buyers see who submitted the profile.",
       icon: ShieldCheck,
     },
     {
@@ -46,7 +46,7 @@ export default function AdvertisePage() {
     },
     {
       name: "Mzansi Business",
-      description: "Build a business profile that supports discovery and trust.",
+      description: "Build a business profile managed by an identity-reviewed representative.",
       browseHref: "/mzansi-business",
       createHref: "/post/create-business",
       createLabel: "Create business profile",
@@ -81,8 +81,8 @@ export default function AdvertisePage() {
 
             <div className="max-w-3xl space-y-4 text-sm text-muted-foreground sm:text-base">
               <p>
-                Reach local buyers with video-powered listings, trusted business profiles, tourism
-                posts, and event campaigns that can be boosted after approval.
+                Reach local buyers with video-powered listings, representative-managed business
+                profiles, tourism posts, and event campaigns that can be boosted after approval.
               </p>
               <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <Button asChild size="lg" className="gap-2">

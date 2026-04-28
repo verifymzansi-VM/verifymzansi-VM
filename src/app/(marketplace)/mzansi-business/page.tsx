@@ -30,7 +30,7 @@ import {
 export const metadata = {
   title: "Mzansi Business",
   description:
-    "Build business visibility and discover South African brands, shops, and services on VerifyMzansi.",
+    "Discover business profiles posted by identity-reviewed representatives on VerifyMzansi.",
   alternates: {
     canonical: "/mzansi-business",
   },
@@ -72,7 +72,7 @@ export default async function MzansiBusinessPage() {
             type: "business",
             href: "/post/create-business",
             title: "Mzansi Business",
-            description: "Discover South African business profiles, shops, and services.",
+            description: "Discover profiles posted by identity-reviewed representatives.",
             location: "South Africa",
             mediaUrl: "/images/fallbacks/hero-shop.svg",
           },
@@ -88,7 +88,7 @@ export default async function MzansiBusinessPage() {
       <ShowroomCardCarousel
         items={carouselItems}
         emptyTitle="Mzansi Business"
-        emptyDescription="Discover South African business profiles, shops, and services."
+        emptyDescription="Discover profiles posted by identity-reviewed representatives."
         background={mzansiBusinessShowroomBackground}
       />
 
@@ -131,13 +131,13 @@ export default async function MzansiBusinessPage() {
           <section className="min-w-0 flex-1 space-y-6">
             <PageHeader
               title="Mzansi Business"
-              description="Browse South African business profiles, build visibility for your brand, and help customers discover local services."
+              description="Browse South African business profiles posted by identity-reviewed representatives. VerifyMzansi reviews the poster, not the business itself."
               breadcrumbs={[{ label: "Mzansi Business" }]}
               className="hidden lg:block"
             >
               <Button asChild size="sm" className="h-11 gap-2">
                 <Link href="/post/create-business">
-                  List Your Business
+                  Create Business Profile
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>

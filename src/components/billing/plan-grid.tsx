@@ -62,6 +62,10 @@ export function PricingPlanGrid({ plans }: { plans: PlanDefinition[] }) {
                 </span>
                 <span className="text-sm text-muted-foreground">/ 30 days</span>
               </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                30-day subscription entitlement. No payment is made until you approve hosted
+                checkout.
+              </p>
             </div>
           </CardHeader>
           <CardContent>
@@ -76,6 +80,16 @@ export function PricingPlanGrid({ plans }: { plans: PlanDefinition[] }) {
                 </li>
               ))}
             </ul>
+            <div className="mt-4 rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+              <p>
+                Auto-renewal: not charged without checkout confirmation. Cancel or switch plans from
+                billing/support before buying another plan for the same area.
+              </p>
+              <p className="mt-1">
+                Moderation still applies. Rejected paid content may qualify for correction,
+                resubmission, credit, or refund review.
+              </p>
+            </div>
             <div className="mt-6">
               <Button
                 asChild

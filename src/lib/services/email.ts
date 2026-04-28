@@ -180,9 +180,9 @@ export async function sendVerificationApprovedEmail(
             <p>You can now:</p>
             <ul>
               <li>Create and publish listings in Mzansi Market</li>
-              <li>Set up your Business Ad profile</li>
-              <li>Register your Mall Shop</li>
-              <li>Start connecting with verified buyers</li>
+              <li>Set up a business profile as its accountable representative</li>
+              <li>Add shop, service, or mall-store details where relevant</li>
+              <li>Start connecting with identity-reviewed members</li>
             </ul>
             <p style="text-align: center;">
               <a href="${sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL)}/dashboard" class="button">Go to Dashboard</a>

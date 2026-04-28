@@ -281,7 +281,7 @@ export function PosterCardShell({
         />
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/80 via-slate-950/34 to-transparent px-4 pb-4 pt-12 text-white">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
-            Verified preview
+            Public preview
           </p>
           <p className="mt-1 line-clamp-2 text-sm font-semibold leading-tight">{title}</p>
         </div>

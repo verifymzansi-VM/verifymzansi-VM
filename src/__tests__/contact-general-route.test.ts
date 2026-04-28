@@ -131,11 +131,12 @@ describe("POST /api/contact/general", () => {
     expect(insert).toHaveBeenCalledWith({
       name: "Nomsa",
       email: "nomsa@example.com",
-      message: "alert(&quot;xss&quot;)Hello from customer support form.",
+      message: "[general_support] alert(&quot;xss&quot;)Hello from customer support form.",
       status: "new",
     });
     expect(mockLogger.info).toHaveBeenCalledWith("Contact form submission received", {
       name: "Nomsa",
+      category: "general_support",
       email: "nom***",
     });
   });

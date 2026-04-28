@@ -47,16 +47,16 @@ export async function HomeBusinessShowcase() {
       <HomeShowcaseShell
         badge="Mzansi Business"
         title="Mzansi Business"
-        description="Trusted local businesses, verified and presented with the same polished rhythm as the hero showcase."
+        description="Business profiles posted by accountable, identity-reviewed representatives."
         href="/mzansi-business"
-        ctaLabel="View All Businesses"
+        ctaLabel="View Representative Profiles"
         tone="blue"
       >
         <HomeShowcaseEmptyState
-          title="No businesses yet."
-          description="The business directory is ready for its first verified profile. Add a business and it will appear here."
+          title="No representative profiles yet."
+          description="The directory is ready for its first identity-reviewed representative profile. Add a business profile and it will appear here."
           ctaHref="/post/create-business"
-          ctaLabel="List First Business"
+          ctaLabel="Create First Profile"
           tone="blue"
           icon={<Building2 className="h-7 w-7" />}
         />
@@ -74,9 +74,9 @@ export async function HomeBusinessShowcase() {
     <HomeShowcaseShell
       badge="Mzansi Business"
       title="Mzansi Business"
-      description="Trusted local businesses, verified and presented with the same polished rhythm as the hero showcase."
+      description="Business profiles posted by accountable, identity-reviewed representatives."
       href="/mzansi-business"
-      ctaLabel="View All Businesses"
+      ctaLabel="View Representative Profiles"
       tone="blue"
     >
       <AutoScrollRail ariaLabel="Mzansi Business" showEdgeFades={false} flushEdges>

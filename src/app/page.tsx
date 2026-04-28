@@ -49,7 +49,7 @@ export default async function HomePage() {
     {
       id: "mzansi-business",
       title: "Mzansi Business",
-      description: "Local business profiles, shops, and services.",
+      description: "Profiles posted by identity-reviewed representatives.",
       href: "/mzansi-business",
       iconKey: "business",
       accentClass: "text-brand-blue",
@@ -188,11 +188,13 @@ export default async function HomePage() {
                           },
                           {
                             title: "Complete verification",
-                            detail: "Verify with phone, ID, and location to build customer trust.",
+                            detail:
+                              "Complete person-level checks with phone, ID evidence, selfie, and location.",
                           },
                           {
                             title: "Choose your channel",
-                            detail: "Products, business profiles, or promotions — one platform.",
+                            detail:
+                              "Products, representative-managed profiles, or promotions — one platform.",
                           },
                         ].map((step, index) => (
                           <li

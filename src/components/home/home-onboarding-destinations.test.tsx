@@ -36,7 +36,7 @@ const destinations: HomeOnboardingDestination[] = [
   {
     id: "mzansi-business",
     title: "Mzansi Business",
-    description: "Local business profiles, shops, and services.",
+    description: "Profiles posted by identity-reviewed representatives.",
     href: "/mzansi-business",
     iconKey: "business",
     accentClass: "text-brand-blue",

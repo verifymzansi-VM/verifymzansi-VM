@@ -66,15 +66,16 @@ export function ManagedByCard({ ownerProfile, trustLevel }: ManagedByCardProps) 
     <Card>
       <CardContent className="space-y-4 p-5">
         <h3 className="font-display text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Managed By
+          Posted By
         </h3>
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
             <ShieldCheck className="h-5 w-5 text-muted-foreground" />
           </div>
           <div>
-            <p className="font-medium">{ownerProfile?.display_name || "Verified Owner"}</p>
+            <p className="font-medium">{ownerProfile?.display_name || "Reviewed Representative"}</p>
             {trustLevel != null && <TrustBadge level={trustLevel} size="sm" />}
+            <p className="mt-1 text-xs text-muted-foreground">Person-level verification only.</p>
           </div>
         </div>
       </CardContent>

@@ -26,18 +26,19 @@ describe("public trust pages", () => {
     vi.unstubAllEnvs();
   });
 
-  it("renders Trust & Safety without legal placeholders", () => {
+  it("renders Trust & Safety with public legal identity details", () => {
     render(<TrustSafetyPage />);
 
     expect(screen.getByRole("heading", { name: "Trust & Safety" })).toBeInTheDocument();
     expect(screen.getByText(/Verification helps reduce risk/i)).toBeInTheDocument();
-    expect(screen.queryByText("Registered name")).not.toBeInTheDocument();
-    expect(screen.queryByText("CIPC registration number")).not.toBeInTheDocument();
-    expect(
-      screen.getByText(/Official company identity fields are shown here/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText("Registered name")).toBeInTheDocument();
+    expect(screen.getByText("VERIFYMZANSI (PTY) LTD")).toBeInTheDocument();
+    expect(screen.getByText("CIPC registration number")).toBeInTheDocument();
+    expect(screen.getByText("2026/155305/07")).toBeInTheDocument();
+    expect(screen.getAllByText("Senzo Mqondisi Mhlongo").length).toBeGreaterThan(0);
     expect(screen.getByText("privacy@verifymzansi.com")).toBeInTheDocument();
     expect(screen.getAllByText("security@verifymzansi.com").length).toBeGreaterThan(0);
+    expect(screen.getByText(/VerifyMzansi verifies people who post/i)).toBeInTheDocument();
   });
 
   it("renders configured legal details on Trust & Safety", () => {
@@ -69,6 +70,7 @@ describe("public trust pages", () => {
 
     expect(screen.getByText("How Verification Data Is Used")).toBeInTheDocument();
     expect(screen.getByText(/ID numbers, ID document images, selfies/i)).toBeInTheDocument();
+    expect(screen.getByText("Sensitive Data Handling")).toBeInTheDocument();
     expect(screen.getByText("Third Parties")).toBeInTheDocument();
     expect(screen.getByText(/If we discover a data breach/i)).toBeInTheDocument();
   });

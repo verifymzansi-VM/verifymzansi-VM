@@ -468,7 +468,7 @@ export function ListingDetailContent({
                 <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                   Seller
                 </p>
-                <h3 className="font-display text-lg font-semibold">Verified seller profile</h3>
+                <h3 className="font-display text-lg font-semibold">Seller profile</h3>
               </div>
 
               <div className="flex items-center gap-3">
@@ -477,7 +477,14 @@ export function ListingDetailContent({
                 </div>
                 <div className="min-w-0">
                   <p className="truncate font-medium">{seller?.display_name || "Seller"}</p>
-                  {trustLevel ? <TrustBadge level={trustLevel} size="sm" /> : null}
+                  {trustLevel ? (
+                    <div className="space-y-1">
+                      <TrustBadge level={trustLevel} size="sm" />
+                      <p className="text-xs text-muted-foreground">
+                        Badge refers to seller account checks.
+                      </p>
+                    </div>
+                  ) : null}
                 </div>
               </div>
 

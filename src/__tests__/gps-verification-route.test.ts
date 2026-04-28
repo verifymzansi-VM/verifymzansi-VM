@@ -606,6 +606,19 @@ describe("POST /api/verification/location/gps", () => {
     });
 
     mockAdminFrom.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: "profile-1", account_verification_status: "pending_review" },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+
       if (table === "verification_sessions") {
         return createVerificationSessionsTable({
           existingSession: {

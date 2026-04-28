@@ -21,9 +21,9 @@ function makeBiz(overrides: Partial<BusinessDetailRecord> = {}): BusinessDetailR
 }
 
 describe("BusinessContactSection", () => {
-  it("renders Contact Business heading", () => {
+  it("renders Contact Representative heading", () => {
     render(<BusinessContactSection business={makeBiz()} />);
-    expect(screen.getByText("Contact Business")).toBeInTheDocument();
+    expect(screen.getByText("Contact Representative")).toBeInTheDocument();
   });
 
   it("renders phone link when phone is provided", () => {

@@ -41,7 +41,13 @@ export function BusinessContactSection({
 
   const inner = (
     <div className="space-y-5">
-      <h3 className="font-display text-lg font-bold">Contact Business</h3>
+      <div>
+        <h3 className="font-display text-lg font-bold">Contact Representative</h3>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Contact details were submitted by the person managing this profile. VerifyMzansi reviews
+          the poster, not the business itself.
+        </p>
+      </div>
 
       <address className="space-y-3 not-italic">
         {business.phone && (

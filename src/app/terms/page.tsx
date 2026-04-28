@@ -54,8 +54,9 @@ export default function TermsPage() {
     {
       title: "5. Verification Signals",
       content: [
-        "Verification badges and trust signals mean specific platform checks were completed, submitted, or reviewed.",
-        "Verification does not guarantee that a user, business, product, rental, job, event, price, payment, or transaction is safe, lawful, available, or free from risk.",
+        "Verification badges and trust signals mean specific platform checks were completed, submitted, or reviewed for the person or account using the platform.",
+        "VerifyMzansi does not verify that a business itself is official. A business profile may be posted by a person who submitted phone, ID, and selfie evidence, but that does not prove the business is officially claimed unless the page says an official representative was reviewed.",
+        "Verification does not guarantee that a user, business profile, product, rental, job, event, price, payment, or transaction is safe, lawful, available, or free from risk.",
         "Users must still follow safe trading practices, inspect goods, verify ownership, keep records, and report suspicious behaviour.",
       ],
     },
@@ -70,7 +71,8 @@ export default function TermsPage() {
         trustConfig.vatStatus
           ? `VAT status: ${trustConfig.vatStatus}.`
           : "Prices are shown in South African rand. VAT treatment will be shown on the checkout or invoice where applicable.",
-        "Paid placements may be once-off, 30-day listing features, or recurring subscriptions depending on the selected plan and checkout terms.",
+        "Marketplace plans create a 30-day subscription entitlement after successful checkout. Add-ons and other features may be once-off where the checkout says so. No payment is completed until you approve the hosted checkout.",
+        "An active entitlement must be cancelled or allowed to expire before switching to another plan for the same area.",
         "If paid content is rejected after moderation, VerifyMzansi may correct, resubmit, credit, or refund according to the Consumer Protection Act, the plan terms, and the payment provider record.",
         "Invoices or payment records are issued from the billing flow or support channel after successful payment confirmation.",
       ],

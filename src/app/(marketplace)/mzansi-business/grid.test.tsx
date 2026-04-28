@@ -180,10 +180,10 @@ describe("MzansiBusinessGrid", () => {
     render(<MzansiBusinessGrid />);
 
     await waitFor(() => {
-      expect(screen.getByText("No businesses yet")).toBeInTheDocument();
+      expect(screen.getByText("No representative profiles yet")).toBeInTheDocument();
     });
 
-    expect(screen.getByRole("link", { name: /list your business/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /create business profile/i })).toHaveAttribute(
       "href",
       "/post/create-business"
     );

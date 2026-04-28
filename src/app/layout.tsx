@@ -165,23 +165,27 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         </ThemeProvider>
         <noscript>
           <div className="mx-auto max-w-[600px] p-8 text-center font-sans">
-            <h1>JavaScript Required</h1>
+            <h1>Interactive Features Need JavaScript</h1>
             <p>
-              VerifyMzansi requires JavaScript to function. Please enable JavaScript in your browser
-              settings and reload the page.
+              You can read public trust, legal, privacy, and safety pages without signing in.
+              Posting, verification, payments, dashboards, and reports need JavaScript enabled.
             </p>
             <p className="mt-4 text-sm text-muted-foreground">
-              You can still reach us at{" "}
+              For help, contact{" "}
               <a href="mailto:hello@verifymzansi.com" className="text-brand-green underline">
                 hello@verifymzansi.com
               </a>{" "}
-              or visit our{" "}
+              or open{" "}
+              <a href="/trust-safety" className="text-brand-green underline">
+                Trust & Safety
+              </a>
+              ,{" "}
               <a href="/privacy" className="text-brand-green underline">
-                Privacy Policy
+                Privacy
               </a>{" "}
-              and{" "}
+              or{" "}
               <a href="/terms" className="text-brand-green underline">
-                Terms of Service
+                Terms
               </a>
               .
             </p>
