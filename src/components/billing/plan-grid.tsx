@@ -82,12 +82,18 @@ export function PricingPlanGrid({ plans }: { plans: PlanDefinition[] }) {
             </ul>
             <div className="mt-4 rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
               <p>
-                Auto-renewal: not charged without checkout confirmation. Cancel or switch plans from
-                billing/support before buying another plan for the same area.
+                Auto-renewal: off unless checkout clearly says recurring billing is enabled. Cancel
+                from Dashboard -&gt; Billing or support before buying another plan for the same
+                area.
+              </p>
+              <p className="mt-1">
+                Cancellation stops the next renewal where renewal exists and does not remove the
+                current 30-day entitlement.
               </p>
               <p className="mt-1">
                 Moderation still applies. Rejected paid content may qualify for correction,
-                resubmission, credit, or refund review.
+                resubmission, credit, or refund review; ordinary cancellation does not automatically
+                refund an active entitlement.
               </p>
             </div>
             <div className="mt-6">

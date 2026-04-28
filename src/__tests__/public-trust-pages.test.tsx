@@ -5,6 +5,7 @@ import SafetyCentrePage from "@/app/safety/page";
 import PrivacyPolicyPage from "@/app/privacy/page";
 import TermsPage from "@/app/terms/page";
 import PricingPage from "@/app/pricing/page";
+import PaiaManualPage from "@/app/paia/page";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/components/layout/header", () => ({ Header: () => <div>Header</div> }));
@@ -73,6 +74,7 @@ describe("public trust pages", () => {
     expect(screen.getByText("Sensitive Data Handling")).toBeInTheDocument();
     expect(screen.getByText("Third Parties")).toBeInTheDocument();
     expect(screen.getByText(/If we discover a data breach/i)).toBeInTheDocument();
+    expect(screen.getByText(/targeted for deletion within 30 days/i)).toBeInTheDocument();
   });
 
   it("renders payment and verification disclaimers in terms", () => {
@@ -82,6 +84,7 @@ describe("public trust pages", () => {
     expect(screen.getByText(/does not guarantee that a user/i)).toBeInTheDocument();
     expect(screen.getByText("Payments & Billing")).toBeInTheDocument();
     expect(screen.getByText(/paid content is rejected/i)).toBeInTheDocument();
+    expect(screen.getByText(/Plans do not auto-renew/i)).toBeInTheDocument();
   });
 
   it("renders payment transparency on pricing", () => {
@@ -90,5 +93,18 @@ describe("public trust pages", () => {
     expect(screen.getByRole("heading", { name: "Pricing" })).toBeInTheDocument();
     expect(screen.getByText("Payment transparency")).toBeInTheDocument();
     expect(screen.getByText("Moderation and refunds")).toBeInTheDocument();
+  });
+
+  it("renders PAIA request guidance", () => {
+    render(<PaiaManualPage />);
+
+    expect(screen.getByRole("heading", { name: "PAIA Manual" })).toBeInTheDocument();
+    expect(screen.getByText("Legal Identity")).toBeInTheDocument();
+    expect(screen.getByText("2026/155305/07")).toBeInTheDocument();
+    expect(screen.getByText(/Information Regulator South Africa/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Open data-subject request form/i })).toHaveAttribute(
+      "href",
+      "/dsar"
+    );
   });
 });

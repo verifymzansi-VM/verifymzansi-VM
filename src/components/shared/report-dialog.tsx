@@ -25,6 +25,7 @@ interface ReportDialogProps {
   variant?: "ghost" | "outline" | "default";
   size?: "sm" | "default" | "icon";
   className?: string;
+  triggerLabel?: string;
 }
 
 const REPORT_REASONS = [
@@ -44,6 +45,7 @@ export function ReportDialog({
   variant = "ghost",
   size = "sm",
   className,
+  triggerLabel = "Report",
 }: ReportDialogProps) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState<string>("");
@@ -126,7 +128,7 @@ export function ReportDialog({
           className={`gap-1.5 text-muted-foreground hover:text-destructive ${className || ""}`}
         >
           <Flag className="h-3.5 w-3.5" />
-          {size !== "icon" && "Report"}
+          {size !== "icon" && triggerLabel}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">

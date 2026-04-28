@@ -72,8 +72,10 @@ export default function TermsPage() {
           ? `VAT status: ${trustConfig.vatStatus}.`
           : "Prices are shown in South African rand. VAT treatment will be shown on the checkout or invoice where applicable.",
         "Marketplace plans create a 30-day subscription entitlement after successful checkout. Add-ons and other features may be once-off where the checkout says so. No payment is completed until you approve the hosted checkout.",
+        "Plans do not auto-renew unless the checkout or billing screen clearly says recurring billing is enabled. Cancel from Dashboard -> Billing or support; cancellation stops the next renewal where renewal exists and does not remove the current 30-day entitlement.",
         "An active entitlement must be cancelled or allowed to expire before switching to another plan for the same area.",
         "If paid content is rejected after moderation, VerifyMzansi may correct, resubmit, credit, or refund according to the Consumer Protection Act, the plan terms, and the payment provider record.",
+        "Refunds are reviewed for rejected or failed paid content, duplicate charges, billing errors, or payment-provider failures; ordinary cancellation does not automatically refund an already active 30-day entitlement.",
         "Invoices or payment records are issued from the billing flow or support channel after successful payment confirmation.",
       ],
     },

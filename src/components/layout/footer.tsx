@@ -29,6 +29,7 @@ const footerSections = [
     links: [
       { href: "/privacy", label: "Privacy Policy" },
       { href: "/terms", label: "Terms of Service" },
+      { href: "/paia", label: "PAIA Manual" },
       { href: "/contact", label: "Contact" },
     ],
   },
@@ -86,14 +87,30 @@ export function Footer() {
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
           <p>&copy; {currentYear} VerifyMzansi. All rights reserved.</p>
           <div className="flex items-center gap-1">
-            <span
-              className="inline-block w-4 h-3 rounded-sm overflow-hidden"
+            <svg
+              className="h-3 w-5 rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.16)]"
+              viewBox="0 0 90 60"
               role="img"
               aria-label="South African flag"
             >
-              {/* SA flag mini icon — CSS gradient */}
-              <span className="block w-full h-full sa-flag-mini" aria-hidden="true" />
-            </span>
+              <clipPath id="south-african-flag-clip">
+                <rect width="90" height="60" rx="4" />
+              </clipPath>
+              <g clipPath="url(#south-african-flag-clip)">
+                <path fill="#de3831" d="M0 0h90v30H45z" />
+                <path fill="#002395" d="M45 30h45v30H0z" />
+                <path
+                  fill="#fff"
+                  d="M0 0v60l39-30L0 0Zm90 20H39l-13-10h64v10Zm0 20H39L26 50h64V40Z"
+                />
+                <path fill="#ffb81c" d="M0 6v48l31-24L0 6Z" />
+                <path fill="#000" d="M0 12v36l23-18L0 12Z" />
+                <path
+                  fill="#007a4d"
+                  d="M0 0v9l27 21L0 51v9l39-30L0 0Zm90 24H37l-8-6h61v6Zm0 12H37l-8 6h61v-6Z"
+                />
+              </g>
+            </svg>
             <span>Made in South Africa</span>
           </div>
         </div>

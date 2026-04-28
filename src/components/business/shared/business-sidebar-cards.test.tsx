@@ -12,7 +12,9 @@ vi.mock("@/components/shared/share-button", () => ({
   ShareButton: () => <button>Share</button>,
 }));
 vi.mock("@/components/shared/report-dialog", () => ({
-  ReportDialog: () => <button>Report</button>,
+  ReportDialog: ({ triggerLabel = "Report" }: { triggerLabel?: string }) => (
+    <button>{triggerLabel}</button>
+  ),
 }));
 
 import { OperatingHoursCard, ManagedByCard, ShareReportRow } from "./business-sidebar-cards";
@@ -52,6 +54,16 @@ describe("ManagedByCard", () => {
     render(<ManagedByCard ownerProfile={{ display_name: "Owner" }} trustLevel={3} />);
     expect(screen.getByTestId("trust-badge")).toBeInTheDocument();
   });
+
+  it("shows source and ownership precision labels", () => {
+    render(<ManagedByCard ownerProfile={{ display_name: "Owner" }} trustLevel={3} />);
+
+    expect(screen.getByText("Owner-claimed")).toBeInTheDocument();
+    expect(screen.getByText("Official representative reviewed")).toBeInTheDocument();
+    expect(screen.getByText("Information supplied by")).toBeInTheDocument();
+    expect(screen.getByText("Last reviewed date")).toBeInTheDocument();
+    expect(screen.getByText(/Official business ownership is not confirmed/i)).toBeInTheDocument();
+  });
 });
 
 describe("ShareReportRow", () => {
@@ -60,7 +72,7 @@ describe("ShareReportRow", () => {
   it("renders share and report buttons when public actions visible", () => {
     render(<ShareReportRow business={biz} showPublicActions={true} />);
     expect(screen.getByText("Share")).toBeInTheDocument();
-    expect(screen.getByText("Report")).toBeInTheDocument();
+    expect(screen.getByText("Report inaccurate information")).toBeInTheDocument();
   });
 
   it("renders nothing when public actions hidden", () => {

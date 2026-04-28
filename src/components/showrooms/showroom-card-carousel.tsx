@@ -863,10 +863,10 @@ export function ShowroomCardCarousel({
         <div className={cn("invisible mx-auto lg:-translate-y-1", CARD_W)} aria-hidden="true">
           <PosterCardShell
             href="#"
-            title="Marketplace Listing Placeholder"
-            description="Placeholder description"
-            location="South Africa"
-            eyebrow="R 0"
+            title="Carousel sizing card"
+            description="Hidden layout sizing element"
+            location=""
+            eyebrow=""
             mediaUrl="/images/fallbacks/hero-shop.svg"
             cardVariant="hero"
             mediaControlVariant="hero"

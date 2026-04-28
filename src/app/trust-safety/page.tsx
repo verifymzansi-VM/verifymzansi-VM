@@ -8,6 +8,7 @@ import {
   FileLock2,
   LifeBuoy,
   Mail,
+  ShieldAlert,
   Scale,
   ShieldCheck,
 } from "lucide-react";
@@ -69,6 +70,15 @@ const dataPractices = [
   "Verification files are encrypted in transit and stored in restricted verification storage; internal access is limited to authorised operational reviewers.",
   "Third-party KYC, SMS, payment, storage, email, security, and infrastructure providers may process data where needed to deliver the service.",
   "Users can request access, correction, deletion, or objection through the POPIA data-rights process.",
+] as const;
+
+const integrityMetrics = [
+  { label: "Verified users", value: "Launching" },
+  { label: "Reviewed representatives", value: "Launching" },
+  { label: "Listings removed", value: "Tracked internally" },
+  { label: "Fraud reports reviewed", value: "Tracked internally" },
+  { label: "Average response time", value: "1-2 business days" },
+  { label: "Last security review", value: "April 2026" },
 ] as const;
 
 function TrustCard({
@@ -150,6 +160,11 @@ export default function TrustSafetyPage() {
                 profiles are content records and should not be treated as an official endorsement of
                 the business unless the page clearly says the official representative was reviewed.
               </p>
+              <p>
+                You can independently verify our registration on CIPC using registration number{" "}
+                {trustConfig.cipcNumber}. Use the official CIPC company lookup or registration
+                certificate process before relying on company details for high-value transactions.
+              </p>
             </TrustCard>
 
             <TrustCard title="POPIA and identity data" icon={FileLock2}>
@@ -164,8 +179,43 @@ export default function TrustSafetyPage() {
               <Link href="/privacy" className="inline-flex text-brand-green underline">
                 Read the Privacy Policy
               </Link>
+              <Link href="/dsar" className="inline-flex text-brand-green underline">
+                Open the POPIA data-subject request form
+              </Link>
             </TrustCard>
           </div>
+
+          <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <TrustCard title="PAIA and POPIA process" icon={Scale}>
+              <p>
+                Users can request access, correction, deletion, objection, recipient information, or
+                account-data export through the signed-in data-rights form or POPIA contact.
+              </p>
+              <p>
+                The PAIA manual explains record requests, data-subject requests, Information Officer
+                status, and escalation routes. Downloadable request templates will be added when
+                finalised.
+              </p>
+              <Link href="/paia" className="inline-flex text-brand-green underline">
+                Open the PAIA manual
+              </Link>
+              <p>
+                If a POPIA issue is not resolved through VerifyMzansi first, users may escalate to
+                the Information Regulator South Africa.
+              </p>
+            </TrustCard>
+
+            <TrustCard title="Platform Integrity" icon={ShieldAlert}>
+              <dl className="grid grid-cols-2 gap-2">
+                {integrityMetrics.map((metric) => (
+                  <div key={metric.label} className="rounded-md border bg-background px-3 py-2">
+                    <dt className="text-xs font-medium text-foreground">{metric.label}</dt>
+                    <dd className="mt-1">{metric.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </TrustCard>
+          </section>
 
           <section className="space-y-3">
             <h2 className="font-display text-lg font-semibold">How verification works</h2>

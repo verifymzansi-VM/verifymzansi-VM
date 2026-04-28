@@ -36,6 +36,7 @@ describe("Footer", () => {
       "/trust-safety"
     );
     expect(screen.getByRole("link", { name: "Safety Centre" })).toHaveAttribute("href", "/safety");
+    expect(screen.getByRole("link", { name: "PAIA Manual" })).toHaveAttribute("href", "/paia");
     expect(screen.getByRole("link", { name: "Contact" })).toHaveAttribute("href", "/contact");
   });
 });

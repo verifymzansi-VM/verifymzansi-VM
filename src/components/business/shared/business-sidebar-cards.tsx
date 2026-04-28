@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, ShieldCheck } from "lucide-react";
+import { Clock, ShieldAlert, ShieldCheck } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { ShareButton } from "@/components/shared/share-button";
@@ -62,6 +62,13 @@ interface ManagedByCardProps {
 }
 
 export function ManagedByCard({ ownerProfile, trustLevel }: ManagedByCardProps) {
+  const reviewRows = [
+    { label: "Owner-claimed", value: "No" },
+    { label: "Official representative reviewed", value: "No" },
+    { label: "Information supplied by", value: "Poster" },
+    { label: "Last reviewed date", value: "Not publicly displayed" },
+  ] as const;
+
   return (
     <Card>
       <CardContent className="space-y-4 p-5">
@@ -76,6 +83,23 @@ export function ManagedByCard({ ownerProfile, trustLevel }: ManagedByCardProps) 
             <p className="font-medium">{ownerProfile?.display_name || "Reviewed Representative"}</p>
             {trustLevel != null && <TrustBadge level={trustLevel} size="sm" />}
             <p className="mt-1 text-xs text-muted-foreground">Person-level verification only.</p>
+          </div>
+        </div>
+        <dl className="grid gap-2 text-xs">
+          {reviewRows.map((row) => (
+            <div key={row.label} className="rounded-lg border bg-muted/30 px-3 py-2">
+              <dt className="font-medium text-foreground">{row.label}</dt>
+              <dd className="mt-0.5 text-muted-foreground">{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
+          <div className="flex gap-2">
+            <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <p>
+              Official business ownership is not confirmed unless this page explicitly says an
+              official representative was reviewed.
+            </p>
           </div>
         </div>
       </CardContent>
@@ -103,6 +127,7 @@ export function ShareReportRow({ business, showPublicActions }: ShareReportRowPr
         targetId={business.id}
         targetType="business"
         targetName={business.business_name}
+        triggerLabel="Report inaccurate information"
       />
     </div>
   );

@@ -370,25 +370,6 @@
       width: min(416px, calc((100dvh - 96px) / 2.08));
     }
   }
-
-  /* SA flag mini icon — horizontal stripe gradient */
-  .sa-flag-mini {
-    background: linear-gradient(
-      180deg,
-      #de3831 0%,
-      #de3831 17%,
-      #fff 17%,
-      #fff 33%,
-      #00833e 33%,
-      #00833e 50%,
-      #ffb81c 50%,
-      #ffb81c 67%,
-      #002395 67%,
-      #002395 83%,
-      #000 83%,
-      #000 100%
-    );
-  }
 }
 
 @keyframes progress-fill {

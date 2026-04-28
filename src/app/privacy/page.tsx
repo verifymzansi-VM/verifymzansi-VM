@@ -17,23 +17,23 @@ export default function PrivacyPolicyPage() {
       dataType: "ID number",
       purpose: "Identity verification, duplicate-account checks, fraud prevention",
       recipients: "Internal reviewers and KYC/infrastructure providers where required",
-      retention: "Kept only while needed for verification, disputes, fraud prevention, or law",
+      retention: "Successful checks: up to 90 days unless fraud, dispute, or legal hold applies",
       deletion: "Request through privacy contact or signed-in data-rights form",
     },
     {
       dataType: "ID document image",
       purpose: "Evidence review and identity matching",
       recipients: "Restricted verification reviewers and secure storage/KYC providers",
-      retention: "Restricted evidence storage; removed or anonymised when no longer required",
+      retention:
+        "Successful checks: target deletion within 30 days after review unless hold applies",
       deletion: "Reviewed against fraud, dispute, accounting, and legal-hold obligations",
     },
     {
       dataType: "Selfie image",
       purpose: "Selfie-to-ID comparison and liveness-style review where enabled",
       recipients: "Restricted verification reviewers and KYC/infrastructure providers",
-      retention: "Kept only for verification, appeal, fraud, or legal-compliance needs",
-      deletion:
-        "Request deletion; failed submissions may be retained briefly for appeal or abuse checks",
+      retention: "Failed checks: up to 90 days for appeal and abuse checks unless hold applies",
+      deletion: "Request deletion; closed-account evidence is reviewed for deletion within 90 days",
     },
     {
       dataType: "Phone number",
@@ -53,7 +53,7 @@ export default function PrivacyPolicyPage() {
       dataType: "Payment data",
       purpose: "Checkout, paid placement, accounting, refunds, and dispute handling",
       recipients: "Ozow/payment provider, accounting records, and platform support",
-      retention: "Accounting and payment records are retained for required legal periods",
+      retention: "Payment and accounting records may be retained for up to 5 years where required",
       deletion: "Handled under provider rules and platform legal/accounting obligations",
     },
   ] as const;
@@ -82,7 +82,7 @@ export default function PrivacyPolicyPage() {
       title: "3. Data Retention and Deletion",
       content: [
         "We retain account and listing data while your account is active. After account deletion, some records may be retained for fraud prevention, accounting, dispute handling, legal obligations, or platform integrity before deletion or anonymisation.",
-        "Verification documents should be kept only for as long as needed for verification, fraud prevention, dispute review, or legal compliance. Users can request deletion through the data-rights process.",
+        "Successful ID/selfie verification evidence is targeted for deletion within 30 days after review, while failed or appealed verification evidence may be retained for up to 90 days for appeal, abuse, and duplicate-account checks unless a fraud, dispute, security, accounting, or legal hold applies.",
         "After account closure, public listings and profile content may be removed or anonymised, while limited operational records may remain where required by law, accounting rules, abuse prevention, or unresolved disputes.",
       ],
     },
@@ -95,6 +95,7 @@ export default function PrivacyPolicyPage() {
         "• Object to processing of your data",
         "• Request information about the parties who received your personal information",
         "• Lodge a complaint with the Information Regulator",
+        "We provide a signed-in data-subject request form for access, correction, deletion, objection, and recipient-information requests.",
       ],
     },
     {
