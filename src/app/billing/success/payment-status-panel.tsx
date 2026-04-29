@@ -1,10 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { AlertCircle, ArrowRight, CheckCircle2, Clock3, Loader2, XCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { AlertCircle, CheckCircle2, Clock3, Loader2, XCircle } from "lucide-react";
+import { PaymentStatusResult } from "@/components/billing/payment-status-result";
 import type { PaymentStatusView } from "@/lib/payments/status-view";
 
 function getCopy(status: PaymentStatusView) {
@@ -130,40 +128,23 @@ export default function PaymentStatusPanel({
   }, [paymentId, status]);
 
   return (
-    <div className="container-page max-w-md space-y-4 text-center">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        {copy.icon}
-      </div>
-
-      <h1 className="font-display text-xl font-bold">{copy.title}</h1>
-
-      <Card>
-        <CardContent className="space-y-3 p-4">
-          <p className="text-sm text-muted-foreground">{copy.description}</p>
-          <p className="text-xs text-muted-foreground">
-            Payment status is driven by your internal VerifyMzansi payment record, not only the
-            redirect URL.
-          </p>
-          {status === "pending" && isRefreshing ? (
-            <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Refreshing payment status for up to 30 seconds.
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
-
-      <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
-        <Button asChild className="h-11 w-full gap-2 sm:w-auto">
-          <Link href="/dashboard">
-            Go to Dashboard
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </Button>
-        <Button asChild variant="outline" className="h-11 w-full sm:w-auto">
-          <Link href="/billing">View Billing</Link>
-        </Button>
-      </div>
-    </div>
+    <PaymentStatusResult
+      icon={copy.icon}
+      title={copy.title}
+      description={copy.description}
+      primaryAction={{ href: "/dashboard", label: "Go to Dashboard" }}
+      secondaryAction={{ href: "/billing", label: "View Billing" }}
+    >
+      <p className="text-xs text-muted-foreground">
+        Payment status is driven by your internal VerifyMzansi payment record, not only the redirect
+        URL.
+      </p>
+      {status === "pending" && isRefreshing ? (
+        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Refreshing payment status for up to 30 seconds.
+        </div>
+      ) : null}
+    </PaymentStatusResult>
   );
 }

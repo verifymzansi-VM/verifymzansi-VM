@@ -20,6 +20,7 @@ import {
 } from "@/lib/payments/store";
 import { logAuditEvent } from "@/lib/services/audit";
 import { sendPaymentFailedEmail, sendPaymentReceiptEmail } from "@/lib/services/email";
+import { getAuthAdminUserSummary } from "@/lib/supabase/auth-admin-user";
 
 const log = createLogger("OzowWebhook");
 const SUPPORTED_OZOW_EVENT_TYPE = "transaction.complete";
@@ -57,40 +58,18 @@ async function sendPaymentStatusEmail(params: {
   status: "success" | "failed";
   logContext: { paymentId: string; providerPaymentId?: string | null };
 }): Promise<void> {
-  const authAdmin = (
-    params.admin as unknown as {
-      auth?: {
-        admin?: {
-          getUserById?: (id: string) => Promise<{
-            data?: {
-              user?: {
-                email?: string | null;
-                user_metadata?: { full_name?: string | null; name?: string | null };
-              } | null;
-            };
-            error?: { message?: string };
-          }>;
-        };
-      };
-    }
-  ).auth?.admin;
-
-  if (!authAdmin?.getUserById) return;
-
-  const { data: userData, error: userLookupErr } = await authAdmin.getUserById(params.userId);
-  const recipient = userData?.user;
-  if (userLookupErr || !recipient?.email) {
+  const recipient = await getAuthAdminUserSummary(params.admin, params.userId);
+  if (recipient.errorMessage || !recipient.email) {
     log.warn("Skipping payment email: recipient lookup failed", {
       ...params.logContext,
       userId: params.userId,
-      error: userLookupErr?.message,
+      error: recipient.errorMessage,
     });
     return;
   }
 
   const email = recipient.email;
-  const accountName =
-    recipient.user_metadata?.full_name || recipient.user_metadata?.name || "there";
+  const accountName = recipient.accountName;
   const amount = params.amountCents / 100;
   const planName = getPlanNameFromArea(params.area);
 

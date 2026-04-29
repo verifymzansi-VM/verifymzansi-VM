@@ -10,14 +10,13 @@ import {
   rateLimitResponse,
   unauthorizedResponse,
 } from "@/lib/utils/api";
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
-import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import {
   createBooleanFlagSchema,
   createBoundedIntegerSchema,
   uuidSchema,
 } from "@/lib/validations/shared";
+import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
 
 const log = createLogger("LeadsRoute");
 
@@ -123,13 +122,8 @@ export async function GET(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
   try {
-    const sameOriginFailure = enforceSameOriginMutation(request, log);
-    if (sameOriginFailure) {
-      return sameOriginFailure;
-    }
-
-    const csrfBlock = enforceCsrfToken(request, log);
-    if (csrfBlock) return csrfBlock;
+    const mutationBlock = enforceMutationRequest(request, log);
+    if (mutationBlock) return mutationBlock;
 
     const supabase = await createClient();
     const {

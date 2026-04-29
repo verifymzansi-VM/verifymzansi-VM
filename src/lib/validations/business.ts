@@ -1,4 +1,12 @@
 import { z } from "zod";
+import {
+  citySchema,
+  createPostTitleSchema,
+  provinceSchema,
+  saNumberOrEmptySchema,
+  slugSchema,
+  urlOrEmptySchema,
+} from "./shared";
 
 /**
  * Zod schema for creating or updating a business profile.
@@ -9,23 +17,15 @@ export const businessProfileSchema = z.object({
     .string()
     .min(2, "Business name must be at least 2 characters")
     .max(100, "Business name cannot exceed 100 characters"),
-  slug: z
-    .string()
-    .min(3, "Slug must be at least 3 characters")
-    .max(60, "Slug cannot exceed 60 characters")
-    .regex(/^[a-z0-9-]+$/, "Only lowercase letters, numbers and hyphens"),
+  slug: slugSchema,
   industry: z.string().min(1, "Industry is required").max(100),
   description: z.string().max(3000, "Description cannot exceed 3000 characters").optional(),
-  logo_url: z.string().url().optional().or(z.literal("")),
-  banner_url: z.string().url().optional().or(z.literal("")),
+  logo_url: urlOrEmptySchema,
+  banner_url: urlOrEmptySchema,
   website: z.string().url("Enter a valid URL").optional().or(z.literal("")),
-  province: z.string().min(1, "Province is required").max(50),
-  city: z.string().min(1, "City is required").max(80),
-  whatsapp: z
-    .string()
-    .regex(/^(\+27|0)[6-8][0-9]{8}$/, "Enter a valid SA number")
-    .optional()
-    .or(z.literal("")),
+  province: provinceSchema,
+  city: citySchema,
+  whatsapp: saNumberOrEmptySchema,
   email: z.string().email().optional().or(z.literal("")),
   year_established: z.number().int().min(1900).max(new Date().getFullYear()).optional(),
   cipc_registration: z.string().max(30).optional(),
@@ -50,10 +50,7 @@ export const businessProfileSchema = z.object({
 
 /** Zod schema for creating a business post (update, case study, offer, hiring). */
 export const businessPostSchema = z.object({
-  title: z
-    .string()
-    .min(3, "Title must be at least 3 characters")
-    .max(120, "Title cannot exceed 120 characters"),
+  title: createPostTitleSchema(),
   body: z.string().max(5000, "Post cannot exceed 5000 characters").optional(),
   media_urls: z.array(z.string().url()).max(8, "Maximum 8 media items").optional(),
   post_type: z.enum(["update", "case_study", "offer", "hiring"]).default("update"),

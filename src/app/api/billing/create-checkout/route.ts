@@ -1,10 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { parseAndValidateJsonRequest } from "@/lib/utils/api";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
-import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createHostedCheckout } from "@/lib/payments/checkout";
 import {
   OzowAuthenticationError,
@@ -13,10 +11,9 @@ import {
 } from "@/lib/payments/ozow";
 import { z } from "zod";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
-import { enforceCsrfToken } from "@/lib/utils/csrf";
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { resolveBillingPlanSelection } from "@/lib/billing/plan-resolver";
 import { resolveSafeBillingAppUrl } from "@/lib/billing/app-url";
+import { enforceBillingMutationGuard } from "@/lib/billing/route-guard";
 
 const log = createLogger("Checkout");
 
@@ -35,49 +32,17 @@ const checkoutSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    const originBlock = enforceSameOriginMutation(request, log);
-    if (originBlock) return originBlock;
-
-    const csrfBlock = enforceCsrfToken(request, log);
-    if (csrfBlock) return csrfBlock;
-
-    // ── Authenticate ─────────────────────────────────────────
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (!user.email_confirmed_at) {
-      return NextResponse.json(
-        { error: "Please confirm your email address before making purchases." },
-        { status: 403 }
-      );
-    }
-
-    // ── Rate limit ──────────────────────────────────────────
-    const ip = getClientIp(request);
-    const rateCheck = await checkRateLimit({
-      key: `${user.id}:${ip}`,
-      action: "billing:checkout",
-      degradedMode: "block",
+    const guard = await enforceBillingMutationGuard({
+      request,
+      log,
+      rateLimitAction: "billing:checkout",
+      rateLimitKey: (userId, ip) => `${userId}:${ip}`,
+      requireConfirmedEmailMessage: "Please confirm your email address before making purchases.",
+      degradedMessage: "Checkout protection is temporarily unavailable. Please try again shortly.",
+      limitedMessage: "Too many checkout attempts. Please try again later.",
     });
-    if (rateCheck.limited) {
-      if (rateCheck.degraded) {
-        return NextResponse.json(
-          { error: "Checkout protection is temporarily unavailable. Please try again shortly." },
-          { status: 503, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
-        );
-      }
-
-      return NextResponse.json(
-        { error: "Too many checkout attempts. Please try again later." },
-        { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
-      );
-    }
+    if (!guard.success) return guard.response;
+    const { supabase, user } = guard;
 
     // ── Validate input ───────────────────────────────────────
     const parsed = await parseAndValidateJsonRequest(request, checkoutSchema, {

@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { MapPin } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { getListingCardStatus } from "@/components/listings/listing-card-status";
 import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
 import { VideoDurationBadge } from "@/components/ui/video-duration-badge";
 import { ContentLikeButton } from "@/components/listings/content-like-button";
@@ -45,33 +46,6 @@ interface ListingCardListProps {
   mediaHeight?: number | null;
 }
 
-function isNew(createdAt: string): boolean {
-  return new Date().getTime() - new Date(createdAt).getTime() < 24 * 60 * 60 * 1000;
-}
-
-function getListingStatus(
-  featured?: boolean,
-  boosted?: boolean,
-  urgent?: boolean,
-  createdAt?: string
-) {
-  if (urgent) {
-    return {
-      label: "Urgent",
-      className: "bg-red-500/95 text-white border border-white/10",
-    };
-  }
-
-  if (createdAt && isNew(createdAt)) {
-    return {
-      label: "New",
-      className: "bg-emerald-500/95 text-white border border-white/10",
-    };
-  }
-
-  return null;
-}
-
 export const ListingCardList = memo(function ListingCardList({
   id,
   title,
@@ -98,7 +72,7 @@ export const ListingCardList = memo(function ListingCardList({
   const isVideo = isVideoUrl(imageUrl);
   const normalizedImageUrl = imageUrl ? normalizeMediaUrl(imageUrl) : undefined;
   const normalizedLogoUrl = logoUrl ? normalizeMediaUrl(logoUrl) : undefined;
-  const status = getListingStatus(featured, boosted, urgent, createdAt);
+  const status = getListingCardStatus({ featured, boosted, urgent, createdAt });
   const frameAspectRatio = CARD_ASPECT_RATIO;
 
   return (

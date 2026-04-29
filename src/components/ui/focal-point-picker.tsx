@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Crosshair } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getFocalPositionClassName } from "@/lib/utils/media-position-classes";
+import { clampNormalizedPoint, nudgeNormalizedPoint } from "@/lib/utils/focal-point";
 
 export interface FocalPoint {
   x: number; // 0..1 (left..right)
@@ -49,9 +50,12 @@ export function FocalPointPicker({
       const rect = containerRef.current?.getBoundingClientRect();
       if (!rect) return;
 
-      const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-      const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
-      onChange({ x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000 });
+      onChange(
+        clampNormalizedPoint({
+          x: (e.clientX - rect.left) / rect.width,
+          y: (e.clientY - rect.top) / rect.height,
+        })
+      );
     },
     [onChange]
   );
@@ -61,9 +65,12 @@ export function FocalPointPicker({
       const rect = containerRef.current?.getBoundingClientRect();
       if (!rect || !e.touches[0]) return;
 
-      const x = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
-      const y = Math.max(0, Math.min(1, (e.touches[0].clientY - rect.top) / rect.height));
-      onChange({ x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000 });
+      onChange(
+        clampNormalizedPoint({
+          x: (e.touches[0].clientX - rect.left) / rect.width,
+          y: (e.touches[0].clientY - rect.top) / rect.height,
+        })
+      );
     },
     [onChange]
   );
@@ -87,19 +94,12 @@ export function FocalPointPicker({
         onMouseEnter={() => setHovering(true)}
         onMouseLeave={() => setHovering(false)}
         onKeyDown={(e) => {
-          // Arrow key nudging (1% per press)
-          const step = 0.01;
-          let { x, y } = value;
-          if (e.key === "ArrowLeft") x = Math.max(0, x - step);
-          else if (e.key === "ArrowRight") x = Math.min(1, x + step);
-          else if (e.key === "ArrowUp") {
-            y = Math.max(0, y - step);
+          const nextPoint = nudgeNormalizedPoint(value, e.key, 0.01);
+          if (!nextPoint) return;
+          if (e.key === "ArrowUp" || e.key === "ArrowDown") {
             e.preventDefault();
-          } else if (e.key === "ArrowDown") {
-            y = Math.min(1, y + step);
-            e.preventDefault();
-          } else return;
-          onChange({ x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000 });
+          }
+          onChange(nextPoint);
         }}
       >
         {/* Full image */}

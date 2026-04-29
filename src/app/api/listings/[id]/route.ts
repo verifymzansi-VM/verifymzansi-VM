@@ -3,12 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listingSchema } from "@/lib/validations/listing";
 import { logAuditEvent } from "@/lib/services/audit";
-import { getEntitlements } from "@/lib/services/entitlements";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { createLogger } from "@/lib/utils/logger";
-import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import { parseJsonRequest, parseAndValidateRouteParams } from "@/lib/utils/api";
 import {
   collectMediaUrls,
@@ -16,7 +14,7 @@ import {
   queuePublicMediaCleanup,
 } from "@/lib/services/media-cleanup";
 import { confirmMediaUploads } from "@/lib/media/confirm-media-uploads";
-import type { MarketplaceArea, PlanTier } from "@/types/enums";
+import type { MarketplaceArea } from "@/types/enums";
 import {
   applyOwnerFilter,
   getOwnerColumn,
@@ -33,6 +31,10 @@ import {
   hasPendingContentEdit,
   isEditLimitReached,
 } from "@/lib/content-edit-requests";
+import {
+  enforcePostingMediaLimits,
+  getPostingEntitlementsOrResponse,
+} from "@/app/api/_lib/posting-entitlements";
 
 const log = createLogger("ListingUpdate");
 const listingIdParamsSchema = z.object({
@@ -176,65 +178,22 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       );
     }
 
-    // ── Enforce photo/video limits based on plan ─────────────
-    // Check if user has a paid entitlement (not expired)
-    const { data: activeEntitlement, error: entitlementError } = await supabase
-      .from("entitlements")
-      .select("tier")
-      .eq("user_id", user.id)
-      .eq("area", AREA)
-      .eq("status", "active")
-      .gt("expires_at", new Date().toISOString())
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (entitlementError) {
-      log.error("Failed to check entitlements", {
-        userId: user.id,
-        error: entitlementError.message,
-      });
-      return NextResponse.json({ error: "Unable to verify subscription status" }, { status: 503 });
+    const entitlementsResult = await getPostingEntitlementsOrResponse(supabase, user.id, AREA, log);
+    if (entitlementsResult.response) {
+      return entitlementsResult.response;
     }
-
-    const hasPaidPlan = !!activeEntitlement;
-    const activeTier = (activeEntitlement?.tier as string) || null;
-
-    const ent =
-      hasPaidPlan && activeTier
-        ? getEntitlements(activeTier as PlanTier, AREA)
-        : {
-            maxPhotos: FREE_POST_CONFIG.maxPhotos,
-            maxVideos: FREE_POST_CONFIG.maxVideos,
-            videoAllowed: FREE_POST_CONFIG.videoAllowed,
-          };
+    const ent = entitlementsResult.entitlements;
 
     const videoUrls = data.videos;
     const nextVideoThumbnail = data.videoThumbnail || null;
     const nextLogoUrl = data.logo_url || null;
 
-    if (data.images.length > ent.maxPhotos) {
-      return NextResponse.json(
-        {
-          error: `Maximum ${ent.maxPhotos} photos allowed on your plan`,
-        },
-        { status: 422 }
-      );
-    }
-
-    if (videoUrls.length > 0 && !ent.videoAllowed) {
-      return NextResponse.json(
-        { error: "Video upload is not available on your current plan." },
-        { status: 422 }
-      );
-    }
-
-    if (videoUrls.length > ent.maxVideos) {
-      return NextResponse.json(
-        { error: `Maximum ${ent.maxVideos} videos allowed on your plan` },
-        { status: 422 }
-      );
-    }
+    const mediaLimitBlock = enforcePostingMediaLimits({
+      entitlements: ent,
+      photoCount: data.images.length,
+      videoCount: videoUrls.length,
+    });
+    if (mediaLimitBlock) return mediaLimitBlock;
 
     // ── Prepare update record ────────────────────────────────
     const priceCents = Math.round(+(data.price_zar * 100).toPrecision(12));

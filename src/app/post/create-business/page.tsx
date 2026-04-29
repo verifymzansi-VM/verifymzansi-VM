@@ -1043,9 +1043,23 @@ function CreateBusinessContent() {
       const uploadFailure = getBusinessMediaUploadErrorState(error);
       if (uploadFailure) {
         setStep(2);
-        setFieldErrors((current) => ({ ...current, ...uploadFailure.fieldErrors }));
+        setFieldErrors(uploadFailure.fieldErrors);
         setFormError(uploadFailure.formError);
         focusFirstError(uploadFailure.fieldErrors, 2);
+        return;
+      }
+
+      if (
+        error instanceof Error &&
+        error.message === "Business logo upload failed. Retry the selected image."
+      ) {
+        const fieldErrors = { logo_url: error.message };
+        setStep(2);
+        setFieldErrors(fieldErrors);
+        setFormError(
+          "Selected business media could not be uploaded. Retry the highlighted files and try again."
+        );
+        focusFirstError(fieldErrors, 2);
         return;
       }
 

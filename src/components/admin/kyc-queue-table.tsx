@@ -31,6 +31,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { KycComparisonViewer } from "./kyc-comparison-viewer";
 import { getKycEvidenceErrorMessage } from "./kyc-evidence-errors";
+import { KYC_REVIEW_REASON_CODES } from "./kyc-review-constants";
 import type { PendingVerificationGroup } from "@/lib/utils/admin-queries";
 import { OVERRIDE_REASON_CODES } from "@/lib/constants/verification";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
@@ -90,17 +91,6 @@ const STEP_LABELS: Record<string, string> = {
 };
 
 const VIEWABLE_STEP_TYPES = new Set(["id_doc", "selfie"]);
-
-const REASON_CODES = [
-  { value: "blurry_image", label: "Image too blurry to verify" },
-  { value: "mismatch", label: "Selfie does not match ID photo" },
-  { value: "expired_document", label: "ID document is expired" },
-  { value: "incomplete_info", label: "Missing or unreadable fields" },
-  { value: "fraudulent", label: "Suspected fraudulent document" },
-  { value: "wrong_document_type", label: "Uploaded wrong document type" },
-  { value: "not_sa_document", label: "Document is not South African" },
-  { value: "other", label: "Other (provide note)" },
-];
 
 export function KycQueueTable({
   groups,
@@ -545,7 +535,7 @@ export function KycQueueTable({
                   className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value="">Select a reason...</option>
-                  {REASON_CODES.map((rc) => (
+                  {KYC_REVIEW_REASON_CODES.map((rc) => (
                     <option key={rc.value} value={rc.value}>
                       {rc.label}
                     </option>

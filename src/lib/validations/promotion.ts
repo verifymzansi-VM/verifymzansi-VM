@@ -1,7 +1,12 @@
 import { z } from "zod";
-import { priceSchema } from "./shared";
+import {
+  platformMediaUrlArraySchema,
+  platformMediaUrlSchema,
+  postLocationFields,
+  postMediaMetadataFields,
+  priceSchema,
+} from "./shared";
 import type { BusinessCategory } from "@/types/enums";
-import { isTrustedPlatformMediaUrl } from "@/lib/utils/media-url";
 
 const BUSINESS_CATEGORY_VALUES = [
   "fashion_accessories",
@@ -40,47 +45,27 @@ export const promotionSchema = z
     category_key: z.enum(BUSINESS_CATEGORY_VALUES).optional(),
     price_zar: priceSchema.optional(),
     negotiable: z.boolean().default(false),
-    province: z.string().min(1, "Province is required").max(50),
-    city: z.string().min(1, "City is required").max(80),
-    location_town: z.string().trim().min(1).max(120).optional(),
-    location_address: z.string().trim().min(1).max(300).optional(),
+    ...postLocationFields,
     contact_methods: z
       .array(z.enum(["call", "whatsapp", "form"]))
       .min(1, "At least one contact method is required"),
-    images: z
-      .array(
-        z.string().url().refine(isTrustedPlatformMediaUrl, {
-          message: "Images must be hosted on the VerifyMzansi platform",
-        })
-      )
-      .max(10, "Maximum 10 images"),
-    videos: z
-      .array(
-        z.string().url().refine(isTrustedPlatformMediaUrl, {
-          message: "Videos must be hosted on the VerifyMzansi platform",
-        })
-      )
-      .max(3, "Maximum 3 videos")
+    images: platformMediaUrlArraySchema(
+      10,
+      "Images must be hosted on the VerifyMzansi platform",
+      "Maximum 10 images"
+    ),
+    videos: platformMediaUrlArraySchema(
+      3,
+      "Videos must be hosted on the VerifyMzansi platform",
+      "Maximum 3 videos"
+    )
       .optional()
       .default([]),
-    video_thumbnail: z
-      .string()
-      .url()
-      .refine(isTrustedPlatformMediaUrl, {
-        message: "Video thumbnail must be hosted on the VerifyMzansi platform",
-      })
-      .optional(),
-    media_width: z.number().int().positive().optional(),
-    media_height: z.number().int().positive().optional(),
-    focal_x: z.number().min(0).max(1).optional(),
-    focal_y: z.number().min(0).max(1).optional(),
-    logo_url: z
-      .string()
-      .url()
-      .refine(isTrustedPlatformMediaUrl, {
-        message: "Logo must be hosted on the VerifyMzansi platform",
-      })
-      .optional(),
+    video_thumbnail: platformMediaUrlSchema(
+      "Video thumbnail must be hosted on the VerifyMzansi platform"
+    ).optional(),
+    ...postMediaMetadataFields,
+    logo_url: platformMediaUrlSchema("Logo must be hosted on the VerifyMzansi platform").optional(),
     start_date: z.string().datetime().optional(),
     end_date: z.string().datetime().optional(),
     business_id: z.string().uuid().optional(),

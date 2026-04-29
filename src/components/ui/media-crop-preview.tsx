@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { Move } from "lucide-react";
 import { getFocalPositionClassName } from "@/lib/utils/media-position-classes";
+import { clampNormalizedPoint, nudgeNormalizedPoint } from "@/lib/utils/focal-point";
 
 export interface CropPosition {
   /** Focal point X: 0..1 (left..right). Equivalent to FocalPoint.x */
@@ -87,13 +88,12 @@ export function MediaCropPreview({
       const dy = (e.clientY - dragStartRef.current.y) / rect.height;
 
       // Invert: dragging right moves the crop window right → focal point moves left
-      const newX = Math.max(0, Math.min(1, dragStartRef.current.startVal.x - dx));
-      const newY = Math.max(0, Math.min(1, dragStartRef.current.startVal.y - dy));
-
-      onChange({
-        x: Math.round(newX * 1000) / 1000,
-        y: Math.round(newY * 1000) / 1000,
-      });
+      onChange(
+        clampNormalizedPoint({
+          x: dragStartRef.current.startVal.x - dx,
+          y: dragStartRef.current.startVal.y - dy,
+        })
+      );
     },
     [isDragging, onChange]
   );
@@ -125,18 +125,12 @@ export function MediaCropPreview({
           onPointerCancel={handlePointerUp}
           aria-label="Drag to position crop"
           onKeyDown={(e) => {
-            const step = 0.02;
-            let { x, y } = value;
-            if (e.key === "ArrowLeft") x = Math.max(0, x - step);
-            else if (e.key === "ArrowRight") x = Math.min(1, x + step);
-            else if (e.key === "ArrowUp") {
-              y = Math.max(0, y - step);
+            const nextPoint = nudgeNormalizedPoint(value, e.key, 0.02);
+            if (!nextPoint) return;
+            if (e.key === "ArrowUp" || e.key === "ArrowDown") {
               e.preventDefault();
-            } else if (e.key === "ArrowDown") {
-              y = Math.min(1, y + step);
-              e.preventDefault();
-            } else return;
-            onChange({ x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000 });
+            }
+            onChange(nextPoint);
           }}
         >
           {/* The image with object-position driven by focal point */}

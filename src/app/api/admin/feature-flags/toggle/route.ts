@@ -9,15 +9,11 @@
 
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
 import { toggleFeatureFlag, updateFeatureFlagConfig } from "@/lib/services/feature-flags";
 import { logAuditEvent } from "@/lib/services/audit";
-import { verifyAdminActorRoleFromDb } from "@/lib/auth/admin-access";
-import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
-import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
 
 const log = createLogger("FeatureFlagsToggle");
 
@@ -38,34 +34,14 @@ const canarySchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const sameOriginFailure = enforceSameOriginMutation(request, log);
-    if (sameOriginFailure) {
-      return sameOriginFailure;
-    }
-    const csrfBlock = enforceCsrfToken(request, log);
-    if (csrfBlock) return csrfBlock;
-
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const actorRole = await verifyAdminActorRoleFromDb(user);
-    if (!actorRole) {
-      return NextResponse.json({ error: "Forbidden — admin only" }, { status: 403 });
-    }
-
-    const rl = checkLocalRateLimit(user.id, "admin:feature-flags:toggle");
-    if (rl.limited) {
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
-      );
-    }
+    const guard = await enforceAdminMutationGuard({
+      request,
+      logger: log,
+      rateLimitAction: "admin:feature-flags:toggle",
+      adminOnly: true,
+      forbiddenMessage: "Forbidden — admin only",
+    });
+    if (!guard.success) return guard.response;
 
     const bodyResult = await parseAndValidateJsonRequest(request, z.unknown(), {
       invalidJsonMessage: "Invalid JSON payload",
@@ -88,7 +64,7 @@ export async function POST(request: NextRequest) {
         mode,
         percent,
         allowlistRoles: allowlist_roles,
-        updatedBy: user.id,
+        updatedBy: guard.user.id,
         reason,
       });
 
@@ -98,8 +74,8 @@ export async function POST(request: NextRequest) {
       }
 
       await logAuditEvent({
-        actorId: user.id,
-        actorRole,
+        actorId: guard.user.id,
+        actorRole: guard.actorRole,
         action: "feature_flag_toggled",
         targetType: "feature_flag",
         targetId: key,
@@ -122,8 +98,8 @@ export async function POST(request: NextRequest) {
       }
 
       await logAuditEvent({
-        actorId: user.id,
-        actorRole,
+        actorId: guard.user.id,
+        actorRole: guard.actorRole,
         action: "feature_flag_toggled",
         targetType: "feature_flag",
         targetId: key,

@@ -25,8 +25,6 @@ import {
 import type { BusinessDetails } from "@/types/business-details";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
-import { uuidSchema } from "@/lib/validations/shared";
-import { z } from "zod";
 import { createNotification, shouldSendOwnerLifecycleNotifications } from "@/lib/notifications";
 import {
   buildViewerKey,
@@ -36,8 +34,12 @@ import {
 import { createOwnedContentDeleteRoute } from "@/app/api/_lib/create-owned-content-delete-route";
 import { createViewerCookieJsonResponse } from "@/app/api/_lib/engagement-viewer-cookie-response";
 import { requireAuthenticatedLocalMutation } from "@/app/api/_lib/authenticated-local-mutation";
-import { getPostingEntitlementsOrResponse } from "@/app/api/_lib/posting-entitlements";
+import {
+  enforcePostingMediaLimits,
+  getPostingEntitlementsOrResponse,
+} from "@/app/api/_lib/posting-entitlements";
 import { buildBusinessMutationPayload } from "@/app/api/businesses/_lib/build-business-mutation-payload";
+import { idRouteParamsSchema } from "@/app/api/_lib/route-params";
 import type { MarketplaceArea } from "@/types/enums";
 import {
   contentEditSubmittedResponse,
@@ -48,9 +50,6 @@ import {
 } from "@/lib/content-edit-requests";
 
 const log = createLogger("BusinessDetail");
-const businessIdParamsSchema = z.object({
-  id: uuidSchema,
-});
 const BUSINESS_DETAIL_SELECT = `
   id, owner_id, business_type, business_name, slug, description, category, logo_url,
   cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city,
@@ -92,7 +91,7 @@ function getMallPhotoUrls(details: BusinessDetails | null | undefined): string[]
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const parsedParams = parseAndValidateRouteParams(await params, businessIdParamsSchema, {
+    const parsedParams = parseAndValidateRouteParams(await params, idRouteParamsSchema, {
       validationErrorMessage: "Invalid business ID",
       includeValidationDetails: false,
     });
@@ -227,7 +226,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const csrfBlock = enforceCsrfToken(request, log);
     if (csrfBlock) return csrfBlock;
 
-    const parsedParams = parseAndValidateRouteParams(await params, businessIdParamsSchema, {
+    const parsedParams = parseAndValidateRouteParams(await params, idRouteParamsSchema, {
       validationErrorMessage: "Invalid business ID",
       includeValidationDetails: false,
     });
@@ -287,19 +286,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
     const ent = entitlementsResult.entitlements;
 
-    if ((data.gallery_photos?.length ?? 0) > ent.maxPhotos) {
-      return NextResponse.json(
-        { error: `Maximum ${ent.maxPhotos} gallery photos allowed on your plan` },
-        { status: 422 }
-      );
-    }
-
-    if (data.cover_video && !ent.videoAllowed) {
-      return NextResponse.json(
-        { error: "Video is not available on your current plan." },
-        { status: 422 }
-      );
-    }
+    const mediaLimitBlock = enforcePostingMediaLimits({
+      entitlements: ent,
+      photoCount: data.gallery_photos?.length ?? 0,
+      videoCount: data.cover_video ? 1 : 0,
+      photoLabel: "gallery photos",
+      videoUnavailableMessage: "Video is not available on your current plan.",
+    });
+    if (mediaLimitBlock) return mediaLimitBlock;
 
     const admin = createAdminClient();
     const { data: slugConflict, error: slugError } = await admin
@@ -515,7 +509,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
  */
 export const DELETE = createOwnedContentDeleteRoute<{ id: string }, BusinessOwnerRow>({
   log,
-  paramsSchema: businessIdParamsSchema,
+  paramsSchema: idRouteParamsSchema,
   validationErrorMessage: "Invalid business ID",
   table: "businesses",
   ownerSelect:

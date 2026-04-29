@@ -1,18 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { reportSchema } from "@/lib/validations/contact";
-import { verifyTurnstileToken } from "@/lib/utils/turnstile";
 import { mapLegacyReportValues } from "@/lib/utils/enum-compat";
 import crypto from "crypto";
 import { createLogger } from "@/lib/utils/logger";
-import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { getClientIp } from "@/lib/utils/rate-limit";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { notifyStaffForAdminEvent } from "@/lib/notifications";
 import { sanitizeUserMessage } from "@/lib/utils/sanitize-html";
-
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
-import { enforceCsrfToken } from "@/lib/utils/csrf";
+import { enforcePublicMutationPrelude } from "@/lib/utils/public-mutation-route";
 
 const log = createLogger("Reports");
 
@@ -21,12 +17,6 @@ const DEV_IP_HASH_FALLBACK_KEY = crypto.randomBytes(32).toString("hex");
 
 export async function POST(request: NextRequest) {
   try {
-    const sameOriginFailure = enforceSameOriginMutation(request, log);
-    if (sameOriginFailure) return sameOriginFailure;
-
-    const csrfBlock = enforceCsrfToken(request, log);
-    if (csrfBlock) return csrfBlock;
-
     const parsedBody = await parseAndValidateJsonRequest(request, reportSchema, {
       invalidJsonMessage: "Invalid JSON payload",
       validationErrorMessage: "Invalid request",
@@ -37,35 +27,16 @@ export async function POST(request: NextRequest) {
       return parsedBody.response;
     }
 
-    // ── CAPTCHA verification ─────────────────────────────────
-    if (process.env.TURNSTILE_SECRET_KEY) {
-      const remoteIp = getClientIp(request);
-      const captchaResult = await verifyTurnstileToken({
-        token: parsedBody.data.turnstileToken,
-        remoteIp,
-      });
-      if (!captchaResult.success) {
-        return NextResponse.json({ error: "CAPTCHA verification failed" }, { status: 400 });
-      }
-    } else if (process.env.NODE_ENV === "production") {
-      log.error("TURNSTILE_SECRET_KEY not configured in production");
-      return NextResponse.json({ error: "CAPTCHA service unavailable" }, { status: 503 });
-    }
+    const prelude = await enforcePublicMutationPrelude({
+      request,
+      logger: log,
+      turnstileToken: parsedBody.data.turnstileToken,
+      rateLimitAction: "report:submit",
+      rateLimitMessage: "Too many reports submitted. Please try again later.",
+    });
+    if (!prelude.success) return prelude.response;
 
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    // Rate limit by user ID or IP to prevent report spam
-    const rateLimitKey = user?.id || getClientIp(request) || "unknown";
-    const rl = await checkRateLimit({ key: rateLimitKey, action: "report:submit" });
-    if (rl.limited) {
-      return NextResponse.json(
-        { error: "Too many reports submitted. Please try again later." },
-        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
-      );
-    }
+    const { user } = prelude;
 
     // Map legacy request values to canonical DB enums
     const { category, targetType, area } = mapLegacyReportValues({

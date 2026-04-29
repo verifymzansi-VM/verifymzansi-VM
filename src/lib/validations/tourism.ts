@@ -1,6 +1,11 @@
 import { z } from "zod";
-import { priceSchema } from "./shared";
-import { isTrustedPlatformMediaUrl } from "@/lib/utils/media-url";
+import {
+  platformMediaUrlArraySchema,
+  platformMediaUrlSchema,
+  postLocationFields,
+  postMediaMetadataFields,
+  priceSchema,
+} from "./shared";
 
 /* ── Allowed-value lists ─────────────────────────────────── */
 
@@ -71,15 +76,6 @@ const VISIT_DURATION_VALUES = [
 
 /* ── Reusable fragments ──────────────────────────────────── */
 
-const trustedUrlArray = (max: number) =>
-  z
-    .array(
-      z.string().url().refine(isTrustedPlatformMediaUrl, {
-        message: "Media must be hosted on the VerifyMzansi platform",
-      })
-    )
-    .max(max);
-
 /* ── Shared fields (both tourism business & event) ───────── */
 
 const sharedFields = {
@@ -91,26 +87,16 @@ const sharedFields = {
     .string()
     .min(20, "Description must be at least 20 characters")
     .max(5000, "Description cannot exceed 5 000 characters"),
-  province: z.string().min(1, "Province is required").max(50),
-  city: z.string().min(1, "City is required").max(80),
-  location_town: z.string().trim().min(1).max(120).optional(),
-  location_address: z.string().trim().min(1).max(300).optional(),
+  ...postLocationFields,
   contact_methods: z
     .array(z.enum(["call", "whatsapp", "form"]))
     .min(1, "At least one contact method is required"),
-  images: trustedUrlArray(10).min(1, "At least 1 image is required"),
-  videos: trustedUrlArray(3).optional().default([]),
-  video_thumbnail: z
-    .string()
-    .url()
-    .refine(isTrustedPlatformMediaUrl, {
-      message: "Video thumbnail must be hosted on the VerifyMzansi platform",
-    })
-    .optional(),
-  media_width: z.number().int().positive().optional(),
-  media_height: z.number().int().positive().optional(),
-  focal_x: z.number().min(0).max(1).optional(),
-  focal_y: z.number().min(0).max(1).optional(),
+  images: platformMediaUrlArraySchema(10).min(1, "At least 1 image is required"),
+  videos: platformMediaUrlArraySchema(3).optional().default([]),
+  video_thumbnail: platformMediaUrlSchema(
+    "Video thumbnail must be hosted on the VerifyMzansi platform"
+  ).optional(),
+  ...postMediaMetadataFields,
   business_id: z.string().uuid().optional(),
 };
 
@@ -185,13 +171,7 @@ export const tourismBusinessSchema = z.object({
     .or(z.literal("")),
   email: z.string().email("Enter a valid email").max(254).optional().or(z.literal("")),
   website: z.string().url("Enter a valid website URL").max(2000).optional().or(z.literal("")),
-  logo: z
-    .string()
-    .url()
-    .refine(isTrustedPlatformMediaUrl, {
-      message: "Logo must be hosted on the VerifyMzansi platform",
-    })
-    .optional(),
+  logo: platformMediaUrlSchema("Logo must be hosted on the VerifyMzansi platform").optional(),
   category_details: tourismCategoryDetailsSchema,
   operating_hours: z
     .object({

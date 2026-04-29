@@ -1,18 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
-import { PageHeader } from "@/components/layout/page-header";
-import { Badge } from "@/components/ui/badge";
-import { AreaAdminTabs } from "@/components/admin/area-admin-tabs";
-import {
-  getPendingVerificationGroups,
-  getPendingContent,
-  getAreaReports,
-  getRecentActivity,
-  getActionsToday,
-  type DashboardReport,
-} from "@/lib/utils/admin-queries";
-import { calculateSlaState } from "@/lib/utils/sla";
-import { isStaff } from "@/lib/auth/roles";
+import { AreaAdminPage } from "../_lib/area-admin-page";
 
 export const metadata = {
   title: "Mzansi Market — Admin",
@@ -20,59 +6,9 @@ export const metadata = {
 };
 
 export default async function AdminMzansiMarketPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user || !isStaff(user)) {
-    redirect("/dashboard");
-  }
-
-  const [pendingVerifications, pendingContent, reports, activity, actionsToday] = await Promise.all(
-    [
-      getPendingVerificationGroups(),
-      getPendingContent("MZANSI_MARKET"),
-      getAreaReports("MZANSI_MARKET"),
-      getRecentActivity(20, "MZANSI_MARKET"),
-      getActionsToday("MZANSI_MARKET"),
-    ]
-  );
-  const pendingVerificationCount = pendingVerifications.reduce(
-    (count, group) => count + group.steps.length,
-    0
-  );
-
-  const highSeverityOverdue = reports.filter((r: DashboardReport) => {
-    if (r.severity !== "high") return false;
-    const sla = calculateSlaState(r.created_at, "high");
-    return sla.state === "breached";
-  }).length;
-
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Mzansi Market"
-        description="Moderation and reports for Mzansi Market."
-        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Mzansi Market" }]}
-      >
-        <Badge variant="outline">MZANSI_MARKET</Badge>
-      </PageHeader>
-
-      <AreaAdminTabs
-        area="MZANSI_MARKET"
-        areaLabel="Mzansi Market"
-        pendingVerifications={pendingVerifications}
-        pendingContent={pendingContent}
-        reports={reports}
-        activityEntries={activity}
-        overviewStats={{
-          pendingVerificationCount,
-          pendingFlagCount: reports.length,
-          highSeverityOverdue,
-          pendingContentCount: pendingContent.length,
-          actionsToday,
-        }}
-      />
-    </div>
-  );
+  return AreaAdminPage({
+    area: "MZANSI_MARKET",
+    areaLabel: "Mzansi Market",
+    description: "Moderation and reports for Mzansi Market.",
+  });
 }

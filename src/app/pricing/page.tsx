@@ -1,9 +1,9 @@
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 import { FREE_POST_CONFIG, getActivePlansByArea } from "@/lib/constants/pricing";
 import { PricingPlanGrid } from "@/components/billing/plan-grid";
+import { PlanTabs } from "@/components/billing/plan-tabs";
 import { getTrustPublicConfig } from "@/lib/trust-public-config";
 
 export const metadata = {
@@ -72,44 +72,13 @@ export default function PricingPage() {
             ))}
           </div>
 
-          <Tabs defaultValue="market" className="max-w-5xl mx-auto">
-            <div className="flex justify-center mb-3">
-              <TabsList className="grid w-full max-w-3xl grid-cols-3 p-1 h-12 bg-muted/50 rounded-full">
-                <TabsTrigger
-                  value="market"
-                  className="h-11 rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs sm:text-sm"
-                >
-                  <span className="hidden sm:inline">Mzansi </span>Market
-                </TabsTrigger>
-                <TabsTrigger
-                  value="business"
-                  className="h-11 rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs sm:text-sm"
-                >
-                  <span className="hidden sm:inline">Mzansi </span>Business
-                </TabsTrigger>
-                <TabsTrigger
-                  value="promotions"
-                  className="h-11 rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs sm:text-sm"
-                >
-                  <span className="hidden sm:inline">Tourism & </span>Events
-                </TabsTrigger>
-              </TabsList>
-            </div>
-
-            <TabsContent value="market" className="mt-0">
-              <PricingPlanGrid plans={marketPlans} />
-            </TabsContent>
-
-            <TabsContent value="business" className="mt-0">
-              <PricingPlanGrid plans={businessPlans} />
-            </TabsContent>
-
-            {promotionPlans.length > 0 && (
-              <TabsContent value="promotions" className="mt-0">
-                <PricingPlanGrid plans={promotionPlans} />
-              </TabsContent>
-            )}
-          </Tabs>
+          <PlanTabs
+            marketPlans={marketPlans}
+            businessPlans={businessPlans}
+            promotionPlans={promotionPlans}
+            PlanGrid={PricingPlanGrid}
+            hideEmptyPromotionPlans
+          />
 
           <p className="text-center text-sm text-muted-foreground">
             Compare a surface, choose a plan, then continue to secure Ozow checkout after

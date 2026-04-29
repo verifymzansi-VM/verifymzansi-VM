@@ -1,19 +1,10 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createNotification } from "@/lib/notifications";
-import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
 import { adminContentEditDecideSchema } from "@/lib/validations/admin";
-import {
-  parseAndValidateJsonRequest,
-  forbiddenResponse,
-  rateLimitResponse,
-  unauthorizedResponse,
-} from "@/lib/utils/api";
-import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
-import { enforceCsrfToken } from "@/lib/utils/csrf";
+import { parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
 import { createLogger } from "@/lib/utils/logger";
 import {
   MAX_APPROVED_CONTENT_EDITS,
@@ -82,29 +73,12 @@ function collectRequestMedia(data: Record<string, unknown>) {
 
 export async function POST(request: Request) {
   try {
-    const originBlock = enforceSameOriginMutation(request, log);
-    if (originBlock) return originBlock;
-    const csrfBlock = enforceCsrfToken(request, log);
-    if (csrfBlock) return csrfBlock;
-
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return unauthorizedResponse();
-    }
-
-    const adminRole = await verifyStaffActorRoleFromDb(user);
-    if (!adminRole) {
-      return forbiddenResponse();
-    }
-
-    const rl = checkLocalRateLimit(user.id, "admin:content-edit:decide");
-    if (rl.limited) {
-      return rateLimitResponse(rl.retryAfter ?? 60);
-    }
+    const guard = await enforceAdminMutationGuard({
+      request,
+      logger: log,
+      rateLimitAction: "admin:content-edit:decide",
+    });
+    if (!guard.success) return guard.response;
 
     const bodyResult = await parseAndValidateJsonRequest(request, adminContentEditDecideSchema, {
       invalidJsonMessage: "Invalid JSON payload",
@@ -147,7 +121,7 @@ export async function POST(request: Request) {
         .update({
           status: "rejected",
           reason,
-          reviewed_by: user.id,
+          reviewed_by: guard.user.id,
           reviewed_at: new Date().toISOString(),
         })
         .eq("id", requestId)
@@ -182,8 +156,8 @@ export async function POST(request: Request) {
       }
 
       await logAuditEvent({
-        actorId: user.id,
-        actorRole: adminRole,
+        actorId: guard.user.id,
+        actorRole: guard.actorRole,
         action: "moderation_action",
         targetType: `${editRequest.target_type}_edit`,
         targetId: editRequest.target_id,
@@ -265,7 +239,7 @@ export async function POST(request: Request) {
       .update({
         status: "approved",
         reason: null,
-        reviewed_by: user.id,
+        reviewed_by: guard.user.id,
         reviewed_at: new Date().toISOString(),
       })
       .eq("id", requestId)
@@ -298,8 +272,8 @@ export async function POST(request: Request) {
     }
 
     await logAuditEvent({
-      actorId: user.id,
-      actorRole: adminRole,
+      actorId: guard.user.id,
+      actorRole: guard.actorRole,
       action: "moderation_action",
       targetType: `${editRequest.target_type}_edit`,
       targetId: editRequest.target_id,

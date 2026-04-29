@@ -1,19 +1,15 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { adminFlaggingActionSchema } from "@/lib/validations/admin";
 import { createLogger } from "@/lib/utils/logger";
-import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
-import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { ACCOUNT_PROFILE_WRITE_TABLE, getOwnerColumn } from "@/lib/account/compat";
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
-import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { sendAccountEnforcementEmail } from "@/lib/services/email";
 import { hasCapability } from "@/lib/auth/roles";
 import { createDecisionRecord } from "@/lib/services/decision-ledger";
 import type { StaffRole } from "@/types/enums";
+import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
 
 const log = createLogger("AdminFlagging");
 
@@ -23,34 +19,13 @@ const log = createLogger("AdminFlagging");
  */
 export async function POST(request: Request) {
   try {
-    const sameOriginFailure = enforceSameOriginMutation(request, log);
-    if (sameOriginFailure) {
-      return sameOriginFailure;
-    }
-    const csrfBlock = enforceCsrfToken(request, log);
-    if (csrfBlock) return csrfBlock;
-
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const adminRole = await verifyStaffActorRoleFromDb(user);
-    if (!adminRole) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    const rl = checkLocalRateLimit(user.id, "admin:flagging:action");
-    if (rl.limited) {
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
-      );
-    }
+    const guard = await enforceAdminMutationGuard({
+      request,
+      logger: log,
+      rateLimitAction: "admin:flagging:action",
+      rateLimitMessage: "Too many requests",
+    });
+    if (!guard.success) return guard.response;
 
     const parsedBody = await parseAndValidateJsonRequest(request, adminFlaggingActionSchema, {
       invalidJsonMessage: "Invalid JSON payload",
@@ -149,7 +124,7 @@ export async function POST(request: Request) {
     // the actor already has the decision:approve capability.
     const SENSITIVE_ACTIONS = ["ban", "suspend"];
     const dbVerifiedActor = {
-      app_metadata: { role: adminRole },
+      app_metadata: { role: guard.actorRole },
       is_anonymous: false,
     };
     if (SENSITIVE_ACTIONS.includes(action) && !hasCapability(dbVerifiedActor, "decision:approve")) {
@@ -159,8 +134,8 @@ export async function POST(request: Request) {
           caseType: "report",
           caseId: reportId,
           actionCategory: action === "ban" ? "account_ban" : "account_suspend",
-          recommenderId: user.id,
-          recommenderRole: adminRole as StaffRole,
+          recommenderId: guard.user.id,
+          recommenderRole: guard.actorRole as StaffRole,
           recommendation: action,
           rationale: reason || `Recommended: ${action}`,
           evidenceRefs: [reportId],
@@ -184,7 +159,7 @@ export async function POST(request: Request) {
         // Record moderation action as "pending_approval"
         const { error: recInsertErr } = await admin.from("moderation_actions").insert({
           report_id: reportId,
-          actor_id: user.id,
+          actor_id: guard.user.id,
           action: `${action}_recommended`,
           target_owner_id: ownerId,
           area: report.area || null,
@@ -199,8 +174,8 @@ export async function POST(request: Request) {
         }
 
         await logAuditEvent({
-          actorId: user.id,
-          actorRole: adminRole,
+          actorId: guard.user.id,
+          actorRole: guard.actorRole,
           action: "decision_recommended",
           targetType: "report",
           targetId: reportId,
@@ -408,8 +383,8 @@ export async function POST(request: Request) {
             });
 
             await logAuditEvent({
-              actorId: user.id,
-              actorRole: adminRole,
+              actorId: guard.user.id,
+              actorRole: guard.actorRole,
               action: result.success ? "communication_email_sent" : "communication_email_failed",
               targetType: "account_profile",
               targetId: ownerId,
@@ -442,7 +417,7 @@ export async function POST(request: Request) {
     // Record moderation action
     const { error: modInsertErr } = await admin.from("moderation_actions").insert({
       report_id: reportId,
-      actor_id: user.id,
+      actor_id: guard.user.id,
       action,
       target_owner_id: ownerId,
       area: report.area || null,
@@ -464,7 +439,7 @@ export async function POST(request: Request) {
       .from("reports")
       .update({
         status: reportStatus,
-        assigned_to: user.id,
+        assigned_to: guard.user.id,
       })
       .eq("id", reportId);
     if (reportUpdateErr) {
@@ -484,8 +459,8 @@ export async function POST(request: Request) {
     };
 
     await logAuditEvent({
-      actorId: user.id,
-      actorRole: adminRole,
+      actorId: guard.user.id,
+      actorRole: guard.actorRole,
       action: (auditActionMap[action] || "moderation_action") as
         | "moderation_action"
         | "account_suspended"

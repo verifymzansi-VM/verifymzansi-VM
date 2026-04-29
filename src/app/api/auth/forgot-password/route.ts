@@ -3,36 +3,31 @@ import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/li
 import { forgotPasswordSchema } from "@/lib/validations/auth";
 import { createClient } from "@/lib/supabase/server";
 import { buildAuthCallbackUrl } from "@/lib/utils/auth-redirect";
-import { getTurnstileConfigStatus, verifyTurnstileToken } from "@/lib/utils/turnstile";
+import { verifyTurnstileToken } from "@/lib/utils/turnstile";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
-import { isPlaywrightTestMode as checkPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
-import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { createLogger } from "@/lib/utils/logger";
+import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
+import { rateLimitExceededResponse } from "@/lib/utils/rate-limit-responses";
+import {
+  enforcePublicAuthTurnstileAvailability,
+  getPublicAuthTurnstileStatus,
+} from "../_lib/public-auth-turnstile";
 
 const log = createLogger("ForgotPassword");
 const forgotPasswordRequestSchema = forgotPasswordSchema.partial({ turnstileToken: true });
 
 export async function POST(request: NextRequest) {
   try {
-    const originBlock = enforceSameOriginMutation(request, log);
-    if (originBlock) return originBlock;
+    const mutationBlock = enforceMutationRequest(request, log);
+    if (mutationBlock) return mutationBlock;
 
-    const csrfBlock = enforceCsrfToken(request, log);
-    if (csrfBlock) return csrfBlock;
+    const unavailableResponse = enforcePublicAuthTurnstileAvailability(
+      request,
+      "Password reset temporarily unavailable"
+    );
+    if (unavailableResponse) return unavailableResponse;
 
-    const isPlaywrightTestMode = checkPlaywrightTestMode();
-    const turnstileStatus = getTurnstileConfigStatus({ requestHost: request.nextUrl.hostname });
-    if (
-      process.env.NODE_ENV === "production" &&
-      !turnstileStatus.configured &&
-      !isPlaywrightTestMode
-    ) {
-      return NextResponse.json(
-        { error: "Password reset temporarily unavailable" },
-        { status: 503 }
-      );
-    }
+    const turnstileStatus = getPublicAuthTurnstileStatus(request);
 
     const parsedBody = await parseAndValidateJsonRequest(request, forgotPasswordRequestSchema, {
       invalidJsonMessage: "Invalid JSON payload",
@@ -64,20 +59,13 @@ export async function POST(request: NextRequest) {
       degradedMode: "local",
     });
     if (rl.limited) {
-      if (rl.degraded) {
-        return NextResponse.json(
-          {
-            error:
-              "Password reset protection is temporarily unavailable. Please try again shortly.",
-          },
-          { status: 503, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
-        );
-      }
-
-      return NextResponse.json(
-        { error: "Too many requests. Please try again later." },
-        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
-      );
+      return rateLimitExceededResponse({
+        degraded: rl.degraded,
+        retryAfter: rl.retryAfter,
+        degradedMessage:
+          "Password reset protection is temporarily unavailable. Please try again shortly.",
+        limitedMessage: "Too many requests. Please try again later.",
+      });
     }
 
     if (turnstileStatus.configured && !isAuthenticatedOwnReset) {
@@ -106,13 +94,13 @@ export async function POST(request: NextRequest) {
     });
     if (emailRl.limited) {
       if (emailRl.degraded) {
-        return NextResponse.json(
-          {
-            error:
-              "Password reset protection is temporarily unavailable. Please try again shortly.",
-          },
-          { status: 503, headers: { "Retry-After": String(emailRl.retryAfter ?? 60) } }
-        );
+        return rateLimitExceededResponse({
+          degraded: true,
+          retryAfter: emailRl.retryAfter,
+          degradedMessage:
+            "Password reset protection is temporarily unavailable. Please try again shortly.",
+          limitedMessage: "Too many requests. Please try again later.",
+        });
       }
 
       // Return generic success to avoid revealing whether the email exists

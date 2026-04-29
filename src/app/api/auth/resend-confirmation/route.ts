@@ -4,12 +4,15 @@ import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { buildAuthCallbackUrl } from "@/lib/utils/auth-redirect";
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
-import { enforceCsrfToken } from "@/lib/utils/csrf";
-import { getTurnstileConfigStatus, verifyTurnstileToken } from "@/lib/utils/turnstile";
-import { isPlaywrightTestMode as checkPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
+import { verifyTurnstileToken } from "@/lib/utils/turnstile";
 import { emailSchema, trimmedStringSchema, turnstileTokenSchema } from "@/lib/validations/shared";
 import { z } from "zod";
+import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
+import { rateLimitExceededResponse } from "@/lib/utils/rate-limit-responses";
+import {
+  enforcePublicAuthTurnstileAvailability,
+  getPublicAuthTurnstileStatus,
+} from "../_lib/public-auth-turnstile";
 
 const log = createLogger("ResendConfirmation");
 
@@ -20,25 +23,16 @@ const resendSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const originBlock = enforceSameOriginMutation(request, log);
-    if (originBlock) return originBlock;
+    const mutationBlock = enforceMutationRequest(request, log);
+    if (mutationBlock) return mutationBlock;
 
-    const csrfBlock = enforceCsrfToken(request, log);
-    if (csrfBlock) return csrfBlock;
+    const unavailableResponse = enforcePublicAuthTurnstileAvailability(
+      request,
+      "Confirmation resend temporarily unavailable"
+    );
+    if (unavailableResponse) return unavailableResponse;
 
-    const isPlaywrightTestMode = checkPlaywrightTestMode();
-    const turnstileStatus = getTurnstileConfigStatus({ requestHost: request.nextUrl.hostname });
-
-    if (
-      process.env.NODE_ENV === "production" &&
-      !turnstileStatus.configured &&
-      !isPlaywrightTestMode
-    ) {
-      return NextResponse.json(
-        { error: "Confirmation resend temporarily unavailable" },
-        { status: 503 }
-      );
-    }
+    const turnstileStatus = getPublicAuthTurnstileStatus(request);
 
     // Rate limit aggressively — this triggers outbound emails
     const ip = getClientIp(request);
@@ -48,20 +42,13 @@ export async function POST(request: NextRequest) {
       degradedMode: "local",
     });
     if (rateCheck.limited) {
-      if (rateCheck.degraded) {
-        return NextResponse.json(
-          {
-            error:
-              "Confirmation email protection is temporarily unavailable. Please try again shortly.",
-          },
-          { status: 503, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
-        );
-      }
-
-      return NextResponse.json(
-        { error: "Too many requests. Please wait before trying again." },
-        { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
-      );
+      return rateLimitExceededResponse({
+        degraded: rateCheck.degraded,
+        retryAfter: rateCheck.retryAfter,
+        degradedMessage:
+          "Confirmation email protection is temporarily unavailable. Please try again shortly.",
+        limitedMessage: "Too many requests. Please wait before trying again.",
+      });
     }
 
     const bodyResult = await parseAndValidateJsonRequest(request, resendSchema, {

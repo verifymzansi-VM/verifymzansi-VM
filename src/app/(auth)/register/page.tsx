@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Eye, EyeOff, Check } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { type z } from "zod";
 
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,12 @@ import { Label } from "@/components/ui/label";
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
 import { GoogleOAuthButton } from "@/components/ui/google-oauth-button";
 import { AuthEmailField } from "@/components/auth/auth-email-field";
+import { AuthPasswordField } from "@/components/auth/auth-password-field";
 import { AuthTurnstileFeedback } from "@/components/auth/auth-turnstile-feedback";
+import {
+  getPasswordRequirements,
+  PasswordRequirements,
+} from "@/components/auth/password-requirements";
 import { registerSchema, type RegisterInput } from "@/lib/validations/auth";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -158,12 +163,7 @@ export default function RegisterPage() {
   }, [resetTurnstileChallenge]);
 
   const password = useWatch({ control, name: "password", defaultValue: "" });
-  const requirements = [
-    { label: "8+ characters", met: password.length >= 8 },
-    { label: "Lowercase", met: /[a-z]/.test(password) },
-    { label: "Uppercase", met: /[A-Z]/.test(password) },
-    { label: "Number", met: /[0-9]/.test(password) },
-  ];
+  const requirements = getPasswordRequirements(password);
 
   async function onSubmit(data: RegisterInput) {
     try {
@@ -294,87 +294,31 @@ export default function RegisterPage() {
           )}
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="password">Password</Label>
-          <div className="relative">
-            <Input
-              id="password"
-              type={showPassword ? "text" : "password"}
-              placeholder="Create a strong password"
-              autoComplete="new-password"
-              spellCheck={false}
-              autoCapitalize="none"
-              disabled={!isInteractive}
-              aria-invalid={!!errors.password}
-              aria-describedby={
-                ["password-requirements", errors.password ? "password-error" : undefined]
-                  .filter(Boolean)
-                  .join(" ") || undefined
-              }
-              {...register("password")}
-            />
-            <button
-              type="button"
-              className="absolute right-1 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              onClick={() => setShowPassword(!showPassword)}
-              disabled={!isInteractive}
-              aria-label={showPassword ? "Hide password" : "Show password"}
-            >
-              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </button>
-          </div>
-          {/* Password strength indicators */}
-          <div id="password-requirements" className="grid grid-cols-2 gap-1">
-            {requirements.map((req) => (
-              <span
-                key={req.label}
-                className={`text-xs flex items-center gap-1 ${
-                  req.met ? "text-brand-green" : "text-muted-foreground"
-                }`}
-              >
-                <Check className={`h-3 w-3 ${req.met ? "" : "opacity-30"}`} />
-                {req.label}
-              </span>
-            ))}
-          </div>
-          {errors.password && (
-            <p id="password-error" className="inline-form-error" role="alert">
-              {errors.password.message}
-            </p>
-          )}
-        </div>
+        <AuthPasswordField
+          id="password"
+          label="Password"
+          placeholder="Create a strong password"
+          inputProps={register("password")}
+          errorMessage={errors.password?.message}
+          shown={showPassword}
+          onToggleShown={() => setShowPassword(!showPassword)}
+          describedBy="password-requirements"
+          disabled={!isInteractive}
+          toggleClassName="right-1 inline-flex h-11 w-11 items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        />
+        <PasswordRequirements id="password-requirements" requirements={requirements} />
 
-        <div className="space-y-2">
-          <Label htmlFor="confirmPassword">Confirm password</Label>
-          <div className="relative">
-            <Input
-              id="confirmPassword"
-              type={showConfirmPassword ? "text" : "password"}
-              placeholder="Confirm your password"
-              autoComplete="new-password"
-              spellCheck={false}
-              autoCapitalize="none"
-              disabled={!isInteractive}
-              aria-invalid={!!errors.confirmPassword}
-              aria-describedby={errors.confirmPassword ? "confirmPassword-error" : undefined}
-              {...register("confirmPassword")}
-            />
-            <button
-              type="button"
-              className="absolute right-1 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              disabled={!isInteractive}
-              aria-label={showConfirmPassword ? "Hide password" : "Show password"}
-            >
-              {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </button>
-          </div>
-          {errors.confirmPassword && (
-            <p id="confirmPassword-error" className="inline-form-error" role="alert">
-              {errors.confirmPassword.message}
-            </p>
-          )}
-        </div>
+        <AuthPasswordField
+          id="confirmPassword"
+          label="Confirm password"
+          placeholder="Confirm your password"
+          inputProps={register("confirmPassword")}
+          errorMessage={errors.confirmPassword?.message}
+          shown={showConfirmPassword}
+          onToggleShown={() => setShowConfirmPassword(!showConfirmPassword)}
+          disabled={!isInteractive}
+          toggleClassName="right-1 inline-flex h-11 w-11 items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        />
 
         <div className="flex items-start gap-2">
           <input

@@ -6,20 +6,16 @@ import {
   readOwnerId,
   withOwnerColumn,
 } from "@/lib/account/compat";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { contactAccountHolderSchema } from "@/lib/validations/contact";
-import { verifyTurnstileToken } from "@/lib/utils/turnstile";
 import { mapLegacyContactMethod } from "@/lib/utils/enum-compat";
 import { createLogger } from "@/lib/utils/logger";
-import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createNotification } from "@/lib/notifications";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { sanitizeUserMessage } from "@/lib/utils/sanitize-html";
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
-import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { sendContactFormNotification } from "@/lib/services/email";
 import { logAuditEvent } from "@/lib/services/audit";
+import { enforcePublicMutationPrelude } from "@/lib/utils/public-mutation-route";
 
 const log = createLogger("ContactRoute");
 
@@ -43,12 +39,6 @@ function isContactTargetRow(record: unknown): record is ContactTargetRow {
 
 export async function POST(request: NextRequest) {
   try {
-    const originBlock = enforceSameOriginMutation(request, log);
-    if (originBlock) return originBlock;
-
-    const csrfBlock = enforceCsrfToken(request, log);
-    if (csrfBlock) return csrfBlock;
-
     const parsedBody = await parseAndValidateJsonRequest(request, contactAccountHolderSchema, {
       invalidJsonMessage: "Invalid JSON payload",
       validationErrorMessage: "Invalid request",
@@ -59,35 +49,16 @@ export async function POST(request: NextRequest) {
       return parsedBody.response;
     }
 
-    // ── CAPTCHA verification ─────────────────────────────────
-    if (process.env.TURNSTILE_SECRET_KEY) {
-      const remoteIp = getClientIp(request);
-      const captchaResult = await verifyTurnstileToken({
-        token: parsedBody.data.turnstileToken,
-        remoteIp,
-      });
-      if (!captchaResult.success) {
-        return NextResponse.json({ error: "CAPTCHA verification failed" }, { status: 400 });
-      }
-    } else if (process.env.NODE_ENV === "production") {
-      log.error("TURNSTILE_SECRET_KEY not configured in production");
-      return NextResponse.json({ error: "CAPTCHA service unavailable" }, { status: 503 });
-    }
+    const prelude = await enforcePublicMutationPrelude({
+      request,
+      logger: log,
+      turnstileToken: parsedBody.data.turnstileToken,
+      rateLimitAction: "contact:send",
+      rateLimitMessage: "Too many contact requests. Please try again later.",
+    });
+    if (!prelude.success) return prelude.response;
 
-    // Rate limit by IP (or user ID if authenticated)
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    const rateLimitKey = user?.id || getClientIp(request) || "unknown";
-    const rl = await checkRateLimit({ key: rateLimitKey, action: "contact:send" });
-    if (rl.limited) {
-      return NextResponse.json(
-        { error: "Too many contact requests. Please try again later." },
-        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
-      );
-    }
+    const { user } = prelude;
 
     // Use admin client for lookups and inserts to bypass RLS on service-only tables
     const admin = createAdminClient();

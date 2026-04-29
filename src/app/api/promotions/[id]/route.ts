@@ -22,8 +22,6 @@ import {
 import { userOwnsBusiness } from "@/lib/account/owned-business";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
-import { uuidSchema } from "@/lib/validations/shared";
-import { z } from "zod";
 import { createNotification, shouldSendOwnerLifecycleNotifications } from "@/lib/notifications";
 import {
   buildViewerKey,
@@ -33,7 +31,11 @@ import {
 import { createOwnedContentDeleteRoute } from "@/app/api/_lib/create-owned-content-delete-route";
 import { createViewerCookieJsonResponse } from "@/app/api/_lib/engagement-viewer-cookie-response";
 import { requireAuthenticatedLocalMutation } from "@/app/api/_lib/authenticated-local-mutation";
-import { getPostingEntitlementsOrResponse } from "@/app/api/_lib/posting-entitlements";
+import {
+  enforcePostingMediaLimits,
+  getPostingEntitlementsOrResponse,
+} from "@/app/api/_lib/posting-entitlements";
+import { idRouteParamsSchema } from "@/app/api/_lib/route-params";
 import {
   contentEditSubmittedResponse,
   createContentEditRequest,
@@ -43,9 +45,6 @@ import {
 } from "@/lib/content-edit-requests";
 
 const log = createLogger("PromotionDetail");
-const promotionIdParamsSchema = z.object({
-  id: uuidSchema,
-});
 type PromotionOwnerRow = {
   id: string;
   status: string;
@@ -82,7 +81,7 @@ type PromotionOwnerRow = {
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const parsedParams = parseAndValidateRouteParams(await params, promotionIdParamsSchema, {
+    const parsedParams = parseAndValidateRouteParams(await params, idRouteParamsSchema, {
       validationErrorMessage: "Invalid promotion ID",
       includeValidationDetails: false,
     });
@@ -187,7 +186,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const csrfBlock = enforceCsrfToken(request, log);
     if (csrfBlock) return csrfBlock;
 
-    const parsedParams = parseAndValidateRouteParams(await params, promotionIdParamsSchema, {
+    const parsedParams = parseAndValidateRouteParams(await params, idRouteParamsSchema, {
       validationErrorMessage: "Invalid promotion ID",
       includeValidationDetails: false,
     });
@@ -255,26 +254,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
     const ent = entitlementsResult.entitlements;
 
-    if (data.images.length > ent.maxPhotos) {
-      return NextResponse.json(
-        { error: `Maximum ${ent.maxPhotos} photos allowed on your plan` },
-        { status: 422 }
-      );
-    }
-
-    if (data.videos.length > 0 && !ent.videoAllowed) {
-      return NextResponse.json(
-        { error: "Video upload is not available on your current plan." },
-        { status: 422 }
-      );
-    }
-
-    if (data.videos.length > ent.maxVideos) {
-      return NextResponse.json(
-        { error: `Maximum ${ent.maxVideos} videos allowed on your plan` },
-        { status: 422 }
-      );
-    }
+    const mediaLimitBlock = enforcePostingMediaLimits({
+      entitlements: ent,
+      photoCount: data.images.length,
+      videoCount: data.videos.length,
+    });
+    if (mediaLimitBlock) return mediaLimitBlock;
 
     const removedMediaUrls = diffRemovedMediaUrls(
       collectMediaUrls(
@@ -519,7 +504,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
  */
 export const DELETE = createOwnedContentDeleteRoute<{ id: string }, PromotionOwnerRow>({
   log,
-  paramsSchema: promotionIdParamsSchema,
+  paramsSchema: idRouteParamsSchema,
   validationErrorMessage: "Invalid promotion ID",
   table: "promotions",
   ownerSelect: "id, owner_id, status, photos, videos, video_thumbnail, logo_url",

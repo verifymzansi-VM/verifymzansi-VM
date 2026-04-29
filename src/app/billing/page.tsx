@@ -2,11 +2,11 @@ import { Gift, ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FREE_POST_CONFIG, getActivePlansByArea } from "@/lib/constants/pricing";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { BillingPlanGrid } from "@/components/billing/plan-grid";
+import { PlanTabs } from "@/components/billing/plan-tabs";
 import { PageHeader } from "@/components/layout/page-header";
 
 export const metadata = {
@@ -75,42 +75,12 @@ export default function BillingPage() {
             </div>
           </div>
 
-          <Tabs defaultValue="market" className="max-w-5xl mx-auto">
-            <div className="flex justify-center mb-3">
-              <TabsList className="grid w-full max-w-3xl grid-cols-3 p-1 h-12 bg-muted/50 rounded-full">
-                <TabsTrigger
-                  value="market"
-                  className="h-11 rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs sm:text-sm"
-                >
-                  <span className="hidden sm:inline">Mzansi </span>Market
-                </TabsTrigger>
-                <TabsTrigger
-                  value="business"
-                  className="h-11 rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs sm:text-sm"
-                >
-                  <span className="hidden sm:inline">Mzansi </span>Business
-                </TabsTrigger>
-                <TabsTrigger
-                  value="promotions"
-                  className="h-11 rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs sm:text-sm"
-                >
-                  <span className="hidden sm:inline">Tourism & </span>Events
-                </TabsTrigger>
-              </TabsList>
-            </div>
-
-            <TabsContent value="market" className="mt-0">
-              <BillingPlanGrid plans={marketPlans} />
-            </TabsContent>
-
-            <TabsContent value="business" className="mt-0">
-              <BillingPlanGrid plans={businessPlans} />
-            </TabsContent>
-
-            <TabsContent value="promotions" className="mt-0">
-              <BillingPlanGrid plans={promotionPlans} />
-            </TabsContent>
-          </Tabs>
+          <PlanTabs
+            marketPlans={marketPlans}
+            businessPlans={businessPlans}
+            promotionPlans={promotionPlans}
+            PlanGrid={BillingPlanGrid}
+          />
         </div>
       </main>
       <Footer />

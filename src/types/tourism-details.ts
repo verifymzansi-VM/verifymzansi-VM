@@ -7,6 +7,27 @@
 /** Listing‐type picker on the create-tourism form */
 export type TourismListingType = "tourism_business" | "event";
 
+export interface TourismCategorySpecificFormFields {
+  treatmentTypes: string[];
+  activityTypes: string[];
+  tourDuration: string;
+  maxGroupSize: string;
+  difficultyLevel: string;
+  equipmentProvided: boolean;
+  whatsIncluded: string;
+  tourismAgeRestriction: string;
+  servicesOffered: string[];
+  tourismSpecializations: string[];
+  guidedTours: boolean;
+  audioGuide: boolean;
+  visitDuration: string;
+  vehicleTypes: string[];
+  deliveryCollection: boolean;
+  minDriverAge: string;
+  insuranceIncluded: boolean;
+  gpsAvailable: boolean;
+}
+
 /* ── Tourism Business (stored in businesses.category_details) ── */
 
 export interface TourismCategoryDetails {

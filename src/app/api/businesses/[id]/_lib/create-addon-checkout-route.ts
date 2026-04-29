@@ -2,17 +2,19 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import {
-  ACCOUNT_PROFILE_NOT_FOUND_ERROR,
   ACCOUNT_PROFILE_WRITE_TABLE,
   applyOwnerFilter,
   getOwnerColumn,
   readOwnerId,
   withOwnerColumn,
 } from "@/lib/account/compat";
-import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { uuidSchema } from "@/lib/validations/shared";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
-import { createAddonCheckoutRouteCore } from "@/app/api/_lib/create-addon-checkout-route-core";
+import {
+  createAddonAccountProfileGuard,
+  createAddonCheckoutRouteCore,
+  createAddonLocalRateLimitEnforcer,
+} from "@/app/api/_lib/create-addon-checkout-route-core";
 
 const businessAddonParamsSchema = z.object({
   id: uuidSchema,
@@ -69,35 +71,8 @@ export function createBusinessAddonCheckoutRoute(config: BusinessAddonRouteConfi
     auditDurationKey: config.auditDurationKey,
     failureMessage: config.failureMessage,
     getEntityId: ({ id }) => id,
-    enforceRateLimit: async ({ user }) => {
-      const rl = checkLocalRateLimit(user.id, config.rateLimitKey);
-      if (!rl.limited) return null;
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
-      );
-    },
-    ensureAccountProfile: async ({ admin, user, log: routeLog }) => {
-      const { data: accountProfile, error: profileError } = await admin
-        .from(ACCOUNT_PROFILE_WRITE_TABLE)
-        .select("id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (profileError) {
-        routeLog.error("Failed to fetch account profile", {
-          userId: user.id,
-          error: profileError.message,
-        });
-        return NextResponse.json({ error: "Unable to verify account" }, { status: 500 });
-      }
-
-      if (!accountProfile) {
-        return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
-      }
-
-      return null;
-    },
+    enforceRateLimit: createAddonLocalRateLimitEnforcer(config.rateLimitKey),
+    ensureAccountProfile: createAddonAccountProfileGuard(ACCOUNT_PROFILE_WRITE_TABLE),
     findEntity: async ({ params, supabase, user }) => {
       const ownerColumn = await getOwnerColumn(supabase, "businesses");
       const { data: rawBusiness } = await applyOwnerFilter(

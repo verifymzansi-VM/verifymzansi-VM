@@ -1,6 +1,7 @@
 "use client";
 
 import { memo } from "react";
+import { getListingCardStatus } from "@/components/listings/listing-card-status";
 import { formatZARShort } from "@/lib/utils/format";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
 import type { MediaFitStrategy } from "@/components/ui/video-card-player";
@@ -35,33 +36,6 @@ interface ListingCardProps {
   mediaHeight?: number | null;
 }
 
-function isNew(createdAt: string): boolean {
-  return new Date().getTime() - new Date(createdAt).getTime() < 24 * 60 * 60 * 1000;
-}
-
-function getListingStatus(
-  featured?: boolean,
-  boosted?: boolean,
-  urgent?: boolean,
-  createdAt?: string
-) {
-  if (urgent) {
-    return {
-      label: "Urgent",
-      className: "bg-red-500/95 text-white border border-white/10",
-    };
-  }
-
-  if (createdAt && isNew(createdAt)) {
-    return {
-      label: "New",
-      className: "bg-emerald-500/95 text-white border border-white/10",
-    };
-  }
-
-  return null;
-}
-
 export const ListingCard = memo(function ListingCard({
   id,
   title,
@@ -86,7 +60,7 @@ export const ListingCard = memo(function ListingCard({
   mediaWidth,
   mediaHeight,
 }: ListingCardProps) {
-  const status = getListingStatus(featured, boosted, urgent, createdAt);
+  const status = getListingCardStatus({ featured, boosted, urgent, createdAt });
   const priceLabel = price > 0 ? formatZARShort(price) : null;
   const eyebrow = priceLabel && negotiable ? `${priceLabel} · Neg` : priceLabel;
 

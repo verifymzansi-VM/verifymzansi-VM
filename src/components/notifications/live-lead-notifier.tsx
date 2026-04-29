@@ -1,20 +1,13 @@
 "use client";
 
-import { useMemo, useRef } from "react";
-import { useRealtime } from "@/hooks/use-realtime";
-import { toast } from "@/hooks/use-toast";
-import { ToastAction } from "@/components/ui/toast";
+import {
+  type NotificationInsertRow,
+  useLiveNotificationListener,
+} from "@/components/notifications/use-live-notification-listener";
 
 interface LiveLeadNotifierProps {
   userId?: string;
 }
-
-type NotificationInsertRow = {
-  id?: string;
-  title?: string;
-  message?: string;
-  href?: string;
-};
 
 function isLeadNotification(row: NotificationInsertRow): boolean {
   if (typeof row.href === "string" && row.href.startsWith("/dashboard/leads")) {
@@ -26,62 +19,16 @@ function isLeadNotification(row: NotificationInsertRow): boolean {
 }
 
 export function LiveLeadNotifier({ userId }: LiveLeadNotifierProps) {
-  const seenNotificationIds = useRef<Set<string>>(new Set());
-  const seenNotificationOrder = useRef<string[]>([]);
-  const enabled = useMemo(() => Boolean(userId), [userId]);
-
-  useRealtime({
-    table: "notifications",
-    event: "INSERT",
-    filterColumn: userId ? "user_id" : undefined,
-    filterValue: userId,
-    enabled,
-    onEvent: (payload) => {
-      const row = (payload.new ?? payload) as NotificationInsertRow;
-      if (!isLeadNotification(row)) {
-        return;
-      }
-
-      const notificationId = row.id;
-      if (notificationId) {
-        if (seenNotificationIds.current.has(notificationId)) {
-          return;
-        }
-
-        seenNotificationIds.current.add(notificationId);
-        seenNotificationOrder.current.push(notificationId);
-
-        if (seenNotificationOrder.current.length > 200) {
-          const removed = seenNotificationOrder.current.shift();
-          if (removed) {
-            seenNotificationIds.current.delete(removed);
-          }
-        }
-      }
-
-      const title = row.title || "New lead received";
-      const description = row.message || "A buyer sent you a new enquiry.";
-      const targetHref =
-        typeof row.href === "string" && row.href.startsWith("/") ? row.href : "/dashboard/leads";
-
-      toast({
-        title,
-        description,
-        variant: "success",
-        action: (
-          <ToastAction
-            altText="Open leads inbox"
-            onClick={() => {
-              if (typeof window !== "undefined") {
-                window.location.assign(targetHref);
-              }
-            }}
-          >
-            View
-          </ToastAction>
-        ),
-      });
-
+  useLiveNotificationListener({
+    userId,
+    matches: isLeadNotification,
+    fallbackTitle: "New lead received",
+    fallbackDescription: "A buyer sent you a new enquiry.",
+    fallbackHref: "/dashboard/leads",
+    toastVariant: "success",
+    actionAltText: "Open leads inbox",
+    actionLabel: "View",
+    afterToast: ({ notificationId, description, targetHref }) => {
       if (typeof window === "undefined" || !("Notification" in window)) {
         return;
       }

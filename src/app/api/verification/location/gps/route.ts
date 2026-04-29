@@ -5,16 +5,14 @@
 
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { reverseGeocode, computeLocationConfidence } from "@/lib/services/geocoding";
 import { logAuditEvent } from "@/lib/services/audit";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { createLogger } from "@/lib/utils/logger";
-import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { rateLimitExceededResponse } from "@/lib/utils/rate-limit-responses";
 import { optionalTrimmedStringSchema } from "@/lib/validations/shared";
 import { citiesMatch, normalizeProvinceName, resolveCityName } from "@/lib/constants/sa-provinces";
 
@@ -28,11 +26,11 @@ import {
   GPS_CITY_MISMATCH_RISK,
 } from "@/lib/constants/verification";
 import { buildVerificationStep } from "@/lib/services/verification-state";
-import { buildVerificationEmailConfirmationRequiredPayload } from "@/lib/constants/verification-email-confirmation";
 import {
   ensureLocationVerificationWritable,
   persistLocationVerificationLifecycle,
 } from "../_lib/location-verification-lifecycle";
+import { enforceConfirmedVerificationRequest } from "../../_lib/verification-request-prelude";
 
 const gpsLocationSchema = z.object({
   latitude: z.number().min(-35).max(-22),
@@ -45,33 +43,10 @@ const gpsLocationSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const originBlock = enforceSameOriginMutation(request, log);
-    if (originBlock) {
-      return originBlock;
-    }
+    const prelude = await enforceConfirmedVerificationRequest(request, log);
+    if (!prelude.success) return prelude.response;
 
-    const csrfBlock = enforceCsrfToken(request, log);
-    if (csrfBlock) {
-      return csrfBlock;
-    }
-
-    // Auth check
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Email confirmation gate — users must confirm their email before GPS location
-    if (!user.email_confirmed_at) {
-      return NextResponse.json(buildVerificationEmailConfirmationRequiredPayload(), {
-        status: 403,
-      });
-    }
+    const { supabase, user } = prelude;
 
     const rateCheck = await checkRateLimit({
       key: getClientIp(request),
@@ -79,17 +54,13 @@ export async function POST(request: NextRequest) {
       degradedMode: "block",
     });
     if (rateCheck.limited) {
-      if (rateCheck.degraded) {
-        return NextResponse.json(
-          { error: "GPS verification protection is temporarily unavailable. Please try again." },
-          { status: 503, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
-        );
-      }
-
-      return NextResponse.json(
-        { error: "Too many GPS verification attempts. Please try again later." },
-        { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
-      );
+      return rateLimitExceededResponse({
+        degraded: rateCheck.degraded,
+        retryAfter: rateCheck.retryAfter,
+        degradedMessage:
+          "GPS verification protection is temporarily unavailable. Please try again.",
+        limitedMessage: "Too many GPS verification attempts. Please try again later.",
+      });
     }
 
     // Feature flag check

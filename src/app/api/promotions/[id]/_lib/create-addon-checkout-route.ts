@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import {
-  ACCOUNT_PROFILE_NOT_FOUND_ERROR,
   applyOwnerFilter,
   getOwnerColumn,
   readOwnerId,
@@ -11,7 +10,11 @@ import {
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { uuidSchema } from "@/lib/validations/shared";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
-import { createAddonCheckoutRouteCore } from "@/app/api/_lib/create-addon-checkout-route-core";
+import {
+  createAddonAccountProfileGuard,
+  createAddonCheckoutRouteCore,
+} from "@/app/api/_lib/create-addon-checkout-route-core";
+import { rateLimitExceededResponse } from "@/lib/utils/rate-limit-responses";
 
 const promotionAddonParamsSchema = z.object({
   id: uuidSchema,
@@ -81,39 +84,14 @@ export function createPromotionAddonCheckoutRoute(config: PromotionAddonRouteCon
 
       if (!rateCheck.limited) return null;
 
-      if (rateCheck.degraded) {
-        return NextResponse.json(
-          { error: config.degradedErrorMessage },
-          { status: 503, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
-        );
-      }
-
-      return NextResponse.json(
-        { error: config.limitedErrorMessage },
-        { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
-      );
+      return rateLimitExceededResponse({
+        degraded: rateCheck.degraded,
+        retryAfter: rateCheck.retryAfter,
+        degradedMessage: config.degradedErrorMessage,
+        limitedMessage: config.limitedErrorMessage,
+      });
     },
-    ensureAccountProfile: async ({ admin, user, log: routeLog }) => {
-      const { data: profile, error: profileError } = await admin
-        .from("account_profiles")
-        .select("id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (profileError) {
-        routeLog.error("Failed to fetch account profile", {
-          userId: user.id,
-          error: profileError.message,
-        });
-        return NextResponse.json({ error: "Unable to verify account" }, { status: 500 });
-      }
-
-      if (!profile) {
-        return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
-      }
-
-      return null;
-    },
+    ensureAccountProfile: createAddonAccountProfileGuard(),
     findEntity: async ({ params, supabase, user }) => {
       const ownerColumn = await getOwnerColumn(supabase, "promotions");
       const { data: rawPromotion } = await applyOwnerFilter(

@@ -1,19 +1,8 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { verifyCapabilityRoleFromDb } from "@/lib/auth/admin-access";
 import { resolveAppeal } from "@/lib/services/decision-ledger";
 import { createLogger } from "@/lib/utils/logger";
-import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
-import { enforceCsrfToken } from "@/lib/utils/csrf";
-import {
-  internalApiError,
-  logApiError,
-  parseAndValidateJsonRequest,
-  unauthorizedResponse,
-  forbiddenResponse,
-  rateLimitResponse,
-} from "@/lib/utils/api";
+import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
 import { z } from "zod";
 import { uuidSchema } from "@/lib/validations/shared";
 import type { AppealStatus } from "@/types/enums";
@@ -35,29 +24,13 @@ const appealResolveSchema = z.object({
  */
 export async function POST(request: Request) {
   try {
-    const originBlock = enforceSameOriginMutation(request, log);
-    if (originBlock) return originBlock;
-    const csrfBlock = enforceCsrfToken(request, log);
-    if (csrfBlock) return csrfBlock;
-
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return unauthorizedResponse();
-    }
-
-    const actorRole = await verifyCapabilityRoleFromDb(user, "appeal:decide");
-    if (!actorRole) {
-      return forbiddenResponse();
-    }
-
-    const rl = checkLocalRateLimit(user.id, "admin:governance:appeal");
-    if (rl.limited) {
-      return rateLimitResponse(rl.retryAfter ?? 60);
-    }
+    const guard = await enforceAdminMutationGuard({
+      request,
+      logger: log,
+      capability: "appeal:decide",
+      rateLimitAction: "admin:governance:appeal",
+    });
+    if (!guard.success) return guard.response;
 
     const bodyResult = await parseAndValidateJsonRequest(request, appealResolveSchema, {
       invalidJsonMessage: "Invalid JSON payload",
@@ -72,8 +45,8 @@ export async function POST(request: Request) {
 
     const result = await resolveAppeal({
       appealId,
-      reviewerId: user.id,
-      reviewerRole: actorRole,
+      reviewerId: guard.user.id,
+      reviewerRole: guard.actorRole,
       status: status as Extract<
         AppealStatus,
         "upheld" | "overturned" | "partially_overturned" | "dismissed"

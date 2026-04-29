@@ -1,11 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
-import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import {
@@ -13,6 +9,7 @@ import {
   EMAIL_CHANGE_COOLDOWN_MS,
   emailCooldown,
 } from "@/lib/account/identity-policy";
+import { enforceAuthenticatedMutationRequest } from "@/lib/utils/authenticated-mutation-route";
 
 const log = createLogger("EmailChange");
 const ACCOUNT_EMAIL_IN_USE_ERROR = "That email address is already in use by another account.";
@@ -29,30 +26,14 @@ const emailChangeSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const sameOriginFailure = enforceSameOriginMutation(request, log);
-    if (sameOriginFailure) return sameOriginFailure;
+    const prelude = await enforceAuthenticatedMutationRequest({
+      request,
+      logger: log,
+      rateLimitAction: "account:email-change",
+    });
+    if (!prelude.success) return prelude.response;
 
-    const csrfFailure = enforceCsrfToken(request, log);
-    if (csrfFailure) return csrfFailure;
-
-    const ip = getClientIp(request);
-    const rateCheck = await checkRateLimit({ key: ip, action: "account:email-change" });
-    if (rateCheck.limited) {
-      return NextResponse.json(
-        { error: "Too many requests. Please try again later." },
-        { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
-      );
-    }
-
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-    }
+    const { supabase, user } = prelude;
 
     const admin = createAdminClient();
 

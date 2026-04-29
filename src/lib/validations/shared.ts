@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { validateSaIdFull } from "@/lib/utils/sa-id-validation";
 import { sanitizeSaPhoneInput } from "@/lib/utils/phone";
+import { isTrustedPlatformMediaUrl } from "@/lib/utils/media-url";
 
 function trimStringInput(value: unknown): unknown {
   return typeof value === "string" ? value.trim() : value;
@@ -112,6 +113,55 @@ export const optionalTrimmedStringSchema = z.preprocess(
 
 /** Zod schema for an optional UUID string that treats blank input as absent. */
 export const optionalUuidSchema = z.preprocess(trimToUndefined, uuidSchema.optional());
+
+export const urlOrEmptySchema = z.string().url().optional().or(z.literal(""));
+
+export const slugSchema = z
+  .string()
+  .min(3, "Slug must be at least 3 characters")
+  .max(60, "Slug cannot exceed 60 characters")
+  .regex(/^[a-z0-9-]+$/, "Only lowercase letters, numbers and hyphens");
+
+export const provinceSchema = z.string().min(1, "Province is required").max(50);
+
+export const citySchema = z.string().min(1, "City is required").max(80);
+
+export const platformMediaUrlSchema = (
+  message = "Media must be hosted on the VerifyMzansi platform"
+) => z.string().url().refine(isTrustedPlatformMediaUrl, { message });
+
+export const platformMediaUrlArraySchema = (
+  max: number,
+  message = "Media must be hosted on the VerifyMzansi platform",
+  maxMessage?: string
+) => z.array(platformMediaUrlSchema(message)).max(max, maxMessage);
+
+export const postLocationFields = {
+  province: provinceSchema,
+  city: citySchema,
+  location_town: z.string().trim().min(1).max(120).optional(),
+  location_address: z.string().trim().min(1).max(300).optional(),
+};
+
+export const postMediaMetadataFields = {
+  media_width: z.number().int().positive().optional(),
+  media_height: z.number().int().positive().optional(),
+  focal_x: z.number().min(0).max(1).optional(),
+  focal_y: z.number().min(0).max(1).optional(),
+};
+
+export const saNumberOrEmptySchema = z
+  .string()
+  .regex(/^(\+27|0)[6-8][0-9]{8}$/, "Enter a valid SA number")
+  .optional()
+  .or(z.literal(""));
+
+export function createPostTitleSchema(entityName = "Title") {
+  return z
+    .string()
+    .min(3, `${entityName} must be at least 3 characters`)
+    .max(120, `${entityName} cannot exceed 120 characters`);
+}
 
 /**
  * Create a bounded integer schema for query params or form fields.

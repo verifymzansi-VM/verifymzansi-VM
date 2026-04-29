@@ -13,34 +13,22 @@ import {
   withOwnerColumn,
 } from "@/lib/account/compat";
 
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
-import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { uuidSchema } from "@/lib/validations/shared";
 import { createNotification, shouldSendOwnerLifecycleNotifications } from "@/lib/notifications";
+import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
+import {
+  contentAreaSchema,
+  contentAreaTableMap,
+  isOwnerCompatibleContentTable,
+} from "../_lib/content-area";
 
 const log = createLogger("ContentResubmit");
 
 const resubmitSchema = z.object({
   itemId: uuidSchema,
-  area: z.enum(
-    ["MZANSI_MARKET", "MZANSI_BUSINESS", "BUSINESS_ADS", "MALL_SHOPS", "PROMOTIONS_EVENTS"],
-    {
-      message:
-        "area must be MZANSI_MARKET, MZANSI_BUSINESS, BUSINESS_ADS, MALL_SHOPS, or PROMOTIONS_EVENTS",
-    }
-  ),
+  area: contentAreaSchema,
 });
 
-const tableMap = {
-  MZANSI_MARKET: { table: "listings", ownerCompatible: true },
-  MZANSI_BUSINESS: { table: "businesses", ownerCompatible: true },
-  BUSINESS_ADS: { table: "businesses", ownerCompatible: true },
-  MALL_SHOPS: { table: "storefronts", ownerCompatible: false },
-  PROMOTIONS_EVENTS: { table: "promotions", ownerCompatible: true },
-} as const;
-
-type TableConfig = (typeof tableMap)[keyof typeof tableMap];
-type CompatibleTable = "listings" | "businesses" | "promotions";
 type NonCompatibleFetchedItem = {
   id: string;
   status: string;
@@ -75,20 +63,14 @@ async function wasEditedAfterRejection(
   return new Date(itemUpdatedAt).getTime() > new Date(lastRejection.created_at).getTime();
 }
 
-function isOwnerCompatibleTable(table: TableConfig["table"]): table is CompatibleTable {
-  return table === "listings" || table === "businesses" || table === "promotions";
-}
-
 /**
  * POST /api/content/resubmit
  * Allows the account holder to resubmit rejected content for moderation after editing.
  */
 export async function POST(request: Request) {
   try {
-    const sameOriginFailure = enforceSameOriginMutation(request, log);
-    if (sameOriginFailure) return sameOriginFailure;
-    const csrfBlock = enforceCsrfToken(request, log);
-    if (csrfBlock) return csrfBlock;
+    const mutationBlock = enforceMutationRequest(request, log);
+    if (mutationBlock) return mutationBlock;
 
     const supabase = await createClient();
     const {
@@ -119,7 +101,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const config = tableMap[area];
+    const config = contentAreaTableMap[area];
     if (!config) {
       return NextResponse.json({ error: "Invalid area" }, { status: 400 });
     }
@@ -133,7 +115,7 @@ export async function POST(request: Request) {
     } | null = null;
     let updateErrorMessage: string | null = null;
 
-    if (config.ownerCompatible && isOwnerCompatibleTable(config.table)) {
+    if (config.ownerCompatible && isOwnerCompatibleContentTable(config.table)) {
       const ownerColumn = await getOwnerColumn(supabase, config.table);
       const { data: fetchedItem, error: fetchError } = await applyOwnerFilter(
         supabase
@@ -306,7 +288,7 @@ export async function POST(request: Request) {
     }
 
     if (shouldSendOwnerLifecycleNotifications()) {
-      const hrefByArea: Record<keyof typeof tableMap, string> = {
+      const hrefByArea: Record<keyof typeof contentAreaTableMap, string> = {
         MZANSI_MARKET: "/dashboard/listings",
         MZANSI_BUSINESS: "/dashboard/businesses",
         BUSINESS_ADS: "/dashboard/businesses",

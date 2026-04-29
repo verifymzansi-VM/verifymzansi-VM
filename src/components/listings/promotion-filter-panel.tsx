@@ -29,11 +29,7 @@ export interface PromotionFilterState {
   eventState?: PromotionEventState;
 }
 
-interface PromotionFilterPanelProps {
-  filters: PromotionFilterState;
-  activeTab: "tourism" | "events";
-  cities: string[];
-  businessMap: Map<string, string>;
+export interface PromotionFilterCallbacks {
   onTypeChange: (value: PromotionFilterType | undefined) => void;
   onCategoryChange: (value: BusinessCategory | undefined) => void;
   onEventTypeChange: (value: string | undefined) => void;
@@ -43,6 +39,13 @@ interface PromotionFilterPanelProps {
   onEventStateChange: (value: PromotionEventState | undefined) => void;
   onClearQuery: () => void;
   onClearAll: () => void;
+}
+
+interface PromotionFilterPanelProps extends PromotionFilterCallbacks {
+  filters: PromotionFilterState;
+  activeTab: "tourism" | "events";
+  cities: string[];
+  businessMap: Map<string, string>;
   className?: string;
   mode?: "desktop" | "mobile";
 }

@@ -1,16 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { ZodType } from "zod";
 
+import { ACCOUNT_PROFILE_NOT_FOUND_ERROR } from "@/lib/account/compat";
 import { resolveSafeBillingAppUrl } from "@/lib/billing/app-url";
 import { createHostedCheckout } from "@/lib/payments/checkout";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { logAuditEvent, type AuditAction } from "@/lib/services/audit";
 import { getActivePlanTierForArea } from "@/lib/services/plan-tier";
-import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { parseAndValidateRouteParams } from "@/lib/utils/api";
+import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
 import { createLogger, type AppLogger } from "@/lib/utils/logger";
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
 
 type AllowedResult = {
@@ -87,6 +88,48 @@ type CoreConfig<
   buildAuditPayload: (entityId: string, area: MarketplaceArea) => AuditPayload;
 };
 
+export function createAddonLocalRateLimitEnforcer(rateLimitKey: string) {
+  return <Params extends Record<string, string>>({
+    user,
+  }: Pick<RouteContext<Params>, "user">): NextResponse | null => {
+    const rateLimit = checkLocalRateLimit(user.id, rateLimitKey);
+    if (!rateLimit.limited) return null;
+
+    return NextResponse.json(
+      { error: "Too many requests" },
+      { status: 429, headers: { "Retry-After": String(rateLimit.retryAfter ?? 60) } }
+    );
+  };
+}
+
+export function createAddonAccountProfileGuard(table = "account_profiles") {
+  return async <Params extends Record<string, string>>({
+    admin,
+    user,
+    log,
+  }: Pick<RouteContext<Params>, "admin" | "user" | "log">): Promise<NextResponse | null> => {
+    const { data: accountProfile, error: profileError } = await admin
+      .from(table)
+      .select("id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      log.error("Failed to fetch account profile", {
+        userId: user.id,
+        error: profileError.message,
+      });
+      return NextResponse.json({ error: "Unable to verify account" }, { status: 500 });
+    }
+
+    if (!accountProfile) {
+      return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
+    }
+
+    return null;
+  };
+}
+
 export function createAddonCheckoutRouteCore<
   Params extends Record<string, string>,
   Entity extends AddonEntity,
@@ -98,11 +141,8 @@ export function createAddonCheckoutRouteCore<
     const log = createLogger(config.loggerName);
 
     try {
-      const originBlock = enforceSameOriginMutation(request, log);
-      if (originBlock) return originBlock;
-
-      const csrfBlock = enforceCsrfToken(request, log);
-      if (csrfBlock) return csrfBlock;
+      const mutationBlock = enforceMutationRequest(request, log);
+      if (mutationBlock) return mutationBlock;
 
       const parsedParams = parseAndValidateRouteParams(await params, config.paramsSchema, {
         validationErrorMessage: config.validationErrorMessage,

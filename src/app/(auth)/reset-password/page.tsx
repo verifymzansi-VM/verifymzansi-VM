@@ -5,11 +5,14 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Eye, EyeOff, Check, AlertTriangle, ArrowLeft } from "lucide-react";
+import { Loader2, AlertTriangle, ArrowLeft } from "lucide-react";
 
+import { AuthPasswordField } from "@/components/auth/auth-password-field";
+import {
+  getPasswordRequirements,
+  PasswordRequirements,
+} from "@/components/auth/password-requirements";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { resetPasswordSchema, type ResetPasswordInput } from "@/lib/validations/auth";
 import { useToast } from "@/hooks/use-toast";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
@@ -47,12 +50,7 @@ export default function ResetPasswordPage() {
   });
 
   const password = useWatch({ control, name: "password", defaultValue: "" });
-  const requirements = [
-    { label: "8+ characters", met: password.length >= 8 },
-    { label: "Lowercase letter", met: /[a-z]/.test(password) },
-    { label: "Uppercase letter", met: /[A-Z]/.test(password) },
-    { label: "Number", met: /[0-9]/.test(password) },
-  ];
+  const requirements = getPasswordRequirements(password, "Lowercase letter", "Uppercase letter");
 
   async function onSubmit(data: ResetPasswordInput) {
     try {
@@ -137,80 +135,30 @@ export default function ResetPasswordPage() {
       </div>
 
       <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="password">New password</Label>
-          <div className="relative">
-            <Input
-              id="password"
-              type={showPassword ? "text" : "password"}
-              placeholder="Create a strong password"
-              autoComplete="new-password"
-              spellCheck={false}
-              autoCapitalize="none"
-              aria-invalid={!!errors.password}
-              aria-describedby={errors.password ? "password-error" : undefined}
-              {...register("password")}
-            />
-            <button
-              type="button"
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              onClick={() => setShowPassword(!showPassword)}
-              tabIndex={-1}
-              aria-label={showPassword ? "Hide password" : "Show password"}
-            >
-              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </button>
-          </div>
-          <div className="grid grid-cols-2 gap-1">
-            {requirements.map((req) => (
-              <span
-                key={req.label}
-                className={`text-xs flex items-center gap-1 ${
-                  req.met ? "text-brand-green" : "text-muted-foreground"
-                }`}
-              >
-                <Check className={`h-3 w-3 ${req.met ? "" : "opacity-30"}`} />
-                {req.label}
-              </span>
-            ))}
-          </div>
-          {errors.password && (
-            <p id="password-error" className="inline-form-error" role="alert">
-              {errors.password.message}
-            </p>
-          )}
-        </div>
+        <AuthPasswordField
+          id="password"
+          label="New password"
+          placeholder="Create a strong password"
+          inputProps={register("password")}
+          errorMessage={errors.password?.message}
+          shown={showPassword}
+          onToggleShown={() => setShowPassword(!showPassword)}
+          describedBy="password-requirements"
+          toggleTabIndex={-1}
+        />
+        <PasswordRequirements id="password-requirements" requirements={requirements} />
 
-        <div className="space-y-2">
-          <Label htmlFor="confirmPassword">Confirm password</Label>
-          <div className="relative">
-            <Input
-              id="confirmPassword"
-              type={showConfirmPassword ? "text" : "password"}
-              placeholder="Confirm your password"
-              autoComplete="new-password"
-              spellCheck={false}
-              autoCapitalize="none"
-              aria-invalid={!!errors.confirmPassword}
-              aria-describedby={errors.confirmPassword ? "confirmPassword-error" : undefined}
-              {...register("confirmPassword")}
-            />
-            <button
-              type="button"
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              tabIndex={-1}
-              aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
-            >
-              {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </button>
-          </div>
-          {errors.confirmPassword && (
-            <p id="confirmPassword-error" className="inline-form-error" role="alert">
-              {errors.confirmPassword.message}
-            </p>
-          )}
-        </div>
+        <AuthPasswordField
+          id="confirmPassword"
+          label="Confirm password"
+          placeholder="Confirm your password"
+          inputProps={register("confirmPassword")}
+          errorMessage={errors.confirmPassword?.message}
+          shown={showConfirmPassword}
+          onToggleShown={() => setShowConfirmPassword(!showConfirmPassword)}
+          toggleLabel={{ show: "Show confirm password", hide: "Hide confirm password" }}
+          toggleTabIndex={-1}
+        />
 
         <Button type="submit" className="w-full" variant="trust-verified" disabled={isSubmitting}>
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

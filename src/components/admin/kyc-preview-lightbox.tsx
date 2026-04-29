@@ -38,6 +38,7 @@ import {
   setCachedKycArtifactBlob,
 } from "@/lib/utils/kyc-artifact-blob-cache";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { getKycZoomWidthClass, KYC_REVIEW_REASON_CODES } from "./kyc-review-constants";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -88,35 +89,10 @@ const STEP_LABELS: Record<string, string> = {
   location: "Location Proof",
 };
 
-const REASON_CODES = [
-  { value: "blurry_image", label: "Image too blurry to verify" },
-  { value: "mismatch", label: "Selfie does not match ID photo" },
-  { value: "expired_document", label: "ID document is expired" },
-  { value: "incomplete_info", label: "Missing or unreadable fields" },
-  { value: "fraudulent", label: "Suspected fraudulent document" },
-  { value: "wrong_document_type", label: "Uploaded wrong document type" },
-  { value: "not_sa_document", label: "Document is not South African" },
-  { value: "other", label: "Other (provide note)" },
-];
-
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function getZoomWidthClass(zoomLevel: number): string {
-  if (zoomLevel <= 0.5) return "w-1/2";
-  if (zoomLevel <= 0.75) return "w-3/4";
-  if (zoomLevel <= 1) return "w-full";
-  if (zoomLevel <= 1.25) return "w-[125%]";
-  if (zoomLevel <= 1.5) return "w-[150%]";
-  if (zoomLevel <= 1.75) return "w-[175%]";
-  if (zoomLevel <= 2) return "w-[200%]";
-  if (zoomLevel <= 2.25) return "w-[225%]";
-  if (zoomLevel <= 2.5) return "w-[250%]";
-  if (zoomLevel <= 2.75) return "w-[275%]";
-  return "w-[300%]";
 }
 
 /* ------------------------------------------------------------------ */
@@ -484,7 +460,7 @@ export function KycPreviewLightbox({
                   onMouseLeave={handleImageMouseUp}
                 >
                   <div className="flex h-full min-h-[60vh] items-center justify-center">
-                    <div className={`shrink-0 ${getZoomWidthClass(zoom)}`}>
+                    <div className={`shrink-0 ${getKycZoomWidthClass(zoom)}`}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={blobUrl}
@@ -625,7 +601,7 @@ export function KycPreviewLightbox({
                     className="mt-1 w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
                   >
                     <option value="">Select a reason...</option>
-                    {REASON_CODES.map((rc) => (
+                    {KYC_REVIEW_REASON_CODES.map((rc) => (
                       <option key={rc.value} value={rc.value}>
                         {rc.label}
                       </option>

@@ -1,4 +1,7 @@
-import type { TourismListingType } from "@/types/tourism-details";
+import type {
+  TourismCategorySpecificFormFields,
+  TourismListingType,
+} from "@/types/tourism-details";
 import type { SocialAuthorizerRelationship } from "@/types/enums";
 import { TOURISM_SUBCATEGORY_FIELD_GROUPS } from "@/lib/constants/categories";
 
@@ -21,7 +24,7 @@ function hasValidMoneyPrecision(value: number): boolean {
 
 /* ── Form value interfaces ───────────────────────────────── */
 
-export interface TourismFormValues {
+export interface TourismFormValues extends TourismCategorySpecificFormFields {
   /* shared */
   listingType: TourismListingType;
   title: string;
@@ -46,26 +49,6 @@ export interface TourismFormValues {
   socialInstagram: string;
   socialTwitter: string;
   socialTiktok: string;
-
-  /* category-specific tourism fields */
-  treatmentTypes: string[];
-  activityTypes: string[];
-  tourDuration: string;
-  maxGroupSize: string;
-  difficultyLevel: string;
-  equipmentProvided: boolean;
-  whatsIncluded: string;
-  tourismAgeRestriction: string;
-  servicesOffered: string[];
-  tourismSpecializations: string[];
-  guidedTours: boolean;
-  audioGuide: boolean;
-  visitDuration: string;
-  vehicleTypes: string[];
-  deliveryCollection: boolean;
-  minDriverAge: string;
-  insuranceIncluded: boolean;
-  gpsAvailable: boolean;
 
   /* event */
   eventType: string;

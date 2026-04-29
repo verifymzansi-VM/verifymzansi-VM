@@ -1,53 +1,14 @@
-import Link from "next/link";
-import { ArrowRight, AlertCircle, Clock3, CheckCircle2, XCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { AlertCircle, Clock3, CheckCircle2, XCircle } from "lucide-react";
+import { PaymentStatusResult } from "@/components/billing/payment-status-result";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
-import { createClient } from "@/lib/supabase/server";
+import { resolveCurrentUserPaymentStatus } from "@/lib/payments/resolve-payment-status";
+import type { PaymentStatusView } from "@/lib/payments/status-view";
 
 export const metadata = {
   title: "Payment Status",
   description: "Review the current status of your VerifyMzansi payment.",
 };
-
-type PaymentStatusView = "complete" | "pending" | "failed" | "expired" | "missing";
-
-async function resolvePaymentStatus(paymentId?: string): Promise<PaymentStatusView> {
-  if (!paymentId) {
-    return "missing";
-  }
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return "missing";
-  }
-
-  const { data: payment } = await supabase
-    .from("payments")
-    .select("status")
-    .eq("id", paymentId)
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  switch (payment?.status) {
-    case "complete":
-      return "complete";
-    case "pending":
-    case "processing":
-      return "pending";
-    case "failed":
-      return "failed";
-    case "expired":
-      return "expired";
-    default:
-      return "missing";
-  }
-}
 
 function getCopy(status: PaymentStatusView) {
   switch (status) {
@@ -92,7 +53,7 @@ export default async function BillingCancelPage({
   searchParams: Promise<{ payment?: string }>;
 }) {
   const { payment } = await searchParams;
-  const status = await resolvePaymentStatus(payment);
+  const status = await resolveCurrentUserPaymentStatus(payment);
   const copy = getCopy(status);
 
   return (
@@ -100,40 +61,23 @@ export default async function BillingCancelPage({
       <Header isAuthenticated />
 
       <main id="main-content" className="flex flex-1 items-center justify-center py-4 scroll-mt-24">
-        <div className="container-page max-w-md space-y-4 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-            {copy.icon}
-          </div>
-
-          <h1 className="font-display text-xl font-bold">{copy.title}</h1>
-
-          <Card>
-            <CardContent className="space-y-3 p-4">
-              <p className="text-sm text-muted-foreground">{copy.description}</p>
-              <p className="text-xs text-muted-foreground">
-                Need help? Contact{" "}
-                <a
-                  href="mailto:support@verifymzansi.com"
-                  className="rounded-sm text-brand-green underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  support@verifymzansi.com
-                </a>
-              </p>
-            </CardContent>
-          </Card>
-
-          <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Button asChild className="h-11 w-full gap-2 sm:w-auto">
-              <Link href="/billing">
-                View Plans
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="h-11 w-full sm:w-auto">
-              <Link href="/dashboard">Back to Dashboard</Link>
-            </Button>
-          </div>
-        </div>
+        <PaymentStatusResult
+          icon={copy.icon}
+          title={copy.title}
+          description={copy.description}
+          primaryAction={{ href: "/billing", label: "View Plans" }}
+          secondaryAction={{ href: "/dashboard", label: "Back to Dashboard" }}
+        >
+          <p className="text-xs text-muted-foreground">
+            Need help? Contact{" "}
+            <a
+              href="mailto:support@verifymzansi.com"
+              className="rounded-sm text-brand-green underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              support@verifymzansi.com
+            </a>
+          </p>
+        </PaymentStatusResult>
       </main>
 
       <Footer />

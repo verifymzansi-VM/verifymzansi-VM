@@ -1,16 +1,8 @@
-import { withCsrfHeaders } from "@/lib/utils/csrf";
-import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { createLogger } from "@/lib/utils/logger";
 import { VideoTranscodeError } from "@/lib/media/compress-before-upload";
 import { uploadVideoWithFastPath } from "@/app/post/_lib/video-fast-upload";
 import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-errors";
-import {
-  appendTraceId,
-  getPayloadError,
-  getPayloadTraceId,
-  parseUploadJson,
-  parseUploadResponse,
-} from "@/app/post/_lib/media-upload-response";
+import { uploadMediaViaServer } from "@/app/post/_lib/server-media-upload";
 import type { UploadArea } from "@/types/enums";
 
 const log = createLogger("PromotionMediaUpload");
@@ -35,6 +27,10 @@ function toPromotionMediaUploadError(
     return error;
   }
 
+  if (error instanceof Error && error.message === FIELD_MESSAGES[field]) {
+    return new PromotionMediaUploadError(field, error.message);
+  }
+
   return new PromotionMediaUploadError(
     field,
     normalizeCreatePostRuntimeError(error, FIELD_MESSAGES[field])
@@ -48,34 +44,12 @@ async function uploadPromotionVideosViaServer({
   files: File[];
   area: UploadArea;
 }): Promise<string[]> {
-  const uploadData = new FormData();
-  uploadData.append("area", area);
-  files.forEach((file) => uploadData.append("files", file));
-
-  const response = await fetchWithRetry("/api/media/upload", {
-    method: "POST",
-    headers: withCsrfHeaders(),
-    body: uploadData,
+  return uploadMediaViaServer({
+    files,
+    area,
+    fallbackMessage: FIELD_MESSAGES.videos,
+    preferPayloadError: true,
   });
-
-  const payload = await parseUploadJson(response);
-  const { urls, errors } = parseUploadResponse(payload);
-  const uploadSucceeded = response.ok && errors.length === 0 && urls.length === files.length;
-
-  if (!uploadSucceeded) {
-    const payloadError = getPayloadError(payload);
-    const detail = errors[0] ?? payloadError ?? `Failed to upload video (HTTP ${response.status})`;
-    const traceId = getPayloadTraceId(payload, response);
-    throw new PromotionMediaUploadError(
-      "videos",
-      appendTraceId(
-        normalizeCreatePostRuntimeError(new Error(detail), FIELD_MESSAGES.videos),
-        traceId
-      )
-    );
-  }
-
-  return urls;
 }
 
 class PromotionMediaUploadError extends Error {
@@ -92,14 +66,24 @@ export function getPromotionMediaUploadErrorState(error: unknown): {
   formError: string;
   fieldErrors: Record<string, string>;
 } | null {
-  if (!(error instanceof PromotionMediaUploadError)) {
+  const field =
+    error instanceof PromotionMediaUploadError
+      ? error.field
+      : error &&
+          typeof error === "object" &&
+          "name" in error &&
+          (error as { name: unknown }).name === "PromotionMediaUploadError" &&
+          "field" in error
+        ? (error as { field: PromotionMediaField }).field
+        : null;
+  if (!field || !(field in FIELD_MESSAGES)) {
     return null;
   }
 
   return {
     formError: FORM_MESSAGE,
     fieldErrors: {
-      [error.field]: error.message,
+      [field]: error instanceof Error ? error.message : FIELD_MESSAGES[field],
     },
   };
 }
@@ -116,35 +100,18 @@ export async function uploadRequiredPromotionMedia({
   if (files.length === 0) return [];
 
   try {
-    const uploadData = new FormData();
-    uploadData.append("area", area);
-    files.forEach((file) => uploadData.append("files", file));
-
-    const response = await fetchWithRetry("/api/media/upload", {
-      method: "POST",
-      headers: withCsrfHeaders(),
-      body: uploadData,
+    return await uploadMediaViaServer({
+      files,
+      area,
+      fallbackMessage: FIELD_MESSAGES[field],
     });
-
-    const payload = await parseUploadJson(response);
-    const { urls, errors } = parseUploadResponse(payload);
-    const uploadSucceeded = response.ok && errors.length === 0 && urls.length === files.length;
-
-    if (!uploadSucceeded) {
-      log.warn("Blocking promotion-style save because media upload failed", {
-        field,
-        area,
-        attemptedCount: files.length,
-        uploadedCount: urls.length,
-        status: response.status,
-        errors,
-        payloadError: getPayloadError(payload),
-      });
-      throw new PromotionMediaUploadError(field);
-    }
-
-    return urls;
   } catch (error) {
+    log.warn("Blocking promotion-style save because media upload failed", {
+      field,
+      area,
+      attemptedCount: files.length,
+      error: error instanceof Error ? error.message : String(error),
+    });
     throw toPromotionMediaUploadError(field, error);
   }
 }

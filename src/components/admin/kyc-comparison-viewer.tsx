@@ -34,6 +34,7 @@ import {
   setCachedKycArtifactBlob,
 } from "@/lib/utils/kyc-artifact-blob-cache";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { getKycZoomWidthClass } from "./kyc-review-constants";
 
 interface Artifact {
   id: string;
@@ -58,20 +59,6 @@ interface DocumentViewerProps {
   onResubmit?: () => void;
   disableActions?: boolean;
   isLoading?: boolean;
-}
-
-function getZoomWidthClass(zoomLevel: number): string {
-  if (zoomLevel <= 0.5) return "w-1/2";
-  if (zoomLevel <= 0.75) return "w-3/4";
-  if (zoomLevel <= 1) return "w-full";
-  if (zoomLevel <= 1.25) return "w-[125%]";
-  if (zoomLevel <= 1.5) return "w-[150%]";
-  if (zoomLevel <= 1.75) return "w-[175%]";
-  if (zoomLevel <= 2) return "w-[200%]";
-  if (zoomLevel <= 2.25) return "w-[225%]";
-  if (zoomLevel <= 2.5) return "w-[250%]";
-  if (zoomLevel <= 2.75) return "w-[275%]";
-  return "w-[300%]";
 }
 
 /**
@@ -486,7 +473,7 @@ export function KycComparisonViewer({
             >
               {artifact.content_type?.startsWith("image") ? (
                 <div className="flex min-h-[24rem] items-center justify-center p-4">
-                  <div className={`relative shrink-0 ${getZoomWidthClass(zoomLevel)}`}>
+                  <div className={`relative shrink-0 ${getKycZoomWidthClass(zoomLevel)}`}>
                     <Image
                       src={blobUrl}
                       alt={getStepLabel(artifact.step_type)}

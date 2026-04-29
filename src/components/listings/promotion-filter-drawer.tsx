@@ -5,37 +5,22 @@ import { SlidersHorizontal, X } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import {
+  type PromotionFilterCallbacks,
   PromotionFilterPanel,
   type PromotionFilterState,
 } from "@/components/listings/promotion-filter-panel";
-import {
-  getPromotionFilterTypeLabel,
-  type PromotionFilterType,
-} from "@/lib/promotions/type-taxonomy";
+import { getPromotionFilterTypeLabel } from "@/lib/promotions/type-taxonomy";
 import { EVENT_TYPES, TOURISM_SUBCATEGORIES } from "@/lib/constants/categories";
-import {
-  PROMOTION_EVENT_STATE_LABELS,
-  type BusinessCategory,
-  type PromotionEventState,
-} from "@/types/enums";
+import { PROMOTION_EVENT_STATE_LABELS } from "@/types/enums";
 import { triggerHaptic } from "@/lib/utils/haptics";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { ActiveFilterChips, type FilterChip } from "./active-filter-chips";
 
-interface PromotionFilterDrawerProps {
+interface PromotionFilterDrawerProps extends PromotionFilterCallbacks {
   filters: PromotionFilterState;
   activeTab: "tourism" | "events";
   cities: string[];
   businessMap: Map<string, string>;
-  onTypeChange: (value: PromotionFilterType | undefined) => void;
-  onCategoryChange: (value: BusinessCategory | undefined) => void;
-  onEventTypeChange: (value: string | undefined) => void;
-  onSubcategoryChange: (value: string | undefined) => void;
-  onProvinceChange: (value: string | undefined) => void;
-  onCityChange: (value: string | undefined) => void;
-  onEventStateChange: (value: PromotionEventState | undefined) => void;
-  onClearQuery: () => void;
-  onClearAll: () => void;
 }
 
 function countActivePromotionFilters(filters: PromotionFilterState): number {

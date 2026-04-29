@@ -1,16 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createLogger } from "@/lib/utils/logger";
-import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
-import { enforceCsrfToken } from "@/lib/utils/csrf";
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createHostedCheckout } from "@/lib/payments/checkout";
 import { resolveBillingPlanSelection } from "@/lib/billing/plan-resolver";
 import { resolveSafeBillingAppUrl } from "@/lib/billing/app-url";
+import { enforceBillingMutationGuard } from "@/lib/billing/route-guard";
 
 const log = createLogger("BillingChangePlan");
 
@@ -25,44 +22,16 @@ const changePlanSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    const originBlock = enforceSameOriginMutation(request, log);
-    if (originBlock) return originBlock;
-
-    const csrfBlock = enforceCsrfToken(request, log);
-    if (csrfBlock) return csrfBlock;
-
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (!user.email_confirmed_at) {
-      return NextResponse.json(
-        { error: "Please confirm your email address before changing plans." },
-        { status: 403 }
-      );
-    }
-
-    const ip = getClientIp(request);
-    const rateCheck = await checkRateLimit({
-      key: ip,
-      action: "billing:change-plan",
-      degradedMode: "block",
+    const guard = await enforceBillingMutationGuard({
+      request,
+      log,
+      rateLimitAction: "billing:change-plan",
+      requireConfirmedEmailMessage: "Please confirm your email address before changing plans.",
+      degradedMessage: "Plan change is temporarily unavailable. Please try again shortly.",
+      limitedMessage: "Too many plan change attempts. Please try again later.",
     });
-    if (rateCheck.limited) {
-      const status = rateCheck.degraded ? 503 : 429;
-      const error = rateCheck.degraded
-        ? "Plan change is temporarily unavailable. Please try again shortly."
-        : "Too many plan change attempts. Please try again later.";
-      return NextResponse.json(
-        { error },
-        { status, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
-      );
-    }
+    if (!guard.success) return guard.response;
+    const { user } = guard;
 
     const parsed = await parseAndValidateJsonRequest(request, changePlanSchema, {
       invalidJsonMessage: "Invalid JSON payload",

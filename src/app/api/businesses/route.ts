@@ -5,9 +5,8 @@ import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { parseAndValidateJsonRequest, parseAndValidateSearchParams } from "@/lib/utils/api";
 import { businessSchema } from "@/lib/validations/business-unified";
-import { getEntitlements, canCreateListing } from "@/lib/services/entitlements";
+import { canCreateListing } from "@/lib/services/entitlements";
 import { checkLocalRateLimit, checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
-import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import { isPostingLimitBypassEnabled } from "@/lib/utils/posting-limit-bypass";
 import {
   applyOwnerFilter,
@@ -17,11 +16,9 @@ import {
   withOwnerField,
   type OwnerColumn,
 } from "@/lib/account/compat";
-import type { MarketplaceArea, PlanTier } from "@/types/enums";
+import type { MarketplaceArea } from "@/types/enums";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 import { queryWithSelectFallbacks } from "@/lib/utils/marketplace-select-fallback";
-import { enforceCsrfToken } from "@/lib/utils/csrf";
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import {
   BUSINESS_SLUG_CONFLICT_RESPONSE,
   isBusinessSlugConflictError,
@@ -50,6 +47,11 @@ import { claimFreePostSlot, releaseFreePostSlot } from "@/lib/billing/free-posts
 import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
 import { getContentLikeSummaryMap, getContentViewCountMap } from "@/lib/engagement-server";
 import { enforceVerifiedPostingAccess } from "@/app/api/_lib/verified-posting-access";
+import {
+  enforcePostingMediaLimits,
+  getActivePostingPlanOrResponse,
+} from "@/app/api/_lib/posting-entitlements";
+import { requirePostingMutationSession } from "@/app/api/_lib/posting-mutation-session";
 import { buildBusinessMutationPayload } from "@/app/api/businesses/_lib/build-business-mutation-payload";
 import { confirmMediaUploads } from "@/lib/media/confirm-media-uploads";
 
@@ -115,25 +117,10 @@ function redactBusinessListContactFields(
  */
 export async function POST(request: NextRequest) {
   try {
-    const originBlock = enforceSameOriginMutation(request, log);
-    if (originBlock) return originBlock;
-    const csrfBlock = enforceCsrfToken(request, log);
-    if (csrfBlock) return csrfBlock;
+    const session = await requirePostingMutationSession(request, log);
+    if (session.response) return session.response;
+    const { supabase, user, getAdmin } = session;
 
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    let admin: ReturnType<typeof createAdminClient> | null = null;
-    const getAdmin = () => {
-      admin ??= createAdminClient();
-      return admin;
-    };
     let ownerColumn: OwnerColumn;
     try {
       ownerColumn = await getOwnerColumn(supabase, "businesses");
@@ -182,38 +169,20 @@ export async function POST(request: NextRequest) {
     const effectiveArea: MarketplaceArea =
       data.category === "tourism_hospitality" ? "PROMOTIONS_EVENTS" : AREA;
 
-    const { data: activeEntitlement, error: entitlementError } = await supabase
-      .from("entitlements")
-      .select("tier")
-      .eq("user_id", user.id)
-      .eq("area", effectiveArea)
-      .eq("status", "active")
-      .gt("expires_at", new Date().toISOString())
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (entitlementError) {
-      log.error("Failed to check entitlements", {
-        userId: user.id,
-        error: entitlementError.message,
-      });
-      return NextResponse.json({ error: "Unable to verify subscription status" }, { status: 503 });
+    const planResult = await getActivePostingPlanOrResponse(supabase, user.id, effectiveArea, log);
+    if (planResult.response) {
+      return planResult.response;
     }
-
-    const hasPaidPlan = !!activeEntitlement;
-    const tier = (activeEntitlement?.tier as string) || null;
+    const { hasPaidPlan, tier, entitlements: ent } = planResult;
     const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
 
     if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
       // Paid plan — atomic business-count guard to prevent TOCTOU race
-      const ent0 = getEntitlements(tier as PlanTier, effectiveArea);
-
-      if (ent0.maxAllowed !== -1) {
+      if (ent.maxAllowed !== -1) {
         const { data: underLimit, error: rpcError } = await getAdmin().rpc("check_business_limit", {
           p_user_id: user.id,
           p_area: effectiveArea,
-          p_max_allowed: ent0.maxAllowed,
+          p_max_allowed: ent.maxAllowed,
         });
 
         if (rpcError) {
@@ -222,7 +191,7 @@ export async function POST(request: NextRequest) {
         }
 
         if (!underLimit) {
-          const check = canCreateListing(ent0.maxAllowed, tier as PlanTier, effectiveArea);
+          const check = canCreateListing(ent.maxAllowed, tier, effectiveArea);
           return NextResponse.json(
             { error: "Business limit reached", reason: check.reason },
             { status: 403 }
@@ -231,28 +200,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const ent =
-      hasPaidPlan && tier
-        ? getEntitlements(tier as PlanTier, effectiveArea)
-        : {
-            maxPhotos: FREE_POST_CONFIG.maxPhotos,
-            maxVideos: FREE_POST_CONFIG.maxVideos,
-            videoAllowed: FREE_POST_CONFIG.videoAllowed,
-          };
-
-    if ((data.gallery_photos?.length ?? 0) > ent.maxPhotos) {
-      return NextResponse.json(
-        { error: `Maximum ${ent.maxPhotos} gallery photos allowed on your plan` },
-        { status: 422 }
-      );
-    }
-
-    if (data.cover_video && !ent.videoAllowed) {
-      return NextResponse.json(
-        { error: "Video is not available on your current plan." },
-        { status: 422 }
-      );
-    }
+    const mediaLimitBlock = enforcePostingMediaLimits({
+      entitlements: ent,
+      photoCount: data.gallery_photos?.length ?? 0,
+      videoCount: data.cover_video ? 1 : 0,
+      photoLabel: "gallery photos",
+      videoUnavailableMessage: "Video is not available on your current plan.",
+    });
+    if (mediaLimitBlock) return mediaLimitBlock;
 
     const { data: slugConflict } = await getAdmin()
       .from("businesses")

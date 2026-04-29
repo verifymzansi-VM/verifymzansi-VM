@@ -1,19 +1,8 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { verifyCapabilityRoleFromDb } from "@/lib/auth/admin-access";
 import { approveDecision, rejectDecision, escalateDecision } from "@/lib/services/decision-ledger";
 import { createLogger } from "@/lib/utils/logger";
-import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
-import { enforceCsrfToken } from "@/lib/utils/csrf";
-import {
-  internalApiError,
-  logApiError,
-  parseAndValidateJsonRequest,
-  unauthorizedResponse,
-  forbiddenResponse,
-  rateLimitResponse,
-} from "@/lib/utils/api";
+import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
 import { z } from "zod";
 import { uuidSchema } from "@/lib/validations/shared";
 
@@ -48,30 +37,13 @@ const DUAL_APPROVAL_CATEGORIES: ReadonlySet<string> = new Set([
  */
 export async function POST(request: Request) {
   try {
-    const originBlock = enforceSameOriginMutation(request, log);
-    if (originBlock) return originBlock;
-    const csrfBlock = enforceCsrfToken(request, log);
-    if (csrfBlock) return csrfBlock;
-
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return unauthorizedResponse();
-    }
-
-    const capability = "decision:approve";
-    const actorRole = await verifyCapabilityRoleFromDb(user, capability);
-    if (!actorRole) {
-      return forbiddenResponse();
-    }
-
-    const rl = checkLocalRateLimit(user.id, "admin:governance:decide");
-    if (rl.limited) {
-      return rateLimitResponse(rl.retryAfter ?? 60);
-    }
+    const guard = await enforceAdminMutationGuard({
+      request,
+      logger: log,
+      capability: "decision:approve",
+      rateLimitAction: "admin:governance:decide",
+    });
+    if (!guard.success) return guard.response;
 
     const bodyResult = await parseAndValidateJsonRequest(request, governanceDecideSchema, {
       invalidJsonMessage: "Invalid JSON payload",
@@ -99,7 +71,7 @@ export async function POST(request: Request) {
       }
 
       // Four-eyes principle: approver must differ from recommender
-      if (decision.recommender_id === user.id) {
+      if (decision.recommender_id === guard.user.id) {
         return NextResponse.json(
           { error: "Cannot approve/reject your own recommendation" },
           { status: 403 }
@@ -126,8 +98,8 @@ export async function POST(request: Request) {
     if (action === "approve") {
       const result = await approveDecision({
         decisionId,
-        approverId: user.id,
-        approverRole: actorRole,
+        approverId: guard.user.id,
+        approverRole: guard.actorRole,
         rationale,
         afterState: afterState ?? {},
         secondaryApproverId,
@@ -144,8 +116,8 @@ export async function POST(request: Request) {
     if (action === "reject") {
       const result = await rejectDecision({
         decisionId,
-        approverId: user.id,
-        approverRole: actorRole,
+        approverId: guard.user.id,
+        approverRole: guard.actorRole,
         rationale,
       });
       if (!result) {
@@ -160,8 +132,8 @@ export async function POST(request: Request) {
     if (action === "escalate") {
       const result = await escalateDecision({
         decisionId,
-        actorId: user.id,
-        actorRole,
+        actorId: guard.user.id,
+        actorRole: guard.actorRole,
         reason: rationale,
       });
       if (!result) {

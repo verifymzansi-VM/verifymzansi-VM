@@ -7,6 +7,7 @@
  */
 
 import type { SocialAuthorizerRelationship } from "@/types/enums";
+import type { TourismCategorySpecificFormFields } from "@/types/tourism-details";
 
 const STORAGE_VERSION = 1;
 const DRAFT_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
@@ -94,7 +95,7 @@ export interface BusinessDraftData {
   selectedLayout: string;
 }
 
-export interface TourismDraftData {
+export interface TourismDraftData extends TourismCategorySpecificFormFields {
   listingType: string;
   title: string;
   description: string;
@@ -112,25 +113,6 @@ export interface TourismDraftData {
   bookingUrl: string;
   petsAllowed: boolean;
   smokingAllowed: boolean;
-  /* category-specific tourism fields */
-  treatmentTypes: string[];
-  activityTypes: string[];
-  tourDuration: string;
-  maxGroupSize: string;
-  difficultyLevel: string;
-  equipmentProvided: boolean;
-  whatsIncluded: string;
-  tourismAgeRestriction: string;
-  servicesOffered: string[];
-  tourismSpecializations: string[];
-  guidedTours: boolean;
-  audioGuide: boolean;
-  visitDuration: string;
-  vehicleTypes: string[];
-  deliveryCollection: boolean;
-  minDriverAge: string;
-  insuranceIncluded: boolean;
-  gpsAvailable: boolean;
   eventType: string;
   startDate: string;
   endDate: string;

@@ -1,15 +1,11 @@
 import { NextResponse } from "next/server";
 import { parseAndValidateJsonRequest } from "@/lib/utils/api";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { sendDsarCompletedEmail } from "@/lib/services/email";
 import { adminDsarCompleteSchema } from "@/lib/validations/admin";
-import { verifyAdminActorRoleFromDb } from "@/lib/auth/admin-access";
-import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
-import { enforceCsrfToken } from "@/lib/utils/csrf";
+import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
 
 const log = createLogger("DSARComplete");
 
@@ -20,32 +16,13 @@ const log = createLogger("DSARComplete");
  */
 export async function POST(req: Request) {
   try {
-    const originBlock = enforceSameOriginMutation(req, log);
-    if (originBlock) return originBlock;
-    const csrfBlock = enforceCsrfToken(req, log);
-    if (csrfBlock) return csrfBlock;
-
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const actorRole = await verifyAdminActorRoleFromDb(user);
-    if (!actorRole) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    const rl = checkLocalRateLimit(user.id, "admin:dsar:complete");
-    if (rl.limited) {
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
-      );
-    }
+    const guard = await enforceAdminMutationGuard({
+      request: req,
+      logger: log,
+      rateLimitAction: "admin:dsar:complete",
+      adminOnly: true,
+    });
+    if (!guard.success) return guard.response;
 
     const bodyResult = await parseAndValidateJsonRequest(req, adminDsarCompleteSchema, {
       invalidJsonMessage: "Invalid JSON payload",
@@ -65,7 +42,7 @@ export async function POST(req: Request) {
       .update({
         status: "completed",
         completed_at: completedAt,
-        processed_by: user.id,
+        processed_by: guard.user.id,
         ...(notes ? { response_summary: notes } : {}),
       })
       .eq("id", requestId)
@@ -86,8 +63,8 @@ export async function POST(req: Request) {
 
     await logAuditEvent({
       action: "dsar_completed",
-      actorId: user.id,
-      actorRole,
+      actorId: guard.user.id,
+      actorRole: guard.actorRole,
       targetId: requestId,
       targetType: "dsar_case",
       metadata: { notes, completedAt },

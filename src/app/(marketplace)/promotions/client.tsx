@@ -5,7 +5,10 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, TreePalm, CalendarDays } from "lucide-react";
 import { PageHeader } from "@/components/layout";
-import { BusinessCard } from "@/components/listings/business-card";
+import {
+  BusinessCardGridItem,
+  type BusinessCardGridRow,
+} from "@/components/listings/business-card-grid-item";
 import { MarketplacePaginationControls } from "@/components/listings/marketplace-pagination-controls";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { PromotionFilterPanel } from "@/components/listings/promotion-filter-panel";
@@ -16,7 +19,6 @@ import { getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { parsePromotionFilterType, type PromotionFilterType } from "@/lib/promotions/type-taxonomy";
 import {
   type BusinessCategory,
-  type BusinessType,
   type PromotionEventState,
   type PromotionType,
   type TrustLevel,
@@ -81,29 +83,8 @@ interface PromotionsResponse {
   error?: string;
 }
 
-interface BusinessRow {
-  id: string;
+interface BusinessRow extends BusinessCardGridRow {
   owner_id: string;
-  business_type: BusinessType;
-  business_name: string;
-  description: string | null;
-  category: string | null;
-  subcategory: string | null;
-  logo_url: string | null;
-  cover_photo: string | null;
-  cover_video: string | null;
-  video_thumbnail: string | null;
-  gallery_photos: string[] | null;
-  location_province: string;
-  location_city: string;
-  boost_until: string | null;
-  featured_until: string | null;
-  service_areas: Record<string, unknown> | null;
-  focal_x: number | null;
-  focal_y: number | null;
-  media_width: number | null;
-  media_height: number | null;
-  view_count?: number | null;
   like_count?: number | null;
   viewer_has_liked?: boolean;
 }
@@ -597,34 +578,7 @@ export function PromotionsExplorer() {
                 className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-5 xl:gap-6"
               >
                 {tourismBusinesses.map((business, index) => (
-                  <div
-                    key={business.id}
-                    className={`content-auto animate-in fade-in fill-mode-both [animation-duration:400ms] sm:slide-in-from-bottom-2 [animation-delay:${Math.min(index * 50, 400)}ms]`}
-                  >
-                    <BusinessCard
-                      id={business.id}
-                      businessName={business.business_name}
-                      businessType={business.business_type}
-                      description={business.description ?? undefined}
-                      coverPhoto={business.cover_photo}
-                      coverVideo={business.cover_video}
-                      videoThumbnail={business.video_thumbnail}
-                      logoUrl={business.logo_url}
-                      galleryPhotos={business.gallery_photos}
-                      province={business.location_province}
-                      city={business.location_city}
-                      category={business.category as BusinessCategory | undefined}
-                      subcategory={business.subcategory}
-                      boostUntil={business.boost_until}
-                      featuredUntil={business.featured_until}
-                      serviceAreas={business.service_areas}
-                      viewCount={business.view_count ?? 0}
-                      focalX={business.focal_x}
-                      focalY={business.focal_y}
-                      mediaWidth={business.media_width}
-                      mediaHeight={business.media_height}
-                    />
-                  </div>
+                  <BusinessCardGridItem key={business.id} business={business} index={index} />
                 ))}
               </div>
 

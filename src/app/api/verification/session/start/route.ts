@@ -4,48 +4,23 @@
  */
 
 import { type NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { logAuditEvent } from "@/lib/services/audit";
 import { REQUIRED_VERIFICATION_STEPS } from "@/lib/constants/verification";
-import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { createLogger } from "@/lib/utils/logger";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
-import { buildVerificationEmailConfirmationRequiredPayload } from "@/lib/constants/verification-email-confirmation";
+import { rateLimitExceededResponse } from "@/lib/utils/rate-limit-responses";
+import { enforceConfirmedVerificationRequest } from "../../_lib/verification-request-prelude";
 
 const log = createLogger("SessionStart");
 
 export async function POST(_request: NextRequest) {
   try {
     const request = _request;
-    const originBlock = enforceSameOriginMutation(request, log);
-    if (originBlock) {
-      return originBlock;
-    }
+    const prelude = await enforceConfirmedVerificationRequest(request, log);
+    if (!prelude.success) return prelude.response;
 
-    const csrfBlock = enforceCsrfToken(request, log);
-    if (csrfBlock) {
-      return csrfBlock;
-    }
-
-    // Auth check
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Email confirmation gate — users must confirm their email before starting verification
-    if (!user.email_confirmed_at) {
-      return NextResponse.json(buildVerificationEmailConfirmationRequiredPayload(), {
-        status: 403,
-      });
-    }
+    const { supabase, user } = prelude;
 
     const rateCheck = await checkRateLimit({
       key: user.id,
@@ -53,19 +28,13 @@ export async function POST(_request: NextRequest) {
       degradedMode: "block",
     });
     if (rateCheck.limited) {
-      if (rateCheck.degraded) {
-        return NextResponse.json(
-          {
-            error: "Verification session protection is temporarily unavailable. Please try again.",
-          },
-          { status: 503, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
-        );
-      }
-
-      return NextResponse.json(
-        { error: "Too many verification session attempts. Please try again later." },
-        { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
-      );
+      return rateLimitExceededResponse({
+        degraded: rateCheck.degraded,
+        retryAfter: rateCheck.retryAfter,
+        degradedMessage:
+          "Verification session protection is temporarily unavailable. Please try again.",
+        limitedMessage: "Too many verification session attempts. Please try again later.",
+      });
     }
 
     // Feature flag check

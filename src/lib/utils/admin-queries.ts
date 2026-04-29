@@ -71,9 +71,8 @@ export interface RecentOtpAttempt {
   expires_at: string;
 }
 
-async function getPendingModerationCountInternal() {
+async function getPendingModerationCountsByArea() {
   const supabase = createAdminClient();
-
   const [{ count: pendingListings }, { count: pendingBusinesses }, { count: pendingPromotions }] =
     await Promise.all([
       supabase
@@ -90,7 +89,18 @@ async function getPendingModerationCountInternal() {
         .eq("status", "pending_moderation"),
     ]);
 
-  return (pendingListings || 0) + (pendingBusinesses || 0) + (pendingPromotions || 0);
+  return {
+    pendingListings: pendingListings || 0,
+    pendingBusinesses: pendingBusinesses || 0,
+    pendingPromotions: pendingPromotions || 0,
+  };
+}
+
+async function getPendingModerationCountInternal() {
+  const { pendingListings, pendingBusinesses, pendingPromotions } =
+    await getPendingModerationCountsByArea();
+
+  return pendingListings + pendingBusinesses + pendingPromotions;
 }
 
 export async function getPendingModerationCount(): Promise<number> {
@@ -215,22 +225,8 @@ export async function getAreaCardCounts(): Promise<
     .eq("status", "open")
     .limit(10000);
 
-  // Content pending moderation counts
-  const [{ count: pendingListings }, { count: pendingMzansiBiz }, { count: pendingPromos }] =
-    await Promise.all([
-      supabase
-        .from("listings")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "pending_moderation"),
-      supabase
-        .from("businesses")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "pending_moderation"),
-      supabase
-        .from("promotions")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "pending_moderation"),
-    ]);
+  const { pendingListings, pendingBusinesses, pendingPromotions } =
+    await getPendingModerationCountsByArea();
 
   // Map target_type to area
   const flagCounts = {
@@ -255,7 +251,7 @@ export async function getAreaCardCounts(): Promise<
   return {
     MZANSI_MARKET: {
       pendingFlags: flagCounts.MZANSI_MARKET,
-      pendingContent: pendingListings || 0,
+      pendingContent: pendingListings,
     },
     BUSINESS_ADS: {
       pendingFlags: flagCounts.BUSINESS_ADS,
@@ -267,11 +263,11 @@ export async function getAreaCardCounts(): Promise<
     },
     MZANSI_BUSINESS: {
       pendingFlags: flagCounts.MZANSI_BUSINESS,
-      pendingContent: pendingMzansiBiz || 0,
+      pendingContent: pendingBusinesses,
     },
     PROMOTIONS_EVENTS: {
       pendingFlags: flagCounts.PROMOTIONS_EVENTS,
-      pendingContent: pendingPromos || 0,
+      pendingContent: pendingPromotions,
     },
   };
 }

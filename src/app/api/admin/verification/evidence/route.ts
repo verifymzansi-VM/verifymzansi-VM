@@ -4,20 +4,17 @@
  * Logs access to kyc_evidence_access_logs.
  */
 
-import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { downloadKycDocumentWithMetrics } from "@/lib/services/storage";
 import crypto from "crypto";
-import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
 import { getLinkedEvidenceArtifactIds } from "@/lib/services/kyc-evidence-access";
 import { createLogger } from "@/lib/utils/logger";
-import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
-import { parseAndValidateJsonRequest, parseAndValidateSearchParams } from "@/lib/utils/api";
+import { parseAndValidateSearchParams } from "@/lib/utils/api";
 import { uuidSchema } from "@/lib/validations/shared";
 import { z } from "zod";
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
-import { enforceCsrfToken } from "@/lib/utils/csrf";
+import { authorizeEvidenceRequest } from "../_lib/evidence-route-auth";
+import { forwardEvidencePostBodyToGet } from "../_lib/evidence-post-wrapper";
 
 const log = createLogger("EvidenceProxy");
 const evidenceQuerySchema = z.object({
@@ -49,32 +46,15 @@ export async function GET(request: NextRequest) {
 
   try {
     const authStartedAt = Date.now();
-    // Auth check — admin/moderator only
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      responseStatus = 401;
-      return NextResponse.json({ error: "Unauthorized", code: "unauthorized" }, { status: 401 });
+    const auth = await authorizeEvidenceRequest({
+      log,
+      rateLimitAction: "admin:evidence:view",
+    });
+    if (!auth.success) {
+      responseStatus = auth.status;
+      return auth.response;
     }
-
-    const role = await verifyStaffActorRoleFromDb(user);
-    if (!role) {
-      responseStatus = 403;
-      return NextResponse.json({ error: "Forbidden", code: "forbidden" }, { status: 403 });
-    }
-
-    const rl = checkLocalRateLimit(user.id, "admin:evidence:view");
-    if (rl.limited) {
-      responseStatus = 429;
-      return NextResponse.json(
-        { error: "Too many requests", code: "rate_limited" },
-        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
-      );
-    }
+    const { user, role } = auth;
     authMs = Date.now() - authStartedAt;
 
     // Get artifact ID from query params
@@ -387,41 +367,15 @@ function hashIp(ip: string, secret: string | undefined): string {
  * to prevent sensitive IDs from leaking into server logs and browser history.
  */
 export async function POST(request: NextRequest) {
-  try {
-    const originBlock = enforceSameOriginMutation(request, log);
-    if (originBlock) {
-      return originBlock;
-    }
-    const csrfBlock = enforceCsrfToken(request, log);
-    if (csrfBlock) {
-      return csrfBlock;
-    }
-
-    const parsedBody = await parseAndValidateJsonRequest(request, evidenceBodySchema, {
-      invalidJsonMessage: "Invalid JSON body",
-      validationErrorMessage: "artifactId is required in request body",
-      includeValidationDetails: false,
-    });
-    if (!parsedBody.success) {
-      return parsedBody.response;
-    }
-    const { artifactId } = parsedBody.data;
-
-    // Rewrite into the query-string so the GET handler logic can be reused
-    const url = new URL(request.url);
-    url.searchParams.set("artifactId", artifactId);
-    const syntheticRequest = new NextRequest(url, {
-      method: "GET",
-      headers: request.headers,
-    });
-    return GET(syntheticRequest);
-  } catch (err) {
-    log.error("POST wrapper error", {
-      error: err instanceof Error ? err.message : "unknown error",
-    });
-    return NextResponse.json(
-      { error: "Internal server error", code: "server_error" },
-      { status: 500 }
-    );
-  }
+  return forwardEvidencePostBodyToGet({
+    request,
+    schema: evidenceBodySchema,
+    logger: log,
+    invalidJsonMessage: "Invalid JSON body",
+    validationErrorMessage: "artifactId is required in request body",
+    toSearchParams: ({ artifactId }, searchParams) => {
+      searchParams.set("artifactId", artifactId);
+    },
+    get: GET,
+  });
 }

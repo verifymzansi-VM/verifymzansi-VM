@@ -3,9 +3,9 @@ import { resetPasswordSchema } from "@/lib/validations/auth";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
-import { enforceCsrfToken } from "@/lib/utils/csrf";
+import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
+import { rateLimitExceededResponse } from "@/lib/utils/rate-limit-responses";
 
 const log = createLogger("ResetPassword");
 
@@ -53,13 +53,8 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const sameOriginFailure = enforceSameOriginMutation(request, log);
-    if (sameOriginFailure) {
-      return sameOriginFailure;
-    }
-
-    const csrfBlock = enforceCsrfToken(request, log);
-    if (csrfBlock) return csrfBlock;
+    const mutationBlock = enforceMutationRequest(request, log);
+    if (mutationBlock) return mutationBlock;
 
     const ip = getClientIp(request);
     const rateCheck = await checkRateLimit({
@@ -68,20 +63,13 @@ export async function POST(request: NextRequest) {
       degradedMode: "local",
     });
     if (rateCheck.limited) {
-      if (rateCheck.degraded) {
-        return NextResponse.json(
-          {
-            error:
-              "Password reset protection is temporarily unavailable. Please try again shortly.",
-          },
-          { status: 503, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
-        );
-      }
-
-      return NextResponse.json(
-        { error: "Too many attempts. Please try again later." },
-        { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
-      );
+      return rateLimitExceededResponse({
+        degraded: rateCheck.degraded,
+        retryAfter: rateCheck.retryAfter,
+        degradedMessage:
+          "Password reset protection is temporarily unavailable. Please try again shortly.",
+        limitedMessage: "Too many attempts. Please try again later.",
+      });
     }
 
     const supabase = await createClient();

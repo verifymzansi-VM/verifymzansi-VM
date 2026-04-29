@@ -1,16 +1,8 @@
 import { VideoTranscodeError } from "@/lib/media/compress-before-upload";
-import { withCsrfHeaders } from "@/lib/utils/csrf";
-import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { createLogger } from "@/lib/utils/logger";
 import { uploadVideoWithFastPath } from "@/app/post/_lib/video-fast-upload";
 import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-errors";
-import {
-  appendTraceId,
-  getPayloadError,
-  getPayloadTraceId,
-  parseUploadJson,
-  parseUploadResponse,
-} from "@/app/post/_lib/media-upload-response";
+import { uploadMediaFileViaServer } from "@/app/post/_lib/server-media-upload";
 import type { UploadArea } from "@/types/enums";
 
 const log = createLogger("ListingMediaUpload");
@@ -43,33 +35,12 @@ async function uploadListingVideoViaServer({
   file: File;
   area: UploadArea;
 }): Promise<string> {
-  const uploadData = new FormData();
-  uploadData.append("area", area);
-  uploadData.append("files", file);
-
-  const response = await fetchWithRetry("/api/media/upload", {
-    method: "POST",
-    headers: withCsrfHeaders(),
-    body: uploadData,
+  return uploadMediaFileViaServer({
+    file,
+    area,
+    fallbackMessage: VIDEO_FIELD_MESSAGE,
+    preferPayloadError: true,
   });
-
-  const payload = await parseUploadJson(response);
-  const { urls, errors } = parseUploadResponse(payload);
-  const uploadSucceeded = response.ok && errors.length === 0 && urls.length === 1;
-
-  if (!uploadSucceeded) {
-    const payloadError = getPayloadError(payload);
-    const detail = errors[0] ?? payloadError ?? `Failed to upload video (HTTP ${response.status})`;
-    const traceId = getPayloadTraceId(payload, response);
-    throw new ListingMediaUploadError(
-      appendTraceId(
-        normalizeCreatePostRuntimeError(new Error(detail), VIDEO_FIELD_MESSAGE),
-        traceId
-      )
-    );
-  }
-
-  return urls[0] ?? "";
 }
 
 export function getListingMediaUploadErrorState(error: unknown): {

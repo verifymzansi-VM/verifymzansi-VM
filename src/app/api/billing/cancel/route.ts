@@ -1,14 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { parseAndValidateJsonRequest, unauthorizedResponse } from "@/lib/utils/api";
+import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createLogger } from "@/lib/utils/logger";
-import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
-import { enforceCsrfToken } from "@/lib/utils/csrf";
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createNotification } from "@/lib/notifications";
+import { enforceBillingMutationGuard } from "@/lib/billing/route-guard";
 
 const log = createLogger("BillingCancel");
 
@@ -22,37 +19,16 @@ const cancelSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    const originBlock = enforceSameOriginMutation(request, log);
-    if (originBlock) return originBlock;
-
-    const csrfBlock = enforceCsrfToken(request, log);
-    if (csrfBlock) return csrfBlock;
-
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return unauthorizedResponse();
-    }
-
-    const ip = getClientIp(request);
-    const rateCheck = await checkRateLimit({
-      key: ip,
-      action: "billing:cancel",
-      degradedMode: "block",
+    const guard = await enforceBillingMutationGuard({
+      request,
+      log,
+      rateLimitAction: "billing:cancel",
+      degradedMessage:
+        "Subscription cancellation is temporarily unavailable. Please try again shortly.",
+      limitedMessage: "Too many cancellation attempts. Please try again later.",
     });
-    if (rateCheck.limited) {
-      const status = rateCheck.degraded ? 503 : 429;
-      const error = rateCheck.degraded
-        ? "Subscription cancellation is temporarily unavailable. Please try again shortly."
-        : "Too many cancellation attempts. Please try again later.";
-      return NextResponse.json(
-        { error },
-        { status, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
-      );
-    }
+    if (!guard.success) return guard.response;
+    const { user } = guard;
 
     const parsed = await parseAndValidateJsonRequest(request, cancelSchema, {
       invalidJsonMessage: "Invalid JSON payload",

@@ -4,20 +4,17 @@
  * artifacts, provider results, risk signals, step details.
  */
 
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { ACCOUNT_PROFILE_WRITE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
-import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
 import { getLinkedEvidenceArtifactIds } from "@/lib/services/kyc-evidence-access";
 import { createLogger } from "@/lib/utils/logger";
-import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
-import { parseAndValidateJsonRequest, parseAndValidateSearchParams } from "@/lib/utils/api";
+import { parseAndValidateSearchParams } from "@/lib/utils/api";
 import { optionalUuidSchema } from "@/lib/validations/shared";
 import { z } from "zod";
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
-import { enforceCsrfToken } from "@/lib/utils/csrf";
+import { authorizeEvidenceRequest } from "../../_lib/evidence-route-auth";
+import { forwardEvidencePostBodyToGet } from "../../_lib/evidence-post-wrapper";
 
 const log = createLogger("EvidenceMetadata");
 const evidenceMetadataQuerySchema = z
@@ -52,32 +49,15 @@ export async function GET(request: NextRequest) {
 
   try {
     const authStartedAt = Date.now();
-    // Auth check — admin/moderator only
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      responseStatus = 401;
-      return NextResponse.json({ error: "Unauthorized", code: "unauthorized" }, { status: 401 });
+    const auth = await authorizeEvidenceRequest({
+      log,
+      rateLimitAction: "admin:evidence:metadata",
+    });
+    if (!auth.success) {
+      responseStatus = auth.status;
+      return auth.response;
     }
-
-    const role = await verifyStaffActorRoleFromDb(user);
-    if (!role) {
-      responseStatus = 403;
-      return NextResponse.json({ error: "Forbidden", code: "forbidden" }, { status: 403 });
-    }
-
-    const rl = checkLocalRateLimit(user.id, "admin:evidence:metadata");
-    if (rl.limited) {
-      responseStatus = 429;
-      return NextResponse.json(
-        { error: "Too many requests", code: "rate_limited" },
-        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
-      );
-    }
+    const { user, role } = auth;
     authMs = Date.now() - authStartedAt;
 
     const parsedQuery = parseAndValidateSearchParams(
@@ -443,42 +423,16 @@ export async function GET(request: NextRequest) {
  * to prevent sensitive IDs from leaking into server logs and browser history.
  */
 export async function POST(request: NextRequest) {
-  try {
-    const originBlock = enforceSameOriginMutation(request, log);
-    if (originBlock) {
-      return originBlock;
-    }
-    const csrfBlock = enforceCsrfToken(request, log);
-    if (csrfBlock) {
-      return csrfBlock;
-    }
-
-    const parsedBody = await parseAndValidateJsonRequest(request, evidenceMetadataBodySchema, {
-      invalidJsonMessage: "Invalid JSON body",
-      validationErrorMessage: "Invalid evidence metadata body",
-    });
-    if (!parsedBody.success) {
-      return parsedBody.response;
-    }
-
-    const { stepId, userId } = parsedBody.data;
-
-    // Rewrite into the query-string so the GET handler logic can be reused
-    const url = new URL(request.url);
-    if (stepId) url.searchParams.set("stepId", stepId);
-    if (userId) url.searchParams.set("userId", userId);
-    const syntheticRequest = new NextRequest(url, {
-      method: "GET",
-      headers: request.headers,
-    });
-    return GET(syntheticRequest);
-  } catch (err) {
-    log.error("POST wrapper error", {
-      error: err instanceof Error ? err.message : "unknown error",
-    });
-    return NextResponse.json(
-      { error: "Internal server error", code: "server_error" },
-      { status: 500 }
-    );
-  }
+  return forwardEvidencePostBodyToGet({
+    request,
+    schema: evidenceMetadataBodySchema,
+    logger: log,
+    invalidJsonMessage: "Invalid JSON body",
+    validationErrorMessage: "Invalid evidence metadata body",
+    toSearchParams: ({ stepId, userId }, searchParams) => {
+      if (stepId) searchParams.set("stepId", stepId);
+      if (userId) searchParams.set("userId", userId);
+    },
+    get: GET,
+  });
 }

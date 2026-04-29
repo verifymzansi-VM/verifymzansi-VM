@@ -89,6 +89,38 @@ function getStaggerDelayClass(index: number) {
   return STAGGER_DELAY_CLASSES[Math.min(index, STAGGER_DELAY_CLASSES.length - 1)];
 }
 
+function getListingCardProps(listing: ListingRow, sellers: Map<string, OwnerRow>) {
+  const videoUrl = listing.videos?.[0];
+  const seller = sellers.get(listing.owner_id);
+
+  return {
+    id: listing.id,
+    title: listing.title,
+    price: listing.price_cents ?? 0,
+    negotiable: listing.price_negotiable,
+    imageUrl: videoUrl || listing.photos?.[0],
+    posterUrl: listing.video_thumbnail || listing.photos?.[0] || undefined,
+    logoUrl: listing.logo_url,
+    province: listing.location_province,
+    city: listing.location_city,
+    category: listing.category,
+    attributes: listing.attributes,
+    condition: listing.condition ?? undefined,
+    createdAt: listing.created_at,
+    ownerTrustLevel: computeTrustLevel(
+      (seller?.account_verification_status ?? null) as AccountVerificationStatus | null
+    ),
+    ownerName: seller?.display_name,
+    boosted: listing.boost_until ? new Date(listing.boost_until) > new Date() : false,
+    featured: listing.featured,
+    focalX: listing.focal_x,
+    focalY: listing.focal_y,
+    mediaWidth: listing.media_width,
+    mediaHeight: listing.media_height,
+    viewCount: listing.view_count ?? undefined,
+  };
+}
+
 export function MzansiMarketGrid() {
   const { filters, page, setPage, setFilter, resetFilters } = useMarketplaceStore();
   const [listings, setListings] = useState<ListingRow[]>([]);
@@ -366,46 +398,14 @@ export function MzansiMarketGrid() {
       {viewMode === "grid" ? (
         <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-5 xl:gap-6">
           {listings.map((listing, index) => {
-            const videoUrl = listing.videos?.[0];
-            const displayUrl = videoUrl || listing.photos?.[0];
-            const posterSrc = listing.video_thumbnail || listing.photos?.[0] || undefined;
-            const seller = sellers.get(listing.owner_id);
-            const trustLevel = computeTrustLevel(
-              (seller?.account_verification_status ?? null) as AccountVerificationStatus | null
-            );
-            const isBoosted = listing.boost_until
-              ? new Date(listing.boost_until) > new Date()
-              : false;
+            const cardProps = getListingCardProps(listing, sellers);
 
             return (
               <div
                 key={listing.id}
                 className={`content-auto animate-in fade-in fill-mode-both [animation-duration:400ms] sm:slide-in-from-bottom-2 ${getStaggerDelayClass(index)}`}
               >
-                <ListingCard
-                  id={listing.id}
-                  title={listing.title}
-                  price={listing.price_cents ?? 0}
-                  negotiable={listing.price_negotiable}
-                  imageUrl={displayUrl}
-                  posterUrl={posterSrc}
-                  logoUrl={listing.logo_url}
-                  province={listing.location_province}
-                  city={listing.location_city}
-                  category={listing.category}
-                  attributes={listing.attributes}
-                  condition={listing.condition ?? undefined}
-                  createdAt={listing.created_at}
-                  ownerTrustLevel={trustLevel}
-                  ownerName={seller?.display_name}
-                  boosted={isBoosted}
-                  featured={listing.featured}
-                  focalX={listing.focal_x}
-                  focalY={listing.focal_y}
-                  mediaWidth={listing.media_width}
-                  mediaHeight={listing.media_height}
-                  viewCount={listing.view_count ?? undefined}
-                />
+                <ListingCard {...cardProps} />
               </div>
             );
           })}
@@ -413,16 +413,7 @@ export function MzansiMarketGrid() {
       ) : (
         <div className="flex flex-col gap-3">
           {listings.map((listing, index) => {
-            const videoUrl = listing.videos?.[0];
-            const displayUrl = videoUrl || listing.photos?.[0];
-            const posterSrc = listing.video_thumbnail || listing.photos?.[0] || undefined;
-            const seller = sellers.get(listing.owner_id);
-            const trustLevel = computeTrustLevel(
-              (seller?.account_verification_status ?? null) as AccountVerificationStatus | null
-            );
-            const isBoosted = listing.boost_until
-              ? new Date(listing.boost_until) > new Date()
-              : false;
+            const cardProps = getListingCardProps(listing, sellers);
 
             return (
               <div
@@ -430,32 +421,11 @@ export function MzansiMarketGrid() {
                 className={`animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms] ${getStaggerDelayClass(index)}`}
               >
                 <ListingCardList
-                  id={listing.id}
-                  title={listing.title}
-                  price={listing.price_cents ?? 0}
-                  negotiable={listing.price_negotiable}
-                  imageUrl={displayUrl}
-                  posterUrl={posterSrc}
-                  logoUrl={listing.logo_url}
-                  province={listing.location_province}
-                  city={listing.location_city}
-                  category={listing.category}
-                  attributes={listing.attributes}
-                  condition={listing.condition ?? undefined}
-                  createdAt={listing.created_at}
-                  ownerTrustLevel={trustLevel}
-                  ownerName={seller?.display_name}
-                  viewCount={listing.view_count ?? undefined}
+                  {...cardProps}
                   likeCount={
                     typeof listing.like_count === "number" ? listing.like_count : undefined
                   }
                   viewerHasLiked={listing.viewer_has_liked ?? false}
-                  boosted={isBoosted}
-                  featured={listing.featured}
-                  focalX={listing.focal_x}
-                  focalY={listing.focal_y}
-                  mediaWidth={listing.media_width}
-                  mediaHeight={listing.media_height}
                 />
               </div>
             );

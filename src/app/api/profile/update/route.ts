@@ -1,13 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { profileUpdateSchema } from "@/lib/validations/profile";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { ACCOUNT_PHONE_IN_USE_ERROR, normalizeSaPhone } from "@/lib/utils/phone";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
-import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import {
   checkCooldown,
@@ -15,6 +12,7 @@ import {
   phoneCooldown,
   phoneReverificationRequired,
 } from "@/lib/account/identity-policy";
+import { enforceAuthenticatedMutationRequest } from "@/lib/utils/authenticated-mutation-route";
 
 const log = createLogger("ProfileUpdate");
 
@@ -39,34 +37,14 @@ function isMissingPolicyColumnError(error: {
 
 export async function POST(request: NextRequest) {
   try {
-    const sameOriginFailure = enforceSameOriginMutation(request, log);
-    if (sameOriginFailure) {
-      return sameOriginFailure;
-    }
+    const prelude = await enforceAuthenticatedMutationRequest({
+      request,
+      logger: log,
+      rateLimitAction: "profile:update",
+    });
+    if (!prelude.success) return prelude.response;
 
-    const csrfFailure = enforceCsrfToken(request, log);
-    if (csrfFailure) {
-      return csrfFailure;
-    }
-
-    const ip = getClientIp(request);
-    const rateCheck = await checkRateLimit({ key: ip, action: "profile:update" });
-    if (rateCheck.limited) {
-      return NextResponse.json(
-        { error: "Too many requests. Please try again later." },
-        { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
-      );
-    }
-
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-    }
+    const { supabase, user } = prelude;
 
     // Secondary user-scoped rate limit to prevent bypass via IP rotation
     const userRateCheck = await checkRateLimit({

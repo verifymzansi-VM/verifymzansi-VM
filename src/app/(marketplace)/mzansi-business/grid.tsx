@@ -3,40 +3,23 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { AlertTriangle, Building2, Plus } from "lucide-react";
-import { BusinessCard } from "@/components/listings/business-card";
+import {
+  BusinessCardGridItem,
+  type BusinessCardGridRow,
+} from "@/components/listings/business-card-grid-item";
 import { ListingGridSkeleton } from "@/components/listings/listing-skeleton";
 import { MarketplacePaginationControls } from "@/components/listings/marketplace-pagination-controls";
 import { Button } from "@/components/ui/button";
 import { useMarketplaceStore } from "@/stores";
 import { createLogger } from "@/lib/utils/logger";
 import { triggerHaptic } from "@/lib/utils/haptics";
-import type { BusinessCategory, BusinessType } from "@/types/enums";
+import type { BusinessCategory } from "@/types/enums";
 
 const PAGE_SIZE = 24;
 const log = createLogger("MzansiBusinessGrid");
 
-interface BusinessRow {
-  id: string;
-  business_type: BusinessType;
-  business_name: string;
-  description: string | null;
-  cover_photo: string | null;
-  cover_video: string | null;
-  video_thumbnail: string | null;
-  logo_url: string | null;
-  gallery_photos: string[] | null;
-  location_province: string;
-  location_city: string;
+interface BusinessRow extends BusinessCardGridRow {
   category: BusinessCategory;
-  subcategory: string | null;
-  boost_until: string | null;
-  featured_until: string | null;
-  service_areas: Record<string, unknown> | null;
-  focal_x: number | null;
-  focal_y: number | null;
-  media_width: number | null;
-  media_height: number | null;
-  view_count?: number | null;
   like_count?: number | null;
   viewer_has_liked?: boolean;
 }
@@ -253,34 +236,7 @@ export function MzansiBusinessGrid() {
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-5 xl:gap-6">
         {businesses.map((business, index) => (
-          <div
-            key={business.id}
-            className={`animate-in fade-in fill-mode-both [animation-duration:400ms] sm:slide-in-from-bottom-2 [animation-delay:${Math.min(index * 50, 400)}ms]`}
-          >
-            <BusinessCard
-              id={business.id}
-              businessName={business.business_name}
-              businessType={business.business_type}
-              description={business.description ?? undefined}
-              coverPhoto={business.cover_photo}
-              coverVideo={business.cover_video}
-              videoThumbnail={business.video_thumbnail}
-              logoUrl={business.logo_url}
-              galleryPhotos={business.gallery_photos}
-              province={business.location_province}
-              city={business.location_city}
-              category={business.category}
-              subcategory={business.subcategory}
-              boostUntil={business.boost_until}
-              featuredUntil={business.featured_until}
-              serviceAreas={business.service_areas}
-              viewCount={business.view_count ?? 0}
-              focalX={business.focal_x}
-              focalY={business.focal_y}
-              mediaWidth={business.media_width}
-              mediaHeight={business.media_height}
-            />
-          </div>
+          <BusinessCardGridItem key={business.id} business={business} index={index} />
         ))}
       </div>
 

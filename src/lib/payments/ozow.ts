@@ -178,6 +178,69 @@ function isOzowAccessDeniedDetail(detail: string): boolean {
   );
 }
 
+function classifyOzowProviderFailure(status: number, errorDetail: string) {
+  const isAuthenticationFailure = status === 401 || status === 403;
+  const isConsumerNotFound = status === 404 && /consumer could not be found/i.test(errorDetail);
+
+  return {
+    category: isAuthenticationFailure
+      ? "authentication"
+      : isConsumerNotFound
+        ? "configuration"
+        : "provider",
+    isAuthenticationFailure,
+    isConsumerNotFound,
+  };
+}
+
+function throwOzowProviderFailure({
+  status,
+  errorDetail,
+  ozowEnv,
+  baseUrlHost,
+  providerMessage,
+  providerContext = {},
+}: {
+  status: number;
+  errorDetail: string;
+  ozowEnv: "staging" | "production";
+  baseUrlHost: string;
+  providerMessage: string;
+  providerContext?: Record<string, unknown>;
+}): never {
+  const failure = classifyOzowProviderFailure(status, errorDetail);
+
+  if (failure.isAuthenticationFailure) {
+    throw new OzowAuthenticationError("Payment provider authentication failed", {
+      status,
+      ozowEnv,
+      baseUrlHost,
+      reason: isOzowAccessDeniedDetail(errorDetail)
+        ? "consumer_resource_access_denied"
+        : "authentication_failed",
+      detail: errorDetail,
+    });
+  }
+
+  if (failure.isConsumerNotFound) {
+    throw new OzowConfigurationError("Ozow consumer could not be found for this client ID", {
+      status,
+      ozowEnv,
+      baseUrlHost,
+      reason: "consumer_not_found",
+      detail: errorDetail,
+    });
+  }
+
+  throw new OzowProviderError(providerMessage, {
+    status,
+    ozowEnv,
+    baseUrlHost,
+    detail: errorDetail,
+    ...providerContext,
+  });
+}
+
 function createMockHostedPaymentResponse(
   input: OzowHostedPaymentRequest
 ): OzowHostedPaymentResponse {
@@ -272,46 +335,20 @@ async function fetchOzowAccessToken(normalizedScope: string): Promise<string> {
   if (!response.ok) {
     const body = await response.text();
     const errorDetail = extractOzowErrorDetail(body);
-    const isAuthenticationFailure = response.status === 401 || response.status === 403;
-    const isConsumerNotFound =
-      response.status === 404 && /consumer could not be found/i.test(errorDetail);
+    const failure = classifyOzowProviderFailure(response.status, errorDetail);
     log.error("Ozow token request failed", {
-      category: isAuthenticationFailure
-        ? "authentication"
-        : isConsumerNotFound
-          ? "configuration"
-          : "provider",
+      category: failure.category,
       status: response.status,
       ozowEnv,
       baseUrlHost,
     });
-    if (isAuthenticationFailure) {
-      throw new OzowAuthenticationError("Payment provider authentication failed", {
-        status: response.status,
-        ozowEnv,
-        baseUrlHost,
-        reason: isOzowAccessDeniedDetail(errorDetail)
-          ? "consumer_resource_access_denied"
-          : "authentication_failed",
-        detail: errorDetail,
-      });
-    }
 
-    if (isConsumerNotFound) {
-      throw new OzowConfigurationError("Ozow consumer could not be found for this client ID", {
-        status: response.status,
-        ozowEnv,
-        baseUrlHost,
-        reason: "consumer_not_found",
-        detail: errorDetail,
-      });
-    }
-
-    throw new OzowProviderError("Ozow token endpoint is temporarily unavailable", {
+    throwOzowProviderFailure({
       status: response.status,
+      errorDetail,
       ozowEnv,
       baseUrlHost,
-      detail: errorDetail,
+      providerMessage: "Ozow token endpoint is temporarily unavailable",
     });
   }
 
@@ -463,48 +500,22 @@ export async function createOzowHostedPayment(
       const body = await response.text();
       const bodyPreview = body.slice(0, 200);
       const errorDetail = extractOzowErrorDetail(body);
-      const isAuthenticationFailure = response.status === 401 || response.status === 403;
-      const isConsumerNotFound =
-        response.status === 404 && /consumer could not be found/i.test(errorDetail);
+      const failure = classifyOzowProviderFailure(response.status, errorDetail);
       log.error("Ozow payment creation failed", {
-        category: isAuthenticationFailure
-          ? "authentication"
-          : isConsumerNotFound
-            ? "configuration"
-            : "provider",
+        category: failure.category,
         status: response.status,
         correlationId,
         ozowEnv,
         baseUrlHost,
         body: bodyPreview,
       });
-      if (isAuthenticationFailure) {
-        throw new OzowAuthenticationError("Payment provider authentication failed", {
-          status: response.status,
-          ozowEnv,
-          baseUrlHost,
-          reason: isOzowAccessDeniedDetail(errorDetail)
-            ? "consumer_resource_access_denied"
-            : "authentication_failed",
-          detail: errorDetail,
-        });
-      }
 
-      if (isConsumerNotFound) {
-        throw new OzowConfigurationError("Ozow consumer could not be found for this client ID", {
-          status: response.status,
-          ozowEnv,
-          baseUrlHost,
-          reason: "consumer_not_found",
-          detail: errorDetail,
-        });
-      }
-
-      throw new OzowProviderError("Ozow payment creation failed", {
+      throwOzowProviderFailure({
         status: response.status,
-        detail: errorDetail,
+        errorDetail,
         ozowEnv,
         baseUrlHost,
+        providerMessage: "Ozow payment creation failed",
       });
     }
 
