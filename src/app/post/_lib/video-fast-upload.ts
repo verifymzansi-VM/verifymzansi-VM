@@ -10,6 +10,7 @@ const log = createLogger("VideoFastUpload");
 type DirectUploadUrlResponse = {
   uploadUrl?: string;
   publicUrl?: string;
+  key?: string;
 };
 
 const preparedVideoUploads = new WeakMap<File, Promise<File>>();
@@ -71,7 +72,7 @@ async function uploadVideoDirectToR2(file: File, area: UploadArea): Promise<stri
     const uploadUrl = signedUrlPayload?.uploadUrl;
     const publicUrl = signedUrlPayload?.publicUrl;
 
-    if (!uploadUrl || !publicUrl) {
+    if (!uploadUrl || !publicUrl || !signedUrlPayload?.key) {
       log.warn("Direct video upload URL response was incomplete; falling back");
       return null;
     }
@@ -88,6 +89,28 @@ async function uploadVideoDirectToR2(file: File, area: UploadArea): Promise<stri
       log.warn("Direct video upload failed; falling back to validated upload endpoint", {
         status: uploadResponse.status,
       });
+      return null;
+    }
+
+    const completeResponse = await fetchWithRetry("/api/media/upload-complete", {
+      method: "POST",
+      headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        key: signedUrlPayload.key,
+        publicUrl,
+        contentType: file.type,
+        size: file.size,
+        area,
+      }),
+    });
+
+    if (!completeResponse.ok) {
+      log.warn(
+        "Direct video upload verification failed; falling back to validated upload endpoint",
+        {
+          status: completeResponse.status,
+        }
+      );
       return null;
     }
 

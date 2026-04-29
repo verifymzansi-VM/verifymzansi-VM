@@ -29,7 +29,11 @@ interface R2BucketBinding {
   get(
     key: string,
     options?: Record<string, unknown>
-  ): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
+  ): Promise<{
+    arrayBuffer(): Promise<ArrayBuffer>;
+    size?: number;
+    httpMetadata?: { contentType?: string };
+  } | null>;
 }
 
 type CloudflareContextLike = {
@@ -380,6 +384,42 @@ export async function deleteFromR2(bucket: string, key: string): Promise<void> {
   });
 
   await client.send(command);
+}
+
+export async function getR2ObjectBytes(
+  bucket: string,
+  key: string
+): Promise<{ bytes: Uint8Array; contentType?: string; contentLength?: number } | null> {
+  assertSafeStorageKey(key);
+
+  const r2Binding = await getR2BucketBinding(bucket);
+  if (r2Binding) {
+    const object = await r2Binding.get(key);
+    if (!object) return null;
+    return {
+      bytes: new Uint8Array(await object.arrayBuffer()),
+      contentType: object.httpMetadata?.contentType,
+      contentLength: object.size,
+    };
+  }
+
+  const client = getR2Client();
+  const response = await client.send(
+    new GetObjectCommand({
+      Bucket: bucket,
+      Key: key,
+    })
+  );
+
+  if (!response.Body) {
+    return null;
+  }
+
+  return {
+    bytes: new Uint8Array(await response.Body.transformToByteArray()),
+    contentType: response.ContentType,
+    contentLength: response.ContentLength,
+  };
 }
 
 /**

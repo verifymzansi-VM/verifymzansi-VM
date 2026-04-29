@@ -56,8 +56,14 @@ describe("uploadVideoWithFastPath", () => {
       status: 200,
       json: async () => ({
         uploadUrl: "https://upload.example.com/signed",
+        key: "media/promotion/user-1/clip.mp4",
         publicUrl: "https://media.example.com/clip.mp4",
       }),
+    });
+    mockFetchWithRetry.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true }),
     });
     putFetch.mockResolvedValueOnce({ ok: true, status: 200 });
 
@@ -76,6 +82,19 @@ describe("uploadVideoWithFastPath", () => {
       "/api/media/upload-url",
       expect.objectContaining({
         method: "POST",
+      })
+    );
+    expect(mockFetchWithRetry).toHaveBeenCalledWith(
+      "/api/media/upload-complete",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          key: "media/promotion/user-1/clip.mp4",
+          publicUrl: "https://media.example.com/clip.mp4",
+          contentType: "video/mp4",
+          size: file.size,
+          area: "promotion",
+        }),
       })
     );
     expect(putFetch).toHaveBeenCalledWith(
@@ -134,6 +153,35 @@ describe("uploadVideoWithFastPath", () => {
     expect(uploadViaServer).toHaveBeenCalledWith(converted);
   });
 
+  it("falls back to the validated server upload when direct upload verification fails", async () => {
+    const file = new File(["video"], "clip.mp4", { type: "video/mp4" });
+    const uploadViaServer = vi.fn().mockResolvedValue("https://media.example.com/server.mp4");
+    mockFetchWithRetry.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        uploadUrl: "https://upload.example.com/signed",
+        key: "media/promotion/user-1/clip.mp4",
+        publicUrl: "https://media.example.com/clip.mp4",
+      }),
+    });
+    putFetch.mockResolvedValueOnce({ ok: true, status: 200 });
+    mockFetchWithRetry.mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      json: async () => ({ code: "uploaded_object_mime_mismatch" }),
+    });
+
+    const url = await uploadVideoWithFastPath({
+      file,
+      area: "promotion",
+      uploadViaServer,
+    });
+
+    expect(url).toBe("https://media.example.com/server.mp4");
+    expect(uploadViaServer).toHaveBeenCalledWith(file);
+  });
+
   it("reuses a background-prepared video during submit", async () => {
     const original = new File(["video"], "clip.mp4", { type: "video/mp4" });
     const prepared = new File(["prepared"], "clip.mp4", { type: "video/mp4" });
@@ -144,8 +192,14 @@ describe("uploadVideoWithFastPath", () => {
       status: 200,
       json: async () => ({
         uploadUrl: "https://upload.example.com/signed",
+        key: "media/promotion/user-1/prepared.mp4",
         publicUrl: "https://media.example.com/prepared.mp4",
       }),
+    });
+    mockFetchWithRetry.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true }),
     });
     putFetch.mockResolvedValueOnce({ ok: true, status: 200 });
 
