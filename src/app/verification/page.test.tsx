@@ -991,6 +991,141 @@ describe("VerificationPage", () => {
     expect(screen.queryByRole("button", { name: /Submit Verification/i })).not.toBeInTheDocument();
   });
 
+  it("lets users open GPS before saving the address", async () => {
+    sessionResponse = jsonResponse(
+      {
+        sessionId: "session-1",
+        completedSteps: ["phone", "id_doc", "selfie"],
+        pendingSteps: [],
+        requiredSteps: ["phone", "id_doc", "selfie", "location"],
+        finalizedAt: null,
+        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
+      },
+      200
+    );
+    statusResponse = jsonResponse(
+      buildStatusPayload({
+        steps: [
+          { step_type: "phone", status: "approved" },
+          { step_type: "id_doc", status: "approved" },
+          { step_type: "selfie", status: "approved" },
+        ],
+      }),
+      200
+    );
+
+    render(<VerificationPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Save Address/i })).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText(/^Province$/i), {
+      target: { value: "Gauteng" },
+    });
+    fireEvent.change(screen.getByLabelText(/^City$/i), {
+      target: { value: "Johannesburg" },
+    });
+
+    const gpsButton = await screen.findByRole("button", { name: /Verify Address with GPS/i });
+    const saveButton = screen.getByRole("button", { name: /Save Address/i });
+
+    expect(gpsButton.compareDocumentPosition(saveButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+    expect(
+      screen.getByText(/Saving your address sends the verification to admin/i)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Review Before Saving/i)).toBeInTheDocument();
+  });
+
+  it("estimates the address with GPS before saving without persisting the location step", async () => {
+    sessionResponse = jsonResponse(
+      {
+        sessionId: "session-1",
+        completedSteps: ["phone", "id_doc", "selfie"],
+        pendingSteps: [],
+        requiredSteps: ["phone", "id_doc", "selfie", "location"],
+        finalizedAt: null,
+        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
+      },
+      200
+    );
+    statusResponse = jsonResponse(
+      buildStatusPayload({
+        steps: [
+          { step_type: "phone", status: "approved" },
+          { step_type: "id_doc", status: "approved" },
+          { step_type: "selfie", status: "approved" },
+        ],
+      }),
+      200
+    );
+    gpsResponse = jsonResponse(
+      {
+        success: true,
+        preview: true,
+        persisted: false,
+        verified: true,
+        confidence: "high",
+        resolvedProvince: "Gauteng",
+        resolvedCity: "Johannesburg",
+      },
+      200
+    );
+    manualLocationResponse = jsonResponse({ success: true }, 200);
+
+    const mockGetCurrentPosition = vi.fn((success: PositionCallback) =>
+      success({
+        coords: {
+          latitude: -26.2041,
+          longitude: 28.0473,
+          accuracy: 12,
+        } as GeolocationCoordinates,
+        timestamp: Date.now(),
+      } as GeolocationPosition)
+    );
+    Object.defineProperty(global.navigator, "geolocation", {
+      configurable: true,
+      value: {
+        getCurrentPosition: mockGetCurrentPosition,
+      },
+    });
+
+    render(<VerificationPage />);
+
+    const estimateButton = await screen.findByRole("button", {
+      name: /Estimate Address with GPS/i,
+    });
+
+    fireEvent.click(estimateButton);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/^Province$/i)).toHaveValue("Gauteng");
+      expect(screen.getByLabelText(/^City$/i)).toHaveValue("Johannesburg");
+    });
+
+    expect(
+      fetchCalls().some(([input]) =>
+        String(input).includes("/api/verification/location/gps?preview=1")
+      )
+    ).toBe(true);
+    expect(fetchCalls().some(([input]) => String(input) === "/api/verification/location/gps")).toBe(
+      false
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Save Address/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByRole("heading", { name: /Verification Submitted/i }).length
+      ).toBeGreaterThan(0);
+    });
+    expect(
+      fetchCalls().some(([input]) => String(input).includes("/api/verification/location/manual"))
+    ).toBe(true);
+  });
+
   it("shows a verified address state after successful GPS confirmation", async () => {
     sessionResponse = jsonResponse(
       {
