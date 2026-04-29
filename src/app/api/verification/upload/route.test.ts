@@ -1138,7 +1138,17 @@ describe("POST /api/verification/upload", () => {
       throw new Error("Expected default admin mock implementation");
     }
 
+    const artifactDeleteEq = vi.fn().mockResolvedValue({ error: null });
+    const artifactDelete = vi.fn().mockReturnValue({ eq: artifactDeleteEq });
+
     mockFrom.mockImplementation((table: string) => {
+      if (table === "kyc_artifacts") {
+        return {
+          ...baseFromImpl(table),
+          delete: artifactDelete,
+        };
+      }
+
       if (table === "verification_steps") {
         return {
           select: vi.fn().mockReturnValue({
@@ -1204,6 +1214,8 @@ describe("POST /api/verification/upload", () => {
       })
     );
     expect(mockDeleteFromR2).toHaveBeenCalled();
+    expect(artifactDelete).toHaveBeenCalled();
+    expect(artifactDeleteEq).toHaveBeenCalledWith("id", "artifact-1");
   });
 
   it("returns 500 when ID uniqueness lookup fails", async () => {
@@ -1215,7 +1227,17 @@ describe("POST /api/verification/upload", () => {
       throw new Error("Expected default admin mock implementation");
     }
 
+    const artifactDeleteEq = vi.fn().mockResolvedValue({ error: null });
+    const artifactDelete = vi.fn().mockReturnValue({ eq: artifactDeleteEq });
+
     mockFrom.mockImplementation((table: string) => {
+      if (table === "kyc_artifacts") {
+        return {
+          ...baseFromImpl(table),
+          delete: artifactDelete,
+        };
+      }
+
       if (table === "verification_steps") {
         return {
           select: vi.fn().mockImplementation((...args: unknown[]) => {
@@ -1296,6 +1318,9 @@ describe("POST /api/verification/upload", () => {
         error: "Unable to verify ID number uniqueness",
       })
     );
+    expect(artifactDelete).toHaveBeenCalled();
+    expect(artifactDeleteEq).toHaveBeenCalledWith("id", "artifact-1");
+    expect(mockDeleteFromR2).toHaveBeenCalled();
   });
 
   it("returns 500 when risk signal insert fails for phone linked to flagged account", async () => {

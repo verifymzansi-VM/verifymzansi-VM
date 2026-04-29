@@ -13,6 +13,7 @@
 /test-results
 /e2e/.auth/
 /.lighthouseci/
+/.playwright-mcp/
 
 # next.js
 /.next/

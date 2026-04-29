@@ -37,6 +37,21 @@ pnpm install
 cp .env.example .env.local
 ```
 
+### Ubuntu / WSL on Windows 11
+
+Use one runtime for install and commands. If `node_modules` was installed from
+Windows and you then run checks from Ubuntu/WSL, native packages such as
+`esbuild`, `sharp`, and `workerd` can fail with a platform mismatch. Rebuild the
+dependency tree from Ubuntu before running launch checks:
+
+```bash
+cd /mnt/c/Users/SENZO/Documents/verifymzansi
+CI=true pnpm install --force
+pnpm lint
+pnpm typecheck
+pnpm test:blocking
+```
+
 Generate the encryption secrets and paste them into `.env.local`:
 
 ```bash

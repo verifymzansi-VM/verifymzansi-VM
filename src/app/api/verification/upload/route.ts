@@ -88,6 +88,44 @@ async function cleanupUploadedR2Object(params: {
   return false;
 }
 
+async function cleanupPersistedKycUpload(params: {
+  admin: ReturnType<typeof createAdminClient>;
+  artifactId: string;
+  bucket: string;
+  key: string;
+  requestId: string;
+  reason: string;
+  uploadedToR2: boolean;
+}): Promise<void> {
+  try {
+    const { error } = await params.admin.from("kyc_artifacts").delete().eq("id", params.artifactId);
+    if (error) {
+      log.error("CRITICAL: Failed to clean up rejected kyc_artifact row", {
+        artifactId: params.artifactId,
+        requestId: params.requestId,
+        reason: params.reason,
+        error: error.message,
+      });
+    }
+  } catch (error) {
+    log.error("CRITICAL: Failed to clean up rejected kyc_artifact row", {
+      artifactId: params.artifactId,
+      requestId: params.requestId,
+      reason: params.reason,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  if (params.uploadedToR2) {
+    await cleanupUploadedR2Object({
+      bucket: params.bucket,
+      key: params.key,
+      requestId: params.requestId,
+      reason: params.reason,
+    });
+  }
+}
+
 /**
  * POST /api/verification/upload
  *
@@ -618,6 +656,15 @@ export async function POST(request: NextRequest) {
         userId: user.id,
         stepType,
       });
+      await cleanupPersistedKycUpload({
+        admin,
+        artifactId: artifact.id,
+        bucket: process.env.R2_PRIVATE_BUCKET || "verifymzansi-private",
+        key: uploadResult.key,
+        requestId,
+        reason: "supersede_prior_artifacts_failed",
+        uploadedToR2,
+      });
       return jsonError(
         { error: "Failed to finalize upload — please retry", code: "supersede_failed" },
         { status: 500 }
@@ -642,6 +689,15 @@ export async function POST(request: NextRequest) {
           error: riskSignalError.message,
           userId: user.id,
           artifactId: artifact.id,
+        });
+        await cleanupPersistedKycUpload({
+          admin,
+          artifactId: artifact.id,
+          bucket: process.env.R2_PRIVATE_BUCKET || "verifymzansi-private",
+          key: uploadResult.key,
+          requestId,
+          reason: "risk_signal_insert_failed",
+          uploadedToR2,
         });
         return NextResponse.json({ error: "Upload processing failed" }, { status: 500 });
       }
@@ -742,6 +798,15 @@ export async function POST(request: NextRequest) {
             userId: user.id,
             error: hmacLookupErr.message,
           });
+          await cleanupPersistedKycUpload({
+            admin,
+            artifactId: artifact.id,
+            bucket: process.env.R2_PRIVATE_BUCKET || "verifymzansi-private",
+            key: uploadResult.key,
+            requestId,
+            reason: "id_number_uniqueness_lookup_failed",
+            uploadedToR2,
+          });
           return jsonError(
             { error: "Unable to verify ID number uniqueness", requestId },
             { status: 500 }
@@ -753,12 +818,14 @@ export async function POST(request: NextRequest) {
             userId: user.id,
             existingUserId: existingHmac.user_id,
           });
-          const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
-          await cleanupUploadedR2Object({
-            bucket: privateBucket,
+          await cleanupPersistedKycUpload({
+            admin,
+            artifactId: artifact.id,
+            bucket: process.env.R2_PRIVATE_BUCKET || "verifymzansi-private",
             key: uploadResult.key,
             requestId,
             reason: "duplicate_id_number_check",
+            uploadedToR2,
           });
           return NextResponse.json(
             {
@@ -796,12 +863,14 @@ export async function POST(request: NextRequest) {
         (updateError.message?.includes("idx_verification_steps_unique_approved_id_hmac") ?? false);
 
       if (isApprovedIdConflict) {
-        const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
-        await cleanupUploadedR2Object({
-          bucket: privateBucket,
+        await cleanupPersistedKycUpload({
+          admin,
+          artifactId: artifact.id,
+          bucket: process.env.R2_PRIVATE_BUCKET || "verifymzansi-private",
           key: uploadResult.key,
           requestId,
           reason: "approved_id_conflict_update",
+          uploadedToR2,
         });
         return NextResponse.json(
           {
@@ -831,12 +900,14 @@ export async function POST(request: NextRequest) {
             false);
 
         if (isApprovedIdConflict) {
-          const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
-          await cleanupUploadedR2Object({
-            bucket: privateBucket,
+          await cleanupPersistedKycUpload({
+            admin,
+            artifactId: artifact.id,
+            bucket: process.env.R2_PRIVATE_BUCKET || "verifymzansi-private",
             key: uploadResult.key,
             requestId,
             reason: "approved_id_conflict_insert",
+            uploadedToR2,
           });
           return NextResponse.json(
             {
@@ -850,6 +921,15 @@ export async function POST(request: NextRequest) {
 
         // Unique constraint violation means the step was approved concurrently
         if (insertError.code === "23505") {
+          await cleanupPersistedKycUpload({
+            admin,
+            artifactId: artifact.id,
+            bucket: process.env.R2_PRIVATE_BUCKET || "verifymzansi-private",
+            key: uploadResult.key,
+            requestId,
+            reason: "step_already_approved_insert",
+            uploadedToR2,
+          });
           return NextResponse.json(
             {
               error: "This verification step has already been approved.",
