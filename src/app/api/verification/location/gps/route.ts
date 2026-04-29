@@ -1,6 +1,7 @@
 /**
  * POST /api/verification/location/gps
  * Accepts GPS coordinates, reverse-geocodes them, and writes location step evidence.
+ * Use ?preview=1 to confirm a selected address before the location step is saved.
  */
 
 import { type NextRequest, NextResponse } from "next/server";
@@ -39,6 +40,10 @@ const gpsLocationSchema = z.object({
   timestamp: z.number().positive().finite(),
   declaredProvince: optionalTrimmedStringSchema,
   declaredCity: optionalTrimmedStringSchema,
+  declaredTown: z.preprocess(
+    (value) => (typeof value === "string" ? value.trim() || undefined : value),
+    z.string().max(120).optional()
+  ),
 });
 
 export async function POST(request: NextRequest) {
@@ -81,8 +86,16 @@ export async function POST(request: NextRequest) {
       return bodyResult.response;
     }
 
-    const { latitude, longitude, accuracy, timestamp, declaredProvince, declaredCity } =
-      bodyResult.data;
+    const {
+      latitude,
+      longitude,
+      accuracy,
+      timestamp,
+      declaredProvince,
+      declaredCity,
+      declaredTown,
+    } = bodyResult.data;
+    const previewOnly = request.nextUrl.searchParams.get("preview") === "1";
     const isConfirmationMode = !!declaredProvince;
     const normalizedDeclaredProvince = isConfirmationMode
       ? normalizeProvinceName(declaredProvince)
@@ -284,6 +297,22 @@ export async function POST(request: NextRequest) {
           resolvedCity)
         : (resolveCityName(resolvedProvince, resolvedCity ?? null) ?? resolvedCity);
 
+    if (previewOnly) {
+      return NextResponse.json({
+        success: true,
+        preview: true,
+        persisted: false,
+        verified: gpsVerified,
+        confidence,
+        resolvedProvince,
+        resolvedCity,
+        source: geoResult.source,
+        riskScore,
+        riskLevel,
+        ...(isConfirmationMode ? { mismatch } : {}),
+      });
+    }
+
     // Upsert verification step — always auto-approved (location is self-service)
     const stepStatus = "approved" as const;
     const stepData = buildVerificationStep(
@@ -295,6 +324,7 @@ export async function POST(request: NextRequest) {
         gps_lon: longitude,
         location_province: locationProvince,
         location_city: locationCity,
+        location_town: declaredTown || null,
         risk_score: riskScore,
         risk_level: riskLevel,
         auto_status: "approved",

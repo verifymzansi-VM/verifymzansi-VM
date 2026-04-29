@@ -121,6 +121,7 @@ describe("VerificationPage", () => {
   let verificationUploadResponse: ReturnType<typeof jsonResponse>;
   let manualLocationResponse: ReturnType<typeof jsonResponse>;
   let gpsResponse: ReturnType<typeof jsonResponse>;
+  let gpsSaveResponse: ReturnType<typeof jsonResponse> | null;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -163,6 +164,7 @@ describe("VerificationPage", () => {
     verificationUploadResponse = jsonResponse({ success: true }, 200);
     manualLocationResponse = jsonResponse({ success: true }, 200);
     gpsResponse = jsonResponse({ success: true }, 200);
+    gpsSaveResponse = null;
 
     (useSearchParams as unknown as ReturnType<typeof vi.fn>).mockReturnValue(new URLSearchParams());
 
@@ -187,6 +189,9 @@ describe("VerificationPage", () => {
         return Promise.resolve(manualLocationResponse);
       }
       if (url.includes("/api/verification/location/gps")) {
+        if (!url.includes("preview=1") && gpsSaveResponse) {
+          return Promise.resolve(gpsSaveResponse);
+        }
         return Promise.resolve(gpsResponse);
       }
       return Promise.resolve(jsonResponse({}, 200));
@@ -919,6 +924,9 @@ describe("VerificationPage", () => {
     fireEvent.change(screen.getByLabelText(/^City$/i), {
       target: { value: "Johannesburg" },
     });
+    fireEvent.change(screen.getByLabelText(/Town \/ Suburb/i), {
+      target: { value: "Soweto" },
+    });
     fireEvent.click(screen.getByRole("button", { name: /Save Address/i }));
 
     await waitFor(() => {
@@ -930,10 +938,10 @@ describe("VerificationPage", () => {
       );
     });
     expect(screen.getByRole("button", { name: /Save Address/i })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /Submit Verification/i })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /Submit Verification/i })).not.toBeInTheDocument();
   });
 
-  it("keeps a saved address visible without a verification tick until GPS succeeds", async () => {
+  it("finishes verification when the address is saved", async () => {
     sessionResponse = jsonResponse(
       {
         sessionId: "session-1",
@@ -975,12 +983,12 @@ describe("VerificationPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save Address/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/^Saved address$/i)).toBeInTheDocument();
-      expect(screen.getAllByText(/Soweto, Johannesburg, Gauteng/i).length).toBeGreaterThan(0);
-      expect(screen.getByRole("button", { name: /Verify Address with GPS/i })).toBeInTheDocument();
+      expect(
+        screen.getAllByRole("heading", { name: /Verification Submitted/i }).length
+      ).toBeGreaterThan(0);
     });
 
-    expect(screen.queryByText(/^GPS-verified address$/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Submit Verification/i })).not.toBeInTheDocument();
   });
 
   it("shows a verified address state after successful GPS confirmation", async () => {
@@ -1009,10 +1017,24 @@ describe("VerificationPage", () => {
     gpsResponse = jsonResponse(
       {
         success: true,
+        preview: true,
+        persisted: false,
         verified: true,
         confidence: "high",
         resolvedProvince: "Gauteng",
         resolvedCity: "Johannesburg",
+        mismatch: { province: false, city: false },
+      },
+      200
+    );
+    gpsSaveResponse = jsonResponse(
+      {
+        success: true,
+        verified: true,
+        confidence: "high",
+        resolvedProvince: "Gauteng",
+        resolvedCity: "Johannesburg",
+        mismatch: { province: false, city: false },
       },
       200
     );
@@ -1046,8 +1068,9 @@ describe("VerificationPage", () => {
     fireEvent.change(screen.getByLabelText(/^City$/i), {
       target: { value: "Johannesburg" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Save Address/i }));
-
+    fireEvent.change(screen.getByLabelText(/Town \/ Suburb/i), {
+      target: { value: "Soweto" },
+    });
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /Verify Address with GPS/i })).toBeInTheDocument();
     });
@@ -1055,10 +1078,40 @@ describe("VerificationPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Verify Address with GPS/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/^GPS-verified address$/i)).toBeInTheDocument();
       expect(screen.getByText(/Address verified by GPS/i)).toBeInTheDocument();
-      expect(screen.getByText(/GPS verified \(GPS: high\)/i)).toBeInTheDocument();
+      expect(screen.getByText(/GPS matches the province and city/i)).toBeInTheDocument();
     });
+
+    expect(
+      fetchCalls().some(([input]) =>
+        String(input).includes("/api/verification/location/gps?preview=1")
+      )
+    ).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: /Save Address/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByRole("heading", { name: /Verification Submitted/i }).length
+      ).toBeGreaterThan(0);
+    });
+
+    expect(fetchCalls().some(([input]) => String(input) === "/api/verification/location/gps")).toBe(
+      true
+    );
+    const gpsSaveCall = fetchCalls().find(
+      ([input]) => String(input) === "/api/verification/location/gps"
+    );
+    expect(JSON.parse(String(gpsSaveCall?.[1]?.body))).toEqual(
+      expect.objectContaining({
+        declaredProvince: "Gauteng",
+        declaredCity: "Johannesburg",
+        declaredTown: "Soweto",
+      })
+    );
+    expect(
+      fetchCalls().some(([input]) => String(input).includes("/api/verification/location/manual"))
+    ).toBe(false);
   });
 
   it("shows the explicit email-confirmation blocker when GPS verification is rejected", async () => {
@@ -1120,10 +1173,7 @@ describe("VerificationPage", () => {
     fireEvent.change(screen.getByLabelText(/^City$/i), {
       target: { value: "Johannesburg" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Save Address/i }));
-
     await waitFor(() => {
-      expect(screen.getByText(/^Saved address$/i)).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /Verify Address with GPS/i })).toBeInTheDocument();
     });
 
@@ -1143,7 +1193,104 @@ describe("VerificationPage", () => {
     expect(screen.getByRole("button", { name: /Verify Address with GPS/i })).toBeDisabled();
   });
 
-  it("stays on completion after final submit when prior document steps are already persisted", async () => {
+  it("falls back to manual save when GPS confirmation cannot be persisted", async () => {
+    sessionResponse = jsonResponse(
+      {
+        sessionId: "session-1",
+        completedSteps: ["phone", "id_doc", "selfie"],
+        pendingSteps: [],
+        requiredSteps: ["phone", "id_doc", "selfie", "location"],
+        finalizedAt: null,
+        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
+      },
+      200
+    );
+    statusResponse = jsonResponse(
+      buildStatusPayload({
+        steps: [
+          { step_type: "phone", status: "approved" },
+          { step_type: "id_doc", status: "approved" },
+          { step_type: "selfie", status: "approved" },
+        ],
+      }),
+      200
+    );
+    gpsResponse = jsonResponse(
+      {
+        success: true,
+        preview: true,
+        persisted: false,
+        verified: true,
+        confidence: "high",
+        resolvedProvince: "Gauteng",
+        resolvedCity: "Johannesburg",
+        mismatch: { province: false, city: false },
+      },
+      200
+    );
+    gpsSaveResponse = jsonResponse(
+      {
+        success: true,
+        persisted: false,
+        warning: "Failed to save location verification",
+        verified: false,
+      },
+      200
+    );
+    manualLocationResponse = jsonResponse({ success: true }, 200);
+
+    const mockGetCurrentPosition = vi.fn((success: PositionCallback) =>
+      success({
+        coords: {
+          latitude: -26.2041,
+          longitude: 28.0473,
+          accuracy: 12,
+        } as GeolocationCoordinates,
+        timestamp: Date.now(),
+      } as GeolocationPosition)
+    );
+    Object.defineProperty(global.navigator, "geolocation", {
+      configurable: true,
+      value: {
+        getCurrentPosition: mockGetCurrentPosition,
+      },
+    });
+
+    render(<VerificationPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Save Address/i })).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText(/^Province$/i), {
+      target: { value: "Gauteng" },
+    });
+    fireEvent.change(screen.getByLabelText(/^City$/i), {
+      target: { value: "Johannesburg" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Verify Address with GPS/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Address verified by GPS/i)).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Save Address/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByRole("heading", { name: /Verification Submitted/i }).length
+      ).toBeGreaterThan(0);
+    });
+
+    expect(fetchCalls().some(([input]) => String(input) === "/api/verification/location/gps")).toBe(
+      true
+    );
+    expect(
+      fetchCalls().some(([input]) => String(input).includes("/api/verification/location/manual"))
+    ).toBe(true);
+  });
+
+  it("stays on completion after saving location when prior document steps are already persisted", async () => {
     sessionResponse = jsonResponse(
       {
         sessionId: "session-ready-for-location",
@@ -1181,16 +1328,11 @@ describe("VerificationPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save Address/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/^Saved address$/i)).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /Submit Verification/i }));
-
-    await waitFor(() => {
       expect(
         screen.getAllByRole("heading", { name: /Verification Submitted/i }).length
       ).toBeGreaterThan(0);
     });
     expect(screen.queryByText(/Step 1: Phone \+ OTP/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Submit Verification/i })).not.toBeInTheDocument();
   });
 });

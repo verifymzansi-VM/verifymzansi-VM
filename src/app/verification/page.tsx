@@ -97,6 +97,7 @@ const GPS_WATCH_SETTLE_MS = 4000;
 
 type VerificationApiResponse = {
   success?: boolean;
+  preview?: boolean;
   persisted?: boolean;
   warning?: string;
   verified?: boolean;
@@ -122,7 +123,7 @@ const STEP_COPY: Record<Exclude<WizardStep, "complete">, string> = {
   id_doc: "Enter your 13-digit SA ID and take a clear photo of your ID. Max 5 MB.",
   selfie: "Take a live selfie using your camera. Max 5 MB.",
   location:
-    "Select your province and city, save it, then optionally use GPS to confirm your device location matches what you selected.",
+    "Select your province and city, optionally use GPS to confirm your device location matches, then save your address.",
 };
 
 const GEOLOCATION_PERMISSION_DENIED = 1;
@@ -550,6 +551,7 @@ export default function VerificationPage() {
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lon: number; accuracy: number } | null>(
     null
   );
+  const [gpsTimestamp, setGpsTimestamp] = useState<number | null>(null);
   const [gpsConfidence, setGpsConfidence] = useState<LocationConfidence | null>(null);
   const [gpsProvince, setGpsProvince] = useState<string | null>(null);
   const [gpsFeatureAvailable, setGpsFeatureAvailable] = useState(true);
@@ -567,7 +569,6 @@ export default function VerificationPage() {
   const [idAgeError, setIdAgeError] = useState<string | null>(null);
 
   const [isLoading, setIsLoading] = useState(false);
-  const [isFinalizing, setIsFinalizing] = useState(false);
   const [isUploadingId, setIsUploadingId] = useState(false);
   const [isUploadingSelfie, setIsUploadingSelfie] = useState(false);
   const [completedSteps, setCompletedSteps] = useState<VerificationStepType[]>([]);
@@ -637,7 +638,7 @@ export default function VerificationPage() {
     !persistedGpsMismatch?.province &&
     !persistedGpsMismatch?.city;
   const locationVerified = persistedGpsVerified || gpsApproved;
-  const isLocationReady = locationSaved;
+  const hasSelectedLocation = Boolean(province && city);
   const locationSummary = formatLocationSummary(locationTown, city, province);
   const allStepsResolved = useMemo(
     () =>
@@ -936,12 +937,14 @@ export default function VerificationPage() {
     setGpsConfidence(null);
     setGpsProvince(null);
     setGpsCoords(null);
+    setGpsTimestamp(null);
     setGpsStatus("requesting");
 
     try {
       const position = await requestDeviceGpsPosition();
       const { latitude, longitude, accuracy } = position.coords;
       setGpsCoords({ lat: latitude, lon: longitude, accuracy });
+      setGpsTimestamp(position.timestamp);
       setGpsStatus("success");
 
       try {
@@ -951,18 +954,44 @@ export default function VerificationPage() {
           accuracy,
           timestamp: position.timestamp,
         };
-        // Pass declared values for GPS confirmation mode
-        if (manualSubmitted && province) {
+        // Pass declared values so GPS can confirm the address before the final save.
+        if (province && city) {
           gpsBody.declaredProvince = province;
-          if (city) gpsBody.declaredCity = city;
+          gpsBody.declaredCity = city;
+          if (locationTown) gpsBody.declaredTown = locationTown;
         }
-        const res = await fetch("/api/verification/location/gps", {
-          method: "POST",
-          headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-          body: JSON.stringify(gpsBody),
-        });
+        const previewGpsCheck = Boolean(province && city && !manualSubmitted);
+        const res = await fetch(
+          `/api/verification/location/gps${previewGpsCheck ? "?preview=1" : ""}`,
+          {
+            method: "POST",
+            headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify(gpsBody),
+          }
+        );
         if (res.ok) {
           const data = await res.json();
+          if (data.preview === true) {
+            setGpsConfidence(data.confidence);
+            setGpsProvince(data.resolvedProvince ?? null);
+            setGpsMismatch(data.mismatch ?? null);
+            setGpsApproved(Boolean(data.verified));
+
+            const gpsMismatchDescription = data.mismatch?.province
+              ? `GPS detected a different province${data.resolvedProvince ? ` (${data.resolvedProvince})` : ""}. Check your selected address before saving.`
+              : data.mismatch?.city
+                ? "GPS detected a different city. Check your selected address before saving."
+                : "GPS captured your location, but it did not match the province and city you selected closely enough.";
+
+            toast({
+              title: data.verified ? "Address confirmed by GPS" : "GPS check complete",
+              description: data.verified
+                ? "GPS matched the province and city you selected. You can save the address now."
+                : gpsMismatchDescription,
+              variant: data.verified ? "success" : "default",
+            });
+            return;
+          }
           if (data.persisted === false) {
             setGpsStatus("idle");
             setGpsApproved(false);
@@ -975,7 +1004,7 @@ export default function VerificationPage() {
             });
             return;
           }
-          if (!manualSubmitted) {
+          if (!province || !city) {
             setProvince(data.resolvedProvince ?? "");
             setCity(data.resolvedCity ?? "");
           }
@@ -1020,7 +1049,8 @@ export default function VerificationPage() {
             return;
           }
           const optionalGpsPersistenceFailure =
-            manualSubmitted &&
+            province &&
+            city &&
             (res.status >= 500 || data.error === "Failed to save location verification");
 
           if (optionalGpsPersistenceFailure) {
@@ -1049,6 +1079,7 @@ export default function VerificationPage() {
         setGpsApproved(false);
         setGpsMismatch(null);
         setGpsStatus("error");
+        setGpsTimestamp(null);
         toast({
           title: "GPS verification failed",
           description: err instanceof Error ? err.message : "Please try again.",
@@ -1058,6 +1089,7 @@ export default function VerificationPage() {
     } catch (err) {
       setGpsApproved(false);
       setGpsMismatch(null);
+      setGpsTimestamp(null);
       const permissionDenied = isGeolocationPermissionDenied(err);
       setGpsStatus(permissionDenied ? "denied" : "error");
       toast({
@@ -1073,6 +1105,7 @@ export default function VerificationPage() {
     manualSubmitted,
     province,
     city,
+    locationTown,
     syncVerificationStatus,
   ]);
 
@@ -1431,17 +1464,6 @@ export default function VerificationPage() {
     markStepComplete("selfie");
   }
 
-  async function submitLocation() {
-    if (persistedLocationSubmitted || manualSubmitted) {
-      if (!completedSteps.includes("location")) {
-        markStepComplete("location");
-      }
-      return;
-    }
-
-    throw new Error("Please select your province and city.");
-  }
-
   async function handleManualLocationSubmit() {
     if (verificationSubmissionBlocked) {
       toast({
@@ -1458,32 +1480,78 @@ export default function VerificationPage() {
     }
     setManualSubmitting(true);
     try {
-      const res = await fetch("/api/verification/location/manual", {
-        method: "POST",
-        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ province, city, town: locationTown || undefined }),
-      });
+      const submitManualAddress = () =>
+        fetch("/api/verification/location/manual", {
+          method: "POST",
+          headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify({ province, city, town: locationTown || undefined }),
+        });
+      const gpsConfirmation =
+        gpsApproved && gpsCoords && gpsTimestamp
+          ? {
+              latitude: gpsCoords.lat,
+              longitude: gpsCoords.lon,
+              accuracy: gpsCoords.accuracy,
+              timestamp: gpsTimestamp,
+            }
+          : null;
+      let savedWithGps = false;
+      let res = gpsConfirmation
+        ? await fetch("/api/verification/location/gps", {
+            method: "POST",
+            headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify({
+              ...gpsConfirmation,
+              declaredProvince: province,
+              declaredCity: city,
+              declaredTown: locationTown || undefined,
+            }),
+          })
+        : await submitManualAddress();
+
+      let data = (await res.json().catch(() => ({}))) as VerificationApiResponse;
+
+      if (gpsConfirmation && res.ok) {
+        savedWithGps = data.persisted !== false && data.verified !== false;
+        if (!savedWithGps) {
+          setGpsApproved(false);
+          res = await submitManualAddress();
+          data = (await res.json().catch(() => ({}))) as VerificationApiResponse;
+        }
+      }
+
       if (res.ok) {
         setManualSubmitted(true);
-        setGpsApproved(false);
+        setGpsApproved(savedWithGps);
         setGpsStatus("idle");
-        setGpsCoords(null);
-        setGpsConfidence(null);
-        setGpsProvince(null);
-        setGpsMismatch(null);
         await syncVerificationStatus();
         toast({
           title: "Address saved",
-          description:
-            "Your selected address has been saved. Use GPS to confirm it matches your device location.",
+          description: savedWithGps
+            ? "Your GPS-confirmed address has been sent to admin for review."
+            : gpsConfirmation
+              ? "Your address was submitted for review. GPS confirmation could not be saved, so it was sent without GPS evidence."
+              : "Your verification has been sent to admin for review.",
           variant: "success",
         });
+        setStep("complete");
       } else {
-        const data = (await res.json().catch(() => ({}))) as VerificationApiResponse;
         if (applyEmailConfirmationBlocker(data)) {
           toast({
             title: "Confirm your email first",
             description: EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION,
+            variant: "destructive",
+          });
+          return;
+        }
+        if (gpsConfirmation) {
+          setGpsApproved(false);
+          toast({
+            title: "GPS confirmation could not be saved",
+            description:
+              data.detail ||
+              data.error ||
+              "Your address is still selected. Click Save Address again to submit it without GPS confirmation.",
             variant: "destructive",
           });
           return;
@@ -1502,73 +1570,6 @@ export default function VerificationPage() {
       });
     } finally {
       setManualSubmitting(false);
-    }
-  }
-
-  async function handleFinalize() {
-    if (verificationSubmissionBlocked) {
-      toast({
-        title: blockedSubmissionTitle,
-        description: blockedSubmissionDescription,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!isPhoneReady) {
-      setStep("phone");
-      toast({ title: "Verify your phone first", variant: "destructive" });
-      return;
-    }
-    if (!isIdReady) {
-      setStep("id_doc");
-      toast({ title: "ID details are incomplete", variant: "destructive" });
-      return;
-    }
-    if (!isSelfieReady) {
-      setStep("selfie");
-      toast({ title: "Selfie is required", variant: "destructive" });
-      return;
-    }
-    if (!isLocationReady) {
-      toast({
-        title: "Save your address first",
-        description: "Please select your province and city before submitting.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsFinalizing(true);
-    try {
-      await uploadIdIfNeeded();
-      await uploadSelfieIfNeeded();
-      await submitLocation();
-      const statusSnapshot = await syncVerificationStatus();
-
-      const locationStep = statusSnapshot?.steps.find((entry) => entry.step_type === "location");
-      const _addressVerified = locationStep?.status === "approved";
-      const verificationComplete = statusSnapshot?.accountStatus === "verified";
-
-      toast({
-        title: verificationComplete ? "Verification approved" : "Verification submitted",
-        description: verificationComplete
-          ? "Your account is verified."
-          : "Everything was submitted to admin. Your application is pending review.",
-        variant: "success",
-      });
-      setStep("complete");
-    } catch (err) {
-      const isEmailBlocker =
-        err instanceof SubmissionError &&
-        err.code === VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE;
-      toast({
-        title: isEmailBlocker ? "Confirm your email first" : "Submission failed",
-        description: err instanceof Error ? err.message : "Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsFinalizing(false);
     }
   }
 
@@ -1901,7 +1902,7 @@ export default function VerificationPage() {
                         variant="ghost"
                         size="sm"
                         className="h-11 text-sm text-muted-foreground sm:text-xs"
-                        disabled={isLoading || isFinalizing}
+                        disabled={isLoading}
                         onClick={() => {
                           setPhoneVerified(false);
                           setOtpSent(false);
@@ -2254,6 +2255,7 @@ export default function VerificationPage() {
                           setGpsApproved(false);
                           setGpsStatus("idle");
                           setGpsCoords(null);
+                          setGpsTimestamp(null);
                           setGpsConfidence(null);
                           setGpsProvince(null);
                           setGpsMismatch(null);
@@ -2302,7 +2304,7 @@ export default function VerificationPage() {
                     </div>
 
                     {/* GPS Confirmation (Recommended) */}
-                    {locationSaved && !locationVerified && (
+                    {hasSelectedLocation && !locationSaved && !locationVerified && (
                       <div className="space-y-3 rounded-md border border-dashed border-brand-blue/40 p-4 bg-brand-blue/5">
                         <h4 className="flex items-center gap-2 text-sm font-medium">
                           <Navigation className="h-4 w-4 text-brand-blue" />
@@ -2310,7 +2312,7 @@ export default function VerificationPage() {
                         </h4>
                         <p className="text-xs text-muted-foreground">
                           Use GPS to confirm the province and city you selected match your device
-                          location.
+                          location before saving.
                         </p>
 
                         {gpsFeatureAvailable && gpsStatus === "idle" && (
@@ -2346,6 +2348,7 @@ export default function VerificationPage() {
                                 setGpsStatus("idle");
                                 setGpsApproved(false);
                                 setGpsCoords(null);
+                                setGpsTimestamp(null);
                                 setGpsConfidence(null);
                                 setGpsProvince(null);
                                 setGpsMismatch(null);
@@ -2430,24 +2433,11 @@ export default function VerificationPage() {
                       <Button
                         variant="outline"
                         onClick={() => setStep("selfie")}
-                        disabled={isFinalizing}
+                        disabled={manualSubmitting}
                         className="h-11 gap-1"
                       >
                         <ArrowLeft className="h-4 w-4" />
                         Back
-                      </Button>
-                      <Button
-                        onClick={handleFinalize}
-                        disabled={!isLocationReady || isFinalizing || verificationSubmissionBlocked}
-                        variant="trust-verified"
-                        className="h-11 gap-2"
-                      >
-                        {isFinalizing ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <ShieldCheck className="h-4 w-4" />
-                        )}
-                        Submit Verification
                       </Button>
                     </div>
                   </CardContent>
