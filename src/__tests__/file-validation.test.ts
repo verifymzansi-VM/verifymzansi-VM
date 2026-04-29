@@ -75,6 +75,13 @@ describe("File Validation", () => {
       expect(detectMimeFromMagicBytes(buf)).toBe("image/avif");
     });
 
+    it("detects QuickTime before generic MP4", () => {
+      const buf = new Uint8Array([
+        0x00, 0x00, 0x00, 0x14, 0x66, 0x74, 0x79, 0x70, 0x71, 0x74, 0x20, 0x20,
+      ]);
+      expect(detectMimeFromMagicBytes(buf)).toBe("video/quicktime");
+    });
+
     it("returns null for empty buffer", () => {
       expect(detectMimeFromMagicBytes(new Uint8Array(0))).toBeNull();
     });

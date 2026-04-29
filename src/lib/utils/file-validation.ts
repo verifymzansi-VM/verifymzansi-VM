@@ -29,7 +29,13 @@ const MAGIC_SIGNATURES: Array<{
   { mime: "image/heic", bytes: [0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x78], offset: 4 },
   // PDF: %PDF
   { mime: "application/pdf", bytes: [0x25, 0x50, 0x44, 0x46] },
-  // MP4 / QuickTime: bytes 4-7 = "ftyp" (ISO base media file, covers mp4 & mov)
+  // QuickTime/MOV: ISO BMFF with "ftypqt  " at offset 4. Must be before generic MP4.
+  {
+    mime: "video/quicktime",
+    bytes: [0x66, 0x74, 0x79, 0x70, 0x71, 0x74, 0x20, 0x20],
+    offset: 4,
+  },
+  // MP4: bytes 4-7 = "ftyp" (after stricter image/QuickTime signatures above)
   { mime: "video/mp4", bytes: [0x66, 0x74, 0x79, 0x70], offset: 4 },
   // WebM: bytes 0-3 = 0x1A45DFA3 (EBML header, covers WebM/Matroska)
   { mime: "video/webm", bytes: [0x1a, 0x45, 0xdf, 0xa3] },

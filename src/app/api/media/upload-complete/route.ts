@@ -225,7 +225,7 @@ export async function POST(request: NextRequest) {
     }
 
     const detectedMime = detectMimeFromMagicBytes(object.bytes.slice(0, 12));
-    if (!detectedMime || !VIDEO_TYPES.has(detectedMime)) {
+    if (detectedMime !== contentType) {
       await cleanupRejectedUpload({
         bucket: row.bucket,
         key,

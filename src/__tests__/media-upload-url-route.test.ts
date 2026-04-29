@@ -32,6 +32,7 @@ vi.mock("@/lib/utils/rate-limit", () => ({
 }));
 
 import { POST } from "@/app/api/media/upload-url/route";
+import { UPLOAD_AREAS } from "@/types/enums";
 
 const ORIGINAL_ENABLE_DIRECT_R2_UPLOADS = process.env.ENABLE_DIRECT_R2_UPLOADS;
 
@@ -275,5 +276,48 @@ describe("POST /api/media/upload-url", () => {
         area: "listing_video",
       })
     );
+  });
+
+  it("accepts every configured upload area for video direct uploads", async () => {
+    process.env.R2_PUBLIC_URL = "https://media.verifymzansi.com";
+    const insert = vi.fn().mockResolvedValue({ error: null });
+
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
+      from: vi.fn((table: string) => {
+        if (table === "media_uploads") {
+          return { insert };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
+        };
+      }),
+    });
+
+    for (const area of UPLOAD_AREAS) {
+      const res = await POST(
+        createRequest({
+          filename: "clip.mp4",
+          contentType: "video/mp4",
+          size: 2048,
+          area,
+        })
+      );
+
+      expect(res.status, area).toBe(200);
+      await expect(res.json()).resolves.toMatchObject({
+        uploadUrl: "https://upload.example.com/signed",
+        publicUrl: "https://media.verifymzansi.com/media/listing/user-1/video.mp4",
+      });
+    }
+
+    expect(insert).toHaveBeenCalledTimes(UPLOAD_AREAS.length);
+    for (const area of UPLOAD_AREAS) {
+      expect(insert).toHaveBeenCalledWith(expect.objectContaining({ area }));
+    }
   });
 });

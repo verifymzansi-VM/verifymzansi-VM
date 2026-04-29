@@ -535,7 +535,7 @@ describe("CreateListingPage", () => {
               json: async () => ({
                 success: false,
                 urls: [],
-                errors: ['"clip.mp4": unable to verify video file type'],
+                errors: ['"clip.mp4": file content does not match declared video type'],
                 traceId: "trace-video-1",
               }),
               headers: new Headers(),
@@ -581,7 +581,8 @@ describe("CreateListingPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getAllByText(/unable to verify video file type.*trace-video-1/i).length
+        screen.getAllByText(/file content does not match declared video type.*trace-video-1/i)
+          .length
       ).toBeGreaterThan(0);
     });
     expect(screen.getByText(/Selected listing media could not be uploaded/i)).toBeInTheDocument();

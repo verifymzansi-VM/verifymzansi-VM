@@ -211,5 +211,33 @@ describe("Media Upload Routes", () => {
       expect(data.urls).toEqual([]);
       expect(data.errors).toEqual(['"test.txt": unsupported file type']);
     });
+
+    it("rejects mp4 uploads whose bytes are QuickTime/MOV", async () => {
+      mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === "media_uploads") {
+          return {
+            insert: vi.fn().mockResolvedValue({ error: null }),
+          };
+        }
+
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" } }),
+        };
+      });
+
+      const quickTimeHeader = new Uint8Array([
+        0x00, 0x00, 0x00, 0x14, 0x66, 0x74, 0x79, 0x70, 0x71, 0x74, 0x20, 0x20,
+      ]);
+      const file = new File([quickTimeHeader], "clip.mp4", { type: "video/mp4" });
+      const res = await uploadMedia(createFormDataRequest([file]));
+      const data = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(data.errors).toEqual(['"clip.mp4": file content does not match declared video type']);
+      expect(uploadToR2).not.toHaveBeenCalled();
+    });
   });
 });

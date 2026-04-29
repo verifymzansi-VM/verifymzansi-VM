@@ -37,7 +37,8 @@ interface UploadOptions {
   onQualityWarning?: (message: string) => void;
 }
 
-const VIDEO_TYPES = new Set(["video/mp4", "video/webm"]);
+const UPLOAD_VIDEO_TYPES = new Set(["video/mp4", "video/webm"]);
+const COMPRESSIBLE_VIDEO_TYPES = new Set([...UPLOAD_VIDEO_TYPES, "video/quicktime"]);
 
 /** Max video duration default: 2 minutes */
 const DEFAULT_MAX_DURATION_SEC = 120;
@@ -328,14 +329,14 @@ export function useMediaUpload(options: UploadOptions = {}) {
 
   const validate = useCallback(
     (file: File): string | null => {
-      const isVideo = VIDEO_TYPES.has(file.type);
+      const isVideo = COMPRESSIBLE_VIDEO_TYPES.has(file.type);
       const effectiveMax = isVideo ? 50 : maxSizeMB;
 
       if (file.size > effectiveMax * 1024 * 1024) {
         return `File too large. Maximum size is ${effectiveMax}MB.`;
       }
 
-      const allAllowed = [...allowedTypes, ...VIDEO_TYPES];
+      const allAllowed = [...allowedTypes, ...COMPRESSIBLE_VIDEO_TYPES];
       if (allAllowed.length > 0 && !allAllowed.includes(file.type)) {
         return `File type "${file.type}" not allowed. Accepted: ${allAllowed.join(", ")}`;
       }
@@ -369,7 +370,7 @@ export function useMediaUpload(options: UploadOptions = {}) {
         url: null,
       });
 
-      const isVideo = VIDEO_TYPES.has(file.type);
+      const isVideo = COMPRESSIBLE_VIDEO_TYPES.has(file.type);
 
       // ── Video duration + dimension check (client-side) ───────────────
       if (isVideo) {
@@ -460,6 +461,22 @@ export function useMediaUpload(options: UploadOptions = {}) {
           }
 
           setState((prev) => ({ ...prev, isCompressing: false, compressionProgress: 100 }));
+
+          if (!UPLOAD_VIDEO_TYPES.has(uploadFile.type)) {
+            const errorMsg =
+              file.type === "video/quicktime"
+                ? "MOV videos must be compressed to MP4 before upload. Please try again or export as MP4."
+                : `File type "${uploadFile.type}" not allowed. Accepted: ${[...UPLOAD_VIDEO_TYPES].join(", ")}`;
+            setState({
+              isUploading: false,
+              isCompressing: false,
+              compressionProgress: 0,
+              progress: 0,
+              error: errorMsg,
+              url: null,
+            });
+            return null;
+          }
 
           // 1. Upload through the validated server endpoint
           setState((prev) => ({ ...prev, progress: 2 }));

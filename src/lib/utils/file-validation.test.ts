@@ -71,6 +71,12 @@ describe("detectMimeFromMagicBytes", () => {
     expect(detectMimeFromMagicBytes(buf)).toBe("video/webm");
   });
 
+  it("detects QuickTime before generic MP4", () => {
+    const ftypQuickTime = [0x66, 0x74, 0x79, 0x70, 0x71, 0x74, 0x20, 0x20];
+    const buf = makeBufferAt(4, ftypQuickTime);
+    expect(detectMimeFromMagicBytes(buf)).toBe("video/quicktime");
+  });
+
   it("detects ZIP", () => {
     const buf = makeBuffer([0x50, 0x4b, 0x03, 0x04]);
     expect(detectMimeFromMagicBytes(buf)).toBe("application/zip");

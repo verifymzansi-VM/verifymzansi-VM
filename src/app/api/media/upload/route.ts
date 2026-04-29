@@ -210,15 +210,10 @@ export async function POST(request: NextRequest) {
         errors.push(`"${file.name}": file content does not match declared type`);
         continue;
       }
-      if (isVideo && detectedMime !== null && !VIDEO_TYPES.has(detectedMime)) {
-        // If we detected a non-video type (e.g. image or PDF disguised as video), reject.
+      if (isVideo && detectedMime !== file.type) {
+        // Require declared MIME to match bytes for videos so MOV/QuickTime cannot be
+        // smuggled in as MP4. Client-side compression must produce MP4/WebM first.
         errors.push(`"${file.name}": file content does not match declared video type`);
-        continue;
-      }
-      if (isVideo && detectedMime === null) {
-        // Reject uploads where MIME cannot be verified for video files
-        log.warn("Rejected video upload with undetectable MIME", { filename: file.name });
-        errors.push(`"${file.name}": unable to verify video file type`);
         continue;
       }
 

@@ -118,6 +118,20 @@ describe("MediaUpload", () => {
     expect(screen.getByText(/MP4, WebM, MOV/)).toBeInTheDocument();
   });
 
+  it("accepts MOV files in video mode so submit can transcode them", async () => {
+    render(<SingleVideoHarness />);
+
+    const input = screen.getByLabelText("Upload photos and videos");
+    const file = new File(["video"], "clip.mov", { type: "video/quicktime" });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Remove clip.mov" })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText("Some files were not added")).not.toBeInTheDocument();
+  });
+
   it("can remove and re-select the same maxFiles=1 video", async () => {
     render(<SingleVideoHarness />);
 

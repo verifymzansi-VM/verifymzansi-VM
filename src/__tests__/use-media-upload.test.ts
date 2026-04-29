@@ -104,12 +104,11 @@ describe("useMediaUpload", () => {
     expect(error).toMatch(/type/i);
   });
 
-  it("should reject quicktime video uploads", () => {
+  it("should accept quicktime video as a compression input", () => {
     const { result } = renderHook(() => useMediaUpload());
     const movFile = new File(["data"], "clip.mov", { type: "video/quicktime" });
     const error = result.current.validate(movFile);
-    expect(error).toBeTruthy();
-    expect(error).toMatch(/type/i);
+    expect(error).toBeNull();
   });
 
   it("should upload image successfully", async () => {

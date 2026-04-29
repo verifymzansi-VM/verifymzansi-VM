@@ -156,4 +156,32 @@ describe("POST /api/media/upload-complete", () => {
       "media/listing/user-1/clip.mp4"
     );
   });
+
+  it("rejects and cleans up direct uploads when bytes do not match declared type", async () => {
+    mockTrackedUpload({ file_size: 12 });
+    mockGetR2ObjectBytes.mockResolvedValue({
+      bytes: new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0, 0, 0, 0, 0, 0, 0, 0]),
+      contentType: "video/mp4",
+      contentLength: 12,
+    });
+
+    const res = await POST(
+      createRequest({
+        key: "media/listing/user-1/clip.mp4",
+        publicUrl: "https://media.example.com/media/listing/user-1/clip.mp4",
+        contentType: "video/mp4",
+        size: 12,
+        area: "listing",
+      })
+    );
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      code: "uploaded_object_mime_mismatch",
+    });
+    expect(mockDeleteFromR2).toHaveBeenCalledWith(
+      "verifymzansi-public",
+      "media/listing/user-1/clip.mp4"
+    );
+  });
 });
