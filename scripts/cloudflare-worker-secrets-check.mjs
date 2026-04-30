@@ -37,6 +37,23 @@ const requiredSecrets = [
   "RATE_LIMITER_API_KEY",
 ];
 
+function hasCloudflareApiToken() {
+  return (
+    typeof process.env.CLOUDFLARE_API_TOKEN === "string" &&
+    process.env.CLOUDFLARE_API_TOKEN.trim().length > 0
+  );
+}
+
+function assertCloudflareApiToken() {
+  if (hasCloudflareApiToken()) {
+    return;
+  }
+
+  throw new Error(
+    "CLOUDFLARE_API_TOKEN is required to inspect deployed Worker secrets in non-interactive release checks. Set a Cloudflare API token with Workers Scripts Read and Account Workers Scripts Read access, then rerun pnpm cloudflare:secrets:check."
+  );
+}
+
 const forbiddenProductionSecrets = [
   "PLAYWRIGHT_E2E_AUTH",
   "PLAYWRIGHT_TEST_MODE",
@@ -56,7 +73,7 @@ const forbiddenProductionSecrets = [
 ];
 
 function buildWranglerCommand(commandParts) {
-  const parts = ["pnpm", "wrangler", ...commandParts, "--name", workerName];
+  const parts = ["pnpm", "exec", "wrangler", ...commandParts, "--name", workerName];
   if (envArg) {
     parts.push("--env", targetEnv);
   }
@@ -96,6 +113,8 @@ function getCurrentVersionId(deployments) {
 }
 
 async function main() {
+  assertCloudflareApiToken();
+
   const deployments = await runWranglerJson(["deployments", "list"]);
   const currentVersionId = getCurrentVersionId(deployments);
   const version = await runWranglerJson(["versions", "view", currentVersionId]);
@@ -136,6 +155,9 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error("Cloudflare Worker secret check failed:", error instanceof Error ? error.message : error);
+  console.error(
+    "Cloudflare Worker secret check failed:",
+    error instanceof Error ? error.message : error
+  );
   process.exit(1);
 });

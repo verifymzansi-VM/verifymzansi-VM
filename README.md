@@ -283,6 +283,10 @@ Run the one-command stabilization gate with:
 pnpm run stability:check
 ```
 
+Quality and launch scripts resolve local CLIs through `pnpm exec`, so the same
+commands work on native Windows, WSL, Ubuntu, and CI without relying on shell
+shim behavior.
+
 Or run the blocking launch gate step-by-step with:
 
 ```bash

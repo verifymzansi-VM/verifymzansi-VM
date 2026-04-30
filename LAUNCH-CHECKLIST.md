@@ -61,6 +61,9 @@ Failure triage map:
   runtime-critical checks (health and HSTS).
 - `pnpm cloudflare:posture:strict:zone` failure: resolve zone-governance checks
   (`www` routing/DNS behavior and DNSSEC DS) before final sign-off.
+- `pnpm cloudflare:secrets:check` exits before inspecting deployments: set
+  `CLOUDFLARE_API_TOKEN` for the shell/CI job. The token must be able to read
+  Workers deployments and version bindings for the VerifyMzansi account.
 - `pnpm cloudflare:secrets:check` failure: add missing Worker secrets (for
   example `KYC_WEBHOOK_SECRET`) and remove forbidden production bypass secrets
   before any deploy promotion.
@@ -106,6 +109,11 @@ deployed Cloudflare/Wrangler runtime secrets:
   upstream packages update or compatibility is proven.
 
 Failing any of the above should block deploy.
+
+The release-checking environment, such as a local shell or GitHub Actions job,
+must also expose `CLOUDFLARE_API_TOKEN` so Wrangler can inspect deployed Worker
+versions and bindings. This token is a CI/operator credential, not an app
+runtime secret.
 
 If `RATE_LIMITER_API_KEY` is set, `OTP_RATE_LIMITER_URL` must also be set.
 
