@@ -1,0 +1,6 @@
+Contact: mailto:security@verifymzansi.com
+Contact: mailto:hello@verifymzansi.com
+Canonical: https://verifymzansi.com/.well-known/security.txt
+Preferred-Languages: en, zu, xh, af
+Policy: https://verifymzansi.com/trust-safety
+Expires: 2027-04-30T00:00:00Z

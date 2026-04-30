@@ -7,6 +7,7 @@ import { createLogger } from "@/lib/utils/logger";
 // static generation and trigger a build warning.
 
 const logger = createLogger("HealthRoute");
+const HEALTH_SNAPSHOT_TIMEOUT_MS = 1200;
 
 function publicHealthPayload(status: "ok" | "degraded") {
   return {
@@ -16,9 +17,27 @@ function publicHealthPayload(status: "ok" | "degraded") {
   };
 }
 
+async function getLaunchHealthSnapshotWithinTimeout() {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      getLaunchHealthSnapshot(),
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error("Health snapshot timed out"));
+        }, HEALTH_SNAPSHOT_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
 export async function GET() {
   try {
-    const snapshot = await getLaunchHealthSnapshot();
+    const snapshot = await getLaunchHealthSnapshotWithinTimeout();
     const status = snapshot.status === "ok" ? "ok" : "degraded";
 
     if (status === "degraded") {

@@ -111,10 +111,15 @@ async function probeSchema(
           "id, pending_phone, location_verified_at, legal_name_locked_at, contact_last_phone_change_at, contact_last_email_change_at, pending_email",
       },
     ] as const;
-    const failures: string[] = [];
+    const results = await Promise.all(
+      probes.map(async (probe) => {
+        const { error } = await supabase.from(probe.table).select(probe.select).limit(1);
+        return { probe, error };
+      })
+    );
 
-    for (const probe of probes) {
-      const { error } = await supabase.from(probe.table).select(probe.select).limit(1);
+    const failures: string[] = [];
+    for (const { probe, error } of results) {
       if (error) {
         failures.push(`${probe.table}: ${error.code ?? error.message}`);
       }
