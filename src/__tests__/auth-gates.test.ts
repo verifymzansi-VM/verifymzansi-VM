@@ -389,6 +389,26 @@ describe("checkBanEnforcement", () => {
     expect(result.response).not.toBeNull();
     expect(result.response!.status).toBe(503);
   });
+
+  it("redirects page routes to the unavailable recovery copy on DB failure", async () => {
+    const supabase = mockSupabase({
+      profileData: null,
+      profileError: { message: "connection error", code: "TIMEOUT" },
+    });
+    const result = await checkBanEnforcement(
+      createRequest("/dsar"),
+      supabase,
+      "user-1",
+      true,
+      null
+    );
+
+    expect(result.response).not.toBeNull();
+    expect(result.response!.status).toBe(307);
+    const location = new URL(result.response!.headers.get("location")!);
+    expect(location.pathname).toBe("/error");
+    expect(location.searchParams.get("reason")).toBe("unavailable");
+  });
 });
 
 // ── checkPostingGate ────────────────────────────────────────────────

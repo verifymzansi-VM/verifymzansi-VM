@@ -174,7 +174,7 @@ export async function checkBanEnforcement(
         };
       }
       return {
-        response: NextResponse.redirect(new URL("/error", request.url)),
+        response: NextResponse.redirect(new URL("/error?reason=unavailable", request.url)),
         profile: cachedProfile,
       };
     }
