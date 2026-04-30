@@ -118,10 +118,20 @@ function isAllowedComputedHashMatch({ filePath, line, ruleName }: SecretScanMatc
   return normalizedPath === "skills-lock.json" && line.includes('"computedHash"');
 }
 
+function isGeneratedArtifactHashMatch({ filePath, ruleName }: SecretScanMatchContext): boolean {
+  if (ruleName !== "64-char hex string (potential encryption key)") {
+    return false;
+  }
+
+  const normalizedPath = normalizeFilePath(filePath);
+  return /^(?:\.next|\.open-next|out|build|dist)\//.test(normalizedPath);
+}
+
 export function shouldIgnoreSecretFinding(context: SecretScanMatchContext): boolean {
   return (
     isAllowedLine(context.line) ||
     isDeterministicFixtureMatch(context) ||
-    isAllowedComputedHashMatch(context)
+    isAllowedComputedHashMatch(context) ||
+    isGeneratedArtifactHashMatch(context)
   );
 }

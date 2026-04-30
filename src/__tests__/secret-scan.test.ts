@@ -48,6 +48,24 @@ describe("secret scan allowlisting", () => {
     ).toBe(false);
   });
 
+  it("allows generated build artifact hashes without suppressing named secret rules", () => {
+    expect(
+      shouldIgnoreSecretFinding({
+        filePath: ".open-next/server-functions/default/.next/prerender-manifest.json",
+        line: fakeHash,
+        ruleName: "64-char hex string (potential encryption key)",
+      })
+    ).toBe(true);
+
+    expect(
+      shouldIgnoreSecretFinding({
+        filePath: ".next/server/chunks/7493.js",
+        line: "const key = getSecret();",
+        ruleName: "Stripe live secret",
+      })
+    ).toBe(false);
+  });
+
   it("detects unquoted env-style secret assignments for supported credentials", () => {
     expect(
       getRule("Hardcoded service role key assignment").pattern.test(
