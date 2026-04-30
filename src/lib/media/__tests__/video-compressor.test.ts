@@ -128,6 +128,16 @@ describe("compressVideo", () => {
     expect(mockLoad).not.toHaveBeenCalled(); // FFmpeg never loaded
   });
 
+  it("does not skip small QuickTime files because R2 upload requires MP4/WebM", async () => {
+    const smallMov = fakeFile(1 * 1024 * 1024, "clip.mov", "video/quicktime");
+    const result = await compressVideo(smallMov);
+
+    expect(result.skipped).toBe(false);
+    expect(result.file.type).toBe("video/mp4");
+    expect(result.file.name).toBe("clip.mp4");
+    expect(mockLoad).toHaveBeenCalled();
+  });
+
   it("skips compression for small custom threshold", async () => {
     const file = fakeFile(500_000); // 500 KB
     const result = await compressVideo(file, { skipBelowBytes: 1_000_000 });
@@ -209,6 +219,31 @@ describe("compressVideo", () => {
     expect(result.skipped).toBe(true);
     expect(result.skipReason).toContain("larger");
     expect(result.file).toBe(original);
+  });
+
+  it("keeps larger MP4 output for QuickTime input so upload validation can pass", async () => {
+    mockVideoMeta = { width: 1920, height: 1080, duration: 30 };
+    const original = fakeFile(3 * 1024 * 1024, "clip.mov", "video/quicktime");
+
+    mockReadFile.mockResolvedValueOnce(new Uint8Array(4 * 1024 * 1024));
+
+    const result = await compressVideo(original);
+
+    expect(result.skipped).toBe(false);
+    expect(result.file).not.toBe(original);
+    expect(result.file.type).toBe("video/mp4");
+    expect(result.file.name).toBe("clip.mp4");
+  });
+
+  it("adds an MP4 extension when compressed phone video has no extension", async () => {
+    mockVideoMeta = { width: 1920, height: 1080, duration: 30 };
+    const original = fakeFile(3 * 1024 * 1024, "1000061870", "video/quicktime");
+
+    const result = await compressVideo(original);
+
+    expect(result.skipped).toBe(false);
+    expect(result.file.type).toBe("video/mp4");
+    expect(result.file.name).toBe("1000061870.mp4");
   });
 
   it("falls back to original on FFmpeg failure", async () => {

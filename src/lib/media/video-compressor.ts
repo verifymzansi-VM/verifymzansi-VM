@@ -50,6 +50,8 @@ const DEFAULT_OPTIONS: Required<Omit<CompressionOptions, "onProgress" | "signal"
   skipBelowBytes: 2 * 1024 * 1024, // 2 MB
 };
 
+const WEB_UPLOAD_VIDEO_TYPES = new Set(["video/mp4", "video/webm"]);
+
 /**
  * Read video dimensions using a temporary <video> element.
  */
@@ -115,6 +117,10 @@ function shouldSkipCompression(
   dims: { width: number; height: number; duration: number } | null,
   opts: Required<Omit<CompressionOptions, "onProgress" | "signal">>
 ): string | null {
+  if (!WEB_UPLOAD_VIDEO_TYPES.has(file.type)) {
+    return null;
+  }
+
   if (file.size < opts.skipBelowBytes) {
     return `File is ${(file.size / (1024 * 1024)).toFixed(1)} MB (below ${(opts.skipBelowBytes / (1024 * 1024)).toFixed(0)} MB threshold)`;
   }
@@ -273,8 +279,9 @@ export async function compressVideo(
     const compressedBlob = new Blob([blobPart], { type: "video/mp4" });
     const compressedSize = compressedBlob.size;
 
-    // If compression made the file larger, return original
-    if (compressedSize >= originalSize) {
+    // If compression made an already web-compatible file larger, keep original.
+    // Incompatible inputs such as MOV still need the MP4 output for R2 validation.
+    if (compressedSize >= originalSize && WEB_UPLOAD_VIDEO_TYPES.has(file.type)) {
       return {
         file,
         originalSize,
@@ -285,7 +292,7 @@ export async function compressVideo(
       };
     }
 
-    const compressedFile = new File([compressedBlob], file.name.replace(/\.[^.]+$/, ".mp4"), {
+    const compressedFile = new File([compressedBlob], withMp4Extension(file.name), {
       type: "video/mp4",
       lastModified: Date.now(),
     });
@@ -319,4 +326,10 @@ export async function compressVideo(
 function getExtension(filename: string): string {
   const match = filename.match(/\.[^.]+$/);
   return match ? match[0].toLowerCase() : ".mp4";
+}
+
+function withMp4Extension(filename: string): string {
+  const trimmed = filename.trim();
+  const safeName = trimmed || "video";
+  return /\.[^.]+$/.test(safeName) ? safeName.replace(/\.[^.]+$/, ".mp4") : `${safeName}.mp4`;
 }
