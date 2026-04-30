@@ -177,4 +177,22 @@ describe("businessSchema", () => {
 
     expect(result.success).toBe(false);
   });
+
+  it("normalizes accidental spaces in external website URLs", () => {
+    const result = businessSchema.safeParse({
+      ...base,
+      business_type: "standalone_shop",
+      website: "https:// www.booking.co.za",
+      business_details: {
+        type: "standalone_shop",
+        street_address: "24 Vilakazi Street",
+        suburb: "Orlando West",
+      },
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.website).toBe("https://www.booking.co.za");
+    }
+  });
 });

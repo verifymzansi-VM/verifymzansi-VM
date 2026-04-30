@@ -5,6 +5,7 @@ import {
   postLocationFields,
   postMediaMetadataFields,
   priceSchema,
+  externalUrlOrEmptySchema,
 } from "./shared";
 import type { BusinessCategory } from "@/types/enums";
 
@@ -84,7 +85,7 @@ export const promotionSchema = z
           )
           .max(10)
           .optional(),
-        tickets_url: z.string().url().max(2000).optional().or(z.literal("")),
+        tickets_url: externalUrlOrEmptySchema("Enter a valid ticketing URL"),
         age_restriction: z.string().max(20).optional(),
         dress_code: z.string().max(300).optional(),
         lineup: z.string().max(2000).optional(),

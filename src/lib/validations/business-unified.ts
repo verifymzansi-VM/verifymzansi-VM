@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isTrustedPlatformMediaUrl } from "@/lib/utils/media-url";
+import { externalUrlOrEmptySchema, externalUrlSchema } from "./shared";
 
 const saPhoneRegex = /^(\+27|0)[6-8][0-9]{8}$/;
 
@@ -101,7 +102,7 @@ const onlineOnlyDetailsSchema = z.object({
     "email",
     "other",
   ]),
-  order_url: z.string().url("Enter a valid order URL."),
+  order_url: externalUrlSchema("Enter a valid order URL."),
   delivery_regions: z.array(z.string().trim().min(1).max(120)).optional(),
   support_response_time: optionalText(120),
 });
@@ -162,11 +163,7 @@ export const businessSchema = z
       .max(300, "Address must be 300 characters or fewer")
       .optional(),
     store_number: z.string().trim().max(20).optional(),
-    map_directions: z
-      .string()
-      .url("Enter a valid map directions URL.")
-      .optional()
-      .or(z.literal("")),
+    map_directions: externalUrlOrEmptySchema("Enter a valid map directions URL."),
 
     // Contact
     phone: z.string().regex(saPhoneRegex, "Enter a valid SA number").optional().or(z.literal("")),
@@ -176,7 +173,7 @@ export const businessSchema = z
       .optional()
       .or(z.literal("")),
     email: z.string().email().optional().or(z.literal("")),
-    website: z.string().url("Enter a valid URL").optional().or(z.literal("")),
+    website: externalUrlOrEmptySchema("Enter a valid URL"),
 
     // Media
     logo_url: mediaUrlField("Logo"),
@@ -207,7 +204,7 @@ export const businessSchema = z
       .array(z.enum(["in_store", "delivery", "collection", "nationwide"]))
       .optional()
       .default([]),
-    social_links: z.record(z.string(), z.string().url()).optional(),
+    social_links: z.record(z.string(), externalUrlOrEmptySchema()).optional(),
     layout_template: z.enum(["cinematic", "showcase", "professional"]).nullable().optional(),
     media_width: z.number().int().positive().optional(),
     media_height: z.number().int().positive().optional(),

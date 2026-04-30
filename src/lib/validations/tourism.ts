@@ -5,6 +5,7 @@ import {
   postLocationFields,
   postMediaMetadataFields,
   priceSchema,
+  externalUrlOrEmptySchema,
 } from "./shared";
 
 /* ── Allowed-value lists ─────────────────────────────────── */
@@ -120,7 +121,7 @@ const tourismCategoryDetailsSchema = z.object({
   meal_options: z.array(z.string().max(80)).optional(),
   languages_spoken: z.string().max(500).optional(),
   cancellation_policy: z.enum(CANCELLATION_POLICY_VALUES).optional(),
-  booking_url: z.string().url("Enter a valid booking URL").max(2000).optional().or(z.literal("")),
+  booking_url: externalUrlOrEmptySchema("Enter a valid booking URL"),
   pets_allowed: z.boolean().optional(),
   smoking_allowed: z.boolean().optional(),
   /* Spa & Wellness (Group B) */
@@ -170,7 +171,7 @@ export const tourismBusinessSchema = z.object({
     .optional()
     .or(z.literal("")),
   email: z.string().email("Enter a valid email").max(254).optional().or(z.literal("")),
-  website: z.string().url("Enter a valid website URL").max(2000).optional().or(z.literal("")),
+  website: externalUrlOrEmptySchema("Enter a valid website URL"),
   logo: platformMediaUrlSchema("Logo must be hosted on the VerifyMzansi platform").optional(),
   category_details: tourismCategoryDetailsSchema,
   operating_hours: z
@@ -194,7 +195,7 @@ const eventDetailsSchema = z.object({
   venue_name: z.string().max(200).optional(),
   venue_capacity: z.number().int().min(0).optional(),
   ticket_tiers: z.array(ticketTierSchema).max(10).optional(),
-  tickets_url: z.string().url("Enter a valid ticketing URL").max(2000).optional().or(z.literal("")),
+  tickets_url: externalUrlOrEmptySchema("Enter a valid ticketing URL"),
   age_restriction: z.enum(AGE_RESTRICTION_VALUES).optional(),
   dress_code: z.string().max(300).optional(),
   lineup: z.string().max(2000).optional(),

@@ -75,6 +75,7 @@ describe("EditPromotionPage", () => {
       videos: string[];
       video_thumbnail: string;
       business_id: string | null;
+      event_details: Record<string, unknown>;
     }> = {}
   ) => ({
     id: "promotion-1",
@@ -94,6 +95,7 @@ describe("EditPromotionPage", () => {
     videos: [],
     video_thumbnail: "",
     business_id: "business-1",
+    event_details: {},
     ...overrides,
   });
 
@@ -152,6 +154,9 @@ describe("EditPromotionPage", () => {
       expect.objectContaining({ layoutMode: "review" })
     );
 
+    fireEvent.change(screen.getByLabelText("Tickets URL"), {
+      target: { value: "https:// tickets.example.com/night-market" },
+    });
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
 
     await waitFor(() => {
@@ -168,6 +173,7 @@ describe("EditPromotionPage", () => {
     expect(payload.business_id).toBe("business-1");
     expect(payload.start_date).toBe("2099-03-10T00:00:00.000Z");
     expect(payload.end_date).toBe("2099-03-12T00:00:00.000Z");
+    expect(payload.event_details.tickets_url).toBe("https://tickets.example.com/night-market");
   });
 
   it("does not render a promotion type selector (events only)", async () => {

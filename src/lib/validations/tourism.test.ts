@@ -130,6 +130,23 @@ describe("tourism validation schemas", () => {
       );
       expect(result.success).toBe(true);
     });
+
+    it("normalizes accidental spaces in website and booking URLs", () => {
+      const result = tourismBusinessSchema.safeParse(
+        validTourismBusiness({
+          website: "https:// www.booking.co.za",
+          category_details: {
+            booking_url: "https:// www.hilton.co.za/en",
+          },
+        })
+      );
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.website).toBe("https://www.booking.co.za");
+        expect(result.data.category_details.booking_url).toBe("https://www.hilton.co.za/en");
+      }
+    });
   });
 
   // ── Event schema ────────────────────────────────────────

@@ -40,6 +40,7 @@ import {
 } from "@/lib/constants/categories";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
+import { isValidUserEnteredUrl, normalizeUserEnteredUrl } from "@/lib/utils/external-url";
 const selectClass =
   "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-shadow sm:h-10 sm:text-sm";
 
@@ -254,8 +255,44 @@ export default function EditPromotionPage() {
         endDate,
         contactMethods,
       });
+      if (!title.trim()) validationErrors.title = "Enter an event title.";
+      else if (title.trim().length < 5)
+        validationErrors.title = "Title must be at least 5 characters.";
+      else if (title.trim().length > 120)
+        validationErrors.title = "Title must be 120 characters or fewer.";
+
+      if (!description.trim()) {
+        validationErrors.description = "Enter event details.";
+      } else if (description.trim().length < 20) {
+        validationErrors.description = "Description must be at least 20 characters.";
+      } else if (description.trim().length > 5000) {
+        validationErrors.description = "Description must be 5000 characters or fewer.";
+      }
+
+      if (!province) validationErrors.province = "Select a province.";
+      if (!city) validationErrors.city = "Select a city.";
+      if (province.trim().length > 50) {
+        validationErrors.province = "Province must be 50 characters or fewer.";
+      }
+      if (city.trim().length > 80) {
+        validationErrors.city = "City must be 80 characters or fewer.";
+      }
+      if (locationTown.trim().length > 120) {
+        validationErrors.location_town = "Town / suburb must be 120 characters or fewer.";
+      }
+      if (locationAddress.trim().length > 300) {
+        validationErrors.location_address = "Address must be 300 characters or fewer.";
+      }
+      if (ticketsUrl.trim() && !isValidUserEnteredUrl(ticketsUrl)) {
+        validationErrors.tickets_url = "Enter a valid ticketing URL.";
+      }
+
+      const totalImageCount = existingImages.length + newPhotoFiles.length;
       const totalVideoCount = existingVideos.length + newVideoFiles.length;
-      if (existingImages.length + newPhotoFiles.length > maxPhotos) {
+      if (totalImageCount === 0 && totalVideoCount === 0) {
+        validationErrors.images = "Upload at least one photo or video.";
+      }
+      if (totalImageCount > maxPhotos) {
         validationErrors.images = `You can upload up to ${maxPhotos} photos on this plan.`;
       }
       if (!videoAllowed && totalVideoCount > 0) {
@@ -353,8 +390,8 @@ export default function EditPromotionPage() {
       setUploadStatuses((c) => ({ ...c, saving: "uploading" }));
 
       const body = {
-        title,
-        description,
+        title: title.trim(),
+        description: description.trim(),
         promotion_type: promotionType,
         category: category || undefined,
         category_key: categoryKey || undefined,
@@ -381,7 +418,7 @@ export default function EditPromotionPage() {
           venue_name: venueName || undefined,
           venue_capacity: venueCapacity ? parseInt(venueCapacity, 10) : undefined,
           ticket_tiers: ticketTiers.length > 0 ? ticketTiers : undefined,
-          tickets_url: ticketsUrl || undefined,
+          tickets_url: ticketsUrl ? normalizeUserEnteredUrl(ticketsUrl) : undefined,
           age_restriction: ageRestriction || undefined,
           dress_code: dressCode || undefined,
           lineup: lineup || undefined,
@@ -818,10 +855,21 @@ export default function EditPromotionPage() {
                     id="tickets_url"
                     type="url"
                     value={ticketsUrl}
-                    onChange={(e) => setTicketsUrl(e.target.value)}
+                    onChange={(e) => {
+                      setTicketsUrl(e.target.value);
+                      setFieldErrors((current) => {
+                        const next = { ...current };
+                        delete next.tickets_url;
+                        return next;
+                      });
+                    }}
                     maxLength={2000}
                     placeholder="https://…"
+                    className={fieldErrors.tickets_url ? "border-destructive" : undefined}
                   />
+                  {fieldErrors.tickets_url && (
+                    <p className="inline-form-error">{fieldErrors.tickets_url}</p>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap gap-4">
@@ -1079,8 +1127,10 @@ export default function EditPromotionPage() {
                   disabled={
                     isSubmitting ||
                     !hasAnyMedia ||
-                    title.length < 5 ||
-                    description.length < 20 ||
+                    title.trim().length < 5 ||
+                    title.trim().length > 120 ||
+                    description.trim().length < 20 ||
+                    description.trim().length > 5000 ||
                     !province ||
                     !city
                   }

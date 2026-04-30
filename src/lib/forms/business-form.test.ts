@@ -81,4 +81,29 @@ describe("business-form helpers", () => {
       })
     ).toEqual({});
   });
+
+  it("accepts URLs with accidental mobile-keyboard whitespace", () => {
+    expect(
+      validateBusinessForm({
+        businessType: "online_only",
+        businessDetails: {
+          type: "online_only",
+          primary_order_channel: "website",
+          order_url: "https:// orders.example.com",
+          support_response_time: "",
+        },
+        storeNumber: "",
+        serviceAreasInput: "",
+        mapDirections: "",
+        phone: "",
+        whatsapp: "",
+        email: "",
+        website: "https:// www.booking.co.za",
+        socialFacebook: "",
+        socialInstagram: "",
+        socialTwitter: "",
+        socialTiktok: "",
+      })
+    ).toEqual({});
+  });
 });

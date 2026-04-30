@@ -89,6 +89,7 @@ import {
   type PromotionDetailRecord,
   type PromotionAdvertiserRecord,
 } from "@/components/listings/promotion-detail-content";
+import { normalizeUserEnteredUrl } from "@/lib/utils/external-url";
 
 const SELECT_CLASS =
   "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm";
@@ -1121,7 +1122,7 @@ function CreateTourismContent() {
         }
         if (languagesSpoken) categoryDetails.languages_spoken = languagesSpoken;
         if (cancellationPolicy) categoryDetails.cancellation_policy = cancellationPolicy;
-        if (bookingUrl) categoryDetails.booking_url = bookingUrl;
+        if (bookingUrl) categoryDetails.booking_url = normalizeUserEnteredUrl(bookingUrl);
 
         // SA tourism additions
         if (tgcsaGrading) categoryDetails.tgcsa_grading = tgcsaGrading;
@@ -1145,6 +1146,17 @@ function CreateTourismContent() {
             .slice(0, 80) +
           "-" +
           Date.now().toString(36);
+
+        const socialLinks = Object.fromEntries(
+          Object.entries({
+            facebook: socialFacebook,
+            instagram: socialInstagram,
+            twitter: socialTwitter,
+            tiktok: socialTiktok,
+          })
+            .map(([key, value]) => [key, normalizeUserEnteredUrl(value)] as const)
+            .filter(([, value]) => value.length > 0)
+        );
 
         const body = {
           business_type: "standalone_shop" as const,
@@ -1170,10 +1182,7 @@ function CreateTourismContent() {
           whatsapp: whatsapp || undefined,
           email: email || undefined,
           website: website || undefined,
-          social_facebook: socialFacebook || undefined,
-          social_instagram: socialInstagram || undefined,
-          social_twitter: socialTwitter || undefined,
-          social_tiktok: socialTiktok || undefined,
+          social_links: Object.keys(socialLinks).length > 0 ? socialLinks : undefined,
           operating_hours: Object.keys(operatingHours).length > 0 ? operatingHours : undefined,
           services_offered: [],
           category_details: categoryDetails,

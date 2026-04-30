@@ -60,6 +60,8 @@ const FIELD_IDS: Record<string, string> = {
   price_zar: "price",
   province: "province",
   city: "city",
+  location_town: "town",
+  location_address: "address",
   contact_methods: "promotion-contact-methods",
   start_date: "start_date",
   end_date: "end_date",
@@ -75,6 +77,8 @@ const PROMOTION_FIELD_LABELS: Record<string, string> = {
   price_zar: "Price",
   province: "Province",
   city: "City",
+  location_town: "Town / suburb",
+  location_address: "Address",
   contact_methods: "Contact methods",
   start_date: "Start date",
   end_date: "End date",
@@ -91,6 +95,8 @@ function getStepForFieldKey(key: string): number {
     key === "price_zar" ||
     key === "province" ||
     key === "city" ||
+    key === "location_town" ||
+    key === "location_address" ||
     key === "contact_methods" ||
     key === "start_date" ||
     key === "end_date"
@@ -392,15 +398,30 @@ function CreatePromotionContent() {
     if (targetStep === 0) {
       if (!title.trim()) errors.title = "Enter an event title.";
       else if (title.trim().length < 5) errors.title = "Title must be at least 5 characters.";
+      else if (title.trim().length > 120) errors.title = "Title must be 120 characters or fewer.";
       if (!description.trim()) {
         errors.description = "Enter event details.";
       } else if (description.trim().length < 20) {
         errors.description = "Description must be at least 20 characters.";
+      } else if (description.trim().length > 5000) {
+        errors.description = "Description must be 5000 characters or fewer.";
       }
     }
     if (targetStep === 1) {
       if (!province) errors.province = "Select a province.";
       if (!city) errors.city = "Select a city.";
+      if (province.trim().length > 50) {
+        errors.province = "Province must be 50 characters or fewer.";
+      }
+      if (city.trim().length > 80) {
+        errors.city = "City must be 80 characters or fewer.";
+      }
+      if (locationTown.trim().length > 120) {
+        errors.location_town = "Town / suburb must be 120 characters or fewer.";
+      }
+      if (locationAddress.trim().length > 300) {
+        errors.location_address = "Address must be 300 characters or fewer.";
+      }
       Object.assign(errors, promotionValidationErrors);
     }
     if (targetStep === 2) {
@@ -943,7 +964,7 @@ function CreatePromotionContent() {
                         setCity(v.city);
                         setLocationTown(v.town ?? "");
                         setLocationAddress(v.address ?? "");
-                        clearErrors("province", "city");
+                        clearErrors("province", "city", "location_town", "location_address");
                       }}
                       showTown
                       showAddress

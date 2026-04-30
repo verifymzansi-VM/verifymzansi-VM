@@ -5,6 +5,7 @@ import {
 } from "./business-type-details";
 import type { BusinessDetails } from "@/types/business-details";
 import type { BusinessType } from "@/types/enums";
+import { isValidUserEnteredUrl } from "@/lib/utils/external-url";
 
 const SA_PHONE_REGEX = /^(\+27|0)[6-8][0-9]{8}$/;
 
@@ -22,15 +23,6 @@ export interface BusinessFormValues {
   socialInstagram: string;
   socialTwitter: string;
   socialTiktok: string;
-}
-
-function isValidUrl(value: string): boolean {
-  try {
-    new URL(value);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 export function parseServiceAreas(serviceAreasInput: string): string[] {
@@ -66,7 +58,7 @@ function validateDetailsField(
     field.kind === "url" &&
     typeof value === "string" &&
     value.trim() &&
-    !isValidUrl(value.trim())
+    !isValidUserEnteredUrl(value)
   ) {
     errors[path] = `Enter a valid ${field.label.toLowerCase()}.`;
   }
@@ -103,7 +95,7 @@ export function validateBusinessForm(values: BusinessFormValues): Record<string,
       values.businessType
     ) &&
     values.mapDirections.trim() &&
-    !isValidUrl(values.mapDirections.trim())
+    !isValidUserEnteredUrl(values.mapDirections)
   ) {
     errors.map_directions = "Enter a valid map directions URL.";
   }
@@ -131,7 +123,7 @@ export function validateBusinessForm(values: BusinessFormValues): Record<string,
     errors.email = "Enter a valid email address.";
   }
 
-  if (values.website && !isValidUrl(values.website.trim())) {
+  if (values.website && !isValidUserEnteredUrl(values.website)) {
     errors.website = "Enter a valid website URL.";
   }
 
@@ -144,7 +136,7 @@ export function validateBusinessForm(values: BusinessFormValues): Record<string,
 
   for (const [field, message] of socialFields) {
     const rawValue = values[field];
-    if (typeof rawValue === "string" && rawValue.trim() && !isValidUrl(rawValue.trim())) {
+    if (typeof rawValue === "string" && rawValue.trim() && !isValidUserEnteredUrl(rawValue)) {
       errors[field] = message;
     }
   }

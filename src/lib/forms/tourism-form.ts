@@ -4,19 +4,11 @@ import type {
 } from "@/types/tourism-details";
 import type { SocialAuthorizerRelationship } from "@/types/enums";
 import { TOURISM_SUBCATEGORY_FIELD_GROUPS } from "@/lib/constants/categories";
+import { isValidUserEnteredUrl } from "@/lib/utils/external-url";
 
 /* ── Regex ───────────────────────────────────────────────── */
 
 const SA_PHONE_REGEX = /^(\+27|0)[6-8][0-9]{8}$/;
-
-function isValidUrl(value: string): boolean {
-  try {
-    new URL(value);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 function hasValidMoneyPrecision(value: number): boolean {
   return Math.abs(value * 100 - Math.round(value * 100)) < 0.001;
@@ -114,7 +106,7 @@ function validateStep1Tourism(v: TourismFormValues, errors: Record<string, strin
   }
 
   // Booking URL (all groups)
-  if (v.bookingUrl.trim() && !isValidUrl(v.bookingUrl.trim())) {
+  if (v.bookingUrl.trim() && !isValidUserEnteredUrl(v.bookingUrl)) {
     errors.bookingUrl = "Enter a valid booking URL.";
   }
 
@@ -177,7 +169,7 @@ function validateStep1Event(v: TourismFormValues, errors: Record<string, string>
     }
   }
 
-  if (v.ticketsUrl.trim() && !isValidUrl(v.ticketsUrl.trim())) {
+  if (v.ticketsUrl.trim() && !isValidUserEnteredUrl(v.ticketsUrl)) {
     errors.ticketsUrl = "Enter a valid ticketing URL.";
   }
 }
@@ -213,7 +205,7 @@ function validateStep2(v: TourismFormValues, errors: Record<string, string>) {
     errors.email = "Enter a valid email address.";
   }
 
-  if (v.website && !isValidUrl(v.website.trim())) {
+  if (v.website && !isValidUserEnteredUrl(v.website)) {
     errors.website = "Enter a valid website URL.";
   }
 
@@ -226,7 +218,7 @@ function validateStep2(v: TourismFormValues, errors: Record<string, string>) {
 
   for (const [field, message] of socialFields) {
     const rawValue = v[field];
-    if (typeof rawValue === "string" && rawValue.trim() && !isValidUrl(rawValue.trim())) {
+    if (typeof rawValue === "string" && rawValue.trim() && !isValidUserEnteredUrl(rawValue)) {
       errors[field] = message;
     }
   }

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { validateSaIdFull } from "@/lib/utils/sa-id-validation";
 import { sanitizeSaPhoneInput } from "@/lib/utils/phone";
 import { isTrustedPlatformMediaUrl } from "@/lib/utils/media-url";
+import { normalizeUserEnteredUrlInput } from "@/lib/utils/external-url";
 
 function trimStringInput(value: unknown): unknown {
   return typeof value === "string" ? value.trim() : value;
@@ -114,7 +115,18 @@ export const optionalTrimmedStringSchema = z.preprocess(
 /** Zod schema for an optional UUID string that treats blank input as absent. */
 export const optionalUuidSchema = z.preprocess(trimToUndefined, uuidSchema.optional());
 
-export const urlOrEmptySchema = z.string().url().optional().or(z.literal(""));
+export function externalUrlOrEmptySchema(message = "Enter a valid URL", max = 2000) {
+  return z.preprocess(
+    normalizeUserEnteredUrlInput,
+    z.string().url(message).max(max).optional().or(z.literal(""))
+  );
+}
+
+export function externalUrlSchema(message = "Enter a valid URL", max = 2000) {
+  return z.preprocess(normalizeUserEnteredUrlInput, z.string().url(message).max(max));
+}
+
+export const urlOrEmptySchema = externalUrlOrEmptySchema();
 
 export const slugSchema = z
   .string()

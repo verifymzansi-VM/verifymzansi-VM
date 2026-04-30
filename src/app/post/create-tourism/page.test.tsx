@@ -516,6 +516,76 @@ describe("CreateTourismPage type switch behavior", () => {
     });
   });
 
+  it("persists tourism business social links and normalized booking URLs", async () => {
+    (fetchWithRetry as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        urls: ["https://media.verifymzansi.com/tourism/photo.jpg"],
+        errors: [],
+      }),
+    });
+
+    render(<CreateTourismPage />);
+
+    fireEvent.change(screen.getByLabelText("Business Name *"), {
+      target: { value: "Kruger Sunset Lodge" },
+    });
+    fireEvent.change(screen.getByLabelText("Description *"), {
+      target: {
+        value: "A detailed tourism business description with enough content to pass validation.",
+      },
+    });
+    fireEvent.change(screen.getByLabelText("Tourism Category"), {
+      target: { value: "hotel_resort" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText("Booking URL"), {
+      target: { value: "https:// www.booking.co.za" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText("Province"), {
+      target: { value: "Gauteng" },
+    });
+    fireEvent.change(screen.getByLabelText("City"), {
+      target: { value: "Johannesburg" },
+    });
+    fireEvent.change(screen.getByLabelText("Street address"), {
+      target: { value: "24 Vilakazi Street" },
+    });
+    fireEvent.change(screen.getByLabelText("Town"), {
+      target: { value: "Orlando West" },
+    });
+    fireEvent.change(screen.getByLabelText("Website"), {
+      target: { value: "https:// www.kruger.example" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Facebook URL"), {
+      target: { value: "https:// facebook.com/kruger" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/businesses",
+        expect.objectContaining({ method: "POST" })
+      );
+    });
+
+    const businessCall = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([input]) => input === "/api/businesses"
+    );
+    const body = JSON.parse(String(businessCall?.[1]?.body));
+
+    expect(body.social_links).toEqual({
+      facebook: "https://facebook.com/kruger",
+    });
+    expect(body.category_details.booking_url).toBe("https://www.booking.co.za");
+  });
+
   it("maps tourism business API 422 video-limit errors to the media step", async () => {
     (fetchWithRetry as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
