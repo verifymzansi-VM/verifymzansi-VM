@@ -2,9 +2,10 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import PromotionsPage from "./page";
 
-const { mockCreateClient, mockCookies } = vi.hoisted(() => ({
+const { mockCreateClient, mockCookies, mockGetOwnerColumn } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCookies: vi.fn(),
+  mockGetOwnerColumn: vi.fn(),
 }));
 
 const { carouselSpy, trustStripSpy } = vi.hoisted(() => ({
@@ -44,7 +45,7 @@ vi.mock("./client", () => ({
 }));
 
 vi.mock("@/lib/account/compat", () => ({
-  getOwnerColumn: vi.fn().mockResolvedValue("owner_id"),
+  getOwnerColumn: mockGetOwnerColumn,
   withOwnerColumn: (fields: string) => fields,
 }));
 
@@ -81,6 +82,21 @@ function createQueryResult<T>(data: T) {
   return builder;
 }
 
+function createRejectedQueryResult(message = "Query failed") {
+  const builder = {
+    select: vi.fn(() => builder),
+    eq: vi.fn(() => builder),
+    or: vi.fn(() => builder),
+    order: vi.fn(() => builder),
+    limit: vi.fn(() => builder),
+    then: (_resolve: unknown, reject?: (reason: Error) => unknown) =>
+      reject ? Promise.resolve(reject(new Error(message))) : Promise.reject(new Error(message)),
+    catch: (reject: (reason: Error) => unknown) => Promise.resolve(reject(new Error(message))),
+  };
+
+  return builder;
+}
+
 function createSupabaseClient({
   businesses,
   promotions,
@@ -106,6 +122,7 @@ function createSupabaseClient({
 describe("PromotionsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetOwnerColumn.mockResolvedValue("owner_id");
     mockCookies.mockResolvedValue({
       get: vi.fn().mockReturnValue(undefined),
     });
@@ -251,6 +268,27 @@ describe("PromotionsPage", () => {
     expect(trustStripSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         variant: "green",
+        title: "Latest Tourism & Events",
+      })
+    );
+  });
+
+  it("renders the tourism empty state when owner detection and hero queries fail", async () => {
+    mockGetOwnerColumn.mockRejectedValue(new Error("Supabase probe failed"));
+    mockCreateClient.mockResolvedValue({
+      from: () => createRejectedQueryResult(),
+    });
+
+    render(await PromotionsPage());
+
+    expect(screen.getByTestId("showroom-card-carousel")).toBeInTheDocument();
+    expect(carouselSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        items: expect.arrayContaining([expect.objectContaining({ id: "tourism-events-empty" })]),
+      })
+    );
+    expect(trustStripSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
         title: "Latest Tourism & Events",
       })
     );

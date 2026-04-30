@@ -58,6 +58,32 @@ type TourismBusinessCarouselRow = {
   featured_until?: string | null;
 };
 
+type QueryDataResult<T> = {
+  data: T[] | null;
+};
+
+async function getPublicPromotionOwnerColumn(
+  supabase: Awaited<ReturnType<typeof createClient>>
+): Promise<"owner_id" | "seller_id"> {
+  try {
+    return await getOwnerColumn(supabase, "promotions");
+  } catch {
+    return "owner_id";
+  }
+}
+
+async function getPublicCarouselRows<T>(
+  query: { limit: (count: number) => PromiseLike<QueryDataResult<T>> },
+  limit: number
+): Promise<T[]> {
+  try {
+    const { data } = await query.limit(limit);
+    return data ?? [];
+  } catch {
+    return [];
+  }
+}
+
 function buildBalancedCarouselItems(
   tourismItems: CarouselItem[],
   eventItems: CarouselItem[]
@@ -92,21 +118,27 @@ export default async function PromotionsPage() {
     readCookieValue(cookieStore, PLAYWRIGHT_HIDE_FIXTURES_COOKIE)
   );
   const supabase = await createClient();
-  const promotionOwnerColumn = await getOwnerColumn(supabase, "promotions");
+  const promotionOwnerColumn = await getPublicPromotionOwnerColumn(supabase);
   const now = new Date().toISOString();
 
   // ── Fetch top tourism businesses for showroom hero ──
-  const { data: tourismBusinesses } = await buildPublicTourismBusinessesQuery(supabase).limit(10);
+  const tourismBusinesses = await getPublicCarouselRows<unknown>(
+    buildPublicTourismBusinessesQuery(supabase),
+    10
+  );
 
   // ── Fetch top events for showroom hero ──
-  const { data: topEvents } = await buildPublicEventPromotionsQuery(
-    supabase,
-    now,
-    withOwnerColumn(
-      "id, title, description, videos, photos, video_thumbnail, price_cents, location_province, location_city, promotion_type, boost_until, featured_until, business_id",
-      promotionOwnerColumn
-    )
-  ).limit(10);
+  const topEvents = await getPublicCarouselRows<unknown>(
+    buildPublicEventPromotionsQuery(
+      supabase,
+      now,
+      withOwnerColumn(
+        "id, title, description, videos, photos, video_thumbnail, price_cents, location_province, location_city, promotion_type, boost_until, featured_until, business_id",
+        promotionOwnerColumn
+      )
+    ),
+    10
+  );
 
   // ── Build carousel items (tourism businesses + events) ──
   const tourismRows = (tourismBusinesses ?? []) as unknown as TourismBusinessCarouselRow[];
