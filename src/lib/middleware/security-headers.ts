@@ -286,7 +286,7 @@ export function withSecurityHeaders(
     !response.headers.has("Cache-Control") &&
     (request.method === "GET" || request.method === "HEAD")
   ) {
-    response.headers.set("Cache-Control", "private, max-age=0, must-revalidate");
+    response.headers.set("Cache-Control", "private, no-store, no-cache, must-revalidate");
   }
   if (nonce) {
     response.headers.set("x-nonce", nonce);

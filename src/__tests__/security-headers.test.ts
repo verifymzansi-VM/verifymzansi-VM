@@ -240,11 +240,13 @@ describe("withSecurityHeaders", () => {
     expect(response.headers.get("Cache-Control")).toBe("public, max-age=31536000, immutable");
   });
 
-  it("relaxes successful document caching away from no-store", () => {
+  it("prevents successful document responses from being cached", () => {
     const request = createRequest("/");
     const proxyResponse = NextResponse.next();
     const response = withSecurityHeaders(request, proxyResponse);
 
-    expect(response.headers.get("Cache-Control")).toBe("private, max-age=0, must-revalidate");
+    expect(response.headers.get("Cache-Control")).toBe(
+      "private, no-store, no-cache, must-revalidate"
+    );
   });
 });

@@ -11,6 +11,7 @@ const logger = createLogger("HealthRoute");
 function publicHealthPayload(status: "ok" | "degraded") {
   return {
     status,
+    readiness: status,
     timestamp: new Date().toISOString(),
   };
 }
@@ -25,7 +26,7 @@ export async function GET() {
     }
 
     return NextResponse.json(publicHealthPayload(status), {
-      status: status === "ok" ? 200 : 503,
+      status: 200,
       headers: {
         "Cache-Control": "private, no-store, no-cache, must-revalidate",
         "X-Content-Type-Options": "nosniff",

@@ -43,11 +43,12 @@ describe("Health route", () => {
     expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
     await expect(response.json()).resolves.toEqual({
       status: "ok",
+      readiness: "ok",
       timestamp: expect.any(String),
     });
   });
 
-  it("returns HTTP 503 when the launch snapshot is degraded", async () => {
+  it("returns HTTP 200 with degraded readiness when the launch snapshot is degraded", async () => {
     vi.mocked(getLaunchHealthSnapshot).mockResolvedValue({
       status: "degraded",
       mode: "production",
@@ -63,9 +64,10 @@ describe("Health route", () => {
     const { GET } = await import("@/app/api/health/route");
     const response = await GET();
 
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       status: "degraded",
+      readiness: "degraded",
       timestamp: expect.any(String),
     });
   });
@@ -80,6 +82,7 @@ describe("Health route", () => {
     expect(response.status).toBe(503);
     expect(payload).toEqual({
       status: "degraded",
+      readiness: "degraded",
       timestamp: expect.any(String),
     });
     expect(mockError).toHaveBeenCalledWith("Health snapshot generation failed", {
