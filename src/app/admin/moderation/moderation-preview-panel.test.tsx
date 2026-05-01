@@ -334,6 +334,41 @@ describe("ModerationPreviewPanel", () => {
     expect(screen.getAllByText("011 555 0102").length).toBeGreaterThan(0);
   });
 
+  it("renders submitted business gallery photos for tourism-area business edits", () => {
+    render(
+      <ModerationPreviewPanel
+        item={{
+          ...baseBusinessItem,
+          area: "PROMOTIONS_EVENTS",
+          areaLabel: "Tourism & Events",
+          itemType: "Business edit",
+          isEditRequest: true,
+          gallery_photos: ["https://bucket.r2.cloudflarestorage.com/businesses/new-gallery.jpg"],
+          current_snapshot: {
+            business_name: "Nomsa Beauty Studio",
+            gallery_photos: [],
+          },
+          change_summary: [
+            {
+              field: "gallery_photos",
+              label: "Gallery photos",
+              before: "None",
+              after: "1 photo",
+            },
+          ],
+        }}
+      />
+    );
+
+    expect(screen.getByText("Business media")).toBeInTheDocument();
+    expect(screen.getByText("1 gallery photo")).toBeInTheDocument();
+    expect(screen.getByAltText(/Nomsa Beauty Studio - image 1/i)).toHaveAttribute(
+      "src",
+      "/api/media/serve/businesses/new-gallery.jpg"
+    );
+    expect(screen.queryByText("No media")).not.toBeInTheDocument();
+  });
+
   it("makes an empty edit diff explicit instead of hiding the change section", () => {
     render(
       <ModerationPreviewPanel

@@ -932,6 +932,14 @@ function BusinessModerationPreview({ item }: ModerationPreviewPanelProps) {
   );
 }
 
+function isBusinessModerationItem(item: ModerationItem) {
+  return (
+    item.area === "MZANSI_BUSINESS" ||
+    item.itemType.toLowerCase().includes("business") ||
+    Boolean(item.business_name || item.business_type)
+  );
+}
+
 export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -951,7 +959,7 @@ export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
       : null;
   const editChanges = item.isEditRequest ? getChangeSummary(item) : [];
 
-  if (item.area === "MZANSI_BUSINESS") {
+  if (isBusinessModerationItem(item)) {
     return <BusinessModerationPreview item={item} />;
   }
 
