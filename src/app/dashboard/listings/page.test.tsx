@@ -195,6 +195,7 @@ describe("Dashboard listings page", () => {
             cover_photo: null,
             logo_url: null,
             gallery_photos: [],
+            view_count: 18,
             boost_until: null,
             featured_until: null,
             status_reason: null,
@@ -208,6 +209,7 @@ describe("Dashboard listings page", () => {
             cover_photo: null,
             logo_url: null,
             gallery_photos: [],
+            view_count: 0,
             boost_until: null,
             featured_until: null,
             status_reason: null,
@@ -245,7 +247,7 @@ describe("Dashboard listings page", () => {
     expect(screen.getByRole("button", { name: "Rejected (3)" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ended (1)" })).toBeInTheDocument();
     expect(screen.getByText("37")).toBeInTheDocument();
-    expect(screen.getByText("12")).toBeInTheDocument();
+    expect(screen.getByText("18")).toBeInTheDocument();
 
     expect(screen.getByText("Needs VIN photo")).toBeInTheDocument();
     expect(screen.getByText("Township Tutors")).toBeInTheDocument();

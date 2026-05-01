@@ -231,6 +231,7 @@ export interface Listing {
   boost_until: string | null;
   featured_until: string | null;
   urgent_until: string | null;
+  view_count: number;
   featured: boolean;
   urgent: boolean;
   media_width: number | null;
@@ -287,6 +288,7 @@ export interface Business {
   entitlement_id: string | null;
   boost_until: string | null;
   featured_until: string | null;
+  view_count: number;
   published_at: string | null;
   created_at: string;
   updated_at: string;

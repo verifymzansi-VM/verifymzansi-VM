@@ -36,7 +36,8 @@ import {
   type PromotionType,
 } from "@/types/enums";
 
-const LISTING_DASHBOARD_FALLBACK_FIELDS = ["featured_until", "urgent_until"] as const;
+const LISTING_DASHBOARD_FALLBACK_FIELDS = ["view_count", "featured_until", "urgent_until"] as const;
+const BUSINESS_DASHBOARD_FALLBACK_FIELDS = ["view_count"] as const;
 
 export const metadata = {
   title: "Your Content",
@@ -77,6 +78,7 @@ type BusinessDashboardRow = {
   featured_until?: string | null;
   urgent_until?: string | null;
   status_reason?: string | null;
+  view_count?: number | null;
 };
 
 type ContentSource = DashboardItem["source"];
@@ -97,7 +99,14 @@ function getViewCountForItem(
   item: DashboardItem,
   viewCounts: Record<ContentSource, Map<string, number>>
 ) {
-  return viewCounts[item.source].get(item.id) ?? item.view_count ?? null;
+  const summaryCount = viewCounts[item.source].get(item.id);
+  const tableCount = item.view_count;
+
+  if (typeof summaryCount === "number" && typeof tableCount === "number") {
+    return Math.max(summaryCount, tableCount);
+  }
+
+  return summaryCount ?? tableCount ?? null;
 }
 
 async function getOwnerViewCountMap(
@@ -200,18 +209,46 @@ export default async function ListingsPage({
   const listingSelectAttempts = [
     {
       select:
-        "id, title, status, price_cents, category, created_at, area, photos, boost_until, featured_until, urgent_until, status_reason",
+        "id, title, status, price_cents, category, created_at, area, photos, view_count, boost_until, featured_until, urgent_until, status_reason",
       omittedFields: [] as const,
     },
     {
       select:
-        "id, title, status, price_cents, category, created_at, area, photos, boost_until, featured_until, status_reason",
+        "id, title, status, price_cents, category, created_at, area, photos, boost_until, featured_until, urgent_until, status_reason",
+      omittedFields: ["view_count"] as const,
+    },
+    {
+      select:
+        "id, title, status, price_cents, category, created_at, area, photos, view_count, boost_until, featured_until, status_reason",
       omittedFields: ["urgent_until"] as const,
     },
     {
       select:
-        "id, title, status, price_cents, category, created_at, area, photos, boost_until, status_reason",
+        "id, title, status, price_cents, category, created_at, area, photos, view_count, boost_until, status_reason",
       omittedFields: ["featured_until", "urgent_until"] as const,
+    },
+    {
+      select:
+        "id, title, status, price_cents, category, created_at, area, photos, boost_until, featured_until, status_reason",
+      omittedFields: ["view_count", "urgent_until"] as const,
+    },
+    {
+      select:
+        "id, title, status, price_cents, category, created_at, area, photos, boost_until, status_reason",
+      omittedFields: ["view_count", "featured_until", "urgent_until"] as const,
+    },
+  ] as const;
+
+  const businessSelectAttempts = [
+    {
+      select:
+        "id, business_name, status, category, created_at, area, cover_photo, logo_url, gallery_photos, view_count, boost_until, featured_until, urgent_until, status_reason",
+      omittedFields: [] as const,
+    },
+    {
+      select:
+        "id, business_name, status, category, created_at, area, cover_photo, logo_url, gallery_photos, boost_until, featured_until, urgent_until, status_reason",
+      omittedFields: ["view_count"] as const,
     },
   ] as const;
 
@@ -226,16 +263,19 @@ export default async function ListingsPage({
           user.id
         ),
     }),
-    applyOwnerFilter(
-      supabase
-        .from("businesses")
-        .select(
-          "id, business_name, status, category, created_at, area, cover_photo, logo_url, gallery_photos, boost_until, featured_until, urgent_until, status_reason"
-        )
-        .order("created_at", { ascending: false }),
-      businessOwnerColumn,
-      user.id
-    ),
+    queryWithSelectFallbacks({
+      attempts: businessSelectAttempts,
+      fallbackFields: BUSINESS_DASHBOARD_FALLBACK_FIELDS,
+      runQuery: (selectClause) =>
+        applyOwnerFilter(
+          supabase
+            .from("businesses")
+            .select(selectClause)
+            .order("created_at", { ascending: false }),
+          businessOwnerColumn,
+          user.id
+        ),
+    }),
     applyOwnerFilter(
       supabase
         .from("promotions")
@@ -257,7 +297,7 @@ export default async function ListingsPage({
       view_count: listing.view_count ?? null,
     })),
     ...(Array.isArray(businessResponse.data)
-      ? (businessResponse.data as BusinessDashboardRow[])
+      ? (businessResponse.data as unknown as BusinessDashboardRow[])
       : []
     ).map((business) => ({
       id: business.id,
@@ -278,7 +318,7 @@ export default async function ListingsPage({
       featured_until: business.featured_until,
       status_reason: business.status_reason,
       price_cents: null,
-      view_count: null,
+      view_count: business.view_count ?? null,
       urgent_until: business.urgent_until ?? null,
     })),
     ...toDashboardItems(promotionResponse.data).map((promotion) => ({
