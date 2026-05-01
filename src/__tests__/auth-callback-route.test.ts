@@ -4,12 +4,14 @@ const {
   mockCreateClient,
   mockCreateAdminClient,
   mockExchangeCodeForSession,
+  mockVerifyOtp,
   mockFrom,
   mockAdminFrom,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
   mockExchangeCodeForSession: vi.fn(),
+  mockVerifyOtp: vi.fn(),
   mockFrom: vi.fn(),
   mockAdminFrom: vi.fn(),
 }));
@@ -33,7 +35,7 @@ describe("GET /auth/callback", () => {
     vi.clearAllMocks();
     mockCreateClient.mockResolvedValue({
       from: mockFrom,
-      auth: { exchangeCodeForSession: mockExchangeCodeForSession },
+      auth: { exchangeCodeForSession: mockExchangeCodeForSession, verifyOtp: mockVerifyOtp },
     });
     mockCreateAdminClient.mockReturnValue({
       from: mockAdminFrom,
@@ -101,6 +103,57 @@ describe("GET /auth/callback", () => {
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("https://verifymzansi.com/dashboard?tab=profile");
+  });
+
+  it("allows password recovery callbacks to reach the reset password page", async () => {
+    mockExchangeCodeForSession.mockResolvedValue({ error: null });
+
+    const response = await GET(
+      new Request("https://verifymzansi.com/auth/callback?code=test-code&next=%2Freset-password")
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://verifymzansi.com/reset-password");
+  });
+
+  it("verifies token-hash recovery links and redirects to the reset password page", async () => {
+    mockVerifyOtp.mockResolvedValue({
+      error: null,
+      data: {
+        session: {
+          user: {
+            id: "user-1",
+            email: "user@example.com",
+            app_metadata: { provider: "email" },
+          },
+        },
+      },
+    });
+
+    const response = await GET(
+      new Request(
+        "https://verifymzansi.com/auth/callback?token_hash=hash&type=recovery&next=%2Freset-password"
+      )
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://verifymzansi.com/reset-password");
+    expect(mockVerifyOtp).toHaveBeenCalledWith({ token_hash: "hash", type: "recovery" });
+  });
+
+  it("sends failed recovery token-hash links back to forgot password", async () => {
+    mockVerifyOtp.mockResolvedValue({ error: { message: "expired token" } });
+
+    const response = await GET(
+      new Request(
+        "https://verifymzansi.com/auth/callback?token_hash=expired&type=recovery&next=%2Freset-password"
+      )
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(
+      "https://verifymzansi.com/forgot-password?error=code_expired"
+    );
   });
 
   it("redirects failed exchanges back to login with an error flag", async () => {

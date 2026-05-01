@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
 import { ACCOUNT_PROFILE_NOT_FOUND_ERROR, ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
@@ -8,6 +9,28 @@ import { createLogger } from "@/lib/utils/logger";
 import { resolveAppOrigin } from "@/lib/utils/auth-redirect";
 
 const log = createLogger("AuthCallback");
+const PASSWORD_RECOVERY_COOKIE = "vm_password_recovery";
+const PASSWORD_RECOVERY_COOKIE_MAX_AGE = 60 * 60;
+
+function isSecureOrigin(origin: string): boolean {
+  return origin.startsWith("https://");
+}
+
+function redirectAfterAuth(origin: string, path: string, recoveryUserId?: string): NextResponse {
+  const response = NextResponse.redirect(`${origin}${path}`);
+  if (recoveryUserId && path.startsWith("/reset-password")) {
+    response.cookies.set({
+      name: PASSWORD_RECOVERY_COOKIE,
+      value: recoveryUserId,
+      httpOnly: true,
+      sameSite: "lax",
+      secure: isSecureOrigin(origin),
+      path: "/",
+      maxAge: PASSWORD_RECOVERY_COOKIE_MAX_AGE,
+    });
+  }
+  return response;
+}
 
 async function finalizePendingEmailChange(userId: string, confirmedEmail: string) {
   const admin = createAdminClient();
@@ -82,6 +105,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const origin = resolveAppOrigin(request);
   const code = searchParams.get("code");
+  const tokenHash = searchParams.get("token_hash");
   const rawNext = searchParams.get("next");
   const next = sanitizeReturnUrl(rawNext);
   const type = searchParams.get("type"); // Supabase passes type=signup for email confirmation
@@ -206,7 +230,44 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${origin}${next || "/"}`);
     }
 
-    return NextResponse.redirect(`${origin}${next}`);
+    return redirectAfterAuth(origin, next, user?.id);
+  }
+
+  if (tokenHash && type) {
+    const supabase = await createClient();
+    const { error, data } = await supabase.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: type as EmailOtpType,
+    });
+
+    if (error) {
+      const msg = (error.message || "").toLowerCase();
+      const errorCode =
+        msg.includes("expired") || msg.includes("invalid") || msg.includes("not found")
+          ? "code_expired"
+          : "auth_callback_failed";
+      log.warn("Auth callback token verification failed", {
+        errorCode,
+        message: error.message,
+        type,
+        hasNext: Boolean(rawNext),
+        userAgent,
+      });
+      const errorPath = type === "recovery" ? "/forgot-password" : "/login";
+      return NextResponse.redirect(`${origin}${errorPath}?error=${errorCode}`);
+    }
+
+    const user = data?.session?.user ?? data?.user;
+    if (user?.id && user.email) {
+      await finalizePendingEmailChange(user.id, user.email);
+    }
+
+    if (type === "signup") {
+      const confirmedPath = rawNext ? next : "/login?confirmed=true";
+      return NextResponse.redirect(`${origin}${confirmedPath}`);
+    }
+
+    return redirectAfterAuth(origin, next, user?.id);
   }
 
   // No code parameter — redirect to login

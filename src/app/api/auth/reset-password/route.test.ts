@@ -42,13 +42,32 @@ vi.mock("@/lib/utils/logger", () => ({
 
 import { GET, POST } from "./route";
 
-function createRequest(body: unknown): NextRequest {
+function createRequest(body: unknown, cookieValues: Record<string, string> = {}): NextRequest {
   const payload = typeof body === "string" ? body : JSON.stringify(body);
   return {
     method: "POST",
     text: async () => payload,
     url: "https://verifymzansi.com/api/auth/reset-password",
     nextUrl: new URL("https://verifymzansi.com/api/auth/reset-password"),
+    cookies: {
+      get: (name: string) =>
+        cookieValues[name] === undefined ? undefined : { name, value: cookieValues[name] },
+    },
+    headers: {
+      get: () => null,
+    },
+  } as unknown as NextRequest;
+}
+
+function createGetRequest(cookieValues: Record<string, string> = {}): NextRequest {
+  return {
+    method: "GET",
+    url: "https://verifymzansi.com/api/auth/reset-password",
+    nextUrl: new URL("https://verifymzansi.com/api/auth/reset-password"),
+    cookies: {
+      get: (name: string) =>
+        cookieValues[name] === undefined ? undefined : { name, value: cookieValues[name] },
+    },
     headers: {
       get: () => null,
     },
@@ -87,7 +106,7 @@ describe("GET /api/auth/reset-password", () => {
   it("returns valid:false when session user is missing", async () => {
     mockCreateClient.mockResolvedValue(createSupabaseAuthClient({ user: null }));
 
-    const response = await GET();
+    const response = await GET(createGetRequest());
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ valid: false });
@@ -99,7 +118,7 @@ describe("GET /api/auth/reset-password", () => {
       createSupabaseAuthClient({ user: { id: "user-1", recovery_sent_at: stale } })
     );
 
-    const response = await GET();
+    const response = await GET(createGetRequest());
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ valid: false });
@@ -111,7 +130,18 @@ describe("GET /api/auth/reset-password", () => {
       createSupabaseAuthClient({ user: { id: "user-1", recovery_sent_at: recent } })
     );
 
-    const response = await GET();
+    const response = await GET(createGetRequest());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ valid: true });
+  });
+
+  it("returns valid:true when the callback recovery marker matches the user", async () => {
+    mockCreateClient.mockResolvedValue(
+      createSupabaseAuthClient({ user: { id: "user-1", recovery_sent_at: null } })
+    );
+
+    const response = await GET(createGetRequest({ vm_password_recovery: "user-1" }));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ valid: true });
@@ -120,7 +150,7 @@ describe("GET /api/auth/reset-password", () => {
   it("returns 500 when session check throws", async () => {
     mockCreateClient.mockRejectedValue(new Error("boom"));
 
-    const response = await GET();
+    const response = await GET(createGetRequest());
 
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toEqual({ error: "Internal server error" });
@@ -190,6 +220,38 @@ describe("POST /api/auth/reset-password", () => {
     await expect(response.json()).resolves.toEqual({
       error: "Your reset link has expired or is invalid. Please request a new one.",
     });
+  });
+
+  it("returns 401 when authenticated user has no recovery proof", async () => {
+    mockCreateClient.mockResolvedValue(
+      createSupabaseAuthClient({ user: { id: "user-1", recovery_sent_at: null } })
+    );
+
+    const response = await POST(
+      createRequest({ password: "NewPassword123!", confirmPassword: "NewPassword123!" })
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: "Your reset link has expired or is invalid. Please request a new one.",
+    });
+  });
+
+  it("updates password when callback recovery marker matches the user", async () => {
+    const client = createSupabaseAuthClient({ user: { id: "user-1", recovery_sent_at: null } });
+    mockCreateClient.mockResolvedValue(client);
+
+    const response = await POST(
+      createRequest(
+        { password: "NewPassword123!", confirmPassword: "NewPassword123!" },
+        { vm_password_recovery: "user-1" }
+      )
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ success: true });
+    expect(client.auth.updateUser).toHaveBeenCalledWith({ password: "NewPassword123!" });
+    expect(response.headers.get("set-cookie")).toContain("vm_password_recovery=");
   });
 
   it("returns 400 for invalid payload", async () => {

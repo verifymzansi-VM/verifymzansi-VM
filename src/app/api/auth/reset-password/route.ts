@@ -8,6 +8,26 @@ import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
 import { rateLimitExceededResponse } from "@/lib/utils/rate-limit-responses";
 
 const log = createLogger("ResetPassword");
+const PASSWORD_RECOVERY_COOKIE = "vm_password_recovery";
+const PASSWORD_RECOVERY_COOKIE_MAX_AGE_MS = 60 * 60 * 1000;
+
+function hasRecentRecoveryTimestamp(user: { recovery_sent_at?: string | null }): boolean {
+  const recoverySentAt = user.recovery_sent_at ? new Date(user.recovery_sent_at).getTime() : 0;
+  const oneHourAgo = Date.now() - PASSWORD_RECOVERY_COOKIE_MAX_AGE_MS;
+  return Boolean(recoverySentAt && recoverySentAt >= oneHourAgo);
+}
+
+function hasRecoveryMarker(request: NextRequest, user: { id?: string }): boolean {
+  const marker = request.cookies.get(PASSWORD_RECOVERY_COOKIE)?.value;
+  return Boolean(user.id && marker && marker === user.id);
+}
+
+function hasValidRecoverySession(
+  request: NextRequest,
+  user: { id?: string; recovery_sent_at?: string | null }
+): boolean {
+  return hasRecentRecoveryTimestamp(user) || hasRecoveryMarker(request, user);
+}
 
 /**
  * GET /api/auth/reset-password
@@ -15,7 +35,7 @@ const log = createLogger("ResetPassword");
  * Check if the current session is a valid recovery session.
  * Returns { valid: true } if the user has an active recovery session.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
     const {
@@ -27,10 +47,9 @@ export async function GET() {
       return NextResponse.json({ valid: false }, { status: 200 });
     }
 
-    // Only treat as valid recovery if a reset was recently requested (within 1 hour)
-    const recoverySentAt = user.recovery_sent_at ? new Date(user.recovery_sent_at).getTime() : 0;
-    const oneHourAgo = Date.now() - 60 * 60 * 1000;
-    if (!recoverySentAt || recoverySentAt < oneHourAgo) {
+    // Only treat as valid recovery if the Supabase user has a recent recovery
+    // timestamp or our callback set a short-lived recovery marker.
+    if (!hasValidRecoverySession(request, user)) {
       return NextResponse.json({ valid: false }, { status: 200 });
     }
 
@@ -85,6 +104,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!hasValidRecoverySession(request, user)) {
+      return NextResponse.json(
+        { error: "Your reset link has expired or is invalid. Please request a new one." },
+        { status: 401 }
+      );
+    }
+
     const parsedBody = await parseAndValidateJsonRequest(request, resetPasswordSchema, {
       invalidJsonMessage: "Invalid JSON payload",
       validationErrorMessage: "Invalid request",
@@ -120,7 +146,16 @@ export async function POST(request: NextRequest) {
     // Invalidate the recovery session so the reset link can't be reused
     await supabase.auth.signOut();
 
-    return NextResponse.json({ success: true });
+    const response = NextResponse.json({ success: true });
+    response.cookies.set({
+      name: PASSWORD_RECOVERY_COOKIE,
+      value: "",
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 0,
+    });
+    return response;
   } catch (error) {
     logApiError(log, "Unexpected password reset error", error);
     return internalApiError();

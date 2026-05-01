@@ -6,6 +6,7 @@ const ALLOWED_REDIRECT_PREFIXES = [
   "/admin",
   "/login",
   "/register",
+  "/reset-password",
   "/mzansi-market",
   "/mall-shops",
   "/business-ads",

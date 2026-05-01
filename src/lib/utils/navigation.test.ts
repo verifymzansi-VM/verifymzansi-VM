@@ -11,6 +11,7 @@ describe("sanitizeReturnUrl", () => {
     expect(sanitizeReturnUrl("/verification")).toBe("/verification");
     expect(sanitizeReturnUrl("/post/create")).toBe("/post/create");
     expect(sanitizeReturnUrl("/admin/users")).toBe("/admin/users");
+    expect(sanitizeReturnUrl("/reset-password")).toBe("/reset-password");
     expect(sanitizeReturnUrl("/mzansi-market")).toBe("/mzansi-market");
     expect(sanitizeReturnUrl("/dashboard?tab=listings")).toBe("/dashboard?tab=listings");
   });
