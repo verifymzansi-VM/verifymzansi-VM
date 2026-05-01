@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
 import { PageHeader } from "@/components/layout/page-header";
+import { ContentViewCountText } from "@/components/listings/content-view-count-text";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
 import { ACCOUNT_PROFILE_TABLE, normalizeOwnerRecord, readOwnerId } from "@/lib/account/compat";
 import { getOptionalContentViewCountMap } from "@/lib/engagement-server";
@@ -68,6 +69,9 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
   const promotionViewCounts = await getOptionalContentViewCountMap(engagementAdmin, "promotion", [
     promotion.id,
   ]);
+  const promotionViewCount = promotionViewCounts.ok
+    ? (promotionViewCounts.data.get(promotion.id) ?? 0)
+    : (promotion.view_count ?? 0);
 
   const locationName = [promotion.location_city, promotion.location_province]
     .filter(Boolean)
@@ -103,6 +107,13 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
       <div className="container-page py-4 space-y-5">
         <PageHeader
           title={promotion.title}
+          description={
+            <ContentViewCountText
+              targetId={promotion.id}
+              targetType="promotion"
+              initialCount={promotionViewCount}
+            />
+          }
           breadcrumbs={[
             { label: "Home", href: "/" },
             { label: "Tourism & Events", href: "/tourism-events" },
@@ -112,9 +123,7 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
         <PromotionDetailContent
           promotion={{
             ...promotion,
-            view_count: promotionViewCounts.ok
-              ? (promotionViewCounts.data.get(promotion.id) ?? 0)
-              : (promotion.view_count ?? null),
+            view_count: promotionViewCount,
           }}
           advertiserProfile={advertiserProfile}
           linkedBusiness={linkedBusiness}

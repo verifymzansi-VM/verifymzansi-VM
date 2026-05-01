@@ -138,6 +138,11 @@ function getDisplayPrice(item: DashboardItem) {
   return AREA_LABELS[item.area];
 }
 
+function getViewCountLabel(count: number | null | undefined) {
+  const value = count ?? 0;
+  return value === 1 ? "view" : "views";
+}
+
 function getViewHref(item: DashboardItem) {
   // Tourism businesses are in the businesses table but live under Tourism & Events publicly.
   if (item.source === "business") {
@@ -436,6 +441,11 @@ function RejectedListingList({ listings }: { listings: DashboardItem[] }) {
 
               <div className="flex-1 min-w-0">
                 <h3 className="font-medium text-sm truncate">{listing.title}</h3>
+                <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                  <Eye className="h-3 w-3" />
+                  <span>{listing.view_count ?? 0}</span>
+                  <span>{getViewCountLabel(listing.view_count)}</span>
+                </p>
                 <p className="text-sm font-bold text-brand-green">{getDisplayPrice(listing)}</p>
                 <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1 text-xs text-muted-foreground">
                   <span>{listing.category || AREA_LABELS[listing.area]}</span>
@@ -533,6 +543,11 @@ function ListingList({
 
               <div className="flex-1 min-w-0">
                 <h3 className="font-medium text-sm truncate">{listing.title}</h3>
+                <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                  <Eye className="h-3 w-3" />
+                  <span>{listing.view_count ?? 0}</span>
+                  <span>{getViewCountLabel(listing.view_count)}</span>
+                </p>
                 <p className="text-sm font-bold text-brand-green">{getDisplayPrice(listing)}</p>
                 <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1 text-xs text-muted-foreground">
                   <span>{listing.category || AREA_LABELS[listing.area]}</span>
@@ -551,13 +566,6 @@ function ListingList({
                     )}
                 </div>
               </div>
-            </div>
-
-            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <Eye className="h-3 w-3" />
-                {listing.view_count || 0}
-              </span>
             </div>
 
             <div className="flex items-center gap-1 flex-wrap">

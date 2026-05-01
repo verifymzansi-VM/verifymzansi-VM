@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/layout/page-header";
+import { ContentViewCountText } from "@/components/listings/content-view-count-text";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -134,6 +135,10 @@ async function loadBusinessDetail(id: string): Promise<LoadedBusinessDetail | nu
   }
 
   if (error || !rawBusiness) {
+    return null;
+  }
+
+  if (!rawBusiness.business_name || !rawBusiness.status) {
     return null;
   }
 
@@ -313,6 +318,19 @@ export async function BusinessDetailPageContent({
       ? (promotionLikeSummary.data.get(promotion.id)?.viewerHasLiked ?? false)
       : false,
   }));
+  const businessViewCount = businessViewSummary.ok
+    ? (businessViewSummary.data.get(business.id) ?? 0)
+    : (business.view_count ?? 0);
+  const businessProfileDescription = `Representative-managed ${
+    resolvedSection === "tourism" ? "tourism" : "business"
+  } profile.`;
+  const businessViewDescription = (
+    <ContentViewCountText
+      targetId={business.id}
+      targetType="business"
+      initialCount={businessViewCount}
+    />
+  );
 
   return (
     <div className="bg-muted/30">
@@ -320,13 +338,21 @@ export async function BusinessDetailPageContent({
         <PageHeader
           title={business.business_name}
           description={
-            isOwnerPreview
-              ? `Previewing a representative-managed ${
+            isOwnerPreview ? (
+              <>
+                {businessViewDescription}
+                {" · "}
+                {`Previewing a representative-managed ${
                   resolvedSection === "tourism" ? "tourism" : "business"
-                } profile that is still pending moderation.`
-              : `Representative-managed ${
-                  resolvedSection === "tourism" ? "tourism" : "business"
-                } profile.`
+                } profile that is still pending moderation.`}
+              </>
+            ) : (
+              <>
+                {businessViewDescription}
+                {" · "}
+                {businessProfileDescription}
+              </>
+            )
           }
           breadcrumbs={breadcrumbs}
         />
@@ -346,9 +372,7 @@ export async function BusinessDetailPageContent({
         <BusinessLayoutRouter
           business={{
             ...business,
-            view_count: businessViewSummary.ok
-              ? (businessViewSummary.data.get(business.id) ?? 0)
-              : (business.view_count ?? null),
+            view_count: businessViewCount,
           }}
           trustLevel={trustLevel}
           ownerProfile={ownerProfile}

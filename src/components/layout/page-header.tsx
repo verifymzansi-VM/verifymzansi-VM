@@ -3,7 +3,7 @@ import { Breadcrumbs, type BreadcrumbItem } from "./breadcrumbs";
 
 interface PageHeaderProps {
   title: string;
-  description?: string;
+  description?: React.ReactNode;
   breadcrumbs?: BreadcrumbItem[];
   children?: React.ReactNode;
   className?: string;

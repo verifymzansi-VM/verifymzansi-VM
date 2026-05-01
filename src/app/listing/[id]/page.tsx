@@ -4,6 +4,7 @@ import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
+import { ContentViewCountText } from "@/components/listings/content-view-count-text";
 import {
   ListingDetailContent,
   type SimilarListingRow,
@@ -137,6 +138,9 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
     getOptionalContentViewCountMap(engagementAdmin, "listing", [listing.id, ...similarListingIds]),
     getOptionalContentLikeSummaryMap(engagementAdmin, "listing", similarListingIds, viewerKey),
   ]);
+  const listingViewCount = listingViewCounts.ok
+    ? (listingViewCounts.data.get(listing.id) ?? 0)
+    : (listing.view_count ?? 0);
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -165,6 +169,13 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
         <div className="container-page py-4 space-y-5">
           <PageHeader
             title={listing.title}
+            description={
+              <ContentViewCountText
+                targetId={listing.id}
+                targetType="listing"
+                initialCount={listingViewCount}
+              />
+            }
             breadcrumbs={[
               { label: "Mzansi Market", href: "/mzansi-market" },
               { label: listing.title },
@@ -173,9 +184,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
           <ListingDetailContent
             listing={{
               ...listing,
-              view_count: listingViewCounts.ok
-                ? (listingViewCounts.data.get(listing.id) ?? 0)
-                : (listing.view_count ?? null),
+              view_count: listingViewCount,
             }}
             seller={safeSeller}
             similarItems={similarItems.map((item) => ({

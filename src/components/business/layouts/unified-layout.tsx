@@ -1,8 +1,17 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { CalendarDays, Globe, MapPin, Maximize2, Play, ShieldCheck, Store } from "lucide-react";
+import {
+  CalendarDays,
+  Eye,
+  Globe,
+  MapPin,
+  Maximize2,
+  Play,
+  ShieldCheck,
+  Store,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -35,6 +44,7 @@ import { PromotionCard } from "@/components/listings/promotion-card";
 import { safeExternalHref } from "@/lib/utils/sanitize-html";
 import type { BusinessProfileFamily } from "@/lib/presentation/profile-variants";
 import { useHorizontalSwipeNavigation } from "@/hooks/use-horizontal-swipe-navigation";
+import { useTrackContentView } from "@/hooks/use-track-content-view";
 
 interface UnifiedLayoutProps {
   family: BusinessProfileFamily;
@@ -416,6 +426,16 @@ export function UnifiedLayout({
   galleryPhotos,
   deliveryAvailable,
 }: UnifiedLayoutProps) {
+  const [viewCount, setViewCount] = useState(business.view_count ?? 0);
+  const handleViewRecorded = useCallback(() => {
+    setViewCount((currentCount) => currentCount + 1);
+  }, []);
+  useTrackContentView(
+    business.id,
+    "business",
+    layoutMode === "public" && business.status === "live",
+    handleViewRecorded
+  );
   const isReviewLayout = layoutMode === "review";
   const businessType = business.business_type as BusinessType;
   const businessCategory = business.category as BusinessCategory;
@@ -439,6 +459,7 @@ export function UnifiedLayout({
     : showStickyContactBar && (business.phone || business.whatsapp)
       ? "grid grid-cols-1 gap-6 pb-24 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:items-start lg:pb-0"
       : "grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:items-start";
+  const viewCountLabel = `${viewCount} ${viewCount === 1 ? "view" : "views"}`;
 
   const introBody = (
     <div className="space-y-4">
@@ -466,6 +487,11 @@ export function UnifiedLayout({
           </span>
         </div>
       )}
+
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Eye className="h-4 w-4 text-brand-blue" />
+        <span>{viewCountLabel}</span>
+      </div>
 
       {business.description ? (
         <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">

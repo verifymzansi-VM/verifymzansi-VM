@@ -35,6 +35,11 @@ export function useTrackContentView(
         const payload = (await response.json().catch(() => null)) as { recorded?: boolean } | null;
         if (payload?.recorded) {
           onRecorded?.();
+          window.dispatchEvent(
+            new CustomEvent("vmz:content-view-recorded", {
+              detail: { targetId, targetType },
+            })
+          );
         }
       })
       .catch(() => {
