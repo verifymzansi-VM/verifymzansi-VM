@@ -4,6 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Eye, ExternalLink, Megaphone, Pencil, Plus, XCircle, Package } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,6 +26,7 @@ import {
 } from "@/lib/services/entitlements";
 import { applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
 import { getActivePlanTierForArea } from "@/lib/services/plan-tier";
+import { getOptionalContentViewCountMap } from "@/lib/engagement-server";
 import { queryWithSelectFallbacks } from "@/lib/utils/marketplace-select-fallback";
 import {
   AREA_LABELS,
@@ -77,6 +79,8 @@ type BusinessDashboardRow = {
   status_reason?: string | null;
 };
 
+type ContentSource = DashboardItem["source"];
+
 function sortByNewest(items: DashboardItem[]) {
   return [...items].sort((a, b) => {
     const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
@@ -87,6 +91,13 @@ function sortByNewest(items: DashboardItem[]) {
 
 function toDashboardItems(input: unknown): DashboardItem[] {
   return Array.isArray(input) ? (input as DashboardItem[]) : [];
+}
+
+function getViewCountForItem(
+  item: DashboardItem,
+  viewCounts: Record<ContentSource, Map<string, number>>
+) {
+  return viewCounts[item.source].get(item.id) ?? item.view_count ?? null;
 }
 
 function getEditHref(item: DashboardItem) {
@@ -215,7 +226,7 @@ export default async function ListingsPage({
     ),
   ]);
 
-  const items = sortByNewest([
+  const baseItems = [
     ...toDashboardItems(listingResponse.data).map((listing) => ({
       ...listing,
       source: "listing" as const,
@@ -257,7 +268,39 @@ export default async function ListingsPage({
       promotion_type:
         ((promotion as Record<string, unknown>).promotion_type as string | null) ?? null,
     })),
+  ];
+
+  const engagementAdmin = tryCreateAdminClient();
+  const [listingViewCounts, businessViewCounts, promotionViewCounts] = await Promise.all([
+    getOptionalContentViewCountMap(
+      engagementAdmin,
+      "listing",
+      baseItems.filter((item) => item.source === "listing").map((item) => item.id)
+    ),
+    getOptionalContentViewCountMap(
+      engagementAdmin,
+      "business",
+      baseItems.filter((item) => item.source === "business").map((item) => item.id)
+    ),
+    getOptionalContentViewCountMap(
+      engagementAdmin,
+      "promotion",
+      baseItems.filter((item) => item.source === "promotion").map((item) => item.id)
+    ),
   ]);
+
+  const viewCounts: Record<ContentSource, Map<string, number>> = {
+    listing: listingViewCounts.data,
+    business: businessViewCounts.data,
+    promotion: promotionViewCounts.data,
+  };
+
+  const items = sortByNewest(
+    baseItems.map((item) => ({
+      ...item,
+      view_count: getViewCountForItem(item, viewCounts),
+    }))
+  );
 
   const active = items.filter((item) => item.status === "active" || item.status === "live");
   const pending = items.filter(
@@ -493,7 +536,7 @@ function ListingList({
               </div>
             </div>
 
-            <div className="hidden sm:flex items-center gap-4 text-xs text-muted-foreground">
+            <div className="flex items-center gap-4 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
                 <Eye className="h-3 w-3" />
                 {listing.view_count || 0}

@@ -7,6 +7,28 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
 
+vi.mock("@/lib/supabase/admin", () => ({
+  tryCreateAdminClient: vi.fn(() => ({ rpc: vi.fn() })),
+}));
+
+vi.mock("@/lib/engagement-server", () => ({
+  getOptionalContentViewCountMap: vi.fn(
+    (_admin: unknown, targetType: string, targetIds: string[]) => ({
+      ok: true,
+      data: new Map(
+        targetIds.map((targetId) => {
+          const counts: Record<string, Record<string, number>> = {
+            listing: { "listing-active": 37 },
+            business: { "business-pending": 12 },
+            promotion: { "promo-rejected": 14 },
+          };
+          return [targetId, counts[targetType]?.[targetId] ?? 0];
+        })
+      ),
+    })
+  ),
+}));
+
 vi.mock("next/navigation", () => ({
   redirect: vi.fn(),
 }));
@@ -222,6 +244,8 @@ describe("Dashboard listings page", () => {
     expect(screen.getByRole("button", { name: "Under Review (1)" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Rejected (3)" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ended (1)" })).toBeInTheDocument();
+    expect(screen.getByText("37")).toBeInTheDocument();
+    expect(screen.getByText("12")).toBeInTheDocument();
 
     expect(screen.getByText("Needs VIN photo")).toBeInTheDocument();
     expect(screen.getByText("Township Tutors")).toBeInTheDocument();

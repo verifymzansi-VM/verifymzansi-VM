@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { UnifiedLayout } from "./unified-layout";
 import type {
@@ -120,6 +120,46 @@ const business: BusinessDetailRecord = {
 };
 
 describe("UnifiedLayout", () => {
+  it("does not render the profile identity overlay on the video slide", () => {
+    render(
+      <UnifiedLayout
+        family="showroom"
+        business={business}
+        trustLevel={null}
+        ownerProfile={null as BusinessOwnerRecord | null}
+        promotions={[] as BusinessPromotionRecord[]}
+        showPromotions={false}
+        showPublicActions
+        galleryPhotos={business.gallery_photos ?? []}
+        deliveryAvailable={false}
+      />
+    );
+
+    expect(screen.queryByAltText("Unified Studio logo")).not.toBeInTheDocument();
+    expect(screen.queryByText("Featured Profile")).not.toBeInTheDocument();
+  });
+
+  it("keeps the profile identity overlay on photo slides", () => {
+    render(
+      <UnifiedLayout
+        family="showroom"
+        business={business}
+        trustLevel={null}
+        ownerProfile={null as BusinessOwnerRecord | null}
+        promotions={[] as BusinessPromotionRecord[]}
+        showPromotions={false}
+        showPublicActions
+        galleryPhotos={business.gallery_photos ?? []}
+        deliveryAvailable={false}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "View cover photo" }));
+
+    expect(screen.getByAltText("Unified Studio logo")).toBeInTheDocument();
+    expect(screen.getByText("Featured Profile")).toBeInTheDocument();
+  });
+
   it("keeps the cover photo as a distinct media step alongside the video and gallery photos", () => {
     render(
       <UnifiedLayout

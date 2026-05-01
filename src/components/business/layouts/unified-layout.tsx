@@ -308,37 +308,39 @@ function MediaColumn({
               </div>
             )}
 
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 p-4">
-              <div className="flex items-end gap-3">
-                <div className="h-14 w-14 overflow-hidden rounded-2xl border border-white/20 bg-white p-1 shadow-lg dark:bg-warm-900">
-                  {business.logo_url ? (
-                    <Image
-                      src={normalizeMediaUrl(business.logo_url)}
-                      alt={`${business.business_name} logo`}
-                      width={56}
-                      height={56}
-                      className="h-full w-full rounded-xl object-contain"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center rounded-xl bg-muted text-muted-foreground">
-                      <Store className="h-5 w-5" />
-                    </div>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1 text-left text-white">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/70">
-                    {family === "tourism"
-                      ? "Tourism & Hospitality"
-                      : family === "professional"
-                        ? "Business Profile"
-                        : "Featured Profile"}
-                  </p>
-                  <h1 className="line-clamp-2 font-display text-2xl font-semibold leading-tight">
-                    {business.business_name}
-                  </h1>
+            {activeMedia?.kind !== "video" && (
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 p-4">
+                <div className="flex items-end gap-3">
+                  <div className="h-14 w-14 overflow-hidden rounded-2xl border border-white/20 bg-white p-1 shadow-lg dark:bg-warm-900">
+                    {business.logo_url ? (
+                      <Image
+                        src={normalizeMediaUrl(business.logo_url)}
+                        alt={`${business.business_name} logo`}
+                        width={56}
+                        height={56}
+                        className="h-full w-full rounded-xl object-contain"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                        <Store className="h-5 w-5" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1 text-left text-white">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/70">
+                      {family === "tourism"
+                        ? "Tourism & Hospitality"
+                        : family === "professional"
+                          ? "Business Profile"
+                          : "Featured Profile"}
+                    </p>
+                    <h1 className="line-clamp-2 font-display text-2xl font-semibold leading-tight">
+                      {business.business_name}
+                    </h1>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
