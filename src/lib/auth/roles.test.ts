@@ -10,8 +10,6 @@ import {
   hasAnyCapability,
   hasAllCapabilities,
   requireRole,
-  isAllowedAdmin,
-  ADMIN_EMAIL_ALLOWLIST,
 } from "./roles";
 
 function makeUser(role: unknown, isAnon = false) {
@@ -163,45 +161,6 @@ describe("requireRole", () => {
   });
   it("matches case-insensitively for governance_controller", () => {
     expect(requireRole(makeUser("governance_controller"), ["Governance_Controller"])).toBe(true);
-  });
-});
-
-describe("isAllowedAdmin", () => {
-  it("returns true for allowlisted email", () => {
-    expect(isAllowedAdmin("ivelosm@gmail.com")).toBe(true);
-    expect(isAllowedAdmin("senzonsm@gmail.com")).toBe(true);
-  });
-
-  it("is case-insensitive", () => {
-    expect(isAllowedAdmin("IVELOSM@GMAIL.COM")).toBe(true);
-    expect(isAllowedAdmin("Senzonsm@Gmail.Com")).toBe(true);
-  });
-
-  it("trims whitespace", () => {
-    expect(isAllowedAdmin("  ivelosm@gmail.com  ")).toBe(true);
-  });
-
-  it("returns false for non-allowlisted email", () => {
-    expect(isAllowedAdmin("random@example.com")).toBe(false);
-  });
-
-  it("returns false for null/undefined", () => {
-    expect(isAllowedAdmin(null)).toBe(false);
-    expect(isAllowedAdmin(undefined)).toBe(false);
-  });
-
-  it("returns false for empty string", () => {
-    expect(isAllowedAdmin("")).toBe(false);
-  });
-});
-
-describe("ADMIN_EMAIL_ALLOWLIST", () => {
-  it("is frozen (immutable)", () => {
-    expect(Object.isFrozen(ADMIN_EMAIL_ALLOWLIST)).toBe(true);
-  });
-
-  it("contains exactly 2 entries", () => {
-    expect(ADMIN_EMAIL_ALLOWLIST).toHaveLength(2);
   });
 });
 

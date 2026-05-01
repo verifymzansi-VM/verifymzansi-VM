@@ -5,8 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   mockCreateClient,
   mockCreateAdminClient,
-  mockVerifyCapabilityFromDb,
-  mockIsAllowedAdmin,
+  mockVerifyAdminActorRoleFromDb,
   mockGetRoleFromUser,
   mockRecordRoleChange,
   mockCheckLocalRateLimit,
@@ -17,8 +16,7 @@ const {
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
-  mockVerifyCapabilityFromDb: vi.fn(),
-  mockIsAllowedAdmin: vi.fn(),
+  mockVerifyAdminActorRoleFromDb: vi.fn(),
   mockGetRoleFromUser: vi.fn(),
   mockRecordRoleChange: vi.fn(),
   mockCheckLocalRateLimit: vi.fn(),
@@ -37,12 +35,11 @@ vi.mock("@/lib/supabase/admin", () => ({
 }));
 
 vi.mock("@/lib/auth/admin-access", () => ({
-  verifyCapabilityFromDb: mockVerifyCapabilityFromDb,
+  verifyAdminActorRoleFromDb: mockVerifyAdminActorRoleFromDb,
 }));
 
 vi.mock("@/lib/auth/roles", () => ({
   getRoleFromUser: mockGetRoleFromUser,
-  isAllowedAdmin: mockIsAllowedAdmin,
 }));
 
 vi.mock("@/lib/services/decision-ledger", () => ({
@@ -75,7 +72,7 @@ import { POST } from "./route";
 
 const ADMIN_USER = {
   id: "admin-1",
-  email: "ivelosm@gmail.com",
+  email: "admin@example.com",
   app_metadata: { role: "admin" },
 };
 
@@ -109,8 +106,7 @@ function setupHappyPath() {
       getUser: vi.fn().mockResolvedValue({ data: { user: ADMIN_USER } }),
     },
   });
-  mockVerifyCapabilityFromDb.mockResolvedValue(true);
-  mockIsAllowedAdmin.mockReturnValue(true);
+  mockVerifyAdminActorRoleFromDb.mockResolvedValue("admin");
   mockCheckLocalRateLimit.mockReturnValue({ limited: false });
   mockGetRoleFromUser.mockReturnValue("member");
   mockRecordRoleChange.mockResolvedValue(undefined);
@@ -151,7 +147,7 @@ describe("POST /api/admin/governance/roles", () => {
       const res = await POST(createMockRequest(validBody()));
 
       expect(res.status).toBe(403);
-      expect(mockVerifyCapabilityFromDb).not.toHaveBeenCalled();
+      expect(mockVerifyAdminActorRoleFromDb).not.toHaveBeenCalled();
     });
   });
 
@@ -165,7 +161,7 @@ describe("POST /api/admin/governance/roles", () => {
       const res = await POST(createMockRequest(validBody()));
 
       expect(res.status).toBe(403);
-      expect(mockVerifyCapabilityFromDb).not.toHaveBeenCalled();
+      expect(mockVerifyAdminActorRoleFromDb).not.toHaveBeenCalled();
     });
   });
 
@@ -185,9 +181,9 @@ describe("POST /api/admin/governance/roles", () => {
     });
   });
 
-  describe("L3: Capability check (role:assign)", () => {
-    it("returns 403 when user lacks role:assign capability", async () => {
-      mockVerifyCapabilityFromDb.mockResolvedValue(false);
+  describe("L3: DB-verified admin role", () => {
+    it("returns 403 when user is not a verified admin", async () => {
+      mockVerifyAdminActorRoleFromDb.mockResolvedValue(null);
 
       const res = await POST(createMockRequest(validBody()));
       const data = await res.json();
@@ -195,17 +191,53 @@ describe("POST /api/admin/governance/roles", () => {
       expect(res.status).toBe(403);
       expect(data.error).toBe("Forbidden");
     });
-  });
 
-  describe("L4: Admin email allowlist", () => {
-    it("returns 403 when email is not in allowlist", async () => {
-      mockIsAllowedAdmin.mockReturnValue(false);
+    it("returns 403 for a moderator", async () => {
+      mockCreateClient.mockResolvedValue({
+        auth: {
+          getUser: vi.fn().mockResolvedValue({
+            data: {
+              user: {
+                id: "moderator-1",
+                email: "moderator@example.com",
+                app_metadata: { role: "moderator" },
+              },
+            },
+          }),
+        },
+      });
+      mockVerifyAdminActorRoleFromDb.mockResolvedValue(null);
 
       const res = await POST(createMockRequest(validBody()));
       const data = await res.json();
 
       expect(res.status).toBe(403);
       expect(data.error).toBe("Forbidden");
+      expect(mockUpdateUserById).not.toHaveBeenCalled();
+    });
+
+    it("returns 403 for governance controllers", async () => {
+      mockCreateClient.mockResolvedValue({
+        auth: {
+          getUser: vi.fn().mockResolvedValue({
+            data: {
+              user: {
+                id: "governance-1",
+                email: "governance@example.com",
+                app_metadata: { role: "governance_controller" },
+              },
+            },
+          }),
+        },
+      });
+      mockVerifyAdminActorRoleFromDb.mockResolvedValue(null);
+
+      const res = await POST(createMockRequest(validBody()));
+      const data = await res.json();
+
+      expect(res.status).toBe(403);
+      expect(data.error).toBe("Forbidden");
+      expect(mockUpdateUserById).not.toHaveBeenCalled();
     });
   });
 
@@ -315,7 +347,7 @@ describe("POST /api/admin/governance/roles", () => {
         previousRole: "member",
         newRole: "moderator",
         assignedBy: ADMIN_USER.id,
-        assignerRole: "member",
+        assignerRole: "admin",
         reason: "Promoting to moderator for content moderation duties",
       });
     });
@@ -403,21 +435,12 @@ describe("POST /api/admin/governance/roles", () => {
       expect(callOrder.indexOf("origin")).toBeLessThan(callOrder.indexOf("csrf"));
     });
 
-    it("checks capability before allowlist", async () => {
-      mockVerifyCapabilityFromDb.mockResolvedValue(false);
+    it("checks DB admin verification before rate limit", async () => {
+      mockVerifyAdminActorRoleFromDb.mockResolvedValue(null);
 
       await POST(createMockRequest(validBody()));
 
-      // Should fail at capability check, never reach allowlist check
-      expect(mockIsAllowedAdmin).not.toHaveBeenCalled();
-    });
-
-    it("checks allowlist before rate limit", async () => {
-      mockIsAllowedAdmin.mockReturnValue(false);
-
-      await POST(createMockRequest(validBody()));
-
-      // Should fail at allowlist, never reach rate limit
+      // Should fail at DB admin verification, never reach rate limit
       expect(mockCheckLocalRateLimit).not.toHaveBeenCalled();
     });
   });

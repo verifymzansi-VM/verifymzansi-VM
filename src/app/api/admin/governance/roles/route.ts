@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
-import { getRoleFromUser, isAllowedAdmin } from "@/lib/auth/roles";
+import { verifyAdminActorRoleFromDb } from "@/lib/auth/admin-access";
+import { getRoleFromUser } from "@/lib/auth/roles";
 import { recordRoleChange } from "@/lib/services/decision-ledger";
 import { createLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
@@ -17,7 +17,6 @@ import {
   rateLimitResponse,
 } from "@/lib/utils/api";
 import { z } from "zod";
-import type { StaffRole } from "@/types/enums";
 
 const log = createLogger("GovernanceRoles");
 
@@ -37,9 +36,8 @@ const roleAssignSchema = z.object({
  * Security layers (in order):
  *   L1 — Same-origin enforcement
  *   L2 — CSRF double-submit
- *   L3 — DB-verified role:assign capability
- *   L4 — Hardcoded admin email allowlist
- *   L5 — Rate limit (5/min)
+ *   L3 — DB-verified admin role
+ *   L4 — Rate limit (5/min)
  */
 export async function POST(request: Request) {
   try {
@@ -61,20 +59,14 @@ export async function POST(request: Request) {
       return unauthorizedResponse();
     }
 
-    // L3: DB-verified capability check (guards against stale JWTs)
-    const verified = await verifyCapabilityFromDb(user, "role:assign");
-    if (!verified) {
-      log.warn("Role assign rejected: capability check failed", { actorId: user.id });
+    // L3: DB-verified admin role check (guards against stale JWTs and non-admin staff)
+    const verifiedAdminRole = await verifyAdminActorRoleFromDb(user);
+    if (!verifiedAdminRole) {
+      log.warn("Role assign rejected: actor is not a DB-verified admin", { actorId: user.id });
       return forbiddenResponse();
     }
 
-    // L4: Hardcoded admin email allowlist (tamper-proof, not in DB)
-    if (!isAllowedAdmin(user.email)) {
-      log.warn("Role assign rejected: email not in admin allowlist", { actorId: user.id });
-      return forbiddenResponse();
-    }
-
-    // L5: Tight rate limit — max 5 role changes per minute
+    // L4: Tight rate limit — max 5 role changes per minute
     const rl = checkLocalRateLimit(user.id, "admin:role:assign", 5);
     if (rl.limited) {
       return rateLimitResponse(rl.retryAfter ?? 60);
@@ -152,13 +144,12 @@ export async function POST(request: Request) {
     }
 
     // Record in audit trail
-    const actorRole = getRoleFromUser(user) as StaffRole;
     await recordRoleChange({
       targetUserId: targetUser.id,
       previousRole: currentRole,
       newRole: roleForMetadata,
       assignedBy: user.id,
-      assignerRole: actorRole,
+      assignerRole: verifiedAdminRole,
       reason,
     });
 

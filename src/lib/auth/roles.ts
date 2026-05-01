@@ -100,44 +100,6 @@ const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
   ]),
 };
 
-/* ── Admin Email Allowlist ─────────────────────────────────
-   Hard cap: only these accounts can ever hold the admin role.
-   Production requires ADMIN_EMAIL_ALLOWLIST env var (comma-separated).
-   The hardcoded list is used ONLY in development/test.
-   ────────────────────────────────────────────────────────── */
-
-const DEV_ADMIN_EMAILS: ReadonlyArray<string> = Object.freeze([
-  "ivelosm@gmail.com",
-  "senzonsm@gmail.com",
-]);
-
-function loadAdminAllowlist(): ReadonlyArray<string> {
-  const envList = typeof process !== "undefined" ? (process.env?.ADMIN_EMAIL_ALLOWLIST ?? "") : "";
-  if (envList.trim()) {
-    return Object.freeze(
-      envList
-        .split(",")
-        .map((e) => e.trim().toLowerCase())
-        .filter(Boolean)
-    );
-  }
-  // In production, require the env var — never fall back to hardcoded emails
-  const isProduction = typeof process !== "undefined" && process.env?.NODE_ENV === "production";
-  if (isProduction) {
-    return Object.freeze([]);
-  }
-  return DEV_ADMIN_EMAILS;
-}
-
-export const ADMIN_EMAIL_ALLOWLIST: ReadonlyArray<string> = loadAdminAllowlist();
-
-/** Check whether an email is on the hardcoded admin allowlist (case-insensitive). */
-export function isAllowedAdmin(email: string | null | undefined): boolean {
-  if (!email) return false;
-  const normalized = email.toLowerCase().trim();
-  return ADMIN_EMAIL_ALLOWLIST.includes(normalized);
-}
-
 /* ── Role Extraction ──────────────────────────────────────── */
 
 function readRole(metadata: unknown): string | null {
