@@ -56,6 +56,7 @@ type TourismBusinessCarouselRow = {
   media_height?: number | null;
   boost_until?: string | null;
   featured_until?: string | null;
+  category?: string | null;
 };
 
 type QueryDataResult<T> = {
@@ -146,7 +147,7 @@ export default async function PromotionsPage() {
   const tourismItems: CarouselItem[] = tourismRows
     .filter((b) => !shouldHidePlaywrightFixtureRowWhenEnabled(b, hideFixtures))
     .filter((b) => !isPlaceholderMarketplaceContent(b.business_name, b.description))
-    .map((b) => businessToCarouselItem(b, `/mzansi-business/${b.id}`));
+    .map((b) => businessToCarouselItem({ ...b, category: b.category ?? "tourism_hospitality" }));
 
   const eventItems: CarouselItem[] = (
     (topEvents ?? []) as unknown as Array<{

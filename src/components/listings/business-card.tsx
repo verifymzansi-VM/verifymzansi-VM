@@ -115,10 +115,12 @@ export function BusinessCard({
     businessType,
     _description
   );
+  const href =
+    category === "tourism_hospitality" ? `/tourism-events/${id}` : `/mzansi-business/${id}`;
 
   return (
     <PosterCardShell
-      href={`/mzansi-business/${id}`}
+      href={href}
       title={businessName}
       description={cardDescription}
       location={city || null}

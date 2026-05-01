@@ -6,6 +6,11 @@ import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
 const { mockCreateClient } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
 }));
+const { mockRedirect } = vi.hoisted(() => ({
+  mockRedirect: vi.fn((href: string) => {
+    throw new Error(`redirect:${href}`);
+  }),
+}));
 const { promotionCardSpy } = vi.hoisted(() => ({
   promotionCardSpy: vi.fn(),
 }));
@@ -31,6 +36,7 @@ vi.mock("next/link", () => ({
   ),
 }));
 vi.mock("next/navigation", () => ({
+  redirect: mockRedirect,
   notFound: vi.fn(() => {
     throw new Error("notFound");
   }),
@@ -153,6 +159,47 @@ function buildClient(
 }
 
 describe("BusinessDetailPage", () => {
+  it("redirects live tourism businesses to Tourism & Events", async () => {
+    mockCreateClient.mockResolvedValue(
+      buildClient({
+        id: "tourism-1",
+        owner_id: "owner-1",
+        business_name: "Hilton Garden Hotel",
+        description: "A hotel in Durban.",
+        status: "live",
+        area: "PROMOTIONS_EVENTS",
+        business_type: "standalone_shop",
+        category: "tourism_hospitality",
+        cover_photo: null,
+        logo_url: null,
+        cover_video: null,
+        video_thumbnail: null,
+        gallery_photos: [],
+        social_links: {},
+        operating_hours: {},
+        services_offered: [],
+        payment_methods_accepted: [],
+        delivery_options: [],
+        service_areas: null,
+        location_city: "Durban",
+        location_province: "KwaZulu-Natal",
+        phone: null,
+        whatsapp: null,
+        email: null,
+        website: null,
+        store_number: null,
+        map_directions: null,
+        business_details: null,
+        category_details: {},
+      })
+    );
+
+    await expect(
+      BusinessDetailPage({ params: Promise.resolve({ id: "tourism-1" }) })
+    ).rejects.toThrow("redirect:/tourism-events/tourism-1");
+    expect(mockRedirect).toHaveBeenCalledWith("/tourism-events/tourism-1");
+  });
+
   it("shows live business details publicly", async () => {
     mockCreateClient.mockResolvedValue(
       buildClient({

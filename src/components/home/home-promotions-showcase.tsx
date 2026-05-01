@@ -185,7 +185,7 @@ export async function HomePromotionsShowcase() {
           >
             {item.kind === "tourism" ? (
               <BusinessPreviewCard
-                href={`/mzansi-business/${item.data.id}`}
+                href={`/tourism-events/${item.data.id}`}
                 imageUrl={
                   item.data.cover_video ||
                   item.data.video_thumbnail ||

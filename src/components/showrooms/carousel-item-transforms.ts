@@ -66,13 +66,18 @@ export function businessToCarouselItem(
     focal_y?: number | null;
     media_width?: number | null;
     media_height?: number | null;
+    category?: string | null;
   },
   hrefOverride?: string
 ): CarouselItem {
+  const href =
+    hrefOverride ??
+    (b.category === "tourism_hospitality" ? `/tourism-events/${b.id}` : `/mzansi-business/${b.id}`);
+
   return {
     id: b.id,
     type: "business",
-    href: hrefOverride ?? `/mzansi-business/${b.id}`,
+    href,
     title: b.business_name,
     description: b.description ?? undefined,
     location: b.location_city || b.location_province || "South Africa",

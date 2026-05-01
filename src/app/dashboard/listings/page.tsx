@@ -139,8 +139,12 @@ function getDisplayPrice(item: DashboardItem) {
 }
 
 function getViewHref(item: DashboardItem) {
-  // Tourism businesses are in the businesses table — view on the business detail page.
-  if (item.source === "business") return `/mzansi-business/${item.id}`;
+  // Tourism businesses are in the businesses table but live under Tourism & Events publicly.
+  if (item.source === "business") {
+    return item.area === "PROMOTIONS_EVENTS"
+      ? `/tourism-events/${item.id}`
+      : `/mzansi-business/${item.id}`;
+  }
   switch (item.area) {
     case "PROMOTIONS_EVENTS":
       return `/tourism-events/${item.id}`;

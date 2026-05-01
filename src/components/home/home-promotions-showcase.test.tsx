@@ -191,7 +191,7 @@ describe("HomePromotionsShowcase", () => {
     expect(screen.getByTestId("business-preview-card")).toBeInTheDocument();
     expect(businessPreviewCardSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        href: "/mzansi-business/tourism-1",
+        href: "/tourism-events/tourism-1",
         title: "Zulu Lodge",
         city: "Richards Bay",
       })

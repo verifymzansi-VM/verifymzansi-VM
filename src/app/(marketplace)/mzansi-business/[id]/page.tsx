@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/layout/page-header";
@@ -39,6 +39,8 @@ interface LoadedBusinessDetail {
   promotions: BusinessPromotionRecord[];
   isOwnerPreview: boolean;
 }
+
+type BusinessDetailSection = "business" | "tourism";
 
 type BusinessDetailOwnerRecord = BusinessDetailRecord & {
   owner_id?: string | null;
@@ -83,6 +85,10 @@ const BUSINESS_DETAIL_SELECT_MIN_LEGACY = `
 
 const BUSINESS_PROMOTION_SELECT =
   "id, title, promotion_type, category, category_key, photos, videos, video_thumbnail, focal_x, focal_y, media_width, media_height, price_cents, price_negotiable, location_province, location_city, boost_until, featured_until, view_count, start_date, end_date, created_at";
+
+function isTourismBusinessRecord(business: { area?: string | null; category?: string | null }) {
+  return business.area === "PROMOTIONS_EVENTS" || business.category === "tourism_hospitality";
+}
 
 function isMissingBusinessOptionalColumnError(
   error: { code?: string | null; message?: string | null } | null
@@ -171,16 +177,25 @@ async function loadBusinessDetail(id: string): Promise<LoadedBusinessDetail | nu
   };
 }
 
-function getBreadcrumbs(isOwnerPreview: boolean, businessName: string) {
+function getBreadcrumbs(
+  isOwnerPreview: boolean,
+  businessName: string,
+  section: BusinessDetailSection
+) {
+  const sectionLabel = section === "tourism" ? "Tourism & Events" : "Mzansi Business";
+  const dashboardHref =
+    section === "tourism" ? "/dashboard/tourism-events" : "/dashboard/businesses";
+  const publicHref = section === "tourism" ? "/tourism-events" : "/mzansi-business";
+
   return isOwnerPreview
     ? [
         { label: "Dashboard", href: "/dashboard" },
-        { label: "Mzansi Business", href: "/dashboard/businesses" },
+        { label: sectionLabel, href: dashboardHref },
         { label: businessName },
       ]
     : [
         { label: "Home", href: "/" },
-        { label: "Mzansi Business", href: "/mzansi-business" },
+        { label: sectionLabel, href: publicHref },
         { label: businessName },
       ];
 }
@@ -204,31 +219,72 @@ function getPreviewDescription(status: string) {
   return "Awaiting moderation — only visible to you until approved.";
 }
 
-export async function generateMetadata({ params }: BusinessDetailPageProps): Promise<Metadata> {
-  const { id } = await params;
+export async function generateBusinessDetailMetadata(
+  id: string,
+  section: BusinessDetailSection = "business"
+): Promise<Metadata | null> {
   const detail = await loadBusinessDetail(id);
 
   if (!detail) {
-    return { title: "Business Not Found" };
+    return null;
   }
 
+  const isTourismBusiness = isTourismBusinessRecord(detail.business);
+  if (section === "tourism" && !isTourismBusiness) {
+    return null;
+  }
+
+  const resolvedSection = section === "tourism" || isTourismBusiness ? "tourism" : "business";
+  const sectionTitle = resolvedSection === "tourism" ? "Tourism & Events" : "Mzansi Business";
+
   return {
-    title: `${detail.business.business_name} | Mzansi Business`,
+    title: `${detail.business.business_name} | ${sectionTitle}`,
     description: detail.business.description?.slice(0, 160),
   };
 }
 
-export default async function BusinessDetailPage({ params }: BusinessDetailPageProps) {
+export async function generateMetadata({ params }: BusinessDetailPageProps): Promise<Metadata> {
   const { id } = await params;
+  return (await generateBusinessDetailMetadata(id)) ?? { title: "Business Not Found" };
+}
+
+export async function BusinessDetailPageContent({
+  id,
+  section = "business",
+  redirectTourism = false,
+  notFoundOnMissing = true,
+}: {
+  id: string;
+  section?: BusinessDetailSection;
+  redirectTourism?: boolean;
+  notFoundOnMissing?: boolean;
+}) {
   const cookieStore = await getOptionalCookieStore();
   const detail = await loadBusinessDetail(id);
   const supabase = await createClient();
 
   if (!detail) {
-    notFound();
+    if (notFoundOnMissing) {
+      notFound();
+    }
+    return null;
   }
 
   const { business, ownerProfile, promotions, isOwnerPreview } = detail;
+  const isTourismBusiness = isTourismBusinessRecord(business);
+  if (section === "tourism" && !isTourismBusiness) {
+    if (notFoundOnMissing) {
+      notFound();
+    }
+    return null;
+  }
+
+  const resolvedSection = section === "tourism" || isTourismBusiness ? "tourism" : "business";
+
+  if (redirectTourism && !isOwnerPreview && resolvedSection === "tourism") {
+    redirect(`/tourism-events/${business.id}`);
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -246,7 +302,7 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
   const trustLevel = ownerProfile
     ? computeTrustLevel(readAccountVerificationStatus(ownerProfile))
     : null;
-  const breadcrumbs = getBreadcrumbs(isOwnerPreview, business.business_name);
+  const breadcrumbs = getBreadcrumbs(isOwnerPreview, business.business_name, resolvedSection);
   const promotionsWithLikes = promotions.map((promotion) => ({
     ...promotion,
     view_count: promotionViewSummary.ok ? (promotionViewSummary.data.get(promotion.id) ?? 0) : null,
@@ -265,8 +321,12 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
           title={business.business_name}
           description={
             isOwnerPreview
-              ? "Previewing a representative-managed business profile that is still pending moderation."
-              : "Representative-managed business profile."
+              ? `Previewing a representative-managed ${
+                  resolvedSection === "tourism" ? "tourism" : "business"
+                } profile that is still pending moderation.`
+              : `Representative-managed ${
+                  resolvedSection === "tourism" ? "tourism" : "business"
+                } profile.`
           }
           breadcrumbs={breadcrumbs}
         />
@@ -298,4 +358,9 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
       </div>
     </div>
   );
+}
+
+export default async function BusinessDetailPage({ params }: BusinessDetailPageProps) {
+  const { id } = await params;
+  return BusinessDetailPageContent({ id, redirectTourism: true });
 }
