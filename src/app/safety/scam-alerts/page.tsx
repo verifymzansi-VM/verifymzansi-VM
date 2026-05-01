@@ -133,11 +133,11 @@ export default function ScamAlertsPage() {
 
           {/* Golden Rules - inline */}
           <div className="rounded-lg border bg-muted/30 p-3">
-            <p className="text-xs font-semibold mb-1.5 flex items-center gap-1.5">
+            <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold">
               <Badge className="bg-brand-green text-white text-[10px] px-1.5 py-0">
                 Golden Rules
               </Badge>
-            </p>
+            </div>
             <ol className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 list-decimal list-inside text-xs sm:text-sm text-muted-foreground">
               <li>Always deal with verified accounts, businesses, or advertisers (green shield)</li>
               <li>Never pay before inspecting the item</li>

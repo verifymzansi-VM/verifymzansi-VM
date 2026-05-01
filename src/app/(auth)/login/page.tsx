@@ -403,7 +403,7 @@ export default function LoginPage() {
       )}
 
       <div className="space-y-1">
-        <h1 className="font-display text-2xl font-bold tracking-tight">Sign in to your account</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Sign in</h1>
       </div>
 
       <GoogleOAuthButton mode="login" />
@@ -492,7 +492,7 @@ export default function LoginPage() {
       <p className="text-center text-sm text-muted-foreground">
         Don&apos;t have an account?{" "}
         <Link href="/register" className="font-medium text-brand-green underline">
-          Register
+          Create one
         </Link>
       </p>
     </div>

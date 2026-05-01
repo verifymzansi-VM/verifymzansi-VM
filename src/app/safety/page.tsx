@@ -20,11 +20,11 @@ export const metadata = {
 };
 
 const safetyRules = [
-  "Never pay deposits before seeing goods, verifying ownership, or confirming the person you are dealing with.",
+  "Never pay deposits before seeing goods and confirming ownership.",
   "Meet in safe, public, well-lit places. Avoid private locations for first meetings.",
-  "Do not share OTPs, banking login details, identity documents, or card information in chats.",
-  "Be careful with courier, delivery, EFT, e-wallet, fake proof-of-payment, and urgent pressure tactics.",
-  "Keep communication records, screenshots, listing links, payment references, and courier details.",
+  "Do not share OTPs, banking details, ID documents, or card information in chats.",
+  "Be careful with courier, EFT, e-wallet, fake proof-of-payment, and pressure tactics.",
+  "Keep screenshots, listing links, payment references, and courier details.",
 ] as const;
 
 const responseSteps = [
@@ -54,7 +54,7 @@ export default function SafetyCentrePage() {
         <div className="container-page py-4 space-y-5">
           <PageHeader
             title="Safety Centre"
-            description="Practical safety rules for buying, selling, reporting scams, and understanding platform moderation."
+            description="Practical guidance for safer buying, selling, scam reports, and moderation."
             breadcrumbs={[{ label: "Safety Centre" }]}
           />
 
@@ -66,8 +66,7 @@ export default function SafetyCentrePage() {
                   Verification reduces risk. It does not remove the need for safe trading.
                 </h2>
                 <p className="text-sm text-amber-800 dark:text-amber-200">
-                  Users should still inspect goods, confirm business details, avoid pressure, and
-                  walk away from anything that feels unsafe.
+                  Inspect goods, confirm details, avoid pressure, and walk away from unsafe deals.
                 </p>
               </div>
             </div>
@@ -151,8 +150,8 @@ export default function SafetyCentrePage() {
                   Criminal matters should be reported to SAPS.
                 </h2>
                 <p className="text-sm text-muted-foreground">
-                  VerifyMzansi can moderate platform content, but it is not a law-enforcement body
-                  and cannot guarantee recovery of money, goods, or identity documents.
+                  VerifyMzansi can moderate platform content, but cannot recover money, goods, or
+                  identity documents.
                 </p>
               </div>
             </div>

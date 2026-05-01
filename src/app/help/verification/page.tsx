@@ -156,15 +156,13 @@ export default function VerificationHelpPage() {
       </Link>
 
       <h1 className="text-2xl font-bold tracking-tight mb-2">Verification Help</h1>
-      <p className="text-muted-foreground mb-8">
-        Understand the verification process and learn how to fix common issues.
-      </p>
+      <p className="text-muted-foreground mb-8">Fix common verification issues quickly.</p>
 
       {/* ---------- Steps overview ---------- */}
       <section className="mb-10">
         <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
           <CheckCircle2 className="h-5 w-5 text-brand-green" />
-          The 4 Verification Steps
+          Verification steps
         </h2>
         <div className="grid gap-3">
           {STEPS.map((step) => (
@@ -183,7 +181,7 @@ export default function VerificationHelpPage() {
       <section className="mt-10">
         <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
           <Camera className="h-5 w-5 text-brand-red" />
-          Camera Not Opening? (Desktop &amp; Mobile)
+          Camera not opening?
         </h2>
         <div className="rounded-lg border p-4 space-y-4">
           <div>
@@ -238,7 +236,7 @@ export default function VerificationHelpPage() {
       <section>
         <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
           <AlertTriangle className="h-5 w-5 text-amber-500" />
-          Common Rejection Reasons &amp; How to Fix Them
+          Common rejection reasons
         </h2>
         <div className="space-y-4">
           {REJECTIONS.map((entry) => (

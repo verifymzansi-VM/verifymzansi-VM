@@ -127,7 +127,11 @@ export default function ContactPage() {
 
       <main id="main-content" className="flex-1">
         <div className="container-page py-4 space-y-4">
-          <PageHeader title="Contact Us" breadcrumbs={[{ label: "Contact" }]} />
+          <PageHeader
+            title="Contact"
+            description="Send support, verification, payment, privacy, or security requests to the right team."
+            breadcrumbs={[{ label: "Contact" }]}
+          />
 
           <div className="mx-auto max-w-lg">
             <OfficialSocialLinks
@@ -142,9 +146,8 @@ export default function ContactPage() {
                   <CheckCircle2 className="h-10 w-10 text-brand-green mx-auto" />
                   <h2 className="font-display text-xl font-bold">Message Sent</h2>
                   <p className="text-muted-foreground">
-                    Thank you for reaching out! Our team will get back to you at{" "}
-                    <strong>{email}</strong> within 1–2 business days (South African business
-                    hours). Fraud and security reports are prioritised.
+                    We will reply to <strong>{email}</strong> within 1-2 business days. Fraud and
+                    security reports are prioritised.
                   </p>
                   <Button
                     variant="outline"
@@ -262,7 +265,7 @@ export default function ContactPage() {
                         </p>
                       ) : (
                         <p id="message-hint" className="text-xs text-muted-foreground">
-                          Please provide at least 10 characters
+                          Minimum 10 characters.
                         </p>
                       )}
                     </div>

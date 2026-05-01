@@ -22,21 +22,19 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </Link>
           <p className="text-lg text-muted-foreground">
             South Africa&apos;s verification-first marketplace.
-            <br />
-            Buy &amp; sell with people you can trust.
           </p>
           <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground mt-4">
             <span className="flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-brand-green" />
-              4-step verification
+              Verification
             </span>
             <span className="flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-brand-gold" />
-              Trust scores
+              Trust badges
             </span>
             <span className="flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-brand-blue" />
-              POPIA compliant
+              POPIA
             </span>
           </div>
         </div>

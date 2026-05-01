@@ -131,7 +131,7 @@ export default async function MzansiBusinessPage() {
           <section className="min-w-0 flex-1 space-y-6">
             <PageHeader
               title="Mzansi Business"
-              description="Browse South African business profiles posted by identity-reviewed representatives. VerifyMzansi reviews the poster, not the business itself."
+              description="Browse South African business profiles posted by identity-reviewed representatives."
               breadcrumbs={[{ label: "Mzansi Business" }]}
               className="hidden lg:block"
             >

@@ -397,7 +397,7 @@ export function PromotionsExplorer() {
     <div className="container-page py-8 space-y-6">
       <PageHeader
         title="Tourism & Events"
-        description="Tourism destinations, accommodations, and events from South African hosts, businesses, and members."
+        description="Tourism destinations, stays, experiences, and events across South Africa."
         breadcrumbs={[{ label: "Home", href: "/" }, { label: "Tourism & Events" }]}
       >
         <Button asChild size="sm" className="h-11 gap-1">
@@ -552,8 +552,7 @@ export function PromotionsExplorer() {
                     : "No events match your filters"}
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  Try broadening the filters, clearing a location filter, or publishing a new
-                  {activeTab === "tourism" ? " tourism business" : " event"}.
+                  Try broadening the filters or clearing a location filter.
                 </p>
                 <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
                   <Button asChild size="sm" className="h-11 gap-1">

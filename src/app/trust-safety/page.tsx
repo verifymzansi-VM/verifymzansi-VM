@@ -39,8 +39,7 @@ const verificationLevels = [
   },
   {
     name: "ID evidence reviewed",
-    meaning:
-      "The person posting submitted an ID number, ID evidence, and selfie for platform review.",
+    meaning: "The person posting submitted ID evidence and a selfie for review.",
   },
   {
     name: "Location verified",
@@ -48,8 +47,7 @@ const verificationLevels = [
   },
   {
     name: "Official representative reviewed",
-    meaning:
-      "VerifyMzansi does not verify that a business itself is official. We review the person posting on behalf of that business using their phone number, ID evidence, and selfie.",
+    meaning: "The person posting for a business completed representative review.",
   },
   {
     name: "Payment verified",
@@ -58,18 +56,18 @@ const verificationLevels = [
 ] as const;
 
 const safetyRules = [
-  "Never pay deposits before seeing goods or confirming the seller is legitimate.",
+  "Never pay deposits before seeing goods or confirming the seller.",
   "Meet in safe public places and tell someone where you are going.",
   "Avoid courier, EFT, e-wallet, and OTP pressure tactics.",
-  "Keep records of chats, payment references, listings, and profile links.",
-  "Report suspicious listings, accounts, representatives, or business profiles before continuing a deal.",
+  "Keep chats, payment references, listings, and profile links.",
+  "Report suspicious listings before continuing a deal.",
 ] as const;
 
 const dataPractices = [
-  "ID numbers, document images, selfies, phone numbers, and location data are collected only for verification, fraud prevention, safety, and legal compliance.",
-  "Verification files are encrypted in transit and stored in restricted verification storage; internal access is limited to authorised operational reviewers.",
-  "Third-party KYC, SMS, payment, storage, email, security, and infrastructure providers may process data where needed to deliver the service.",
-  "Users can request access, correction, deletion, or objection through the POPIA data-rights process.",
+  "Identity, phone, and location data is collected for verification, fraud prevention, safety, and legal compliance.",
+  "Verification files are encrypted and stored with restricted reviewer access.",
+  "Trusted service providers may process data where needed to run the service.",
+  "Users can request access, correction, deletion, or objection through the POPIA process.",
 ] as const;
 
 const integrityMetrics = [
@@ -116,7 +114,7 @@ export default function TrustSafetyPage() {
         <div className="container-page py-4 space-y-5">
           <PageHeader
             title="Trust & Safety"
-            description="Clear answers about who VerifyMzansi is, how person-level verification works, and what users should still do to stay safe."
+            description="How VerifyMzansi handles verification, safety, payments, and identity data."
             breadcrumbs={[{ label: "Trust & Safety" }]}
           />
 
@@ -128,10 +126,8 @@ export default function TrustSafetyPage() {
                   Verification helps reduce risk, but it does not guarantee safety.
                 </h2>
                 <p className="text-sm text-muted-foreground">
-                  A verified badge means a person or account completed specific platform checks. It
-                  does not mean VerifyMzansi has verified the business itself, nor that every
-                  seller, buyer, product, job, rental, event, or business profile is guaranteed
-                  safe, lawful, available, or fairly priced.
+                  A verified badge means an account completed platform checks. It does not guarantee
+                  a product, deal, business, rental, job, or event.
                 </p>
               </div>
             </div>
@@ -156,14 +152,8 @@ export default function TrustSafetyPage() {
                 ))}
               </dl>
               <p>
-                VerifyMzansi verifies people who post or manage content on the platform. Business
-                profiles are content records and should not be treated as an official endorsement of
-                the business unless the page clearly says the official representative was reviewed.
-              </p>
-              <p>
                 You can independently verify our registration on CIPC using registration number{" "}
-                {trustConfig.cipcNumber}. Use the official CIPC company lookup or registration
-                certificate process before relying on company details for high-value transactions.
+                {trustConfig.cipcNumber}.
               </p>
             </TrustCard>
 
@@ -176,10 +166,10 @@ export default function TrustSafetyPage() {
                   </li>
                 ))}
               </ul>
-              <Link href="/privacy" className="inline-flex text-brand-green underline">
+              <Link href="/privacy" className="block text-brand-green underline">
                 Read the Privacy Policy
               </Link>
-              <Link href="/dsar" className="inline-flex text-brand-green underline">
+              <Link href="/dsar" className="block text-brand-green underline">
                 Open the POPIA data-subject request form
               </Link>
             </TrustCard>
@@ -189,14 +179,13 @@ export default function TrustSafetyPage() {
             <TrustCard title="PAIA and POPIA process" icon={Scale}>
               <p>
                 Users can request access, correction, deletion, objection, recipient information, or
-                account-data export through the signed-in data-rights form or POPIA contact.
+                account-data export.
               </p>
               <p>
-                The PAIA manual explains record requests, data-subject requests, Information Officer
-                status, and escalation routes. Downloadable request templates will be added when
-                finalised.
+                The PAIA manual explains record requests, data-subject requests, and escalation
+                routes.
               </p>
-              <Link href="/paia" className="inline-flex text-brand-green underline">
+              <Link href="/paia" className="block text-brand-green underline">
                 Open the PAIA manual
               </Link>
               <p>
@@ -246,30 +235,29 @@ export default function TrustSafetyPage() {
                   </li>
                 ))}
               </ul>
-              <Link href="/safety" className="inline-flex text-brand-green underline">
+              <Link href="/safety" className="block text-brand-green underline">
                 Open the Safety Centre
               </Link>
             </TrustCard>
 
             <TrustCard title="Payments and refunds" icon={CreditCard}>
               <p>
-                Paid visibility features are processed through secure hosted checkout in South
-                African rand. The checkout should show VerifyMzansi
+                Paid visibility is processed through secure hosted checkout in South African rand.
+                The checkout should show VerifyMzansi
                 {trustConfig.ozowMerchantName ? ` or ${trustConfig.ozowMerchantName}` : ""} as the
                 expected merchant name.
               </p>
               <p>
-                Listings remain subject to moderation. If paid content is rejected, cancelled, or
-                disputed, refund handling follows the Terms of Service, the Consumer Protection Act,
-                and the payment provider record.
+                Listings remain subject to moderation. Refund handling follows the Terms of Service,
+                consumer law, and the payment provider record.
               </p>
               {trustConfig.vatStatus && <p>VAT status: {trustConfig.vatStatus}</p>}
             </TrustCard>
 
             <TrustCard title="Accountability channels" icon={LifeBuoy}>
               <p>
-                Suspicious listings, fraud reports, data-rights requests, verification appeals, and
-                security concerns should be sent through the correct support channel.
+                Send fraud reports, data-rights requests, verification appeals, and security
+                concerns through the correct support channel.
               </p>
               <div className="grid gap-2">
                 <a

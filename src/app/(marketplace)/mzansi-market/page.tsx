@@ -104,7 +104,7 @@ export default async function MzansiMarketPage() {
           <div className="flex-1 min-w-0 space-y-5">
             <PageHeader
               title="Browse Listings"
-              description="Verified classifieds from South African sellers, with filters for price, condition, and location."
+              description="Classifieds from South African sellers, with filters for price, condition, and location."
               breadcrumbs={[{ label: "Mzansi Market" }]}
               className="hidden lg:block"
             >

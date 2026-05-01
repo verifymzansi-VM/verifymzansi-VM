@@ -21,17 +21,17 @@ export default function AdvertisePage() {
   const pillars = [
     {
       title: "List your tourism business",
-      description: "Showcase accommodations, tours, and experiences with accountable posting.",
+      description: "Showcase stays, tours, and experiences.",
       icon: TreePalm,
     },
     {
       title: "Build customer confidence",
-      description: "Person-level trust badges help buyers see who submitted the profile.",
+      description: "Trust badges show who submitted the post.",
       icon: ShieldCheck,
     },
     {
       title: "Grow your business presence",
-      description: "A stronger storefront for your business and campaigns.",
+      description: "Create a cleaner storefront for offers and campaigns.",
       icon: Store,
     },
   ];
@@ -39,21 +39,21 @@ export default function AdvertisePage() {
   const surfaces = [
     {
       name: "Mzansi Market",
-      description: "Promote individual products, offers, and listings.",
+      description: "Products, offers, and individual listings.",
       browseHref: "/mzansi-market",
       createHref: "/post/create-listing",
       createLabel: "Create marketplace listing",
     },
     {
       name: "Mzansi Business",
-      description: "Build a business profile managed by an identity-reviewed representative.",
+      description: "Business profiles from reviewed representatives.",
       browseHref: "/mzansi-business",
       createHref: "/post/create-business",
       createLabel: "Create business profile",
     },
     {
       name: "Tourism & Events",
-      description: "Promote your tourism business and events with trusted visibility.",
+      description: "Tourism businesses, experiences, and events.",
       browseHref: "/tourism-events",
       createHref: "/post/create-tourism?type=event",
       createLabel: "Create event campaign",
@@ -68,22 +68,11 @@ export default function AdvertisePage() {
           <div className="container-page py-10 space-y-6 sm:py-14">
             <PageHeader
               title="Advertise on VerifyMzansi"
-              description="Promote products, services, tourism experiences, and events with visibility that helps customers discover your brand with more confidence."
+              description="Promote products, services, tourism experiences, and events with trusted visibility."
               breadcrumbs={[{ label: "Advertise" }]}
-            >
-              <Button asChild className="gap-2">
-                <Link href="/pricing">
-                  View pricing
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-            </PageHeader>
+            />
 
             <div className="max-w-3xl space-y-4 text-sm text-muted-foreground sm:text-base">
-              <p>
-                Reach local buyers with video-powered listings, representative-managed business
-                profiles, tourism posts, and event campaigns that can be boosted after approval.
-              </p>
               <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <Button asChild size="lg" className="gap-2">
                   <Link href="/post/create">
@@ -92,26 +81,23 @@ export default function AdvertisePage() {
                   </Link>
                 </Button>
                 <Button asChild size="lg" variant="outline">
-                  <Link href="/register">Create Account</Link>
+                  <Link href="/pricing">View Pricing</Link>
                 </Button>
                 <Button asChild size="lg" variant="outline">
-                  <Link href="/tourism-events">Explore Tourism & Events</Link>
+                  <Link href="/register">Create Account</Link>
                 </Button>
               </div>
             </div>
           </div>
         </section>
 
-        <TrustStrip variant="green" />
+        <TrustStrip variant="green" title="Trusted advertising surfaces" />
 
         <section className="container-page py-8 space-y-6 sm:py-10">
           <div className="max-w-2xl space-y-2">
             <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
               Why advertise here
             </h2>
-            <p className="text-sm text-muted-foreground sm:text-base">
-              Trust signals that turn browsers into buyers.
-            </p>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
@@ -137,8 +123,7 @@ export default function AdvertisePage() {
               Choose your visibility surface
             </h2>
             <p className="text-sm text-muted-foreground sm:text-base">
-              Start with the format that matches your offer, then expand into other surfaces as your
-              campaigns grow.
+              Start with the format that matches your offer.
             </p>
           </div>
 

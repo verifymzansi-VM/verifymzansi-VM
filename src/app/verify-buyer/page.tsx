@@ -18,19 +18,19 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const buyerTokenGuidance = [
   {
     title: "Where the token comes from",
-    text: "A buyer shares the token from their VerifyMzansi account or buyer-verification screen. Do not trust screenshots alone; paste the token here.",
+    text: "A buyer shares the token from their VerifyMzansi account. Paste the token here instead of relying on screenshots.",
   },
   {
     title: "What a valid token means",
-    text: "The token only confirms that the buyer account had completed platform checks when the token was issued. It is not a payment guarantee.",
+    text: "A valid token confirms platform checks at issue time. It is not a payment guarantee.",
   },
   {
     title: "Expiry and reuse",
-    text: "Tokens may expire or be revoked. Ask for a fresh token if the result is expired, revoked, not found, or the deal details changed.",
+    text: "Ask for a fresh token if it expired, was revoked, or the deal changed.",
   },
   {
     title: "Keep trading safely",
-    text: "Meet safely, inspect goods, avoid OTP/payment pressure, and keep records even when a token is valid.",
+    text: "Meet safely, inspect goods, avoid payment pressure, and keep records.",
   },
 ] as const;
 
@@ -109,7 +109,7 @@ export default function VerifyBuyerPage() {
         <div className="container-page py-4 space-y-4">
           <PageHeader
             title="Verify a Buyer"
-            description="Check a buyer's current token directly instead of relying on screenshots or forwarded messages."
+            description="Check a buyer token directly before continuing a deal."
             breadcrumbs={[{ label: "Verify a Buyer" }]}
           />
 
@@ -135,8 +135,7 @@ export default function VerifyBuyerPage() {
                       }}
                     />
                     <p className="text-xs text-muted-foreground">
-                      Paste the buyer token from their VerifyMzansi account. Tokens are UUIDs and
-                      may expire or be revoked.
+                      Tokens are UUIDs and may expire or be revoked.
                     </p>
                   </div>
 
