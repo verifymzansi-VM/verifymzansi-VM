@@ -165,7 +165,7 @@ export default async function DashboardPage() {
         .from("businesses")
         .select("*", { count: "exact", head: true })
         .neq("category", "tourism_hospitality")
-        .neq("area", "PROMOTIONS_EVENTS"),
+        .or("area.is.null,area.neq.PROMOTIONS_EVENTS"),
       businessOwnerColumn,
       user.id
     ),

@@ -186,6 +186,7 @@ describe("DashboardPage", () => {
     tourismBusinessCount?: number;
   }) {
     let businessQueryCount = 0;
+    const businessQueries: Array<ReturnType<typeof createQueryResult>> = [];
 
     mockSupabase.from.mockImplementation((table: string) => {
       if (table === "account_profiles") {
@@ -216,10 +217,12 @@ describe("DashboardPage", () => {
 
       if (table === "businesses") {
         businessQueryCount += 1;
-        return createQueryResult({
+        const query = createQueryResult({
           data: [],
           count: businessQueryCount === 1 ? businessCount : tourismBusinessCount,
         });
+        businessQueries.push(query);
+        return query;
       }
 
       if (table === "listing_views") {
@@ -228,6 +231,8 @@ describe("DashboardPage", () => {
 
       return createQueryResult({ data: [], count: 0 });
     });
+
+    return { businessQueries };
   }
 
   it("treats fully approved steps as verified even when the profile status is stale", async () => {
@@ -303,7 +308,7 @@ describe("DashboardPage", () => {
   });
 
   it("counts tourism businesses under Tourism & Events instead of Businesses", async () => {
-    stubDashboardQueries({
+    const { businessQueries } = stubDashboardQueries({
       profileStatus: "verified",
       verificationSteps: [
         { step_type: "phone", status: "approved" },
@@ -320,5 +325,10 @@ describe("DashboardPage", () => {
 
     expect(screen.getByText("stats:0:0:1")).toBeInTheDocument();
     expect(screen.queryByText("dashboard-onboarding:true:false:false")).not.toBeInTheDocument();
+    expect(businessQueries[0].neq).toHaveBeenCalledWith("category", "tourism_hospitality");
+    expect(businessQueries[0].or).toHaveBeenCalledWith("area.is.null,area.neq.PROMOTIONS_EVENTS");
+    expect(businessQueries[1].or).toHaveBeenCalledWith(
+      "area.eq.PROMOTIONS_EVENTS,category.eq.tourism_hospitality"
+    );
   });
 });
