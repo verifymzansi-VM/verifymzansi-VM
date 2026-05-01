@@ -231,14 +231,6 @@ function getChangeSummary(item: ModerationItem) {
 }
 
 function ContentEditChanges({ changes }: { changes: ContentEditChange[] }) {
-  if (changes.length === 0) {
-    return (
-      <div className="mt-3 rounded-md bg-white/70 p-2 text-xs text-amber-800">
-        No changed fields were detected in the submitted payload.
-      </div>
-    );
-  }
-
   return (
     <div className="mt-3 space-y-2">
       <div className="flex items-center justify-between gap-3">
@@ -252,6 +244,12 @@ function ContentEditChanges({ changes }: { changes: ContentEditChange[] }) {
           {changes.length} update{changes.length === 1 ? "" : "s"}
         </Badge>
       </div>
+      {changes.length === 0 && (
+        <div className="rounded-md bg-white/80 p-2 text-xs text-amber-800">
+          No field-level differences were detected between the current live version and the
+          submitted edit. Review the full submitted post details below before approving.
+        </div>
+      )}
       <div className="space-y-2">
         {changes.map((change) => (
           <div key={change.field} className="rounded-md bg-white/80 p-2">

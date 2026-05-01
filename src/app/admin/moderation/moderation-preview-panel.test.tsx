@@ -333,4 +333,25 @@ describe("ModerationPreviewPanel", () => {
     expect(screen.getAllByText("011 555 0101").length).toBeGreaterThan(0);
     expect(screen.getAllByText("011 555 0102").length).toBeGreaterThan(0);
   });
+
+  it("makes an empty edit diff explicit instead of hiding the change section", () => {
+    render(
+      <ModerationPreviewPanel
+        item={{
+          ...baseItem,
+          isEditRequest: true,
+          current_snapshot: {
+            title: "Toyota Hilux 2019",
+            description: undefined,
+            price_cents: 45000000,
+          },
+          change_summary: [],
+        }}
+      />
+    );
+
+    expect(screen.getByText("Changed fields")).toBeInTheDocument();
+    expect(screen.getByText("0 updates")).toBeInTheDocument();
+    expect(screen.getByText(/No field-level differences were detected/i)).toBeInTheDocument();
+  });
 });
