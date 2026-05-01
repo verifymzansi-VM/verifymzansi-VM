@@ -133,6 +133,13 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
                         Edit review
                       </Badge>
                     )}
+                    {item.isEditRequest &&
+                      item.change_summary &&
+                      item.change_summary.length > 0 && (
+                        <Badge variant="secondary" className="text-[10px]">
+                          {item.change_summary.length} changed
+                        </Badge>
+                      )}
                     <Badge variant="secondary" className="text-[10px]">
                       {item.areaLabel}
                     </Badge>
@@ -145,6 +152,11 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Submitted {formatRelativeTime(item.created_at)}
                   </p>
+                  {item.isEditRequest && item.change_summary && item.change_summary.length > 0 && (
+                    <p className="mt-1 line-clamp-1 text-xs text-amber-700">
+                      Updates: {item.change_summary.map((change) => change.label).join(", ")}
+                    </p>
+                  )}
                 </div>
                 <div className="col-span-2 min-w-0 w-full max-w-full flex flex-wrap justify-start gap-1 border-t border-border/60 pt-3 lg:justify-end">
                   <Button

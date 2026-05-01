@@ -254,4 +254,83 @@ describe("ModerationPreviewPanel", () => {
     expect(screen.getByText("Soweto")).toBeInTheDocument();
     expect(screen.getByText("Roodepoort")).toBeInTheDocument();
   });
+
+  it("shows exactly which fields changed for a live listing edit request", () => {
+    render(
+      <ModerationPreviewPanel
+        item={{
+          ...baseItem,
+          isEditRequest: true,
+          title: "Toyota Hilux 2019, low mileage",
+          description: "Updated service history.",
+          price_cents: 43000000,
+          current_snapshot: {
+            title: "Toyota Hilux 2019",
+            description: "Original listing copy.",
+            price_cents: 45000000,
+          },
+          change_summary: [
+            {
+              field: "title",
+              label: "Title",
+              before: "Toyota Hilux 2019",
+              after: "Toyota Hilux 2019, low mileage",
+            },
+            {
+              field: "description",
+              label: "Description",
+              before: "Original listing copy.",
+              after: "Updated service history.",
+            },
+          ],
+        }}
+      />
+    );
+
+    expect(screen.getByText("Changed fields")).toBeInTheDocument();
+    expect(screen.getByText("2 updates")).toBeInTheDocument();
+    expect(screen.getAllByText("Current").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Submitted").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Title").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Toyota Hilux 2019, low mileage").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Original listing copy.").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Updated service history.").length).toBeGreaterThan(0);
+  });
+
+  it("shows exactly which fields changed for a live business edit request", () => {
+    render(
+      <ModerationPreviewPanel
+        item={{
+          ...baseBusinessItem,
+          isEditRequest: true,
+          business_name: "Nomsa Beauty Studio Sandton",
+          phone: "011 555 0102",
+          current_snapshot: {
+            business_name: "Nomsa Beauty Studio",
+            phone: "011 555 0101",
+          },
+          change_summary: [
+            {
+              field: "business_name",
+              label: "Business name",
+              before: "Nomsa Beauty Studio",
+              after: "Nomsa Beauty Studio Sandton",
+            },
+            {
+              field: "phone",
+              label: "Phone",
+              before: "011 555 0101",
+              after: "011 555 0102",
+            },
+          ],
+        }}
+      />
+    );
+
+    expect(screen.getByText("Changed fields")).toBeInTheDocument();
+    expect(screen.getByText("Business name")).toBeInTheDocument();
+    expect(screen.getAllByText("Nomsa Beauty Studio Sandton").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("011 555 0101").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("011 555 0102").length).toBeGreaterThan(0);
+  });
 });

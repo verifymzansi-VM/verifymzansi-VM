@@ -73,6 +73,20 @@ const items: ModerationItem[] = [
     itemType: "Listing edit",
     isEditRequest: true,
     current_snapshot: { title: "Used iPhone 15" },
+    change_summary: [
+      {
+        field: "title",
+        label: "Title",
+        before: "Used iPhone 15",
+        after: "Used iPhone 15 - updated",
+      },
+      {
+        field: "price_cents",
+        label: "Price",
+        before: "1200000",
+        after: "1100000",
+      },
+    ],
   },
 ];
 
@@ -185,6 +199,13 @@ describe("ModerationQueueClient", () => {
         })
       );
     });
+  });
+
+  it("surfaces changed fields on edit request cards", () => {
+    render(<ModerationQueueClient items={items} />);
+
+    expect(screen.getByText("2 changed")).toBeInTheDocument();
+    expect(screen.getByText("Updates: Title, Price")).toBeInTheDocument();
   });
 
   it("uses a horizontally scrollable preview wrapper in the review sheet", () => {

@@ -38,11 +38,20 @@ vi.mock("@/lib/utils/logger", () => ({
 }));
 
 vi.mock("./moderation-queue-client", () => ({
-  ModerationQueueClient: ({ items }: { items: Array<{ title?: string; itemType: string }> }) => (
+  ModerationQueueClient: ({
+    items,
+  }: {
+    items: Array<{ title?: string; itemType: string; change_summary?: Array<{ label: string }> }>;
+  }) => (
     <div>
       <p>queue-size:{items.length}</p>
       {items.map((item, index) => (
-        <div key={`${item.itemType}-${index}`}>{`${item.itemType}:${item.title}`}</div>
+        <div key={`${item.itemType}-${index}`}>
+          {`${item.itemType}:${item.title}`}
+          {item.change_summary
+            ? ` changes:${item.change_summary.map((c) => c.label).join(",")}`
+            : ""}
+        </div>
       ))}
     </div>
   ),
@@ -155,7 +164,8 @@ describe("AdminModerationPage", () => {
     expect(screen.getByText("Listing:Used iPhone 15")).toBeInTheDocument();
     expect(screen.getByText("Business:Nomsa Beauty Studio")).toBeInTheDocument();
     expect(screen.getByText("Promotion:Weekend Sale")).toBeInTheDocument();
-    expect(screen.getByText("Listing edit:Used iPhone 15 - updated")).toBeInTheDocument();
+    expect(screen.getByText(/Listing edit:Used iPhone 15 - updated/)).toBeInTheDocument();
+    expect(screen.getByText(/changes:Category,Title/i)).toBeInTheDocument();
     expect(listingQuery?.select).toHaveBeenCalledWith(expect.stringContaining("video_thumbnail"));
     expect(businessQuery?.select).toHaveBeenCalledWith(expect.stringContaining("business_details"));
     expect(businessQuery?.select).toHaveBeenCalledWith(expect.stringContaining("cover_photo"));
@@ -218,6 +228,7 @@ describe("AdminModerationPage", () => {
       listingsError: undefined,
       businessesError: undefined,
       promotionsError: "column promotions.logo_url does not exist",
+      editRequestsError: undefined,
     });
   });
 });

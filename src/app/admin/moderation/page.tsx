@@ -6,6 +6,7 @@ import { ModerationQueueClient } from "./moderation-queue-client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isStaff } from "@/lib/auth/roles";
 import { createLogger } from "@/lib/utils/logger";
+import { getContentEditChanges } from "@/lib/content-edit-diff";
 
 const log = createLogger("AdminModerationPage");
 
@@ -124,6 +125,7 @@ export default async function AdminModerationPage() {
       itemType,
       isEditRequest: true,
       current_snapshot: currentSnapshot,
+      change_summary: getContentEditChanges(currentSnapshot, proposed),
     };
   });
 

@@ -27,6 +27,7 @@ import { VideoWithPoster } from "@/components/ui/video-with-poster";
 import { formatZAR, formatRelativeTime } from "@/lib/utils/format";
 import { normalizeMediaUrl, normalizeVideoUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
+import { getContentEditChanges, type ContentEditChange } from "@/lib/content-edit-diff";
 import {
   hasBusinessDeliveryAvailable,
   PRIMARY_ORDER_CHANNEL_LABELS,
@@ -88,6 +89,7 @@ export interface ModerationItem {
   isEditRequest?: boolean;
   targetId?: string;
   current_snapshot?: Record<string, unknown>;
+  change_summary?: ContentEditChange[];
 }
 
 interface ModerationPreviewPanelProps {
@@ -202,6 +204,75 @@ function BusinessInfoCard({
         <span>{label}</span>
       </div>
       <p className="mt-1 text-sm font-medium break-words whitespace-pre-wrap">{value}</p>
+    </div>
+  );
+}
+
+function getChangeSummary(item: ModerationItem) {
+  if (item.change_summary) return item.change_summary;
+
+  const proposedFields = { ...item } as Record<string, unknown>;
+  [
+    "area",
+    "areaLabel",
+    "change_summary",
+    "current_snapshot",
+    "id",
+    "isEditRequest",
+    "itemType",
+    "owner_id",
+    "status",
+    "targetId",
+  ].forEach((field) => {
+    delete proposedFields[field];
+  });
+
+  return getContentEditChanges(item.current_snapshot, proposedFields);
+}
+
+function ContentEditChanges({ changes }: { changes: ContentEditChange[] }) {
+  if (changes.length === 0) {
+    return (
+      <div className="mt-3 rounded-md bg-white/70 p-2 text-xs text-amber-800">
+        No changed fields were detected in the submitted payload.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-amber-900">
+          Changed fields
+        </p>
+        <Badge
+          variant="outline"
+          className="border-amber-300 bg-white/70 text-[10px] text-amber-950"
+        >
+          {changes.length} update{changes.length === 1 ? "" : "s"}
+        </Badge>
+      </div>
+      <div className="space-y-2">
+        {changes.map((change) => (
+          <div key={change.field} className="rounded-md bg-white/80 p-2">
+            <p className="text-xs font-semibold text-amber-950">{change.label}</p>
+            <div className="mt-1 grid gap-2 sm:grid-cols-2">
+              <div>
+                <p className="text-[10px] font-medium uppercase text-amber-700">Current</p>
+                <p className="mt-0.5 line-clamp-3 break-words text-xs text-amber-900">
+                  {change.before}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] font-medium uppercase text-amber-700">Submitted</p>
+                <p className="mt-0.5 line-clamp-3 break-words text-xs font-medium text-amber-950">
+                  {change.after}
+                </p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -416,6 +487,7 @@ function BusinessModerationPreview({ item }: ModerationPreviewPanelProps) {
   const socialLinks = Object.entries(item.social_links ?? {}).filter(
     ([, value]) => typeof value === "string" && value.trim().length > 0
   );
+  const editChanges = item.isEditRequest ? getChangeSummary(item) : [];
 
   function goTo(index: number) {
     if (index >= 0 && index < allMedia.length) {
@@ -457,6 +529,7 @@ function BusinessModerationPreview({ item }: ModerationPreviewPanelProps) {
                 )}
               </div>
             </div>
+            <ContentEditChanges changes={editChanges} />
           </div>
         )}
 
@@ -878,6 +951,7 @@ export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
     typeof item.current_snapshot?.price_cents === "number"
       ? item.current_snapshot.price_cents
       : null;
+  const editChanges = item.isEditRequest ? getChangeSummary(item) : [];
 
   if (item.area === "MZANSI_BUSINESS") {
     return <BusinessModerationPreview item={item} />;
@@ -950,6 +1024,7 @@ export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
                 )}
               </div>
             </div>
+            <ContentEditChanges changes={editChanges} />
           </div>
         )}
 
