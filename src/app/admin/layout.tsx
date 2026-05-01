@@ -17,7 +17,7 @@ export const metadata = {
 const WORKSPACE_LABELS: Record<string, string> = {
   moderator: "Operations",
   governance_controller: "Governance",
-  admin: "Intelligence",
+  admin: "Admin",
 };
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -72,7 +72,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </div>
       </header>
 
-      <AdminLiveNotifier userId={staffUser.id} />
+      <AdminLiveNotifier userId={staffUser.id} userRole={role} />
       <AdminRealtimeRefresh />
 
       <div className="flex min-w-0 w-full flex-1 overflow-x-hidden">

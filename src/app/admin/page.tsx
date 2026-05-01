@@ -15,7 +15,7 @@ import {
 import { calculateSlaState } from "@/lib/utils/sla";
 import type { ReportSeverity } from "@/types/enums";
 import {
-  OverviewStrip,
+  RoleCommandCenter,
   VerificationCard,
   AreaDashboardCard,
   AdminControls,
@@ -51,6 +51,10 @@ export default async function AdminPage() {
 
   const isAdminRole = role === "admin";
   const isGovernance = role === "governance_controller";
+  const dashboardRole =
+    role === "admin" || role === "governance_controller" || role === "moderator"
+      ? role
+      : "moderator";
   const roleLabel = ROLE_LABELS[role] ?? role;
   const roleBadgeVariant = ROLE_VARIANTS[role] ?? "secondary";
 
@@ -119,7 +123,6 @@ export default async function AdminPage() {
         ? "warning"
         : "healthy";
 
-  // ── Overview metrics ───────────────────────────────────────
   const totalAccounts = stats.totalAccounts;
   const verifiedAccounts = extended?.verifiedAccounts ?? 0;
   const bannedAccounts = extended?.bannedAccounts ?? 0;
@@ -128,50 +131,65 @@ export default async function AdminPage() {
       ? Math.round((verifiedAccounts / totalAccounts) * 100)
       : null;
 
-  const overviewMetrics = [
-    { label: "Accounts", value: totalAccounts },
-    ...(verifiedPct !== null ? [{ label: "Verified", value: `${verifiedPct}%` }] : []),
-    ...((isAdminRole || isGovernance) && extended
-      ? [{ label: "Live Content", value: extended.liveListings }]
-      : []),
-    { label: "KYC queue", value: stats.pendingVerifications },
-    { label: "Reports", value: stats.openReports },
-    { label: "Moderation", value: stats.pendingModeration },
-  ];
-
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* ── Header ──────────────────────────────────────────── */}
-      <PageHeader title="Admin" breadcrumbs={[{ label: "Admin" }]}>
+      <PageHeader title={`${roleLabel} Command Center`} breadcrumbs={[{ label: "Admin" }]}>
         <Badge variant={roleBadgeVariant}>{roleLabel}</Badge>
       </PageHeader>
 
-      {/* ── 1. Overview Strip ───────────────────────────────── */}
-      <OverviewStrip status={healthStatus} metrics={overviewMetrics} />
+      <RoleCommandCenter
+        role={dashboardRole}
+        healthStatus={healthStatus}
+        stats={stats}
+        verifiedPct={verifiedPct}
+        reports={reports}
+        breachedReportCount={breachedReports.length}
+        areaSummary={areaSummary}
+        areaCounts={areaCounts}
+        stepCounts={stepCounts}
+        extended={extended}
+      />
 
-      {/* ── 2. Verification ─────────────────────────────────── */}
-      <VerificationCard pendingVerifications={stats.pendingVerifications} stepCounts={stepCounts} />
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-sm font-semibold">Operations queues</h2>
+          <p className="text-xs text-muted-foreground">
+            Reviewable work stays grouped by what staff can act on today.
+          </p>
+        </div>
+        <VerificationCard
+          pendingVerifications={stats.pendingVerifications}
+          stepCounts={stepCounts}
+        />
+      </section>
 
-      {/* ── 3. Marketplace Areas ────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <AreaDashboardCard
-          area="MZANSI_MARKET"
-          stats={areaSummary.MZANSI_MARKET}
-          flagCount={areaCounts.MZANSI_MARKET.pendingFlags}
-        />
-        <AreaDashboardCard
-          area="MZANSI_BUSINESS"
-          stats={areaSummary.MZANSI_BUSINESS}
-          flagCount={areaCounts.MZANSI_BUSINESS.pendingFlags}
-        />
-        <AreaDashboardCard
-          area="PROMOTIONS_EVENTS"
-          stats={areaSummary.PROMOTIONS_EVENTS}
-          flagCount={areaCounts.PROMOTIONS_EVENTS.pendingFlags}
-        />
-      </div>
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-sm font-semibold">Area workload</h2>
+          <p className="text-xs text-muted-foreground">
+            Marketplace, business, and tourism queues show content state and flag pressure together.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <AreaDashboardCard
+            area="MZANSI_MARKET"
+            stats={areaSummary.MZANSI_MARKET}
+            flagCount={areaCounts.MZANSI_MARKET.pendingFlags}
+          />
+          <AreaDashboardCard
+            area="MZANSI_BUSINESS"
+            stats={areaSummary.MZANSI_BUSINESS}
+            flagCount={areaCounts.MZANSI_BUSINESS.pendingFlags}
+          />
+          <AreaDashboardCard
+            area="PROMOTIONS_EVENTS"
+            stats={areaSummary.PROMOTIONS_EVENTS}
+            flagCount={areaCounts.PROMOTIONS_EVENTS.pendingFlags}
+          />
+        </div>
+      </section>
 
-      {/* ── 4. Admin/Governance Controls ───────────────────── */}
       {(isAdminRole || isGovernance) && extended && (
         <AdminControls
           enforcementStats={{
