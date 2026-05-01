@@ -220,6 +220,32 @@ describe("EditListingPage", () => {
     expect(screen.getByText("No listing logo uploaded.")).toBeInTheDocument();
   });
 
+  it("returns to the dashboard when a live edit is already pending review", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      json: async () => ({ code: "pending_edit_exists" }),
+    });
+
+    render(<EditListingPage />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("Used iPhone 15")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+
+    await waitFor(() => {
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Edit already submitted for review",
+          variant: "success",
+        })
+      );
+    });
+    expect(mockPush).toHaveBeenCalledWith("/dashboard/listings");
+  });
+
   it("uploads and uses a replacement listing logo", async () => {
     (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
       async (input: RequestInfo | URL) => {

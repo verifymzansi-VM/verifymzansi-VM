@@ -219,6 +219,69 @@ describe("EditBusinessPage", () => {
     });
   });
 
+  it("returns to the dashboard when a live business edit is already pending review", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockReset();
+    (global.fetch as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          business: {
+            id: "business-1",
+            status: "live",
+            business_type: "home_business",
+            business_name: "Nomsa Home Studio",
+            slug: "nomsa-home-studio",
+            description: "A home-based studio.",
+            category: "health_beauty",
+            location_province: "Gauteng",
+            location_city: "Johannesburg",
+            logo_url: "",
+            cover_photo: "",
+            cover_video: "",
+            video_thumbnail: "",
+            gallery_photos: [],
+            services_offered: ["Braids"],
+            payment_methods_accepted: [],
+            delivery_options: [],
+            social_links: {},
+            operating_hours: {},
+            service_areas: null,
+            business_details: {
+              type: "home_business",
+              service_suburb: "Noordwyk",
+              appointment_required: true,
+              customer_pickup_allowed: false,
+            },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        json: async () => ({ code: "pending_edit_exists" }),
+      });
+
+    render(<EditBusinessPage />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("Nomsa Home Studio")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+
+    await waitFor(() => {
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Edit already submitted for review",
+          variant: "success",
+        })
+      );
+    });
+    expect(mockPush).toHaveBeenCalledWith(
+      "/dashboard/listings?area=MZANSI_BUSINESS&updated=business"
+    );
+  });
+
   it("collapses legacy online delivery details into simple delivery availability on save", async () => {
     (global.fetch as unknown as ReturnType<typeof vi.fn>).mockReset();
     (global.fetch as unknown as ReturnType<typeof vi.fn>)

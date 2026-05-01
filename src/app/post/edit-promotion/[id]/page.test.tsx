@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import EditPromotionPage from "./page";
 import { useParams, useRouter } from "next/navigation";
+import { useToast } from "@/hooks/use-toast";
 
 const { promotionDetailPreviewSpy } = vi.hoisted(() => ({
   promotionDetailPreviewSpy: vi.fn(),
@@ -10,6 +11,10 @@ const { promotionDetailPreviewSpy } = vi.hoisted(() => ({
 vi.mock("next/navigation", () => ({
   useRouter: vi.fn(),
   useParams: vi.fn(),
+}));
+
+vi.mock("@/hooks/use-toast", () => ({
+  useToast: vi.fn(),
 }));
 
 vi.mock("next/link", () => ({
@@ -69,6 +74,7 @@ vi.mock("@/components/billing/plan-gate", () => ({
 
 describe("EditPromotionPage", () => {
   const mockPush = vi.fn();
+  const mockToast = vi.fn();
   const createDefaultPromotion = (
     overrides: Partial<{
       photos: string[];
@@ -131,6 +137,7 @@ describe("EditPromotionPage", () => {
     vi.clearAllMocks();
     (useRouter as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ push: mockPush });
     (useParams as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ id: "promotion-1" });
+    (useToast as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ toast: mockToast });
     mockEditPromotionFetch();
   });
 
@@ -211,6 +218,45 @@ describe("EditPromotionPage", () => {
     expect(payload.images).toEqual([]);
     expect(payload.videos).toEqual(["https://example.com/promo-video.mp4"]);
     expect(payload.video_thumbnail).toBe("https://example.com/promo-video-thumb.jpg");
+  });
+
+  it("returns to the dashboard when a live promotion edit is already pending review", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          promotion: createDefaultPromotion(),
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          businesses: [{ id: "business-1", business_name: "Nomsa Kitchen" }],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        json: async () => ({ code: "pending_edit_exists" }),
+      }) as unknown as typeof fetch;
+
+    render(<EditPromotionPage />);
+
+    const saveButton = await screen.findByRole("button", { name: /Save Changes/i });
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Edit already submitted for review",
+          variant: "success",
+        })
+      );
+    });
+    expect(mockPush).toHaveBeenCalledWith(
+      "/dashboard/listings?area=PROMOTIONS_EVENTS&updated=promotion"
+    );
   });
 
   it("shows a photo-or-video validation message when no media exists", async () => {

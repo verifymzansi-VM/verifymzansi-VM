@@ -525,7 +525,11 @@ export default function EditListingPage() {
             return;
           }
           if (data?.code === "pending_edit_exists") {
-            setFormError("This listing already has an edit pending admin review.");
+            toast({
+              title: "Edit already submitted for review",
+              variant: "success",
+            });
+            router.push("/dashboard/listings");
             return;
           }
           setFormError(
