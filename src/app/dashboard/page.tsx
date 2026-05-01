@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Plus, BadgeCheck, ShieldCheck, ChevronRight } from "lucide-react";
@@ -12,6 +13,7 @@ import {
 } from "@/lib/account/compat";
 import { summarizeVerification } from "@/lib/account/verification-summary";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
+import { getOptionalContentViewCountMap } from "@/lib/engagement-server";
 import { EmailConfirmedToast } from "@/components/dashboard/email-confirmed-toast";
 import { DashboardOnboarding } from "@/components/dashboard/dashboard-onboarding";
 import {
@@ -212,7 +214,14 @@ export default async function DashboardPage() {
   const firstName = displayName.split(" ")[0];
 
   // Build posts for the mini listing manager
-  const posts: MiniListingPost[] = (ownerListingsResult.data ?? []).map(
+  const listingRows = ownerListingsResult.data ?? [];
+  const listingIds = listingRows.map((listing: { id: string }) => listing.id);
+  const listingViewCounts =
+    listingIds.length > 0
+      ? await getOptionalContentViewCountMap(tryCreateAdminClient(), "listing", listingIds)
+      : { data: new Map<string, number>() };
+
+  const posts: MiniListingPost[] = listingRows.map(
     (l: {
       id: string;
       title: string | null;
@@ -228,7 +237,7 @@ export default async function DashboardPage() {
       status: l.status,
       area: l.area,
       photos: l.photos,
-      view_count: l.view_count,
+      view_count: listingViewCounts.data.get(l.id) ?? l.view_count ?? null,
       created_at: l.created_at,
       updated_at: l.updated_at,
     })

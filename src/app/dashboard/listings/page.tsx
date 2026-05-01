@@ -100,6 +100,19 @@ function getViewCountForItem(
   return viewCounts[item.source].get(item.id) ?? item.view_count ?? null;
 }
 
+async function getOwnerViewCountMap(
+  admin: ReturnType<typeof tryCreateAdminClient>,
+  targetType: ContentSource,
+  targetIds: string[]
+) {
+  if (targetIds.length === 0) {
+    return new Map<string, number>();
+  }
+
+  const result = await getOptionalContentViewCountMap(admin, targetType, targetIds);
+  return result.data;
+}
+
 function getEditHref(item: DashboardItem) {
   // Tourism businesses live in the businesses table with area PROMOTIONS_EVENTS;
   // route them to edit-business (not edit-promotion).
@@ -272,17 +285,17 @@ export default async function ListingsPage({
 
   const engagementAdmin = tryCreateAdminClient();
   const [listingViewCounts, businessViewCounts, promotionViewCounts] = await Promise.all([
-    getOptionalContentViewCountMap(
+    getOwnerViewCountMap(
       engagementAdmin,
       "listing",
       baseItems.filter((item) => item.source === "listing").map((item) => item.id)
     ),
-    getOptionalContentViewCountMap(
+    getOwnerViewCountMap(
       engagementAdmin,
       "business",
       baseItems.filter((item) => item.source === "business").map((item) => item.id)
     ),
-    getOptionalContentViewCountMap(
+    getOwnerViewCountMap(
       engagementAdmin,
       "promotion",
       baseItems.filter((item) => item.source === "promotion").map((item) => item.id)
@@ -290,9 +303,9 @@ export default async function ListingsPage({
   ]);
 
   const viewCounts: Record<ContentSource, Map<string, number>> = {
-    listing: listingViewCounts.data,
-    business: businessViewCounts.data,
-    promotion: promotionViewCounts.data,
+    listing: listingViewCounts,
+    business: businessViewCounts,
+    promotion: promotionViewCounts,
   };
 
   const items = sortByNewest(

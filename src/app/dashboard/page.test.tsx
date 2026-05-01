@@ -7,6 +7,19 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
 
+vi.mock("@/lib/supabase/admin", () => ({
+  tryCreateAdminClient: vi.fn(() => ({ rpc: vi.fn() })),
+}));
+
+vi.mock("@/lib/engagement-server", () => ({
+  getOptionalContentViewCountMap: vi.fn(
+    (_admin: unknown, _targetType: string, targetIds: string[]) => ({
+      ok: true,
+      data: new Map(targetIds.map((targetId) => [targetId, targetId === "listing-1" ? 23 : 0])),
+    })
+  ),
+}));
+
 vi.mock("next/navigation", () => ({
   redirect: vi.fn(),
 }));
@@ -55,7 +68,18 @@ vi.mock("@/components/dashboard/stat-chips", () => ({
 }));
 
 vi.mock("@/components/dashboard/listing-manager-mini", () => ({
-  ListingManagerMini: () => <div>listing-manager-mini</div>,
+  ListingManagerMini: ({
+    posts,
+  }: {
+    posts: Array<{ title: string | null; view_count?: number | null }>;
+  }) => (
+    <div>
+      listing-manager-mini
+      {posts.map((post) => (
+        <span key={post.title ?? "untitled"}>{`${post.title}:${post.view_count ?? 0}`}</span>
+      ))}
+    </div>
+  ),
 }));
 
 vi.mock("@/components/dashboard/dashboard-onboarding", () => ({
@@ -244,6 +268,7 @@ describe("DashboardPage", () => {
     render(ui);
 
     expect(screen.getByText("listing-manager-mini")).toBeInTheDocument();
+    expect(screen.getByText("Starter listing:23")).toBeInTheDocument();
     expect(screen.queryByText(/dashboard-onboarding:/i)).not.toBeInTheDocument();
   });
 });

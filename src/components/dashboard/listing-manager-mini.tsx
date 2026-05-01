@@ -260,12 +260,10 @@ export function ListingManagerMini({ posts, limit = 5 }: ListingManagerMiniProps
                       >
                         {status.label}
                       </Badge>
-                      {(post.view_count ?? 0) > 0 && (
-                        <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                          <Eye className="h-3 w-3" />
-                          {post.view_count}
-                        </span>
-                      )}
+                      <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                        <Eye className="h-3 w-3" />
+                        {post.view_count ?? 0}
+                      </span>
                       <span className="text-[10px] text-muted-foreground">{dateStr}</span>
                     </div>
                   </div>
