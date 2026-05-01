@@ -42,12 +42,85 @@ import {
   getPendingVerificationGroups,
   getPendingVerifications,
   getPendingModerationCount,
+  getDashboardAreaSummary,
   getRecentOtpAttempts,
   getRecentActivity,
   getAreaReports,
   getPendingContent,
   getActionsToday,
 } from "./admin-queries";
+
+type DashboardSummaryMockRow = {
+  area?: string | null;
+  category?: string | null;
+  promotion_type?: string | null;
+  status?: string | null;
+};
+
+function createDashboardSummaryTableMock(
+  table: string,
+  rowsByTable: Record<string, DashboardSummaryMockRow[]>
+) {
+  const filters: Array<
+    | { op: "eq" | "neq"; column: keyof DashboardSummaryMockRow; value: string }
+    | { op: "or"; expression: string }
+  > = [];
+  let selected = "*";
+  let head = false;
+
+  const applyFilters = () =>
+    (rowsByTable[table] || []).filter((row) =>
+      filters.every((filter) => {
+        if (filter.op === "eq") return row[filter.column] === filter.value;
+        if (filter.op === "neq") return row[filter.column] !== filter.value;
+        if (
+          filter.op === "or" &&
+          filter.expression === "area.eq.PROMOTIONS_EVENTS,category.eq.tourism_hospitality"
+        ) {
+          return row.area === "PROMOTIONS_EVENTS" || row.category === "tourism_hospitality";
+        }
+
+        return true;
+      })
+    );
+
+  const builder = {
+    select(fields: string, options?: { head?: boolean }) {
+      selected = fields;
+      head = Boolean(options?.head);
+      return builder;
+    },
+    eq(column: keyof DashboardSummaryMockRow, value: string) {
+      filters.push({ op: "eq", column, value });
+      return builder;
+    },
+    neq(column: keyof DashboardSummaryMockRow, value: string) {
+      filters.push({ op: "neq", column, value });
+      return builder;
+    },
+    or(expression: string) {
+      filters.push({ op: "or", expression });
+      return builder;
+    },
+    then(
+      resolve: (value: { count: number | null; data: DashboardSummaryMockRow[] | null }) => void
+    ) {
+      const rows = applyFilters();
+      resolve({
+        count: head ? rows.length : null,
+        data: head
+          ? null
+          : rows.map((row) =>
+              selected === "promotion_type"
+                ? { promotion_type: row.promotion_type }
+                : { category: row.category }
+            ),
+      });
+    },
+  };
+
+  return builder;
+}
 
 describe("admin-queries", () => {
   beforeEach(() => {
@@ -67,7 +140,7 @@ describe("admin-queries", () => {
       expect(stats.totalListings).toBe(5);
       expect(stats.openReports).toBe(5);
       expect(typeof stats.pendingVerifications).toBe("number");
-      expect(stats.pendingModeration).toBe(15);
+      expect(stats.pendingModeration).toBe(20);
     });
 
     it("defaults counts to 0 when null", async () => {
@@ -81,7 +154,7 @@ describe("admin-queries", () => {
       expect(stats.pendingModeration).toBe(0);
     });
 
-    it("sums pending moderation across listings, businesses, and promotions", async () => {
+    it("sums pending moderation across listings, businesses, tourism businesses, and promotions", async () => {
       mockFrom.mockImplementation((table: string) => {
         if (table === "listings") {
           return createChainableMock({ count: 4 });
@@ -100,7 +173,7 @@ describe("admin-queries", () => {
 
       const stats = await getAdminDashboardStats();
 
-      expect(stats.pendingModeration).toBe(9);
+      expect(stats.pendingModeration).toBe(12);
     });
   });
 
@@ -122,7 +195,44 @@ describe("admin-queries", () => {
         return createChainableMock({ count: 0 });
       });
 
-      await expect(getPendingModerationCount()).resolves.toBe(16);
+      await expect(getPendingModerationCount()).resolves.toBe(21);
+    });
+  });
+
+  describe("getDashboardAreaSummary", () => {
+    it("groups tourism businesses under Tourism & Events instead of Mzansi Business", async () => {
+      mockFrom.mockImplementation((table: string) =>
+        createDashboardSummaryTableMock(table, {
+          listings: [],
+          businesses: [
+            {
+              area: "MZANSI_BUSINESS",
+              category: "tourism_hospitality",
+              status: "live",
+            },
+            {
+              area: "MZANSI_BUSINESS",
+              category: "tourism_hospitality",
+              status: "live",
+            },
+            {
+              area: "MZANSI_BUSINESS",
+              category: "tourism_hospitality",
+              status: "live",
+            },
+          ],
+          promotions: [],
+        })
+      );
+
+      const result = await getDashboardAreaSummary();
+
+      expect(result.MZANSI_BUSINESS.totalPosted).toBe(0);
+      expect(result.MZANSI_BUSINESS.liveCount).toBe(0);
+      expect(result.MZANSI_BUSINESS.topCategory).toBeNull();
+      expect(result.PROMOTIONS_EVENTS.totalPosted).toBe(3);
+      expect(result.PROMOTIONS_EVENTS.liveCount).toBe(3);
+      expect(result.PROMOTIONS_EVENTS.topCategory).toBe("tourism_hospitality");
     });
   });
 
@@ -149,6 +259,32 @@ describe("admin-queries", () => {
       expect(counts.MZANSI_BUSINESS.pendingFlags).toBe(1);
       expect(counts.BUSINESS_ADS.pendingFlags).toBe(0);
       expect(counts.MALL_SHOPS.pendingFlags).toBe(0);
+    });
+
+    it("keeps pending tourism businesses in the Tourism & Events content count", async () => {
+      let businessQueryCount = 0;
+      mockFrom.mockImplementation((table: string) => {
+        if (table === "reports") {
+          return createChainableMock({ data: [] });
+        }
+        if (table === "listings") {
+          return createChainableMock({ count: 1 });
+        }
+        if (table === "businesses") {
+          businessQueryCount += 1;
+          return createChainableMock({ count: businessQueryCount === 1 ? 3 : 2 });
+        }
+        if (table === "promotions") {
+          return createChainableMock({ count: 4 });
+        }
+        return createChainableMock({ count: 0 });
+      });
+
+      const counts = await getAreaCardCounts();
+
+      expect(counts.MZANSI_MARKET.pendingContent).toBe(1);
+      expect(counts.MZANSI_BUSINESS.pendingContent).toBe(3);
+      expect(counts.PROMOTIONS_EVENTS.pendingContent).toBe(6);
     });
   });
 

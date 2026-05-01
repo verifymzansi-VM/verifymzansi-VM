@@ -71,36 +71,50 @@ export interface RecentOtpAttempt {
   expires_at: string;
 }
 
+const TOURISM_BUSINESS_FILTER = "area.eq.PROMOTIONS_EVENTS,category.eq.tourism_hospitality";
+
 async function getPendingModerationCountsByArea() {
   const supabase = createAdminClient();
-  const [{ count: pendingListings }, { count: pendingBusinesses }, { count: pendingPromotions }] =
-    await Promise.all([
-      supabase
-        .from("listings")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "pending_moderation"),
-      supabase
-        .from("businesses")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "pending_moderation"),
-      supabase
-        .from("promotions")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "pending_moderation"),
-    ]);
+  const [
+    { count: pendingListings },
+    { count: pendingBusinesses },
+    { count: pendingTourismBusinesses },
+    { count: pendingPromotions },
+  ] = await Promise.all([
+    supabase
+      .from("listings")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "pending_moderation"),
+    supabase
+      .from("businesses")
+      .select("*", { count: "exact", head: true })
+      .eq("area", "MZANSI_BUSINESS")
+      .neq("category", "tourism_hospitality")
+      .eq("status", "pending_moderation"),
+    supabase
+      .from("businesses")
+      .select("*", { count: "exact", head: true })
+      .or(TOURISM_BUSINESS_FILTER)
+      .eq("status", "pending_moderation"),
+    supabase
+      .from("promotions")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "pending_moderation"),
+  ]);
 
   return {
     pendingListings: pendingListings || 0,
     pendingBusinesses: pendingBusinesses || 0,
+    pendingTourismBusinesses: pendingTourismBusinesses || 0,
     pendingPromotions: pendingPromotions || 0,
   };
 }
 
 async function getPendingModerationCountInternal() {
-  const { pendingListings, pendingBusinesses, pendingPromotions } =
+  const { pendingListings, pendingBusinesses, pendingTourismBusinesses, pendingPromotions } =
     await getPendingModerationCountsByArea();
 
-  return pendingListings + pendingBusinesses + pendingPromotions;
+  return pendingListings + pendingBusinesses + pendingTourismBusinesses + pendingPromotions;
 }
 
 export async function getPendingModerationCount(): Promise<number> {
@@ -225,7 +239,7 @@ export async function getAreaCardCounts(): Promise<
     .eq("status", "open")
     .limit(10000);
 
-  const { pendingListings, pendingBusinesses, pendingPromotions } =
+  const { pendingListings, pendingBusinesses, pendingTourismBusinesses, pendingPromotions } =
     await getPendingModerationCountsByArea();
 
   // Map target_type to area
@@ -267,7 +281,7 @@ export async function getAreaCardCounts(): Promise<
     },
     PROMOTIONS_EVENTS: {
       pendingFlags: flagCounts.PROMOTIONS_EVENTS,
-      pendingContent: pendingPromotions,
+      pendingContent: pendingPromotions + pendingTourismBusinesses,
     },
   };
 }
@@ -317,17 +331,35 @@ export async function getDashboardAreaSummary(): Promise<
     { count: bizRejected },
     { data: bizCategories },
   ] = await Promise.all([
-    supabase.from("businesses").select("*", { count: "exact", head: true }),
     supabase
       .from("businesses")
       .select("*", { count: "exact", head: true })
+      .eq("area", "MZANSI_BUSINESS")
+      .neq("category", "tourism_hospitality"),
+    supabase
+      .from("businesses")
+      .select("*", { count: "exact", head: true })
+      .eq("area", "MZANSI_BUSINESS")
+      .neq("category", "tourism_hospitality")
       .eq("status", "pending_moderation"),
-    supabase.from("businesses").select("*", { count: "exact", head: true }).eq("status", "live"),
     supabase
       .from("businesses")
       .select("*", { count: "exact", head: true })
+      .eq("area", "MZANSI_BUSINESS")
+      .neq("category", "tourism_hospitality")
+      .eq("status", "live"),
+    supabase
+      .from("businesses")
+      .select("*", { count: "exact", head: true })
+      .eq("area", "MZANSI_BUSINESS")
+      .neq("category", "tourism_hospitality")
       .eq("status", "rejected"),
-    supabase.from("businesses").select("category").eq("status", "live"),
+    supabase
+      .from("businesses")
+      .select("category")
+      .eq("area", "MZANSI_BUSINESS")
+      .neq("category", "tourism_hospitality")
+      .eq("status", "live"),
   ]);
 
   const bizCatBreakdown = buildCategoryBreakdown(bizCategories || []);
@@ -339,6 +371,11 @@ export async function getDashboardAreaSummary(): Promise<
     { count: promoLive },
     { count: promoRejected },
     { data: promoCategories },
+    { count: tourismBizTotal },
+    { count: tourismBizPending },
+    { count: tourismBizLive },
+    { count: tourismBizRejected },
+    { data: tourismBizCategories },
   ] = await Promise.all([
     supabase.from("promotions").select("*", { count: "exact", head: true }),
     supabase
@@ -351,13 +388,34 @@ export async function getDashboardAreaSummary(): Promise<
       .select("*", { count: "exact", head: true })
       .eq("status", "rejected"),
     supabase.from("promotions").select("promotion_type").eq("status", "live"),
+    supabase
+      .from("businesses")
+      .select("*", { count: "exact", head: true })
+      .or(TOURISM_BUSINESS_FILTER),
+    supabase
+      .from("businesses")
+      .select("*", { count: "exact", head: true })
+      .or(TOURISM_BUSINESS_FILTER)
+      .eq("status", "pending_moderation"),
+    supabase
+      .from("businesses")
+      .select("*", { count: "exact", head: true })
+      .or(TOURISM_BUSINESS_FILTER)
+      .eq("status", "live"),
+    supabase
+      .from("businesses")
+      .select("*", { count: "exact", head: true })
+      .or(TOURISM_BUSINESS_FILTER)
+      .eq("status", "rejected"),
+    supabase.from("businesses").select("category").or(TOURISM_BUSINESS_FILTER).eq("status", "live"),
   ]);
 
-  const promoCatBreakdown = buildCategoryBreakdown(
-    (promoCategories || []).map((p) => ({
+  const promoCatBreakdown = buildCategoryBreakdown([
+    ...(promoCategories || []).map((p) => ({
       category: (p as { promotion_type: string }).promotion_type,
-    }))
-  );
+    })),
+    ...(tourismBizCategories || []),
+  ]);
 
   return {
     MZANSI_MARKET: {
@@ -377,10 +435,10 @@ export async function getDashboardAreaSummary(): Promise<
       categoryBreakdown: bizCatBreakdown,
     },
     PROMOTIONS_EVENTS: {
-      totalPosted: promoTotal || 0,
-      pendingReview: promoPending || 0,
-      liveCount: promoLive || 0,
-      rejectedCount: promoRejected || 0,
+      totalPosted: (promoTotal || 0) + (tourismBizTotal || 0),
+      pendingReview: (promoPending || 0) + (tourismBizPending || 0),
+      liveCount: (promoLive || 0) + (tourismBizLive || 0),
+      rejectedCount: (promoRejected || 0) + (tourismBizRejected || 0),
       topCategory: promoCatBreakdown[0]?.category || null,
       categoryBreakdown: promoCatBreakdown,
     },

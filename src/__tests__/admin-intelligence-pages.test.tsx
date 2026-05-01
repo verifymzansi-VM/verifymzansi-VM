@@ -81,6 +81,7 @@ function createQuery(result: QueryResult) {
     in: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
     limit: vi.fn().mockReturnThis(),
+    range: vi.fn().mockReturnThis(),
     then: promise.then.bind(promise),
     catch: promise.catch.bind(promise),
     finally: promise.finally.bind(promise),
@@ -105,6 +106,10 @@ describe("admin intelligence page regressions", () => {
       from: mockAdminFrom,
     });
   });
+
+  function expectMetric(value: string) {
+    expect(screen.getAllByText(value).length).toBeGreaterThan(0);
+  }
 
   it("uses the real listings and promotions tables for marketplace metrics", async () => {
     mockAdminFrom.mockImplementation((table: string) => {
@@ -155,35 +160,71 @@ describe("admin intelligence page regressions", () => {
 
     render(await IntelligenceOperationsPage());
 
-    expect(screen.getByText("4")).toBeInTheDocument();
-    expect(screen.getByText("7")).toBeInTheDocument();
-    expect(screen.getByText("10")).toBeInTheDocument();
-    expect(screen.getByText("6")).toBeInTheDocument();
+    expectMetric("4");
+    expectMetric("7");
+    expectMetric("10");
+    expectMetric("6");
     expect(mockAdminFrom).not.toHaveBeenCalledWith("kyc_verifications");
     expect(mockAdminFrom).not.toHaveBeenCalledWith("flagged_content");
   });
 
   it("sums payment revenue from amount_cents", async () => {
+    const paymentQueries: Array<ReturnType<typeof createQuery>> = [];
+
     mockAdminFrom.mockImplementation((table: string) => {
+      if (table === "invoices") {
+        return createQuery({ data: [{ amount_cents: 4350, vat_cents: 650, total_cents: 5000 }] });
+      }
+
       if (table !== "payments") {
         throw new Error(`Unexpected table ${table}`);
       }
 
       const callCount = mockAdminFrom.mock.calls.length;
       if (callCount === 1) {
-        return createQuery({ count: 10 });
+        const query = createQuery({ count: 10 });
+        paymentQueries.push(query);
+        return query;
       }
       if (callCount === 2) {
-        return createQuery({ data: [{ amount_cents: 1250 }, { amount_cents: 3750 }] });
+        const query = createQuery({
+          data: [
+            { amount_cents: 1250 },
+            { amount_cents: 3750 },
+            { amount_cents: 0 },
+            { amount_cents: 0 },
+            { amount_cents: 0 },
+            { amount_cents: 0 },
+            { amount_cents: 0 },
+            { amount_cents: 0 },
+          ],
+        });
+        paymentQueries.push(query);
+        return query;
       }
-      return createQuery({ count: 2 });
+      if (callCount === 3) {
+        const query = createQuery({
+          data: [
+            { amount_cents: 500, status: "failed", area: "MZANSI_MARKET" },
+            { amount_cents: 0, status: "failed", area: "MZANSI_MARKET" },
+          ],
+        });
+        paymentQueries.push(query);
+        return query;
+      }
+      const query = createQuery({ data: [] });
+      paymentQueries.push(query);
+      return query;
     });
 
     render(await IntelligenceRevenuePage());
 
-    expect(screen.getByText("R 50.00")).toBeInTheDocument();
-    expect(screen.getByText("10")).toBeInTheDocument();
-    expect(screen.getByText("80%")).toBeInTheDocument();
+    expectMetric("R 50.00");
+    expectMetric("10");
+    expectMetric("80%");
+    expect(paymentQueries[1]?.eq).toHaveBeenCalledWith("status", "complete");
+    expect(paymentQueries[2]?.eq).toHaveBeenCalledWith("status", "failed");
+    expect(paymentQueries[3]?.eq).toHaveBeenCalledWith("status", "pending");
   });
 
   it("reads verification metrics from verification_steps", async () => {
@@ -199,10 +240,10 @@ describe("admin intelligence page regressions", () => {
     render(await IntelligenceVerificationPage());
 
     expect(screen.getByRole("heading", { name: "Total Verification Steps" })).toBeInTheDocument();
-    expect(screen.getByText("20")).toBeInTheDocument();
-    expect(screen.getByText("5")).toBeInTheDocument();
-    expect(screen.getByText("12")).toBeInTheDocument();
-    expect(screen.getByText("60% pass rate")).toBeInTheDocument();
+    expectMetric("20");
+    expectMetric("5");
+    expectMetric("12");
+    expectMetric("60% pass rate");
     expect(mockAdminFrom).not.toHaveBeenCalledWith("kyc_verifications");
   });
 
@@ -231,9 +272,9 @@ describe("admin intelligence page regressions", () => {
 
     render(await IntelligenceTrendsPage());
 
-    expect(screen.getByText("14")).toBeInTheDocument();
-    expect(screen.getByText("4")).toBeInTheDocument();
-    expect(screen.getAllByText("6")).toHaveLength(2);
+    expectMetric("14");
+    expectMetric("4");
+    expect(screen.getAllByText("6").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByRole("heading", { name: "Content Posted (30d)" })).toBeInTheDocument();
     expect(mockAdminFrom).not.toHaveBeenCalledWith("profiles");
     expect(mockAdminFrom).not.toHaveBeenCalledWith("posts");
@@ -251,11 +292,11 @@ describe("admin intelligence page regressions", () => {
 
     render(await IntelligenceUsersPage());
 
-    expect(screen.getByText("50")).toBeInTheDocument();
-    expect(screen.getByText("35")).toBeInTheDocument();
+    expectMetric("50");
+    expectMetric("35");
     expect(screen.getByText("70% of total")).toBeInTheDocument();
-    expect(screen.getByText("4")).toBeInTheDocument();
-    expect(screen.getByText("1")).toBeInTheDocument();
+    expectMetric("4");
+    expectMetric("1");
     expect(mockAdminFrom).not.toHaveBeenCalledWith("profiles");
   });
 });

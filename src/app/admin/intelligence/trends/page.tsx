@@ -5,6 +5,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  ColumnChartPanel,
+  DecisionPanel,
+  HorizontalBarPanel,
+} from "@/components/admin/intelligence-panels";
 import { TrendingUp, Calendar, BarChart3, Activity } from "lucide-react";
 
 export const metadata = {
@@ -70,7 +75,17 @@ export default async function IntelligenceTrendsPage() {
   const s30 = signups30d ?? 0;
   const s7 = signups7d ?? 0;
   const v30 = verifications30d ?? 0;
-  const content30d = (listings30d ?? 0) + (businesses30d ?? 0) + (promotions30d ?? 0);
+  const listingPosts = listings30d ?? 0;
+  const businessPosts = businesses30d ?? 0;
+  const promotionPosts = promotions30d ?? 0;
+  const content30d = listingPosts + businessPosts + promotionPosts;
+  const weeklyRunRate = s7 * 4;
+  const signupMomentum =
+    s30 > 0
+      ? Math.round(((weeklyRunRate - s30) / Math.max(1, s30)) * 100)
+      : weeklyRunRate > 0
+        ? 100
+        : 0;
 
   return (
     <div className="space-y-6">
@@ -118,6 +133,57 @@ export default async function IntelligenceTrendsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <ColumnChartPanel
+          title="Growth run-rate"
+          description="Compares the latest 7-day signup pace with the last 30 days."
+          data={[
+            { label: "30d signups", value: s30, tone: "sky" },
+            {
+              label: "7d x4 run-rate",
+              value: weeklyRunRate,
+              tone: signupMomentum >= 0 ? "emerald" : "amber",
+            },
+            { label: "30d verifications", value: v30, tone: "violet" },
+            { label: "30d content", value: content30d, tone: "amber" },
+          ]}
+        />
+        <HorizontalBarPanel
+          title="Content creation mix"
+          description="Breaks recent supply creation into listing, business, and promotion activity."
+          data={[
+            { label: "Listings", value: listingPosts, tone: "emerald" },
+            { label: "Businesses", value: businessPosts, tone: "sky" },
+            { label: "Promotions", value: promotionPosts, tone: "violet" },
+          ]}
+        />
+      </div>
+
+      <DecisionPanel
+        title="Decision notes"
+        description="Signals for growth pacing and whether supply creation is keeping up."
+        items={[
+          {
+            label: "Signup momentum",
+            value: `${signupMomentum >= 0 ? "+" : ""}${signupMomentum}%`,
+            detail:
+              signupMomentum >= 0
+                ? "The latest week is pacing ahead of the 30-day baseline. Check onboarding capacity before increasing acquisition."
+                : "The latest week is below the 30-day baseline. Review acquisition channels and activation friction.",
+            tone: signupMomentum >= 0 ? "emerald" : "amber",
+          },
+          {
+            label: "Supply creation",
+            value: `${content30d}`,
+            detail:
+              content30d >= s30
+                ? "Content creation is keeping pace with signups, which supports marketplace liquidity."
+                : "Content creation trails signups. Nudge new users toward first listing, business, or promotion creation.",
+            tone: content30d >= s30 ? "emerald" : "amber",
+          },
+        ]}
+      />
     </div>
   );
 }

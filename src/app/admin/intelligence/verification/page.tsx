@@ -4,6 +4,7 @@ import { hasCapability } from "@/lib/auth/roles";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DecisionPanel, HorizontalBarPanel } from "@/components/admin/intelligence-panels";
 import { ShieldCheck, Clock, CheckCircle, XCircle } from "lucide-react";
 
 export const metadata = {
@@ -49,6 +50,8 @@ export default async function IntelligenceVerificationPage() {
   const approved = approvedCount ?? 0;
   const rejected = rejectedCount ?? 0;
   const passRate = total > 0 ? Math.round((approved / total) * 100) : 0;
+  const rejectionRate = total > 0 ? Math.round((rejected / total) * 100) : 0;
+  const pendingRate = total > 0 ? Math.round((pending / total) * 100) : 0;
 
   return (
     <div className="space-y-6">
@@ -96,6 +99,57 @@ export default async function IntelligenceVerificationPage() {
             <div className="text-2xl font-bold">{rejected}</div>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <HorizontalBarPanel
+          title="Verification funnel"
+          description="Status distribution across all identity verification steps."
+          data={[
+            {
+              label: "Approved",
+              value: approved,
+              caption: `${passRate}% pass rate`,
+              tone: "emerald",
+            },
+            {
+              label: "Pending review",
+              value: pending,
+              caption: `${pendingRate}% awaiting action`,
+              tone: "amber",
+            },
+            {
+              label: "Rejected",
+              value: rejected,
+              caption: `${rejectionRate}% rejection rate`,
+              tone: "rose",
+            },
+          ]}
+        />
+        <DecisionPanel
+          title="Decision notes"
+          description="Use this to balance conversion, fraud control, and reviewer staffing."
+          items={[
+            {
+              label: "Reviewer workload",
+              value: `${pending}`,
+              detail:
+                pending > approved
+                  ? "Pending work exceeds approved volume. Add reviewer capacity or simplify low-risk checks."
+                  : "Pending workload is below approved throughput.",
+              tone: pending > approved ? "amber" : "emerald",
+            },
+            {
+              label: "Conversion quality",
+              value: `${passRate}%`,
+              detail:
+                passRate < 60
+                  ? "Pass rate is low. Check whether rejections are caused by document quality, policy friction, or fraud."
+                  : "Pass rate is within a workable range for a trust-first marketplace.",
+              tone: passRate < 60 ? "rose" : "emerald",
+            },
+          ]}
+        />
       </div>
     </div>
   );

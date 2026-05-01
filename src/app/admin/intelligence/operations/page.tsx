@@ -4,6 +4,7 @@ import { hasCapability } from "@/lib/auth/roles";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DecisionPanel, HorizontalBarPanel } from "@/components/admin/intelligence-panels";
 import { Clock, Flag, ShieldCheck, Activity } from "lucide-react";
 
 export const metadata = {
@@ -61,6 +62,9 @@ export default async function IntelligenceOperationsPage() {
     (pendingBusinessModeration ?? 0) +
     (pendingPromotionModeration ?? 0);
   const decisions = pendingDecisions ?? 0;
+  const totalQueue = reports + verifications + moderation + decisions;
+  const verificationShare = totalQueue > 0 ? Math.round((verifications / totalQueue) * 100) : 0;
+  const escalationLoad = reports + decisions;
 
   return (
     <div className="space-y-6">
@@ -107,6 +111,50 @@ export default async function IntelligenceOperationsPage() {
             <div className="text-2xl font-bold">{decisions}</div>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <HorizontalBarPanel
+          title="Queue depth by work type"
+          description="Shows where admin capacity is currently being consumed."
+          data={[
+            { label: "Open reports", value: reports, tone: "rose" },
+            { label: "Pending verifications", value: verifications, tone: "amber" },
+            { label: "Pending moderation", value: moderation, tone: "sky" },
+            { label: "Pending decisions", value: decisions, tone: "violet" },
+          ]}
+        />
+        <DecisionPanel
+          title="Decision notes"
+          description="Signals for staffing, escalation, and queue triage."
+          items={[
+            {
+              label: "Total operational backlog",
+              value: `${totalQueue}`,
+              detail:
+                totalQueue > 0
+                  ? "Prioritise queues with user-visible blocking impact first: reports, verifications, then moderation."
+                  : "No current backlog is visible in the tracked operational queues.",
+              tone: totalQueue > 0 ? "amber" : "emerald",
+            },
+            {
+              label: "Escalation load",
+              value: `${escalationLoad}`,
+              detail:
+                escalationLoad > moderation
+                  ? "Reports and pending decisions outweigh content moderation. Keep senior reviewer time available."
+                  : "Escalation load is lower than routine moderation pressure.",
+              tone: escalationLoad > moderation ? "rose" : "sky",
+            },
+            {
+              label: "Verification pressure",
+              value: `${verificationShare}%`,
+              detail:
+                "This share helps decide whether KYC review needs a dedicated shift or can remain part of the general queue.",
+              tone: verificationShare > 50 ? "amber" : "emerald",
+            },
+          ]}
+        />
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DecisionPanel, HorizontalBarPanel } from "@/components/admin/intelligence-panels";
 import { Users, UserPlus, TrendingUp, CheckCircle } from "lucide-react";
 
 export const metadata = {
@@ -49,7 +50,10 @@ export default async function IntelligenceUsersPage() {
   const verified = verifiedUsers ?? 0;
   const suspended = suspendedUsers ?? 0;
   const banned = bannedUsers ?? 0;
+  const active = Math.max(0, total - suspended - banned);
+  const unverified = Math.max(0, total - verified);
   const verificationRate = total > 0 ? Math.round((verified / total) * 100) : 0;
+  const riskRate = total > 0 ? Math.round(((suspended + banned) / total) * 100) : 0;
 
   return (
     <div className="space-y-6">
@@ -98,6 +102,59 @@ export default async function IntelligenceUsersPage() {
           </CardContent>
         </Card>
       </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <HorizontalBarPanel
+          title="Verification adoption"
+          description="Shows how much of the user base can be trusted for higher-risk marketplace actions."
+          data={[
+            {
+              label: "Verified users",
+              value: verified,
+              caption: `${verificationRate}% of total users`,
+              tone: "emerald",
+            },
+            {
+              label: "Unverified users",
+              value: unverified,
+              caption: `${Math.max(0, 100 - verificationRate)}% still need verification`,
+              tone: "amber",
+            },
+          ]}
+        />
+        <HorizontalBarPanel
+          title="Account health mix"
+          description="Separates usable accounts from accounts requiring trust and safety attention."
+          data={[
+            { label: "Active or reviewable accounts", value: active, tone: "sky" },
+            { label: "Suspended accounts", value: suspended, tone: "amber" },
+            { label: "Banned accounts", value: banned, tone: "rose" },
+          ]}
+        />
+      </div>
+
+      <DecisionPanel
+        title="Decision notes"
+        description="Signals for growth, trust, and operational planning."
+        items={[
+          {
+            label: "Activation opportunity",
+            value: `${unverified}`,
+            detail:
+              "Unverified accounts are the clearest growth pool. Use reminders or verification incentives before adding acquisition spend.",
+            tone: unverified > 0 ? "amber" : "emerald",
+          },
+          {
+            label: "Trust exposure",
+            value: `${riskRate}%`,
+            detail:
+              riskRate > 5
+                ? "Suspended and banned accounts are elevated. Review abuse patterns and tighten risky flows."
+                : "Account enforcement volume is low relative to the user base.",
+            tone: riskRate > 5 ? "rose" : "emerald",
+          },
+        ]}
+      />
     </div>
   );
 }
