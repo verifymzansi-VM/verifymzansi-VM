@@ -2,32 +2,32 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Search, PlusCircle, MessageSquare, User } from "lucide-react";
+import { Home, ShieldCheck, PlusCircle, ShieldAlert, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
-import { useLeadsUnread } from "@/hooks/use-leads-unread";
 import { triggerHaptic } from "@/lib/utils/haptics";
 
 interface TabDef {
+  id: "home" | "verify" | "post" | "trust-safety" | "dashboard";
   href: string;
   icon: typeof Home;
   label: string;
-  dotSource?: "leads" | "profile";
+  dotSource?: "profile";
   requiresAuth?: boolean;
 }
 
 const TABS: TabDef[] = [
-  { href: "/", icon: Home, label: "Home" },
-  { href: "/mzansi-market", icon: Search, label: "Browse" },
-  { href: "/post/create", icon: PlusCircle, label: "Post", requiresAuth: true },
+  { id: "home", href: "/", icon: Home, label: "Home" },
+  { id: "verify", href: "/verification", icon: ShieldCheck, label: "Verify" },
+  { id: "post", href: "/post/create", icon: PlusCircle, label: "Post", requiresAuth: true },
   {
-    href: "/dashboard/leads",
-    icon: MessageSquare,
-    label: "Leads",
-    dotSource: "leads",
-    requiresAuth: true,
+    id: "trust-safety",
+    href: "/trust-safety",
+    icon: ShieldAlert,
+    label: "Trust & Safety",
   },
   {
+    id: "dashboard",
     href: "/dashboard",
     icon: User,
     label: "Dashboard",
@@ -36,17 +36,9 @@ const TABS: TabDef[] = [
   },
 ];
 
-/** Marketplace prefixes the Browse tab should match */
-const BROWSE_PREFIXES = ["/mzansi-market", "/mzansi-business", "/tourism-events"];
-
 export function MobileNav() {
   const pathname = usePathname();
-  const { unreadCount: unreadLeads } = useLeadsUnread();
   const { isAuthenticated } = useAuth();
-
-  // Resolve the Browse tab href to the user's current marketplace area
-  const browseHref =
-    BROWSE_PREFIXES.find((prefix) => pathname.startsWith(prefix)) || "/mzansi-market";
 
   return (
     <nav
@@ -55,18 +47,17 @@ export function MobileNav() {
     >
       <div className="flex items-center justify-around h-16 px-2">
         {TABS.map((tab) => {
-          const href = tab.label === "Browse" ? browseHref : tab.href;
+          const href = tab.href;
           const resolvedHref =
             tab.requiresAuth && !isAuthenticated
               ? `/login?returnUrl=${encodeURIComponent(href)}`
               : href;
           const isActive = href === "/" ? pathname === "/" : pathname.startsWith(href);
           const Icon = tab.icon;
-          const showLeadBadge = tab.dotSource === "leads" && unreadLeads > 0;
 
           return (
             <Link
-              key={tab.label}
+              key={tab.id}
               href={resolvedHref}
               prefetch={false}
               onClick={() => triggerHaptic("light")}
@@ -77,14 +68,16 @@ export function MobileNav() {
               )}
             >
               <span className="relative">
-                <Icon className={cn("h-5 w-5", tab.label === "Post" && "h-6 w-6")} />
-                {showLeadBadge && (
-                  <span className="absolute -top-2 -right-2 inline-flex min-h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold leading-none text-destructive-foreground border border-background">
-                    {unreadLeads > 99 ? "99+" : unreadLeads}
-                  </span>
-                )}
+                <Icon className={cn("h-5 w-5", tab.id === "post" && "h-6 w-6")} />
               </span>
-              <span className="text-xs font-medium">{tab.label}</span>
+              <span
+                className={cn(
+                  "max-w-16 text-center text-xs font-medium leading-tight",
+                  tab.id === "trust-safety" && "text-[10px] leading-[1.05]"
+                )}
+              >
+                {tab.label}
+              </span>
             </Link>
           );
         })}
