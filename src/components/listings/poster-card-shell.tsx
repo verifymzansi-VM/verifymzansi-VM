@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useCallback, useState, type ReactNode } from "react";
 import { ImageOff, MapPin } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import {
@@ -14,6 +13,7 @@ import { VideoDurationBadge } from "@/components/ui/video-duration-badge";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
 import type { TrustLevel } from "@/types/enums";
+import type { ReactNode } from "react";
 
 const CARD_FRAME = { aspectRatio: 9 / 16, aspectClassName: "aspect-[9/16]" } as const;
 type PosterCardVariant = "default" | "showcase" | "hero";
@@ -133,12 +133,6 @@ export function PosterCardShell({
     ? normalizeMediaUrl(mediaFallbackUrl)
     : undefined;
   const hasVideo = isVideo ?? isVideoUrl(mediaUrl);
-  const [videoPlaybackState, setVideoPlaybackState] = useState<{
-    mediaUrl?: string;
-    isPlaying: boolean;
-  }>({ isPlaying: false });
-  const hideMetadataForPlayback =
-    hasVideo && videoPlaybackState.isPlaying && videoPlaybackState.mediaUrl === normalizedMediaUrl;
   const frame = CARD_FRAME;
   const effectiveFitStrategy = fitStrategy;
   const isHeroVariant = cardVariant === "hero";
@@ -180,12 +174,6 @@ export function PosterCardShell({
       event.preventDefault();
     }
   };
-  const handlePlaybackStateChange = useCallback(
-    (isPlaying: boolean) => {
-      setVideoPlaybackState({ mediaUrl: normalizedMediaUrl, isPlaying });
-    },
-    [normalizedMediaUrl]
-  );
   const cardClassName = cn(
     "relative h-full w-full flex flex-col overflow-hidden border-transparent transition-all duration-300",
     isHeroVariant
@@ -196,12 +184,7 @@ export function PosterCardShell({
     rootRadiusClassName,
     accentClassName
   );
-  const metadataClassName = cn(
-    "flex flex-1 transition-opacity duration-200",
-    hideMetadataForPlayback && "pointer-events-none opacity-0",
-    contentPaddingClassName,
-    contentClassName
-  );
+  const metadataClassName = cn("flex flex-1", contentPaddingClassName, contentClassName);
   const metadataBody = (
     <div className={metadataClassName}>
       {/* Channel avatar / logo */}
@@ -348,7 +331,6 @@ export function PosterCardShell({
             onEnded={onVideoEnded}
             showPlaybackControl={showPlaybackControl}
             controlVariant={mediaControlVariant}
-            onPlaybackStateChange={handlePlaybackStateChange}
             feedPlaybackActive={feedPlaybackActive}
             deferVideoLoadUntilPlay={deferVideoLoadUntilPlay}
             disableNativeDrag={disableNativeDrag}

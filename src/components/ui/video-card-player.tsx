@@ -327,7 +327,6 @@ export function VideoCardPlayer({
         mediaWidth={mediaWidth}
         mediaHeight={mediaHeight}
         muteControlVisibility={muteControlVisibility}
-        onPlaybackStateChange={onPlaybackStateChange}
         focalX={focalX}
         focalY={focalY}
         disableNativeDrag={disableNativeDrag}
@@ -367,7 +366,6 @@ export function VideoCardPlayer({
         focalX={focalX}
         focalY={focalY}
         onEnded={onEnded}
-        onPlaybackStateChange={onPlaybackStateChange}
         feedPlaybackActive={feedPlaybackActive}
         disableNativeDrag={disableNativeDrag}
         fallback={fallback}
@@ -576,10 +574,26 @@ function VideoCardPlayerInner({
     };
   }, [aspectRatioKey, videoRef, onEnded]);
 
+  // Sync external pause/play events (e.g. global manager arbitration) back to
+  // the showroom's isActiveVideoPaused state so the slide timer pauses properly.
   useEffect(() => {
-    if (!isVideo || !onPlaybackStateChange) return;
-    onPlaybackStateChange(isPlaying && !hasError);
-  }, [hasError, isPlaying, isVideo, onPlaybackStateChange]);
+    const el = videoRef.current;
+    if (!el || !onPlaybackStateChange || !showPlaybackControl) return;
+
+    const onExternalPause = () => {
+      onPlaybackStateChange(false);
+    };
+    const onExternalPlay = () => {
+      onPlaybackStateChange(true);
+    };
+
+    el.addEventListener("pause", onExternalPause);
+    el.addEventListener("play", onExternalPlay);
+    return () => {
+      el.removeEventListener("pause", onExternalPause);
+      el.removeEventListener("play", onExternalPlay);
+    };
+  }, [videoRef, onPlaybackStateChange, showPlaybackControl]);
 
   const handleImageLoad = useCallback(
     (event: React.SyntheticEvent<HTMLImageElement>) => {
@@ -667,13 +681,15 @@ function VideoCardPlayerInner({
         });
         setIsPlaybackPaused(false);
         setHasActivatedPlayback(true);
+        onPlaybackStateChange?.(true);
         return;
       }
 
       el.pause();
       setIsPlaybackPaused(true);
+      onPlaybackStateChange?.(false);
     },
-    [isPlaybackPaused, normalizedSrc, videoRef]
+    [isPlaybackPaused, normalizedSrc, onPlaybackStateChange, videoRef]
   );
 
   const handleError = useCallback(() => {
@@ -1022,7 +1038,6 @@ interface HoverVideoPlayerProps {
   mediaWidth?: number | null;
   mediaHeight?: number | null;
   muteControlVisibility: MuteControlVisibility;
-  onPlaybackStateChange?: (isPlaying: boolean) => void;
   focalX?: number | null;
   focalY?: number | null;
   disableNativeDrag: boolean;
@@ -1044,7 +1059,6 @@ function HoverVideoPlayer({
   mediaWidth,
   mediaHeight,
   muteControlVisibility,
-  onPlaybackStateChange,
   focalX,
   focalY,
   disableNativeDrag,
@@ -1089,10 +1103,6 @@ function HoverVideoPlayer({
     !hasError &&
     !reducedMotion &&
     muteControlVisibility === "always";
-
-  useEffect(() => {
-    onPlaybackStateChange?.(isHovering && videoReady && !hasError && !reducedMotion);
-  }, [hasError, isHovering, onPlaybackStateChange, reducedMotion, videoReady]);
 
   useEffect(() => {
     const el = videoRef.current;
@@ -1333,7 +1343,6 @@ interface FeedVideoPlayerProps {
   focalX?: number | null;
   focalY?: number | null;
   onEnded?: () => void;
-  onPlaybackStateChange?: (isPlaying: boolean) => void;
   feedPlaybackActive: boolean;
   disableNativeDrag: boolean;
   fallback?: ReactNode;
@@ -1357,7 +1366,6 @@ function FeedVideoPlayer({
   focalX,
   focalY,
   onEnded,
-  onPlaybackStateChange,
   feedPlaybackActive,
   disableNativeDrag,
   fallback,
@@ -1402,10 +1410,6 @@ function FeedVideoPlayer({
     !hasError &&
     !reducedMotion &&
     muteControlVisibility === "always";
-
-  useEffect(() => {
-    onPlaybackStateChange?.(isPlaying && !hasError && !reducedMotion);
-  }, [hasError, isPlaying, onPlaybackStateChange, reducedMotion]);
 
   // Show poster when video is not actively playing (includes user pause AND manager arbitration)
   const showPoster = !isPlaying || !videoReady || hasError;
