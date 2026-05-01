@@ -202,7 +202,7 @@ describe("VideoCardPlayer", () => {
     expect(screen.getByRole("button", { name: /play video/i })).toBeTruthy();
   });
 
-  it("notifies callers when the ambient playback control pauses and resumes video", () => {
+  it("notifies callers when ambient playback actually pauses and resumes", () => {
     const onPlaybackStateChange = vi.fn();
 
     render(
@@ -216,11 +216,18 @@ describe("VideoCardPlayer", () => {
       />
     );
 
+    const video = document.querySelector("video") as HTMLVideoElement;
+
+    fireEvent.play(video);
+    expect(onPlaybackStateChange).toHaveBeenCalledWith(true);
+
     fireEvent.click(screen.getByRole("button", { name: /pause video/i }));
+    fireEvent.pause(video);
     expect(onPlaybackStateChange).toHaveBeenCalledWith(false);
     expect(screen.getByRole("button", { name: /play video/i })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /play video/i }));
+    fireEvent.play(video);
     expect(onPlaybackStateChange).toHaveBeenCalledWith(true);
     expect(screen.getByRole("button", { name: /pause video/i })).toBeTruthy();
   });

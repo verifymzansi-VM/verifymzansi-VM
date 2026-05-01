@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { PosterCardShell } from "./poster-card-shell";
 
@@ -9,12 +9,14 @@ const { videoCardPlayerMock } = vi.hoisted(() => ({
       deferVideoLoadUntilPlay,
       fitStrategy,
       disableNativeDrag,
+      onPlaybackStateChange,
       fallback,
     }: {
       showPlaybackControl?: boolean;
       deferVideoLoadUntilPlay?: boolean;
       fitStrategy?: string;
       disableNativeDrag?: boolean;
+      onPlaybackStateChange?: (isPlaying: boolean) => void;
       fallback?: React.ReactNode;
     }) => (
       <div
@@ -24,6 +26,12 @@ const { videoCardPlayerMock } = vi.hoisted(() => ({
         data-fit={fitStrategy ?? ""}
         data-drag-disabled={disableNativeDrag ? "yes" : "no"}
       >
+        <button type="button" onClick={() => onPlaybackStateChange?.(true)}>
+          mock play
+        </button>
+        <button type="button" onClick={() => onPlaybackStateChange?.(false)}>
+          mock pause
+        </button>
         {fallback}
       </div>
     )
@@ -75,6 +83,51 @@ describe("PosterCardShell", () => {
     const outerLinks = container.querySelectorAll('a[href="/listing/abc"]');
     expect(outerLinks).toHaveLength(1);
     expect(screen.getByTestId("video-player").closest("a")).toBeNull();
+  });
+
+  it("hides the title and logo row while a controlled hero video is playing", () => {
+    render(
+      <PosterCardShell
+        href="/listing/video"
+        title="Video title"
+        mediaUrl="https://example.com/clip.mp4"
+        posterUrl="https://example.com/poster.jpg"
+        logoUrl="https://example.com/logo.jpg"
+        showPlaybackControl
+        cardVariant="hero"
+        makeEntireCardClickable
+      />
+    );
+
+    const title = screen.getByRole("heading", { name: "Video title" });
+    const metadataRow = title.parentElement?.parentElement;
+
+    expect(metadataRow).not.toHaveClass("opacity-0");
+
+    fireEvent.click(screen.getByRole("button", { name: "mock play" }));
+    expect(metadataRow).toHaveClass("opacity-0");
+    expect(metadataRow).toHaveClass("pointer-events-none");
+
+    fireEvent.click(screen.getByRole("button", { name: "mock pause" }));
+    expect(metadataRow).not.toHaveClass("opacity-0");
+  });
+
+  it("hides the title and logo row for standard tourism video cards while playing", () => {
+    render(
+      <PosterCardShell
+        href="/listing/video"
+        title="Standard video"
+        mediaUrl="https://example.com/clip.mp4"
+        posterUrl="https://example.com/poster.jpg"
+        logoUrl="https://example.com/logo.jpg"
+      />
+    );
+
+    const title = screen.getByRole("heading", { name: "Standard video" });
+    const metadataRow = title.parentElement?.parentElement;
+
+    fireEvent.click(screen.getByRole("button", { name: "mock play" }));
+    expect(metadataRow).toHaveClass("opacity-0");
   });
 
   it("disables native drag on hero card links used by the showroom", () => {
