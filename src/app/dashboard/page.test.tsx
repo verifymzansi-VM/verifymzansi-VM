@@ -102,12 +102,34 @@ vi.mock("@/components/dashboard/email-confirmed-toast", () => ({
   EmailConfirmedToast: () => null,
 }));
 
+vi.mock("@/components/dashboard/dashboard-live-lead-alerts", () => ({
+  DashboardLiveLeadAlerts: ({
+    liveListings,
+    businesses,
+    activePromos,
+    verificationStatus,
+    stepsRemaining,
+  }: {
+    liveListings: number;
+    businesses: number;
+    activePromos: number;
+    verificationStatus: string;
+    stepsRemaining: number;
+  }) => (
+    <div>
+      <div>{`stats:${liveListings}:${businesses}:${activePromos}`}</div>
+      <div>{`needs:${verificationStatus}:${stepsRemaining}`}</div>
+    </div>
+  ),
+}));
+
 function createQueryResult(result: { data?: unknown; count?: number | null }) {
   const builder = {
     select: vi.fn(() => builder),
     eq: vi.fn(() => builder),
     in: vi.fn(() => builder),
     or: vi.fn(() => builder),
+    neq: vi.fn(() => builder),
     lt: vi.fn(() => builder),
     gt: vi.fn(() => builder),
     order: vi.fn(() => builder),
@@ -144,6 +166,7 @@ describe("DashboardPage", () => {
     activeListingsCount = 0,
     activePromosCount = 0,
     businessCount = 0,
+    tourismBusinessCount = 0,
   }: {
     profileStatus: string | null;
     verificationSteps: Array<{ step_type: string; status: string; reviewed_at?: string | null }>;
@@ -160,7 +183,10 @@ describe("DashboardPage", () => {
     activeListingsCount?: number;
     activePromosCount?: number;
     businessCount?: number;
+    tourismBusinessCount?: number;
   }) {
+    let businessQueryCount = 0;
+
     mockSupabase.from.mockImplementation((table: string) => {
       if (table === "account_profiles") {
         return createQueryResult({
@@ -189,7 +215,11 @@ describe("DashboardPage", () => {
       }
 
       if (table === "businesses") {
-        return createQueryResult({ data: [], count: businessCount });
+        businessQueryCount += 1;
+        return createQueryResult({
+          data: [],
+          count: businessQueryCount === 1 ? businessCount : tourismBusinessCount,
+        });
       }
 
       if (table === "listing_views") {
@@ -270,5 +300,25 @@ describe("DashboardPage", () => {
     expect(screen.getByText("listing-manager-mini")).toBeInTheDocument();
     expect(screen.getByText("Starter listing:23")).toBeInTheDocument();
     expect(screen.queryByText(/dashboard-onboarding:/i)).not.toBeInTheDocument();
+  });
+
+  it("counts tourism businesses under Tourism & Events instead of Businesses", async () => {
+    stubDashboardQueries({
+      profileStatus: "verified",
+      verificationSteps: [
+        { step_type: "phone", status: "approved" },
+        { step_type: "id_doc", status: "approved" },
+        { step_type: "selfie", status: "approved" },
+        { step_type: "location", status: "approved" },
+      ],
+      businessCount: 0,
+      tourismBusinessCount: 1,
+    });
+
+    const ui = await DashboardPage();
+    render(ui);
+
+    expect(screen.getByText("stats:0:0:1")).toBeInTheDocument();
+    expect(screen.queryByText("dashboard-onboarding:true:false:false")).not.toBeInTheDocument();
   });
 });

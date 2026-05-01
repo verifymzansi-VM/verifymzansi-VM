@@ -161,11 +161,24 @@ export default async function DashboardPage() {
     ),
     /* 10 — business count */
     applyOwnerFilter(
-      supabase.from("businesses").select("*", { count: "exact", head: true }),
+      supabase
+        .from("businesses")
+        .select("*", { count: "exact", head: true })
+        .neq("category", "tourism_hospitality")
+        .neq("area", "PROMOTIONS_EVENTS"),
       businessOwnerColumn,
       user.id
     ),
-    /* 11 — active entitlements (for plan label on quick links) */
+    /* 11 — tourism business count */
+    applyOwnerFilter(
+      supabase
+        .from("businesses")
+        .select("*", { count: "exact", head: true })
+        .or("area.eq.PROMOTIONS_EVENTS,category.eq.tourism_hospitality"),
+      businessOwnerColumn,
+      user.id
+    ),
+    /* 12 — active entitlements (for plan label on quick links) */
     supabase
       .from("entitlements")
       .select("area, tier, status")
@@ -185,7 +198,8 @@ export default async function DashboardPage() {
   const expiringListingsResult = settled(results[8], EMPTY_OK);
   const expiringPromosResult = settled(results[9], EMPTY_OK);
   const businessCountResult = settled(results[10], EMPTY_OK);
-  const entitlementsResult = settled(results[11], EMPTY_LIST_OK);
+  const tourismBusinessCountResult = settled(results[11], EMPTY_OK);
+  const entitlementsResult = settled(results[12], EMPTY_LIST_OK);
 
   const profile = profileResult.data;
   const verificationSteps = verificationStepsResult.data;
@@ -197,6 +211,7 @@ export default async function DashboardPage() {
   const expiringListingCount = expiringListingsResult.count || 0;
   const expiringPromoCount = expiringPromosResult.count || 0;
   const businessCount = businessCountResult.count || 0;
+  const tourismEventsCount = activePromos + (tourismBusinessCountResult.count || 0);
 
   const verificationSummary = summarizeVerification(
     profile?.account_verification_status,
@@ -263,7 +278,7 @@ export default async function DashboardPage() {
   const verStatus = verificationSummary.accountVerificationStatus;
   const stepsRemaining = verificationSummary.stepsRemaining;
   const hasAnyPosts = posts.length > 0;
-  const showDashboardOnboarding = !hasAnyPosts && businessCount === 0 && activePromos === 0;
+  const showDashboardOnboarding = !hasAnyPosts && businessCount === 0 && tourismEventsCount === 0;
 
   return (
     <div className="space-y-5">
@@ -316,7 +331,7 @@ export default async function DashboardPage() {
       <DashboardLiveLeadAlerts
         liveListings={activeListings}
         businesses={businessCount}
-        activePromos={activePromos}
+        activePromos={tourismEventsCount}
         initialUnreadLeadCount={unreadLeadCount}
         rejectedListingCount={rejectedListingCount}
         pendingModerationCount={pendingModerationCount}
