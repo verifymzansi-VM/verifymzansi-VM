@@ -6,12 +6,14 @@ const {
   mockCheckRateLimit,
   mockGetClientIp,
   mockEnforceSameOriginMutation,
+  mockIsPwnedPassword,
   mockLogger,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCheckRateLimit: vi.fn(),
   mockGetClientIp: vi.fn(),
   mockEnforceSameOriginMutation: vi.fn<(request: NextRequest) => Response | null>(() => null),
+  mockIsPwnedPassword: vi.fn().mockResolvedValue(false),
   mockLogger: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -38,6 +40,13 @@ vi.mock("@/lib/utils/csrf", () => ({
 
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => mockLogger,
+}));
+vi.mock("@/lib/security/pwned-passwords", () => ({
+  isPwnedPassword: mockIsPwnedPassword,
+  PWNED_PASSWORD_ERROR:
+    "This password has appeared in a known data breach. Choose a different password.",
+  PWNED_PASSWORD_CHECK_UNAVAILABLE_ERROR:
+    "Password breach checks are temporarily unavailable. Please try again shortly.",
 }));
 
 import { GET, POST } from "./route";
@@ -165,6 +174,7 @@ describe("POST /api/auth/reset-password", () => {
     mockGetClientIp.mockReturnValue("127.0.0.1");
     mockCheckRateLimit.mockResolvedValue({ limited: false });
     mockCreateClient.mockResolvedValue(createSupabaseAuthClient());
+    mockIsPwnedPassword.mockResolvedValue(false);
   });
 
   it("rejects cross-origin requests before rate-limit", async () => {
@@ -252,6 +262,22 @@ describe("POST /api/auth/reset-password", () => {
     await expect(response.json()).resolves.toEqual({ success: true });
     expect(client.auth.updateUser).toHaveBeenCalledWith({ password: "NewPassword123!" });
     expect(response.headers.get("set-cookie")).toContain("vm_password_recovery=");
+  });
+
+  it("rejects known-breached passwords before updating the user", async () => {
+    mockIsPwnedPassword.mockResolvedValueOnce(true);
+    const client = createSupabaseAuthClient();
+    mockCreateClient.mockResolvedValue(client);
+
+    const response = await POST(
+      createRequest({ password: "NewPassword123!", confirmPassword: "NewPassword123!" })
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "This password has appeared in a known data breach. Choose a different password.",
+    });
+    expect(client.auth.updateUser).not.toHaveBeenCalled();
   });
 
   it("returns 400 for invalid payload", async () => {

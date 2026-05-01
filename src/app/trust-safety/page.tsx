@@ -142,7 +142,7 @@ export default function TrustSafetyPage() {
         <div className="container-page space-y-6 py-4 sm:py-6">
           <PageHeader
             title="Trust & Safety"
-            description="Start here before you meet, pay, share documents, or trust a verification badge."
+            description="Verification helps reduce risk, but it does not replace your own checks before you meet, pay, share documents, or trust a badge."
             breadcrumbs={[{ label: "Trust & Safety" }]}
           />
 
@@ -216,8 +216,8 @@ export default function TrustSafetyPage() {
             <div className="max-w-3xl space-y-1">
               <h2 className="font-display text-xl font-semibold">What verification means</h2>
               <p className="text-sm leading-6 text-muted-foreground">
-                Badges show completed platform checks. They are signals to consider, not promises
-                that a deal is safe.
+                VerifyMzansi verifies people who post and badges show completed platform checks.
+                They are signals to consider, not promises that a deal is safe.
               </p>
             </div>
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">

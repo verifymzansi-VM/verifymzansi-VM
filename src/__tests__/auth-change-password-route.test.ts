@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
-const { mockCreateClient, mockCheckRateLimit } = vi.hoisted(() => ({
+const { mockCreateClient, mockCheckRateLimit, mockIsPwnedPassword } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
+  mockIsPwnedPassword: vi.fn().mockResolvedValue(false),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
@@ -13,6 +14,13 @@ vi.mock("@/lib/utils/rate-limit", () => ({
 }));
 vi.mock("@/lib/utils/csrf", () => ({
   enforceCsrfToken: vi.fn(() => null),
+}));
+vi.mock("@/lib/security/pwned-passwords", () => ({
+  isPwnedPassword: mockIsPwnedPassword,
+  PWNED_PASSWORD_ERROR:
+    "This password has appeared in a known data breach. Choose a different password.",
+  PWNED_PASSWORD_CHECK_UNAVAILABLE_ERROR:
+    "Password breach checks are temporarily unavailable. Please try again shortly.",
 }));
 
 import { POST } from "@/app/api/auth/change-password/route";
@@ -35,6 +43,7 @@ describe("POST /api/auth/change-password", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCheckRateLimit.mockResolvedValue({ limited: false });
+    mockIsPwnedPassword.mockResolvedValue(false);
   });
 
   it("rejects cross-site requests", async () => {
@@ -170,5 +179,36 @@ describe("POST /api/auth/change-password", () => {
     });
     expect(updateUser).toHaveBeenCalledWith({ password: "NewPassword123" });
     expect(signOut).toHaveBeenCalledWith({ scope: "others" });
+  });
+
+  it("rejects known-breached new passwords before updating the user", async () => {
+    const signInWithPassword = vi.fn().mockResolvedValue({ error: null });
+    const updateUser = vi.fn();
+    mockIsPwnedPassword.mockResolvedValueOnce(true);
+
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: "user-1", email: "user@example.com" } },
+          error: null,
+        }),
+        signInWithPassword,
+        updateUser,
+      },
+    });
+
+    const res = await POST(
+      createRequest({
+        currentPassword: "old-password-123",
+        newPassword: "NewPassword123",
+        confirmNewPassword: "NewPassword123",
+      })
+    );
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toEqual({
+      error: "This password has appeared in a known data breach. Choose a different password.",
+    });
+    expect(updateUser).not.toHaveBeenCalled();
   });
 });

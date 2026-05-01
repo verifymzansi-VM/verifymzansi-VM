@@ -7,6 +7,11 @@ import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/li
 import { sendPasswordChangeNotification } from "@/lib/services/email";
 import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
 import { rateLimitExceededResponse } from "@/lib/utils/rate-limit-responses";
+import {
+  isPwnedPassword,
+  PWNED_PASSWORD_CHECK_UNAVAILABLE_ERROR,
+  PWNED_PASSWORD_ERROR,
+} from "@/lib/security/pwned-passwords";
 
 const log = createLogger("ChangePassword");
 
@@ -59,6 +64,21 @@ export async function POST(request: NextRequest) {
     if (signInError) {
       log.warn("Password change failed: incorrect current password", { userId: user.id });
       return NextResponse.json({ error: "Current password is incorrect" }, { status: 401 });
+    }
+
+    try {
+      if (await isPwnedPassword(parsedBody.data.newPassword)) {
+        return NextResponse.json({ error: PWNED_PASSWORD_ERROR }, { status: 400 });
+      }
+    } catch (passwordCheckError) {
+      log.warn("Password breach check unavailable during password change", {
+        userId: user.id,
+        error: passwordCheckError instanceof Error ? passwordCheckError.message : "Unknown",
+      });
+      return NextResponse.json(
+        { error: PWNED_PASSWORD_CHECK_UNAVAILABLE_ERROR },
+        { status: 503, headers: { "Retry-After": "60" } }
+      );
     }
 
     const { error: updateError } = await supabase.auth.updateUser({

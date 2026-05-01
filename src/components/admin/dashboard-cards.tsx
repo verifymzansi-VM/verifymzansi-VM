@@ -30,14 +30,7 @@ import type {
   VerificationStepCounts,
 } from "@/lib/utils/admin-queries";
 
-// ── 1. Overview Strip (kept) ──────────────────────────────────
-
 type HealthStatus = "healthy" | "warning" | "critical";
-
-interface OverviewStripProps {
-  status: HealthStatus;
-  metrics: { label: string; value: string | number }[];
-}
 
 const STATUS_CONFIG: Record<HealthStatus, { stripe: string; dot: string; label: string }> = {
   healthy: {
@@ -56,28 +49,6 @@ const STATUS_CONFIG: Record<HealthStatus, { stripe: string; dot: string; label: 
     label: "Urgent",
   },
 };
-
-export function OverviewStrip({ status, metrics }: OverviewStripProps) {
-  const cfg = STATUS_CONFIG[status];
-  return (
-    <div className={`rounded-xl border-2 border-border border-l-4 ${cfg.stripe} bg-card px-4 py-3`}>
-      <div className="flex items-center gap-6 flex-wrap">
-        <span className="inline-flex items-center gap-2 text-sm font-semibold">
-          <span className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${cfg.dot}`} />
-          {cfg.label}
-        </span>
-        <span className="hidden sm:block h-4 w-px bg-border" />
-        {metrics.map((m, i) => (
-          <span key={m.label} className="inline-flex items-center gap-1.5 text-xs">
-            <span className="text-muted-foreground">{m.label}</span>
-            <span className="font-semibold tabular-nums">{m.value}</span>
-            {i < metrics.length - 1 && <span className="ml-3 hidden sm:inline text-border">|</span>}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 // ── Role Command Center ──────────────────────────────────────
 

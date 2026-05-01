@@ -146,7 +146,11 @@ export default function AdvertisePage() {
                       </Link>
                     </Button>
                     <Button asChild variant="outline" className="w-full sm:w-auto">
-                      <Link href={surface.browseHref}>Browse {surface.name}</Link>
+                      <Link href={surface.browseHref}>
+                        {surface.name === "Tourism & Events"
+                          ? "Explore Tourism & Events"
+                          : `Browse ${surface.name}`}
+                      </Link>
                     </Button>
                   </div>
                 </CardContent>

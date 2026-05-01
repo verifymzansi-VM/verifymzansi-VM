@@ -17,8 +17,10 @@ export default function PricingPage() {
   const trustConfig = getTrustPublicConfig();
   const freePostCount = Number(FREE_POST_CONFIG.maxAllowed);
   const summaryPoints = [
-    `${freePostCount} free ${freePostCount === 1 ? "post" : "posts"} per area`,
-    `${FREE_POST_CONFIG.maxPhotos} photos + ${FREE_POST_CONFIG.maxVideos} video included`,
+    `${freePostCount} free ${
+      freePostCount === 1 ? "post" : "posts"
+    } per area every ${FREE_POST_CONFIG.durationDays} days`,
+    `${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video on the free plan`,
     "Upgrade for placement and visibility",
   ] as const;
 

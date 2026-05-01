@@ -16,6 +16,7 @@ const {
   mockDeleteUser,
   mockCheckRateLimit,
   mockGetClientRateLimitIdentity,
+  mockIsPwnedPassword,
 } = vi.hoisted(() => ({
   mockCreateAdminClient: vi.fn(),
   mockProfileUpsert: vi.fn().mockResolvedValue({ error: null }),
@@ -28,6 +29,7 @@ const {
     source: "x-forwarded-for",
     ip: "127.0.0.1",
   }),
+  mockIsPwnedPassword: vi.fn().mockResolvedValue(false),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
@@ -42,6 +44,13 @@ vi.mock("@/lib/utils/turnstile", async () => {
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: mockCheckRateLimit,
   getClientRateLimitIdentity: mockGetClientRateLimitIdentity,
+}));
+vi.mock("@/lib/security/pwned-passwords", () => ({
+  isPwnedPassword: mockIsPwnedPassword,
+  PWNED_PASSWORD_ERROR:
+    "This password has appeared in a known data breach. Choose a different password.",
+  PWNED_PASSWORD_CHECK_UNAVAILABLE_ERROR:
+    "Password breach checks are temporarily unavailable. Please try again shortly.",
 }));
 vi.mock("@/lib/utils/api", async () => {
   const actual = await vi.importActual<typeof ApiModule>("@/lib/utils/api");
@@ -142,6 +151,7 @@ describe("POST /api/auth/register", () => {
     mockPhoneUniquenessMaybeSingle.mockResolvedValue({ data: null, error: null });
     mockPendingEmailMaybeSingle.mockResolvedValue({ data: null, error: null });
     mockDeleteUser.mockResolvedValue({ error: null });
+    mockIsPwnedPassword.mockResolvedValue(false);
   });
 
   afterEach(() => {
@@ -224,6 +234,20 @@ describe("POST /api/auth/register", () => {
       }),
       { onConflict: "user_id" }
     );
+  });
+
+  it("rejects known-breached passwords before creating an auth user", async () => {
+    mockIsPwnedPassword.mockResolvedValueOnce(true);
+    const mockSignUp = vi.fn();
+    mockCreateClient.mockResolvedValue({ auth: { signUp: mockSignUp } });
+
+    const res = await POST(createRequest(validBody));
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toEqual({
+      error: "This password has appeared in a known data breach. Choose a different password.",
+    });
+    expect(mockSignUp).not.toHaveBeenCalled();
   });
 
   it("normalizes local SA phone numbers before persisting profile data", async () => {

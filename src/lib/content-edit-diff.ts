@@ -121,7 +121,7 @@ function formatMediaArray(field: string, value: unknown[]) {
   return `${value.length} ${label}${value.length === 1 ? "" : "s"}`;
 }
 
-export function formatContentEditValue(value: unknown, field = ""): string {
+function formatContentEditValue(value: unknown, field = ""): string {
   if (value === null || value === undefined || value === "") return "None";
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (field === "price_cents" && typeof value === "number") return formatMoneyFromCents(value);

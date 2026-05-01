@@ -403,7 +403,7 @@ export default function LoginPage() {
       )}
 
       <div className="space-y-1">
-        <h1 className="font-display text-2xl font-bold tracking-tight">Sign in</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Sign in to your account</h1>
       </div>
 
       <GoogleOAuthButton mode="login" />

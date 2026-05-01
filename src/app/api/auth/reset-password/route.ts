@@ -6,6 +6,11 @@ import { createLogger } from "@/lib/utils/logger";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
 import { rateLimitExceededResponse } from "@/lib/utils/rate-limit-responses";
+import {
+  isPwnedPassword,
+  PWNED_PASSWORD_CHECK_UNAVAILABLE_ERROR,
+  PWNED_PASSWORD_ERROR,
+} from "@/lib/security/pwned-passwords";
 
 const log = createLogger("ResetPassword");
 const PASSWORD_RECOVERY_COOKIE = "vm_password_recovery";
@@ -119,6 +124,21 @@ export async function POST(request: NextRequest) {
 
     if (!parsedBody.success) {
       return parsedBody.response;
+    }
+
+    try {
+      if (await isPwnedPassword(parsedBody.data.password)) {
+        return NextResponse.json({ error: PWNED_PASSWORD_ERROR }, { status: 400 });
+      }
+    } catch (passwordCheckError) {
+      log.warn("Password breach check unavailable during password reset", {
+        userId: user.id,
+        error: passwordCheckError instanceof Error ? passwordCheckError.message : "Unknown",
+      });
+      return NextResponse.json(
+        { error: PWNED_PASSWORD_CHECK_UNAVAILABLE_ERROR },
+        { status: 503, headers: { "Retry-After": "60" } }
+      );
     }
 
     const { error: updateError } = await supabase.auth.updateUser({
