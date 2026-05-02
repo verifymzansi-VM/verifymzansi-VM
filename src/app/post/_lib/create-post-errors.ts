@@ -12,6 +12,15 @@ function normalizeErrorMessage(error: unknown): string {
     return error.message.trim();
   }
 
+  if (
+    error &&
+    typeof error === "object" &&
+    "message" in error &&
+    typeof (error as { message: unknown }).message === "string"
+  ) {
+    return (error as { message: string }).message.trim();
+  }
+
   return "";
 }
 
@@ -31,7 +40,7 @@ export function normalizeCreatePostRuntimeError(error: unknown, fallbackMessage:
   }
 
   if (
-    /failed to get video upload url|failed to upload video|network error during upload|upload was aborted/i.test(
+    /failed to get video upload url|failed to upload video|network error during upload|upload was aborted|operation was aborted/i.test(
       message
     )
   ) {

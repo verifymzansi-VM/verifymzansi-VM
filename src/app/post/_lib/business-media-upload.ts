@@ -27,6 +27,7 @@ const FIELD_MESSAGES: Record<BusinessMediaField, string> = {
 
 const FORM_MESSAGE =
   "Selected business media could not be uploaded. Retry the highlighted files and try again.";
+const VIDEO_UPLOAD_TIMEOUT_MS = 180_000;
 
 function toBusinessMediaUploadError(
   field: BusinessMediaField,
@@ -57,6 +58,7 @@ async function uploadBusinessVideoViaServer({
     file,
     area,
     fallbackMessage: FIELD_MESSAGES.cover_video,
+    timeoutMs: VIDEO_UPLOAD_TIMEOUT_MS,
   });
 }
 

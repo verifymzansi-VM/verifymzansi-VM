@@ -16,22 +16,29 @@ export async function uploadMediaViaServer({
   expectedCount = files.length,
   fallbackMessage,
   preferPayloadError = false,
+  timeoutMs,
 }: {
   files: File[];
   area: UploadArea;
   expectedCount?: number;
   fallbackMessage: string;
   preferPayloadError?: boolean;
+  timeoutMs?: number;
 }): Promise<string[]> {
   const uploadData = new FormData();
   uploadData.append("area", area);
   files.forEach((file) => uploadData.append("files", file));
 
-  const response = await fetchWithRetry("/api/media/upload", {
-    method: "POST",
-    headers: withCsrfHeaders(),
-    body: uploadData,
-  });
+  const response = await fetchWithRetry(
+    "/api/media/upload",
+    {
+      method: "POST",
+      headers: withCsrfHeaders(),
+      body: uploadData,
+    },
+    undefined,
+    timeoutMs
+  );
 
   const payload = await parseUploadJson(response);
   const { urls, errors } = parseUploadResponse(payload);
@@ -55,11 +62,13 @@ export async function uploadMediaFileViaServer({
   area,
   fallbackMessage,
   preferPayloadError,
+  timeoutMs,
 }: {
   file: File;
   area: UploadArea;
   fallbackMessage: string;
   preferPayloadError?: boolean;
+  timeoutMs?: number;
 }): Promise<string> {
   const urls = await uploadMediaViaServer({
     files: [file],
@@ -67,6 +76,7 @@ export async function uploadMediaFileViaServer({
     expectedCount: 1,
     fallbackMessage,
     preferPayloadError,
+    timeoutMs,
   });
 
   return urls[0] ?? "";

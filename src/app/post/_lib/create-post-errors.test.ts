@@ -16,6 +16,17 @@ describe("normalizeCreatePostRuntimeError", () => {
     );
   });
 
+  it("maps browser abort errors during video upload to the recovery message", () => {
+    expect(
+      normalizeCreatePostRuntimeError(
+        new DOMException("The operation was aborted", "AbortError"),
+        "Fallback message"
+      )
+    ).toBe(
+      "Video upload could not be completed. Check your connection and try again. You can remove the video and submit again."
+    );
+  });
+
   it("maps generic upload failures to a file upload message", () => {
     expect(normalizeCreatePostRuntimeError(new Error("Upload failed"), "Fallback message")).toBe(
       "One or more files could not be uploaded. Check your connection and try again."
