@@ -70,6 +70,7 @@ jobs:
           RAW_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           RAW_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL || secrets.APP_URL || secrets.PRODUCTION_APP_URL }}
           RAW_TURNSTILE_SITE_KEY: ${{ secrets.NEXT_PUBLIC_TURNSTILE_SITE_KEY || secrets.TURNSTILE_SITE_KEY }}
+          RAW_KYC_PROVIDER: ${{ secrets.KYC_PROVIDER }}
         run: |
           normalize_public_url() {
             local value="$1"
@@ -97,10 +98,17 @@ jobs:
             echo "::notice::Prefixed app URL with https:// for deploy validation"
           fi
 
+          NORMALIZED_KYC_PROVIDER="$RAW_KYC_PROVIDER"
+          if [ -z "$NORMALIZED_KYC_PROVIDER" ]; then
+            NORMALIZED_KYC_PROVIDER="manual"
+            echo "::notice::KYC_PROVIDER secret is missing; defaulting production deploy to manual review"
+          fi
+
           echo "NEXT_PUBLIC_SUPABASE_URL=$NORMALIZED_SUPABASE_URL" >> "$GITHUB_ENV"
           echo "NEXT_PUBLIC_APP_URL=$NORMALIZED_APP_URL" >> "$GITHUB_ENV"
           echo "APP_URL=$NORMALIZED_APP_URL" >> "$GITHUB_ENV"
           echo "NEXT_PUBLIC_TURNSTILE_SITE_KEY=$RAW_TURNSTILE_SITE_KEY" >> "$GITHUB_ENV"
+          echo "KYC_PROVIDER=$NORMALIZED_KYC_PROVIDER" >> "$GITHUB_ENV"
       - name: Secret scan
         run: pnpm run secret-scan
       - name: Security audit
