@@ -98,10 +98,13 @@ jobs:
             echo "::notice::Prefixed app URL with https:// for deploy validation"
           fi
 
-          NORMALIZED_KYC_PROVIDER="$RAW_KYC_PROVIDER"
+          NORMALIZED_KYC_PROVIDER="$(printf '%s' "$RAW_KYC_PROVIDER" | tr '[:upper:]' '[:lower:]')"
           if [ -z "$NORMALIZED_KYC_PROVIDER" ]; then
             NORMALIZED_KYC_PROVIDER="manual"
             echo "::notice::KYC_PROVIDER secret is missing; defaulting production deploy to manual review"
+          elif [ "$NORMALIZED_KYC_PROVIDER" = "stub" ]; then
+            NORMALIZED_KYC_PROVIDER="manual"
+            echo "::notice::KYC_PROVIDER=stub is not allowed for production deploys; normalizing to manual review"
           fi
 
           echo "NEXT_PUBLIC_SUPABASE_URL=$NORMALIZED_SUPABASE_URL" >> "$GITHUB_ENV"
