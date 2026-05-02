@@ -203,6 +203,24 @@ describe("checkPhoneGate", () => {
     expect(location.searchParams.get("returnUrl")).toBe("/dashboard");
   });
 
+  it("preserves query params in the complete-profile returnUrl", async () => {
+    const supabase = mockSupabase({
+      profileData: { phone: null, account_status: "active" },
+    });
+    const result = await checkPhoneGate(
+      createRequest("/billing?plan=basic&area=MZANSI_MARKET"),
+      NextResponse.next(),
+      supabase,
+      "user-1",
+      null
+    );
+
+    expect(result.response).not.toBeNull();
+    const location = new URL(result.response!.headers.get("location")!);
+    expect(location.pathname).toBe("/dashboard/complete-profile");
+    expect(location.searchParams.get("returnUrl")).toBe("/billing?plan=basic&area=MZANSI_MARKET");
+  });
+
   it("passes through when phone is present", async () => {
     const supabase = mockSupabase({
       profileData: { phone: "+27600000000", account_status: "active" },

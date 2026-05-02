@@ -1,13 +1,22 @@
 import { describe, expect, it, vi } from "vitest";
-import { confirmMediaUploads } from "./confirm-media-uploads";
+import { confirmMediaUploads, MediaUploadConfirmationError } from "./confirm-media-uploads";
 
 describe("confirmMediaUploads", () => {
   it("confirms unique saved media URLs for the current user", async () => {
-    const inMock = vi.fn().mockResolvedValue({ error: null });
-    const eqMock = vi.fn().mockReturnValue({ in: inMock });
-    const updateMock = vi.fn().mockReturnValue({ eq: eqMock });
+    const selectInMock = vi.fn().mockResolvedValue({
+      data: [
+        { url: "https://media.verifymzansi.com/a.jpg" },
+        { url: "https://media.verifymzansi.com/b.mp4" },
+      ],
+      error: null,
+    });
+    const selectEqMock = vi.fn().mockReturnValue({ in: selectInMock });
+    const selectMock = vi.fn().mockReturnValue({ eq: selectEqMock });
+    const updateInMock = vi.fn().mockResolvedValue({ error: null });
+    const updateEqMock = vi.fn().mockReturnValue({ in: updateInMock });
+    const updateMock = vi.fn().mockReturnValue({ eq: updateEqMock });
     const supabase = {
-      from: vi.fn().mockReturnValue({ update: updateMock }),
+      from: vi.fn().mockReturnValue({ select: selectMock, update: updateMock }),
     };
 
     await confirmMediaUploads({
@@ -26,9 +35,15 @@ describe("confirmMediaUploads", () => {
     });
 
     expect(supabase.from).toHaveBeenCalledWith("media_uploads");
+    expect(selectMock).toHaveBeenCalledWith("url");
+    expect(selectEqMock).toHaveBeenCalledWith("user_id", "user-1");
+    expect(selectInMock).toHaveBeenCalledWith("url", [
+      "https://media.verifymzansi.com/a.jpg",
+      "https://media.verifymzansi.com/b.mp4",
+    ]);
     expect(updateMock).toHaveBeenCalledWith({ confirmed_at: expect.any(String) });
-    expect(eqMock).toHaveBeenCalledWith("user_id", "user-1");
-    expect(inMock).toHaveBeenCalledWith("url", [
+    expect(updateEqMock).toHaveBeenCalledWith("user_id", "user-1");
+    expect(updateInMock).toHaveBeenCalledWith("url", [
       "https://media.verifymzansi.com/a.jpg",
       "https://media.verifymzansi.com/b.mp4",
     ]);
@@ -46,5 +61,33 @@ describe("confirmMediaUploads", () => {
     });
 
     expect(supabase.from).not.toHaveBeenCalled();
+  });
+
+  it("rejects URLs that are not saved for the current user", async () => {
+    const selectInMock = vi.fn().mockResolvedValue({
+      data: [{ url: "https://media.verifymzansi.com/a.jpg" }],
+      error: null,
+    });
+    const selectEqMock = vi.fn().mockReturnValue({ in: selectInMock });
+    const selectMock = vi.fn().mockReturnValue({ eq: selectEqMock });
+    const updateMock = vi.fn();
+    const supabase = {
+      from: vi.fn().mockReturnValue({ select: selectMock, update: updateMock }),
+    };
+
+    await expect(
+      confirmMediaUploads({
+        supabase,
+        userId: "user-1",
+        contentType: "listing",
+        contentId: "listing-1",
+        urls: [
+          "https://media.verifymzansi.com/a.jpg",
+          "https://media.verifymzansi.com/missing.jpg",
+        ],
+      })
+    ).rejects.toBeInstanceOf(MediaUploadConfirmationError);
+
+    expect(updateMock).not.toHaveBeenCalled();
   });
 });

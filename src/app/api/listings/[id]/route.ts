@@ -13,7 +13,10 @@ import {
   diffRemovedMediaUrls,
   queuePublicMediaCleanup,
 } from "@/lib/services/media-cleanup";
-import { confirmMediaUploads } from "@/lib/media/confirm-media-uploads";
+import {
+  confirmMediaUploads,
+  MediaUploadConfirmationError,
+} from "@/lib/media/confirm-media-uploads";
 import type { MarketplaceArea } from "@/types/enums";
 import {
   applyOwnerFilter,
@@ -226,6 +229,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       status: ["live", "approved"].includes(listing.status) ? "pending_moderation" : listing.status,
     };
     const admin = createAdminClient();
+    const currentMediaUrls = collectMediaUrls(
+      listing.photos,
+      listing.videos,
+      listing.video_thumbnail,
+      listing.logo_url
+    );
+    const nextMediaUrls = collectMediaUrls(data.images, videoUrls, nextVideoThumbnail, nextLogoUrl);
+    const addedMediaUrls = diffRemovedMediaUrls(nextMediaUrls, currentMediaUrls);
 
     if (listing.status === "live") {
       if (isEditLimitReached(listing.approved_edit_count)) {
@@ -258,7 +269,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         await confirmMediaUploads({
           supabase: admin,
           userId: user.id,
-          urls: collectMediaUrls(data.images, videoUrls, nextVideoThumbnail, nextLogoUrl),
+          urls: addedMediaUrls,
           contentType: "listing",
           contentId: listingId,
         });
@@ -277,6 +288,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           return editRequest.response;
         }
       } catch (editRequestError) {
+        if (editRequestError instanceof MediaUploadConfirmationError) {
+          return NextResponse.json({ error: "Invalid media upload" }, { status: 422 });
+        }
+
         log.error("Failed to create listing edit request", {
           listingId,
           userId: user.id,
@@ -319,10 +334,22 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return contentEditSubmittedResponse(listingId, listing.approved_edit_count);
     }
 
-    const removedMediaUrls = diffRemovedMediaUrls(
-      collectMediaUrls(listing.photos, listing.videos, listing.video_thumbnail, listing.logo_url),
-      collectMediaUrls(updateRecord.photos, videoUrls, nextVideoThumbnail, nextLogoUrl)
-    );
+    const removedMediaUrls = diffRemovedMediaUrls(currentMediaUrls, nextMediaUrls);
+
+    try {
+      await confirmMediaUploads({
+        supabase: admin,
+        userId: user.id,
+        urls: addedMediaUrls,
+        contentType: "listing",
+        contentId: listingId,
+      });
+    } catch (mediaError) {
+      if (mediaError instanceof MediaUploadConfirmationError) {
+        return NextResponse.json({ error: "Invalid media upload" }, { status: 422 });
+      }
+      throw mediaError;
+    }
 
     // ── Update listing ───────────────────────────────────────
     let updateBuilder = supabase.from("listings").update(updateRecord).eq("id", listingId);
@@ -356,14 +383,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         { status: 409 }
       );
     }
-
-    await confirmMediaUploads({
-      supabase: admin,
-      userId: user.id,
-      urls: collectMediaUrls(data.images, videoUrls, nextVideoThumbnail, nextLogoUrl),
-      contentType: "listing",
-      contentId: listingId,
-    });
 
     if (removedMediaUrls.length > 0) {
       try {

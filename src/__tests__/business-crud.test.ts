@@ -47,6 +47,15 @@ vi.mock("@/lib/utils/logger", () => ({
 }));
 vi.mock("@/lib/utils/csrf", () => ({ enforceCsrfToken: mockEnforceCsrfToken }));
 vi.mock("@/lib/account/require-phone", () => ({ hasPhoneNumber: mockHasPhoneNumber }));
+vi.mock("@/lib/media/confirm-media-uploads", async () => {
+  const actual = await vi.importActual<Record<string, unknown>>(
+    "@/lib/media/confirm-media-uploads"
+  );
+  return {
+    ...actual,
+    confirmMediaUploads: vi.fn().mockResolvedValue(undefined),
+  };
+});
 vi.mock("@/lib/notifications", () => ({
   createNotification: mockCreateNotification,
   notifyStaffForAdminEvent: mockNotifyStaffForAdminEvent,

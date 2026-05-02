@@ -52,7 +52,10 @@ import {
 import { claimFreePostSlot, releaseFreePostSlot } from "@/lib/billing/free-posts";
 import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
 import { getContentLikeSummaryMap, getContentViewCountMap } from "@/lib/engagement-server";
-import { confirmMediaUploads } from "@/lib/media/confirm-media-uploads";
+import {
+  confirmMediaUploads,
+  MediaUploadConfirmationError,
+} from "@/lib/media/confirm-media-uploads";
 
 const log = createLogger("ListingCreate");
 const AREA: MarketplaceArea = "MZANSI_MARKET";
@@ -827,6 +830,21 @@ export async function POST(request: NextRequest) {
     const freePostContentId = crypto.randomUUID();
     let freePostClaimed = false;
 
+    try {
+      await confirmMediaUploads({
+        supabase: getAdmin(),
+        userId: user.id,
+        contentType: "listing",
+        contentId: freePostContentId,
+        urls: [...data.images, ...data.videos, data.videoThumbnail, data.logo_url],
+      });
+    } catch (mediaError) {
+      if (mediaError instanceof MediaUploadConfirmationError) {
+        return NextResponse.json({ error: "Invalid media upload" }, { status: 422 });
+      }
+      throw mediaError;
+    }
+
     // Check free post availability for unpaid users
     if (!hasPaidPlan && !postingLimitBypassEnabled) {
       try {
@@ -1041,14 +1059,6 @@ export async function POST(request: NextRequest) {
         );
       }
     }
-
-    await confirmMediaUploads({
-      supabase: getAdmin(),
-      userId: user.id,
-      contentType: "listing",
-      contentId: newListing.id,
-      urls: [...data.images, ...data.videos, data.videoThumbnail, data.logo_url],
-    });
 
     // ── Audit log (best-effort) ────────────────────────────────
     try {

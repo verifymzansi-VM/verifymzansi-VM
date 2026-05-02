@@ -202,6 +202,20 @@ describe("PATCH /api/businesses/[id]", () => {
             maybeSingle: vi.fn().mockResolvedValue({ data: { tier: "starter" } }),
           };
         }
+        if (table === "media_uploads") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            update: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            in: vi
+              .fn()
+              .mockResolvedValueOnce({
+                data: [{ url: "https://media.verifymzansi.com/business/cover-video.mp4" }],
+                error: null,
+              })
+              .mockResolvedValueOnce({ error: null }),
+          };
+        }
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),

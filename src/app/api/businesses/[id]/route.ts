@@ -17,7 +17,10 @@ import {
   diffRemovedMediaUrls,
   queuePublicMediaCleanup,
 } from "@/lib/services/media-cleanup";
-import { confirmMediaUploads } from "@/lib/media/confirm-media-uploads";
+import {
+  confirmMediaUploads,
+  MediaUploadConfirmationError,
+} from "@/lib/media/confirm-media-uploads";
 import {
   BUSINESS_SLUG_CONFLICT_RESPONSE,
   isBusinessSlugConflictError,
@@ -350,24 +353,23 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       data.gallery_photos || [],
       getMallPhotoUrls(data.business_details)
     );
-    const removedMediaUrls = diffRemovedMediaUrls(
-      collectMediaUrls(
-        existing.logo_url,
-        existing.cover_photo,
-        existing.cover_video,
-        existing.video_thumbnail,
-        existing.gallery_photos,
-        getMallPhotoUrls(existing.business_details as BusinessDetails | null | undefined)
-      ),
-      nextMediaUrls
+    const currentMediaUrls = collectMediaUrls(
+      existing.logo_url,
+      existing.cover_photo,
+      existing.cover_video,
+      existing.video_thumbnail,
+      existing.gallery_photos,
+      getMallPhotoUrls(existing.business_details as BusinessDetails | null | undefined)
     );
+    const addedMediaUrls = diffRemovedMediaUrls(nextMediaUrls, currentMediaUrls);
+    const removedMediaUrls = diffRemovedMediaUrls(currentMediaUrls, nextMediaUrls);
 
     if (existing.status === "live") {
       try {
         await confirmMediaUploads({
           supabase: admin,
           userId: user.id,
-          urls: nextMediaUrls,
+          urls: addedMediaUrls,
           contentType: "business",
           contentId: id,
         });
@@ -386,6 +388,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           return editRequest.response;
         }
       } catch (editRequestError) {
+        if (editRequestError instanceof MediaUploadConfirmationError) {
+          return NextResponse.json({ error: "Invalid media upload" }, { status: 422 });
+        }
+
         log.error("Failed to create business edit request", {
           businessId: id,
           userId: user.id,
@@ -421,6 +427,21 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return contentEditSubmittedResponse(id, existing.approved_edit_count);
     }
 
+    try {
+      await confirmMediaUploads({
+        supabase: admin,
+        userId: user.id,
+        urls: addedMediaUrls,
+        contentType: "business",
+        contentId: id,
+      });
+    } catch (mediaError) {
+      if (mediaError instanceof MediaUploadConfirmationError) {
+        return NextResponse.json({ error: "Invalid media upload" }, { status: 422 });
+      }
+      throw mediaError;
+    }
+
     const updateQuery = applyOwnerFilter(
       supabase
         .from("businesses")
@@ -445,14 +466,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       log.error("Failed to update business", { error: updateError.message });
       return NextResponse.json({ error: "Failed to update business" }, { status: 500 });
     }
-
-    await confirmMediaUploads({
-      supabase: admin,
-      userId: user.id,
-      urls: nextMediaUrls,
-      contentType: "business",
-      contentId: id,
-    });
 
     if (removedMediaUrls.length > 0) {
       try {

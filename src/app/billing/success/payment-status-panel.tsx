@@ -5,6 +5,9 @@ import { AlertCircle, CheckCircle2, Clock3, Loader2, XCircle } from "lucide-reac
 import { PaymentStatusResult } from "@/components/billing/payment-status-result";
 import type { PaymentStatusView } from "@/lib/payments/status-view";
 
+const PAYMENT_POLL_INTERVAL_MS = 4000;
+const PAYMENT_POLL_MAX_MS = 30 * 60 * 1000;
+
 function getCopy(status: PaymentStatusView) {
   switch (status) {
     case "complete":
@@ -61,12 +64,15 @@ export default function PaymentStatusPanel({
     }
 
     let isActive = true;
-    let attempts = 0;
-    let timer: ReturnType<typeof setInterval> | undefined;
+    const startedAt = Date.now();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const hasExpired = () => Date.now() - startedAt >= PAYMENT_POLL_MAX_MS;
 
     const stopPolling = () => {
       if (timer) {
-        clearInterval(timer);
+        clearTimeout(timer);
+        timer = undefined;
       }
 
       if (isActive) {
@@ -74,9 +80,23 @@ export default function PaymentStatusPanel({
       }
     };
 
-    const poll = async () => {
-      attempts += 1;
+    const schedulePoll = () => {
+      if (!isActive) {
+        return;
+      }
 
+      if (hasExpired()) {
+        setStatus("expired");
+        stopPolling();
+        return;
+      }
+
+      timer = setTimeout(() => {
+        void poll();
+      }, PAYMENT_POLL_INTERVAL_MS);
+    };
+
+    const poll = async () => {
       try {
         const response = await fetch(
           `/api/billing/payment-status?payment=${encodeURIComponent(paymentId)}`,
@@ -86,9 +106,11 @@ export default function PaymentStatusPanel({
         );
 
         if (!response.ok) {
-          if (response.status === 401 || response.status === 404 || attempts >= 8) {
+          if (response.status === 401 || response.status === 404) {
             stopPolling();
+            return;
           }
+          schedulePoll();
           return;
         }
 
@@ -103,27 +125,41 @@ export default function PaymentStatusPanel({
 
         setStatus(payload.status);
 
-        if (payload.terminal || payload.status !== "pending" || attempts >= 8) {
+        if (payload.terminal || payload.status !== "pending") {
           stopPolling();
+          return;
         }
+
+        schedulePoll();
       } catch {
-        if (attempts >= 8) {
+        if (hasExpired()) {
           stopPolling();
-          if (isActive) setStatus("failed");
+          if (isActive) setStatus("expired");
+          return;
         }
+        schedulePoll();
       }
     };
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        if (timer) {
+          clearTimeout(timer);
+          timer = undefined;
+        }
+        void poll();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     void poll();
-    timer = setInterval(() => {
-      void poll();
-    }, 4000);
 
     return () => {
       isActive = false;
       if (timer) {
-        clearInterval(timer);
+        clearTimeout(timer);
       }
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [paymentId, status]);
 
@@ -142,7 +178,7 @@ export default function PaymentStatusPanel({
       {status === "pending" && isRefreshing ? (
         <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          Refreshing payment status for up to 30 seconds.
+          Refreshing payment status while confirmation completes.
         </div>
       ) : null}
     </PaymentStatusResult>

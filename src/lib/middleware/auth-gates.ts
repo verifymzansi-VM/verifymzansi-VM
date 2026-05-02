@@ -66,7 +66,7 @@ export async function checkPhoneGate(
 
     if (!profile?.phone) {
       const completeProfileUrl = new URL("/dashboard/complete-profile", request.url);
-      completeProfileUrl.searchParams.set("returnUrl", pathname);
+      completeProfileUrl.searchParams.set("returnUrl", `${pathname}${request.nextUrl.search}`);
       const redirect = NextResponse.redirect(completeProfileUrl);
       clearPhoneOkCookie(redirect);
       return { response: redirect, profile };

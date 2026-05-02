@@ -11,7 +11,10 @@ import {
   diffRemovedMediaUrls,
   queuePublicMediaCleanup,
 } from "@/lib/services/media-cleanup";
-import { confirmMediaUploads } from "@/lib/media/confirm-media-uploads";
+import {
+  confirmMediaUploads,
+  MediaUploadConfirmationError,
+} from "@/lib/media/confirm-media-uploads";
 import {
   applyOwnerFilter,
   getOwnerColumn,
@@ -261,20 +264,20 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     });
     if (mediaLimitBlock) return mediaLimitBlock;
 
-    const removedMediaUrls = diffRemovedMediaUrls(
-      collectMediaUrls(
-        existing.photos,
-        existing.videos,
-        existing.video_thumbnail,
-        existing.logo_url
-      ),
-      collectMediaUrls(
-        data.images,
-        data.videos,
-        data.video_thumbnail || null,
-        data.logo_url || null
-      )
+    const currentMediaUrls = collectMediaUrls(
+      existing.photos,
+      existing.videos,
+      existing.video_thumbnail,
+      existing.logo_url
     );
+    const nextMediaUrls = collectMediaUrls(
+      data.images,
+      data.videos,
+      data.video_thumbnail || null,
+      data.logo_url || null
+    );
+    const addedMediaUrls = diffRemovedMediaUrls(nextMediaUrls, currentMediaUrls);
+    const removedMediaUrls = diffRemovedMediaUrls(currentMediaUrls, nextMediaUrls);
 
     const priceCents =
       data.price_zar != null ? Math.round(+(data.price_zar * 100).toPrecision(12)) : null;
@@ -356,12 +359,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         await confirmMediaUploads({
           supabase: admin,
           userId: user.id,
-          urls: collectMediaUrls(
-            data.images,
-            data.videos,
-            data.video_thumbnail || null,
-            data.logo_url || null
-          ),
+          urls: addedMediaUrls,
           contentType: "promotion",
           contentId: id,
         });
@@ -380,6 +378,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           return editRequest.response;
         }
       } catch (editRequestError) {
+        if (editRequestError instanceof MediaUploadConfirmationError) {
+          return NextResponse.json({ error: "Invalid media upload" }, { status: 422 });
+        }
+
         log.error("Failed to create promotion edit request", {
           promotionId: id,
           userId: user.id,
@@ -414,6 +416,21 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return contentEditSubmittedResponse(id, existing.approved_edit_count);
     }
 
+    try {
+      await confirmMediaUploads({
+        supabase: admin,
+        userId: user.id,
+        urls: addedMediaUrls,
+        contentType: "promotion",
+        contentId: id,
+      });
+    } catch (mediaError) {
+      if (mediaError instanceof MediaUploadConfirmationError) {
+        return NextResponse.json({ error: "Invalid media upload" }, { status: 422 });
+      }
+      throw mediaError;
+    }
+
     const updateQuery = applyOwnerFilter(
       supabase
         .from("promotions")
@@ -432,19 +449,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       log.error("Failed to update promotion", { error: updateError.message });
       return NextResponse.json({ error: "Failed to update promotion" }, { status: 500 });
     }
-
-    await confirmMediaUploads({
-      supabase: admin,
-      userId: user.id,
-      urls: collectMediaUrls(
-        data.images,
-        data.videos,
-        data.video_thumbnail || null,
-        data.logo_url || null
-      ),
-      contentType: "promotion",
-      contentId: id,
-    });
 
     if (removedMediaUrls.length > 0) {
       try {

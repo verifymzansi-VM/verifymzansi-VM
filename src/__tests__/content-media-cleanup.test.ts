@@ -27,6 +27,15 @@ vi.mock("@/lib/utils/mutation-origin", () => ({
 vi.mock("@/lib/utils/csrf", () => ({
   enforceCsrfToken: vi.fn().mockReturnValue(null),
 }));
+vi.mock("@/lib/media/confirm-media-uploads", async () => {
+  const actual = await vi.importActual<Record<string, unknown>>(
+    "@/lib/media/confirm-media-uploads"
+  );
+  return {
+    ...actual,
+    confirmMediaUploads: vi.fn().mockResolvedValue(undefined),
+  };
+});
 vi.mock("@/lib/utils/api", () => ({
   parseJsonRequest: vi.fn(async (req: { json: () => Promise<unknown> }) => {
     try {

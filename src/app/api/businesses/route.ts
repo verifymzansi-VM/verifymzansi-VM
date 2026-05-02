@@ -53,7 +53,10 @@ import {
 } from "@/app/api/_lib/posting-entitlements";
 import { requirePostingMutationSession } from "@/app/api/_lib/posting-mutation-session";
 import { buildBusinessMutationPayload } from "@/app/api/businesses/_lib/build-business-mutation-payload";
-import { confirmMediaUploads } from "@/lib/media/confirm-media-uploads";
+import {
+  confirmMediaUploads,
+  MediaUploadConfirmationError,
+} from "@/lib/media/confirm-media-uploads";
 
 const log = createLogger("BusinessesCRUD");
 const AREA: MarketplaceArea = "MZANSI_BUSINESS";
@@ -222,6 +225,27 @@ export async function POST(request: NextRequest) {
     const freePostContentId = crypto.randomUUID();
     let freePostClaimed = false;
 
+    try {
+      await confirmMediaUploads({
+        supabase: getAdmin(),
+        userId: user.id,
+        contentType: "business",
+        contentId: freePostContentId,
+        urls: [
+          data.logo_url,
+          data.cover_photo,
+          data.cover_video,
+          data.video_thumbnail,
+          ...(data.gallery_photos ?? []),
+        ],
+      });
+    } catch (mediaError) {
+      if (mediaError instanceof MediaUploadConfirmationError) {
+        return NextResponse.json({ error: "Invalid media upload" }, { status: 422 });
+      }
+      throw mediaError;
+    }
+
     if (!hasPaidPlan && !postingLimitBypassEnabled) {
       try {
         freePostClaimed = await claimFreePostSlot(getAdmin(), {
@@ -302,20 +326,6 @@ export async function POST(request: NextRequest) {
       }
       return NextResponse.json({ error: "Failed to create business" }, { status: 500 });
     }
-
-    await confirmMediaUploads({
-      supabase: getAdmin(),
-      userId: user.id,
-      contentType: "business",
-      contentId: business.id,
-      urls: [
-        data.logo_url,
-        data.cover_photo,
-        data.cover_video,
-        data.video_thumbnail,
-        ...(data.gallery_photos ?? []),
-      ],
-    });
 
     // Audit (best-effort)
     try {

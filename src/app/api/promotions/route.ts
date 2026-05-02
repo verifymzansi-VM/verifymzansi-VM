@@ -53,7 +53,10 @@ import { z } from "zod";
 import { claimFreePostSlot, releaseFreePostSlot } from "@/lib/billing/free-posts";
 import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
 import { getContentLikeSummaryMap, getContentViewCountMap } from "@/lib/engagement-server";
-import { confirmMediaUploads } from "@/lib/media/confirm-media-uploads";
+import {
+  confirmMediaUploads,
+  MediaUploadConfirmationError,
+} from "@/lib/media/confirm-media-uploads";
 
 const log = createLogger("PromotionsCRUD");
 const AREA: MarketplaceArea = "PROMOTIONS_EVENTS";
@@ -260,30 +263,6 @@ export async function POST(request: NextRequest) {
     const { hasPaidPlan, tier, entitlements: ent } = planResult;
     const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
 
-    if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
-      // Paid plan — check promotion count against plan limits
-      const countQuery = applyOwnerFilter(
-        supabase
-          .from("promotions")
-          .select("id", { count: "exact", head: true })
-          .neq("status", "rejected"),
-        ownerColumn,
-        user.id
-      );
-
-      const { count } = await countQuery;
-
-      const currentCount = count ?? 0;
-      const check = canCreateListing(currentCount, tier, AREA);
-
-      if (!check.allowed) {
-        return NextResponse.json(
-          { error: "Promotion limit reached", reason: check.reason },
-          { status: 403 }
-        );
-      }
-    }
-
     const body = await parseJsonRequest(request);
     if (body === null) {
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
@@ -315,8 +294,44 @@ export async function POST(request: NextRequest) {
     });
     if (mediaLimitBlock) return mediaLimitBlock;
 
+    if (hasPaidPlan && tier && !postingLimitBypassEnabled && ent.maxAllowed !== -1) {
+      const { data: underLimit, error: rpcError } = await getAdmin().rpc("check_promotion_limit", {
+        p_user_id: user.id,
+        p_area: AREA,
+        p_max_allowed: ent.maxAllowed,
+      });
+
+      if (rpcError) {
+        log.error("check_promotion_limit RPC failed", { error: rpcError.message });
+        return NextResponse.json({ error: "Unable to verify promotion limit" }, { status: 500 });
+      }
+
+      if (!underLimit) {
+        const check = canCreateListing(ent.maxAllowed, tier, AREA);
+        return NextResponse.json(
+          { error: "Promotion limit reached", reason: check.reason },
+          { status: 403 }
+        );
+      }
+    }
+
     const freePostContentId = crypto.randomUUID();
     let freePostClaimed = false;
+
+    try {
+      await confirmMediaUploads({
+        supabase: getAdmin(),
+        userId: user.id,
+        contentType: "promotion",
+        contentId: freePostContentId,
+        urls: [...data.images, ...data.videos, data.video_thumbnail, data.logo_url],
+      });
+    } catch (mediaError) {
+      if (mediaError instanceof MediaUploadConfirmationError) {
+        return NextResponse.json({ error: "Invalid media upload" }, { status: 422 });
+      }
+      throw mediaError;
+    }
 
     if (!hasPaidPlan && !postingLimitBypassEnabled) {
       try {
@@ -470,14 +485,6 @@ export async function POST(request: NextRequest) {
         );
       }
     }
-
-    await confirmMediaUploads({
-      supabase: getAdmin(),
-      userId: user.id,
-      contentType: "promotion",
-      contentId: promotion.id,
-      urls: [...data.images, ...data.videos, data.video_thumbnail, data.logo_url],
-    });
 
     // Audit (best-effort)
     try {
