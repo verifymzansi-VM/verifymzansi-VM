@@ -368,6 +368,44 @@ describe("VerificationPage", () => {
     expect(screen.queryByText(/Step 1: Phone \+ OTP/i)).not.toBeInTheDocument();
   });
 
+  it("does not reopen the location form when a finalized session has already saved location", async () => {
+    sessionResponse = jsonResponse(
+      {
+        sessionId: "session-finalized-sparse",
+        completedSteps: ["phone", "id_doc", "selfie"],
+        pendingSteps: [],
+        requiredSteps: ["phone", "id_doc", "selfie", "location"],
+        finalizedAt: "2026-04-21T12:00:00.000Z",
+        locationSubmittedAt: "2026-04-21T11:59:00.000Z",
+        phoneVerifiedAt: "2026-04-21T11:50:00.000Z",
+      },
+      200
+    );
+    statusResponse = jsonResponse(
+      buildStatusPayload({
+        accountVerificationStatus: "incomplete",
+        steps: [
+          { step_type: "phone", status: "approved" },
+          { step_type: "id_doc", status: "pending" },
+          { step_type: "selfie", status: "pending" },
+        ],
+      }),
+      200
+    );
+
+    render(<VerificationPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByRole("heading", { name: /Verification Submitted/i }).length
+      ).toBeGreaterThan(0);
+    });
+
+    expect(screen.queryByText(/Step 4: Verify Your Address/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Select Your Location/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Save Address/i })).not.toBeInTheDocument();
+  });
+
   it("does not let duplicate approved step rows hide a resubmission state", async () => {
     sessionResponse = jsonResponse(
       {

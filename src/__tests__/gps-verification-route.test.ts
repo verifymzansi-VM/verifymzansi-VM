@@ -376,7 +376,7 @@ describe("POST /api/verification/location/gps", () => {
     );
   });
 
-  it("allows GPS confirmation after a manual location has already finalized the session", async () => {
+  it("rejects GPS confirmation after a manual location has already finalized the session", async () => {
     const upsertVerificationStep = vi.fn().mockReturnValue({
       select: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data: { id: "step-1" }, error: null }),
@@ -484,25 +484,14 @@ describe("POST /api/verification/location/gps", () => {
       })
     );
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(409);
     await expect(res.json()).resolves.toEqual(
       expect.objectContaining({
-        success: true,
-        verified: true,
+        error: "Verification session is already finalized",
       })
     );
-    expect(upsertVerificationStep).toHaveBeenCalledWith(
-      expect.objectContaining({
-        location_method: "manual_with_gps",
-        location_province: "Gauteng",
-        location_city: "Johannesburg",
-      }),
-      expect.objectContaining({ onConflict: "user_id,step_type" })
-    );
-    expect(upsertSession).toHaveBeenCalledWith(
-      expect.not.objectContaining({ finalized_at: null }),
-      expect.objectContaining({ onConflict: "user_id" })
-    );
+    expect(upsertVerificationStep).not.toHaveBeenCalled();
+    expect(upsertSession).not.toHaveBeenCalled();
     expect(finalizeSession).not.toHaveBeenCalled();
   });
 
@@ -578,7 +567,7 @@ describe("POST /api/verification/location/gps", () => {
     expect(res.status).toBe(409);
     await expect(res.json()).resolves.toEqual(
       expect.objectContaining({
-        error: "GPS confirmation must match your saved address",
+        error: "Verification session is already finalized",
       })
     );
     expect(mockReverseGeocode).not.toHaveBeenCalled();
@@ -1247,9 +1236,9 @@ describe("POST /api/verification/location/gps", () => {
         };
       }
       if (table === "verification_steps") {
-        return {
+        return createVerificationStepsTable({
           upsert: upsertVerificationStep,
-        };
+        });
       }
       return {};
     });

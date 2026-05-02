@@ -131,7 +131,6 @@ export async function ensureLocationVerificationWritable({
   profileClient,
   userId,
   logger,
-  allowFinalizedLocationConfirmation = false,
 }: EnsureArgs): Promise<EnsureResult> {
   const { data: existingSession, error: sessionFetchErr } = await adminClient
     .from("verification_sessions")
@@ -178,45 +177,33 @@ export async function ensureLocationVerificationWritable({
     };
   }
 
+  const { data: locationStep, error: locationStepErr } = await adminClient
+    .from("verification_steps")
+    .select("status, location_method, location_province, location_city")
+    .eq("user_id", userId)
+    .eq("step_type", "location")
+    .maybeSingle();
+  const existingLocationStep = locationStep as VerificationStepLocationRow | null;
+
+  if (locationStepErr) {
+    logger.error("Failed to fetch existing location step", {
+      userId,
+      error: locationStepErr.message,
+    });
+    return {
+      response: NextResponse.json(
+        { error: "Unable to check location verification" },
+        { status: 500 }
+      ),
+    };
+  }
+
+  const locationIsSubmitted =
+    existingLocationStep?.status === "approved" || existingLocationStep?.status === "pending";
+
   if (existingVerificationSession?.finalized_at) {
-    const { data: locationStep, error: locationStepErr } = await adminClient
-      .from("verification_steps")
-      .select("status, location_method, location_province, location_city")
-      .eq("user_id", userId)
-      .eq("step_type", "location")
-      .maybeSingle();
-    const existingLocationStep = locationStep as VerificationStepLocationRow | null;
-
-    if (locationStepErr) {
-      logger.error("Failed to fetch finalized location step", {
-        userId,
-        error: locationStepErr.message,
-      });
-      return {
-        response: NextResponse.json(
-          { error: "Unable to check location verification" },
-          { status: 500 }
-        ),
-      };
-    }
-
-    const locationIsSubmitted =
-      existingLocationStep?.status === "approved" || existingLocationStep?.status === "pending";
-
     if (!locationIsSubmitted && accountProfile.account_verification_status !== "verified") {
       preserveFinalizedSession = true;
-    } else {
-      const allowFinalizedConfirmation =
-        allowFinalizedLocationConfirmation && existingVerificationSession.location_submitted_at;
-      const locationCanReceiveGpsConfirmation =
-        existingLocationStep?.location_method === "manual" ||
-        existingLocationStep?.location_method === "manual_with_gps";
-
-      if (allowFinalizedConfirmation && locationIsSubmitted && locationCanReceiveGpsConfirmation) {
-        finalizedLocationConfirmation = true;
-        savedLocationProvince = existingLocationStep.location_province ?? null;
-        savedLocationCity = existingLocationStep.location_city ?? null;
-      }
     }
 
     if (!finalizedLocationConfirmation && !preserveFinalizedSession) {
@@ -227,6 +214,15 @@ export async function ensureLocationVerificationWritable({
         ),
       };
     }
+  }
+
+  if (locationIsSubmitted) {
+    return {
+      response: NextResponse.json(
+        { error: "Location has already been submitted" },
+        { status: 409 }
+      ),
+    };
   }
 
   return {

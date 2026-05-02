@@ -403,6 +403,10 @@ function getInitialWizardStep({
     return "complete";
   }
 
+  if (phoneDone && allSubmitted) {
+    return "complete";
+  }
+
   const nonPhoneSubmitted = REVIEWABLE_STEP_ORDER.filter((stepType) => stepType !== "phone").every(
     (stepType) => {
       const status = stepStatusMap.get(stepType);
@@ -640,9 +644,6 @@ export default function VerificationPage() {
   const locationVerified = persistedGpsVerified || gpsApproved;
   const hasSelectedLocation = Boolean(province && city);
   const locationSummary = formatLocationSummary(locationTown, city, province);
-  const saveLocationButtonLabel = locationSaved
-    ? "Update Address & Finish"
-    : "Save Address & Finish";
   const allStepsResolved = useMemo(
     () =>
       REVIEWABLE_STEP_ORDER.every((stepType) => {
@@ -659,6 +660,7 @@ export default function VerificationPage() {
       }) ?? null,
     [serverStepMap]
   );
+  const locationSubmissionLocked = locationSaved && !reviewAttentionStep;
   const verificationInAdminReview =
     !reviewAttentionStep && accountVerificationStatus === "pending_review" && allStepsResolved;
   const verificationSubmissionBlocked =
@@ -796,6 +798,7 @@ export default function VerificationPage() {
         pendingSteps?: VerificationStepType[];
         requiredSteps?: VerificationStepType[];
         finalizedAt?: string | null;
+        locationSubmittedAt?: string | null;
         phoneVerifiedAt?: string | null;
       } | null = null;
 
@@ -860,8 +863,11 @@ export default function VerificationPage() {
               )
             );
           const allSubmitted =
-            (sessionData?.completedSteps?.length ?? 0) + (sessionData?.pendingSteps?.length ?? 0) >=
-              (sessionData?.requiredSteps?.length ?? 4) && Boolean(sessionData?.finalizedAt);
+            Boolean(sessionData?.finalizedAt) &&
+            ((sessionData?.completedSteps?.length ?? 0) +
+              (sessionData?.pendingSteps?.length ?? 0) >=
+              (sessionData?.requiredSteps?.length ?? 4) ||
+              Boolean(sessionData?.locationSubmittedAt));
 
           setStep(
             getInitialWizardStep({
@@ -1491,6 +1497,15 @@ export default function VerificationPage() {
   }
 
   async function handleManualLocationSubmit() {
+    if (locationSubmissionLocked) {
+      toast({
+        title: "Location already submitted",
+        description: "Your saved address is already pending review and cannot be submitted again.",
+        variant: "default",
+      });
+      return;
+    }
+
     if (verificationSubmissionBlocked) {
       toast({
         title: blockedSubmissionTitle,
@@ -2272,26 +2287,28 @@ export default function VerificationPage() {
                         Select Your Location
                       </h4>
 
-                      <LocationSelector
-                        value={{ province, city, town: locationTown }}
-                        onChange={(v) => {
-                          setProvince(v.province);
-                          setCity(v.city);
-                          setLocationTown(v.town ?? "");
-                          setGpsApproved(false);
-                          setGpsStatus("idle");
-                          setGpsCoords(null);
-                          setGpsTimestamp(null);
-                          setGpsConfidence(null);
-                          setGpsProvince(null);
-                          setGpsMismatch(null);
-                        }}
-                        cityLabel="City"
-                        showTown
-                        suggestTownOptions={false}
-                        showAddress={false}
-                        disabled={manualSubmitting || verificationSubmissionBlocked}
-                      />
+                      {!locationSubmissionLocked && (
+                        <LocationSelector
+                          value={{ province, city, town: locationTown }}
+                          onChange={(v) => {
+                            setProvince(v.province);
+                            setCity(v.city);
+                            setLocationTown(v.town ?? "");
+                            setGpsApproved(false);
+                            setGpsStatus("idle");
+                            setGpsCoords(null);
+                            setGpsTimestamp(null);
+                            setGpsConfidence(null);
+                            setGpsProvince(null);
+                            setGpsMismatch(null);
+                          }}
+                          cityLabel="City"
+                          showTown
+                          suggestTownOptions={false}
+                          showAddress={false}
+                          disabled={manualSubmitting || verificationSubmissionBlocked}
+                        />
+                      )}
 
                       {locationSaved && locationSummary && (
                         <div className="rounded-md border border-warm-200/70 bg-warm-50/50 p-3 text-sm dark:border-warm-700/70 dark:bg-warm-950/20">
@@ -2308,12 +2325,17 @@ export default function VerificationPage() {
                               review.
                             </p>
                           )}
+                          {locationSubmissionLocked && (
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              This address has already been submitted and cannot be submitted again.
+                            </p>
+                          )}
                         </div>
                       )}
                     </div>
 
                     {/* GPS Confirmation (Recommended) */}
-                    {!locationSaved && !locationVerified && (
+                    {!locationSubmissionLocked && !locationSaved && !locationVerified && (
                       <div className="space-y-3 rounded-md border border-dashed border-brand-blue/40 p-4 bg-brand-blue/5">
                         <h4 className="flex items-center gap-2 text-sm font-medium">
                           <Navigation className="h-4 w-4 text-brand-blue" />
@@ -2443,22 +2465,24 @@ export default function VerificationPage() {
                       </div>
                     )}
 
-                    <Button
-                      onClick={handleManualLocationSubmit}
-                      disabled={
-                        !province || !city || manualSubmitting || verificationSubmissionBlocked
-                      }
-                      variant="default"
-                      size="sm"
-                      className="h-11 gap-2"
-                    >
-                      {manualSubmitting ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <MapPin className="h-4 w-4" />
-                      )}
-                      {saveLocationButtonLabel}
-                    </Button>
+                    {!locationSubmissionLocked && (
+                      <Button
+                        onClick={handleManualLocationSubmit}
+                        disabled={
+                          !province || !city || manualSubmitting || verificationSubmissionBlocked
+                        }
+                        variant="default"
+                        size="sm"
+                        className="h-11 gap-2"
+                      >
+                        {manualSubmitting ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <MapPin className="h-4 w-4" />
+                        )}
+                        Save Address & Finish
+                      </Button>
+                    )}
 
                     <div className="flex gap-2">
                       <Button

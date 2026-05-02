@@ -297,6 +297,66 @@ describe("POST /api/verification/location/manual", () => {
     expect(body.city).toBe("Durban");
   });
 
+  it("rejects a duplicate manual location when a location step is already submitted", async () => {
+    const upsertVerificationStep = vi.fn();
+
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },
+      error: null,
+    });
+    mockParseAndValidateJsonRequest.mockResolvedValue({
+      success: true,
+      data: {
+        province: "Gauteng",
+        city: "Johannesburg",
+      },
+    });
+
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === "verification_steps") {
+        return createVerificationStepsTable({
+          upsert: upsertVerificationStep,
+          locationStep: {
+            status: "approved",
+            location_method: "manual",
+            location_province: "Gauteng",
+            location_city: "Johannesburg",
+          },
+        });
+      }
+
+      if (table === "verification_sessions") {
+        return createVerificationSessionsTable({
+          existingSession: {
+            finalized_at: null,
+            location_submitted_at: "2026-04-21T12:01:00.000Z",
+          },
+        });
+      }
+
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: "profile-1", account_verification_status: "incomplete" },
+              error: null,
+            }),
+          }),
+        }),
+      };
+    });
+
+    const res = await POST(makeRequest({ province: "Gauteng", city: "Johannesburg" }));
+
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toEqual(
+      expect.objectContaining({
+        error: "Location has already been submitted",
+      })
+    );
+    expect(upsertVerificationStep).not.toHaveBeenCalled();
+  });
+
   it("finalizes the verification session when location completes the last missing step", async () => {
     const finalizedAtUpdate = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
