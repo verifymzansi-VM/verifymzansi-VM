@@ -65,6 +65,42 @@ jobs:
           node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
+      - name: Normalize deploy env aliases
+        env:
+          RAW_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          RAW_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL || secrets.APP_URL || secrets.PRODUCTION_APP_URL }}
+          RAW_TURNSTILE_SITE_KEY: ${{ secrets.NEXT_PUBLIC_TURNSTILE_SITE_KEY || secrets.TURNSTILE_SITE_KEY }}
+        run: |
+          normalize_public_url() {
+            local value="$1"
+            if [ -z "$value" ]; then
+              printf '%s' ""
+              return 0
+            fi
+
+            if [[ "$value" =~ ^https?:// ]]; then
+              printf '%s' "$value"
+              return 0
+            fi
+
+            printf 'https://%s' "$value"
+          }
+
+          NORMALIZED_SUPABASE_URL="$(normalize_public_url "$RAW_SUPABASE_URL")"
+          NORMALIZED_APP_URL="$(normalize_public_url "$RAW_APP_URL")"
+
+          if [ -n "$RAW_SUPABASE_URL" ] && [ "$RAW_SUPABASE_URL" != "$NORMALIZED_SUPABASE_URL" ]; then
+            echo "::notice::Prefixed NEXT_PUBLIC_SUPABASE_URL with https:// for deploy validation"
+          fi
+
+          if [ -n "$RAW_APP_URL" ] && [ "$RAW_APP_URL" != "$NORMALIZED_APP_URL" ]; then
+            echo "::notice::Prefixed app URL with https:// for deploy validation"
+          fi
+
+          echo "NEXT_PUBLIC_SUPABASE_URL=$NORMALIZED_SUPABASE_URL" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_APP_URL=$NORMALIZED_APP_URL" >> "$GITHUB_ENV"
+          echo "APP_URL=$NORMALIZED_APP_URL" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_TURNSTILE_SITE_KEY=$RAW_TURNSTILE_SITE_KEY" >> "$GITHUB_ENV"
       - name: Secret scan
         run: pnpm run secret-scan
       - name: Security audit
@@ -143,7 +179,6 @@ jobs:
       - name: Post-deploy health check
         id: health-check
         env:
-          APP_URL: ${{ secrets.APP_URL }}
           DEPLOY_HEALTHCHECK_URL: ${{ secrets.DEPLOY_HEALTHCHECK_URL }}
         run: |
           if [ -z "$APP_URL" ]; then
@@ -205,10 +240,9 @@ jobs:
         id: public-verify
         continue-on-error: true
         env:
-          PUBLIC_VERIFY_BASE_URL: ${{ secrets.APP_URL }}
           PUBLIC_VERIFY_REQUIRE_TURNSTILE: "1"
           PUBLIC_VERIFY_ALLOW_CLOUDFLARE_CHALLENGE: "1"
-        run: pnpm run test:public-verify
+        run: PUBLIC_VERIFY_BASE_URL="${APP_URL:-$NEXT_PUBLIC_APP_URL}" pnpm run test:public-verify
 
       - name: Annotate public/auth verification failure
         if: always() && steps.public-verify.outcome == 'failure'
