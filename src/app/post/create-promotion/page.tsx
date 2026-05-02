@@ -508,7 +508,7 @@ function CreatePromotionContent() {
         }).then((urls) => urls[0]),
       ]);
 
-      setSubmitProgress("Saving promotion...");
+      setSubmitProgress("Saving Tourism & Events post...");
       setUploadStatuses((c) => ({ ...c, saving: "uploading" }));
       const mediaDimensions = await mediaDimensionsPromise;
 
@@ -616,7 +616,7 @@ function CreatePromotionContent() {
         return;
       }
 
-      toast({ title: "Promotion submitted for review.", variant: "success" });
+      toast({ title: "Tourism & Events post submitted for review.", variant: "success" });
       setSubmitSucceeded(true);
       setUploadStatuses((c) => ({ ...c, saving: "done" }));
       discardDraft();
@@ -673,7 +673,7 @@ function CreatePromotionContent() {
     setLastSavedAt(null);
     toast({
       title: "Draft discarded",
-      description: "You can start a fresh promotion now.",
+      description: "You can start a fresh Tourism & Events post now.",
       variant: "success",
     });
   }
@@ -747,8 +747,8 @@ function CreatePromotionContent() {
                         },
                         {
                           key: "saving",
-                          label: "Saving promotion...",
-                          doneLabel: "Promotion saved",
+                          label: "Saving Tourism & Events post...",
+                          doneLabel: "Tourism & Events post saved",
                           status: uploadStatuses.saving,
                         },
                       ]}

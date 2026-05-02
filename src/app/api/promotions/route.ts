@@ -692,7 +692,10 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       log.error("Failed to fetch promotions", { error: error.message });
-      return NextResponse.json({ error: "Failed to fetch promotions" }, { status: 500 });
+      return NextResponse.json(
+        { error: "Failed to fetch Tourism & Events posts" },
+        { status: 500 }
+      );
     }
 
     const normalizedPromotions = normalizeOwnerRecords(promotions ?? []).map((promotion) => {
@@ -784,6 +787,6 @@ export async function GET(request: NextRequest) {
     });
   } catch (err) {
     log.error("Unexpected error", { error: err instanceof Error ? err.message : "Unknown error" });
-    return NextResponse.json({ error: "Failed to fetch promotions" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to fetch Tourism & Events posts" }, { status: 500 });
   }
 }

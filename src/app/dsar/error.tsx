@@ -34,7 +34,7 @@ export default function DsarError({
             className="h-11 w-full sm:w-auto"
             onClick={() => (window.location.href = "/")}
           >
-            Go to Homepage
+            Go to homepage
           </Button>
           <Button className="h-11 w-full sm:w-auto" onClick={() => reset()}>
             Try again

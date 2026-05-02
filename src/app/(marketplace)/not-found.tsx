@@ -16,13 +16,13 @@ export default function MarketplaceNotFound() {
         <div className="max-w-md space-y-2">
           <h1 className="text-lg sm:text-xl font-display font-bold">Not Found</h1>
           <p className="text-sm text-muted-foreground">
-            This listing, business, or promotion could not be found. It may have been removed or the
-            link is incorrect.
+            This listing, business, or Tourism & Events post could not be found. It may have been
+            removed or the link is incorrect.
           </p>
         </div>
         <div className="flex flex-wrap justify-center gap-3">
           <Button asChild variant="outline">
-            <Link href="/">Go to Homepage</Link>
+            <Link href="/">Go to homepage</Link>
           </Button>
           <Button asChild>
             <Link href="/mzansi-market">Browse Listings</Link>

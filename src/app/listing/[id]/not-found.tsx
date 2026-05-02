@@ -18,7 +18,7 @@ export default function ListingNotFound() {
         </div>
         <div className="flex w-full max-w-sm flex-col gap-3 sm:flex-row">
           <Button asChild variant="outline" className="h-11 w-full sm:w-auto">
-            <Link href="/">Go to Homepage</Link>
+            <Link href="/">Go to homepage</Link>
           </Button>
           <Button asChild className="h-11 w-full sm:w-auto">
             <Link href="/mzansi-market">Browse Listings</Link>

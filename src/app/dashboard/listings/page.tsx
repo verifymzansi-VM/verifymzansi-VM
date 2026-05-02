@@ -84,6 +84,14 @@ type BusinessDashboardRow = {
 
 type ContentSource = DashboardItem["source"];
 
+function dashboardActionLabel(source: ContentSource) {
+  return source === "business"
+    ? "business profile"
+    : source === "promotion"
+      ? "Tourism & Events post"
+      : "listing";
+}
+
 function sortByNewest(items: DashboardItem[]) {
   return [...items].sort((a, b) => {
     const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
@@ -178,15 +186,21 @@ export default async function ListingsPage({
     areaParam && ["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"].includes(areaParam)
       ? (areaParam as MarketplaceArea)
       : null;
+  const dashboardPostLabel = (kind: string | null) =>
+    kind === "business"
+      ? "Business"
+      : kind === "tourism" || kind === "promotion"
+        ? "Tourism & Events post"
+        : "Post";
 
   const successAlert = updated
     ? {
-        title: `${updated === "business" ? "Business" : "Promotion"} updated`,
+        title: `${dashboardPostLabel(updated)} updated`,
         description: "Your changes were saved and resubmitted for review.",
       }
     : created
       ? {
-          title: `${created === "business" ? "Business" : "Promotion"} submitted`,
+          title: `${dashboardPostLabel(created)} submitted`,
           description: "Your post was created successfully and is now waiting for moderation.",
         }
       : null;
@@ -410,7 +424,7 @@ export default async function ListingsPage({
 
       <PageHeader
         title="My Posts"
-        description="Manage listings, businesses, and promotions from one place."
+        description="Manage marketplace listings, business profiles, and Tourism & Events posts from one place."
         breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "My Posts" }]}
       >
         <Button asChild variant="trust-verified" size="sm" className="h-11 gap-2">
@@ -467,7 +481,7 @@ function RejectedListingList({ listings }: { listings: DashboardItem[] }) {
     return (
       <div className="flex flex-col items-center gap-2 py-6 text-muted-foreground">
         <XCircle className="h-8 w-8 opacity-30" />
-        <p>No rejected listings.</p>
+        <p>No rejected posts.</p>
       </div>
     );
   }
@@ -617,7 +631,7 @@ function ListingList({
                   (listing.status === "active" || listing.status === "live") &&
                   checkCanBoost(planTiers[listing.area], listing.area).allowed
                 }
-                itemTypeLabel={listing.source}
+                itemTypeLabel={dashboardActionLabel(listing.source)}
                 boostApiPath={
                   listing.source === "business"
                     ? `/api/businesses/${listing.id}/boost`
@@ -635,7 +649,7 @@ function ListingList({
                   (listing.status === "active" || listing.status === "live") &&
                   checkCanFeatured(planTiers[listing.area], listing.area).allowed
                 }
-                itemTypeLabel={listing.source}
+                itemTypeLabel={dashboardActionLabel(listing.source)}
                 featuredApiPath={
                   listing.source === "business"
                     ? `/api/businesses/${listing.id}/featured`
@@ -653,7 +667,7 @@ function ListingList({
                   (listing.status === "active" || listing.status === "live") &&
                   checkCanUrgent(planTiers[listing.area], listing.area).allowed
                 }
-                itemTypeLabel={listing.source}
+                itemTypeLabel={dashboardActionLabel(listing.source)}
                 urgentApiPath={
                   listing.source === "business"
                     ? `/api/businesses/${listing.id}/urgent`

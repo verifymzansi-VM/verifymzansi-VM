@@ -83,7 +83,7 @@ export default async function IntelligenceMarketplacePage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Live Promotions</CardTitle>
+            <CardTitle className="text-sm font-medium">Live Tourism & Events posts</CardTitle>
             <TrendingUp className="h-4 w-4 text-purple-500" />
           </CardHeader>
           <CardContent>
@@ -104,7 +104,7 @@ export default async function IntelligenceMarketplacePage() {
               tone: "emerald",
             },
             { label: "Business profiles", value: businesses, tone: "sky" },
-            { label: "Live promotions", value: promotions, tone: "violet" },
+            { label: "Live Tourism & Events posts", value: promotions, tone: "violet" },
           ]}
         />
         <DecisionPanel
@@ -116,7 +116,7 @@ export default async function IntelligenceMarketplacePage() {
               value: `${monetisableSupply}`,
               detail:
                 monetisableSupply > 0
-                  ? "There is searchable supply across listings, businesses, and promotions. Prioritise quality and discovery."
+                  ? "There is searchable supply across listings, businesses, and Tourism & Events posts. Prioritise quality and discovery."
                   : "Marketplace supply is empty. Seed listings before investing in buyer acquisition.",
               tone: monetisableSupply > 0 ? "emerald" : "rose",
             },

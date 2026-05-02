@@ -222,7 +222,7 @@ describe("POST /api/promotions/[id]/boost", () => {
     const res = await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
     expect(res.status).toBe(404);
     const body = await res.json();
-    expect(body.error).toBe("Promotion not found");
+    expect(body.error).toBe("Tourism & Events post not found");
   });
 
   it("returns 404 when user does not own the promotion", async () => {
@@ -236,7 +236,7 @@ describe("POST /api/promotions/[id]/boost", () => {
     const res = await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
     expect(res.status).toBe(404);
     const body = await res.json();
-    expect(body.error).toBe("Promotion not found");
+    expect(body.error).toBe("Tourism & Events post not found");
   });
 
   it("accepts legacy seller_id ownership when promotions still use the old column", async () => {

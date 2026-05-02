@@ -16,7 +16,7 @@ export default function DashboardNotFound() {
       </div>
       <div className="flex flex-wrap justify-center gap-3">
         <Button asChild variant="outline">
-          <Link href="/">Go Home</Link>
+          <Link href="/">Go to homepage</Link>
         </Button>
         <Button asChild>
           <Link href="/dashboard">Back to Dashboard</Link>

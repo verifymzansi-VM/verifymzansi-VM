@@ -1084,7 +1084,7 @@ export default function ProfilePage() {
                 </div>
                 {verificationStatus !== "verified" && (
                   <Button asChild variant="outline" size="sm" className="h-11">
-                    <Link href="/dashboard/verification">Verify</Link>
+                    <Link href="/verification">Continue verification</Link>
                   </Button>
                 )}
               </div>

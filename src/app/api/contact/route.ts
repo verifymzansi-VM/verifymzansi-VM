@@ -64,7 +64,8 @@ export async function POST(request: NextRequest) {
     const admin = createAdminClient();
 
     const targetTable = parsedBody.data.targetType === "promotion" ? "promotions" : "listings";
-    const notFoundLabel = parsedBody.data.targetType === "promotion" ? "Promotion" : "Listing";
+    const notFoundLabel =
+      parsedBody.data.targetType === "promotion" ? "Tourism & Events post" : "Listing";
 
     // Get the content owner (use admin client so unauthenticated users can still contact)
     const ownerColumn = await getOwnerColumn(admin, targetTable);

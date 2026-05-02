@@ -70,7 +70,7 @@ export function createPromotionAddonCheckoutRoute(config: PromotionAddonRouteCon
     durationDays: config.durationDays,
     itemDescription: config.itemDescription,
     amountCents: config.amountCents,
-    liveOnlyNoun: "promotions",
+    liveOnlyNoun: "Tourism & Events posts",
     auditAction: config.auditAction,
     auditDurationKey: config.auditDurationKey,
     failureMessage: config.failureMessage,
@@ -107,14 +107,14 @@ export function createPromotionAddonCheckoutRoute(config: PromotionAddonRouteCon
 
       return rawPromotion as PromotionCheckoutRow | null;
     },
-    getNotFoundMessage: "Promotion not found",
+    getNotFoundMessage: "Tourism & Events post not found",
     verifyOwnership: (promotion, userId) => {
       if (!config.requireOwnerMatch || readOwnerId(promotion) === userId) {
         return null;
       }
 
       return NextResponse.json(
-        { error: "Forbidden — you do not own this promotion" },
+        { error: "Forbidden — you do not own this Tourism & Events post" },
         { status: 403 }
       );
     },

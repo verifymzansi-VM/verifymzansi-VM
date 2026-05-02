@@ -134,7 +134,9 @@ describe("admin intelligence page regressions", () => {
 
     expect(screen.getByText("42")).toBeInTheDocument();
     expect(screen.getByText("30 live")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Live Promotions" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Live Tourism & Events posts" })
+    ).toBeInTheDocument();
     expect(mockAdminFrom).not.toHaveBeenCalledWith("market_listings");
   });
 

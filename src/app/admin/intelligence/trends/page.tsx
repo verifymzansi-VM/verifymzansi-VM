@@ -151,11 +151,11 @@ export default async function IntelligenceTrendsPage() {
         />
         <HorizontalBarPanel
           title="Content creation mix"
-          description="Breaks recent supply creation into listing, business, and promotion activity."
+          description="Breaks recent supply creation into listing, business, and Tourism & Events activity."
           data={[
             { label: "Listings", value: listingPosts, tone: "emerald" },
             { label: "Businesses", value: businessPosts, tone: "sky" },
-            { label: "Promotions", value: promotionPosts, tone: "violet" },
+            { label: "Tourism & Events", value: promotionPosts, tone: "violet" },
           ]}
         />
       </div>
@@ -179,7 +179,7 @@ export default async function IntelligenceTrendsPage() {
             detail:
               content30d >= s30
                 ? "Content creation is keeping pace with signups, which supports marketplace liquidity."
-                : "Content creation trails signups. Nudge new users toward first listing, business, or promotion creation.",
+                : "Content creation trails signups. Nudge new users toward first listing, business, or Tourism & Events post creation.",
             tone: content30d >= s30 ? "emerald" : "amber",
           },
         ]}

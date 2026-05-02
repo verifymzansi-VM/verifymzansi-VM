@@ -431,13 +431,19 @@ export function getPlanFeatureItems(
     }
   };
 
-  if (features.maxListings !== undefined) push(`Up to ${features.maxListings} listings`);
+  if (features.maxListings !== undefined) {
+    push(`Up to ${features.maxListings} listing${features.maxListings === 1 ? "" : "s"}`);
+  }
   if (features.maxStorefronts !== undefined) push(`${features.maxStorefronts} storefronts`);
   if (features.maxProfiles !== undefined) push(`${features.maxProfiles} profiles`);
   if (features.maxBusinesses !== undefined) {
     push(`${features.maxBusinesses} business${features.maxBusinesses === 1 ? "" : "es"}`);
   }
-  if (features.maxPromotions !== undefined) push(`${features.maxPromotions} promotions`);
+  if (features.maxPromotions !== undefined) {
+    push(
+      `${features.maxPromotions} Tourism & Events post${features.maxPromotions === 1 ? "" : "s"}`
+    );
+  }
 
   push(`${features.maxPhotos} photos per post`);
   push(

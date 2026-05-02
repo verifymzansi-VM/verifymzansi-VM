@@ -642,8 +642,8 @@ export function UnifiedLayout({
           </p>
           <p className="mt-1 text-sm font-medium">
             {promotions.length > 0
-              ? `${promotions.length} promotions visible`
-              : "No live offers yet"}
+              ? `${promotions.length} Tourism & Events posts visible`
+              : "No live posts yet"}
           </p>
         </div>
       </div>
@@ -705,9 +705,7 @@ export function UnifiedLayout({
             <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
               Active Posts
             </p>
-            <h3 className="font-display text-xl font-semibold">
-              {family === "tourism" ? "Tourism Posts & Offers" : "Promotions & Offers"}
-            </h3>
+            <h3 className="font-display text-xl font-semibold">Tourism & Events posts</h3>
           </div>
           <div className="grid grid-cols-2 gap-3">
             {promotions.map((promo) => (

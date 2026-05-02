@@ -182,7 +182,9 @@ describe("POST /api/promotions/[id]/featured", () => {
     });
 
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({ error: "Invalid promotion ID" });
+    await expect(response.json()).resolves.toEqual({
+      error: "Invalid Tourism & Events post ID",
+    });
   });
 
   it("returns 503 when shared checkout protection is degraded", async () => {

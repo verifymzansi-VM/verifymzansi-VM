@@ -10,15 +10,15 @@ import { createPromotionAddonCheckoutRoute } from "../_lib/create-addon-checkout
  */
 export const POST = createPromotionAddonCheckoutRoute({
   loggerName: "PromotionUrgentCheckout",
-  validationErrorMessage: "Invalid promotion ID",
+  validationErrorMessage: "Invalid Tourism & Events post ID",
   rateLimitAction: "promotion:urgent",
-  limitedErrorMessage: "Too many promotion urgent attempts. Please try again later.",
+  limitedErrorMessage: "Too many Tourism & Events urgent attempts. Please try again later.",
   degradedErrorMessage:
-    "Promotion checkout protection is temporarily unavailable. Please try again.",
+    "Tourism & Events checkout protection is temporarily unavailable. Please try again.",
   activeUntilField: "urgent_until",
   activeVerb: "marked urgent",
-  alreadyActiveMessage: "This promotion is already marked urgent",
-  pendingPaymentMessage: "An urgent payment is already in progress for this promotion",
+  alreadyActiveMessage: "This Tourism & Events post is already marked urgent",
+  pendingPaymentMessage: "An urgent payment is already in progress for this Tourism & Events post",
   paymentType: "urgent_promotion",
   paymentDurationKey: "urgent_days",
   durationDays: URGENT_DURATION_DAYS,

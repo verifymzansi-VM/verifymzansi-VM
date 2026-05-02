@@ -8,6 +8,16 @@ import { TrustStrip } from "@/components/layout/trust-strip";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
+type AdvertiseSurface = {
+  name: string;
+  description: string;
+  browseHref: string;
+  createHref: string;
+  createLabel: string;
+  secondaryCreateHref?: string;
+  secondaryCreateLabel?: string;
+};
+
 export const metadata: Metadata = {
   title: "Advertise",
   description:
@@ -36,7 +46,7 @@ export default function AdvertisePage() {
     },
   ];
 
-  const surfaces = [
+  const surfaces: AdvertiseSurface[] = [
     {
       name: "Mzansi Market",
       description: "Products, offers, and individual listings.",
@@ -55,8 +65,10 @@ export default function AdvertisePage() {
       name: "Tourism & Events",
       description: "Tourism businesses, experiences, and events.",
       browseHref: "/tourism-events",
-      createHref: "/post/create-tourism?type=event",
-      createLabel: "Create event campaign",
+      createHref: "/post/create-tourism",
+      createLabel: "List tourism business",
+      secondaryCreateHref: "/post/create-tourism?type=event",
+      secondaryCreateLabel: "Create event",
     },
   ];
 
@@ -76,7 +88,7 @@ export default function AdvertisePage() {
               <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <Button asChild size="lg" className="gap-2">
                   <Link href="/post/create">
-                    Start Advertising
+                    Choose a post type
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                 </Button>
@@ -152,6 +164,14 @@ export default function AdvertisePage() {
                           : `Browse ${surface.name}`}
                       </Link>
                     </Button>
+                    {surface.secondaryCreateHref && surface.secondaryCreateLabel && (
+                      <Button asChild variant="outline" className="w-full gap-2 sm:w-auto">
+                        <Link href={surface.secondaryCreateHref}>
+                          {surface.secondaryCreateLabel}
+                          <ArrowRight className="h-4 w-4" />
+                        </Link>
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>

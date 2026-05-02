@@ -16,7 +16,7 @@ export default function OfflinePage() {
       <div className="mt-6 flex gap-3">
         <Button onClick={() => window.location.reload()}>Try Again</Button>
         <Button variant="outline" asChild>
-          <Link href="/">Go to Homepage</Link>
+          <Link href="/">Go to homepage</Link>
         </Button>
       </div>
     </div>

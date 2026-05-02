@@ -38,7 +38,7 @@ export default function AdminError({
         </div>
         <div className="flex flex-wrap justify-center gap-3">
           <Button variant="outline" asChild>
-            <Link href="/">Go Home</Link>
+            <Link href="/">Go to homepage</Link>
           </Button>
           <Button variant="outline" onClick={() => (window.location.href = "/admin")}>
             Reload Admin

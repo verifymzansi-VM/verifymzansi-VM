@@ -42,7 +42,7 @@ describe("AdvertisePage", () => {
       screen.getByRole("heading", { level: 1, name: "Advertise on VerifyMzansi" })
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /View pricing/i })).toHaveAttribute("href", "/pricing");
-    expect(screen.getByRole("link", { name: /Start Advertising/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Choose a post type/i })).toHaveAttribute(
       "href",
       "/post/create"
     );
@@ -62,7 +62,11 @@ describe("AdvertisePage", () => {
       "href",
       "/post/create-business"
     );
-    expect(screen.getByRole("link", { name: /Create event campaign/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /List tourism business/i })).toHaveAttribute(
+      "href",
+      "/post/create-tourism"
+    );
+    expect(screen.getByRole("link", { name: /Create event/i })).toHaveAttribute(
       "href",
       "/post/create-tourism?type=event"
     );

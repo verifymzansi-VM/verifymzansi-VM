@@ -110,7 +110,9 @@ describe("GET /api/promotions/[id]", () => {
     });
 
     expect(response.status).toBe(500);
-    await expect(response.json()).resolves.toEqual({ error: "Failed to fetch promotion" });
+    await expect(response.json()).resolves.toEqual({
+      error: "Failed to fetch Tourism & Events post",
+    });
     expect(mockLoggerError).toHaveBeenCalledWith("Failed to fetch promotion", {
       id: "00000000-0000-0000-0000-000000000111",
       error: "column promotions.logo_url does not exist",

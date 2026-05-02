@@ -208,4 +208,21 @@ describe("PromotionsExplorer", () => {
       expect(link).toHaveAttribute("href", "/post/create-tourism?type=event");
     }
   });
+
+  it("treats the legacy type=event URL as the events tab", async () => {
+    useSearchParamsMock.mockReturnValue(
+      new URLSearchParams("type=event") as ReturnType<typeof useSearchParamsMock>
+    );
+
+    render(<PromotionsExplorer />);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/api/promotions?page=1&limit=24&type=event"),
+        expect.anything()
+      );
+    });
+
+    expect(screen.getAllByRole("link", { name: /Create Event/i }).length).toBeGreaterThan(0);
+  });
 });

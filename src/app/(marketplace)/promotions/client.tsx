@@ -110,7 +110,10 @@ export function PromotionsExplorer() {
   const currentSearchParams = useMemo(() => new URLSearchParams(searchParamKey), [searchParamKey]);
 
   /* ── Active tab ── */
-  const activeTab: ActiveTab = currentSearchParams.get("tab") === "events" ? "events" : "tourism";
+  const activeTab: ActiveTab =
+    currentSearchParams.get("tab") === "events" || currentSearchParams.get("type") === "event"
+      ? "events"
+      : "tourism";
   const createHref =
     activeTab === "events" ? "/post/create-tourism?type=event" : "/post/create-tourism";
   const createLabel = activeTab === "events" ? "Create Event" : "List Tourism Business";

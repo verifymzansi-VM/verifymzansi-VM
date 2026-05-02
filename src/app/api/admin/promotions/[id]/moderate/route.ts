@@ -45,7 +45,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       await params,
       promotionModerationParamsSchema,
       {
-        validationErrorMessage: "Invalid promotion ID",
+        validationErrorMessage: "Invalid Tourism & Events post ID",
         includeValidationDetails: false,
       }
     );
@@ -100,11 +100,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         promotionId,
         error: promotionErr.message,
       });
-      return NextResponse.json({ error: "Failed to load promotion" }, { status: 500 });
+      return NextResponse.json({ error: "Failed to load Tourism & Events post" }, { status: 500 });
     }
 
     if (!promotion) {
-      return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
+      return NextResponse.json({ error: "Tourism & Events post not found" }, { status: 404 });
     }
 
     // Map decision to status
@@ -132,7 +132,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     if (updateError) {
       log.error("Failed to moderate promotion", { error: updateError.message });
-      return NextResponse.json({ error: "Failed to moderate promotion" }, { status: 500 });
+      return NextResponse.json(
+        { error: "Failed to moderate Tourism & Events post" },
+        { status: 500 }
+      );
     }
 
     // Audit
@@ -152,12 +155,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // Notify owner on rejection / hiding
     if (decision !== "approve") {
       try {
-        const shortTitle = (promotion.title ?? "Your promotion").slice(0, 40);
+        const shortTitle = (promotion.title ?? "Your Tourism & Events post").slice(0, 40);
         const isHidden = decision === "hide";
         await createNotification({
           userId: promotion.owner_id,
           type: "error",
-          title: isHidden ? "Promotion hidden" : "Promotion rejected",
+          title: isHidden ? "Tourism & Events post hidden" : "Tourism & Events post rejected",
           message: reason
             ? `"${shortTitle}" was ${isHidden ? "hidden" : "rejected"}: ${reason.slice(0, 80)}`
             : isHidden
@@ -173,6 +176,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ success: true, status: newStatus });
   } catch (err) {
     logApiError(log, "Unexpected error moderating promotion", err);
-    return internalApiError("Failed to moderate promotion");
+    return internalApiError("Failed to moderate Tourism & Events post");
   }
 }

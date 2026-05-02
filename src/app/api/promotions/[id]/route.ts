@@ -85,7 +85,7 @@ type PromotionOwnerRow = {
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const parsedParams = parseAndValidateRouteParams(await params, idRouteParamsSchema, {
-      validationErrorMessage: "Invalid promotion ID",
+      validationErrorMessage: "Invalid Tourism & Events post ID",
       includeValidationDetails: false,
     });
     if (!parsedParams.success) {
@@ -107,11 +107,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         id,
         error: error.message,
       });
-      return NextResponse.json({ error: "Failed to fetch promotion" }, { status: 500 });
+      return NextResponse.json({ error: "Failed to fetch Tourism & Events post" }, { status: 500 });
     }
 
     if (!promotion) {
-      return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
+      return NextResponse.json({ error: "Tourism & Events post not found" }, { status: 404 });
     }
 
     const normalizedPromotion = normalizeOwnerRecord(promotion as PromotionOwnerRow);
@@ -123,7 +123,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // Only allow public access to live promotions
     if (normalizedPromotion.status !== "live") {
       if (!isOwnerViewer) {
-        return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
+        return NextResponse.json({ error: "Tourism & Events post not found" }, { status: 404 });
       }
     }
 
@@ -173,7 +173,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       error: err instanceof Error ? err.message : "Unknown error",
       stack: err instanceof Error ? err.stack : undefined,
     });
-    return NextResponse.json({ error: "Failed to fetch promotion" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to fetch Tourism & Events post" }, { status: 500 });
   }
 }
 
@@ -190,7 +190,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (csrfBlock) return csrfBlock;
 
     const parsedParams = parseAndValidateRouteParams(await params, idRouteParamsSchema, {
-      validationErrorMessage: "Invalid promotion ID",
+      validationErrorMessage: "Invalid Tourism & Events post ID",
       includeValidationDetails: false,
     });
     if (!parsedParams.success) {
@@ -224,7 +224,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const existing = rawExisting as PromotionOwnerRow | null;
 
     if (!existing) {
-      return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
+      return NextResponse.json({ error: "Tourism & Events post not found" }, { status: 404 });
     }
 
     const parsedBody = await parseAndValidateJsonRequest(request, promotionSchema, {
@@ -447,7 +447,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     if (updateError) {
       log.error("Failed to update promotion", { error: updateError.message });
-      return NextResponse.json({ error: "Failed to update promotion" }, { status: 500 });
+      return NextResponse.json(
+        { error: "Failed to update Tourism & Events post" },
+        { status: 500 }
+      );
     }
 
     if (removedMediaUrls.length > 0) {
@@ -497,7 +500,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       error: err instanceof Error ? err.message : "Unknown error",
       stack: err instanceof Error ? err.stack : undefined,
     });
-    return NextResponse.json({ error: "Failed to update promotion" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to update Tourism & Events post" }, { status: 500 });
   }
 }
 
@@ -509,13 +512,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 export const DELETE = createOwnedContentDeleteRoute<{ id: string }, PromotionOwnerRow>({
   log,
   paramsSchema: idRouteParamsSchema,
-  validationErrorMessage: "Invalid promotion ID",
+  validationErrorMessage: "Invalid Tourism & Events post ID",
   table: "promotions",
   ownerSelect: "id, owner_id, status, photos, videos, video_thumbnail, logo_url",
   rateLimitKey: "promotion:delete",
-  notFoundMessage: "Promotion not found",
-  invalidStatusMessage: "Only draft or rejected promotions can be deleted",
-  deleteErrorMessage: "Failed to delete promotion",
+  notFoundMessage: "Tourism & Events post not found",
+  invalidStatusMessage: "Only draft or rejected Tourism & Events posts can be deleted",
+  deleteErrorMessage: "Failed to delete Tourism & Events post",
   deleteErrorLogMessage: "Failed to delete promotion",
   cleanupReason: "promotion_deleted",
   cleanupErrorLogMessage: "Failed to queue deleted promotion media for cleanup",

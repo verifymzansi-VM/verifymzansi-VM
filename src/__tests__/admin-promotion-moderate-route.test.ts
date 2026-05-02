@@ -102,7 +102,9 @@ describe("POST /api/admin/promotions/[id]/moderate", () => {
     const response = await POST(createRequest({ decision: "approve" }), createParams("bad-id"));
 
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({ error: "Invalid promotion ID" });
+    await expect(response.json()).resolves.toEqual({
+      error: "Invalid Tourism & Events post ID",
+    });
   });
 
   it("returns 401 before role verification when there is no authenticated user", async () => {
@@ -166,7 +168,9 @@ describe("POST /api/admin/promotions/[id]/moderate", () => {
     const response = await POST(createRequest({ decision: "approve" }), createParams());
 
     expect(response.status).toBe(404);
-    await expect(response.json()).resolves.toEqual({ error: "Promotion not found" });
+    await expect(response.json()).resolves.toEqual({
+      error: "Tourism & Events post not found",
+    });
   });
 
   it("approves unpublished promotions and stamps published_at", async () => {
@@ -269,7 +273,7 @@ describe("POST /api/admin/promotions/[id]/moderate", () => {
 
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toEqual({
-      error: "Failed to moderate promotion",
+      error: "Failed to moderate Tourism & Events post",
     });
     expect(mockLoggerError).toHaveBeenCalledWith("Failed to moderate promotion", {
       error: "raw db failure",
@@ -308,7 +312,7 @@ describe("POST /api/admin/promotions/[id]/moderate", () => {
       expect.objectContaining({
         userId: "owner-1",
         type: "error",
-        title: "Promotion rejected",
+        title: "Tourism & Events post rejected",
         href: "/dashboard/tourism-events",
       })
     );
@@ -347,7 +351,7 @@ describe("POST /api/admin/promotions/[id]/moderate", () => {
       expect.objectContaining({
         userId: "owner-1",
         type: "error",
-        title: "Promotion hidden",
+        title: "Tourism & Events post hidden",
         href: "/dashboard/tourism-events",
       })
     );

@@ -23,10 +23,10 @@ export default function PromotionError({
       <main className="flex-1 flex flex-col items-center justify-center gap-4 px-4 text-center">
         <AlertTriangle className="h-8 w-8 text-destructive" />
         <div className="space-y-2">
-          <h1 className="text-xl font-display font-bold">Failed to load promotion</h1>
+          <h1 className="text-xl font-display font-bold">Failed to load Tourism & Events post</h1>
           <p className="text-muted-foreground max-w-md">
-            We couldn&apos;t load this promotion. It may have been removed or there was a temporary
-            issue — please try again.
+            We couldn&apos;t load this Tourism & Events post. It may have been removed or there was
+            a temporary issue. Please try again.
           </p>
         </div>
         <div className="flex w-full max-w-sm flex-col gap-3 sm:flex-row">

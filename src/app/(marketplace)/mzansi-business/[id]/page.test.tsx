@@ -697,7 +697,7 @@ describe("BusinessDetailPage", () => {
 
     render(await BusinessDetailPage({ params: Promise.resolve({ id: "business-7" }) }));
 
-    expect(screen.getByText("Promotions & Offers")).toBeInTheDocument();
+    expect(screen.getByText("Tourism & Events posts")).toBeInTheDocument();
     expect(screen.getByText("Promotion")).toBeInTheDocument();
     expect(promotionCardSpy).toHaveBeenCalledWith(
       expect.objectContaining({

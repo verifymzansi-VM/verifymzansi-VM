@@ -30,7 +30,7 @@ export default function MarketplaceError({
         </div>
         <div className="flex gap-3">
           <Button variant="outline" onClick={() => (window.location.href = "/")}>
-            Go to Homepage
+            Go to homepage
           </Button>
           <Button onClick={() => reset()}>Retry</Button>
         </div>

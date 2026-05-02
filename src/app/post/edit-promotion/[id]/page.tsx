@@ -176,7 +176,7 @@ export default function EditPromotionPage() {
           setBringYourOwn(ed.bring_your_own || "");
         }
       } catch {
-        setError("Failed to load promotion");
+        setError("Failed to load Tourism & Events post");
       } finally {
         setIsLoading(false);
       }
@@ -386,7 +386,7 @@ export default function EditPromotionPage() {
         setUploadStatuses((c) => ({ ...c, logo: "done" }));
       }
 
-      setSubmitProgress("Saving promotion...");
+      setSubmitProgress("Saving Tourism & Events post...");
       setUploadStatuses((c) => ({ ...c, saving: "uploading" }));
 
       const body = {
@@ -1112,8 +1112,8 @@ export default function EditPromotionPage() {
                   },
                   {
                     key: "saving",
-                    label: "Saving promotion...",
-                    doneLabel: "Promotion saved",
+                    label: "Saving Tourism & Events post...",
+                    doneLabel: "Tourism & Events post saved",
                     status: uploadStatuses.saving,
                   },
                 ]}

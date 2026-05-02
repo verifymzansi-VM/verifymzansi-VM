@@ -40,7 +40,7 @@ export default function AuthError({
           <Button variant="outline" asChild>
             <Link href="/">
               <ShieldCheck className="h-4 w-4 mr-2" />
-              Go to Homepage
+              Go to homepage
             </Link>
           </Button>
         </div>
