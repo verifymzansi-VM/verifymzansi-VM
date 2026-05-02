@@ -348,12 +348,8 @@ export function isAdminUser(user: AuthUserRecord): boolean {
     user.app_metadata && typeof user.app_metadata.role === "string"
       ? user.app_metadata.role.toLowerCase()
       : null;
-  const userRole =
-    user.user_metadata && typeof user.user_metadata.role === "string"
-      ? user.user_metadata.role.toLowerCase()
-      : null;
 
-  return appRole === "admin" || userRole === "admin";
+  return appRole === "admin";
 }
 
 function describeUser(user: AuthUserRecord): string {

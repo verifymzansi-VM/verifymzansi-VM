@@ -13,8 +13,14 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-/** Only allow these roles to be synced from user_metadata → app_metadata */
-const ALLOWED_ROLES = new Set(["user", "agent", "admin"]);
+function readRole(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== "object") {
+    return null;
+  }
+
+  const role = (metadata as Record<string, unknown>).role;
+  return typeof role === "string" && role.trim() ? role.trim().toLowerCase() : null;
+}
 
 async function main() {
   let page = 1;
@@ -41,28 +47,16 @@ async function main() {
     }
 
     for (const user of users) {
-      const role = user.user_metadata?.role;
+      const appRole = readRole(user.app_metadata);
+      const legacyUserRole = readRole(user.user_metadata);
 
-      // Guard: skip invalid / disallowed roles
-      if (!role || typeof role !== "string" || !ALLOWED_ROLES.has(role)) {
-        if (role && !ALLOWED_ROLES.has(role)) {
-          console.warn(`  ⚠ Skipping ${user.email}: disallowed role "${role}"`);
-        }
+      if (!legacyUserRole || appRole === legacyUserRole) {
         continue;
       }
 
-      if (user.app_metadata?.role !== role) {
-        console.log(`Fixing user ${user.email} (role: ${role})...`);
-        const { error: updateError } = await supabase.auth.admin.updateUserById(user.id, {
-          app_metadata: { ...user.app_metadata, role },
-        });
-        if (updateError) {
-          console.error(`  ✗ Failed to update ${user.email}`, updateError);
-        } else {
-          console.log(`  ✓ Updated ${user.email}`);
-          totalFixed++;
-        }
-      }
+      console.warn(
+        `Skipping ${user.email ?? user.id}: refusing to sync user_metadata.role="${legacyUserRole}" into app_metadata`
+      );
     }
 
     // If we got fewer than perPage, we've reached the last page
@@ -72,7 +66,7 @@ async function main() {
     page++;
   }
 
-  console.log(`Done. Fixed ${totalFixed} user(s).`);
+  process.stdout.write(`Done. Fixed ${totalFixed} user(s).\n`);
 }
 
 main().catch((err) => {

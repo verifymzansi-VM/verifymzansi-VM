@@ -284,7 +284,6 @@ async function main(): Promise<void> {
   const existingUser = await findUserByEmail(admin, email);
   const userMetadata = {
     display_name: displayName,
-    role: args.role,
   };
   const appMetadata = {
     role: args.role,

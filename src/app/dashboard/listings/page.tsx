@@ -2,7 +2,7 @@ import React, { Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Eye, ExternalLink, Megaphone, Pencil, Plus, XCircle, Package } from "lucide-react";
+import { Eye, ExternalLink, Pencil, Plus, XCircle, Package } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/layout/page-header";
@@ -17,6 +17,7 @@ import { FeaturedButton } from "@/components/listings/featured-button";
 import { UrgentButton } from "@/components/listings/urgent-button";
 import { ResubmitButton } from "@/components/listings/resubmit-button";
 import { DeletePostButton } from "@/components/listings/delete-post-button";
+import { PostAccountButton } from "@/components/listings/post-account-button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AreaFilter } from "@/components/dashboard/area-filter";
 import {
@@ -663,17 +664,11 @@ function ListingList({
               />
               {listing.source === "business" &&
                 (listing.status === "active" || listing.status === "live") && (
-                  <Button
-                    asChild
-                    variant="ghost"
-                    size="icon"
-                    className="h-11 w-11"
-                    aria-label={`Promote ${listing.title}`}
-                  >
-                    <Link href={`/post/create-tourism?business_id=${listing.id}`}>
-                      <Megaphone className="h-3.5 w-3.5" />
-                    </Link>
-                  </Button>
+                  <PostAccountButton
+                    accountTitle={listing.title}
+                    area="PROMOTIONS_EVENTS"
+                    postHref={`/post/create-tourism?business_id=${listing.id}`}
+                  />
                 )}
               <Button asChild variant="ghost" size="sm" className="h-11 gap-1.5 px-3">
                 <Link href={getViewHref(listing)} target="_blank" rel="noopener noreferrer">

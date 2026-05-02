@@ -29,6 +29,16 @@ describe("reset-launch-data script", () => {
     expect(isAdminUser(makeUser("member-1", "user@example.com", "member"))).toBe(false);
   });
 
+  it("does not trust user metadata for admin preservation", () => {
+    expect(
+      isAdminUser(
+        makeUser("member-1", "user@example.com", null, {
+          user_metadata: { role: "admin" },
+        })
+      )
+    ).toBe(false);
+  });
+
   it("preserves the sole admin automatically", () => {
     const admin = makeUser("admin-1", "admin@example.com", "admin");
     const member = makeUser("user-1", "user@example.com", "member");
