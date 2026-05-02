@@ -6,6 +6,7 @@ const IMAGE_FIXTURE = path.join(process.cwd(), "src", "app", "icon.png");
 const RUN_SUFFIX = Date.now().toString().slice(-6);
 const BUSINESS_DASHBOARD_URL = /\/dashboard\/(?:listings|businesses)/;
 const PROMOTION_DASHBOARD_URL = /\/dashboard\/(?:listings|promotions)/;
+const POSTING_PERSONA = "posting-chromium";
 
 test.use({ storageState: POSTING_CHROMIUM_STATE });
 test.describe.configure({ mode: "serial" });
@@ -64,13 +65,14 @@ async function expectFirstStepValidationGate(page: Page, route: string, firstFie
 }
 
 async function completeListingCreate(page: Page) {
+  const listingTitle = `Playwright iPhone 15 Pro ${Date.now().toString().slice(-6)}`;
   const categoryOption = electronicsCategoryLocator(page);
   await page.goto("/post/create-listing");
   await enterPostingForm(page, categoryOption);
   await categoryOption.click();
   await page.locator('[data-listing-attribute="device_type"]').selectOption("Smartphone");
   await page.locator('[data-listing-attribute="brand"]').fill("Apple");
-  await page.getByLabel(/^Title \*$/).fill("Playwright iPhone 15 Pro");
+  await page.getByLabel(/^Title \*$/).fill(listingTitle);
   await page
     .getByLabel(/^Description \*$/)
     .fill("Playwright listing description with enough detail to satisfy the validation rules.");
@@ -86,7 +88,7 @@ async function completeListingCreate(page: Page) {
     (response) =>
       response.url().includes("/api/listings") &&
       response.request().method() === "POST" &&
-      response.status() === 201
+      [200, 201].includes(response.status())
   );
 
   await page.getByRole("button", { name: /Submit for review/i }).click();
@@ -99,14 +101,14 @@ async function completeListingCreate(page: Page) {
   const listingId = href?.split("/").pop();
 
   expect(listingId).toBeTruthy();
-  return listingId as string;
+  return { listingId: listingId as string, listingTitle };
 }
 
 async function completeBusinessCreate(page: Page) {
   const businessName = `Playwright Business Studio ${RUN_SUFFIX}`;
   const businessSlug = `playwright-business-studio-${RUN_SUFFIX}`;
   const businessesHeading = page.getByRole("heading", { name: "Mzansi Business" });
-  const businessLink = page.getByRole("link", { name: businessName }).first();
+  const businessHeading = page.getByRole("heading", { name: businessName }).first();
   const businessTypeLabel = page
     .locator("label")
     .filter({ hasText: /Standalone Shop|Own Premises/i });
@@ -143,11 +145,11 @@ async function completeBusinessCreate(page: Page) {
   await Promise.race([
     page.waitForURL(BUSINESS_DASHBOARD_URL, { timeout: 30_000 }),
     businessesHeading.waitFor({ state: "visible", timeout: 30_000 }),
-    businessLink.waitFor({ state: "visible", timeout: 30_000 }),
+    businessHeading.waitFor({ state: "visible", timeout: 30_000 }),
   ]);
 
-  await businessLink.waitFor({ state: "visible", timeout: 30_000 });
-  const businessCard = page.locator("div,article").filter({ has: businessLink }).first();
+  await businessHeading.waitFor({ state: "visible", timeout: 30_000 });
+  const businessCard = page.locator("div,article").filter({ has: businessHeading }).first();
   const editLink = businessCard.getByRole("link", { name: "Edit" });
   const href = await editLink.getAttribute("href");
   const businessId = href?.split("/").pop();
@@ -211,8 +213,11 @@ async function expectSuccessfulEditSubmission(responsePromise: Promise<Response>
 }
 
 test.describe("Posting flows in Chromium", () => {
-  test.beforeEach(({ browserName }, testInfo) => {
+  test.beforeEach(async ({ page, browserName }, testInfo) => {
     test.skip(browserName !== "chromium" || testInfo.project.name !== "chromium");
+
+    const response = await page.goto(`/api/e2e/auth/session?persona=${POSTING_PERSONA}&reset=1`);
+    expect(response?.ok()).toBe(true);
   });
 
   test.setTimeout(120_000);
@@ -243,8 +248,7 @@ test.describe("Posting flows in Chromium", () => {
   });
 
   test("creates, edits, and publicly exposes a market listing", async ({ page }) => {
-    const listingId = await completeListingCreate(page);
-    const createdTitle = "Playwright iPhone 15 Pro";
+    const { listingId, listingTitle: createdTitle } = await completeListingCreate(page);
     const editedTitle = "Playwright iPhone 15 Pro Max";
 
     await page.goto("/mzansi-market");

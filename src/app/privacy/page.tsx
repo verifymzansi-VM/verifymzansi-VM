@@ -168,7 +168,12 @@ export default function PrivacyPolicyPage() {
                   </span>
                   Sensitive Data Handling
                 </h2>
-                <div className="overflow-x-auto pl-0 sm:pl-6">
+                <div
+                  className="overflow-x-auto pl-0 sm:pl-6"
+                  role="region"
+                  aria-label="Sensitive data handling table"
+                  tabIndex={0}
+                >
                   <table className="w-full min-w-[720px] border-collapse text-left text-xs">
                     <thead>
                       <tr className="border-b bg-muted/50 text-foreground">

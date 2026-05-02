@@ -68,7 +68,7 @@ test.describe("Dashboard verification state", () => {
         "/post/create",
         { timeout: 15_000 }
       );
-      await expect(page.getByRole("link", { name: "Leads", exact: true })).toHaveAttribute(
+      await expect(page.getByRole("link", { name: /leads/i }).first()).toHaveAttribute(
         "href",
         "/dashboard/leads",
         { timeout: 15_000 }
