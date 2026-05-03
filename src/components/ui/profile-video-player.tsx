@@ -42,7 +42,7 @@ interface ProfileVideoPlayerProps {
 }
 
 function getMediaFitClassName(mediaFit: "contain" | "cover") {
-  return mediaFit === "contain" ? "object-contain bg-black" : "object-cover";
+  return mediaFit === "contain" ? "object-contain" : "object-cover";
 }
 
 function formatSeconds(seconds: number): string {
@@ -156,11 +156,19 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
       if (!video) return;
       if (video.paused) {
         isPausedByUserRef.current = false;
+        if (video.ended && Number.isFinite(video.duration)) {
+          video.currentTime = 0;
+          setCurrentTime(0);
+        }
         manager.requestPriority(video);
+        video.play().catch(() => {
+          /* Browser autoplay policy can still reject; keep the visible play affordance. */
+        });
         return;
       }
       isPausedByUserRef.current = true;
       video.pause();
+      manager.updateVisibility(video, 0);
       manager.releasePriority(video);
     }, [manager]);
 
@@ -297,25 +305,40 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
             </div>
           </div>
         ) : (
-          <video
-            key={retryKey}
-            ref={localVideoRef}
-            src={src}
-            poster={poster}
-            muted
-            loop={loop}
-            playsInline
-            onLoadedMetadata={handleLoadedMetadata}
-            onTimeUpdate={handleTimeUpdate}
-            onDurationChange={handleLoadedMetadata}
-            onPlay={() => setIsPlaying(true)}
-            onPause={() => setIsPlaying(false)}
-            onError={handleVideoError}
-            className={cn("absolute inset-0 h-full w-full", mediaFitClassName, videoClassName)}
-            aria-label={`${title} video`}
-          >
-            <track kind="captions" />
-          </video>
+          <>
+            {poster && mediaFit === "contain" ? (
+              <>
+                <Image
+                  src={poster}
+                  alt=""
+                  aria-hidden="true"
+                  fill
+                  className="absolute inset-0 scale-110 object-cover opacity-75 blur-2xl brightness-75"
+                  sizes="100vw"
+                />
+                <div className="absolute inset-0 bg-black/35" aria-hidden="true" />
+              </>
+            ) : null}
+            <video
+              key={retryKey}
+              ref={localVideoRef}
+              src={src}
+              poster={poster}
+              muted
+              loop={loop}
+              playsInline
+              onLoadedMetadata={handleLoadedMetadata}
+              onTimeUpdate={handleTimeUpdate}
+              onDurationChange={handleLoadedMetadata}
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
+              onError={handleVideoError}
+              className={cn("absolute inset-0 h-full w-full", mediaFitClassName, videoClassName)}
+              aria-label={`${title} video`}
+            >
+              <track kind="captions" />
+            </video>
+          </>
         )}
 
         {!videoError && !isPlaying && (

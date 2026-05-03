@@ -4,6 +4,8 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   Eye,
   Globe,
   MapPin,
@@ -231,12 +233,17 @@ function MediaColumn({
   const activeMedia = heroMediaItems[activeMediaIndex] ?? null;
   const canPrevious = activeMediaIndex > 0;
   const canNext = activeMediaIndex < heroMediaItems.length - 1;
+  const goToPreviousMedia = useCallback(() => {
+    setActiveMediaIndex((current) => Math.max(current - 1, 0));
+  }, []);
+  const goToNextMedia = useCallback(() => {
+    setActiveMediaIndex((current) => Math.min(current + 1, heroMediaItems.length - 1));
+  }, [heroMediaItems.length]);
   const swipeHandlers = useHorizontalSwipeNavigation({
     canPrevious,
     canNext,
-    onPrevious: () => setActiveMediaIndex((current) => Math.max(current - 1, 0)),
-    onNext: () =>
-      setActiveMediaIndex((current) => Math.min(current + 1, heroMediaItems.length - 1)),
+    onPrevious: goToPreviousMedia,
+    onNext: goToNextMedia,
   });
 
   const columnWidthClass =
@@ -288,7 +295,7 @@ function MediaColumn({
                 poster={activeMedia.poster}
                 title={business.business_name}
                 mediaFit="contain"
-                videoClassName="bg-slate-950 object-contain"
+                videoClassName="object-contain"
                 skipSeconds={10}
                 showErrorState
               />
@@ -301,9 +308,18 @@ function MediaColumn({
               >
                 <Image
                   src={activeMedia.url}
+                  alt=""
+                  aria-hidden="true"
+                  fill
+                  className="absolute inset-0 scale-110 object-cover opacity-75 blur-2xl brightness-75"
+                  sizes="(max-width: 1024px) 78vw, 420px"
+                />
+                <div className="absolute inset-0 bg-black/35" aria-hidden="true" />
+                <Image
+                  src={activeMedia.url}
                   alt={`${business.business_name} hero`}
                   fill
-                  className="bg-slate-950 object-contain"
+                  className="object-contain"
                   priority
                   sizes="(max-width: 1024px) 78vw, 420px"
                 />
@@ -351,6 +367,31 @@ function MediaColumn({
                 </div>
               </div>
             )}
+
+            {heroMediaItems.length > 1 ? (
+              <>
+                <button
+                  type="button"
+                  onClick={goToPreviousMedia}
+                  disabled={!canPrevious}
+                  className="absolute left-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/50 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/70 disabled:pointer-events-none disabled:opacity-35"
+                  aria-label="Previous media"
+                  data-carousel-control="true"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={goToNextMedia}
+                  disabled={!canNext}
+                  className="absolute right-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/50 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/70 disabled:pointer-events-none disabled:opacity-35"
+                  aria-label="Next media"
+                  data-carousel-control="true"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+              </>
+            ) : null}
           </div>
         </div>
       </div>
@@ -375,7 +416,7 @@ function MediaColumn({
                       src={item.poster}
                       alt="Profile video thumbnail"
                       fill
-                      className="bg-slate-950 object-contain transition-transform group-hover:scale-105"
+                      className="object-cover transition-transform group-hover:scale-105"
                       sizes="80px"
                     />
                   ) : (
@@ -395,7 +436,7 @@ function MediaColumn({
                   src={item.url}
                   alt={`${business.business_name} ${item.label}`}
                   fill
-                  className="bg-slate-950 object-contain"
+                  className="object-cover"
                   sizes="80px"
                 />
               )}

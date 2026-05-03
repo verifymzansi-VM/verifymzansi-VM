@@ -6,6 +6,16 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ProfileVideoPlayer } from "./profile-video-player";
 
+const managerMock = vi.hoisted(() => ({
+  register: vi.fn(),
+  unregister: vi.fn(),
+  updateVisibility: vi.fn(),
+  requestPriority: vi.fn(),
+  releasePriority: vi.fn(),
+  claimExclusive: vi.fn(),
+  releaseExclusive: vi.fn(),
+}));
+
 vi.mock("next/image", () => ({
   default: ({
     src,
@@ -29,15 +39,7 @@ vi.mock("@/hooks/use-global-mute", () => ({
 }));
 
 vi.mock("@/contexts/video-playback-context", () => ({
-  useVideoPlaybackManager: () => ({
-    register: vi.fn(),
-    unregister: vi.fn(),
-    updateVisibility: vi.fn(),
-    requestPriority: vi.fn(),
-    releasePriority: vi.fn(),
-    claimExclusive: vi.fn(),
-    releaseExclusive: vi.fn(),
-  }),
+  useVideoPlaybackManager: () => managerMock,
 }));
 
 vi.mock("@/hooks/use-reduced-motion", () => ({
@@ -48,6 +50,8 @@ describe("ProfileVideoPlayer", () => {
   let requestFullscreenMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    vi.clearAllMocks();
+
     class CompactResizeObserver {
       constructor(private callback: ResizeObserverCallback) {}
 
@@ -85,5 +89,44 @@ describe("ProfileVideoPlayer", () => {
     expect(requestFullscreenMock).toHaveBeenCalledWith();
     expect(video).toBeInTheDocument();
     expect(video).toHaveClass("object-contain");
+  });
+
+  it("resumes playback after a manual pause", () => {
+    render(<ProfileVideoPlayer src="/video.mp4" title="Profile clip" poster="/poster.jpg" />);
+
+    const video = screen.getByLabelText("Profile clip video") as HTMLVideoElement;
+    let paused = false;
+    Object.defineProperty(video, "paused", {
+      configurable: true,
+      get: () => paused,
+    });
+    Object.defineProperty(video, "ended", {
+      configurable: true,
+      get: () => false,
+    });
+
+    const playMock = vi.fn(() => {
+      paused = false;
+      fireEvent.play(video);
+      return Promise.resolve();
+    });
+    const pauseMock = vi.fn(() => {
+      paused = true;
+      fireEvent.pause(video);
+    });
+    video.play = playMock;
+    video.pause = pauseMock;
+
+    fireEvent.play(video);
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+
+    expect(pauseMock).toHaveBeenCalled();
+    expect(managerMock.updateVisibility).toHaveBeenCalledWith(video, 0);
+    expect(managerMock.releasePriority).toHaveBeenCalledWith(video);
+
+    fireEvent.click(screen.getByRole("button", { name: "Play video" }));
+
+    expect(managerMock.requestPriority).toHaveBeenCalledWith(video);
+    expect(playMock).toHaveBeenCalled();
   });
 });

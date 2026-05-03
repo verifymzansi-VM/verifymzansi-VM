@@ -180,6 +180,58 @@ describe("UnifiedLayout", () => {
     expect(screen.getByRole("button", { name: "View photo 1" })).toBeInTheDocument();
   });
 
+  it("shows visible media navigation controls for profile galleries", () => {
+    render(
+      <UnifiedLayout
+        family="showroom"
+        business={business}
+        trustLevel={null}
+        ownerProfile={null as BusinessOwnerRecord | null}
+        promotions={[] as BusinessPromotionRecord[]}
+        showPromotions={false}
+        showPublicActions
+        galleryPhotos={business.gallery_photos ?? []}
+        deliveryAvailable={false}
+      />
+    );
+
+    const previousButton = screen.getByRole("button", { name: "Previous media" });
+    const nextButton = screen.getByRole("button", { name: "Next media" });
+
+    expect(previousButton).toBeDisabled();
+    expect(nextButton).toBeEnabled();
+
+    fireEvent.click(nextButton);
+
+    expect(previousButton).toBeEnabled();
+    expect(screen.getByAltText("Unified Studio logo")).toBeInTheDocument();
+  });
+
+  it.each(["showroom", "professional", "tourism"] as const)(
+    "keeps media navigation controls visible for %s profiles",
+    (family) => {
+      render(
+        <UnifiedLayout
+          family={family}
+          business={{
+            ...business,
+            category: family === "tourism" ? "tourism_hospitality" : business.category,
+          }}
+          trustLevel={null}
+          ownerProfile={null as BusinessOwnerRecord | null}
+          promotions={[] as BusinessPromotionRecord[]}
+          showPromotions={false}
+          showPublicActions
+          galleryPhotos={business.gallery_photos ?? []}
+          deliveryAvailable={false}
+        />
+      );
+
+      expect(screen.getByRole("button", { name: "Previous media" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Next media" })).toBeInTheDocument();
+    }
+  );
+
   it("renders review mode without the sticky contact bar", () => {
     const { container } = render(
       <UnifiedLayout
