@@ -1,5 +1,7 @@
 export type EmailTone = "success" | "info" | "warning" | "danger" | "neutral";
 
+import { SUPPORT_CONTACT_EMAIL } from "@/lib/contact-email";
+
 interface EmailCta {
   label: string;
   href: string;
@@ -19,7 +21,7 @@ interface BrandedEmailParams {
 }
 
 const BRAND_NAME = "VerifyMzansi";
-const SUPPORT_EMAIL = "support@verifymzansi.com";
+const SUPPORT_EMAIL = SUPPORT_CONTACT_EMAIL;
 const DEFAULT_APP_URL = "https://verifymzansi.com";
 
 const toneColors: Record<EmailTone, { accent: string; accentDark: string; soft: string }> = {

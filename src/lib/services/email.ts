@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { SUPPORT_CONTACT_EMAIL } from "@/lib/contact-email";
 import { createLogger } from "@/lib/utils/logger";
 import {
   brandedEmail,
@@ -23,7 +24,7 @@ function getResend(): Resend {
 }
 
 const FROM_EMAIL = "VerifyMzansi <noreply@verifymzansi.com>";
-const REPLY_TO = "support@verifymzansi.com";
+const REPLY_TO = process.env.VERIFYMZANSI_SUPPORT_EMAIL?.trim() || SUPPORT_CONTACT_EMAIL;
 
 interface SendEmailParams {
   to: string;

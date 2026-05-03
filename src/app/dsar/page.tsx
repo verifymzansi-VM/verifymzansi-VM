@@ -11,6 +11,7 @@ import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
+import { PRIVACY_CONTACT_EMAIL } from "@/lib/contact-email";
 import { saIdSchema } from "@/lib/validations/shared";
 
 type RequestType = "access" | "correction" | "deletion" | "objection";
@@ -26,7 +27,7 @@ function formatDsarSubmissionFailure(payload: DsarFailurePayload | null): string
   ].filter(Boolean);
 
   const suffix = identifiers.length > 0 ? ` ${identifiers.join(" | ")}` : "";
-  return `Please try again or email privacy@verifymzansi.com.${suffix}`;
+  return `Please try again or email ${PRIVACY_CONTACT_EMAIL}.${suffix}`;
 }
 
 export default function DsarPage() {
@@ -100,7 +101,7 @@ export default function DsarPage() {
         description:
           err instanceof Error
             ? err.message
-            : "Please try again or email privacy@verifymzansi.com.",
+            : `Please try again or email ${PRIVACY_CONTACT_EMAIL}.`,
         variant: "destructive",
       });
     } finally {

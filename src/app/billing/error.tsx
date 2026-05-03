@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SUPPORT_CONTACT_EMAIL } from "@/lib/contact-email";
 
 export default function BillingError({
   error,
@@ -24,8 +25,8 @@ export default function BillingError({
         <p className="text-muted-foreground max-w-md">
           Something went wrong with billing. Your payment has not been processed. Please try again
           or contact support at{" "}
-          <Link href="mailto:support@verifymzansi.com" className="text-brand-green underline">
-            support@verifymzansi.com
+          <Link href={`mailto:${SUPPORT_CONTACT_EMAIL}`} className="text-brand-green underline">
+            {SUPPORT_CONTACT_EMAIL}
           </Link>
           .
         </p>

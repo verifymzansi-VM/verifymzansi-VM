@@ -1,5 +1,11 @@
 import "server-only";
 
+import {
+  PRIVACY_CONTACT_EMAIL,
+  SECURITY_CONTACT_EMAIL,
+  SUPPORT_CONTACT_EMAIL,
+} from "@/lib/contact-email";
+
 export interface TrustPublicConfig {
   legalName?: string;
   tradingName?: string;
@@ -86,18 +92,18 @@ export function getTrustPublicConfig(): TrustPublicConfig {
     ),
     informationOfficerEmail: envOrDefault(
       "VERIFYMZANSI_INFORMATION_OFFICER_EMAIL",
-      "privacy@verifymzansi.com"
+      PRIVACY_CONTACT_EMAIL
     ),
     informationOfficerPhone: envOrDefault("VERIFYMZANSI_INFORMATION_OFFICER_PHONE", "0717484185"),
     informationOfficerWhatsapp: envOrDefault(
       "VERIFYMZANSI_INFORMATION_OFFICER_WHATSAPP",
       "0717484185"
     ),
-    supportEmail: envOrDefault("VERIFYMZANSI_SUPPORT_EMAIL", "support@verifymzansi.com"),
+    supportEmail: envOrDefault("VERIFYMZANSI_SUPPORT_EMAIL", SUPPORT_CONTACT_EMAIL),
     supportPhone:
       optionalEnv("VERIFYMZANSI_SUPPORT_PHONE") ??
       optionalEnv("VERIFYMZANSI_INFORMATION_OFFICER_PHONE"),
-    securityEmail: envOrDefault("VERIFYMZANSI_SECURITY_EMAIL", "security@verifymzansi.com"),
+    securityEmail: envOrDefault("VERIFYMZANSI_SECURITY_EMAIL", SECURITY_CONTACT_EMAIL),
     ozowMerchantName: envOrDefault("VERIFYMZANSI_OZOW_MERCHANT_NAME", "VerifyMzansi"),
     vatStatus: optionalEnv("VERIFYMZANSI_VAT_STATUS") ?? "VAT number not currently published",
   };

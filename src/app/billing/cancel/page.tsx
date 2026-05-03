@@ -4,6 +4,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { resolveCurrentUserPaymentStatus } from "@/lib/payments/resolve-payment-status";
 import type { PaymentStatusView } from "@/lib/payments/status-view";
+import { SUPPORT_CONTACT_EMAIL } from "@/lib/contact-email";
 
 export const metadata = {
   title: "Payment Status",
@@ -71,10 +72,10 @@ export default async function BillingCancelPage({
           <p className="text-xs text-muted-foreground">
             Need help? Contact{" "}
             <a
-              href="mailto:support@verifymzansi.com"
+              href={`mailto:${SUPPORT_CONTACT_EMAIL}`}
               className="rounded-sm text-brand-green underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              support@verifymzansi.com
+              {SUPPORT_CONTACT_EMAIL}
             </a>
           </p>
         </PaymentStatusResult>

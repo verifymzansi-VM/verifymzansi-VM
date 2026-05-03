@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   ArrowLeft,
 } from "lucide-react";
+import { SUPPORT_CONTACT_EMAIL } from "@/lib/contact-email";
 
 export const metadata: Metadata = {
   title: "Verification Help | VerifyMzansi",
@@ -267,8 +268,8 @@ export default function VerificationHelpPage() {
         <p className="text-sm font-medium mb-1">Still having trouble?</p>
         <p className="text-xs text-muted-foreground">
           Contact us at{" "}
-          <a href="mailto:support@verifymzansi.com" className="underline">
-            support@verifymzansi.com
+          <a href={`mailto:${SUPPORT_CONTACT_EMAIL}`} className="underline">
+            {SUPPORT_CONTACT_EMAIL}
           </a>{" "}
           and include your registered phone number.
         </p>

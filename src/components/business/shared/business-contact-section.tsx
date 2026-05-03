@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { SUPPORT_CONTACT_EMAIL } from "@/lib/contact-email";
 import { safeExternalHref } from "@/lib/utils/sanitize-html";
 import type { BusinessDetailRecord } from "@/components/business/business-detail-content";
 
@@ -105,7 +106,7 @@ export function BusinessContactSection({
 
         {!business.phone && !business.whatsapp && !business.email && (
           <a
-            href={`mailto:support@verifymzansi.com?subject=Enquiry about ${encodeURIComponent(
+            href={`mailto:${SUPPORT_CONTACT_EMAIL}?subject=Enquiry about ${encodeURIComponent(
               business.business_name
             )}&body=Hi, I found ${encodeURIComponent(
               business.business_name

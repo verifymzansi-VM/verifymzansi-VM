@@ -79,6 +79,8 @@
     "cloudflare:posture:strict": "node scripts/cloudflare-posture-check.mjs --strict",
     "cloudflare:posture:strict:zone": "node scripts/cloudflare-posture-check.mjs --strict \"--strict-checks=Health endpoint,HSTS,DNSSEC DS record,www hostname behavior\"",
     "cloudflare:posture:json": "node scripts/cloudflare-posture-check.mjs --json",
+    "cloudflare:email-routing:catch-all": "node scripts/cloudflare-email-routing-catch-all.mjs",
+    "email:domain:check": "node scripts/email-domain-readiness-check.mjs",
     "cloudflare:zone:remediate": "node scripts/cloudflare-zone-remediate.mjs",
     "validate:launch-env": "tsx scripts/validate-launch-env.ts --mode=production",
     "ozow:webhook:secret": "node scripts/fetch-ozow-webhook-secret.mjs",

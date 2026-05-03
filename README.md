@@ -262,6 +262,33 @@ pnpm wrangler secret put OZOW_WEBHOOK_SECRET
 | `pnpm secret-scan`                                                                     | Secret leak scan                                     |
 | `pnpm licenses:check`                                                                  | License policy gate                                  |
 | `pnpm build:cloudflare`                                                                | OpenNext Cloudflare build                            |
+| `pnpm email:domain:check`                                                              | Public DNS check for Gmail-backed domain email       |
+
+## Domain Email Via Gmail
+
+Keep the public addresses branded on `@verifymzansi.com` and use Gmail only as
+the mailbox behind them.
+
+- Inbound receive path: Cloudflare Email Routing catch-all or explicit aliases
+  forward to `verifymzansi2s@gmail.com`
+- Public aliases to keep in the app: `hello@verifymzansi.com`,
+  `support@verifymzansi.com`, `privacy@verifymzansi.com`,
+  `security@verifymzansi.com`
+- App/runtime overrides live in `.env.example` and `cloudflare-env-vars.txt`
+
+Detailed operator steps are documented in `docs/domain-email-gmail-setup.md`.
+
+Run the public DNS readiness check with:
+
+```bash
+pnpm email:domain:check
+```
+
+Use `--strict` to fail on warnings too:
+
+```bash
+pnpm email:domain:check -- --strict
+```
 
 ## Billing API Endpoints
 

@@ -33,6 +33,7 @@ import { ReportDialog } from "@/components/shared/report-dialog";
 import { BusinessGallery } from "@/components/listings/business-gallery";
 import { BusinessPromoVideo } from "@/components/listings/business-promo-video";
 import { PromotionCard } from "@/components/listings/promotion-card";
+import { SUPPORT_CONTACT_EMAIL } from "@/lib/contact-email";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { safeExternalHref } from "@/lib/utils/sanitize-html";
 import {
@@ -214,7 +215,7 @@ function ContactCard({
 
           {!business.phone && !business.whatsapp && !business.email && (
             <a
-              href={`mailto:support@verifymzansi.com?subject=Enquiry about ${encodeURIComponent(
+              href={`mailto:${SUPPORT_CONTACT_EMAIL}?subject=Enquiry about ${encodeURIComponent(
                 business.business_name
               )}&body=Hi, I found ${encodeURIComponent(
                 business.business_name

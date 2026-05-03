@@ -14,6 +14,7 @@ import { TurnstileWidget } from "@/components/ui/turnstile-widget";
 import { useToast } from "@/hooks/use-toast";
 import { getPublicRuntimeConfig } from "@/lib/public-runtime-config";
 import { OfficialSocialLinks } from "@/components/shared/official-social-links";
+import { SUPPORT_CONTACT_EMAIL } from "@/lib/contact-email";
 
 const contactCategories = [
   {
@@ -113,7 +114,7 @@ export default function ContactPage() {
       toast({
         title: "Failed to send message",
         description:
-          err instanceof Error ? err.message : "Please try again or email support@verifymzansi.com",
+          err instanceof Error ? err.message : `Please try again or email ${SUPPORT_CONTACT_EMAIL}`,
         variant: "destructive",
       });
     } finally {
