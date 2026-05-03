@@ -90,7 +90,7 @@ const TYPE_FALLBACK_MEDIA: Record<CarouselItem["type"], string> = {
 
 const CARD_W = "showroom-card-frame";
 const SECTION_SPACING =
-  "pt-0 pb-2 sm:pt-0 sm:pb-4 md:pt-4 md:pb-8 lg:min-h-[clamp(27rem,58vh,36rem)] lg:py-8";
+  "pt-0 pb-8 sm:pt-0 sm:pb-10 md:pt-4 md:pb-12 lg:min-h-[clamp(31rem,64vh,42rem)] lg:py-10";
 const SECTION_SURFACE = "bg-[linear-gradient(180deg,#f8f5ec_0%,#f1e8da_48%,#e8decd_100%)]";
 
 function getBackgroundOverlayClasses(preset: ShowroomBackgroundOverlayPreset = "market") {
@@ -268,7 +268,7 @@ export function ShowroomCardCarousel({
   const pausedRef = useRef(false);
   const pauseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isVisible, setIsVisible] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
+  const [, setIsPaused] = useState(false);
 
   /* ── Drag / pointer state ──────────────────────────────── */
   const [isDragging, setIsDragging] = useState(false);
@@ -844,7 +844,7 @@ export function ShowroomCardCarousel({
       <div
         ref={coverflowRef}
         className={cn(
-          "relative mx-auto max-w-[1680px] overflow-x-clip overflow-y-visible select-none touch-pan-y pb-0 [perspective:1200px] lg:flex lg:min-h-[clamp(24rem,54vh,34rem)] lg:items-center lg:pb-0",
+          "relative mx-auto max-w-[1680px] overflow-x-clip overflow-y-visible select-none touch-pan-y pb-4 [perspective:1200px] sm:pb-6 md:pb-8 lg:flex lg:min-h-[clamp(28rem,60vh,39rem)] lg:items-center lg:pb-2",
           isDragging ? "cursor-grabbing" : "cursor-grab"
         )}
         onPointerDown={handlePointerDown}
@@ -937,50 +937,6 @@ export function ShowroomCardCarousel({
         })}
       </div>
 
-      {/* Navigation dots with progress indicator */}
-      {count > 1 && (
-        <div
-          className="absolute inset-x-0 bottom-2 z-20 flex items-center justify-center gap-1.5 lg:bottom-4"
-          role="group"
-          aria-label="Slide controls"
-        >
-          {carouselItems.map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => {
-                pauseAutoSwipe();
-                goTo(i);
-              }}
-              aria-label={`Go to slide ${i + 1}`}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full"
-            >
-              {i === displayIndex ? (
-                <span className="relative h-2 w-6 overflow-hidden rounded-full bg-white/25">
-                  <span
-                    key={displayIndex}
-                    className={cn(
-                      "absolute inset-y-0 left-0 rounded-full bg-brand-green-400",
-                      reducedMotion || isPaused
-                        ? "w-full"
-                        : activeIsVideo
-                          ? "w-full"
-                          : "animate-progress-fill"
-                    )}
-                    style={
-                      reducedMotion || isPaused || activeIsVideo
-                        ? undefined
-                        : ({ "--progress-fill-duration": `${imageDisplayMs}ms` } as CSSProperties)
-                    }
-                  />
-                </span>
-              ) : (
-                <span className="h-1.5 w-1.5 rounded-full bg-white/50 transition-all duration-300 hover:bg-white/90 sm:h-2 sm:w-2" />
-              )}
-            </button>
-          ))}
-        </div>
-      )}
       {/* Screen-reader live announcer */}
       {count > 1 && (
         <div className="sr-only" aria-live="polite" aria-atomic="true">

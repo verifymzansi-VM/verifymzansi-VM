@@ -154,10 +154,10 @@ describe("ShowroomCardCarousel", () => {
 
     expect(section.className).toContain("pt-0");
     expect(section.className).toContain("sm:pt-0");
-    expect(section.className).toContain("pb-2");
-    expect(section.className).toContain("sm:pb-4");
-    expect(section.className).toContain("lg:min-h-[clamp(27rem,58vh,36rem)]");
-    expect(section.className).toContain("lg:py-8");
+    expect(section.className).toContain("pb-8");
+    expect(section.className).toContain("sm:pb-10");
+    expect(section.className).toContain("lg:min-h-[clamp(31rem,64vh,42rem)]");
+    expect(section.className).toContain("lg:py-10");
   });
 
   it("uses larger mobile showroom card width while preserving desktop card sizing", () => {
@@ -181,16 +181,9 @@ describe("ShowroomCardCarousel", () => {
     expect(cards.length).toBeGreaterThanOrEqual(mockItems.length);
   });
 
-  it("renders navigation dots for multiple items", () => {
+  it("does not render visible navigation dots over showroom cards", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
-    const dots = screen.getAllByRole("button", { name: /go to slide/i });
-    expect(dots).toHaveLength(mockItems.length);
-  });
-
-  it("does not render navigation dots for single item", () => {
-    render(<ShowroomCardCarousel items={[mockItems[0]]} />);
-    const dots = screen.queryAllByRole("button", { name: /go to slide/i });
-    expect(dots).toHaveLength(0);
+    expect(screen.queryAllByRole("button", { name: /go to slide/i })).toHaveLength(0);
   });
 
   it("renders empty state when no items provided", () => {
@@ -202,7 +195,7 @@ describe("ShowroomCardCarousel", () => {
       node.className.includes("showroom-card-frame")
     );
     expect(section).toBeInTheDocument();
-    expect(section.className).toContain("lg:min-h-[clamp(27rem,58vh,36rem)]");
+    expect(section.className).toContain("lg:min-h-[clamp(31rem,64vh,42rem)]");
     expect(emptyStateCard).toBeDefined();
     expect(screen.getByText("No Items")).toBeInTheDocument();
     expect(screen.getByText("Nothing to show")).toBeInTheDocument();
@@ -247,21 +240,12 @@ describe("ShowroomCardCarousel", () => {
     expect(container.querySelector('[data-showroom-background="desktop"]')).toBeTruthy();
   });
 
-  it("navigates to next slide on dot click", () => {
-    render(<ShowroomCardCarousel items={mockItems} />);
-    const dots = screen.getAllByRole("button", { name: /go to slide/i });
-    fireEvent.click(dots[1]);
-    // Re-query after re-render to avoid stale DOM references
-    const updatedDots = screen.getAllByRole("button", { name: /go to slide/i });
-    expect(updatedDots[1].innerHTML).toContain("bg-brand-green");
-  });
-
   it("announces active slide changes via aria-live", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
     expect(screen.getByText("Slide 1 of 3")).toBeInTheDocument();
 
-    const dots = screen.getAllByRole("button", { name: /go to slide/i });
-    fireEvent.click(dots[2]);
+    const group = screen.getByLabelText(/carousel slides/i);
+    fireEvent.keyDown(group, { key: "ArrowLeft" });
 
     expect(screen.getByText("Slide 3 of 3")).toBeInTheDocument();
   });
@@ -270,8 +254,7 @@ describe("ShowroomCardCarousel", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
     const group = screen.getByLabelText(/carousel slides/i);
     fireEvent.keyDown(group, { key: "ArrowRight" });
-    const dots = screen.getAllByRole("button", { name: /go to slide/i });
-    expect(dots[1].innerHTML).toContain("bg-brand-green");
+    expect(screen.getByText("Slide 2 of 3")).toBeInTheDocument();
   });
 
   it("registers pointer event handlers on carousel area", () => {
@@ -293,8 +276,6 @@ describe("ShowroomCardCarousel", () => {
     fireEvent.pointerUp(group, { clientX: 120, pointerId: 1 });
 
     expect(screen.getByText("Slide 2 of 3")).toBeInTheDocument();
-    const dots = screen.getAllByRole("button", { name: /go to slide/i });
-    expect(dots[1].innerHTML).toContain("bg-brand-green");
   });
 
   it("keeps slot transforms anchored instead of using shared drag translation classes", () => {
@@ -314,8 +295,6 @@ describe("ShowroomCardCarousel", () => {
     fireEvent.pointerUp(group, { clientX: 250, pointerId: 1 });
 
     expect(screen.getByText("Slide 3 of 3")).toBeInTheDocument();
-    const dots = screen.getAllByRole("button", { name: /go to slide/i });
-    expect(dots[2].innerHTML).toContain("bg-brand-green");
   });
 
   it("snaps back to the same card after a short drag", () => {
@@ -327,8 +306,6 @@ describe("ShowroomCardCarousel", () => {
     fireEvent.pointerUp(group, { clientX: 216, pointerId: 1 });
 
     expect(screen.getByText("Slide 1 of 3")).toBeInTheDocument();
-    const dots = screen.getAllByRole("button", { name: /go to slide/i });
-    expect(dots[0].innerHTML).toContain("bg-brand-green");
   });
 
   it("supports drag gestures that begin on the nested active card link surface", () => {
@@ -481,13 +458,13 @@ describe("ShowroomCardCarousel", () => {
     expect(sideCards[0]).toHaveAttribute("data-media-url", "/images/fallbacks/hero-business.svg");
   });
 
-  it("relies on swipe gestures and dots rather than a separate mobile button row", () => {
+  it("relies on swipe and keyboard gestures rather than visible mobile button controls", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
     expect(
       screen.queryByRole("button", { name: /return to previous card/i })
     ).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /skip to next card/i })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /go to slide/i })).toHaveLength(mockItems.length);
+    expect(screen.queryAllByRole("button", { name: /go to slide/i })).toHaveLength(0);
   });
 
   it("renders an active card link to the detail page", () => {
