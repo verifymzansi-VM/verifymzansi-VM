@@ -144,6 +144,8 @@ describe("mapListingCategory", () => {
     expect(mapListingCategory("electronics")).toBe("electronics");
     expect(mapListingCategory("home_lifestyle")).toBe("home_lifestyle");
     expect(mapListingCategory("jobs_services")).toBe("jobs_services");
+    expect(mapListingCategory("farming_agriculture")).toBe("farming_agriculture");
+    expect(mapListingCategory("baby_kids")).toBe("baby_kids");
   });
 
   it("passes through unknown categories as-is", () => {
@@ -161,6 +163,8 @@ describe("mapDbCategoryToUi", () => {
     expect(mapDbCategoryToUi("jobs_services")).toBe("jobs_services");
     expect(mapDbCategoryToUi("property")).toBe("property");
     expect(mapDbCategoryToUi("home_lifestyle")).toBe("home_lifestyle");
+    expect(mapDbCategoryToUi("farming_agriculture")).toBe("farming_agriculture");
+    expect(mapDbCategoryToUi("baby_kids")).toBe("baby_kids");
   });
 
   it("passes through unknown DB categories as-is", () => {
