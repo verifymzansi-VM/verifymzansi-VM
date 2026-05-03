@@ -182,6 +182,18 @@ describe("compressVideo", () => {
     expect(mockExec).toHaveBeenCalled();
   });
 
+  it("loads the browser-compatible FFmpeg ESM core explicitly", async () => {
+    mockVideoMeta = { width: 1920, height: 1080, duration: 30 };
+    const file = fakeFile(10 * 1024 * 1024);
+
+    await compressVideo(file);
+
+    expect(mockLoad).toHaveBeenCalledWith({
+      coreURL: "https://unpkg.com/@ffmpeg/core@0.12.9/dist/esm/ffmpeg-core.js",
+      wasmURL: "https://unpkg.com/@ffmpeg/core@0.12.9/dist/esm/ffmpeg-core.wasm",
+    });
+  });
+
   it("does NOT skip when bitrate is high even at 720p", async () => {
     // 1280×720, 10s, 10 MB → ~8 Mbps (above 2 Mbps threshold)
     mockVideoMeta = { width: 1280, height: 720, duration: 10 };

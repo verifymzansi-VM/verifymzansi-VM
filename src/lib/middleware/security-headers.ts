@@ -43,6 +43,7 @@ export function buildCsp(
     "https://*.ingest.us.sentry.io",
     "https://challenges.cloudflare.com",
     "https://static.cloudflareinsights.com",
+    "https://unpkg.com",
     "https://*.r2.cloudflarestorage.com",
   ];
 
@@ -58,8 +59,8 @@ export function buildCsp(
   // explicit URL allowlists gives strong XSS protection while remaining
   // compatible with Cloudflare's infrastructure.
   const scriptSrc = nonce
-    ? `script-src 'self' 'nonce-${nonce}' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com`
-    : "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com";
+    ? `script-src 'self' 'nonce-${nonce}' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com https://unpkg.com`
+    : "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com https://unpkg.com";
   const styleSrc = nonce ? `style-src 'self' 'nonce-${nonce}'` : "style-src 'self' 'unsafe-inline'";
   const directives = [
     "default-src 'self'",

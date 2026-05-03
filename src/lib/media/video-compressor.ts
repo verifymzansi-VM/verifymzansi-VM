@@ -51,6 +51,7 @@ const DEFAULT_OPTIONS: Required<Omit<CompressionOptions, "onProgress" | "signal"
 };
 
 const WEB_UPLOAD_VIDEO_TYPES = new Set(["video/mp4", "video/webm"]);
+const FFMPEG_CORE_BASE_URL = "https://unpkg.com/@ffmpeg/core@0.12.9/dist/esm";
 
 /**
  * Read video dimensions using a temporary <video> element.
@@ -205,8 +206,12 @@ export async function compressVideo(
       );
     }
 
-    // Load FFmpeg (single-threaded — no SharedArrayBuffer needed)
-    await ffmpeg.load();
+    // Load single-threaded FFmpeg core explicitly. The default loader first
+    // tries the UMD build, which cannot be imported from FFmpeg's module worker.
+    await ffmpeg.load({
+      coreURL: `${FFMPEG_CORE_BASE_URL}/ffmpeg-core.js`,
+      wasmURL: `${FFMPEG_CORE_BASE_URL}/ffmpeg-core.wasm`,
+    });
 
     if (options.signal?.aborted) {
       ffmpeg.terminate();

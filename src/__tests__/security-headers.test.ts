@@ -87,7 +87,7 @@ describe("buildCsp", () => {
   it("uses nonce-based scripts with explicit URL allowlists when nonce provided", () => {
     const csp = buildCsp("abc123");
     expect(csp).toContain(
-      "script-src 'self' 'nonce-abc123' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com"
+      "script-src 'self' 'nonce-abc123' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com https://unpkg.com"
     );
     expect(csp).not.toContain("'strict-dynamic'");
     expect(csp).toContain("style-src 'self' 'nonce-abc123'");
@@ -129,6 +129,13 @@ describe("buildCsp", () => {
   it("includes Sentry ingest in connect-src", () => {
     const csp = buildCsp(null);
     expect(csp).toContain("https://*.ingest.us.sentry.io");
+  });
+
+  it("allows FFmpeg core downloads for client-side video compression", () => {
+    const csp = buildCsp(null);
+    expect(csp).toContain("connect-src");
+    expect(csp).toContain("https://unpkg.com");
+    expect(csp).toContain("script-src");
   });
 
   it("includes Cloudflare Turnstile in frame-src and script-src", () => {
