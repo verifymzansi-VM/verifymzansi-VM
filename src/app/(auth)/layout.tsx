@@ -3,7 +3,8 @@ import { BrandLogo } from "@/components/shared/brand-logo";
 
 export const metadata = {
   title: "Account",
-  description: "Sign in, register, or manage your VerifyMzansi account.",
+  description:
+    "Sign in or create a VerifyMzansi account to post marketplace listings, business services, tourism offers, venues, and events.",
   robots: { index: false, follow: false },
 };
 
@@ -21,7 +22,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             />
           </Link>
           <p className="text-lg text-muted-foreground">
-            South Africa&apos;s verification-first marketplace.
+            Post and manage trusted local listings, business services, tourism, and events.
           </p>
           <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground mt-4">
             <span className="flex items-center gap-1">

@@ -7,7 +7,7 @@ import { getTrustPublicConfig } from "@/lib/trust-public-config";
 export const metadata = {
   title: "Terms of Service",
   description:
-    "VerifyMzansi terms of service — rules, responsibilities, and usage policies for South Africa's verification-first marketplace.",
+    "VerifyMzansi terms of service for posting and browsing marketplace listings, business services, tourism offers, venues, and events in South Africa.",
 };
 
 export default function TermsPage() {

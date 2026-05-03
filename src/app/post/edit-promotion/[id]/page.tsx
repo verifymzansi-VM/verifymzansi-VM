@@ -593,7 +593,7 @@ export default function EditPromotionPage() {
                     ))}
                   </select>
                   <p className="text-xs text-muted-foreground">
-                    Links this promotion to a business profile.
+                    Links this event to a business profile.
                   </p>
                 </div>
               )}
@@ -1018,16 +1018,14 @@ export default function EditPromotionPage() {
               </div>
 
               <div className="rounded-xl border border-dashed border-brand-green/30 bg-brand-green/5 p-4">
-                <div className="mb-3 text-sm font-medium text-muted-foreground">
-                  Promotion preview
-                </div>
+                <div className="mb-3 text-sm font-medium text-muted-foreground">Event preview</div>
                 <PromotionDetailContent
                   promotion={{
                     id: promotionId,
                     owner_id: "preview-seller",
                     business_id: businessId || null,
-                    title: title || "Your promotion title",
-                    description: description || "Your promotion description will appear here.",
+                    title: title || "Your event title",
+                    description: description || "Your event description will appear here.",
                     promotion_type: promotionType,
                     category: category || null,
                     category_key: categoryKey || null,

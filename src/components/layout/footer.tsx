@@ -53,7 +53,7 @@ export function Footer() {
               <BrandLogo size="sm" />
             </Link>
             <p className="text-xs text-muted-foreground max-w-xs">
-              Mzansi&apos;s Proudly Trusted Market.
+              Find and post trusted local listings, services, tourism, and events in South Africa.
             </p>
           </div>
 

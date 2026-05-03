@@ -8,6 +8,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { DesktopPageShell } from "@/components/layout/desktop-page-shell";
+import { HELLO_CONTACT_EMAIL } from "@/lib/contact-email";
+import { VERIFY_MZANSI_SITE_DESCRIPTION } from "@/lib/seo/public-categories";
 import "@/styles/globals.css";
 
 const TURBOPACK_NAME_POLYFILL =
@@ -50,21 +52,22 @@ if (typeof window !== "undefined" && "serviceWorker" in navigator) {
 
 export const metadata: Metadata = {
   title: {
-    default: "VerifyMzansi — Promote With Trust",
+    default: "VerifyMzansi - South African Listings, Business, Tourism & Events",
     template: "%s | VerifyMzansi",
   },
-  description:
-    "Promote your products, services, tourism experiences, and events across South Africa with visibility that helps customers discover brands with more confidence.",
+  description: VERIFY_MZANSI_SITE_DESCRIPTION,
   keywords: [
     "South Africa",
-    "business promotion",
-    "brand visibility",
+    "verified marketplace",
+    "classified ads",
+    "business directory",
     "business profiles",
-    "tourism events",
-    "digital marketing",
-    "advertise your business",
+    "tourism destinations",
+    "events in South Africa",
+    "accommodation",
+    "local services",
     "Mzansi",
-    "trusted visibility",
+    "VerifyMzansi",
   ],
   authors: [{ name: "VerifyMzansi" }],
   creator: "VerifyMzansi",
@@ -74,23 +77,21 @@ export const metadata: Metadata = {
     locale: "en_ZA",
     url: process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com",
     siteName: "VerifyMzansi",
-    title: "VerifyMzansi — Promote With Trust",
-    description:
-      "Promote your products, services, tourism experiences, and events across South Africa.",
+    title: "VerifyMzansi - South African Listings, Business, Tourism & Events",
+    description: VERIFY_MZANSI_SITE_DESCRIPTION,
     images: [
       {
         url: "/opengraph-image",
         width: 1200,
         height: 630,
-        alt: "VerifyMzansi — Promote With Trust",
+        alt: "VerifyMzansi - South African Listings, Business, Tourism & Events",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "VerifyMzansi — Promote With Trust",
-    description:
-      "Promote your products, services, tourism experiences, and events across South Africa.",
+    title: "VerifyMzansi - South African Listings, Business, Tourism & Events",
+    description: VERIFY_MZANSI_SITE_DESCRIPTION,
     images: ["/twitter-image"],
   },
   robots: {
@@ -172,8 +173,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </p>
             <p className="mt-4 text-sm text-muted-foreground">
               For help, contact{" "}
-              <a href="mailto:hello@verifymzansi.com" className="text-brand-green underline">
-                hello@verifymzansi.com
+              <a href={`mailto:${HELLO_CONTACT_EMAIL}`} className="text-brand-green underline">
+                {HELLO_CONTACT_EMAIL}
               </a>{" "}
               or open{" "}
               <a href="/trust-safety" className="text-brand-green underline">

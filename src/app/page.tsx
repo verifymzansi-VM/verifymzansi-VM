@@ -13,18 +13,21 @@ import { HeroBannerSkeleton } from "@/components/home/hero-banner-skeleton";
 import { HomeMzansiMarketShowcase } from "@/components/home/home-mzansi-market-showcase";
 import { HomeBusinessShowcase } from "@/components/home/home-business-showcase";
 import { HomePromotionsShowcase } from "@/components/home/home-promotions-showcase";
+import { HELLO_CONTACT_EMAIL } from "@/lib/contact-email";
 import { getServerPublicRuntimeConfig } from "@/lib/public-runtime-config";
 import { getOfficialSocialSameAs } from "@/lib/official-social-links";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
+import {
+  VERIFY_MZANSI_CATEGORY_SEO,
+  VERIFY_MZANSI_SITE_DESCRIPTION,
+} from "@/lib/seo/public-categories";
 
 export const metadata: Metadata = {
-  title: "VerifyMzansi — Mzansi's Proudly Trusted Market",
-  description:
-    "South Africa's trusted marketplace. Post products, services, tourism experiences, and events with photos and videos.",
+  title: "VerifyMzansi - South African Listings, Business, Tourism & Events",
+  description: VERIFY_MZANSI_SITE_DESCRIPTION,
   openGraph: {
-    title: "VerifyMzansi — Mzansi's Proudly Trusted Market",
-    description:
-      "South Africa's trusted marketplace. Post products, services, tourism experiences, and events with photos and videos.",
+    title: "VerifyMzansi - South African Listings, Business, Tourism & Events",
+    description: VERIFY_MZANSI_SITE_DESCRIPTION,
     images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "VerifyMzansi" }],
   },
 };
@@ -36,35 +39,30 @@ export default async function HomePage() {
   const runtimeConfig = getServerPublicRuntimeConfig();
   const url = runtimeConfig.appUrl || "https://verifymzansi.com";
   const sameAs = getOfficialSocialSameAs(runtimeConfig.officialSocialLinks);
-  const onboardingDestinations = [
-    {
-      id: "tourism-events",
-      title: "Tourism & Events",
-      description: "Tourism destinations, accommodations, and events near you.",
-      href: "/tourism-events",
+  const categoryStyles = {
+    "tourism-events": {
       iconKey: "tourism",
       accentClass: "text-teal-400",
       iconBgClass: "bg-teal-500/10",
     },
-    {
-      id: "mzansi-business",
-      title: "Mzansi Business",
-      description: "Profiles posted by identity-reviewed representatives.",
-      href: "/mzansi-business",
+    "mzansi-business": {
       iconKey: "business",
       accentClass: "text-brand-blue",
       iconBgClass: "bg-brand-blue/10",
     },
-    {
-      id: "mzansi-market",
-      title: "Mzansi Market",
-      description: "Products and listings from local sellers.",
-      href: "/mzansi-market",
+    "mzansi-market": {
       iconKey: "market",
       accentClass: "text-brand-green",
       iconBgClass: "bg-brand-green/10",
     },
-  ] as const;
+  } as const;
+  const onboardingDestinations = VERIFY_MZANSI_CATEGORY_SEO.map((category) => ({
+    id: category.id,
+    title: category.name,
+    description: category.description,
+    href: category.href,
+    ...categoryStyles[category.id],
+  }));
   const freePostCount = Number(FREE_POST_CONFIG.maxAllowed);
   const freePostHighlights = [
     `${freePostCount} free ${freePostCount === 1 ? "post" : "posts"} per area`,
@@ -79,8 +77,7 @@ export default async function HomePage() {
         "@type": "WebSite",
         name: "VerifyMzansi",
         url,
-        description:
-          "South Africa's trusted marketplace for products, services, tourism experiences, and events with photos and videos.",
+        description: VERIFY_MZANSI_SITE_DESCRIPTION,
         potentialAction: {
           "@type": "SearchAction",
           target: {
@@ -98,9 +95,23 @@ export default async function HomePage() {
         sameAs,
         contactPoint: {
           "@type": "ContactPoint",
-          email: "hello@verifymzansi.com",
+          email: HELLO_CONTACT_EMAIL,
           contactType: "customer support",
         },
+      },
+      {
+        "@type": "ItemList",
+        name: "VerifyMzansi categories",
+        itemListElement: VERIFY_MZANSI_CATEGORY_SEO.map((category, index) => ({
+          "@type": "ListItem",
+          position: index + 1,
+          item: {
+            "@type": "WebPage",
+            name: category.name,
+            url: `${url}${category.href}`,
+            description: category.description,
+          },
+        })),
       },
     ],
   };
@@ -167,12 +178,13 @@ export default async function HomePage() {
                         ))}
                       </div>
                       <h1 className="font-display text-2xl font-bold leading-[1.05] tracking-tight text-slate-950 dark:text-white sm:text-4xl">
-                        Mzansi&apos;s Proudly Trusted Market.
+                        Find and post trusted listings across South Africa.
                       </h1>
 
                       <p className="max-w-2xl text-base text-slate-600 dark:text-slate-300 sm:text-lg">
-                        Start with free posts, build trust with verification, and upgrade only when
-                        you want more visibility across market, business, or event surfaces.
+                        Browse or advertise marketplace items, business services, tourism stays and
+                        experiences, venues, and events. Start with free posts, add photos or
+                        videos, complete verification, and upgrade when you want more visibility.
                       </p>
                     </div>
 
@@ -192,9 +204,9 @@ export default async function HomePage() {
                               "Complete person-level checks with phone, ID evidence, selfie, and location.",
                           },
                           {
-                            title: "Choose your channel",
+                            title: "Choose your category",
                             detail:
-                              "Products, representative-managed profiles, or promotions — one platform.",
+                              "Post marketplace listings, business profiles, tourism offers, venues, or events.",
                           },
                         ].map((step, index) => (
                           <li

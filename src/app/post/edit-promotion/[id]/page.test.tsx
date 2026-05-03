@@ -154,7 +154,7 @@ describe("EditPromotionPage", () => {
     expect(screen.getByDisplayValue("50")).toBeInTheDocument();
     expect(screen.getByDisplayValue("2099-03-10")).toBeInTheDocument();
     expect(screen.getByDisplayValue("2099-03-12")).toBeInTheDocument();
-    expect(screen.getByText("Promotion preview")).toBeInTheDocument();
+    expect(screen.getByText("Event preview")).toBeInTheDocument();
     expect(screen.getByText("Promotion Detail Preview")).toBeInTheDocument();
     expect(screen.getAllByText("Nomsa Kitchen").length).toBeGreaterThan(0);
     expect(promotionDetailPreviewSpy).toHaveBeenLastCalledWith(

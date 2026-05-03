@@ -84,7 +84,7 @@ const SELECT_CLASS =
   "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm";
 const STEPS: PostFormStep[] = [
   { label: "Details", icon: FileText, description: "Type, name, category, and overview" },
-  { label: "Location & Reach", icon: MapPin, description: "Address, contact, and hours" },
+  { label: "Location & Contact", icon: MapPin, description: "Address, contact, and hours" },
   { label: "Media & Review", icon: Camera, description: "Media, extras, and final review" },
 ];
 

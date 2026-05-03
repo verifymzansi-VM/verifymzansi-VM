@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { TrustStrip } from "@/components/layout/trust-strip";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { VERIFY_MZANSI_CATEGORY_SEO } from "@/lib/seo/public-categories";
 
 type AdvertiseSurface = {
   name: string;
@@ -21,7 +22,7 @@ type AdvertiseSurface = {
 export const metadata: Metadata = {
   title: "Advertise",
   description:
-    "Advertise products, services, tourism experiences, and events with visibility that helps South African customers discover your brand with confidence.",
+    "Advertise marketplace items, business services, tourism accommodation, experiences, venues, and events on VerifyMzansi.",
   alternates: {
     canonical: "https://verifymzansi.com/advertise",
   },
@@ -30,47 +31,53 @@ export const metadata: Metadata = {
 export default function AdvertisePage() {
   const pillars = [
     {
-      title: "List your tourism business",
-      description: "Showcase stays, tours, and experiences.",
+      title: "List what you offer",
+      description: "Post products, services, places to stay, experiences, venues, or events.",
       icon: TreePalm,
     },
     {
       title: "Build customer confidence",
-      description: "Trust badges show who submitted the post.",
+      description: "Verification and trust signals help people understand who submitted the post.",
       icon: ShieldCheck,
     },
     {
-      title: "Grow your business presence",
-      description: "Create a cleaner storefront for offers and campaigns.",
+      title: "Grow your visibility",
+      description: "Start free, then upgrade when you want stronger placement for your post.",
       icon: Store,
     },
   ];
 
-  const surfaces: AdvertiseSurface[] = [
-    {
-      name: "Mzansi Market",
-      description: "Products, offers, and individual listings.",
-      browseHref: "/mzansi-market",
-      createHref: "/post/create-listing",
-      createLabel: "Create marketplace listing",
-    },
-    {
-      name: "Mzansi Business",
-      description: "Business profiles from reviewed representatives.",
-      browseHref: "/mzansi-business",
-      createHref: "/post/create-business",
-      createLabel: "Create business profile",
-    },
-    {
-      name: "Tourism & Events",
-      description: "Tourism businesses, experiences, and events.",
-      browseHref: "/tourism-events",
+  const surfaces: AdvertiseSurface[] = VERIFY_MZANSI_CATEGORY_SEO.map((category) => {
+    if (category.id === "mzansi-market") {
+      return {
+        name: category.name,
+        description: category.description,
+        browseHref: category.href,
+        createHref: "/post/create-listing",
+        createLabel: "Create marketplace listing",
+      };
+    }
+
+    if (category.id === "mzansi-business") {
+      return {
+        name: category.name,
+        description: category.description,
+        browseHref: category.href,
+        createHref: "/post/create-business",
+        createLabel: "Create business profile",
+      };
+    }
+
+    return {
+      name: category.name,
+      description: category.description,
+      browseHref: category.href,
       createHref: "/post/create-tourism",
       createLabel: "List tourism business",
       secondaryCreateHref: "/post/create-tourism?type=event",
       secondaryCreateLabel: "Create event",
-    },
-  ];
+    };
+  });
 
   return (
     <>
@@ -80,7 +87,7 @@ export default function AdvertisePage() {
           <div className="container-page py-10 space-y-6 sm:py-14">
             <PageHeader
               title="Advertise on VerifyMzansi"
-              description="Promote products, services, tourism experiences, and events with trusted visibility."
+              description="Promote marketplace items, business services, tourism accommodation, experiences, venues, and events with trusted visibility."
               breadcrumbs={[{ label: "Advertise" }]}
             />
 
@@ -103,7 +110,7 @@ export default function AdvertisePage() {
           </div>
         </section>
 
-        <TrustStrip variant="green" title="Trusted advertising surfaces" />
+        <TrustStrip variant="green" title="Trusted posting categories" />
 
         <section className="container-page py-8 space-y-6 sm:py-10">
           <div className="max-w-2xl space-y-2">
@@ -132,10 +139,10 @@ export default function AdvertisePage() {
         <section className="container-page py-4 space-y-6 sm:py-6">
           <div className="max-w-2xl space-y-2">
             <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
-              Choose your visibility surface
+              Choose your posting category
             </h2>
             <p className="text-sm text-muted-foreground sm:text-base">
-              Start with the format that matches your offer.
+              Pick the category that best matches what you want people to discover.
             </p>
           </div>
 

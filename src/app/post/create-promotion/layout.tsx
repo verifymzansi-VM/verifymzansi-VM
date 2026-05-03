@@ -2,7 +2,8 @@ import { requireVerifiedPostAccess } from "@/app/post/_lib/require-verified-post
 
 export const metadata = {
   title: "Create Tourism & Events Listing",
-  description: "Create a tourism or event listing on VerifyMzansi to boost your reach.",
+  description:
+    "Post tourism accommodation, experiences, venues, restaurants, tours, or events on VerifyMzansi.",
 };
 
 export default async function Layout({ children }: { children: React.ReactNode }) {

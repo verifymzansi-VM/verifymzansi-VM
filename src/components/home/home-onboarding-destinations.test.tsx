@@ -27,7 +27,7 @@ const destinations: HomeOnboardingDestination[] = [
   {
     id: "tourism-events",
     title: "Tourism & Events",
-    description: "Tourism destinations, accommodations, and events near you.",
+    description: "Places to visit, accommodation, experiences, venues, and events.",
     href: "/tourism-events",
     iconKey: "tourism",
     accentClass: "text-teal-400",
@@ -36,7 +36,7 @@ const destinations: HomeOnboardingDestination[] = [
   {
     id: "mzansi-business",
     title: "Mzansi Business",
-    description: "Profiles posted by identity-reviewed representatives.",
+    description: "Businesses, shops, trades, and professional services.",
     href: "/mzansi-business",
     iconKey: "business",
     accentClass: "text-brand-blue",
@@ -45,7 +45,7 @@ const destinations: HomeOnboardingDestination[] = [
   {
     id: "mzansi-market",
     title: "Mzansi Market",
-    description: "Products and listings from local sellers.",
+    description: "Local classified ads for products, vehicles, property, and home goods.",
     href: "/mzansi-market",
     iconKey: "market",
     accentClass: "text-brand-green",

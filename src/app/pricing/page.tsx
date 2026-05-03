@@ -5,11 +5,12 @@ import { FREE_POST_CONFIG, getActivePlansByArea } from "@/lib/constants/pricing"
 import { PricingPlanGrid } from "@/components/billing/plan-grid";
 import { PlanTabs } from "@/components/billing/plan-tabs";
 import { getTrustPublicConfig } from "@/lib/trust-public-config";
+import { HELLO_CONTACT_EMAIL } from "@/lib/contact-email";
 
 export const metadata = {
   title: "Pricing",
   description:
-    "Choose the plan that fits your promotion, visibility, and growth goals on VerifyMzansi. Free and premium options for products, businesses, and campaigns.",
+    "View VerifyMzansi pricing for marketplace listings, business profiles, tourism posts, venues, and events. Start free, then upgrade for stronger placement.",
 };
 
 export default function PricingPage() {
@@ -21,7 +22,7 @@ export default function PricingPage() {
       freePostCount === 1 ? "post" : "posts"
     } per area every ${FREE_POST_CONFIG.durationDays} days`,
     `${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video on the free plan`,
-    "Upgrade for placement and visibility",
+    "Upgrade when you want stronger placement",
   ] as const;
 
   const allPlans = [...marketPlans, ...businessPlans, ...promotionPlans];
@@ -59,7 +60,7 @@ export default function PricingPage() {
         <div className="container-page py-4 space-y-4">
           <PageHeader
             title="Pricing"
-            description="Start free. Upgrade when you need stronger placement, boosts, or campaign visibility."
+            description="Start free for marketplace listings, business profiles, tourism posts, venues, and events. Upgrade when you want stronger placement."
             breadcrumbs={[{ label: "Pricing" }]}
           />
 
@@ -109,7 +110,7 @@ export default function PricingPage() {
           <p className="text-center text-sm text-muted-foreground">
             Have questions?{" "}
             <a
-              href="mailto:hello@verifymzansi.com"
+              href={`mailto:${HELLO_CONTACT_EMAIL}`}
               className="text-brand-green underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
             >
               Contact us

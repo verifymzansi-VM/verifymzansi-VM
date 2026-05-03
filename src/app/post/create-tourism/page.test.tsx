@@ -84,7 +84,7 @@ vi.mock("@/components/listings/promotion-detail-content", () => ({
     layoutMode?: "public" | "review";
   }) => {
     promotionPreviewProps.current = props;
-    return <div>Promotion Preview: {props.promotion.title ?? "preview"}</div>;
+    return <div>Event Preview: {props.promotion.title ?? "preview"}</div>;
   },
 }));
 

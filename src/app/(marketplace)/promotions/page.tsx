@@ -25,14 +25,21 @@ import {
 } from "@/lib/supabase/playwright-visual-fixtures";
 import { PromotionsExplorer } from "./client";
 import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
+import { getRequiredVerifyMzansiCategorySeo } from "@/lib/seo/public-categories";
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com";
+const categorySeo = getRequiredVerifyMzansiCategorySeo("tourism-events");
 
 export const metadata: Metadata = {
-  title: "Tourism & Events",
-  description: "Discover tourism destinations, accommodations, and events across South Africa.",
+  title: categorySeo.title,
+  description: categorySeo.description,
   alternates: {
     canonical: `${BASE_URL}/tourism-events`,
+  },
+  openGraph: {
+    title: categorySeo.title,
+    description: categorySeo.description,
+    url: `${BASE_URL}/tourism-events`,
   },
 };
 
@@ -114,6 +121,19 @@ function buildBalancedCarouselItems(
 }
 
 export default async function PromotionsPage() {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: categorySeo.name,
+    url: `${BASE_URL}/tourism-events`,
+    description: categorySeo.description,
+    isPartOf: {
+      "@type": "WebSite",
+      name: "VerifyMzansi",
+      url: BASE_URL,
+    },
+    about: ["tourism", "accommodation", "experiences", "events", "South Africa"],
+  };
   const cookieStore = await getOptionalCookieStore();
   const hideFixtures = shouldHidePlaywrightFixtures(
     readCookieValue(cookieStore, PLAYWRIGHT_HIDE_FIXTURES_COOKIE)
@@ -180,8 +200,7 @@ export default async function PromotionsPage() {
       type: "promotion",
       href: "/post/create-tourism",
       title: "Tourism & Events",
-      description:
-        "Discover tourism destinations, accommodations, and events from South African hosts and businesses.",
+      description: categorySeo.description,
       location: "South Africa",
       mediaUrl: "/images/fallbacks/hero-shop.svg",
     });
@@ -189,11 +208,15 @@ export default async function PromotionsPage() {
 
   return (
     <div className="space-y-0">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/<\//g, "<\\/") }}
+      />
       {/* ── Card Carousel Showroom ── */}
       <ShowroomCardCarousel
         items={carouselItems}
         emptyTitle="Tourism & Events"
-        emptyDescription="Discover tourism destinations, accommodations, and events from South African hosts and businesses."
+        emptyDescription={categorySeo.description}
         background={tourismEventsShowroomBackground}
       />
 

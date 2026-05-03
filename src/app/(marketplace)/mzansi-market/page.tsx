@@ -21,15 +21,21 @@ import {
   shouldHidePlaywrightFixtures,
 } from "@/lib/supabase/playwright-visual-fixtures";
 import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
+import { getRequiredVerifyMzansiCategorySeo } from "@/lib/seo/public-categories";
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com";
+const categorySeo = getRequiredVerifyMzansiCategorySeo("mzansi-market");
 
 export const metadata: Metadata = {
-  title: "Mzansi Market",
-  description:
-    "Browse verified classified ads for property, cars, electronics and more across South Africa.",
+  title: categorySeo.title,
+  description: categorySeo.description,
   alternates: {
     canonical: `${BASE_URL}/mzansi-market`,
+  },
+  openGraph: {
+    title: categorySeo.title,
+    description: categorySeo.description,
+    url: `${BASE_URL}/mzansi-market`,
   },
 };
 
@@ -37,6 +43,19 @@ export const metadata: Metadata = {
 export const revalidate = 60;
 
 export default async function MzansiMarketPage() {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: categorySeo.name,
+    url: `${BASE_URL}/mzansi-market`,
+    description: categorySeo.description,
+    isPartOf: {
+      "@type": "WebSite",
+      name: "VerifyMzansi",
+      url: BASE_URL,
+    },
+    about: ["classified ads", "local marketplace", "identity-reviewed members", "South Africa"],
+  };
   const cookieStore = await getOptionalCookieStore();
   const hideFixtures = shouldHidePlaywrightFixtures(
     readCookieValue(cookieStore, PLAYWRIGHT_HIDE_FIXTURES_COOKIE)
@@ -61,6 +80,10 @@ export default async function MzansiMarketPage() {
 
   return (
     <div className="space-y-0">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/<\//g, "<\\/") }}
+      />
       <Suspense fallback={null}>
         <MarketplaceUrlFilterSync />
       </Suspense>
@@ -69,7 +92,7 @@ export default async function MzansiMarketPage() {
       <ShowroomCardCarousel
         items={carouselItems}
         emptyTitle="Mzansi Market"
-        emptyDescription="Browse classified ads from identity-verified members."
+        emptyDescription={categorySeo.description}
         background={mzansiMarketShowroomBackground}
       />
 
@@ -104,7 +127,7 @@ export default async function MzansiMarketPage() {
           <div className="flex-1 min-w-0 space-y-5">
             <PageHeader
               title="Browse Listings"
-              description="Classifieds from South African sellers, with filters for price, condition, and location."
+              description={categorySeo.description}
               breadcrumbs={[{ label: "Mzansi Market" }]}
               className="hidden lg:block"
             >

@@ -176,8 +176,8 @@ export function PostCreateClient({
               Need more visibility after launch?
             </p>
             <p className="text-sm text-muted-foreground">
-              Start with the surface that matches your offer, then use advertising and boost tools
-              to increase reach once your listing or event is live.
+              Start with the category that matches what you offer, then use advertising or boosts
+              when you want stronger placement after your post is live.
             </p>
           </div>
           <Button asChild variant="outline" className="gap-2 self-start sm:self-center">

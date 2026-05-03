@@ -21,9 +21,9 @@ import Link from "next/link";
 import { getOptionalContentViewCountMap } from "@/lib/engagement-server";
 
 export const metadata = {
-  title: "Events",
+  title: "Events in South Africa",
   description:
-    "Discover upcoming events, gatherings, and happenings from South African hosts, businesses, and members.",
+    "Find upcoming South African events, markets, shows, community gatherings, and live experiences posted by identity-reviewed hosts, organisers, and businesses.",
 };
 
 export const revalidate = 60;
@@ -176,8 +176,8 @@ export default async function EventsPage() {
   return (
     <div className="container-page py-8 space-y-6">
       <PageHeader
-        title="Events"
-        description="Upcoming events from South African hosts and businesses."
+        title="Events in South Africa"
+        description="Browse upcoming events, markets, shows, community gatherings, and live experiences from South African hosts, organisers, and businesses."
         breadcrumbs={[
           { label: "Home", href: "/" },
           { label: "Tourism & Events", href: "/tourism-events" },
@@ -277,8 +277,8 @@ export default async function EventsPage() {
             <Calendar className="mx-auto h-8 w-8 text-muted-foreground" />
             <h3 className="font-display text-lg font-semibold">No upcoming events</h3>
             <p className="mx-auto max-w-md text-sm text-muted-foreground">
-              Check back soon for events from South African hosts and businesses. Past events may
-              appear below.
+              Check back soon for South African events from local hosts, organisers, and businesses.
+              Past events may appear below.
             </p>
             <Button asChild size="sm" className="mx-auto h-11 w-fit gap-1">
               <Link href="/post/create-tourism?type=event">Create Event</Link>

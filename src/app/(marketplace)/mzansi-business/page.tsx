@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { ShowroomCardCarousel } from "@/components/showrooms/showroom-card-carousel";
 import { mzansiBusinessShowroomBackground } from "@/components/showrooms/showroom-backgrounds";
@@ -26,13 +27,21 @@ import {
   PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
   shouldHidePlaywrightFixtures,
 } from "@/lib/supabase/playwright-visual-fixtures";
+import { getRequiredVerifyMzansiCategorySeo } from "@/lib/seo/public-categories";
 
-export const metadata = {
-  title: "Mzansi Business",
-  description:
-    "Discover business profiles posted by identity-reviewed representatives on VerifyMzansi.",
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com";
+const categorySeo = getRequiredVerifyMzansiCategorySeo("mzansi-business");
+
+export const metadata: Metadata = {
+  title: categorySeo.title,
+  description: categorySeo.description,
   alternates: {
-    canonical: "/mzansi-business",
+    canonical: `${BASE_URL}/mzansi-business`,
+  },
+  openGraph: {
+    title: categorySeo.title,
+    description: categorySeo.description,
+    url: `${BASE_URL}/mzansi-business`,
   },
 };
 
@@ -40,6 +49,19 @@ export const metadata = {
 export const revalidate = 60;
 
 export default async function MzansiBusinessPage() {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: categorySeo.name,
+    url: `${BASE_URL}/mzansi-business`,
+    description: categorySeo.description,
+    isPartOf: {
+      "@type": "WebSite",
+      name: "VerifyMzansi",
+      url: BASE_URL,
+    },
+    about: ["business directory", "local services", "verified representatives", "South Africa"],
+  };
   const cookieStore = await cookies();
   const hideFixtures = shouldHidePlaywrightFixtures(
     cookieStore.get(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
@@ -72,7 +94,7 @@ export default async function MzansiBusinessPage() {
             type: "business",
             href: "/post/create-business",
             title: "Mzansi Business",
-            description: "Discover profiles posted by identity-reviewed representatives.",
+            description: categorySeo.description,
             location: "South Africa",
             mediaUrl: "/images/fallbacks/hero-shop.svg",
           },
@@ -80,6 +102,10 @@ export default async function MzansiBusinessPage() {
 
   return (
     <div className="space-y-0">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/<\//g, "<\\/") }}
+      />
       <Suspense fallback={<div className="h-10" />}>
         <MzansiBusinessFilterSync />
       </Suspense>
@@ -88,7 +114,7 @@ export default async function MzansiBusinessPage() {
       <ShowroomCardCarousel
         items={carouselItems}
         emptyTitle="Mzansi Business"
-        emptyDescription="Discover profiles posted by identity-reviewed representatives."
+        emptyDescription={categorySeo.description}
         background={mzansiBusinessShowroomBackground}
       />
 
@@ -131,7 +157,7 @@ export default async function MzansiBusinessPage() {
           <section className="min-w-0 flex-1 space-y-6">
             <PageHeader
               title="Mzansi Business"
-              description="Browse South African business profiles posted by identity-reviewed representatives."
+              description={categorySeo.description}
               breadcrumbs={[{ label: "Mzansi Business" }]}
               className="hidden lg:block"
             >

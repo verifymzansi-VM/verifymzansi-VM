@@ -83,13 +83,13 @@ describe("HomePage", () => {
     expect(
       screen.getByRole("heading", {
         level: 1,
-        name: "Mzansi's Proudly Trusted Market.",
+        name: "Find and post trusted listings across South Africa.",
       })
     ).toBeInTheDocument();
     expect(screen.getByText("Get Started")).toBeInTheDocument();
     expect(screen.getByText("Create your profile")).toBeInTheDocument();
     expect(screen.getByText("Complete verification")).toBeInTheDocument();
-    expect(screen.getByText("Choose your channel")).toBeInTheDocument();
+    expect(screen.getByText("Choose your category")).toBeInTheDocument();
   });
 
   it("uses canonical category href values", async () => {
@@ -107,12 +107,12 @@ describe("HomePage", () => {
     expect(screen.getByRole("link", { name: /Pricing/i })).toHaveAttribute("href", "/pricing");
     expect(
       screen.getByRole("link", {
-        name: /Mzansi Market Products and listings from local sellers\./i,
+        name: /Mzansi Market Buy, sell, and browse local classified ads in South Africa/i,
       })
     ).toHaveAttribute("href", "/mzansi-market");
     expect(
       screen.getByRole("link", {
-        name: /Mzansi Business Profiles posted by identity-reviewed representatives\./i,
+        name: /Mzansi Business Find South African businesses, shops, trades, and professional services/i,
       })
     ).toHaveAttribute("href", "/mzansi-business");
     expect(
@@ -138,6 +138,6 @@ describe("HomePage", () => {
     expect(screen.getByRole("link", { name: /Advertise/i })).toHaveAttribute("href", "/advertise");
     expect(screen.getByText("Create your profile")).toBeInTheDocument();
     expect(screen.getByText("Complete verification")).toBeInTheDocument();
-    expect(screen.getByText("Choose your channel")).toBeInTheDocument();
+    expect(screen.getByText("Choose your category")).toBeInTheDocument();
   });
 });

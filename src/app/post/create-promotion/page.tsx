@@ -49,8 +49,8 @@ const SELECT_CLASS =
   "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm";
 
 const STEPS: PostFormStep[] = [
-  { label: "Details", icon: FileText, description: "Type, title, and campaign summary" },
-  { label: "Pricing & Reach", icon: MapPin, description: "Price, location, dates, and contact" },
+  { label: "Details", icon: FileText, description: "Type, title, and post summary" },
+  { label: "Price & Location", icon: MapPin, description: "Price, location, dates, and contact" },
   { label: "Media & Review", icon: Camera, description: "Photos, video, and final review" },
 ];
 
@@ -1114,9 +1114,8 @@ function CreatePromotionContent() {
                           id: "preview-promotion",
                           owner_id: "preview-seller",
                           business_id: businessId || null,
-                          title: title || "Your promotion title",
-                          description:
-                            description || "Your promotion description will appear here.",
+                          title: title || "Your event title",
+                          description: description || "Your event description will appear here.",
                           promotion_type: promotionType,
                           category: category || null,
                           category_key: categoryKey || null,
