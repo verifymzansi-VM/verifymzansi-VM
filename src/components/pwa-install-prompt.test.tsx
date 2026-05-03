@@ -4,6 +4,7 @@
 import React from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PUBLIC_RUNTIME_CONFIG_ELEMENT_ID } from "@/lib/public-runtime-config";
 
 const { mockUsePathname, mockIsPlaywrightTestMode } = vi.hoisted(() => ({
   mockUsePathname: vi.fn(),
@@ -22,9 +23,20 @@ vi.mock("lucide-react", () => ({
 }));
 
 vi.mock("@/components/ui/button", () => ({
-  Button: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
-    <button {...props}>{children}</button>
-  ),
+  Button: ({
+    children,
+    asChild,
+    ...props
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & { asChild?: boolean }) => {
+    if (asChild && React.isValidElement(children)) {
+      return React.cloneElement(
+        React.Children.only(children) as React.ReactElement<Record<string, unknown>>,
+        props as Record<string, unknown>
+      );
+    }
+
+    return <button {...props}>{children}</button>;
+  },
 }));
 
 vi.mock("@/lib/supabase/playwright-mode", () => ({
@@ -121,11 +133,15 @@ describe("PwaInstallPrompt", () => {
 
     render(<PwaInstallPrompt />);
 
-    const helpButton = await screen.findByRole("button", { name: "How To Install" });
+    const helpButton = await screen.findByRole("button", { name: "Install" });
     fireEvent.click(helpButton);
 
     expect(await screen.findByRole("dialog", { name: "Install on iPhone" })).toBeTruthy();
+    expect(screen.getByText("Open the install link on your iPhone.")).toBeTruthy();
     expect(screen.getByText("Tap the Share button in Safari.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Open install link" }).getAttribute("href")).toBe(
+      "https://verifymzansi.com/"
+    );
 
     // Close via the X button
     fireEvent.click(screen.getByRole("button", { name: "Close install instructions" }));
@@ -134,13 +150,29 @@ describe("PwaInstallPrompt", () => {
     });
 
     // Re-open and close via "Got it"
-    fireEvent.click(screen.getByRole("button", { name: "How To Install" }));
+    fireEvent.click(screen.getByRole("button", { name: "Install" }));
     expect(await screen.findByRole("dialog", { name: "Install on iPhone" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Got it" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog", { name: "Install on iPhone" })).toBeNull();
     });
+  });
+
+  it("uses the public runtime app URL for the iOS install link", async () => {
+    document.body.innerHTML = `<div id="${PUBLIC_RUNTIME_CONFIG_ELEMENT_ID}" data-app-url="https://staging.verifymzansi.com"></div>`;
+    Object.defineProperty(window.navigator, "userAgent", {
+      configurable: true,
+      value: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
+    });
+
+    render(<PwaInstallPrompt />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Install" }));
+
+    expect(screen.getByRole("link", { name: "Open install link" }).getAttribute("href")).toBe(
+      "https://staging.verifymzansi.com/"
+    );
   });
 
   it("shows iOS install help for iPadOS desktop-mode Safari", async () => {
@@ -160,7 +192,7 @@ describe("PwaInstallPrompt", () => {
 
     render(<PwaInstallPrompt />);
 
-    expect(await screen.findByRole("button", { name: "How To Install" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Install" })).toBeTruthy();
   });
 
   it("suppresses rendering when the prompt was previously dismissed", () => {
@@ -176,7 +208,7 @@ describe("PwaInstallPrompt", () => {
     render(<PwaInstallPrompt />);
 
     expect(screen.queryByText("Install App")).toBeNull();
-    expect(screen.queryByRole("button", { name: "How To Install" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Install" })).toBeNull();
   });
 
   it("waits until the home hero has been scrolled past before showing the prompt", async () => {
@@ -227,7 +259,7 @@ describe("PwaInstallPrompt", () => {
       render(<PwaInstallPrompt />);
 
       expect(screen.queryByText("Install App")).toBeNull();
-      expect(screen.queryByRole("button", { name: "How To Install" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Install" })).toBeNull();
     }
   );
 
@@ -345,7 +377,7 @@ describe("PwaInstallPrompt", () => {
 
     render(<PwaInstallPrompt />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "How To Install" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Install" }));
     expect(await screen.findByRole("dialog", { name: "Install on iPhone" })).toBeTruthy();
 
     await act(async () => {
@@ -365,7 +397,7 @@ describe("PwaInstallPrompt", () => {
 
     render(<PwaInstallPrompt />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "How To Install" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Install" }));
     const dialog = await screen.findByRole("dialog", { name: "Install on iPhone" });
     expect(dialog).toBeTruthy();
 

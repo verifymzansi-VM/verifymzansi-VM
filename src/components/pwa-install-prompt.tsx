@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import { X, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
+import { getPublicRuntimeConfig } from "@/lib/public-runtime-config";
 
 const DISMISSED_STORAGE_KEY = "pwa-prompt-dismissed";
 const HOME_PROMPT_MIN_SCROLL_Y = 360;
@@ -92,9 +93,23 @@ function getIOSFallbackSnapshot(suppressed: boolean) {
   return isIOSLikeDevice() && !window.matchMedia("(display-mode: standalone)").matches;
 }
 
+function getInstallLinkHref() {
+  const fallbackHref =
+    typeof window === "undefined"
+      ? "https://verifymzansi.com/"
+      : new URL("/", window.location.origin).toString();
+
+  try {
+    return new URL("/", getPublicRuntimeConfig().appUrl).toString();
+  } catch {
+    return fallbackHref;
+  }
+}
+
 export function PwaInstallPrompt() {
   const pathname = usePathname();
   const isPlaywright = isPlaywrightTestMode();
+  const installLinkHref = useMemo(() => getInstallLinkHref(), []);
   const [dismissed, setDismissed] = useState(() => isPromptDismissed());
   const promptBlockedForRoute = PROMPT_BLOCKED_PATH_PREFIXES.some(
     (prefix) => pathname != null && (pathname === prefix || pathname.startsWith(`${prefix}/`))
@@ -268,7 +283,7 @@ export function PwaInstallPrompt() {
             <h3 className="font-semibold text-sm">Install App</h3>
             <p className="text-xs text-muted-foreground mr-1">
               {isIOSFallback
-                ? "On iPhone: tap Share, then Add to Home Screen"
+                ? "Open the install link, then add it to Home Screen"
                 : "Fast & easy access to VerifyMzansi"}
             </p>
           </div>
@@ -280,7 +295,7 @@ export function PwaInstallPrompt() {
             onClick={handleInstallClick}
             className="rounded-full shadow-sm shadow-brand-green/20"
           >
-            {isIOSFallback ? "How To Install" : "Install"}
+            Install
           </Button>
           <button
             onClick={handleDismiss}
@@ -320,11 +335,15 @@ export function PwaInstallPrompt() {
               </button>
             </div>
             <ol className="mt-3 space-y-2 text-sm text-muted-foreground list-decimal pl-5">
+              <li>Open the install link on your iPhone.</li>
               <li>Tap the Share button in Safari.</li>
               <li>Scroll and tap Add to Home Screen.</li>
               <li>Tap Add to finish installation.</li>
             </ol>
-            <div className="mt-4 flex justify-end">
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <Button size="sm" asChild>
+                <a href={installLinkHref}>Open install link</a>
+              </Button>
               <Button size="sm" onClick={closeIOSHelp}>
                 Got it
               </Button>
