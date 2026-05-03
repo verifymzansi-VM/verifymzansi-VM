@@ -24,7 +24,7 @@
     <rect x="770" y="488" width="164" height="20" rx="10" fill="#0EA5A4" fill-opacity="0.18"/>
     <rect x="770" y="526" width="198" height="16" rx="8" fill="#111827" fill-opacity="0.14"/>
   </g>
-  <text x="182" y="730" fill="#111827" font-family="Segoe UI, sans-serif" font-size="30" font-weight="700" letter-spacing="6">TOURISM & EVENTS</text>
+  <text x="182" y="730" fill="#111827" font-family="Segoe UI, sans-serif" font-size="30" font-weight="700" letter-spacing="6">TOURISM &amp; EVENTS</text>
   <text x="182" y="784" fill="#0F172A" font-family="Segoe UI, sans-serif" font-size="60" font-weight="800">Tourism and campaigns that convert</text>
   <text x="182" y="830" fill="#334155" font-family="Segoe UI, sans-serif" font-size="30">Live-inspired fallback for current promotions surfaces</text>
   <defs>

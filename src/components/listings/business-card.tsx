@@ -132,6 +132,7 @@ export function BusinessCard({
       statusClassName={status?.className}
       statusVariant="ribbon"
       accentClassName="hover:border-brand-blue/55"
+      cardVariant="showcase"
       trustLevel={trustLevel}
       viewCount={viewCount}
       fitStrategy="smart"

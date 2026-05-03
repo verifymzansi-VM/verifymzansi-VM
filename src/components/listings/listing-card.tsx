@@ -80,6 +80,7 @@ export const ListingCard = memo(function ListingCard({
       statusLabel={status?.label}
       statusClassName={status?.className}
       accentClassName="hover:border-brand-green/55"
+      cardVariant="showcase"
       trustLevel={ownerTrustLevel}
       logoUrl={logoUrl}
       videoDuration={videoDuration}

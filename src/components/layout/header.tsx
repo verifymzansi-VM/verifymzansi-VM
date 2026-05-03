@@ -68,7 +68,7 @@ function HeaderInner({
 }: HeaderProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
-  const { theme, setTheme } = useTheme();
+  const { theme, resolvedTheme, setTheme } = useTheme();
 
   // Use the shared auth store via useAuth() instead of a duplicate Supabase subscription
   const auth = useAuth();
@@ -85,6 +85,27 @@ function HeaderInner({
         .slice(0, 2)
     : "U";
   const hasAdminAccess = auth.isModerator; // isModerator already includes admin role
+  const activeTheme = theme === "system" ? resolvedTheme : theme;
+  const isDarkMode = activeTheme === "dark";
+  const nextTheme = isDarkMode ? "light" : "dark";
+
+  const handleThemeToggle = useCallback(() => {
+    setTheme(nextTheme);
+  }, [nextTheme, setTheme]);
+
+  const renderThemeToggle = (className?: string) => (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={handleThemeToggle}
+      aria-label="Toggle theme"
+      title="Toggle theme"
+      className={className}
+    >
+      <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+      <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+    </Button>
+  );
 
   // Close mobile menu on Escape key
   const handleEscape = useCallback(
@@ -126,19 +147,22 @@ function HeaderInner({
       ) : null}
 
       <div className="container-page grid h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
-        <Link
-          href="/"
-          prefetch={false}
-          aria-label="VerifyMzansi — Home"
-          className="group flex items-center gap-2 sm:gap-3 lg:justify-self-start"
-        >
-          <BrandLogo
-            size="md"
-            variant="transparent"
-            priority
-            imageClassName="drop-shadow-[0_10px_20px_rgba(15,23,42,0.08)] transition-transform duration-200 group-hover:scale-105"
-          />
-        </Link>
+        <div className="flex min-w-0 items-center gap-1.5 lg:justify-self-start">
+          <Link
+            href="/"
+            prefetch={false}
+            aria-label="VerifyMzansi — Home"
+            className="group flex min-w-0 items-center gap-2 sm:gap-3"
+          >
+            <BrandLogo
+              size="md"
+              variant="transparent"
+              priority
+              imageClassName="drop-shadow-[0_10px_20px_rgba(15,23,42,0.08)] transition-transform duration-200 group-hover:scale-105"
+            />
+          </Link>
+          {renderThemeToggle("relative h-9 w-9 shrink-0 lg:hidden")}
+        </div>
 
         {/* Marketplace Switcher — hidden on mobile, shown lg+ */}
         <div className="hidden lg:flex lg:justify-self-center">
@@ -148,16 +172,7 @@ function HeaderInner({
         {/* Desktop Right — Auth */}
         <div className="hidden items-center gap-2 lg:flex lg:justify-self-end">
           {/* Theme toggle */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            aria-label="Toggle theme"
-            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-          >
-            <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-            <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-          </Button>
+          {renderThemeToggle("relative")}
 
           {isAuthenticated ? (
             <>
