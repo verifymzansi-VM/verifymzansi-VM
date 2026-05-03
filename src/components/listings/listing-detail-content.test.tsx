@@ -12,6 +12,13 @@ const { listingDetailClientState } = vi.hoisted(() => ({
   },
 }));
 
+vi.mock("next/image", () => ({
+  default: ({ src, alt, ...props }: { src: string; alt: string; [key: string]: unknown }) => (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={src} alt={alt} {...props} />
+  ),
+}));
+
 vi.mock("next/link", () => ({
   default: ({ children, href }: { children: React.ReactNode; href: string }) => (
     <a href={href}>{children}</a>
@@ -214,5 +221,43 @@ describe("ListingDetailContent", () => {
     expect(container.querySelector('article[data-layout-mode="review"]')).toBeTruthy();
     expect(screen.queryByTestId("contact-actions")).toBeNull();
     expect(screen.getByText("Preview mode")).toBeTruthy();
+  });
+
+  it("normalizes the brand logo image through the media proxy", () => {
+    listingDetailClientState.shouldThrow = false;
+
+    render(
+      <ListingDetailContent
+        listing={{
+          id: "listing-4",
+          owner_id: "owner-1",
+          title: "Logo listing",
+          description: "Logo preview",
+          price_cents: 456000,
+          price_negotiable: false,
+          category: "jobs_services",
+          condition: "like_new",
+          attributes: { brand: "Apple" },
+          photos: [],
+          videos: [],
+          video_thumbnail: null,
+          logo_url: "https://media.verifymzansi.com/media/listing/logo.jpg",
+          location_province: "KwaZulu-Natal",
+          location_city: "Richards Bay",
+          location_suburb: null,
+          location_address: null,
+          contact_methods: ["call"],
+          created_at: new Date().toISOString(),
+        }}
+        seller={null}
+        showContactActions={false}
+        showSimilarListings={false}
+      />
+    );
+
+    expect(screen.getByAltText("Logo listing logo")).toHaveAttribute(
+      "src",
+      "/api/media/serve/media/listing/logo.jpg"
+    );
   });
 });

@@ -19,6 +19,7 @@ import { ListingContactActions } from "@/app/listing/[id]/listing-contact-action
 import { getListingConditionLabel } from "@/lib/constants/listing-condition";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
 import { resolveMarketProfileVariant } from "@/lib/presentation/profile-variants";
+import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import type { AccountVerificationStatus } from "@/types/enums";
 
 export interface ListingDetailRecord {
@@ -535,7 +536,7 @@ export function ListingDetailContent({
               <CardContent className="flex items-center gap-3 p-5">
                 <div className="h-12 w-12 overflow-hidden rounded-2xl border bg-white p-1 dark:bg-warm-900">
                   <Image
-                    src={listing.logo_url}
+                    src={normalizeMediaUrl(listing.logo_url)}
                     alt={`${listing.title} logo`}
                     width={48}
                     height={48}
