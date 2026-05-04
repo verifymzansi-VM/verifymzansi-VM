@@ -1791,8 +1791,8 @@ function CreateTourismContent() {
                         },
                         {
                           key: "videos",
-                          label: "Uploading video...",
-                          doneLabel: "Video uploaded",
+                          label: "Preparing and verifying video...",
+                          doneLabel: "Video verified",
                           status: videoFiles.length > 0 ? uploadStatuses.videos : "skipped",
                         },
                         {

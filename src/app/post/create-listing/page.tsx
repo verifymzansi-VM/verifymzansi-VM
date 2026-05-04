@@ -1036,8 +1036,8 @@ export default function CreateListingPage() {
                           },
                           {
                             key: "video",
-                            label: "Uploading video...",
-                            doneLabel: "Video uploaded",
+                            label: "Preparing and verifying video...",
+                            doneLabel: "Video verified",
                             status: videoFile.length > 0 ? uploadStatuses.video : "skipped",
                           },
                           {

@@ -13,6 +13,14 @@ type DirectUploadUrlResponse = {
   key?: string;
 };
 
+type DirectUploadDescriptor = {
+  key: string;
+  publicUrl: string;
+  contentType: string;
+  size: number;
+  area: UploadArea;
+};
+
 const preparedVideoUploads = new WeakMap<File, Promise<File>>();
 const VIDEO_PREPARE_TIMEOUT_MS = 60_000;
 const DIRECT_UPLOAD_TIMEOUT_MS = 60_000;
@@ -63,6 +71,16 @@ export function prewarmVideosForFastUpload(files: File[]): void {
   }
 }
 
+async function verifyDirectUpload(upload: DirectUploadDescriptor): Promise<boolean> {
+  const completeResponse = await fetchWithRetry("/api/media/upload-complete", {
+    method: "POST",
+    headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(upload),
+  });
+
+  return completeResponse.ok;
+}
+
 async function uploadVideoDirectToR2(file: File, area: UploadArea): Promise<string | null> {
   try {
     const signedUrlResponse = await fetchWithRetry("/api/media/upload-url", {
@@ -94,6 +112,14 @@ async function uploadVideoDirectToR2(file: File, area: UploadArea): Promise<stri
       return null;
     }
 
+    const uploadDescriptor: DirectUploadDescriptor = {
+      key: signedUrlPayload.key,
+      publicUrl,
+      contentType: file.type,
+      size: file.size,
+      area,
+    };
+
     const timeout = createTimeoutSignal(DIRECT_UPLOAD_TIMEOUT_MS);
     let uploadResponse: Response;
     try {
@@ -105,6 +131,14 @@ async function uploadVideoDirectToR2(file: File, area: UploadArea): Promise<stri
         body: file,
         signal: timeout.signal,
       });
+    } catch (error) {
+      await verifyDirectUpload(uploadDescriptor).catch((cleanupError) => {
+        log.warn("Direct video upload cleanup failed after PUT error", {
+          uploadError: error instanceof Error ? error.message : String(error),
+          cleanupError: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+        });
+      });
+      throw error;
     } finally {
       timeout.cancel();
     }
@@ -113,27 +147,19 @@ async function uploadVideoDirectToR2(file: File, area: UploadArea): Promise<stri
       log.warn("Direct video upload failed; falling back to validated upload endpoint", {
         status: uploadResponse.status,
       });
+      await verifyDirectUpload(uploadDescriptor).catch((error) => {
+        log.warn("Direct video upload cleanup failed before fallback", {
+          status: uploadResponse.status,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
       return null;
     }
 
-    const completeResponse = await fetchWithRetry("/api/media/upload-complete", {
-      method: "POST",
-      headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({
-        key: signedUrlPayload.key,
-        publicUrl,
-        contentType: file.type,
-        size: file.size,
-        area,
-      }),
-    });
-
-    if (!completeResponse.ok) {
+    if (!(await verifyDirectUpload(uploadDescriptor))) {
       log.warn(
         "Direct video upload verification failed; falling back to validated upload endpoint",
-        {
-          status: completeResponse.status,
-        }
+        { reason: "upload_complete_rejected" }
       );
       return null;
     }
