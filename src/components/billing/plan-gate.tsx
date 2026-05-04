@@ -855,15 +855,29 @@ function usePlanEntitlements(area: MarketplaceArea): PlanEntitlementInfo {
   const [info, setInfo] = useState<PlanEntitlementInfo>(() => ({
     maxPhotos: FREE_POST_CONFIG.maxPhotos,
     maxVideos: isPlaywrightTestMode() ? FREE_POST_CONFIG.maxVideos : FREE_POST_CONFIG.maxVideos,
-    videoAllowed: isPlaywrightTestMode() ? FREE_POST_CONFIG.videoAllowed : false,
+    videoAllowed: FREE_POST_CONFIG.videoAllowed,
   }));
 
   useEffect(() => {
     if (isPlaywrightTestMode()) return;
     let cancelled = false;
-    fetchSharedEntitlements(area).then((result) => {
-      if (!cancelled) setInfo(result);
-    });
+    fetchSharedEntitlements(area)
+      .then((result) => {
+        if (!cancelled) setInfo(result);
+      })
+      .catch((error) => {
+        logger.warn("Unable to load posting entitlements for media controls", {
+          area,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        if (!cancelled) {
+          setInfo({
+            maxPhotos: FREE_POST_CONFIG.maxPhotos,
+            maxVideos: FREE_POST_CONFIG.maxVideos,
+            videoAllowed: FREE_POST_CONFIG.videoAllowed,
+          });
+        }
+      });
     return () => {
       cancelled = true;
     };

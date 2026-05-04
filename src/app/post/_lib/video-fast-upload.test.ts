@@ -76,6 +76,7 @@ describe("uploadVideoWithFastPath", () => {
     expect(url).toBe("https://media.example.com/clip.mp4");
     expect(mockCompressVideoForUpload).toHaveBeenCalledWith(file, {
       requireCompatibleOutput: true,
+      timeoutMs: 60000,
     });
     expect(uploadViaServer).not.toHaveBeenCalled();
     expect(mockFetchWithRetry).toHaveBeenCalledWith(
@@ -102,6 +103,7 @@ describe("uploadVideoWithFastPath", () => {
       expect.objectContaining({
         method: "PUT",
         body: file,
+        signal: expect.any(AbortSignal),
       })
     );
   });
@@ -124,6 +126,7 @@ describe("uploadVideoWithFastPath", () => {
     expect(url).toBe("https://media.example.com/server.mp4");
     expect(mockCompressVideoForUpload).toHaveBeenCalledWith(file, {
       requireCompatibleOutput: true,
+      timeoutMs: 60000,
     });
     expect(putFetch).not.toHaveBeenCalled();
     expect(uploadViaServer).toHaveBeenCalledWith(file);
@@ -149,6 +152,7 @@ describe("uploadVideoWithFastPath", () => {
     expect(url).toBe("https://media.example.com/converted.mp4");
     expect(mockCompressVideoForUpload).toHaveBeenCalledWith(original, {
       requireCompatibleOutput: true,
+      timeoutMs: 60000,
     });
     expect(uploadViaServer).toHaveBeenCalledWith(converted);
   });
@@ -217,7 +221,32 @@ describe("uploadVideoWithFastPath", () => {
       expect.objectContaining({
         method: "PUT",
         body: prepared,
+        signal: expect.any(AbortSignal),
       })
     );
+  });
+
+  it("falls back to server upload when direct storage upload times out", async () => {
+    const file = new File(["video"], "clip.mp4", { type: "video/mp4" });
+    const uploadViaServer = vi.fn().mockResolvedValue("https://media.example.com/server.mp4");
+    mockFetchWithRetry.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        uploadUrl: "https://upload.example.com/signed",
+        key: "media/promotion/user-1/clip.mp4",
+        publicUrl: "https://media.example.com/clip.mp4",
+      }),
+    });
+    putFetch.mockRejectedValueOnce(new DOMException("Timed out", "AbortError"));
+
+    const url = await uploadVideoWithFastPath({
+      file,
+      area: "promotion",
+      uploadViaServer,
+    });
+
+    expect(url).toBe("https://media.example.com/server.mp4");
+    expect(uploadViaServer).toHaveBeenCalledWith(file);
   });
 });

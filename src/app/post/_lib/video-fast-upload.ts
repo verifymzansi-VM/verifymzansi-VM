@@ -14,6 +14,20 @@ type DirectUploadUrlResponse = {
 };
 
 const preparedVideoUploads = new WeakMap<File, Promise<File>>();
+const VIDEO_PREPARE_TIMEOUT_MS = 60_000;
+const DIRECT_UPLOAD_TIMEOUT_MS = 60_000;
+
+function createTimeoutSignal(ms: number): { signal: AbortSignal; cancel: () => void } {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort(new DOMException("Direct video upload timed out", "AbortError"));
+  }, ms);
+
+  return {
+    signal: controller.signal,
+    cancel: () => clearTimeout(timeoutId),
+  };
+}
 
 async function prepareVideoForUpload(file: File): Promise<File> {
   const existing = preparedVideoUploads.get(file);
@@ -21,7 +35,10 @@ async function prepareVideoForUpload(file: File): Promise<File> {
     return existing;
   }
 
-  const prepared = compressVideoForUpload(file, { requireCompatibleOutput: true })
+  const prepared = compressVideoForUpload(file, {
+    requireCompatibleOutput: true,
+    timeoutMs: VIDEO_PREPARE_TIMEOUT_MS,
+  })
     .then((preparedFile) => normalizeSelectedFile(preparedFile))
     .catch((error) => {
       preparedVideoUploads.delete(file);
@@ -77,13 +94,20 @@ async function uploadVideoDirectToR2(file: File, area: UploadArea): Promise<stri
       return null;
     }
 
-    const uploadResponse = await fetch(uploadUrl, {
-      method: "PUT",
-      headers: {
-        "Content-Type": file.type,
-      },
-      body: file,
-    });
+    const timeout = createTimeoutSignal(DIRECT_UPLOAD_TIMEOUT_MS);
+    let uploadResponse: Response;
+    try {
+      uploadResponse = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": file.type,
+        },
+        body: file,
+        signal: timeout.signal,
+      });
+    } finally {
+      timeout.cancel();
+    }
 
     if (!uploadResponse.ok) {
       log.warn("Direct video upload failed; falling back to validated upload endpoint", {

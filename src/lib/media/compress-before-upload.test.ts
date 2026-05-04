@@ -15,7 +15,10 @@ describe("compressVideoForUpload", () => {
 
     const result = await compressVideoForUpload(original);
 
-    expect(compressVideo).toHaveBeenCalledWith(original);
+    expect(compressVideo).toHaveBeenCalledWith(
+      original,
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
     expect(result).toBe(compressed);
   });
 
@@ -35,5 +38,43 @@ describe("compressVideoForUpload", () => {
     await expect(
       compressVideoForUpload(original, { requireCompatibleOutput: true })
     ).rejects.toBeInstanceOf(VideoTranscodeError);
+  });
+
+  it("returns original web-compatible videos when compression times out", async () => {
+    const original = new File(["original"], "clip.mp4", { type: "video/mp4" });
+    vi.useFakeTimers();
+    compressVideo.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          setTimeout(() => reject(new DOMException("Timed out", "AbortError")), 1);
+        })
+    );
+
+    const resultPromise = compressVideoForUpload(original, { timeoutMs: 1 });
+    await vi.runAllTimersAsync();
+    const result = await resultPromise;
+
+    expect(result).toBe(original);
+    vi.useRealTimers();
+  });
+
+  it("fails incompatible videos when conversion times out", async () => {
+    const original = new File(["original"], "clip.mov", { type: "video/quicktime" });
+    vi.useFakeTimers();
+    compressVideo.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          setTimeout(() => reject(new DOMException("Timed out", "AbortError")), 1);
+        })
+    );
+
+    const resultPromise = compressVideoForUpload(original, {
+      requireCompatibleOutput: true,
+      timeoutMs: 1,
+    });
+    const expectation = expect(resultPromise).rejects.toBeInstanceOf(VideoTranscodeError);
+    await vi.runAllTimersAsync();
+    await expectation;
+    vi.useRealTimers();
   });
 });

@@ -51,6 +51,7 @@ import {
   getListingMediaUploadErrorState,
   uploadListingVideoFiles,
 } from "@/app/post/_lib/listing-media-upload";
+import { prewarmVideosForFastUpload } from "@/app/post/_lib/video-fast-upload";
 import { coerceListingAttributes, validateListingAttributes } from "@/lib/forms/listing-form";
 import { CATEGORIES } from "@/lib/constants/categories";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
@@ -1402,6 +1403,7 @@ export default function CreateListingPage() {
                         files={videoFile}
                         onChange={(files) => {
                           setVideoFile(files);
+                          prewarmVideosForFastUpload(files);
                           if (files.length === 0) setVideoCoverFile([]);
                           clearErrors("videos");
                         }}
