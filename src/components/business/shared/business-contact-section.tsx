@@ -1,16 +1,7 @@
 "use client";
 
-import {
-  Facebook,
-  Globe,
-  Instagram,
-  Mail,
-  MessageCircle,
-  MessageSquare,
-  Music2,
-  Phone,
-  Twitter,
-} from "lucide-react";
+import { Globe, Mail, MessageCircle, MessageSquare, Music2, Phone } from "lucide-react";
+import { FacebookIcon, InstagramIcon, TwitterIcon } from "@/components/icons/social-icons";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -134,7 +125,7 @@ export function BusinessContactSection({
                   title="Facebook"
                   className="rounded-full bg-[#1877F2]/10 p-2.5 text-[#1877F2] transition-colors hover:bg-[#1877F2]/20"
                 >
-                  <Facebook className="h-5 w-5 fill-current" />
+                  <FacebookIcon className="h-5 w-5" />
                 </a>
               )}
               {socialLinks?.instagram && (
@@ -145,7 +136,7 @@ export function BusinessContactSection({
                   title="Instagram"
                   className="rounded-full bg-[#E4405F]/10 p-2.5 text-[#E4405F] transition-colors hover:bg-[#E4405F]/20"
                 >
-                  <Instagram className="h-5 w-5" />
+                  <InstagramIcon className="h-5 w-5" />
                 </a>
               )}
               {socialLinks?.twitter && (
@@ -156,7 +147,7 @@ export function BusinessContactSection({
                   title="Twitter"
                   className="rounded-full bg-black/5 p-2.5 text-black transition-colors hover:bg-black/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
                 >
-                  <Twitter className="h-5 w-5 fill-current" />
+                  <TwitterIcon className="h-5 w-5" />
                 </a>
               )}
               {socialLinks?.tiktok && (
