@@ -404,6 +404,28 @@ describe("VideoCardPlayer", () => {
     expect(poster.className).toContain("opacity-100");
   });
 
+  it("shows the first loaded video frame when a video card has no poster", () => {
+    render(
+      <VideoCardPlayer
+        src="https://example.com/clip.mp4"
+        alt="Clip"
+        mode="ambient"
+        showPlaybackControl
+        fallback={<div>Fallback media</div>}
+      />
+    );
+
+    const video = document.querySelector("video") as HTMLVideoElement;
+    expect(video).toHaveAttribute("preload", "metadata");
+    expect(video.className).toContain("opacity-0");
+    expect(screen.getByTestId("media-fallback")).toHaveTextContent("Fallback media");
+
+    fireEvent(video, new Event("loadeddata"));
+
+    expect(video.className).toContain("opacity-100");
+    expect(screen.queryByTestId("media-fallback")).toBeNull();
+  });
+
   it("renders the provided fallback when an image fails to load", () => {
     render(
       <VideoCardPlayer

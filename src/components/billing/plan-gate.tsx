@@ -81,20 +81,20 @@ const AREA_COLORS: Record<MarketplaceArea, string> = {
   PROMOTIONS_EVENTS: "bg-purple-600 text-white",
 };
 
-const AREA_COUNT_TABLES: Record<MarketplaceArea, string> = {
-  MZANSI_MARKET: "listings",
-  MALL_SHOPS: "storefronts",
-  BUSINESS_ADS: "business_profiles",
-  MZANSI_BUSINESS: "businesses",
-  PROMOTIONS_EVENTS: "promotions",
-};
-
 const AREA_ITEM_LABELS: Record<MarketplaceArea, string> = {
   MZANSI_MARKET: "listings",
   MALL_SHOPS: "storefronts",
   BUSINESS_ADS: "profiles",
   MZANSI_BUSINESS: "businesses",
   PROMOTIONS_EVENTS: "promotions",
+};
+
+const AREA_COUNT_TARGETS: Record<MarketplaceArea, { table: string; area?: MarketplaceArea }[]> = {
+  MZANSI_MARKET: [{ table: "listings", area: "MZANSI_MARKET" }],
+  MZANSI_BUSINESS: [{ table: "businesses", area: "MZANSI_BUSINESS" }],
+  PROMOTIONS_EVENTS: [{ table: "promotions" }, { table: "businesses", area: "PROMOTIONS_EVENTS" }],
+  BUSINESS_ADS: [{ table: "business_profiles", area: "BUSINESS_ADS" }],
+  MALL_SHOPS: [{ table: "storefronts", area: "MALL_SHOPS" }],
 };
 
 /* ─────────────────────────────────────────────────────────────
@@ -128,6 +128,34 @@ function planFeatureList(plan: PlanDefinition): { text: string; enabled: boolean
     rows.push({ text: "Videos", enabled: false });
   }
   return rows;
+}
+
+async function countCurrentAreaItems(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  area: MarketplaceArea
+): Promise<number> {
+  let total = 0;
+
+  for (const target of AREA_COUNT_TARGETS[area]) {
+    const ownerCol = (OWNER_COMPAT_TABLES as readonly string[]).includes(target.table)
+      ? await getOwnerColumn(supabase, target.table as OwnerCompatibleTable)
+      : "owner_id";
+
+    let query = supabase
+      .from(target.table)
+      .select("id", { count: "exact", head: true })
+      .eq(ownerCol, userId);
+
+    if (target.area) {
+      query = query.eq("area", target.area);
+    }
+
+    const { count } = await query.neq("status", "rejected");
+    total += count ?? 0;
+  }
+
+  return total;
 }
 
 function InlinePlanGrid({
@@ -315,18 +343,9 @@ export function PlanGate({ area, children }: PlanGateProps) {
         const isTrial = freePostAvailable;
         const trialDaysLeft = freePostAvailable ? FREE_POST_CONFIG.durationDays : 0;
 
-        // Count existing items for this area
-        const table = AREA_COUNT_TABLES[area];
-        const ownerCol = (OWNER_COMPAT_TABLES as readonly string[]).includes(table)
-          ? await getOwnerColumn(supabase, table as OwnerCompatibleTable)
-          : "owner_id";
-        const { count } = await supabase
-          .from(table)
-          .select("id", { count: "exact", head: true })
-          .eq(ownerCol, user.id)
-          .neq("status", "rejected");
-
-        const currentCount = count ?? 0;
+        // Count existing items for this area. Businesses and tourism share the
+        // businesses table, so the area filter is what keeps their free posts separate.
+        const currentCount = await countCurrentAreaItems(supabase, user.id, area);
 
         // Get entitlements for their plan
         const effectiveTier: PlanTier = tier || TRIAL_CONFIG.tier;

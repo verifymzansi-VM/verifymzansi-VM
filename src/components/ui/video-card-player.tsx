@@ -68,6 +68,40 @@ function getInitialMediaAspectRatio(
 
   return mediaWidth / mediaHeight;
 }
+
+function isVisuallyBlankImage(image: HTMLImageElement): boolean {
+  if (!image.naturalWidth || !image.naturalHeight) return true;
+  if (typeof navigator !== "undefined" && navigator.userAgent.includes("jsdom")) return false;
+
+  try {
+    const sampleSize = 16;
+    const canvas = document.createElement("canvas");
+    canvas.width = sampleSize;
+    canvas.height = sampleSize;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) return false;
+
+    context.drawImage(image, 0, 0, sampleSize, sampleSize);
+    const { data } = context.getImageData(0, 0, sampleSize, sampleSize);
+    let totalLuma = 0;
+    let minLuma = 255;
+    let maxLuma = 0;
+
+    for (let index = 0; index < data.length; index += 4) {
+      const luma = data[index] * 0.2126 + data[index + 1] * 0.7152 + data[index + 2] * 0.0722;
+      totalLuma += luma;
+      minLuma = Math.min(minLuma, luma);
+      maxLuma = Math.max(maxLuma, luma);
+    }
+
+    const pixelCount = data.length / 4;
+    const averageLuma = totalLuma / pixelCount;
+    return averageLuma < 10 && maxLuma - minLuma < 12;
+  } catch {
+    return false;
+  }
+}
+
 function getForegroundMediaClassName(
   baseFitClassName: string,
   usesSmartFit: boolean,
@@ -501,6 +535,7 @@ function VideoCardPlayerInner({
   const shouldAutoplay = !isPlaybackPaused;
   const { videoRef, reducedMotion } = useVideoVisibility(managedVideoSrc, shouldAutoplay);
   const [videoReady, setVideoReady] = useState(false);
+  const [hasVideoFrame, setHasVideoFrame] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [posterError, setPosterError] = useState(false);
@@ -539,12 +574,17 @@ function VideoCardPlayerInner({
     (muteControlVisibility === "always" || mode === "interactive");
   const showPlaybackToggle = isVideo && mode === "ambient" && showPlaybackControl && !hasError;
   const canDisplayVideo = !reducedMotion || hasActivatedPlayback;
+  const hasUsablePoster = Boolean(normalizedPoster && !posterError);
+  const videoHasPreviewFrame = hasVideoFrame || videoReady;
 
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
 
-    const onPlaying = () => setVideoReady(true);
+    const onPlaying = () => {
+      setVideoReady(true);
+      setHasVideoFrame(true);
+    };
     const onPlay = () => {
       setHasActivatedPlayback(true);
       setIsPlaying(true);
@@ -558,18 +598,21 @@ function VideoCardPlayerInner({
         });
       }
     };
+    const onLoadedData = () => setHasVideoFrame(true);
     const onEndedNative = () => onEnded?.();
 
     el.addEventListener("playing", onPlaying);
     el.addEventListener("play", onPlay);
     el.addEventListener("pause", onPause);
     el.addEventListener("loadedmetadata", onLoadedMetadata);
+    el.addEventListener("loadeddata", onLoadedData);
     el.addEventListener("ended", onEndedNative);
     return () => {
       el.removeEventListener("playing", onPlaying);
       el.removeEventListener("play", onPlay);
       el.removeEventListener("pause", onPause);
       el.removeEventListener("loadedmetadata", onLoadedMetadata);
+      el.removeEventListener("loadeddata", onLoadedData);
       el.removeEventListener("ended", onEndedNative);
     };
   }, [aspectRatioKey, videoRef, onEnded]);
@@ -604,9 +647,12 @@ function VideoCardPlayerInner({
           value: image.naturalWidth / image.naturalHeight,
         });
       }
+      if (isVideo && isVisuallyBlankImage(image)) {
+        setPosterError(true);
+      }
       setImageLoaded(true);
     },
-    [aspectRatioKey]
+    [aspectRatioKey, isVideo]
   );
 
   const handlePosterError = useCallback(() => {
@@ -702,6 +748,7 @@ function VideoCardPlayerInner({
       e.stopPropagation();
       setHasError(false);
       setVideoReady(false);
+      setHasVideoFrame(false);
 
       const el = videoRef.current;
       if (el && normalizedSrc) {
@@ -793,9 +840,9 @@ function VideoCardPlayerInner({
           <SmartFitBackdrop src={backgroundMediaSrc} sizes={sizes} priority={priority} />
         ) : null}
 
-        {normalizedPoster && !posterError ? (
+        {hasUsablePoster ? (
           <Image
-            src={normalizedPoster}
+            src={normalizedPoster!}
             alt={alt || "Video cover"}
             fill
             className={cn(
@@ -816,13 +863,13 @@ function VideoCardPlayerInner({
             draggable={disableNativeDrag ? false : undefined}
             onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
           />
-        ) : !videoReady || hasError || reducedMotion ? (
+        ) : !videoHasPreviewFrame || hasError ? (
           <MediaFallback fallback={fallback} />
         ) : null}
 
         <video
           ref={videoRef}
-          preload="none"
+          preload={hasUsablePoster ? "none" : "metadata"}
           loop={!onEnded}
           muted
           playsInline
@@ -833,7 +880,10 @@ function VideoCardPlayerInner({
             foregroundMediaClassName,
             "focal-position-object",
             focalPositionClassName,
-            hasError || !videoReady || !canDisplayVideo || isPlaybackPaused
+            hasError ||
+              (hasUsablePoster
+                ? !videoReady || !canDisplayVideo || isPlaybackPaused
+                : !videoHasPreviewFrame)
               ? "opacity-0"
               : "opacity-100"
           )}
@@ -912,9 +962,9 @@ function VideoCardPlayerInner({
         <SmartFitBackdrop src={backgroundMediaSrc} sizes={sizes} priority={priority} />
       ) : null}
 
-      {normalizedPoster && !posterError ? (
+      {hasUsablePoster ? (
         <Image
-          src={normalizedPoster}
+          src={normalizedPoster!}
           alt={alt || "Video cover"}
           fill
           className={cn(
@@ -933,13 +983,13 @@ function VideoCardPlayerInner({
           draggable={disableNativeDrag ? false : undefined}
           onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
         />
-      ) : !videoReady || hasError || !isPlaying ? (
+      ) : !videoHasPreviewFrame || hasError ? (
         <MediaFallback fallback={fallback} />
       ) : null}
 
       <video
         ref={videoRef}
-        preload="none"
+        preload={hasUsablePoster ? "none" : "metadata"}
         loop
         muted
         playsInline
@@ -950,7 +1000,9 @@ function VideoCardPlayerInner({
           foregroundMediaClassName,
           "focal-position-object",
           focalPositionClassName,
-          !videoReady || hasError || !isPlaying ? "opacity-0" : "opacity-100"
+          hasError || (hasUsablePoster ? !videoReady || !isPlaying : !videoHasPreviewFrame)
+            ? "opacity-0"
+            : "opacity-100"
         )}
         data-media-fit={usesSmartFit ? "smart" : "cover"}
         draggable={disableNativeDrag ? false : undefined}
@@ -1069,6 +1121,7 @@ function HoverVideoPlayer({
 
   const { videoRef, containerRef, reducedMotion, isHovering } = useVideoHover(normalizedSrc);
   const [videoReady, setVideoReady] = useState(false);
+  const [hasVideoFrame, setHasVideoFrame] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [posterError, setPosterError] = useState(false);
   const aspectRatioKey = `${normalizedSrc ?? ""}|${normalizedPoster ?? ""}|${mediaWidth ?? ""}|${mediaHeight ?? ""}`;
@@ -1103,12 +1156,17 @@ function HoverVideoPlayer({
     !hasError &&
     !reducedMotion &&
     muteControlVisibility === "always";
+  const hasUsablePoster = Boolean(normalizedPoster && !posterError);
+  const videoHasPreviewFrame = hasVideoFrame || videoReady;
 
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
 
-    const onPlaying = () => setVideoReady(true);
+    const onPlaying = () => {
+      setVideoReady(true);
+      setHasVideoFrame(true);
+    };
     const onLoadedMetadata = () => {
       if (el.videoWidth > 0 && el.videoHeight > 0) {
         setMeasuredMediaAspectRatio({
@@ -1117,12 +1175,15 @@ function HoverVideoPlayer({
         });
       }
     };
+    const onLoadedData = () => setHasVideoFrame(true);
 
     el.addEventListener("playing", onPlaying);
     el.addEventListener("loadedmetadata", onLoadedMetadata);
+    el.addEventListener("loadeddata", onLoadedData);
     return () => {
       el.removeEventListener("playing", onPlaying);
       el.removeEventListener("loadedmetadata", onLoadedMetadata);
+      el.removeEventListener("loadeddata", onLoadedData);
     };
   }, [aspectRatioKey, videoRef]);
 
@@ -1166,6 +1227,9 @@ function HoverVideoPlayer({
           key: aspectRatioKey,
           value: image.naturalWidth / image.naturalHeight,
         });
+      }
+      if (isVisuallyBlankImage(image)) {
+        setPosterError(true);
       }
     },
     [aspectRatioKey]
@@ -1229,9 +1293,9 @@ function HoverVideoPlayer({
         <SmartFitBackdrop src={backgroundMediaSrc} sizes={sizes} priority={priority} />
       ) : null}
 
-      {normalizedPoster && !posterError ? (
+      {hasUsablePoster ? (
         <Image
-          src={normalizedPoster}
+          src={normalizedPoster!}
           alt={alt || "Video cover"}
           fill
           className={cn(
@@ -1250,13 +1314,13 @@ function HoverVideoPlayer({
           draggable={disableNativeDrag ? false : undefined}
           onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
         />
-      ) : !(isHovering && videoReady) || hasError || reducedMotion ? (
+      ) : !videoHasPreviewFrame || hasError ? (
         <MediaFallback fallback={fallback} />
       ) : null}
 
       <video
         ref={videoRef}
-        preload="none"
+        preload={hasUsablePoster ? "none" : "metadata"}
         loop
         muted
         playsInline
@@ -1267,7 +1331,10 @@ function HoverVideoPlayer({
           usesSmartFit ? foregroundMediaClassName : animatedMediaClassName,
           "focal-position-object",
           focalPositionClassName,
-          hasError || reducedMotion || !videoReady || !isHovering ? "opacity-0" : "opacity-100"
+          hasError ||
+            (hasUsablePoster ? reducedMotion || !videoReady || !isHovering : !videoHasPreviewFrame)
+            ? "opacity-0"
+            : "opacity-100"
         )}
         data-media-fit={usesSmartFit ? "smart" : "cover"}
         draggable={disableNativeDrag ? false : undefined}
@@ -1378,6 +1445,7 @@ function FeedVideoPlayer({
     feedPlaybackActive
   );
   const [videoReady, setVideoReady] = useState(false);
+  const [hasVideoFrame, setHasVideoFrame] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [posterError, setPosterError] = useState(false);
   const aspectRatioKey = `${normalizedSrc ?? ""}|${normalizedPoster ?? ""}|${mediaWidth ?? ""}|${mediaHeight ?? ""}`;
@@ -1410,6 +1478,8 @@ function FeedVideoPlayer({
     !hasError &&
     !reducedMotion &&
     muteControlVisibility === "always";
+  const hasUsablePoster = Boolean(normalizedPoster && !posterError);
+  const videoHasPreviewFrame = hasVideoFrame || videoReady;
 
   // Show poster when video is not actively playing (includes user pause AND manager arbitration)
   const showPoster = !isPlaying || !videoReady || hasError;
@@ -1418,7 +1488,10 @@ function FeedVideoPlayer({
     const el = videoRef.current;
     if (!el) return;
 
-    const onPlaying = () => setVideoReady(true);
+    const onPlaying = () => {
+      setVideoReady(true);
+      setHasVideoFrame(true);
+    };
     const onLoadedMetadata = () => {
       if (el.videoWidth > 0 && el.videoHeight > 0) {
         setMeasuredMediaAspectRatio({
@@ -1427,15 +1500,18 @@ function FeedVideoPlayer({
         });
       }
     };
+    const onLoadedData = () => setHasVideoFrame(true);
 
     const onEndedNative = () => onEnded?.();
 
     el.addEventListener("playing", onPlaying);
     el.addEventListener("loadedmetadata", onLoadedMetadata);
+    el.addEventListener("loadeddata", onLoadedData);
     el.addEventListener("ended", onEndedNative);
     return () => {
       el.removeEventListener("playing", onPlaying);
       el.removeEventListener("loadedmetadata", onLoadedMetadata);
+      el.removeEventListener("loadeddata", onLoadedData);
       el.removeEventListener("ended", onEndedNative);
     };
   }, [aspectRatioKey, videoRef, onEnded]);
@@ -1465,6 +1541,9 @@ function FeedVideoPlayer({
           key: aspectRatioKey,
           value: image.naturalWidth / image.naturalHeight,
         });
+      }
+      if (isVisuallyBlankImage(image)) {
+        setPosterError(true);
       }
     },
     [aspectRatioKey]
@@ -1525,9 +1604,9 @@ function FeedVideoPlayer({
       ) : null}
 
       {/* Poster / thumbnail — shown when paused-by-user or video not ready */}
-      {normalizedPoster && !posterError ? (
+      {hasUsablePoster ? (
         <Image
-          src={normalizedPoster}
+          src={normalizedPoster!}
           alt={alt || "Video cover"}
           fill
           className={cn(
@@ -1546,14 +1625,14 @@ function FeedVideoPlayer({
           draggable={disableNativeDrag ? false : undefined}
           onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
         />
-      ) : showPoster ? (
+      ) : !videoHasPreviewFrame || hasError ? (
         <MediaFallback fallback={fallback} />
       ) : null}
 
       {/* Video element */}
       <video
         ref={videoRef}
-        preload="none"
+        preload={hasUsablePoster ? "none" : "metadata"}
         loop={!onEnded}
         muted
         playsInline
@@ -1564,7 +1643,9 @@ function FeedVideoPlayer({
           foregroundMediaClassName,
           "focal-position-object",
           focalPositionClassName,
-          hasError || !videoReady ? "opacity-0" : "opacity-100"
+          hasError || (hasUsablePoster ? !videoReady : !videoHasPreviewFrame)
+            ? "opacity-0"
+            : "opacity-100"
         )}
         data-media-fit={usesSmartFit ? "smart" : "cover"}
         draggable={disableNativeDrag ? false : undefined}

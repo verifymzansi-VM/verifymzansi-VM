@@ -114,6 +114,20 @@ vi.mock("next/link", () => ({
 
 const { PlanGate } = await import("@/components/billing/plan-gate");
 
+function createCountQuery(count: number, eqCalls?: Array<{ column: string; value: unknown }>) {
+  const query = {
+    eq: vi.fn((column: string, value: unknown) => {
+      eqCalls?.push({ column, value });
+      return query;
+    }),
+    neq: vi.fn().mockResolvedValue({ count, error: null }),
+  };
+
+  return {
+    select: vi.fn().mockReturnValue(query),
+  };
+}
+
 describe("PlanGate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -170,14 +184,14 @@ describe("PlanGate", () => {
           }),
         };
       }
-      if (table === "listings" || table === "storefronts" || table === "business_profiles") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              neq: vi.fn().mockResolvedValue({ count: 0, error: null }),
-            }),
-          }),
-        };
+      if (
+        table === "listings" ||
+        table === "storefronts" ||
+        table === "business_profiles" ||
+        table === "businesses" ||
+        table === "promotions"
+      ) {
+        return createCountQuery(0);
       }
       if (table === "free_posts_used") {
         return {
@@ -295,13 +309,7 @@ describe("PlanGate", () => {
         };
       }
       if (table === "listings") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              neq: vi.fn().mockResolvedValue({ count: 0, error: null }),
-            }),
-          }),
-        };
+        return createCountQuery(0);
       }
       if (table === "free_posts_used") {
         return {
@@ -389,13 +397,7 @@ describe("PlanGate", () => {
         };
       }
       if (table === "listings") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              neq: vi.fn().mockResolvedValue({ count: 0, error: null }),
-            }),
-          }),
-        };
+        return createCountQuery(0);
       }
       if (table === "free_posts_used") {
         return {
@@ -423,5 +425,161 @@ describe("PlanGate", () => {
     });
     expect(screen.getByRole("button", { name: /use your free post/i })).toBeTruthy();
     expect(screen.queryByText(/used your free post/i)).toBeNull();
+  });
+
+  it("keeps tourism business rows from consuming the Mzansi Business gate", async () => {
+    const businessCountEqCalls: Array<{ column: string; value: unknown }> = [];
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "account_profiles") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: { id: "sp-1", created_at: new Date().toISOString() },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "entitlements") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  gt: vi.fn().mockReturnValue({
+                    order: vi.fn().mockReturnValue({
+                      limit: vi.fn().mockReturnValue({
+                        maybeSingle: vi.fn().mockResolvedValue({
+                          data: null,
+                          error: null,
+                        }),
+                      }),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "businesses") {
+        return createCountQuery(0, businessCountEqCalls);
+      }
+      if (table === "free_posts_used") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                is: vi.fn().mockResolvedValue({ count: 0, error: null }),
+              }),
+            }),
+          }),
+        };
+      }
+
+      return {};
+    });
+
+    render(
+      <PlanGate area={"MZANSI_BUSINESS" as never}>
+        <div>Business Form</div>
+      </PlanGate>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/1\/1 free post left/i)).toBeTruthy();
+    });
+
+    expect(businessCountEqCalls).toEqual(
+      expect.arrayContaining([
+        { column: "owner_id", value: "u1" },
+        { column: "area", value: "MZANSI_BUSINESS" },
+      ])
+    );
+    expect(screen.queryByText(/posting limit reached/i)).toBeNull();
+  });
+
+  it("counts Tourism & Events promotions and tourism businesses together", async () => {
+    const promotionCountEqCalls: Array<{ column: string; value: unknown }> = [];
+    const businessCountEqCalls: Array<{ column: string; value: unknown }> = [];
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "account_profiles") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: { id: "sp-1", created_at: new Date().toISOString() },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "entitlements") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  gt: vi.fn().mockReturnValue({
+                    order: vi.fn().mockReturnValue({
+                      limit: vi.fn().mockReturnValue({
+                        maybeSingle: vi.fn().mockResolvedValue({
+                          data: null,
+                          error: null,
+                        }),
+                      }),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "promotions") {
+        return createCountQuery(1, promotionCountEqCalls);
+      }
+      if (table === "businesses") {
+        return createCountQuery(1, businessCountEqCalls);
+      }
+      if (table === "free_posts_used") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                is: vi.fn().mockResolvedValue({ count: 1, error: null }),
+              }),
+            }),
+          }),
+        };
+      }
+
+      return {};
+    });
+
+    render(
+      <PlanGate area={"PROMOTIONS_EVENTS" as never}>
+        <div>Tourism Form</div>
+      </PlanGate>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/choose your plan to start posting/i)).toBeTruthy();
+    });
+
+    expect(promotionCountEqCalls).toEqual(
+      expect.arrayContaining([{ column: "owner_id", value: "u1" }])
+    );
+    expect(businessCountEqCalls).toEqual(
+      expect.arrayContaining([
+        { column: "owner_id", value: "u1" },
+        { column: "area", value: "PROMOTIONS_EVENTS" },
+      ])
+    );
   });
 });
