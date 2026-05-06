@@ -996,4 +996,4 @@ export const VerifyMzansiPublicPromo = () => {
   );
 };
 
-export const VerifyMzansiAdvert = VerifyMzansiLaunchReveal;
+export const VerifyMzansiAdvert = () => <VerifyMzansiLaunchReveal />;

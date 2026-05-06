@@ -109,6 +109,7 @@ describe("createHostedCheckout", () => {
           type: "subscription",
           plan_id: "plan-1",
           merchant_reference: "11111111111141118111111111111111",
+          hosted_checkout_methods: "ozow_merchant_configuration",
           created_at: expect.any(String),
         }),
       })

@@ -70,7 +70,7 @@ export const SECRET_SCAN_RULES: SecretScanRule[] = [
   {
     name: "Turnstile secret key",
     pattern:
-      /\bTURNSTILE_SECRET_KEY\s*[:=]\s*(?:["'](?!process\.env\.)[A-Za-z0-9._-]{10,}["']|(?!process\.env\.|\$\{)[A-Za-z0-9._-]{10,})/g,
+      /\bTURNSTILE_SECRET_KEY\s*[:=]\s*(?:["'](?!process\.env\.|z\.)[A-Za-z0-9._-]{10,}["']|0x[A-Za-z0-9_-]{10,})/g,
   },
   {
     name: "Worker API key",

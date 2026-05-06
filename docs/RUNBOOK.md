@@ -203,7 +203,10 @@ Prefer this pattern instead:
    - `OZOW_CLIENT_SECRET`
    - `OZOW_SITE_CODE`
 4. Confirm `OZOW_ENV=production`
-5. Redeploy and test a hosted checkout transaction
+5. Confirm Card Payments are enabled for the same Ozow merchant/site code if
+   customers must be able to pay with Visa or Mastercard.
+6. Redeploy and test a hosted checkout transaction, including the card option on
+   the Ozow-hosted checkout page.
 
 #### Ozow Webhook Secret (Svix)
 

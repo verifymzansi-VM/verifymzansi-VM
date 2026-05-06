@@ -14,7 +14,7 @@ vi.mock("@supabase/ssr", () => ({
   }),
 }));
 
-import { proxy as middleware } from "@/proxy";
+import { middleware } from "@/middleware";
 import { routeRequest } from "@/proxy-handler";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
@@ -53,6 +53,13 @@ describe("proxy — missing Supabase env", () => {
 
   it("returns 503 for protected API routes when Supabase not configured", async () => {
     const res = await routeRequest(createMockRequest("/api/admin/users"));
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body.error).toMatch(/misconfigured/i);
+  });
+
+  it("returns 503 for private account API routes when Supabase not configured", async () => {
+    const res = await routeRequest(createMockRequest("/api/account/delete"));
     expect(res.status).toBe(503);
     const body = await res.json();
     expect(body.error).toMatch(/misconfigured/i);
@@ -252,6 +259,13 @@ describe("proxy — authenticated routing", () => {
     // /api routes under protected prefixes like /dashboard don't exist,
     // but /api/admin is a protected admin prefix
     const res = await routeRequest(createMockRequest("/api/admin/stats"));
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 401 for unauthenticated account API requests before route code runs", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+
+    const res = await routeRequest(createMockRequest("/api/account/delete"));
     expect(res.status).toBe(401);
   });
 

@@ -25,6 +25,10 @@ const PROTECTED_PREFIXES = [
   "/verification",
   "/dsar",
   "/admin",
+  "/api/account",
+  "/api/communications",
+  "/api/content",
+  "/api/drafts",
   "/api/dsar",
   "/api/dashboard",
   "/api/post",
@@ -32,6 +36,12 @@ const PROTECTED_PREFIXES = [
   "/api/verification",
   "/api/admin",
   "/api/otp",
+  "/api/leads",
+  "/api/media/upload",
+  "/api/media/upload-complete",
+  "/api/media/upload-url",
+  "/api/notifications",
+  "/api/profile",
 ];
 
 // -- Core routing logic (testable without security headers) ------------------

@@ -92,6 +92,14 @@ describe("secret scan allowlisting", () => {
     ).toBe(true);
   });
 
+  it("does not flag schema builders as hardcoded Turnstile secrets", () => {
+    const rule = getRule("Turnstile secret key");
+
+    expect(rule.pattern.test("TURNSTILE_SECRET_KEY: z.string().min(1)")).toBe(false);
+    rule.pattern.lastIndex = 0;
+    expect(rule.pattern.test("TURNSTILE_SECRET_KEY: z")).toBe(false);
+  });
+
   it("does not flag obvious placeholder worker secrets", () => {
     expect(
       getRule("Worker API key").pattern.test("WORKER_API_KEY=replace_with_worker_secret")

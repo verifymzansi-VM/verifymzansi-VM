@@ -5,7 +5,7 @@ function optionalPublicEnv(name: string): string | undefined {
   return value ? value : undefined;
 }
 
-export const GENERAL_CONTACT_EMAIL =
+const GENERAL_CONTACT_EMAIL =
   optionalPublicEnv("NEXT_PUBLIC_VERIFYMZANSI_CONTACT_EMAIL") ?? DEFAULT_CONTACT_EMAIL;
 
 export const HELLO_CONTACT_EMAIL =

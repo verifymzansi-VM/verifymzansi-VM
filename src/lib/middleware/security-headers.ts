@@ -126,6 +126,14 @@ function shouldRelaxDocumentCache(pathname: string): boolean {
   return !pathname.startsWith("/api/") && !pathname.startsWith("/_next/");
 }
 
+function shouldPreventApiCaching(pathname: string): boolean {
+  return pathname.startsWith("/api/") && !isCacheableAssetRequest(pathname);
+}
+
+function applyNoStoreCacheControl(response: NextResponse): void {
+  response.headers.set("Cache-Control", "private, no-store, no-cache, must-revalidate");
+}
+
 /** Attach all standard security headers to a response. */
 export function applySecurityHeaders(
   response: NextResponse,
@@ -189,6 +197,9 @@ export function withSecurityHeaders(
     proxyResponse.headers.set("X-Content-Type-Options", "nosniff");
     proxyResponse.headers.set("X-Frame-Options", "DENY");
     proxyResponse.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+    if (shouldPreventApiCaching(pathname)) {
+      applyNoStoreCacheControl(proxyResponse);
+    }
     return proxyResponse;
   }
 
@@ -212,6 +223,8 @@ export function withSecurityHeaders(
     const assetCacheControl = getAssetCacheControl(pathname);
     if (assetCacheControl) {
       proxyResponse.headers.set("Cache-Control", assetCacheControl);
+    } else if (shouldPreventApiCaching(pathname)) {
+      applyNoStoreCacheControl(proxyResponse);
     }
     if (nonce) {
       proxyResponse.headers.set("x-nonce", nonce);
@@ -287,7 +300,10 @@ export function withSecurityHeaders(
     !response.headers.has("Cache-Control") &&
     (request.method === "GET" || request.method === "HEAD")
   ) {
-    response.headers.set("Cache-Control", "private, no-store, no-cache, must-revalidate");
+    applyNoStoreCacheControl(response);
+  }
+  if (shouldPreventApiCaching(request.nextUrl.pathname) && !response.headers.has("Cache-Control")) {
+    applyNoStoreCacheControl(response);
   }
   if (nonce) {
     response.headers.set("x-nonce", nonce);

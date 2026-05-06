@@ -82,6 +82,7 @@ export async function createHostedCheckout(
     ...input.providerData,
     created_at: new Date().toISOString(),
     merchant_reference: providerReference,
+    hosted_checkout_methods: "ozow_merchant_configuration",
   };
 
   const { data: payment, error: insertError } = await input.admin

@@ -256,4 +256,35 @@ describe("withSecurityHeaders", () => {
       "private, no-store, no-cache, must-revalidate"
     );
   });
+
+  it("prevents non-media API responses from being cached", () => {
+    const request = createRequest("/api/profile/update");
+    const proxyResponse = NextResponse.next();
+    const response = withSecurityHeaders(request, proxyResponse);
+
+    expect(response.headers.get("Cache-Control")).toBe(
+      "private, no-store, no-cache, must-revalidate"
+    );
+  });
+
+  it("prevents the CSRF token API response from being cached", () => {
+    const request = createRequest("/api/csrf");
+    const proxyResponse = NextResponse.next();
+    const response = withSecurityHeaders(request, proxyResponse);
+
+    expect(response.headers.get("set-cookie")).toBeNull();
+    expect(response.headers.get("Cache-Control")).toBe(
+      "private, no-store, no-cache, must-revalidate"
+    );
+  });
+
+  it("prevents API error payloads from being cached", () => {
+    const request = createRequest("/api/admin/verification/evidence");
+    const proxyResponse = NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const response = withSecurityHeaders(request, proxyResponse);
+
+    expect(response.headers.get("Cache-Control")).toBe(
+      "private, no-store, no-cache, must-revalidate"
+    );
+  });
 });

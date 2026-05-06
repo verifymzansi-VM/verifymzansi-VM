@@ -161,6 +161,22 @@ function isKnownConsoleNoise(message: string, challengeOnly401: boolean): boolea
     return true;
   }
 
+  if (
+    challengeOnly401 &&
+    value.includes("this document requires") &&
+    value.includes("assignment")
+  ) {
+    return true;
+  }
+
+  if (
+    challengeOnly401 &&
+    value.includes("executing inline script violates") &&
+    value.includes("content security policy directive")
+  ) {
+    return true;
+  }
+
   return false;
 }
 
