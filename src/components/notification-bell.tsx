@@ -15,10 +15,26 @@ import { useRealtime } from "@/hooks/use-realtime";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 
+const NOTIFICATION_REFRESH_INTERVAL_MS = 10_000;
+
+function mapNotificationRow(n: Record<string, unknown>): Notification {
+  const dbId = n.id as string | undefined;
+  return {
+    id: dbId ?? crypto.randomUUID(),
+    type: (n.type as "info" | "success" | "warning" | "error") ?? "info",
+    title: (n.title as string) ?? "Notification",
+    message: (n.message as string) ?? undefined,
+    href: (n.href as string) ?? undefined,
+    read: (n.read as boolean) ?? false,
+    createdAt: (n.created_at as string) ?? new Date().toISOString(),
+  };
+}
+
 /**
  * Notification bell with unread badge + dropdown panel.
  * Hydrates from the API on mount, then listens for Supabase Realtime `INSERT`
- * events on the `notifications` table for live updates.
+ * events on the `notifications` table for live updates. A short polling
+ * fallback keeps the badge current if the realtime socket is unavailable.
  */
 export function NotificationBell({ userId }: { userId?: string }) {
   const {
@@ -30,58 +46,86 @@ export function NotificationBell({ userId }: { userId?: string }) {
     markAllRead,
     clearAll,
   } = useNotificationStore();
-  const hydratedRef = useRef<string | null>(null);
   const mountedRef = useRef(true);
+  const currentUserRef = useRef<string | undefined>(userId);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
     };
   }, []);
 
+  const refreshNotifications = useCallback(
+    async (signal?: AbortSignal) => {
+      const requestUserId = currentUserRef.current;
+      if (!requestUserId) return;
+
+      await fetch("/api/notifications?limit=25", {
+        signal,
+        cache: "no-store",
+        credentials: "same-origin",
+      })
+        .then((r) => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
+        })
+        .then((data) => {
+          if (signal?.aborted || !mountedRef.current || currentUserRef.current !== requestUserId) {
+            return;
+          }
+          if (data.notifications && Array.isArray(data.notifications)) {
+            // Map DB rows -> store Notification objects, preserving id + read status.
+            const mapped = data.notifications.map(mapNotificationRow);
+            hydrateNotifications(
+              mapped,
+              typeof data.unreadCount === "number" ? data.unreadCount : undefined
+            );
+          }
+        })
+        .catch(() => {
+          // Silently fail — notifications are non-critical
+        });
+    },
+    [hydrateNotifications]
+  );
+
   // Hydrate from API on mount (re-runs when userId changes)
   useEffect(() => {
-    if (!userId || hydratedRef.current === userId) return;
-    hydratedRef.current = userId;
+    currentUserRef.current = userId;
+    if (!userId) {
+      clearAll();
+      return;
+    }
 
     // Flush previous user's notifications before fetching
     clearAll();
 
     const controller = new AbortController();
-
-    fetch("/api/notifications?limit=25", { signal: controller.signal })
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((data) => {
-        if (controller.signal.aborted) return;
-        if (data.notifications && Array.isArray(data.notifications)) {
-          // Map DB rows → store Notification objects, preserving id + read status
-          const mapped = data.notifications.map((n: Record<string, unknown>) => {
-            const dbId = n.id as string | undefined;
-            return {
-              id: dbId ?? crypto.randomUUID(),
-              type: (n.type as "info" | "success" | "warning" | "error") ?? "info",
-              title: (n.title as string) ?? "Notification",
-              message: (n.message as string) ?? undefined,
-              href: (n.href as string) ?? undefined,
-              read: (n.read as boolean) ?? false,
-              createdAt: (n.created_at as string) ?? new Date().toISOString(),
-            };
-          });
-          hydrateNotifications(
-            mapped,
-            typeof data.unreadCount === "number" ? data.unreadCount : undefined
-          );
-        }
-      })
-      .catch(() => {
-        // Silently fail — notifications are non-critical
-      });
+    void refreshNotifications(controller.signal);
 
     return () => controller.abort();
-  }, [userId, hydrateNotifications, clearAll]);
+  }, [userId, refreshNotifications, clearAll]);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    const refreshIfVisible = () => {
+      if (document.visibilityState === "visible") {
+        void refreshNotifications();
+      }
+    };
+
+    const intervalId = window.setInterval(refreshIfVisible, NOTIFICATION_REFRESH_INTERVAL_MS);
+    window.addEventListener("focus", refreshIfVisible);
+    document.addEventListener("visibilitychange", refreshIfVisible);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", refreshIfVisible);
+      document.removeEventListener("visibilitychange", refreshIfVisible);
+    };
+  }, [userId, refreshNotifications]);
 
   // Subscribe to real-time notifications for the authenticated user
   useRealtime({
