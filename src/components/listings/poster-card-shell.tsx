@@ -100,7 +100,7 @@ export function PosterCardShell({
   className,
   contentClassName,
   eyebrowClassName,
-  mediaSizes = "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw",
+  mediaSizes = "(max-width: 640px) 72vw, (max-width: 1024px) 50vw, 33vw",
   trustLevel = 0,
   fallback,
   mediaFallbackUrl,

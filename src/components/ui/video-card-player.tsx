@@ -167,6 +167,15 @@ function SmartFitBackdrop({
   );
 }
 
+function SmartFitStaticBackdrop() {
+  return (
+    <div
+      className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800"
+      aria-hidden="true"
+    />
+  );
+}
+
 function MuteButton({
   videoRef,
   showMuteControl,
@@ -501,7 +510,7 @@ function VideoCardPlayerInner({
   mediaFitClassName,
   mode,
   priority,
-  canHover: _canHover,
+  canHover,
   fitStrategy,
   containerAspectRatio,
   mediaWidth,
@@ -551,6 +560,7 @@ function VideoCardPlayerInner({
   const [imageLoaded, setImageLoaded] = useState(false);
 
   const usesSmartFit = shouldUseSmartFit(fitStrategy, mediaAspectRatio, containerAspectRatio);
+  const showSmartFitBackdrop = usesSmartFit && canHover;
   const focalPositionClassName = !usesSmartFit
     ? getFocalPositionClassName(focalX, focalY)
     : undefined;
@@ -779,7 +789,11 @@ function VideoCardPlayerInner({
           className={cn("relative h-full w-full", className)}
           data-media-fit={usesSmartFit ? "smart" : "cover"}
         >
-          <SmartFitBackdrop src={backgroundMediaSrc} sizes={sizes} priority={priority} />
+          {showSmartFitBackdrop ? (
+            <SmartFitBackdrop src={backgroundMediaSrc} sizes={sizes} priority={priority} />
+          ) : (
+            <SmartFitStaticBackdrop />
+          )}
           {!imageLoaded && <div className="absolute inset-0 z-[1] skeleton-shimmer" />}
           <Image
             src={normalizedSrc}
@@ -836,7 +850,7 @@ function VideoCardPlayerInner({
         className={cn("relative h-full w-full", className)}
         data-media-fit={usesSmartFit ? "smart" : "cover"}
       >
-        {usesSmartFit ? (
+        {showSmartFitBackdrop ? (
           <SmartFitBackdrop src={backgroundMediaSrc} sizes={sizes} priority={priority} />
         ) : null}
 
@@ -958,7 +972,7 @@ function VideoCardPlayerInner({
       className={cn("relative h-full w-full group/video", className)}
       data-media-fit={usesSmartFit ? "smart" : "cover"}
     >
-      {usesSmartFit ? (
+      {showSmartFitBackdrop ? (
         <SmartFitBackdrop src={backgroundMediaSrc} sizes={sizes} priority={priority} />
       ) : null}
 
@@ -1467,7 +1481,6 @@ function FeedVideoPlayer({
   const focalPositionClassName = !usesSmartFit
     ? getFocalPositionClassName(focalX, focalY)
     : undefined;
-  const backgroundMediaSrc = normalizedPoster || normalizedSrc;
   const foregroundMediaClassName = getForegroundMediaClassName(
     mediaFitClassName,
     usesSmartFit,
@@ -1599,9 +1612,7 @@ function FeedVideoPlayer({
       className={cn("relative h-full w-full", className)}
       data-media-fit={usesSmartFit ? "smart" : "cover"}
     >
-      {usesSmartFit ? (
-        <SmartFitBackdrop src={backgroundMediaSrc} sizes={sizes} priority={priority} />
-      ) : null}
+      {usesSmartFit ? <SmartFitStaticBackdrop /> : null}
 
       {/* Poster / thumbnail — shown when paused-by-user or video not ready */}
       {hasUsablePoster ? (

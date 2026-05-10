@@ -169,6 +169,7 @@ function SectionShell({
   const mobileBackgroundSrc = background?.mobileSrc ?? backgroundSrc;
   const desktopPosition = background?.objectPosition ?? "center";
   const mobilePosition = background?.mobileObjectPosition ?? desktopPosition;
+  const usesSameResponsiveBackground = backgroundSrc === mobileBackgroundSrc;
 
   return (
     <section
@@ -187,26 +188,41 @@ function SectionShell({
           className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
           aria-hidden="true"
         >
-          <Image
-            src={backgroundSrc}
-            alt=""
-            fill
-            sizes="100vw"
-            priority
-            className={cn("hidden object-cover md:block", "scale-[1.08] lg:scale-[1.04]")}
-            style={{ objectPosition: desktopPosition, filter: backgroundFilter }}
-            data-showroom-background="desktop"
-          />
-          <Image
-            src={mobileBackgroundSrc}
-            alt=""
-            fill
-            sizes="100vw"
-            priority
-            className="object-cover md:hidden scale-[1.12]"
-            style={{ objectPosition: mobilePosition, filter: backgroundFilter }}
-            data-showroom-background="mobile"
-          />
+          {usesSameResponsiveBackground ? (
+            <Image
+              src={backgroundSrc}
+              alt=""
+              fill
+              sizes="100vw"
+              priority
+              className="object-cover scale-[1.12] md:scale-[1.08] lg:scale-[1.04]"
+              style={{ objectPosition: mobilePosition, filter: backgroundFilter }}
+              data-showroom-background="shared"
+            />
+          ) : (
+            <>
+              <Image
+                src={backgroundSrc}
+                alt=""
+                fill
+                sizes="100vw"
+                priority
+                className={cn("hidden object-cover md:block", "scale-[1.08] lg:scale-[1.04]")}
+                style={{ objectPosition: desktopPosition, filter: backgroundFilter }}
+                data-showroom-background="desktop"
+              />
+              <Image
+                src={mobileBackgroundSrc}
+                alt=""
+                fill
+                sizes="100vw"
+                priority
+                className="object-cover md:hidden scale-[1.12]"
+                style={{ objectPosition: mobilePosition, filter: backgroundFilter }}
+                data-showroom-background="mobile"
+              />
+            </>
+          )}
           <div
             className="absolute inset-0 bg-slate-950"
             style={{ opacity: background?.dimOpacity ?? 0.44 }}
