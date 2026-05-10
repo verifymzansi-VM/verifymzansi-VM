@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Subscription is not active" }, { status: 409 });
     }
 
-    const { error: cancelError } = await admin
+    const { data: cancelledRows, error: cancelError } = await admin
       .from("entitlements")
       .update({
         status: "cancelled",
@@ -75,7 +75,8 @@ export async function POST(request: NextRequest) {
       })
       .eq("id", entitlement.id)
       .eq("user_id", user.id)
-      .eq("status", "active");
+      .eq("status", "active")
+      .select("id");
 
     if (cancelError) {
       log.error("Failed to cancel entitlement", {
@@ -84,6 +85,12 @@ export async function POST(request: NextRequest) {
         error: cancelError.message,
       });
       return NextResponse.json({ error: "Failed to cancel subscription" }, { status: 500 });
+    }
+    if (!cancelledRows || cancelledRows.length === 0) {
+      return NextResponse.json(
+        { error: "Subscription status changed before cancellation completed" },
+        { status: 409 }
+      );
     }
 
     try {

@@ -6,6 +6,9 @@ const mockSelect = vi.fn();
 const mockEq = vi.fn();
 const mockSingle = vi.fn();
 const mockUpsert = vi.fn();
+const mockUpdate = vi.fn();
+const mockUpdateEq = vi.fn();
+const mockUpdateSelect = vi.fn();
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
@@ -16,6 +19,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 mockFrom.mockReturnValue({
   select: mockSelect,
   upsert: mockUpsert,
+  update: mockUpdate,
 });
 
 mockSelect.mockReturnValue({
@@ -26,12 +30,41 @@ mockEq.mockReturnValue({
   single: mockSingle,
 });
 
-import { isFeatureEnabled, clearFlagCache } from "@/lib/services/feature-flags";
+mockUpdate.mockReturnValue({
+  eq: mockUpdateEq,
+});
+
+mockUpdateEq.mockReturnValue({
+  select: mockUpdateSelect,
+});
+
+import {
+  isFeatureEnabled,
+  clearFlagCache,
+  updateFeatureFlagConfig,
+} from "@/lib/services/feature-flags";
 
 describe("Feature Flags Service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearFlagCache();
+    mockFrom.mockReturnValue({
+      select: mockSelect,
+      upsert: mockUpsert,
+      update: mockUpdate,
+    });
+    mockSelect.mockReturnValue({
+      eq: mockEq,
+    });
+    mockEq.mockReturnValue({
+      single: mockSingle,
+    });
+    mockUpdate.mockReturnValue({
+      eq: mockUpdateEq,
+    });
+    mockUpdateEq.mockReturnValue({
+      select: mockUpdateSelect,
+    });
   });
 
   it("returns true when flag is enabled", async () => {
@@ -89,5 +122,33 @@ describe("Feature Flags Service", () => {
     await isFeatureEnabled("kyc_v2_flow");
 
     expect(mockFrom).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns an error when updating a nonexistent flag config", async () => {
+    mockUpdateSelect.mockResolvedValue({ data: [], error: null });
+
+    const result = await updateFeatureFlagConfig("missing_flag", {
+      mode: "percent",
+      percent: 25,
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: 'Flag "missing_flag" does not exist',
+    });
+  });
+
+  it("updates an existing flag config", async () => {
+    mockUpdateSelect.mockResolvedValue({ data: [{ key: "kyc_v2_flow" }], error: null });
+
+    const result = await updateFeatureFlagConfig("kyc_v2_flow", {
+      mode: "allowlist",
+      allowlistRoles: ["admin"],
+      updatedBy: "user-1",
+      reason: "canary",
+    });
+
+    expect(result).toEqual({ success: true });
+    expect(mockUpdateEq).toHaveBeenCalledWith("key", "kyc_v2_flow");
   });
 });

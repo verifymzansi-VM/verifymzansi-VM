@@ -31,34 +31,27 @@ const REQUIRED_ADDON_ROUTES = [
   ["billing/create-checkout", "billing/create-checkout/route.ts"],
 ] as const;
 
+const REQUIRED_ADDON_ROUTE_IMPORTS = [
+  ["listings/[id]/boost", () => import("@/app/api/listings/[id]/boost/route")],
+  ["listings/[id]/featured", () => import("@/app/api/listings/[id]/featured/route")],
+  ["listings/[id]/urgent", () => import("@/app/api/listings/[id]/urgent/route")],
+  ["businesses/[id]/boost", () => import("@/app/api/businesses/[id]/boost/route")],
+  ["billing/create-checkout", () => import("@/app/api/billing/create-checkout/route")],
+] as const;
+
 describe("Addon API route files exist and export POST", () => {
   it.each(REQUIRED_ADDON_ROUTES)("/api/%s route file exists on disk", (_label, relativePath) => {
     const fullPath = path.join(APP_DIR, relativePath);
     expect(fs.existsSync(fullPath)).toBe(true);
   });
 
-  it("listings/[id]/featured exports async POST", async () => {
-    const mod = await import("@/app/api/listings/[id]/featured/route");
-    expect(typeof mod.POST).toBe("function");
-  });
-
-  it("listings/[id]/urgent exports async POST", async () => {
-    const mod = await import("@/app/api/listings/[id]/urgent/route");
-    expect(typeof mod.POST).toBe("function");
-  });
-
-  it("listings/[id]/boost exports async POST", async () => {
-    const mod = await import("@/app/api/listings/[id]/boost/route");
-    expect(typeof mod.POST).toBe("function");
-  });
-
-  it("businesses/[id]/boost exports async POST", async () => {
-    const mod = await import("@/app/api/businesses/[id]/boost/route");
-    expect(typeof mod.POST).toBe("function");
-  });
-
-  it("billing/create-checkout exports async POST", async () => {
-    const mod = await import("@/app/api/billing/create-checkout/route");
-    expect(typeof mod.POST).toBe("function");
-  });
+  it.each(REQUIRED_ADDON_ROUTE_IMPORTS)(
+    "%s exports async POST",
+    async (_label, importRoute) => {
+      const mod = await importRoute();
+      expect(typeof mod.POST).toBe("function");
+      expect(mod.POST.constructor.name).toBe("AsyncFunction");
+    },
+    30_000
+  );
 });

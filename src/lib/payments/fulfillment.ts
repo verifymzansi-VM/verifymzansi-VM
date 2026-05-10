@@ -14,6 +14,16 @@ const log = createLogger("PaymentFulfillment");
 const SYSTEM_ACTOR_ID = "00000000-0000-0000-0000-000000000000";
 const VAT_RATE_BPS = 1500;
 
+type UpdateResult = {
+  data?: Array<Record<string, unknown>> | null;
+  error?: { message?: string } | null;
+};
+
+type UpdateFilter = PromiseLike<{ error?: { message?: string } | null }> & {
+  eq: (column: string, value: string) => UpdateFilter;
+  select: (columns: string) => Promise<UpdateResult>;
+};
+
 function computeVatInclusiveBreakdown(totalCents: number): {
   amountCents: number;
   vatCents: number;
@@ -65,6 +75,15 @@ function assertPaidPlanMatchesPayment(
   }
 }
 
+function assertAddonUpdated(
+  data: Array<Record<string, unknown>> | null | undefined,
+  message: string
+) {
+  if (!data || data.length === 0) {
+    throw new Error(message);
+  }
+}
+
 type AdminClient = {
   from: (table: string) => {
     select: (columns: string) => {
@@ -86,14 +105,7 @@ type AdminClient = {
       options: { onConflict: string }
     ) => Promise<{ error?: { message?: string } | null }>;
     insert: (value: Record<string, unknown>) => Promise<{ error?: { message?: string } | null }>;
-    update: (value: Record<string, unknown>) => {
-      eq: (
-        column: string,
-        value: string
-      ) => {
-        eq: (column: string, value: string) => Promise<{ error?: { message?: string } | null }>;
-      };
-    };
+    update: (value: Record<string, unknown>) => UpdateFilter;
   };
 };
 
@@ -296,14 +308,16 @@ export async function fulfillPayment(
         ? meta.boost_days
         : BOOST_DURATION_DAYS;
     const boostUntil = new Date(baseTime + boostDays * 24 * 60 * 60 * 1000).toISOString();
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("listings")
       .update({ boost_until: boostUntil })
       .eq("id", meta.listing_id)
-      .eq(listingsOwnerCol, payment.user_id);
+      .eq(listingsOwnerCol, payment.user_id)
+      .select("id");
     if (error) {
       throw new Error(`Boost update failed: ${error.message}`);
     }
+    assertAddonUpdated(data, `Boost update matched no listing for ${meta.listing_id}`);
     await logAuditEvent({
       actorId: payment.user_id || SYSTEM_ACTOR_ID,
       actorRole: "member",
@@ -327,14 +341,16 @@ export async function fulfillPayment(
         ? meta.boost_days
         : BOOST_DURATION_DAYS;
     const boostUntil = new Date(baseTime + boostDays * 24 * 60 * 60 * 1000).toISOString();
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("businesses")
       .update({ boost_until: boostUntil })
       .eq("id", targetId)
-      .eq(businessesOwnerCol, payment.user_id);
+      .eq(businessesOwnerCol, payment.user_id)
+      .select("id");
     if (error) {
       throw new Error(`Business boost update failed: ${error.message}`);
     }
+    assertAddonUpdated(data, `Business boost update matched no business for ${targetId}`);
     await logAuditEvent({
       actorId: payment.user_id || SYSTEM_ACTOR_ID,
       actorRole: "member",
@@ -351,14 +367,19 @@ export async function fulfillPayment(
         ? meta.boost_days
         : BOOST_DURATION_DAYS;
     const boostUntil = new Date(baseTime + boostDays * 24 * 60 * 60 * 1000).toISOString();
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("storefronts")
       .update({ boost_until: boostUntil })
       .eq("id", meta.storefront_id)
-      .eq(storefrontsOwnerCol, payment.user_id);
+      .eq(storefrontsOwnerCol, payment.user_id)
+      .select("id");
     if (error) {
       throw new Error(`Storefront boost update failed: ${error.message}`);
     }
+    assertAddonUpdated(
+      data,
+      `Storefront boost update matched no storefront for ${meta.storefront_id}`
+    );
     await logAuditEvent({
       actorId: payment.user_id || SYSTEM_ACTOR_ID,
       actorRole: "member",
@@ -375,14 +396,16 @@ export async function fulfillPayment(
         ? meta.feature_days
         : FEATURED_DURATION_DAYS;
     const featuredUntil = new Date(baseTime + featureDays * 24 * 60 * 60 * 1000).toISOString();
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("listings")
       .update({ featured_until: featuredUntil })
       .eq("id", meta.listing_id)
-      .eq(listingsOwnerCol, payment.user_id);
+      .eq(listingsOwnerCol, payment.user_id)
+      .select("id");
     if (error) {
       throw new Error(`Featured update failed: ${error.message}`);
     }
+    assertAddonUpdated(data, `Featured update matched no listing for ${meta.listing_id}`);
     await logAuditEvent({
       actorId: payment.user_id || SYSTEM_ACTOR_ID,
       actorRole: "member",
@@ -399,14 +422,16 @@ export async function fulfillPayment(
         ? meta.urgent_days
         : URGENT_DURATION_DAYS;
     const urgentUntil = new Date(baseTime + urgentDays * 24 * 60 * 60 * 1000).toISOString();
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("listings")
       .update({ urgent_until: urgentUntil })
       .eq("id", meta.listing_id)
-      .eq(listingsOwnerCol, payment.user_id);
+      .eq(listingsOwnerCol, payment.user_id)
+      .select("id");
     if (error) {
       throw new Error(`Urgent update failed: ${error.message}`);
     }
+    assertAddonUpdated(data, `Urgent update matched no listing for ${meta.listing_id}`);
     await logAuditEvent({
       actorId: payment.user_id || SYSTEM_ACTOR_ID,
       actorRole: "member",
@@ -423,14 +448,19 @@ export async function fulfillPayment(
         ? meta.boost_days
         : BOOST_DURATION_DAYS;
     const boostUntil = new Date(baseTime + boostDays * 24 * 60 * 60 * 1000).toISOString();
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("promotions")
       .update({ boost_until: boostUntil })
       .eq("id", meta.promotion_id)
-      .eq(promotionsOwnerCol, payment.user_id);
+      .eq(promotionsOwnerCol, payment.user_id)
+      .select("id");
     if (error) {
       throw new Error(`Promotion boost update failed: ${error.message}`);
     }
+    assertAddonUpdated(
+      data,
+      `Promotion boost update matched no promotion for ${meta.promotion_id}`
+    );
     await logAuditEvent({
       actorId: payment.user_id || SYSTEM_ACTOR_ID,
       actorRole: "member",
@@ -447,14 +477,19 @@ export async function fulfillPayment(
         ? meta.feature_days
         : FEATURED_DURATION_DAYS;
     const featuredUntil = new Date(baseTime + featureDays * 24 * 60 * 60 * 1000).toISOString();
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("promotions")
       .update({ featured_until: featuredUntil })
       .eq("id", meta.promotion_id)
-      .eq(promotionsOwnerCol, payment.user_id);
+      .eq(promotionsOwnerCol, payment.user_id)
+      .select("id");
     if (error) {
       throw new Error(`Promotion featured update failed: ${error.message}`);
     }
+    assertAddonUpdated(
+      data,
+      `Promotion featured update matched no promotion for ${meta.promotion_id}`
+    );
     await logAuditEvent({
       actorId: payment.user_id || SYSTEM_ACTOR_ID,
       actorRole: "member",
@@ -471,14 +506,19 @@ export async function fulfillPayment(
         ? meta.feature_days
         : FEATURED_DURATION_DAYS;
     const featuredUntil = new Date(baseTime + featureDays * 24 * 60 * 60 * 1000).toISOString();
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("businesses")
       .update({ featured_until: featuredUntil })
       .eq("id", meta.business_id)
-      .eq(businessesOwnerCol, payment.user_id);
+      .eq(businessesOwnerCol, payment.user_id)
+      .select("id");
     if (error) {
       throw new Error(`Business featured update failed: ${error.message}`);
     }
+    assertAddonUpdated(
+      data,
+      `Business featured update matched no business for ${meta.business_id}`
+    );
     await logAuditEvent({
       actorId: payment.user_id || SYSTEM_ACTOR_ID,
       actorRole: "member",
@@ -495,14 +535,16 @@ export async function fulfillPayment(
         ? meta.urgent_days
         : URGENT_DURATION_DAYS;
     const urgentUntil = new Date(baseTime + urgentDays * 24 * 60 * 60 * 1000).toISOString();
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("businesses")
       .update({ urgent_until: urgentUntil })
       .eq("id", meta.business_id)
-      .eq(businessesOwnerCol, payment.user_id);
+      .eq(businessesOwnerCol, payment.user_id)
+      .select("id");
     if (error) {
       throw new Error(`Business urgent update failed: ${error.message}`);
     }
+    assertAddonUpdated(data, `Business urgent update matched no business for ${meta.business_id}`);
     await logAuditEvent({
       actorId: payment.user_id || SYSTEM_ACTOR_ID,
       actorRole: "member",
@@ -519,14 +561,19 @@ export async function fulfillPayment(
         ? meta.urgent_days
         : URGENT_DURATION_DAYS;
     const urgentUntil = new Date(baseTime + urgentDays * 24 * 60 * 60 * 1000).toISOString();
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("promotions")
       .update({ urgent_until: urgentUntil })
       .eq("id", meta.promotion_id)
-      .eq(promotionsOwnerCol, payment.user_id);
+      .eq(promotionsOwnerCol, payment.user_id)
+      .select("id");
     if (error) {
       throw new Error(`Promotion urgent update failed: ${error.message}`);
     }
+    assertAddonUpdated(
+      data,
+      `Promotion urgent update matched no promotion for ${meta.promotion_id}`
+    );
     await logAuditEvent({
       actorId: payment.user_id || SYSTEM_ACTOR_ID,
       actorRole: "member",

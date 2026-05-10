@@ -376,7 +376,7 @@ describe("POST /api/verification/location/gps", () => {
     );
   });
 
-  it("rejects GPS confirmation after a manual location has already finalized the session", async () => {
+  it("allows GPS confirmation after a manual location has already finalized the session", async () => {
     const upsertVerificationStep = vi.fn().mockReturnValue({
       select: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data: { id: "step-1" }, error: null }),
@@ -417,7 +417,12 @@ describe("POST /api/verification/location/gps", () => {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               maybeSingle: vi.fn().mockResolvedValue({
-                data: { id: "profile-1", account_verification_status: "pending_review" },
+                data: {
+                  id: "profile-1",
+                  account_verification_status: "pending_review",
+                  location_province: "Gauteng",
+                  location_city: "Johannesburg",
+                },
                 error: null,
               }),
             }),
@@ -484,14 +489,29 @@ describe("POST /api/verification/location/gps", () => {
       })
     );
 
-    expect(res.status).toBe(409);
+    expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual(
       expect.objectContaining({
-        error: "Verification session is already finalized",
+        success: true,
+        verified: true,
+        stepStatus: "approved",
       })
     );
-    expect(upsertVerificationStep).not.toHaveBeenCalled();
-    expect(upsertSession).not.toHaveBeenCalled();
+    expect(upsertVerificationStep).toHaveBeenCalledWith(
+      expect.objectContaining({
+        location_method: "manual_with_gps",
+        location_province: "Gauteng",
+        location_city: "Johannesburg",
+      }),
+      expect.objectContaining({ onConflict: "user_id,step_type" })
+    );
+    expect(upsertSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_id: "u1",
+        location_submitted_at: expect.any(String),
+      }),
+      expect.objectContaining({ onConflict: "user_id" })
+    );
     expect(finalizeSession).not.toHaveBeenCalled();
   });
 
@@ -521,7 +541,12 @@ describe("POST /api/verification/location/gps", () => {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               maybeSingle: vi.fn().mockResolvedValue({
-                data: { id: "profile-1", account_verification_status: "pending_review" },
+                data: {
+                  id: "profile-1",
+                  account_verification_status: "pending_review",
+                  location_province: "Gauteng",
+                  location_city: "Johannesburg",
+                },
                 error: null,
               }),
             }),
@@ -567,7 +592,7 @@ describe("POST /api/verification/location/gps", () => {
     expect(res.status).toBe(409);
     await expect(res.json()).resolves.toEqual(
       expect.objectContaining({
-        error: "Verification session is already finalized",
+        error: "GPS confirmation must match your saved address",
       })
     );
     expect(mockReverseGeocode).not.toHaveBeenCalled();

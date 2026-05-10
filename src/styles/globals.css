@@ -336,7 +336,7 @@
 
   @media (max-height: 700px) {
     .showroom-card-frame {
-      width: min(68vw, 292px);
+      width: min(60vw, 292px);
     }
   }
 

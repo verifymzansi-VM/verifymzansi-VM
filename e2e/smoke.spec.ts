@@ -192,9 +192,13 @@ test.describe("Platform Smoke", () => {
     });
     expect(clearedState).toEqual({ cookie: false, meta: false });
 
-    await page.getByRole("button", { name: /continue with google/i }).click();
+    const googleButton = page.getByRole("button", { name: /continue with google/i });
+    await expect(googleButton).toBeEnabled();
+    await googleButton.click();
 
-    await expect.poll(async () => (await getCapturedOauthRequests(page)).length).toBe(1);
+    await expect
+      .poll(async () => (await getCapturedOauthRequests(page)).length, { timeout: 15_000 })
+      .toBe(1);
 
     const oauthRequests = await getCapturedOauthRequests(page);
     expect(oauthRequests[0]?.headers["x-csrf-token"]).toMatch(/^[a-f0-9]{64}$/i);

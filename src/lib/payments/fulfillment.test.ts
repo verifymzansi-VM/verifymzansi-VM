@@ -13,6 +13,7 @@ function createMockAdminClient(options?: {
   previousEntitlementStatus?: "active" | "cancelled" | null;
   planRows?: Array<Record<string, unknown>>;
   accountStatus?: "active" | "restricted";
+  addonUpdateRows?: Array<Record<string, unknown>>;
 }) {
   const invoiceInsert = vi.fn().mockResolvedValue({ error: null });
   const entitlementsUpsert = vi.fn().mockResolvedValue({ error: null });
@@ -85,27 +86,33 @@ function createMockAdminClient(options?: {
     }
 
     if (table === "listings" || table === "businesses" || table === "promotions") {
+      const updateFilter = {
+        eq: vi.fn().mockReturnThis(),
+        select: vi.fn().mockResolvedValue({
+          data: options?.addonUpdateRows ?? [{ id: `${table}-1` }],
+          error: null,
+        }),
+      };
       return {
         select: vi.fn().mockReturnThis(),
         limit: vi.fn().mockResolvedValue({ error: null }),
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            eq: vi.fn().mockResolvedValue({ error: null }),
-          }),
-        }),
+        update: vi.fn().mockReturnValue(updateFilter),
       };
     }
 
     if (table === "storefronts") {
+      const updateFilter = {
+        eq: vi.fn().mockReturnThis(),
+        select: vi.fn().mockResolvedValue({
+          data: options?.addonUpdateRows ?? [{ id: "storefront-1" }],
+          error: null,
+        }),
+      };
       return {
         select: vi.fn().mockReturnValue({
           limit: vi.fn().mockResolvedValue({ error: null }),
         }),
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            eq: vi.fn().mockResolvedValue({ error: null }),
-          }),
-        }),
+        update: vi.fn().mockReturnValue(updateFilter),
       };
     }
 
@@ -604,6 +611,33 @@ describe("fulfillPayment invoice creation", () => {
         targetType: "promotion",
         targetId: "promo-1",
       })
+    );
+  });
+
+  it("rejects add-on fulfillment when the target update matches zero rows", async () => {
+    const mock = createMockAdminClient({ addonUpdateRows: [] });
+
+    await expect(
+      fulfillPayment(mock.client as never, {
+        id: "pay-missing-listing",
+        user_id: "user-1",
+        area: "MZANSI_MARKET",
+        amount_cents: 9900,
+        status: "processing",
+        provider: "ozow",
+        provider_payment_id: "ozow-missing-listing",
+        provider_reference: "pay-missing-listing",
+        provider_data: {
+          metadata: {
+            type: "boost",
+            listing_id: "missing-listing",
+          },
+        },
+        created_at: "2026-03-26T10:00:00.000Z",
+      })
+    ).rejects.toThrow("Boost update matched no listing");
+    expect(vi.mocked(logAuditEvent)).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: "listing_boosted" })
     );
   });
 });

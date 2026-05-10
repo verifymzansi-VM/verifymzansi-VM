@@ -3,8 +3,11 @@
 
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
+import nextEnv from "@next/env";
 
 const execAsync = promisify(exec);
+const { loadEnvConfig } = nextEnv;
+loadEnvConfig(process.cwd());
 
 const args = process.argv.slice(2);
 const envArg = args.find((arg) => arg.startsWith("--env="));

@@ -192,7 +192,7 @@ export async function updateFeatureFlagConfig(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = createAdminClient();
-    const { error } = await supabase
+    const { error, data } = await supabase
       .from("feature_flags")
       .update({
         mode: config.mode,
@@ -202,10 +202,14 @@ export async function updateFeatureFlagConfig(
         updated_by: config.updatedBy ?? null,
         updated_reason: config.reason ?? null,
       })
-      .eq("key", key);
+      .eq("key", key)
+      .select("key");
 
     if (error) {
       return { success: false, error: error.message };
+    }
+    if (!data || data.length === 0) {
+      return { success: false, error: `Flag "${key}" does not exist` };
     }
 
     FLAG_CACHE.delete(key);

@@ -184,6 +184,8 @@
     ],
     "overrides": {
       "tailwindcss": "3.4.19",
+      "fast-uri": "3.1.2",
+      "fast-xml-builder": "1.2.0",
       "fast-xml-parser": ">=5.7.0",
       "postcss": "8.5.10",
       "yaml@>=2.0.0 <2.8.3": "2.8.3",
@@ -197,6 +199,8 @@
   "overrides": {
     "tailwindcss": "3.4.19",
     "@aws-sdk/xml-builder": "^3.972.5",
+    "fast-uri": "3.1.2",
+    "fast-xml-builder": "1.2.0",
     "fast-xml-parser": ">=5.7.0",
     "postcss": "$postcss"
   },

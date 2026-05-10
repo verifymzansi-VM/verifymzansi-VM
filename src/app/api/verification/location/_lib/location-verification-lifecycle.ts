@@ -20,6 +20,8 @@ type VerificationPhoneStepRow = {
 type VerificationProfileRow = {
   id?: string;
   account_verification_status?: string | null;
+  location_province?: string | null;
+  location_city?: string | null;
 };
 
 type VerificationStepIdentityRow = {
@@ -131,6 +133,7 @@ export async function ensureLocationVerificationWritable({
   profileClient,
   userId,
   logger,
+  allowFinalizedLocationConfirmation = false,
 }: EnsureArgs): Promise<EnsureResult> {
   const { data: existingSession, error: sessionFetchErr } = await adminClient
     .from("verification_sessions")
@@ -159,7 +162,7 @@ export async function ensureLocationVerificationWritable({
 
   const { data: profile, error: profileErr } = await profileClient
     .from(ACCOUNT_PROFILE_WRITE_TABLE)
-    .select("id, account_verification_status")
+    .select("id, account_verification_status, location_province, location_city")
     .eq("user_id", userId)
     .maybeSingle();
   const accountProfile = profile as VerificationProfileRow | null;
@@ -202,6 +205,12 @@ export async function ensureLocationVerificationWritable({
     existingLocationStep?.status === "approved" || existingLocationStep?.status === "pending";
 
   if (existingVerificationSession?.finalized_at) {
+    if (allowFinalizedLocationConfirmation && existingLocationStep?.location_method === "manual") {
+      finalizedLocationConfirmation = true;
+      savedLocationProvince = accountProfile.location_province ?? null;
+      savedLocationCity = accountProfile.location_city ?? null;
+    }
+
     if (!locationIsSubmitted && accountProfile.account_verification_status !== "verified") {
       preserveFinalizedSession = true;
     }
@@ -216,7 +225,7 @@ export async function ensureLocationVerificationWritable({
     }
   }
 
-  if (locationIsSubmitted) {
+  if (locationIsSubmitted && !finalizedLocationConfirmation) {
     return {
       response: NextResponse.json(
         { error: "Location has already been submitted" },

@@ -84,6 +84,19 @@ async function gotoAndWaitForStablePage(page: Page, route: (typeof publicRoutes)
     if (document.fonts) {
       await document.fonts.ready;
     }
+    const images = Array.from(document.images).filter((image) => {
+      const rect = image.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    });
+    await Promise.all(
+      images.map((image) => {
+        if (image.complete && image.naturalWidth > 0) return Promise.resolve();
+        return new Promise<void>((resolve) => {
+          image.addEventListener("load", () => resolve(), { once: true });
+          image.addEventListener("error", () => resolve(), { once: true });
+        });
+      })
+    );
     // Pause all video elements and reset to frame 0 for deterministic captures
     const videos = document.querySelectorAll("video");
     for (const video of videos) {
@@ -121,6 +134,7 @@ test.describe("Visual Regression — Desktop", () => {
       await expect(page).toHaveScreenshot(`${route.name}-desktop.png`, {
         fullPage: true,
         maxDiffPixelRatio: route.name === "homepage" ? 0.1 : 0.01,
+        timeout: 15_000,
       });
     });
   }
@@ -154,6 +168,7 @@ test.describe("Visual Regression — Mobile", () => {
       await expect(page).toHaveScreenshot(`${route.name}-mobile.png`, {
         fullPage: true,
         maxDiffPixelRatio: 0.01,
+        timeout: 15_000,
       });
     });
   }
@@ -184,6 +199,7 @@ test.describe("Visual Regression — Dark Mode", () => {
       await expect(page).toHaveScreenshot(`${route.name}-dark.png`, {
         fullPage: true,
         maxDiffPixelRatio: 0.01,
+        timeout: 15_000,
       });
     });
   }

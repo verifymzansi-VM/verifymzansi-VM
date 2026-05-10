@@ -60,16 +60,23 @@ function mergeProviderData(
 async function patchPayment(
   env: Env,
   paymentId: string,
+  expectedStatus: "pending" | "processing",
   body: Record<string, unknown>
 ): Promise<boolean> {
   const headers = {
     apikey: env.SUPABASE_SERVICE_ROLE_KEY,
     Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
     "Content-Type": "application/json",
-    Prefer: "return=minimal",
+    Prefer: "return=representation",
   };
 
-  const response = await fetch(`${env.SUPABASE_URL}/rest/v1/payments?id=eq.${paymentId}`, {
+  const params = new URLSearchParams({
+    id: `eq.${paymentId}`,
+    status: `eq.${expectedStatus}`,
+    select: "id",
+  });
+
+  const response = await fetch(`${env.SUPABASE_URL}/rest/v1/payments?${params.toString()}`, {
     method: "PATCH",
     headers,
     body: JSON.stringify(body),
@@ -77,6 +84,14 @@ async function patchPayment(
 
   if (!response.ok) {
     console.error(`Payment cleanup patch failed for ${paymentId}`, await response.text());
+    return false;
+  }
+
+  const updatedRows = (await response.json()) as Array<{ id: string }>;
+  if (updatedRows.length === 0) {
+    console.warn(
+      `Payment cleanup skipped ${paymentId}; status changed from ${expectedStatus} before patch`
+    );
     return false;
   }
 
@@ -166,7 +181,7 @@ const worker: ExportedHandler<Env> = {
     let expiryNotifications = 0;
 
     for (const payment of payments) {
-      const updated = await patchPayment(env, payment.id, {
+      const updated = await patchPayment(env, payment.id, "pending", {
         status: "expired",
         provider_data: mergeProviderData(payment, {
           cleanup_reconciled_at: new Date().toISOString(),
@@ -203,7 +218,7 @@ const worker: ExportedHandler<Env> = {
 
       const fulfillmentCompletedAt = getFulfillmentCompletedAt(payment);
       if (fulfillmentCompletedAt) {
-        const updated = await patchPayment(env, payment.id, {
+        const updated = await patchPayment(env, payment.id, "processing", {
           status: "complete",
           provider_data: mergeProviderData(payment, {
             completed_at: new Date().toISOString(),
@@ -218,7 +233,7 @@ const worker: ExportedHandler<Env> = {
         continue;
       }
 
-      const updated = await patchPayment(env, payment.id, {
+      const updated = await patchPayment(env, payment.id, "processing", {
         status: "failed",
         provider_data: mergeProviderData(payment, {
           cleanup_reconciled_at: new Date().toISOString(),

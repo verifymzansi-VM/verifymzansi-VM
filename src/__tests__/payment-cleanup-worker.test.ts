@@ -28,6 +28,31 @@ describe("payment cleanup worker", () => {
   it("expires stale pending payments and reconciles stale processing payments", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       const url = String(input);
+      const method = _init?.method ?? "GET";
+
+      if (method === "PATCH" && url.includes("/rest/v1/payments?id=eq.pending-1")) {
+        expect(url).toContain("status=eq.pending");
+        expect(_init?.headers).toMatchObject({ Prefer: "return=representation" });
+        return { ok: true, json: async () => [{ id: "pending-1" }] } satisfies Partial<Response>;
+      }
+
+      if (method === "PATCH" && url.includes("/rest/v1/payments?id=eq.processing-complete")) {
+        expect(url).toContain("status=eq.processing");
+        expect(_init?.headers).toMatchObject({ Prefer: "return=representation" });
+        return {
+          ok: true,
+          json: async () => [{ id: "processing-complete" }],
+        } satisfies Partial<Response>;
+      }
+
+      if (method === "PATCH" && url.includes("/rest/v1/payments?id=eq.processing-failed")) {
+        expect(url).toContain("status=eq.processing");
+        expect(_init?.headers).toMatchObject({ Prefer: "return=representation" });
+        return {
+          ok: true,
+          json: async () => [{ id: "processing-failed" }],
+        } satisfies Partial<Response>;
+      }
 
       if (url.includes("status=eq.pending")) {
         return {
@@ -66,18 +91,6 @@ describe("payment cleanup worker", () => {
             },
           ],
         } satisfies Partial<Response>;
-      }
-
-      if (url.includes("/rest/v1/payments?id=eq.pending-1")) {
-        return { ok: true, text: async () => "" } satisfies Partial<Response>;
-      }
-
-      if (url.includes("/rest/v1/payments?id=eq.processing-complete")) {
-        return { ok: true, text: async () => "" } satisfies Partial<Response>;
-      }
-
-      if (url.includes("/rest/v1/payments?id=eq.processing-failed")) {
-        return { ok: true, text: async () => "" } satisfies Partial<Response>;
       }
 
       if (url.includes("/rest/v1/notifications")) {
@@ -148,5 +161,52 @@ describe("payment cleanup worker", () => {
       String(url).includes("/rest/v1/notifications")
     );
     expect(notificationCall).toBeDefined();
+  });
+
+  it("skips cleanup counts and notifications when a status race updates zero rows", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+      const url = String(input);
+      const method = _init?.method ?? "GET";
+
+      if (method === "PATCH" && url.includes("/rest/v1/payments?id=eq.pending-race")) {
+        return { ok: true, json: async () => [] } satisfies Partial<Response>;
+      }
+
+      if (url.includes("status=eq.pending")) {
+        return {
+          ok: true,
+          json: async () => [
+            {
+              id: "pending-race",
+              user_id: "user-1",
+              provider_data: { expire_at: "2026-03-17T08:00:00.000Z" },
+            },
+          ],
+        } satisfies Partial<Response>;
+      }
+
+      if (url.includes("status=eq.processing")) {
+        return { ok: true, json: async () => [] } satisfies Partial<Response>;
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-17T09:00:00.000Z"));
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    try {
+      await worker.scheduled?.({ cron: "*/10 * * * *", scheduledTime: Date.now() }, env, ctx);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(
+      fetchMock.mock.calls.some(([url]) => String(url).includes("/rest/v1/notifications"))
+    ).toBe(false);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/rest/v1/audit_logs"))).toBe(
+      false
+    );
   });
 });

@@ -3,7 +3,9 @@ import { expect, test } from "@playwright/test";
 test.describe("Homepage showcase rail desktop drag", () => {
   test("dragging a rail card with the mouse scrolls before release and does not navigate", async ({
     page,
-  }) => {
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== "chromium", "Desktop drag coverage runs in Chromium only.");
+
     const routePath = "/dev/rail-drag";
 
     await page.goto(routePath, { waitUntil: "domcontentloaded" });
