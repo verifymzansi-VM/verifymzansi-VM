@@ -539,9 +539,11 @@ function VideoCardPlayerInner({
     key: number;
     action: "play" | "pause";
   } | null>(null);
-  const managedVideoSrc =
-    isVideo && deferVideoLoadUntilPlay && !hasActivatedPlayback ? undefined : normalizedSrc;
-  const shouldAutoplay = !isPlaybackPaused;
+  const shouldDeferVideoUntilUserIntent =
+    deferVideoLoadUntilPlay || (mode === "ambient" && showPlaybackControl && !canHover);
+  const isWaitingForUserPlayback = shouldDeferVideoUntilUserIntent && !hasActivatedPlayback;
+  const managedVideoSrc = isVideo && isWaitingForUserPlayback ? undefined : normalizedSrc;
+  const shouldAutoplay = !isPlaybackPaused && !isWaitingForUserPlayback;
   const { videoRef, reducedMotion } = useVideoVisibility(managedVideoSrc, shouldAutoplay);
   const [videoReady, setVideoReady] = useState(false);
   const [hasVideoFrame, setHasVideoFrame] = useState(false);
@@ -583,7 +585,7 @@ function VideoCardPlayerInner({
     !reducedMotion &&
     (muteControlVisibility === "always" || mode === "interactive");
   const showPlaybackToggle = isVideo && mode === "ambient" && showPlaybackControl && !hasError;
-  const canDisplayVideo = !reducedMotion || hasActivatedPlayback;
+  const canDisplayVideo = (!reducedMotion || hasActivatedPlayback) && !isWaitingForUserPlayback;
   const hasUsablePoster = Boolean(normalizedPoster && !posterError);
   const videoHasPreviewFrame = hasVideoFrame || videoReady;
 
@@ -714,7 +716,7 @@ function VideoCardPlayerInner({
       const el = videoRef.current;
       if (!el) return;
 
-      if (isPlaybackPaused) {
+      if (isPlaybackPaused || isWaitingForUserPlayback) {
         if (!el.src && normalizedSrc) {
           el.src = normalizedSrc;
         }
@@ -745,7 +747,7 @@ function VideoCardPlayerInner({
       setIsPlaybackPaused(true);
       onPlaybackStateChange?.(false);
     },
-    [isPlaybackPaused, normalizedSrc, onPlaybackStateChange, videoRef]
+    [isPlaybackPaused, isWaitingForUserPlayback, normalizedSrc, onPlaybackStateChange, videoRef]
   );
 
   const handleError = useCallback(() => {
@@ -937,26 +939,29 @@ function VideoCardPlayerInner({
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                const nextAction = isPlaybackPaused ? "play" : "pause";
+                const nextAction = isPlaybackPaused || isWaitingForUserPlayback ? "play" : "pause";
                 togglePlayback(e);
                 setTapIndicator({ key: Date.now(), action: nextAction });
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
-                  const nextAction = isPlaybackPaused ? "play" : "pause";
+                  const nextAction =
+                    isPlaybackPaused || isWaitingForUserPlayback ? "play" : "pause";
                   togglePlayback(e);
                   setTapIndicator({ key: Date.now(), action: nextAction });
                 }
               }}
-              aria-label={isPlaybackPaused ? "Play video" : "Pause video"}
+              aria-label={
+                isPlaybackPaused || isWaitingForUserPlayback ? "Play video" : "Pause video"
+              }
             >
-              {isPlaybackPaused ? (
+              {isPlaybackPaused || isWaitingForUserPlayback ? (
                 <Play className="h-3.5 w-3.5 fill-white" />
               ) : (
                 <Pause className="h-3.5 w-3.5 fill-white" />
               )}
-              <span>{isPlaybackPaused ? "Play" : "Pause"}</span>
+              <span>{isPlaybackPaused || isWaitingForUserPlayback ? "Play" : "Pause"}</span>
             </button>
             {tapIndicator ? (
               <FeedTapIndicator key={tapIndicator.key} action={tapIndicator.action} />
