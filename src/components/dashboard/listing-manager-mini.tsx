@@ -6,6 +6,7 @@ import Image from "next/image";
 import { Pencil, Eye, Package, AlertTriangle, ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ExpiryCountdownBadge } from "@/components/dashboard/expiry-countdown-badge";
 import { cn } from "@/lib/utils";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 
@@ -20,6 +21,7 @@ export interface MiniListingPost {
   area?: string | null;
   photos?: string[] | null;
   view_count?: number | null;
+  expires_at?: string | null;
   created_at: string;
   updated_at?: string | null;
 }
@@ -230,6 +232,7 @@ export function ListingManagerMini({ posts, limit = 5 }: ListingManagerMiniProps
               const title = post.title?.slice(0, 50) || "Untitled";
               const isRejected = post.status === "rejected";
               const dateStr = getRelativeDate(post.updated_at || post.created_at);
+              const showExpiry = post.status === "live" || post.status === "active";
 
               return (
                 <li key={post.id} className="flex items-center gap-3 px-3.5 py-2.5 sm:px-4">
@@ -266,6 +269,13 @@ export function ListingManagerMini({ posts, limit = 5 }: ListingManagerMiniProps
                       </span>
                       <span className="text-[10px] text-muted-foreground">{dateStr}</span>
                     </div>
+                    {showExpiry ? (
+                      <ExpiryCountdownBadge
+                        expiresAt={post.expires_at}
+                        className="mt-1 flex text-[10px] font-medium text-amber-700 dark:text-amber-400"
+                        iconClassName="h-3 w-3"
+                      />
+                    ) : null}
                   </div>
 
                   {/* Quick action */}

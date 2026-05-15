@@ -23,6 +23,15 @@ const log = createLogger("Register");
 const ORPHANED_AUTH_USER_DELETE_RETRY_DELAYS_MS = [150, 400] as const;
 const REGISTRATION_UNAVAILABLE_ERROR = "Registration temporarily unavailable. Please try again.";
 
+/**
+ * Route ownership:
+ * - Auth creation: Supabase signup and orphaned-auth-user cleanup.
+ * - Validation: registerSchema, phone normalization, pwned-password checks, and Turnstile.
+ * - Abuse controls: same-origin guard and shared fail-closed registration rate limit.
+ * - Profile/contact uniqueness: service-role account profile checks and pending phone/email writes.
+ * - Notifications: already-registered email is best-effort and must not enumerate accounts.
+ */
+
 async function deleteOrphanedAuthUser(userId: string, admin: ReturnType<typeof createAdminClient>) {
   for (let attempt = 0; attempt <= ORPHANED_AUTH_USER_DELETE_RETRY_DELAYS_MS.length; attempt += 1) {
     const { error } = await admin.auth.admin.deleteUser(userId);

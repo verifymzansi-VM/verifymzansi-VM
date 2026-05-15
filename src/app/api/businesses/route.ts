@@ -60,6 +60,15 @@ import {
 
 const log = createLogger("BusinessesCRUD");
 const AREA: MarketplaceArea = "MZANSI_BUSINESS";
+
+/**
+ * Route ownership:
+ * - Auth/session/verified posting gates: shared posting API helpers.
+ * - Validation: businessSchema, business query schema, and category/type normalizers.
+ * - Public reads: service-role boundary owned here; keep live/area/contact redaction tests aligned.
+ * - Storage/media: confirmMediaUploads and business mutation payload builder.
+ * - Audit/notifications/free-post ledger: best-effort side effects after content state changes.
+ */
 const BUSINESS_SELECT_FALLBACK_FIELDS = [
   "gallery_photos",
   "business_details",
@@ -381,6 +390,13 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
+    /**
+     * SERVICE_ROLE_PUBLIC_READ_CHECKLIST:
+     * - createAdminClient is used only after query parsing and browse rate limiting.
+     * - Public responses must stay limited to live marketplace content.
+     * - Owner/contact fields must remain redacted where this list endpoint exposes public data.
+     * - Regression coverage lives in service-role-public-read-checklist.test.ts.
+     */
     const hideFixtures = shouldHidePlaywrightFixtures(
       request.cookies?.get?.(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
     );

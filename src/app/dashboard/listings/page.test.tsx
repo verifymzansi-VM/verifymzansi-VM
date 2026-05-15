@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import ListingsPage from "./page";
 import { createClient } from "@/lib/supabase/server";
@@ -129,10 +129,16 @@ describe("Dashboard listings page", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-05T00:00:00.000Z"));
     vi.mocked(createClient).mockResolvedValue(
       mockSupabase as unknown as Awaited<ReturnType<typeof createClient>>
     );
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("aggregates mixed-area content and exposes rejected recovery actions", async () => {
@@ -151,6 +157,7 @@ describe("Dashboard listings page", () => {
             boost_until: null,
             featured_until: null,
             urgent_until: null,
+            expires_at: "2026-03-07T00:00:00.000Z",
             status_reason: null,
           },
           {
@@ -165,6 +172,7 @@ describe("Dashboard listings page", () => {
             boost_until: null,
             featured_until: null,
             urgent_until: null,
+            expires_at: null,
             status_reason: "Add a clear VIN photo before resubmitting.",
           },
           {
@@ -179,6 +187,7 @@ describe("Dashboard listings page", () => {
             boost_until: null,
             featured_until: null,
             urgent_until: null,
+            expires_at: "2026-03-01T00:00:00.000Z",
             status_reason: null,
           },
         ]);
@@ -248,6 +257,7 @@ describe("Dashboard listings page", () => {
     expect(screen.getByRole("button", { name: "Ended (1)" })).toBeInTheDocument();
     expect(screen.getByText("37")).toBeInTheDocument();
     expect(screen.getByText("18")).toBeInTheDocument();
+    expect(screen.getByText("Expires in 2d")).toBeInTheDocument();
 
     expect(screen.getByText("Needs VIN photo")).toBeInTheDocument();
     expect(screen.getByText("Township Tutors")).toBeInTheDocument();

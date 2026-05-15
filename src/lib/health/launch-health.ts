@@ -26,7 +26,37 @@ export interface LaunchHealthSnapshot {
     config: HealthCheckStatus;
     supabase: HealthCheckStatus;
     schema: HealthCheckStatus;
+    r2: HealthCheckStatus;
+    ozow: HealthCheckStatus;
+    resend: HealthCheckStatus;
+    africasTalking: HealthCheckStatus;
+    turnstile: HealthCheckStatus;
+    rateLimiter: HealthCheckStatus;
     audit: HealthCheckStatus;
+  };
+}
+
+function envPresent(name: string): boolean {
+  return typeof process.env[name] === "string" && process.env[name]!.trim().length > 0;
+}
+
+function missingEnvCheck(names: readonly string[]): string[] {
+  return names.filter((name) => !envPresent(name));
+}
+
+function readinessFromEnv(names: readonly string[], detail: string): HealthCheckStatus {
+  const missing = missingEnvCheck(names);
+  if (missing.length > 0) {
+    return {
+      status: "degraded",
+      detail: `Missing required readiness env: ${missing.join(", ")}`,
+      failedChecks: [...missing],
+    };
+  }
+
+  return {
+    status: "ok",
+    detail,
   };
 }
 
@@ -81,6 +111,170 @@ async function getAuditHealth(): Promise<HealthCheckStatus> {
       detail: "Audit monitor unavailable in this runtime",
     };
   }
+}
+
+async function probeR2(
+  mode: ReturnType<typeof resolveLaunchValidationMode>
+): Promise<HealthCheckStatus> {
+  if (mode !== "production") {
+    return {
+      status: "skipped",
+      detail: "R2 readiness probe is only enforced in production mode",
+    };
+  }
+
+  try {
+    const { hasR2WriteAccess } = await import("@/lib/services/storage");
+    const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
+    const writable = await hasR2WriteAccess(privateBucket);
+
+    if (!writable) {
+      return {
+        status: "degraded",
+        detail: "R2 private bucket write access is unavailable",
+        failedChecks: ["R2 private bucket"],
+      };
+    }
+
+    return {
+      status: "ok",
+      detail: "R2 private bucket write path is available",
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    logger.error("R2 readiness probe threw", { error: message });
+    return {
+      status: "degraded",
+      detail: "R2 readiness probe threw before completion",
+    };
+  }
+}
+
+function probeOzow(mode: ReturnType<typeof resolveLaunchValidationMode>): HealthCheckStatus {
+  if (mode !== "production") {
+    return {
+      status: "skipped",
+      detail: "Ozow readiness probe is only enforced in production mode",
+    };
+  }
+
+  const base = readinessFromEnv(
+    ["OZOW_ENV", "OZOW_CLIENT_ID", "OZOW_CLIENT_SECRET", "OZOW_SITE_CODE", "OZOW_WEBHOOK_SECRET"],
+    "Ozow required env is present"
+  );
+  if (base.status !== "ok") return base;
+
+  const ozowEnv = process.env.OZOW_ENV;
+  if (ozowEnv !== "production") {
+    return {
+      status: "degraded",
+      detail: `OZOW_ENV must be production for production readiness, received ${ozowEnv}`,
+      failedChecks: ["OZOW_ENV"],
+    };
+  }
+
+  const configuredBaseUrl = process.env.OZOW_API_BASE_URL;
+  if (configuredBaseUrl) {
+    try {
+      const parsed = new URL(configuredBaseUrl);
+      if (parsed.protocol !== "https:" || parsed.hostname.toLowerCase() !== "one.ozow.com") {
+        return {
+          status: "degraded",
+          detail: "OZOW_API_BASE_URL must be https://one.ozow.com in production",
+          failedChecks: ["OZOW_API_BASE_URL"],
+        };
+      }
+    } catch {
+      return {
+        status: "degraded",
+        detail: "OZOW_API_BASE_URL is not a valid URL",
+        failedChecks: ["OZOW_API_BASE_URL"],
+      };
+    }
+  }
+
+  return {
+    status: "ok",
+    detail: "Ozow production env is present",
+  };
+}
+
+function probeResend(mode: ReturnType<typeof resolveLaunchValidationMode>): HealthCheckStatus {
+  if (mode !== "production") {
+    return {
+      status: "skipped",
+      detail: "Resend readiness probe is only enforced in production mode",
+    };
+  }
+
+  return readinessFromEnv(["RESEND_API_KEY"], "Resend API key is present");
+}
+
+function probeAfricasTalking(
+  mode: ReturnType<typeof resolveLaunchValidationMode>
+): HealthCheckStatus {
+  if (mode !== "production") {
+    return {
+      status: "skipped",
+      detail: "Africa's Talking readiness probe is only enforced in production mode",
+    };
+  }
+
+  return readinessFromEnv(
+    ["AFRICASTALKING_API_KEY", "AFRICASTALKING_USERNAME", "AFRICASTALKING_SENDER_ID"],
+    "Africa's Talking OTP env is present"
+  );
+}
+
+function probeTurnstile(mode: ReturnType<typeof resolveLaunchValidationMode>): HealthCheckStatus {
+  if (mode !== "production") {
+    return {
+      status: "skipped",
+      detail: "Turnstile readiness probe is only enforced in production mode",
+    };
+  }
+
+  return readinessFromEnv(
+    ["NEXT_PUBLIC_TURNSTILE_SITE_KEY", "TURNSTILE_SECRET_KEY"],
+    "Turnstile site and secret keys are present"
+  );
+}
+
+function probeRateLimiter(mode: ReturnType<typeof resolveLaunchValidationMode>): HealthCheckStatus {
+  if (mode !== "production") {
+    return {
+      status: "skipped",
+      detail: "Rate limiter readiness probe is only enforced in production mode",
+    };
+  }
+
+  const base = readinessFromEnv(
+    ["OTP_RATE_LIMITER_URL", "RATE_LIMITER_API_KEY"],
+    "Shared rate limiter env is present"
+  );
+  if (base.status !== "ok") return base;
+
+  try {
+    const parsed = new URL(process.env.OTP_RATE_LIMITER_URL!);
+    if (parsed.protocol !== "https:") {
+      return {
+        status: "degraded",
+        detail: "OTP_RATE_LIMITER_URL must be HTTPS in production",
+        failedChecks: ["OTP_RATE_LIMITER_URL"],
+      };
+    }
+  } catch {
+    return {
+      status: "degraded",
+      detail: "OTP_RATE_LIMITER_URL is not a valid URL",
+      failedChecks: ["OTP_RATE_LIMITER_URL"],
+    };
+  }
+
+  return {
+    status: "ok",
+    detail: "Shared rate limiter env is present",
+  };
 }
 
 /**
@@ -151,11 +345,17 @@ async function probeSchema(
 export async function getLaunchHealthSnapshot(): Promise<LaunchHealthSnapshot> {
   const mode = resolveLaunchValidationMode(process.env);
   const configSummary = validateLaunchConfiguration(process.env, { mode });
-  const [supabase, schema, audit] = await Promise.all([
+  const [supabase, schema, r2, audit] = await Promise.all([
     probeSupabase(mode),
     probeSchema(mode),
+    probeR2(mode),
     getAuditHealth(),
   ]);
+  const ozow = probeOzow(mode);
+  const resend = probeResend(mode);
+  const africasTalking = probeAfricasTalking(mode);
+  const turnstile = probeTurnstile(mode);
+  const rateLimiter = probeRateLimiter(mode);
 
   const config: HealthCheckStatus = {
     status: configSummary.isValid ? "ok" : "degraded",
@@ -170,6 +370,12 @@ export async function getLaunchHealthSnapshot(): Promise<LaunchHealthSnapshot> {
     config.status === "degraded" ||
     audit.status === "degraded" ||
     schema.status === "degraded" ||
+    r2.status === "degraded" ||
+    ozow.status === "degraded" ||
+    resend.status === "degraded" ||
+    africasTalking.status === "degraded" ||
+    turnstile.status === "degraded" ||
+    rateLimiter.status === "degraded" ||
     (mode === "production" && supabase.status === "degraded");
 
   return {
@@ -180,6 +386,12 @@ export async function getLaunchHealthSnapshot(): Promise<LaunchHealthSnapshot> {
       config,
       supabase,
       schema,
+      r2,
+      ozow,
+      resend,
+      africasTalking,
+      turnstile,
+      rateLimiter,
       audit,
     },
   };

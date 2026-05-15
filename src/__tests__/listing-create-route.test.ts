@@ -1153,6 +1153,9 @@ describe("GET /api/listings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetOwnerColumnCacheForTesting();
+    mockCreateClient.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) },
+    });
   });
 
   it("applies placeholder-content exclusions to public listing queries", async () => {
@@ -1181,6 +1184,58 @@ describe("GET /api/listings", () => {
     const json = await response.json();
     expect(json.listings).toEqual([]);
     expect(json.total).toBe(0);
+  });
+
+  it("keeps mandatory status and area filters on service-role public reads", async () => {
+    const eqSpy = vi.fn().mockReturnThis();
+    const rangeSpy = vi.fn().mockResolvedValue({ data: [], count: 0, error: null });
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "listings") {
+          return {
+            select: vi.fn((fields: string) => {
+              if (fields === "id, owner_id") {
+                return {
+                  limit: vi.fn().mockResolvedValue({ error: null }),
+                };
+              }
+
+              return {
+                eq: eqSpy,
+                neq: vi.fn().mockReturnThis(),
+                not: vi.fn().mockReturnThis(),
+                order: vi.fn().mockReturnThis(),
+                range: rangeSpy,
+              };
+            }),
+          };
+        }
+
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            in: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue({ data: [] }),
+            }),
+          };
+        }
+
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const response = await GET(
+      createGetRequest("http://localhost:3000/api/listings?page=1&limit=24")
+    );
+
+    expect(response.status).toBe(200);
+    expect(eqSpy).toHaveBeenCalledWith("status", "live");
+    expect(eqSpy).toHaveBeenCalledWith("area", "MZANSI_MARKET");
   });
 
   it("returns 503 when owner-column probing fails for public listing discovery", async () => {

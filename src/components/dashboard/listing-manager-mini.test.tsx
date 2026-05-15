@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ListingManagerMini } from "@/components/dashboard/listing-manager-mini";
 
@@ -15,6 +15,10 @@ vi.mock("next/image", () => ({
 }));
 
 describe("ListingManagerMini", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("shows a zero view count so owners can see posts with no views yet", () => {
     render(
       <ListingManagerMini
@@ -35,5 +39,30 @@ describe("ListingManagerMini", () => {
 
     expect(screen.getByText("Starter listing")).toBeInTheDocument();
     expect(screen.getByText("0")).toBeInTheDocument();
+  });
+
+  it("shows a countdown when a live post is close to expiry", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-15T10:00:00.000Z"));
+
+    render(
+      <ListingManagerMini
+        posts={[
+          {
+            id: "listing-expiring",
+            title: "Weekend special",
+            status: "live",
+            area: "MZANSI_MARKET",
+            photos: [],
+            view_count: 4,
+            expires_at: "2026-05-15T12:00:00.000Z",
+            created_at: "2026-05-14T10:00:00.000Z",
+            updated_at: "2026-05-14T10:00:00.000Z",
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByText("Expires in 2h")).toBeInTheDocument();
   });
 });

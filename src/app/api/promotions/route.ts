@@ -61,6 +61,15 @@ import {
 const log = createLogger("PromotionsCRUD");
 const AREA: MarketplaceArea = "PROMOTIONS_EVENTS";
 
+/**
+ * Route ownership:
+ * - Auth/session/verified posting gates: shared posting API helpers.
+ * - Validation: promotionSchema, promotion query schema, and tourism/event taxonomy helpers.
+ * - Public reads: service-role boundary owned here; keep live/area/event filters aligned.
+ * - Storage/media: confirmMediaUploads owns persisted media reconciliation.
+ * - Audit/notifications/free-post ledger: best-effort side effects after content state changes.
+ */
+
 type PromotionQueryOps = {
   eq: (column: string, value: unknown) => PromotionQueryOps;
   gt: (column: string, value: string) => PromotionQueryOps;
@@ -541,6 +550,13 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
+    /**
+     * SERVICE_ROLE_PUBLIC_READ_CHECKLIST:
+     * - createAdminClient is used only after browse rate limiting.
+     * - Public responses must stay limited to live Tourism & Events content.
+     * - Placeholder/demo rows are filtered before returning public results.
+     * - Regression coverage lives in service-role-public-read-checklist.test.ts.
+     */
     // Rate limit public reads by IP (local-only — external worker has wrong
     // limits for read actions; 120 req/min is generous for normal browsing).
     const ip = getClientIp(request) || "unknown";

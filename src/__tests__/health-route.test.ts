@@ -34,6 +34,12 @@ describe("Health route", () => {
         config: { status: "ok", errorCount: 0, warningCount: 0 },
         supabase: { status: "ok", detail: "Supabase query probe succeeded" },
         schema: { status: "ok", detail: "Schema verification passed" },
+        r2: { status: "ok", detail: "R2 private bucket write path is available" },
+        ozow: { status: "ok", detail: "Ozow production env is present" },
+        resend: { status: "ok", detail: "Resend API key is present" },
+        africasTalking: { status: "ok", detail: "Africa's Talking OTP env is present" },
+        turnstile: { status: "ok", detail: "Turnstile site and secret keys are present" },
+        rateLimiter: { status: "ok", detail: "Shared rate limiter env is present" },
         audit: { status: "ok", failureCount: 0 },
       },
     });
@@ -50,6 +56,13 @@ describe("Health route", () => {
       status: "ok",
       readiness: "ok",
       timestamp: expect.any(String),
+      mode: "production",
+      checks: expect.objectContaining({
+        config: expect.objectContaining({ status: "ok" }),
+        supabase: expect.objectContaining({ status: "ok" }),
+        r2: expect.objectContaining({ status: "ok" }),
+        rateLimiter: expect.objectContaining({ status: "ok" }),
+      }),
     });
   });
 
@@ -62,6 +75,12 @@ describe("Health route", () => {
         config: { status: "degraded", errorCount: 1, warningCount: 0, failedChecks: ["App URL"] },
         supabase: { status: "degraded", detail: "Supabase launch probe failed" },
         schema: { status: "ok", detail: "Schema verification passed" },
+        r2: { status: "ok", detail: "R2 private bucket write path is available" },
+        ozow: { status: "ok", detail: "Ozow production env is present" },
+        resend: { status: "ok", detail: "Resend API key is present" },
+        africasTalking: { status: "ok", detail: "Africa's Talking OTP env is present" },
+        turnstile: { status: "ok", detail: "Turnstile site and secret keys are present" },
+        rateLimiter: { status: "ok", detail: "Shared rate limiter env is present" },
         audit: { status: "ok", failureCount: 0 },
       },
     });
@@ -74,6 +93,11 @@ describe("Health route", () => {
       status: "degraded",
       readiness: "degraded",
       timestamp: expect.any(String),
+      mode: "production",
+      checks: expect.objectContaining({
+        config: expect.objectContaining({ status: "degraded", errorCount: 1 }),
+        supabase: expect.objectContaining({ status: "degraded" }),
+      }),
     });
   });
 

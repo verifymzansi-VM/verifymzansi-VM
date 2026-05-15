@@ -18,7 +18,6 @@ import {
   normalizeOwnerRecords,
   type OwnerColumn,
   readAccountVerificationStatus,
-  withOwnerColumn,
   withOwnerField,
 } from "@/lib/account/compat";
 import { ensureAccountProfile } from "@/lib/account/ensure-profile";
@@ -31,7 +30,6 @@ import {
   parseMarketplaceFiltersFromSearchParams,
 } from "@/lib/utils/marketplace-query";
 import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
-import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 import { queryWithSelectFallbacks } from "@/lib/utils/marketplace-select-fallback";
 import {
   createBoundedIntegerSchema,
@@ -56,16 +54,30 @@ import {
   confirmMediaUploads,
   MediaUploadConfirmationError,
 } from "@/lib/media/confirm-media-uploads";
+import {
+  LISTING_INSERT_COMPAT_FIELDS,
+  LISTING_SELECT_FALLBACK_FIELDS,
+  applyBaseMarketFilters,
+  canRetryListingInsertForCompat,
+  createListingSelectAttempts,
+  isPlaceholderListing,
+  matchesAttributeFilters,
+  normalizeListingSelectShape,
+  omitListingCompatFields,
+  type ListingInsertErrorLike,
+} from "./_lib/listing-route-helpers";
 
 const log = createLogger("ListingCreate");
 const AREA: MarketplaceArea = "MZANSI_MARKET";
-const LISTING_SELECT_FALLBACK_FIELDS = [
-  "featured_until",
-  "condition",
-  "video_thumbnail",
-  "logo_url",
-  "view_count",
-] as const;
+
+/**
+ * Route ownership:
+ * - Auth/session/verified posting gates: account + posting helpers.
+ * - Validation: listingSchema and marketplace query schemas.
+ * - Public reads: service-role boundary owned here; keep status/area filters and tests aligned.
+ * - Storage/media: confirmMediaUploads owns persisted media reconciliation.
+ * - Audit/notifications/free-post ledger: best-effort side effects after content state changes.
+ */
 const listingsQuerySchema = z.object({
   category: optionalTrimmedStringSchema,
   q: optionalTrimmedStringSchema,
@@ -79,208 +91,21 @@ const listingsQuerySchema = z.object({
   limit: createBoundedIntegerSchema({ defaultValue: 24, min: 1, max: 50, fieldName: "limit" }),
 });
 
-type MarketQueryOps = {
-  eq: (column: string, value: unknown) => MarketQueryOps;
-  gte: (column: string, value: number) => MarketQueryOps;
-  lte: (column: string, value: number) => MarketQueryOps;
-  or: (filters: string) => MarketQueryOps;
-  order: (
-    column: string,
-    options?: { ascending?: boolean; nullsFirst?: boolean }
-  ) => MarketQueryOps;
-};
-
-type ListingInsertErrorLike = {
-  code?: string | null;
-  message?: string | null;
-} | null;
-
-type ListingCompatField =
-  | "location_address"
-  | "location_suburb"
-  | "logo_url"
-  | "media_height"
-  | "media_width"
-  | "focal_x"
-  | "focal_y"
-  | "video_thumbnail";
-
-const LISTING_INSERT_COMPAT_FIELDS: readonly ListingCompatField[] = [
-  "location_address",
-  "location_suburb",
-  "logo_url",
-  "media_height",
-  "media_width",
-  "focal_x",
-  "focal_y",
-  "video_thumbnail",
-];
-
-function canRetryListingInsertForCompat(
-  error: ListingInsertErrorLike,
-  omittedFields: readonly ListingCompatField[]
-) {
-  if (!error) return false;
-
-  const code = error.code ?? "";
-  const message = (error.message ?? "").toLowerCase();
-
-  if (/schema cache/.test(message)) {
-    return true;
-  }
-
-  const retryableCodes = new Set(["42703", "PGRST200", "PGRST202", "PGRST204", "XX000"]);
-
-  if (!retryableCodes.has(code) && !/does not exist|could not find/.test(message)) {
-    return false;
-  }
-
-  return omittedFields.some((field) => message.includes(field.toLowerCase()));
-}
-
-function omitListingCompatFields<T extends Record<string, unknown>>(
-  record: T,
-  omittedFields: readonly ListingCompatField[]
-) {
-  const next = { ...record };
-  for (const field of omittedFields) {
-    delete next[field];
-  }
-  return next;
-}
-
-function applyBaseMarketFilters<T>(
-  query: T,
-  filters: ReturnType<typeof parseMarketplaceFiltersFromSearchParams>
-): T {
-  let builder = query as T & MarketQueryOps;
-
-  if (filters.category) {
-    builder = builder.eq("category", filters.category) as T & MarketQueryOps;
-  }
-  if (filters.province) {
-    builder = builder.eq("location_province", filters.province) as T & MarketQueryOps;
-  }
-  if (filters.city) {
-    builder = builder.eq("location_city", filters.city) as T & MarketQueryOps;
-  }
-  if (filters.priceMin !== undefined) {
-    builder = builder.gte("price_cents", Math.round(filters.priceMin * 100)) as T & MarketQueryOps;
-  }
-  if (filters.priceMax !== undefined) {
-    builder = builder.lte("price_cents", Math.round(filters.priceMax * 100)) as T & MarketQueryOps;
-  }
-  if (filters.condition) {
-    builder = builder.eq("condition", filters.condition) as T & MarketQueryOps;
-  }
-  if (filters.query) {
-    // Strip all characters that are special in PostgREST filter syntax or
-    // Postgres LIKE patterns to prevent filter injection and query errors.
-    const safeSearch = filters.query.replace(/[^\p{L}\p{N}\s]/gu, "").trim();
-    if (safeSearch) {
-      builder = builder.or(`title.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%`) as T &
-        MarketQueryOps;
-    }
-  }
-
-  switch (filters.sort) {
-    case "price_asc":
-      return builder
-        .order("price_cents", { ascending: true })
-        .order("created_at", { ascending: false }) as T;
-    case "price_desc":
-      return builder
-        .order("price_cents", { ascending: false })
-        .order("created_at", { ascending: false }) as T;
-    case "popular":
-      return builder
-        .order("featured", { ascending: false })
-        .order("boost_until", { ascending: false, nullsFirst: false })
-        .order("created_at", { ascending: false }) as T;
-    case "newest":
-    default:
-      return builder
-        .order("featured", { ascending: false })
-        .order("created_at", { ascending: false }) as T;
-  }
-}
-
-function matchesAttributeFilter(attributeValue: unknown, filterValue: string | boolean | string[]) {
-  if (Array.isArray(filterValue)) {
-    if (!Array.isArray(attributeValue)) {
-      return false;
-    }
-
-    const normalizedAttributeValues = attributeValue.map((value) => String(value).toLowerCase());
-    return filterValue.some((value) => normalizedAttributeValues.includes(value.toLowerCase()));
-  }
-
-  if (typeof filterValue === "boolean") {
-    return attributeValue === filterValue;
-  }
-
-  if (attributeValue === null || attributeValue === undefined) {
-    return false;
-  }
-
-  if (typeof attributeValue === "number") {
-    if (filterValue.endsWith("+")) {
-      const minimum = Number(filterValue.slice(0, -1));
-      return Number.isFinite(minimum) && attributeValue >= minimum;
-    }
-
-    const parsed = Number(filterValue);
-    return Number.isFinite(parsed) ? attributeValue === parsed : false;
-  }
-
-  if (typeof attributeValue === "boolean") {
-    return String(attributeValue) === filterValue;
-  }
-
-  if (Array.isArray(attributeValue)) {
-    return attributeValue.some(
-      (value) => String(value).toLowerCase() === filterValue.toLowerCase()
-    );
-  }
-
-  return String(attributeValue).toLowerCase().includes(filterValue.toLowerCase());
-}
-
-function matchesAttributeFilters(
-  attributes: Record<string, unknown> | null | undefined,
-  filters: Record<string, string | boolean | string[]>
-) {
-  return Object.entries(filters).every(([key, value]) =>
-    matchesAttributeFilter(attributes?.[key], value)
-  );
-}
-
-function isPlaceholderListing(listing: { title: string | null; description?: string | null }) {
-  return isPlaceholderMarketplaceContent(listing.title, listing.description);
-}
-
-function normalizeListingSelectShape(
-  listings: Record<string, unknown>[]
-): Record<string, unknown>[] {
-  return listings.map((listing) => ({
-    ...listing,
-    featured_until: listing.featured_until ?? null,
-    condition: listing.condition ?? null,
-    video_thumbnail: listing.video_thumbnail ?? null,
-    logo_url: listing.logo_url ?? null,
-    view_count: listing.view_count ?? null,
-  }));
-}
-
 /**
  * GET /api/listings
  *
  * Public listing discovery endpoint for Mzansi Market with filtering and pagination.
  *
- * NOTE: Uses admin client (bypasses RLS) intentionally for public marketplace reads.
- * Security relies on explicit application-level filters (.eq("status", "live"),
- * .neq("status", "rejected"), etc.) rather than RLS policies. This allows efficient
- * queries with seller profile joins that would be restricted by user-scoped RLS.
+ * SERVICE_ROLE_PUBLIC_READ_CHECKLIST:
+ * - createAdminClient is used only after validating query params and rate limiting.
+ * - Every select attempt must include status=live and area=MZANSI_MARKET.
+ * - Placeholder/demo rows are filtered before returning public results.
+ * - Regression coverage lives in service-role-public-read-checklist.test.ts.
+ *
+ * SECURITY BOUNDARY: uses the service-role admin client for public reads, so
+ * the explicit application filters below are mandatory. Keep status/area
+ * filters in every select attempt and keep the regression tests in
+ * `listing-create-route.test.ts` aligned with this boundary.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -348,84 +173,7 @@ export async function GET(request: NextRequest) {
     filters.page = query.page;
     const limit = query.limit;
     const offset = (filters.page - 1) * limit;
-    const selectAttempts = [
-      {
-        select: withOwnerColumn(
-          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured, view_count, media_width, media_height, focal_x, focal_y",
-          ownerColumn
-        ),
-        omittedFields: [] as const,
-      },
-      {
-        select: withOwnerColumn(
-          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured, view_count, media_width, media_height, focal_x, focal_y",
-          ownerColumn
-        ),
-        omittedFields: ["featured_until"] as const,
-      },
-      {
-        select: withOwnerColumn(
-          "id, owner_id, title, description, price_cents, price_negotiable, category, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured, view_count, media_width, media_height, focal_x, focal_y",
-          ownerColumn
-        ),
-        omittedFields: ["condition"] as const,
-      },
-      {
-        select: withOwnerColumn(
-          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured, view_count, media_width, media_height, focal_x, focal_y",
-          ownerColumn
-        ),
-        omittedFields: ["video_thumbnail"] as const,
-      },
-      {
-        select: withOwnerColumn(
-          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured_until, featured, view_count, media_width, media_height, focal_x, focal_y",
-          ownerColumn
-        ),
-        omittedFields: ["logo_url"] as const,
-      },
-      {
-        select: withOwnerColumn(
-          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured, media_width, media_height, focal_x, focal_y",
-          ownerColumn
-        ),
-        omittedFields: ["view_count"] as const,
-      },
-      {
-        select: withOwnerColumn(
-          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured, media_width, media_height, focal_x, focal_y",
-          ownerColumn
-        ),
-        omittedFields: ["featured_until", "view_count"] as const,
-      },
-      {
-        select: withOwnerColumn(
-          "id, owner_id, title, description, price_cents, price_negotiable, category, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured, media_width, media_height, focal_x, focal_y",
-          ownerColumn
-        ),
-        omittedFields: ["condition", "view_count"] as const,
-      },
-      {
-        select: withOwnerColumn(
-          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured, media_width, media_height, focal_x, focal_y",
-          ownerColumn
-        ),
-        omittedFields: ["video_thumbnail", "view_count"] as const,
-      },
-      {
-        select: withOwnerColumn(
-          "id, owner_id, title, description, price_cents, price_negotiable, category, attributes, photos, videos, location_province, location_city, created_at, boost_until, featured, media_width, media_height, focal_x, focal_y",
-          ownerColumn
-        ),
-        omittedFields: [
-          "featured_until",
-          "condition",
-          "video_thumbnail",
-          "logo_url",
-          "view_count",
-        ] as const,
-      },
-    ] as const;
+    const selectAttempts = createListingSelectAttempts(ownerColumn);
     const hasAttributeFilters = Object.keys(filters.attributes).length > 0;
 
     let listings: Record<string, unknown>[] = [];

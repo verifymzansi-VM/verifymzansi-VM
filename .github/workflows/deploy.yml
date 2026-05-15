@@ -112,8 +112,8 @@ jobs:
           echo "APP_URL=$NORMALIZED_APP_URL" >> "$GITHUB_ENV"
           echo "NEXT_PUBLIC_TURNSTILE_SITE_KEY=$RAW_TURNSTILE_SITE_KEY" >> "$GITHUB_ENV"
           echo "KYC_PROVIDER=$NORMALIZED_KYC_PROVIDER" >> "$GITHUB_ENV"
-      - name: Secret scan
-        run: pnpm run secret-scan
+      - name: Strict secret scan
+        run: pnpm run secret-scan:strict
       - name: Security audit
         run: pnpm run security:audit
       - name: License policy check
@@ -162,6 +162,12 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node scripts/validate-cloudflare-deploy-credentials.mjs
+
+      - name: Verify Cloudflare Worker secrets before deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm run cloudflare:secrets:check
 
       - name: Deploy to Cloudflare
         env:

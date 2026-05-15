@@ -25,6 +25,14 @@ import { getAuthAdminUserSummary } from "@/lib/supabase/auth-admin-user";
 const log = createLogger("OzowWebhook");
 const SUPPORTED_OZOW_EVENT_TYPE = "transaction.complete";
 
+/**
+ * Route ownership:
+ * - Authenticity/idempotency: Ozow signature verification and payment-store claim helpers.
+ * - Validation: normalized Ozow payload, merchant reference, amount, currency, and provider IDs.
+ * - Fulfillment: payments/fulfillment owns entitlement creation and rollback recovery.
+ * - Audit/notifications: this route owns receipt/failure email and payment audit side effects.
+ */
+
 function isE2eLoggingContext(): boolean {
   const runtimeMode = (process.env.VERIFYMZANSI_RUNTIME_MODE || "").toLowerCase();
   return (

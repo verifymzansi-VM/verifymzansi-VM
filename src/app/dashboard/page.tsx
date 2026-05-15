@@ -90,7 +90,7 @@ export default async function DashboardPage() {
     applyOwnerFilter(
       supabase
         .from("listings")
-        .select("id, title, status, area, photos, view_count, created_at, updated_at")
+        .select("id, title, status, area, photos, view_count, expires_at, created_at, updated_at")
         .order("updated_at", { ascending: false })
         .limit(10),
       listingOwnerColumn,
@@ -244,6 +244,7 @@ export default async function DashboardPage() {
       area?: string | null;
       photos?: string[] | null;
       view_count?: number | null;
+      expires_at?: string | null;
       created_at: string;
       updated_at?: string | null;
     }) => ({
@@ -253,6 +254,7 @@ export default async function DashboardPage() {
       area: l.area,
       photos: l.photos,
       view_count: listingViewCounts.data.get(l.id) ?? l.view_count ?? null,
+      expires_at: l.expires_at,
       created_at: l.created_at,
       updated_at: l.updated_at,
     })

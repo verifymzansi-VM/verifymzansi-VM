@@ -38,6 +38,8 @@ const VALID_PRODUCTION_ENV = {
   IP_HASH_SECRET: "p".repeat(32),
   NEXT_PUBLIC_TURNSTILE_SITE_KEY: "0x4AAAAAAA_test_site_key",
   TURNSTILE_SECRET_KEY: "0x4AAAAAAA_test_secret_key", // secret-scan: allow deterministic fixture
+  OTP_RATE_LIMITER_URL: "https://verifymzansi-rate-limiter.example.workers.dev",
+  RATE_LIMITER_API_KEY: "rate-limiter-api-key",
 };
 
 function stubLaunchEnv(values: Record<string, string>) {
@@ -73,6 +75,12 @@ describe("getLaunchHealthSnapshot", () => {
     expect(snapshot.checks.config.status).toBe("ok");
     expect(snapshot.checks.supabase.status).toBe("ok");
     expect(snapshot.checks.schema.status).toBe("degraded");
+    expect(snapshot.checks.r2.status).toBe("ok");
+    expect(snapshot.checks.ozow.status).toBe("ok");
+    expect(snapshot.checks.resend.status).toBe("ok");
+    expect(snapshot.checks.africasTalking.status).toBe("ok");
+    expect(snapshot.checks.turnstile.status).toBe("ok");
+    expect(snapshot.checks.rateLimiter.status).toBe("ok");
     expect(snapshot.checks.audit.status).toBe("ok");
     expect(snapshot.status).toBe("degraded");
   });
@@ -100,6 +108,24 @@ describe("getLaunchHealthSnapshot", () => {
 
     expect(snapshot.status).toBe("degraded");
     expect(snapshot.checks.schema.status).toBe("degraded");
+  });
+
+  it("returns degraded when external readiness env is missing in production", async () => {
+    vi.stubEnv("RATE_LIMITER_API_KEY", "");
+    vi.mocked(createAdminClient).mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          limit: vi.fn().mockResolvedValue({ error: null }),
+        }),
+      }),
+    } as never);
+    vi.mocked(getAuditFailureCount).mockReturnValue(0);
+
+    const snapshot = await getLaunchHealthSnapshot();
+
+    expect(snapshot.status).toBe("degraded");
+    expect(snapshot.checks.rateLimiter.status).toBe("degraded");
+    expect(snapshot.checks.rateLimiter.failedChecks).toContain("RATE_LIMITER_API_KEY");
   });
 
   it("returns degraded when production config drifts from launch requirements", async () => {
@@ -134,5 +160,8 @@ describe("getLaunchHealthSnapshot", () => {
     expect(snapshot.mode).toBe("e2e");
     expect(snapshot.checks.supabase.status).toBe("skipped");
     expect(snapshot.checks.schema.status).toBe("skipped");
+    expect(snapshot.checks.r2.status).toBe("skipped");
+    expect(snapshot.checks.ozow.status).toBe("skipped");
+    expect(snapshot.checks.rateLimiter.status).toBe("skipped");
   });
 });

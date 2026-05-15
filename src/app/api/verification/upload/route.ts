@@ -1,20 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { uploadKycDocument, deleteFromR2, hasR2WriteAccess } from "@/lib/services/storage";
+import { uploadKycDocument, hasR2WriteAccess } from "@/lib/services/storage";
 import { logAuditEvent } from "@/lib/services/audit";
 import { fileUploadSchema, validateUploadedFile } from "@/lib/validations/verification";
 import { processKycArtifact } from "@/lib/services/kyc-engine";
 import { createLogger } from "@/lib/utils/logger";
 import { isStrictLocalDevelopmentRequest } from "@/lib/utils/local-dev";
-import { stripExifFromJpeg, stripMetadataFromPng } from "@/lib/utils/exif-strip";
-import { inspectJpegExif, type ExifSignals } from "@/lib/utils/exif-inspect";
-import { getImageDimensions } from "@/lib/utils/image-dimensions";
-import { decodeImageToPixels, computeLaplacianVariance } from "@/lib/utils/blur-detection";
-import { computePerceptualHash } from "@/lib/utils/perceptual-hash";
-import { scanForMalware } from "@/lib/utils/malware-scan";
-import { MIN_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION } from "@/lib/constants/verification";
-import { validateBufferIntegrity } from "@/lib/utils/file-validation";
 import {
   buildPendingVerificationStep,
   buildVerificationSessionResumePatch,
@@ -29,102 +21,24 @@ import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { parseAndValidateFormData } from "@/lib/utils/api";
 import { buildVerificationEmailConfirmationRequiredPayload } from "@/lib/constants/verification-email-confirmation";
 import { extractDobFromSaId, calculateAgeFromDob } from "@/lib/utils/sa-id-validation";
+import { cleanupPersistedKycUpload, cleanupUploadedR2Object } from "./_lib/kyc-upload-cleanup";
+import { analyzeKycUploadFile } from "./_lib/kyc-file-analysis";
 
 const log = createLogger("VerificationUpload");
 const ID_NUMBER_IN_USE_ERROR = "This ID number is already linked to another account.";
 const ID_NUMBER_DUPLICATE_CODE = "id_number_duplicate";
-const R2_CLEANUP_RETRY_DELAYS_MS = [0, 75, 150] as const;
+
+/**
+ * Route ownership:
+ * - Auth/session/email/profile gates: this route plus shared account helpers.
+ * - Validation: verification upload schemas, file analysis, age/SA ID checks.
+ * - Storage/encryption: storage service and upload cleanup helpers own R2 artifact lifecycle.
+ * - KYC risk: kyc-engine owns duplicate, velocity, HMAC, provider, and signal scoring.
+ * - Audit/verification state: this route owns final DB writes and cleanup on partial failure.
+ */
 
 // Re-exported from shared module
 import { getDefaultDisplayName } from "@/lib/account/ensure-profile";
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function cleanupUploadedR2Object(params: {
-  bucket: string;
-  key: string;
-  requestId: string;
-  reason: string;
-}): Promise<boolean> {
-  for (let attempt = 0; attempt < R2_CLEANUP_RETRY_DELAYS_MS.length; attempt += 1) {
-    const delayMs = R2_CLEANUP_RETRY_DELAYS_MS[attempt];
-    if (delayMs > 0) {
-      await sleep(delayMs);
-    }
-
-    try {
-      await deleteFromR2(params.bucket, params.key);
-
-      if (attempt > 0) {
-        log.warn("R2 cleanup succeeded after retry", {
-          requestId: params.requestId,
-          r2Key: params.key,
-          reason: params.reason,
-          attempts: attempt + 1,
-        });
-      }
-
-      return true;
-    } catch (error) {
-      const details = {
-        requestId: params.requestId,
-        r2Key: params.key,
-        reason: params.reason,
-        attempt: attempt + 1,
-        error: error instanceof Error ? error.message : String(error),
-      };
-
-      if (attempt === R2_CLEANUP_RETRY_DELAYS_MS.length - 1) {
-        log.error("CRITICAL: Failed to clean up orphaned R2 file after retries", details);
-        return false;
-      }
-
-      log.warn("R2 cleanup attempt failed; retrying", details);
-    }
-  }
-
-  return false;
-}
-
-async function cleanupPersistedKycUpload(params: {
-  admin: ReturnType<typeof createAdminClient>;
-  artifactId: string;
-  bucket: string;
-  key: string;
-  requestId: string;
-  reason: string;
-  uploadedToR2: boolean;
-}): Promise<void> {
-  try {
-    const { error } = await params.admin.from("kyc_artifacts").delete().eq("id", params.artifactId);
-    if (error) {
-      log.error("CRITICAL: Failed to clean up rejected kyc_artifact row", {
-        artifactId: params.artifactId,
-        requestId: params.requestId,
-        reason: params.reason,
-        error: error.message,
-      });
-    }
-  } catch (error) {
-    log.error("CRITICAL: Failed to clean up rejected kyc_artifact row", {
-      artifactId: params.artifactId,
-      requestId: params.requestId,
-      reason: params.reason,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-
-  if (params.uploadedToR2) {
-    await cleanupUploadedR2Object({
-      bucket: params.bucket,
-      key: params.key,
-      requestId: params.requestId,
-      reason: params.reason,
-    });
-  }
-}
 
 /**
  * POST /api/verification/upload
@@ -444,107 +358,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── Read file bytes once for SHA-256 and upload ───────────
-    let fileBuffer = Buffer.from(await file.arrayBuffer());
-
-    // ── Server-side magic-byte MIME validation ────────────────
-    const integrity = validateBufferIntegrity(fileBuffer, file.type);
-    if (!integrity.valid) {
-      log.warn("File MIME mismatch detected", {
-        declared: file.type,
-        detected: integrity.detectedMime,
-        userId: user.id,
-      });
-      return NextResponse.json(
-        {
-          error: "File type does not match its content. Please upload a valid image or document.",
-          requestId,
-        },
-        { status: 400 }
-      );
-    }
-
-    // ── Malware scan ──────────────────────────────────────────
-    const scanResult = scanForMalware(fileBuffer, file.type);
-    if (!scanResult.safe) {
-      log.warn("Malware detected in KYC upload", {
-        threat: scanResult.threat,
-        userId: user.id,
-        fileName: file.name,
-      });
-      return NextResponse.json(
-        {
-          error:
-            "This file was rejected because it contains suspicious content. Please upload a clean photo.",
-          requestId,
-        },
-        { status: 400 }
-      );
-    }
-
-    // ── Inspect EXIF metadata for fraud signals (before stripping) ──
-    let exifSignals: ExifSignals | null = null;
-    if (file.type === "image/jpeg" || integrity.detectedMime === "image/jpeg") {
-      exifSignals = inspectJpegExif(fileBuffer);
-    }
-
-    // ── Image dimension validation ───────────────────────────
-    const isImageFile = file.type.startsWith("image/");
-    if (isImageFile) {
-      const dims = getImageDimensions(fileBuffer);
-      if (dims) {
-        const shortest = Math.min(dims.width, dims.height);
-        const longest = Math.max(dims.width, dims.height);
-        if (shortest < MIN_IMAGE_DIMENSION) {
-          return NextResponse.json(
-            {
-              error: `Image is too small (${dims.width}×${dims.height}). Minimum ${MIN_IMAGE_DIMENSION}px on shortest side.`,
-              requestId,
-            },
-            { status: 400 }
-          );
-        }
-        if (longest > MAX_IMAGE_DIMENSION) {
-          return NextResponse.json(
-            {
-              error: `Image is too large (${dims.width}×${dims.height}). Maximum ${MAX_IMAGE_DIMENSION}px on longest side.`,
-              requestId,
-            },
-            { status: 400 }
-          );
-        }
-      }
-    }
-
-    // ── Blur detection (best-effort, requires sharp) ─────────
-    let blurScore: number | null = null;
-    if (isImageFile) {
-      try {
-        const pixels = await decodeImageToPixels(fileBuffer, file.type);
-        if (pixels) {
-          blurScore = computeLaplacianVariance(pixels.data, pixels.width, pixels.height);
-        }
-      } catch {
-        // Blur detection is best-effort — skip on failure
-      }
-    }
-
-    // ── Perceptual hash (best-effort, requires sharp) ────────
-    let phash: string | null = null;
-    if (isImageFile) {
-      try {
-        phash = await computePerceptualHash(fileBuffer);
-      } catch {
-        // Perceptual hash is best-effort — skip on failure
-      }
-    }
-
-    // ── Strip EXIF metadata from JPEG files (POPIA data minimization) ──
-    if (file.type === "image/jpeg" || integrity.detectedMime === "image/jpeg") {
-      fileBuffer = Buffer.from(stripExifFromJpeg(fileBuffer));
-    } else if (file.type === "image/png" || integrity.detectedMime === "image/png") {
-      fileBuffer = Buffer.from(stripMetadataFromPng(fileBuffer));
-    }
+    const fileAnalysis = await analyzeKycUploadFile({
+      file,
+      fileBuffer: Buffer.from(await file.arrayBuffer()),
+      requestId,
+      userId: user.id,
+    });
+    if (!fileAnalysis.ok) return fileAnalysis.response;
+    const { exifSignals, blurScore, phash } = fileAnalysis;
+    const fileBuffer = fileAnalysis.fileBuffer;
 
     // ── Upload encrypted file to R2 (or local dev fallback) ──
     let uploadResult: { url: string; key: string };
@@ -552,7 +374,7 @@ export async function POST(request: NextRequest) {
 
     try {
       // Re-wrap buffer as Blob to satisfy uploadKycDocument signature
-      const fileBlob = new Blob([fileBuffer], { type: file.type });
+      const fileBlob = new Blob([new Uint8Array(fileBuffer)], { type: file.type });
       uploadResult = await uploadKycDocument(fileBlob, profile.id, docType);
       uploadedToR2 = true;
     } catch (storageError) {

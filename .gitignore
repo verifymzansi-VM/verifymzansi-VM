@@ -61,6 +61,7 @@ warnings_detail.txt
 docs/
 !docs/
 docs/*
+!docs/ARCHITECTURE.md
 !docs/openapi.json
 *.md
 !README.md
@@ -69,6 +70,7 @@ docs/*
 !HARDENING-PLAN.md
 !LAUNCH-CHECKLIST.md
 !LAUNCH-HARDENING-PLAN.md
+!docs/ARCHITECTURE.md
 !.github/**/*.md
 !docs/RUNBOOK.md
 !docs/playbooks/

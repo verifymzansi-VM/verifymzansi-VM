@@ -5,12 +5,14 @@ import { redirect } from "next/navigation";
 import { Eye, ExternalLink, Pencil, Plus, XCircle, Package } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
+import { ExpiryCountdownBadge } from "@/components/dashboard/expiry-countdown-badge";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatRelativeTime, formatZAR } from "@/lib/utils/format";
+import { isFutureExpiry } from "@/lib/utils/expiry-countdown";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { BoostButton } from "@/components/listings/boost-button";
 import { FeaturedButton } from "@/components/listings/featured-button";
@@ -61,6 +63,7 @@ type DashboardItem = {
   boost_until?: string | null;
   featured_until?: string | null;
   urgent_until?: string | null;
+  expires_at?: string | null;
   status_reason?: string | null;
   promotion_type?: string | null;
 };
@@ -176,6 +179,10 @@ function getViewHref(item: DashboardItem) {
   }
 }
 
+function shouldShowExpiryCountdown(item: DashboardItem) {
+  return (item.status === "active" || item.status === "live") && isFutureExpiry(item.expires_at);
+}
+
 export default async function ListingsPage({
   searchParams,
 }: {
@@ -224,32 +231,32 @@ export default async function ListingsPage({
   const listingSelectAttempts = [
     {
       select:
-        "id, title, status, price_cents, category, created_at, area, photos, view_count, boost_until, featured_until, urgent_until, status_reason",
+        "id, title, status, price_cents, category, created_at, area, photos, view_count, boost_until, featured_until, urgent_until, expires_at, status_reason",
       omittedFields: [] as const,
     },
     {
       select:
-        "id, title, status, price_cents, category, created_at, area, photos, boost_until, featured_until, urgent_until, status_reason",
+        "id, title, status, price_cents, category, created_at, area, photos, boost_until, featured_until, urgent_until, expires_at, status_reason",
       omittedFields: ["view_count"] as const,
     },
     {
       select:
-        "id, title, status, price_cents, category, created_at, area, photos, view_count, boost_until, featured_until, status_reason",
+        "id, title, status, price_cents, category, created_at, area, photos, view_count, boost_until, featured_until, expires_at, status_reason",
       omittedFields: ["urgent_until"] as const,
     },
     {
       select:
-        "id, title, status, price_cents, category, created_at, area, photos, view_count, boost_until, status_reason",
+        "id, title, status, price_cents, category, created_at, area, photos, view_count, boost_until, expires_at, status_reason",
       omittedFields: ["featured_until", "urgent_until"] as const,
     },
     {
       select:
-        "id, title, status, price_cents, category, created_at, area, photos, boost_until, featured_until, status_reason",
+        "id, title, status, price_cents, category, created_at, area, photos, boost_until, featured_until, expires_at, status_reason",
       omittedFields: ["view_count", "urgent_until"] as const,
     },
     {
       select:
-        "id, title, status, price_cents, category, created_at, area, photos, boost_until, status_reason",
+        "id, title, status, price_cents, category, created_at, area, photos, boost_until, expires_at, status_reason",
       omittedFields: ["view_count", "featured_until", "urgent_until"] as const,
     },
   ] as const;
@@ -295,7 +302,7 @@ export default async function ListingsPage({
       supabase
         .from("promotions")
         .select(
-          "id, title, status, price_cents, category, created_at, photos, view_count, boost_until, featured_until, urgent_until, status_reason, promotion_type"
+          "id, title, status, price_cents, category, created_at, photos, view_count, boost_until, featured_until, urgent_until, end_date, status_reason, promotion_type"
         )
         .order("created_at", { ascending: false }),
       promotionOwnerColumn,
@@ -309,6 +316,7 @@ export default async function ListingsPage({
       source: "listing" as const,
       featured_until: listing.featured_until ?? null,
       urgent_until: listing.urgent_until ?? null,
+      expires_at: listing.expires_at ?? null,
       view_count: listing.view_count ?? null,
     })),
     ...(Array.isArray(businessResponse.data)
@@ -332,6 +340,7 @@ export default async function ListingsPage({
       boost_until: business.boost_until,
       featured_until: business.featured_until,
       status_reason: business.status_reason,
+      expires_at: null,
       price_cents: null,
       view_count: business.view_count ?? null,
       urgent_until: business.urgent_until ?? null,
@@ -341,6 +350,7 @@ export default async function ListingsPage({
       area: "PROMOTIONS_EVENTS" as const,
       source: "promotion" as const,
       photos: Array.isArray(promotion.photos) ? promotion.photos : [],
+      expires_at: ((promotion as Record<string, unknown>).end_date as string | null) ?? null,
       urgent_until: ((promotion as Record<string, unknown>).urgent_until as string | null) ?? null,
       promotion_type:
         ((promotion as Record<string, unknown>).promotion_type as string | null) ?? null,
@@ -620,6 +630,12 @@ function ListingList({
                       </Badge>
                     )}
                 </div>
+                {shouldShowExpiryCountdown(listing) ? (
+                  <ExpiryCountdownBadge
+                    expiresAt={listing.expires_at}
+                    className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                  />
+                ) : null}
               </div>
             </div>
 
