@@ -6,7 +6,11 @@ import { createLogger } from "@/lib/utils/logger";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { sanitizeUserMessage } from "@/lib/utils/sanitize-html";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
-import { emailSchema, trimmedStringSchema, turnstileTokenSchema } from "@/lib/validations/shared";
+import {
+  emailSchema,
+  trimmedStringSchema,
+  trimmedTurnstileTokenSchema,
+} from "@/lib/validations/shared";
 import { z } from "zod";
 
 const log = createLogger("ContactGeneral");
@@ -36,7 +40,7 @@ const contactFormSchema = z.object({
       "general_support",
     ])
     .default("general_support"),
-  turnstileToken: trimmedStringSchema.pipe(turnstileTokenSchema),
+  turnstileToken: trimmedTurnstileTokenSchema,
 });
 
 /**

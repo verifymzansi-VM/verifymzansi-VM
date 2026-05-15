@@ -18,11 +18,13 @@ interface BrandedEmailParams {
   reason?: string;
   footerNote?: string;
   tone?: EmailTone;
+  preheader?: string;
 }
 
 const BRAND_NAME = "VerifyMzansi";
 const SUPPORT_EMAIL = SUPPORT_CONTACT_EMAIL;
 const DEFAULT_APP_URL = "https://verifymzansi.com";
+const TRUST_COPY = "Verified people. Safer deals. Trusted local commerce.";
 
 const toneColors: Record<EmailTone, { accent: string; accentDark: string; soft: string }> = {
   success: { accent: "#0f9f6e", accentDark: "#087f5b", soft: "#ecfdf5" },
@@ -86,6 +88,7 @@ export function brandedEmail(params: BrandedEmailParams): string {
   const safeTitle = escapeHtml(params.title);
   const safeEyebrow = params.eyebrow ? escapeHtml(params.eyebrow) : BRAND_NAME;
   const safeIntro = escapeHtml(params.intro);
+  const safePreheader = escapeHtml(params.preheader ?? params.intro);
   const footerNote =
     params.footerNote ??
     "This email was sent by VerifyMzansi. We will never ask for your password or payment card details by email.";
@@ -111,17 +114,23 @@ export function brandedEmail(params: BrandedEmailParams): string {
     <meta name="color-scheme" content="light">
     <title>${safeTitle}</title>
     <style>
-      body { margin: 0; padding: 0; background: #f3f4f6; color: #111827; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; line-height: 1.6; }
+      body { margin: 0; padding: 0; background: #eef2f7; color: #111827; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; line-height: 1.6; }
       a { color: ${tone.accentDark}; }
-      .wrapper { width: 100%; background: #f3f4f6; padding: 28px 12px; }
-      .container { max-width: 620px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
-      .brand { padding: 28px 32px 18px; text-align: center; background: #ffffff; }
-      .logo { display: block; width: 176px; max-width: 80%; height: auto; margin: 0 auto; }
-      .hero { padding: 28px 32px; background: ${tone.soft}; border-top: 4px solid ${tone.accent}; text-align: left; }
+      .preheader { display: none; max-height: 0; overflow: hidden; opacity: 0; color: transparent; visibility: hidden; mso-hide: all; }
+      .wrapper { width: 100%; background: #eef2f7; padding: 32px 12px; }
+      .container { max-width: 640px; margin: 0 auto; background: #ffffff; border: 1px solid #dbe3ee; border-radius: 8px; overflow: hidden; box-shadow: 0 16px 34px rgba(15, 23, 42, 0.08); }
+      .brand { padding: 26px 32px 22px; background: #0b1220; color: #ffffff; }
+      .brand-table { width: 100%; border-collapse: collapse; }
+      .brand-logo-cell { width: 184px; vertical-align: middle; }
+      .brand-copy-cell { vertical-align: middle; text-align: right; }
+      .logo { display: block; width: 168px; max-width: 100%; height: auto; }
+      .brand-name { margin: 0; color: #ffffff; font-size: 16px; font-weight: 800; letter-spacing: 0; }
+      .brand-tagline { margin: 4px 0 0; color: #cbd5e1; font-size: 13px; }
+      .hero { padding: 30px 34px; background: ${tone.soft}; border-top: 4px solid ${tone.accent}; text-align: left; }
       .eyebrow { margin: 0 0 8px; color: ${tone.accentDark}; font-size: 13px; font-weight: 700; letter-spacing: 0; text-transform: uppercase; }
       h1 { margin: 0; color: #111827; font-size: 26px; line-height: 1.25; font-weight: 750; letter-spacing: 0; }
       .intro { margin: 14px 0 0; color: #374151; font-size: 16px; }
-      .content { padding: 30px 32px 8px; font-size: 16px; }
+      .content { padding: 30px 34px 8px; font-size: 16px; }
       .content p { margin: 0 0 16px; }
       .content ul { margin: 0 0 18px 22px; padding: 0; }
       .content li { margin: 0 0 8px; }
@@ -132,25 +141,40 @@ export function brandedEmail(params: BrandedEmailParams): string {
       .detail-label, .detail-value { display: table-cell; vertical-align: top; }
       .detail-label { color: #6b7280; width: 42%; }
       .detail-value { color: #111827; font-weight: 700; text-align: right; }
-      .cta { padding: 4px 32px 26px; text-align: center; }
+      .cta { padding: 4px 34px 26px; text-align: center; }
       .button { display: inline-block; min-width: 132px; margin: 8px 4px 0; padding: 12px 20px; border: 1px solid; border-radius: 6px; font-weight: 700; text-decoration: none; }
-      .reason { margin: 0 32px 24px; padding: 14px 16px; background: #f9fafb; border-left: 4px solid ${tone.accent}; color: #374151; }
-      .footer { padding: 22px 32px 28px; color: #6b7280; font-size: 13px; text-align: center; background: #ffffff; border-top: 1px solid #e5e7eb; }
+      .fallback-link { margin: 14px 0 0; color: #6b7280; font-size: 13px; word-break: break-word; }
+      .reason { margin: 0 34px 24px; padding: 14px 16px; background: #f9fafb; border-left: 4px solid ${tone.accent}; color: #374151; }
+      .security-note { margin: 0 34px 24px; padding: 16px; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; color: #7c2d12; font-size: 14px; }
+      .footer { padding: 24px 34px 30px; color: #6b7280; font-size: 13px; text-align: center; background: #ffffff; border-top: 1px solid #e5e7eb; }
       .footer p { margin: 0 0 8px; }
       @media (max-width: 520px) {
         .wrapper { padding: 0; }
         .container { border-radius: 0; border-left: 0; border-right: 0; }
         .brand, .hero, .content, .cta, .footer { padding-left: 20px; padding-right: 20px; }
+        .brand-logo-cell, .brand-copy-cell { display: block; width: 100%; text-align: center; }
+        .logo { margin: 0 auto 12px; }
         h1 { font-size: 23px; }
         .detail-label, .detail-value { display: block; width: 100%; text-align: left; }
       }
     </style>
   </head>
   <body>
+    <div class="preheader">${safePreheader}</div>
     <div class="wrapper">
       <div class="container">
         <div class="brand">
-          <img class="logo" src="${escapeHtml(logoUrl)}" width="176" alt="VerifyMzansi">
+          <table class="brand-table" role="presentation" cellpadding="0" cellspacing="0">
+            <tr>
+              <td class="brand-logo-cell">
+                <img class="logo" src="${escapeHtml(logoUrl)}" width="168" alt="VerifyMzansi">
+              </td>
+              <td class="brand-copy-cell">
+                <p class="brand-name">${BRAND_NAME}</p>
+                <p class="brand-tagline">${TRUST_COPY}</p>
+              </td>
+            </tr>
+          </table>
         </div>
         <div class="hero">
           <p class="eyebrow">${safeEyebrow}</p>
@@ -163,10 +187,11 @@ export function brandedEmail(params: BrandedEmailParams): string {
         </div>
         ${
           params.cta || params.secondaryCta
-            ? `<div class="cta">${params.cta ? renderCta(params.cta, "primary") : ""}${params.secondaryCta ? renderCta(params.secondaryCta, "secondary") : ""}</div>`
+            ? `<div class="cta">${params.cta ? renderCta(params.cta, "primary") : ""}${params.secondaryCta ? renderCta(params.secondaryCta, "secondary") : ""}${params.cta ? `<p class="fallback-link">If the button does not work, copy and paste this link into your browser:<br><a href="${escapeHtml(params.cta.href)}">${escapeHtml(params.cta.href)}</a></p>` : ""}</div>`
             : ""
         }
         ${params.reason ? `<div class="reason"><strong>Why you received this:</strong> ${escapeHtml(params.reason)}</div>` : ""}
+        <div class="security-note">For your safety, VerifyMzansi will never ask for your password, OTP, card PIN, or full card details by email.</div>
         <div class="footer">
           <p>${escapeHtml(footerNote)}</p>
           <p>Questions? Email <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.</p>

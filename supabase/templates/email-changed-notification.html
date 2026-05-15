@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
-    <title>Confirm your VerifyMzansi email</title>
+    <title>Your VerifyMzansi email address was changed</title>
     <style>
       body {
         margin: 0;
@@ -15,7 +15,7 @@
         line-height: 1.6;
       }
       a {
-        color: #087f5b;
+        color: #b91c1c;
       }
       .preheader {
         display: none;
@@ -77,13 +77,13 @@
       }
       .hero {
         padding: 30px 34px;
-        background: #ecfdf5;
-        border-top: 4px solid #0f9f6e;
+        background: #fef2f2;
+        border-top: 4px solid #dc2626;
         text-align: left;
       }
       .eyebrow {
         margin: 0 0 8px;
-        color: #087f5b;
+        color: #b91c1c;
         font-size: 13px;
         font-weight: 700;
         letter-spacing: 0;
@@ -148,24 +148,18 @@
         min-width: 132px;
         margin: 8px 4px 0;
         padding: 12px 20px;
-        border: 1px solid #0f9f6e;
+        border: 1px solid #dc2626;
         border-radius: 6px;
-        background: #0f9f6e;
+        background: #dc2626;
         color: #ffffff;
         font-weight: 700;
         text-decoration: none;
-      }
-      .fallback-link {
-        margin: 14px 0 0;
-        color: #6b7280;
-        font-size: 13px;
-        word-break: break-word;
       }
       .reason {
         margin: 0 34px 24px;
         padding: 14px 16px;
         background: #f9fafb;
-        border-left: 4px solid #0f9f6e;
+        border-left: 4px solid #dc2626;
         color: #374151;
       }
       .security-note {
@@ -228,7 +222,7 @@
   </head>
   <body>
     <div class="preheader">
-      Confirm your email address to finish setting up your VerifyMzansi account.
+      This is a security notice that your VerifyMzansi email address changed.
     </div>
     <div class="wrapper">
       <div class="container">
@@ -251,51 +245,44 @@
           </table>
         </div>
         <div class="hero">
-          <p class="eyebrow">Account confirmation</p>
-          <h1>Confirm your email address</h1>
+          <p class="eyebrow">Security notice</p>
+          <h1>Your email address was changed</h1>
           <p class="intro">
-            Welcome to VerifyMzansi. Confirming your email helps us protect your account and keep
-            important notices going to the right person.
+            This confirms the email address on your VerifyMzansi account has changed.
           </p>
         </div>
         <div class="content">
           <p>Hi,</p>
-          <p>Please confirm your email address to finish setting up your VerifyMzansi account.</p>
+          <p>The email address for your VerifyMzansi account was changed.</p>
           <div class="details">
             <div class="detail-row">
-              <span class="detail-label">Email address</span>
-              <span class="detail-value">{{ .Email }}</span>
+              <span class="detail-label">Previous email</span>
+              <span class="detail-value">{{ .OldEmail }}</span>
             </div>
             <div class="detail-row">
-              <span class="detail-label">Requested from</span>
-              <span class="detail-value">VerifyMzansi</span>
+              <span class="detail-label">Current email</span>
+              <span class="detail-value">{{ .Email }}</span>
             </div>
           </div>
-          <p>If you did not create this account, you can safely ignore this email.</p>
+          <p>If you made this change, no further action is needed.</p>
+          <p>
+            If you did not make this change, reset your password immediately and contact support.
+          </p>
           <p>Best regards,<br />The VerifyMzansi Team</p>
         </div>
         <div class="cta">
-          <a class="button" href="{{ .ConfirmationURL }}">Confirm email</a>
-          <p class="fallback-link">
-            If the button does not work, copy and paste this link into your browser:<br /><a
-              href="{{ .ConfirmationURL }}"
-              >{{ .ConfirmationURL }}</a
-            >
-          </p>
+          <a class="button" href="https://verifymzansi.com/forgot-password">Reset password</a>
         </div>
         <div class="reason">
-          <strong>Why you received this:</strong> A signup request used this email address on
-          VerifyMzansi.
+          <strong>Why you received this:</strong> The email address connected to your VerifyMzansi
+          account was changed.
         </div>
         <div class="security-note">
           For your safety, VerifyMzansi will never ask for your password, OTP, card PIN, or full
           card details by email.
         </div>
         <div class="footer">
-          <p>
-            This email was sent by VerifyMzansi. Keep this message private and do not forward
-            account links.
-          </p>
+          <p>This email was sent by VerifyMzansi as an account security notification.</p>
           <p>
             Questions? Email <a href="mailto:support@verifymzansi.com">support@verifymzansi.com</a>.
           </p>

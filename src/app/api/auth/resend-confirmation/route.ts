@@ -5,7 +5,11 @@ import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { buildAuthCallbackUrl } from "@/lib/utils/auth-redirect";
 import { verifyTurnstileToken } from "@/lib/utils/turnstile";
-import { emailSchema, trimmedStringSchema, turnstileTokenSchema } from "@/lib/validations/shared";
+import {
+  emailSchema,
+  trimmedStringSchema,
+  trimmedTurnstileTokenSchema,
+} from "@/lib/validations/shared";
 import { z } from "zod";
 import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
 import { rateLimitExceededResponse } from "@/lib/utils/rate-limit-responses";
@@ -18,7 +22,7 @@ const log = createLogger("ResendConfirmation");
 
 const resendSchema = z.object({
   email: trimmedStringSchema.pipe(emailSchema),
-  turnstileToken: trimmedStringSchema.pipe(turnstileTokenSchema),
+  turnstileToken: trimmedTurnstileTokenSchema,
 });
 
 export async function POST(request: NextRequest) {

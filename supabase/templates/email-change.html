@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
-    <title>Confirm your VerifyMzansi email</title>
+    <title>Confirm your VerifyMzansi email change</title>
     <style>
       body {
         margin: 0;
@@ -15,7 +15,7 @@
         line-height: 1.6;
       }
       a {
-        color: #087f5b;
+        color: #1d4ed8;
       }
       .preheader {
         display: none;
@@ -77,13 +77,13 @@
       }
       .hero {
         padding: 30px 34px;
-        background: #ecfdf5;
-        border-top: 4px solid #0f9f6e;
+        background: #eff6ff;
+        border-top: 4px solid #2563eb;
         text-align: left;
       }
       .eyebrow {
         margin: 0 0 8px;
-        color: #087f5b;
+        color: #1d4ed8;
         font-size: 13px;
         font-weight: 700;
         letter-spacing: 0;
@@ -148,9 +148,9 @@
         min-width: 132px;
         margin: 8px 4px 0;
         padding: 12px 20px;
-        border: 1px solid #0f9f6e;
+        border: 1px solid #2563eb;
         border-radius: 6px;
-        background: #0f9f6e;
+        background: #2563eb;
         color: #ffffff;
         font-weight: 700;
         text-decoration: none;
@@ -165,7 +165,7 @@
         margin: 0 34px 24px;
         padding: 14px 16px;
         background: #f9fafb;
-        border-left: 4px solid #0f9f6e;
+        border-left: 4px solid #2563eb;
         color: #374151;
       }
       .security-note {
@@ -227,9 +227,7 @@
     </style>
   </head>
   <body>
-    <div class="preheader">
-      Confirm your email address to finish setting up your VerifyMzansi account.
-    </div>
+    <div class="preheader">Confirm the new email address for your VerifyMzansi account.</div>
     <div class="wrapper">
       <div class="container">
         <div class="brand">
@@ -251,31 +249,33 @@
           </table>
         </div>
         <div class="hero">
-          <p class="eyebrow">Account confirmation</p>
-          <h1>Confirm your email address</h1>
+          <p class="eyebrow">Email change confirmation</p>
+          <h1>Confirm your new email address</h1>
           <p class="intro">
-            Welcome to VerifyMzansi. Confirming your email helps us protect your account and keep
-            important notices going to the right person.
+            A request was made to change the email address on your VerifyMzansi account.
           </p>
         </div>
         <div class="content">
           <p>Hi,</p>
-          <p>Please confirm your email address to finish setting up your VerifyMzansi account.</p>
+          <p>Please confirm this new email address before we update your VerifyMzansi account.</p>
           <div class="details">
             <div class="detail-row">
-              <span class="detail-label">Email address</span>
+              <span class="detail-label">Current email</span>
               <span class="detail-value">{{ .Email }}</span>
             </div>
             <div class="detail-row">
-              <span class="detail-label">Requested from</span>
-              <span class="detail-value">VerifyMzansi</span>
+              <span class="detail-label">New email</span>
+              <span class="detail-value">{{ .NewEmail }}</span>
             </div>
           </div>
-          <p>If you did not create this account, you can safely ignore this email.</p>
+          <p>
+            If you did not request this change, do not click the confirmation button. Sign in and
+            update your password, then contact support.
+          </p>
           <p>Best regards,<br />The VerifyMzansi Team</p>
         </div>
         <div class="cta">
-          <a class="button" href="{{ .ConfirmationURL }}">Confirm email</a>
+          <a class="button" href="{{ .ConfirmationURL }}">Confirm email change</a>
           <p class="fallback-link">
             If the button does not work, copy and paste this link into your browser:<br /><a
               href="{{ .ConfirmationURL }}"
@@ -284,8 +284,8 @@
           </p>
         </div>
         <div class="reason">
-          <strong>Why you received this:</strong> A signup request used this email address on
-          VerifyMzansi.
+          <strong>Why you received this:</strong> An authenticated VerifyMzansi account requested an
+          email address change.
         </div>
         <div class="security-note">
           For your safety, VerifyMzansi will never ask for your password, OTP, card PIN, or full

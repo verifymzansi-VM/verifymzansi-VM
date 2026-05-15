@@ -1,60 +1,305 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
     <title>Reset your VerifyMzansi password</title>
     <style>
-      body { margin: 0; padding: 0; background: #f3f4f6; color: #111827; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; line-height: 1.6; }
-      .wrapper { width: 100%; background: #f3f4f6; padding: 28px 12px; }
-      .container { max-width: 620px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
-      .brand { padding: 28px 32px 18px; text-align: center; }
-      .logo { display: block; width: 176px; max-width: 80%; height: auto; margin: 0 auto; }
-      .hero { padding: 28px 32px; background: #fef2f2; border-top: 4px solid #dc2626; }
-      .eyebrow { margin: 0 0 8px; color: #b91c1c; font-size: 13px; font-weight: 700; text-transform: uppercase; }
-      h1 { margin: 0; color: #111827; font-size: 26px; line-height: 1.25; }
-      .intro { margin: 14px 0 0; color: #374151; font-size: 16px; }
-      .content { padding: 30px 32px 8px; font-size: 16px; }
-      .content p { margin: 0 0 16px; }
-      .cta { padding: 4px 32px 26px; text-align: center; }
-      .button { display: inline-block; min-width: 132px; padding: 12px 20px; border-radius: 6px; background: #dc2626; color: #ffffff; font-weight: 700; text-decoration: none; }
-      .reason { margin: 0 32px 24px; padding: 14px 16px; background: #f9fafb; border-left: 4px solid #dc2626; color: #374151; }
-      .footer { padding: 22px 32px 28px; color: #6b7280; font-size: 13px; text-align: center; border-top: 1px solid #e5e7eb; }
-      .footer p { margin: 0 0 8px; }
+      body {
+        margin: 0;
+        padding: 0;
+        background: #eef2f7;
+        color: #111827;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+        line-height: 1.6;
+      }
+      a {
+        color: #b91c1c;
+      }
+      .preheader {
+        display: none;
+        max-height: 0;
+        overflow: hidden;
+        opacity: 0;
+        color: transparent;
+        visibility: hidden;
+        mso-hide: all;
+      }
+      .wrapper {
+        width: 100%;
+        background: #eef2f7;
+        padding: 32px 12px;
+      }
+      .container {
+        max-width: 640px;
+        margin: 0 auto;
+        background: #ffffff;
+        border: 1px solid #dbe3ee;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 16px 34px rgba(15, 23, 42, 0.08);
+      }
+      .brand {
+        padding: 26px 32px 22px;
+        background: #0b1220;
+        color: #ffffff;
+      }
+      .brand-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .brand-logo-cell {
+        width: 184px;
+        vertical-align: middle;
+      }
+      .brand-copy-cell {
+        vertical-align: middle;
+        text-align: right;
+      }
+      .logo {
+        display: block;
+        width: 168px;
+        max-width: 100%;
+        height: auto;
+      }
+      .brand-name {
+        margin: 0;
+        color: #ffffff;
+        font-size: 16px;
+        font-weight: 800;
+        letter-spacing: 0;
+      }
+      .brand-tagline {
+        margin: 4px 0 0;
+        color: #cbd5e1;
+        font-size: 13px;
+      }
+      .hero {
+        padding: 30px 34px;
+        background: #fef2f2;
+        border-top: 4px solid #dc2626;
+        text-align: left;
+      }
+      .eyebrow {
+        margin: 0 0 8px;
+        color: #b91c1c;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+      h1 {
+        margin: 0;
+        color: #111827;
+        font-size: 26px;
+        line-height: 1.25;
+        font-weight: 750;
+        letter-spacing: 0;
+      }
+      .intro {
+        margin: 14px 0 0;
+        color: #374151;
+        font-size: 16px;
+      }
+      .content {
+        padding: 30px 34px 8px;
+        font-size: 16px;
+      }
+      .content p {
+        margin: 0 0 16px;
+      }
+      .details {
+        margin: 20px 0;
+        padding: 18px;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+      }
+      .detail-row {
+        display: table;
+        width: 100%;
+        padding: 9px 0;
+        border-bottom: 1px solid #e5e7eb;
+      }
+      .detail-row:last-child {
+        border-bottom: 0;
+      }
+      .detail-label,
+      .detail-value {
+        display: table-cell;
+        vertical-align: top;
+      }
+      .detail-label {
+        color: #6b7280;
+        width: 42%;
+      }
+      .detail-value {
+        color: #111827;
+        font-weight: 700;
+        text-align: right;
+      }
+      .cta {
+        padding: 4px 34px 26px;
+        text-align: center;
+      }
+      .button {
+        display: inline-block;
+        min-width: 132px;
+        margin: 8px 4px 0;
+        padding: 12px 20px;
+        border: 1px solid #dc2626;
+        border-radius: 6px;
+        background: #dc2626;
+        color: #ffffff;
+        font-weight: 700;
+        text-decoration: none;
+      }
+      .fallback-link {
+        margin: 14px 0 0;
+        color: #6b7280;
+        font-size: 13px;
+        word-break: break-word;
+      }
+      .reason {
+        margin: 0 34px 24px;
+        padding: 14px 16px;
+        background: #f9fafb;
+        border-left: 4px solid #dc2626;
+        color: #374151;
+      }
+      .security-note {
+        margin: 0 34px 24px;
+        padding: 16px;
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+        border-radius: 8px;
+        color: #7c2d12;
+        font-size: 14px;
+      }
+      .footer {
+        padding: 24px 34px 30px;
+        color: #6b7280;
+        font-size: 13px;
+        text-align: center;
+        background: #ffffff;
+        border-top: 1px solid #e5e7eb;
+      }
+      .footer p {
+        margin: 0 0 8px;
+      }
       @media (max-width: 520px) {
-        .wrapper { padding: 0; }
-        .container { border-radius: 0; border-left: 0; border-right: 0; }
-        .brand, .hero, .content, .cta, .footer { padding-left: 20px; padding-right: 20px; }
-        h1 { font-size: 23px; }
+        .wrapper {
+          padding: 0;
+        }
+        .container {
+          border-radius: 0;
+          border-left: 0;
+          border-right: 0;
+        }
+        .brand,
+        .hero,
+        .content,
+        .cta,
+        .footer {
+          padding-left: 20px;
+          padding-right: 20px;
+        }
+        .brand-logo-cell,
+        .brand-copy-cell {
+          display: block;
+          width: 100%;
+          text-align: center;
+        }
+        .logo {
+          margin: 0 auto 12px;
+        }
+        h1 {
+          font-size: 23px;
+        }
+        .detail-label,
+        .detail-value {
+          display: block;
+          width: 100%;
+          text-align: left;
+        }
       }
     </style>
   </head>
   <body>
+    <div class="preheader">Use this secure link to choose a new VerifyMzansi password.</div>
     <div class="wrapper">
       <div class="container">
         <div class="brand">
-          <img class="logo" src="https://verifymzansi.com/images/logo.png" width="176" alt="VerifyMzansi">
+          <table class="brand-table" role="presentation" cellpadding="0" cellspacing="0">
+            <tr>
+              <td class="brand-logo-cell">
+                <img
+                  class="logo"
+                  src="https://verifymzansi.com/images/logo.png"
+                  width="168"
+                  alt="VerifyMzansi"
+                />
+              </td>
+              <td class="brand-copy-cell">
+                <p class="brand-name">VerifyMzansi</p>
+                <p class="brand-tagline">Verified people. Safer deals. Trusted local commerce.</p>
+              </td>
+            </tr>
+          </table>
         </div>
         <div class="hero">
           <p class="eyebrow">Security notice</p>
           <h1>Reset your password</h1>
-          <p class="intro">This email was sent because a password reset was requested for a VerifyMzansi account.</p>
+          <p class="intro">
+            A password reset was requested for your VerifyMzansi account. Use the secure link below
+            only if this was you.
+          </p>
         </div>
         <div class="content">
           <p>Hi,</p>
           <p>Use the button below to choose a new password for your VerifyMzansi account.</p>
-          <p>If you did not request this reset, you can safely ignore this email. Your current password will remain unchanged.</p>
-          <p>Best regards,<br>The VerifyMzansi Team</p>
+          <div class="details">
+            <div class="detail-row">
+              <span class="detail-label">Account email</span>
+              <span class="detail-value">{{ .Email }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Action</span>
+              <span class="detail-value">Password reset</span>
+            </div>
+          </div>
+          <p>
+            If you did not request this reset, you can safely ignore this email. Your current
+            password will remain unchanged.
+          </p>
+          <p>Best regards,<br />The VerifyMzansi Team</p>
         </div>
         <div class="cta">
           <a class="button" href="{{ .ConfirmationURL }}">Reset password</a>
+          <p class="fallback-link">
+            If the button does not work, copy and paste this link into your browser:<br /><a
+              href="{{ .ConfirmationURL }}"
+              >{{ .ConfirmationURL }}</a
+            >
+          </p>
         </div>
         <div class="reason">
-          <strong>Why you received this:</strong> A password reset was requested for this email address on VerifyMzansi.
+          <strong>Why you received this:</strong> A password reset was requested for this email
+          address on VerifyMzansi.
+        </div>
+        <div class="security-note">
+          For your safety, VerifyMzansi will never ask for your password, OTP, card PIN, or full
+          card details by email.
         </div>
         <div class="footer">
-          <p>VerifyMzansi will never ask for your password or payment card details by email.</p>
-          <p>Questions? Email <a href="mailto:support@verifymzansi.com">support@verifymzansi.com</a>.</p>
+          <p>
+            This email was sent by VerifyMzansi. Keep this message private and do not forward
+            account links.
+          </p>
+          <p>
+            Questions? Email <a href="mailto:support@verifymzansi.com">support@verifymzansi.com</a>.
+          </p>
           <p>VerifyMzansi, South Africa's trusted verification marketplace.</p>
         </div>
       </div>

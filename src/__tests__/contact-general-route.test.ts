@@ -140,4 +140,21 @@ describe("POST /api/contact/general", () => {
       email: "nom***",
     });
   });
+
+  it("accepts long Turnstile tokens from Cloudflare", async () => {
+    vi.stubEnv("TURNSTILE_SECRET_KEY", "test-secret");
+    const insert = vi.fn().mockResolvedValue({ error: null });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({ insert }),
+    });
+
+    const longToken = ` ${"a".repeat(1200)} `;
+    const response = await POST(createRequest({ ...validBody, turnstileToken: longToken }));
+
+    expect(response.status).toBe(200);
+    expect(mockVerifyTurnstile).toHaveBeenCalledWith({
+      token: "a".repeat(1200),
+      remoteIp: "203.0.113.10",
+    });
+  });
 });

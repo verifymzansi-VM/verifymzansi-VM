@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { waitFor } from "@testing-library/react";
 import type { NextRequest } from "next/server";
 
 const {
@@ -7,6 +8,7 @@ const {
   mockGetClientIp,
   mockEnforceSameOriginMutation,
   mockIsPwnedPassword,
+  mockSendPasswordChangeNotification,
   mockLogger,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
@@ -14,6 +16,7 @@ const {
   mockGetClientIp: vi.fn(),
   mockEnforceSameOriginMutation: vi.fn<(request: NextRequest) => Response | null>(() => null),
   mockIsPwnedPassword: vi.fn().mockResolvedValue(false),
+  mockSendPasswordChangeNotification: vi.fn().mockResolvedValue({ success: true }),
   mockLogger: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -47,6 +50,10 @@ vi.mock("@/lib/security/pwned-passwords", () => ({
     "This password has appeared in a known data breach. Choose a different password.",
   PWNED_PASSWORD_CHECK_UNAVAILABLE_ERROR:
     "Password breach checks are temporarily unavailable. Please try again shortly.",
+}));
+
+vi.mock("@/lib/services/email", () => ({
+  sendPasswordChangeNotification: mockSendPasswordChangeNotification,
 }));
 
 import { GET, POST } from "./route";
@@ -91,7 +98,7 @@ function createSupabaseAuthClient(overrides?: {
   const user =
     overrides && Object.prototype.hasOwnProperty.call(overrides, "user")
       ? overrides.user
-      : { id: "user-1", recovery_sent_at: new Date().toISOString() };
+      : { id: "user-1", email: "user@example.com", recovery_sent_at: new Date().toISOString() };
 
   return {
     auth: {
@@ -175,6 +182,7 @@ describe("POST /api/auth/reset-password", () => {
     mockCheckRateLimit.mockResolvedValue({ limited: false });
     mockCreateClient.mockResolvedValue(createSupabaseAuthClient());
     mockIsPwnedPassword.mockResolvedValue(false);
+    mockSendPasswordChangeNotification.mockResolvedValue({ success: true });
   });
 
   it("rejects cross-origin requests before rate-limit", async () => {
@@ -248,7 +256,9 @@ describe("POST /api/auth/reset-password", () => {
   });
 
   it("updates password when callback recovery marker matches the user", async () => {
-    const client = createSupabaseAuthClient({ user: { id: "user-1", recovery_sent_at: null } });
+    const client = createSupabaseAuthClient({
+      user: { id: "user-1", email: "user@example.com", recovery_sent_at: null },
+    });
     mockCreateClient.mockResolvedValue(client);
 
     const response = await POST(
@@ -262,6 +272,9 @@ describe("POST /api/auth/reset-password", () => {
     await expect(response.json()).resolves.toEqual({ success: true });
     expect(client.auth.updateUser).toHaveBeenCalledWith({ password: "NewPassword123!" });
     expect(response.headers.get("set-cookie")).toContain("vm_password_recovery=");
+    await waitFor(() =>
+      expect(mockSendPasswordChangeNotification).toHaveBeenCalledWith("user@example.com")
+    );
   });
 
   it("rejects known-breached passwords before updating the user", async () => {
@@ -330,6 +343,9 @@ describe("POST /api/auth/reset-password", () => {
     await expect(response.json()).resolves.toEqual({ success: true });
     expect(client.auth.updateUser).toHaveBeenCalledWith({ password: "NewPassword123!" });
     expect(client.auth.signOut).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(mockSendPasswordChangeNotification).toHaveBeenCalledWith("user@example.com")
+    );
   });
 
   it("returns 500 on unexpected exception", async () => {

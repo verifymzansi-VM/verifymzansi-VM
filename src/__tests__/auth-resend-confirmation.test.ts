@@ -218,6 +218,25 @@ describe("POST /api/auth/resend-confirmation", () => {
     expect(body.error).toContain("Bot detected");
   });
 
+  it("accepts long Turnstile tokens when resending confirmation", async () => {
+    vi.stubEnv("TURNSTILE_SECRET_KEY", "secret");
+    vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "site-key");
+    mockVerifyTurnstile.mockResolvedValue({ success: true });
+    const mockResend = vi.fn().mockResolvedValue({ data: {}, error: null });
+    mockCreateClient.mockResolvedValue({ auth: { resend: mockResend } });
+
+    const token = "a".repeat(1200);
+    const res = await POST(
+      createRequest({ email: "user@example.com", turnstileToken: ` ${token} ` })
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockVerifyTurnstile).toHaveBeenCalledWith({
+      token,
+      remoteIp: "127.0.0.1",
+    });
+  });
+
   it("returns 503 in production when Turnstile is unavailable", async () => {
     vi.stubEnv("NODE_ENV", "production");
     delete process.env.TURNSTILE_SECRET_KEY;

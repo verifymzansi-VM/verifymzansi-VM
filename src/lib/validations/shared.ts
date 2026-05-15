@@ -93,6 +93,9 @@ export const priceSchema = z
 /** Zod schema for a non-empty Cloudflare Turnstile CAPTCHA token. */
 export const turnstileTokenSchema = z.string().min(1, "Complete the CAPTCHA").max(4096);
 
+/** Zod schema for a trimmed Cloudflare Turnstile token without the generic 500-char cap. */
+export const trimmedTurnstileTokenSchema = z.preprocess(trimStringInput, turnstileTokenSchema);
+
 // ── Shared ingress helpers ──────────────────────────────────
 
 /** Zod schema for a UUID string used in route params and query params. */

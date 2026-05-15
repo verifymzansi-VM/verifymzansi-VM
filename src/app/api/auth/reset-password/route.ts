@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { sendPasswordChangeNotification } from "@/lib/services/email";
 import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
 import { rateLimitExceededResponse } from "@/lib/utils/rate-limit-responses";
 import {
@@ -165,6 +166,15 @@ export async function POST(request: NextRequest) {
 
     // Invalidate the recovery session so the reset link can't be reused
     await supabase.auth.signOut();
+
+    if (user.email) {
+      void sendPasswordChangeNotification(user.email).catch((err) => {
+        log.warn("Failed to send password reset completion notification", {
+          userId: user.id,
+          error: err instanceof Error ? err.message : "Unknown",
+        });
+      });
+    }
 
     const response = NextResponse.json({ success: true });
     response.cookies.set({

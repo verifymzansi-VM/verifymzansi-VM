@@ -240,6 +240,15 @@ content_path = "./supabase/templates/confirmation.html"
 subject = "Reset your VerifyMzansi password"
 content_path = "./supabase/templates/recovery.html"
 
+[auth.email.template.email_change]
+subject = "Confirm your VerifyMzansi email change"
+content_path = "./supabase/templates/email-change.html"
+
+[auth.email.notification.email_changed]
+enabled = true
+subject = "Your VerifyMzansi email address was changed"
+content_path = "./supabase/templates/email-changed-notification.html"
+
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
 # enabled = true
