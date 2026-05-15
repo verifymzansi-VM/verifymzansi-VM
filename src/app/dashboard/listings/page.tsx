@@ -12,7 +12,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatRelativeTime, formatZAR } from "@/lib/utils/format";
-import { isFutureExpiry } from "@/lib/utils/expiry-countdown";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { BoostButton } from "@/components/listings/boost-button";
 import { FeaturedButton } from "@/components/listings/featured-button";
@@ -38,9 +37,11 @@ import {
   type PlanTier,
   type PromotionType,
 } from "@/types/enums";
+import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 
 const LISTING_DASHBOARD_FALLBACK_FIELDS = ["view_count", "featured_until", "urgent_until"] as const;
 const BUSINESS_DASHBOARD_FALLBACK_FIELDS = ["view_count"] as const;
+const PROMOTION_DASHBOARD_FALLBACK_FIELDS = ["view_count", "urgent_until", "expires_at"] as const;
 
 export const metadata = {
   title: "Your Content",
@@ -55,6 +56,7 @@ type DashboardItem = {
   price_cents?: number | null;
   category?: string | null;
   created_at?: string | null;
+  published_at?: string | null;
   area: MarketplaceArea;
   /** Which table the item originated from — used for edit/view routing. */
   source: "listing" | "business" | "promotion";
@@ -180,7 +182,24 @@ function getViewHref(item: DashboardItem) {
 }
 
 function shouldShowExpiryCountdown(item: DashboardItem) {
-  return (item.status === "active" || item.status === "live") && isFutureExpiry(item.expires_at);
+  return (item.status === "active" || item.status === "live") && !!getPostExpiresAt(item);
+}
+
+function addDaysIso(value: string | null | undefined, days: number) {
+  if (!value) return null;
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return null;
+  return new Date(timestamp + days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function getPostExpiresAt(item: DashboardItem) {
+  if (item.expires_at) return item.expires_at;
+
+  if (item.source === "promotion") {
+    return addDaysIso(item.published_at ?? item.created_at, FREE_POST_CONFIG.durationDays);
+  }
+
+  return null;
 }
 
 export default async function ListingsPage({
@@ -298,16 +317,40 @@ export default async function ListingsPage({
           user.id
         ),
     }),
-    applyOwnerFilter(
-      supabase
-        .from("promotions")
-        .select(
-          "id, title, status, price_cents, category, created_at, photos, view_count, boost_until, featured_until, urgent_until, end_date, status_reason, promotion_type"
-        )
-        .order("created_at", { ascending: false }),
-      promotionOwnerColumn,
-      user.id
-    ),
+    queryWithSelectFallbacks({
+      attempts: [
+        {
+          select:
+            "id, title, status, price_cents, category, created_at, published_at, photos, view_count, boost_until, featured_until, urgent_until, expires_at, end_date, status_reason, promotion_type",
+          omittedFields: [] as const,
+        },
+        {
+          select:
+            "id, title, status, price_cents, category, created_at, published_at, photos, view_count, boost_until, featured_until, urgent_until, end_date, status_reason, promotion_type",
+          omittedFields: ["expires_at"] as const,
+        },
+        {
+          select:
+            "id, title, status, price_cents, category, created_at, published_at, photos, view_count, boost_until, featured_until, expires_at, end_date, status_reason, promotion_type",
+          omittedFields: ["urgent_until"] as const,
+        },
+        {
+          select:
+            "id, title, status, price_cents, category, created_at, published_at, photos, view_count, boost_until, featured_until, end_date, status_reason, promotion_type",
+          omittedFields: ["urgent_until", "expires_at"] as const,
+        },
+      ] as const,
+      fallbackFields: PROMOTION_DASHBOARD_FALLBACK_FIELDS,
+      runQuery: (selectClause) =>
+        applyOwnerFilter(
+          supabase
+            .from("promotions")
+            .select(selectClause)
+            .order("created_at", { ascending: false }),
+          promotionOwnerColumn,
+          user.id
+        ),
+    }),
   ]);
 
   const baseItems = [
@@ -350,7 +393,10 @@ export default async function ListingsPage({
       area: "PROMOTIONS_EVENTS" as const,
       source: "promotion" as const,
       photos: Array.isArray(promotion.photos) ? promotion.photos : [],
-      expires_at: ((promotion as Record<string, unknown>).end_date as string | null) ?? null,
+      expires_at:
+        ((promotion as Record<string, unknown>).expires_at as string | null) ??
+        ((promotion as Record<string, unknown>).end_date as string | null) ??
+        null,
       urgent_until: ((promotion as Record<string, unknown>).urgent_until as string | null) ?? null,
       promotion_type:
         ((promotion as Record<string, unknown>).promotion_type as string | null) ?? null,
@@ -632,7 +678,8 @@ function ListingList({
                 </div>
                 {shouldShowExpiryCountdown(listing) ? (
                   <ExpiryCountdownBadge
-                    expiresAt={listing.expires_at}
+                    expiresAt={getPostExpiresAt(listing)}
+                    showDate
                     className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300"
                   />
                 ) : null}

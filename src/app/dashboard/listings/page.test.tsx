@@ -229,6 +229,24 @@ describe("Dashboard listings page", () => {
       if (table === "promotions") {
         return createOrderedQuery([
           {
+            id: "promo-active",
+            title: "Nkambeni",
+            status: "live",
+            price_cents: null,
+            category: "tourism_hospitality",
+            created_at: "2026-03-01T00:00:00.000Z",
+            published_at: "2026-03-01T00:00:00.000Z",
+            photos: [],
+            view_count: 8,
+            boost_until: null,
+            featured_until: null,
+            urgent_until: null,
+            expires_at: null,
+            end_date: null,
+            status_reason: null,
+            promotion_type: "general",
+          },
+          {
             id: "promo-rejected",
             title: "Youth Market Day",
             status: "rejected",
@@ -251,13 +269,15 @@ describe("Dashboard listings page", () => {
     render(await ListingsPage({ searchParams: Promise.resolve({}) }));
 
     expect(screen.getByRole("heading", { name: "My Posts" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Active (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Active (2)" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Under Review (1)" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Rejected (3)" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ended (1)" })).toBeInTheDocument();
     expect(screen.getByText("37")).toBeInTheDocument();
     expect(screen.getByText("18")).toBeInTheDocument();
-    expect(screen.getByText("Expires in 2d")).toBeInTheDocument();
+    expect(screen.getByText("Expires 07 Mar 2026 (in 2d)")).toBeInTheDocument();
+    expect(screen.getByText("Nkambeni")).toBeInTheDocument();
+    expect(screen.getByText("Expires 08 Mar 2026 (in 3d)")).toBeInTheDocument();
 
     expect(screen.getByText("Needs VIN photo")).toBeInTheDocument();
     expect(screen.getByText("Township Tutors")).toBeInTheDocument();
