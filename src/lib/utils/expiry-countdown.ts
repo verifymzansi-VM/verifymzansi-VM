@@ -27,10 +27,3 @@ export function getExpiryCountdownLabel(
   const days = Math.max(1, Math.ceil(diffMs / DAY_MS));
   return `Expires in ${days}d`;
 }
-
-export function isFutureExpiry(expiresAt: string | null | undefined, nowMs = Date.now()) {
-  if (!expiresAt) return false;
-
-  const expiryMs = new Date(expiresAt).getTime();
-  return Number.isFinite(expiryMs) && expiryMs > nowMs;
-}

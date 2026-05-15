@@ -215,10 +215,7 @@ export function applyBaseMarketFilters<T>(
   }
 }
 
-export function matchesAttributeFilter(
-  attributeValue: unknown,
-  filterValue: string | boolean | string[]
-) {
+function matchesAttributeFilter(attributeValue: unknown, filterValue: string | boolean | string[]) {
   if (Array.isArray(filterValue)) {
     if (!Array.isArray(attributeValue)) {
       return false;
