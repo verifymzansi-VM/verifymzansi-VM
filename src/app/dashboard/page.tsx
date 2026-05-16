@@ -22,6 +22,7 @@ import {
 } from "@/components/dashboard/listing-manager-mini";
 import { QuickLinks } from "@/components/dashboard/quick-links";
 import { DashboardLiveLeadAlerts } from "@/components/dashboard/dashboard-live-lead-alerts";
+import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 
 /** Safely resolve owner column — fall back to "owner_id" on error. */
 async function safeGetOwnerColumn(
@@ -103,18 +104,24 @@ export default async function DashboardPage() {
     ),
     /* 4 — active listings count */
     applyOwnerFilter(
-      supabase.from("listings").select("*", { count: "exact", head: true }).eq("status", "live"),
+      applyVisibleExpiryFilter(
+        supabase.from("listings").select("*", { count: "exact", head: true }).eq("status", "live"),
+        now
+      ),
       listingOwnerColumn,
       user.id
     ),
     /* 5 — active promotions count */
     applyOwnerFilter(
-      supabase
-        .from("promotions")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "live")
-        .eq("promotion_type", "event")
-        .or(`end_date.is.null,end_date.gte.${now}`),
+      applyVisibleExpiryFilter(
+        supabase
+          .from("promotions")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "live")
+          .eq("promotion_type", "event")
+          .or(`end_date.is.null,end_date.gte.${now}`),
+        now
+      ),
       promotionsOwnerColumn,
       user.id
     ),

@@ -7,6 +7,7 @@ import { createLogger } from "@/lib/utils/logger";
 import { getOwnerColumn, readOwnerId } from "@/lib/account/compat";
 import { createNotification } from "@/lib/notifications";
 import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
+import { getApprovedPostExpiryIso } from "@/lib/posting/post-lifecycle";
 
 const log = createLogger("AdminContentDecide");
 
@@ -53,6 +54,36 @@ export async function POST(request: Request) {
     const newStatus = decision === "approve" ? "live" : "rejected";
 
     const updatePayload: Record<string, unknown> = { status: newStatus };
+    const supportsPostVisibilityDates =
+      table === "listings" || table === "businesses" || table === "promotions";
+
+    if (decision === "approve" && supportsPostVisibilityDates) {
+      const approvedAt = new Date();
+      const { data: pendingItem, error: pendingFetchError } = await admin
+        .from(table)
+        .select("id, created_at, expires_at")
+        .eq("id", itemId)
+        .eq("status", "pending_moderation")
+        .maybeSingle();
+
+      if (pendingFetchError) {
+        return NextResponse.json({ error: "Failed to load content status" }, { status: 500 });
+      }
+
+      if (!pendingItem) {
+        return NextResponse.json({ error: "Content item not found" }, { status: 404 });
+      }
+
+      updatePayload.published_at = approvedAt.toISOString();
+      updatePayload.expires_at = getApprovedPostExpiryIso(
+        {
+          createdAt: (pendingItem as { created_at?: string | null }).created_at,
+          expiresAt: (pendingItem as { expires_at?: string | null }).expires_at,
+        },
+        approvedAt
+      );
+    }
+
     if (decision === "reject" && reason) {
       updatePayload.status_reason = reason;
     } else if (decision === "approve") {

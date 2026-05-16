@@ -110,6 +110,17 @@ describe("retention cleanup worker", () => {
         return { ok: true, text: async () => "" } satisfies Partial<Response>;
       }
 
+      if (
+        url.includes("/rest/v1/listings?status=in.(live,active)") ||
+        url.includes("/rest/v1/businesses?status=in.(live,active)") ||
+        url.includes("/rest/v1/promotions?status=in.(live,active)")
+      ) {
+        return {
+          ok: true,
+          json: async () => [],
+        } satisfies Partial<Response>;
+      }
+
       if (url.includes("/rest/v1/audit_logs")) {
         return { ok: true, text: async () => "" } satisfies Partial<Response>;
       }
@@ -148,5 +159,18 @@ describe("retention cleanup worker", () => {
       String(url).includes("/auth/v1/admin/users/orphan-user-1")
     );
     expect(authDeleteCall).toBeDefined();
+
+    const contentExpiryCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url).includes("status=in.(live,active)")
+    );
+    expect(contentExpiryCalls).toHaveLength(6);
+    expect(
+      contentExpiryCalls.some(([url]) =>
+        String(url).includes("expires_at=not.is.null&expires_at=lte.")
+      )
+    ).toBe(true);
+    expect(
+      contentExpiryCalls.some(([url]) => String(url).includes("expires_at=is.null&created_at=lte."))
+    ).toBe(true);
   });
 });

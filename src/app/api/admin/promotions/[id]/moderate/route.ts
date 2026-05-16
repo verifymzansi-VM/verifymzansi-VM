@@ -16,6 +16,7 @@ import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { uuidSchema } from "@/lib/validations/shared";
+import { getApprovedPostExpiryIso } from "@/lib/posting/post-lifecycle";
 
 const log = createLogger("PromotionModeration");
 const promotionModerationParamsSchema = z.object({
@@ -91,7 +92,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // Fetch current promotion
     const { data: promotion, error: promotionErr } = await admin
       .from("promotions")
-      .select("id, status, owner_id, title, published_at")
+      .select("id, status, owner_id, title, published_at, created_at, expires_at")
       .eq("id", promotionId)
       .maybeSingle();
 
@@ -121,7 +122,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     };
 
     if (decision === "approve" && !promotion.published_at) {
-      updateData.published_at = new Date().toISOString();
+      const approvedAt = new Date();
+      updateData.published_at = approvedAt.toISOString();
+      updateData.expires_at = getApprovedPostExpiryIso(
+        {
+          createdAt: promotion.created_at,
+          expiresAt: promotion.expires_at,
+        },
+        approvedAt
+      );
     }
 
     const { error: updateError } = await admin

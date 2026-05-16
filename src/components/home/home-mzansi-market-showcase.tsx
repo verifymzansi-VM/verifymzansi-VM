@@ -13,6 +13,7 @@ import {
   shouldHidePlaywrightFixtures,
 } from "@/lib/supabase/playwright-visual-fixtures";
 import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
+import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 
 const log = createLogger("HomeMzansiMarketShowcase");
 
@@ -26,11 +27,9 @@ export async function HomeMzansiMarketShowcase() {
     readCookieValue(cookieStore, PLAYWRIGHT_HIDE_FIXTURES_COOKIE)
   );
   const supabase = await createClient();
-  const { data: listings, error } = await supabase
-    .from("listings")
-    .select("*")
-    .eq("status", "live")
-    .eq("area", "MZANSI_MARKET")
+  const { data: listings, error } = await applyVisibleExpiryFilter(
+    supabase.from("listings").select("*").eq("status", "live").eq("area", "MZANSI_MARKET")
+  )
     .order("boost_until", { ascending: false, nullsFirst: false })
     .order("featured", { ascending: false })
     .order("created_at", { ascending: false })

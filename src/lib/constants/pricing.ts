@@ -401,6 +401,10 @@ export const FREE_POST_CONFIG = {
   maxAllowed: 1, // 1 post per area
 } as const;
 
+export const PAID_POST_CONFIG = {
+  durationDays: 30,
+} as const;
+
 export function formatPlanPrice(priceCents: number): string {
   return `R${(priceCents / 100).toLocaleString("en-ZA")}`;
 }

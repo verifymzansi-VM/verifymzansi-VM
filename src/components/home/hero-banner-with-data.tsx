@@ -7,6 +7,7 @@ import {
   businessToCarouselItem,
   promotionToCarouselItem,
 } from "@/components/showrooms/carousel-item-transforms";
+import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 
 function isValidHttpUrl(value: string): boolean {
   try {
@@ -35,31 +36,37 @@ export async function HeroBannerWithData() {
     const supabase = createClient(url, anonKey);
 
     const [businesses, listings, promotions] = await Promise.all([
-      supabase
-        .from("businesses")
-        .select(
-          "id, business_name, logo_url, cover_photo, cover_video, video_thumbnail, description, location_city, location_province, focal_x, focal_y, media_width, media_height"
-        )
-        .eq("status", "live")
+      applyVisibleExpiryFilter(
+        supabase
+          .from("businesses")
+          .select(
+            "id, business_name, logo_url, cover_photo, cover_video, video_thumbnail, description, location_city, location_province, focal_x, focal_y, media_width, media_height"
+          )
+          .eq("status", "live")
+      )
         .order("boost_until", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
         .limit(perAreaFetchLimit),
-      supabase
-        .from("listings")
-        .select(
-          "id, title, description, price_cents, photos, videos, video_thumbnail, logo_url, location_city, location_province, category, focal_x, focal_y, media_width, media_height"
-        )
-        .eq("status", "live")
-        .eq("area", "MZANSI_MARKET")
+      applyVisibleExpiryFilter(
+        supabase
+          .from("listings")
+          .select(
+            "id, title, description, price_cents, photos, videos, video_thumbnail, logo_url, location_city, location_province, category, focal_x, focal_y, media_width, media_height"
+          )
+          .eq("status", "live")
+          .eq("area", "MZANSI_MARKET")
+      )
         .order("featured", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(perAreaFetchLimit),
-      supabase
-        .from("promotions")
-        .select(
-          "id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, location_city, location_province, price_cents, focal_x, focal_y, media_width, media_height"
-        )
-        .eq("status", "live")
+      applyVisibleExpiryFilter(
+        supabase
+          .from("promotions")
+          .select(
+            "id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, location_city, location_province, price_cents, focal_x, focal_y, media_width, media_height"
+          )
+          .eq("status", "live")
+      )
         .order("boost_until", { ascending: false, nullsFirst: false })
         .order("featured_until", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })

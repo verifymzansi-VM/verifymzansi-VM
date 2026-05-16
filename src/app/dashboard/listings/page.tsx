@@ -40,7 +40,7 @@ import {
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 
 const LISTING_DASHBOARD_FALLBACK_FIELDS = ["view_count", "featured_until", "urgent_until"] as const;
-const BUSINESS_DASHBOARD_FALLBACK_FIELDS = ["view_count"] as const;
+const BUSINESS_DASHBOARD_FALLBACK_FIELDS = ["view_count", "expires_at"] as const;
 const PROMOTION_DASHBOARD_FALLBACK_FIELDS = ["view_count", "urgent_until", "expires_at"] as const;
 
 export const metadata = {
@@ -83,6 +83,7 @@ type BusinessDashboardRow = {
   boost_until?: string | null;
   featured_until?: string | null;
   urgent_until?: string | null;
+  expires_at?: string | null;
   status_reason?: string | null;
   view_count?: number | null;
 };
@@ -283,13 +284,23 @@ export default async function ListingsPage({
   const businessSelectAttempts = [
     {
       select:
-        "id, business_name, status, category, created_at, area, cover_photo, logo_url, gallery_photos, view_count, boost_until, featured_until, urgent_until, status_reason",
+        "id, business_name, status, category, created_at, area, cover_photo, logo_url, gallery_photos, view_count, boost_until, featured_until, urgent_until, expires_at, status_reason",
       omittedFields: [] as const,
     },
     {
       select:
-        "id, business_name, status, category, created_at, area, cover_photo, logo_url, gallery_photos, boost_until, featured_until, urgent_until, status_reason",
+        "id, business_name, status, category, created_at, area, cover_photo, logo_url, gallery_photos, boost_until, featured_until, urgent_until, expires_at, status_reason",
       omittedFields: ["view_count"] as const,
+    },
+    {
+      select:
+        "id, business_name, status, category, created_at, area, cover_photo, logo_url, gallery_photos, view_count, boost_until, featured_until, urgent_until, status_reason",
+      omittedFields: ["expires_at"] as const,
+    },
+    {
+      select:
+        "id, business_name, status, category, created_at, area, cover_photo, logo_url, gallery_photos, boost_until, featured_until, urgent_until, status_reason",
+      omittedFields: ["view_count", "expires_at"] as const,
     },
   ] as const;
 
@@ -383,7 +394,7 @@ export default async function ListingsPage({
       boost_until: business.boost_until,
       featured_until: business.featured_until,
       status_reason: business.status_reason,
-      expires_at: null,
+      expires_at: business.expires_at ?? null,
       price_cents: null,
       view_count: business.view_count ?? null,
       urgent_until: business.urgent_until ?? null,

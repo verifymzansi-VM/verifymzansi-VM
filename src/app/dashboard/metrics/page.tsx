@@ -4,6 +4,7 @@ import { Eye, TrendingUp, MessageSquare, Package, BarChart3 } from "lucide-react
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/page-header";
 import { applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
+import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 
 export const metadata = {
   title: "Metrics",
@@ -32,7 +33,9 @@ export default async function MetricsPage() {
     { count: totalListings },
   ] = await Promise.all([
     applyOwnerFilter(
-      supabase.from("listings").select("*", { count: "exact", head: true }).eq("status", "live"),
+      applyVisibleExpiryFilter(
+        supabase.from("listings").select("*", { count: "exact", head: true }).eq("status", "live")
+      ),
       listingOwnerColumn,
       ownerId
     ),

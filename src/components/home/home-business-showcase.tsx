@@ -15,6 +15,7 @@ import {
 } from "@/lib/supabase/playwright-visual-fixtures";
 import { getOptionalContentViewCountMap } from "@/lib/engagement-server";
 import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
+import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 
 function provinceCode(name: string): string {
   return SA_PROVINCES.find((p) => p.name.toLowerCase() === name?.toLowerCase())?.code ?? name;
@@ -27,11 +28,9 @@ export async function HomeBusinessShowcase() {
   );
   const supabase = await createClient();
   const engagementAdmin = tryCreateAdminClient();
-  const { data: businesses } = await supabase
-    .from("businesses")
-    .select("*")
-    .eq("status", "live")
-    .eq("area", "MZANSI_BUSINESS")
+  const { data: businesses } = await applyVisibleExpiryFilter(
+    supabase.from("businesses").select("*").eq("status", "live").eq("area", "MZANSI_BUSINESS")
+  )
     .order("boost_until", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(16);

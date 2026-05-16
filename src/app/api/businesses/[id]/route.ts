@@ -51,6 +51,7 @@ import {
   hasPendingContentEdit,
   isEditLimitReached,
 } from "@/lib/content-edit-requests";
+import { applyVisibleExpiryFilter, isVisibleByExpiry } from "@/lib/posting/visibility";
 
 const log = createLogger("BusinessDetail");
 const BUSINESS_DETAIL_SELECT = `
@@ -60,7 +61,7 @@ const BUSINESS_DETAIL_SELECT = `
   store_number, map_directions, phone, whatsapp, email, website, social_links,
   services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
   delivery_options, layout_template, boost_until, featured_until, published_at, status, area, created_at,
-  updated_at, media_width, media_height, focal_x, focal_y
+  expires_at, updated_at, media_width, media_height, focal_x, focal_y
 `;
 type BusinessOwnerRow = {
   id: string;
@@ -81,6 +82,7 @@ type BusinessOwnerRow = {
   whatsapp?: string | null;
   email?: string | null;
   approved_edit_count?: number | null;
+  expires_at?: string | null;
 };
 
 function getMallPhotoUrls(details: BusinessDetails | null | undefined): string[] {
@@ -121,7 +123,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     let currentUser: { id: string } | null = null;
 
     // Only allow public access to live businesses
-    if (normalizedBusiness.status !== "live") {
+    const isExpiredLivePost =
+      normalizedBusiness.status === "live" && !isVisibleByExpiry(normalizedBusiness.expires_at);
+
+    if (normalizedBusiness.status !== "live" || isExpiredLivePost) {
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -133,13 +138,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Fetch linked promotions
-    const { data: promotions, error: promoError } = await supabase
-      .from("promotions")
-      .select(
-        "id, title, promotion_type, photos, price_cents, start_date, end_date, boost_until, created_at"
-      )
-      .eq("business_id", id)
-      .eq("status", "live")
+    const { data: promotions, error: promoError } = await applyVisibleExpiryFilter(
+      supabase
+        .from("promotions")
+        .select(
+          "id, title, promotion_type, photos, price_cents, start_date, end_date, boost_until, created_at"
+        )
+        .eq("business_id", id)
+        .eq("status", "live")
+    )
       .order("boost_until", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .limit(12);

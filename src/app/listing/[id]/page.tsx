@@ -25,6 +25,7 @@ import {
   getOptionalContentViewCountMap,
 } from "@/lib/engagement-server";
 import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
+import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 
 interface ListingDetailPageProps {
   params: Promise<{ id: string }>;
@@ -33,12 +34,9 @@ interface ListingDetailPageProps {
 export async function generateMetadata({ params }: ListingDetailPageProps): Promise<Metadata> {
   const { id } = await params;
   const supabase = await createClient();
-  const { data: listing } = await supabase
-    .from("listings")
-    .select("title, description")
-    .eq("id", id)
-    .eq("status", "live")
-    .single();
+  const { data: listing } = await applyVisibleExpiryFilter(
+    supabase.from("listings").select("title, description").eq("id", id).eq("status", "live")
+  ).single();
 
   if (!listing) {
     return { title: "Listing Not Found" };
@@ -64,12 +62,9 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
   const isAuthenticated = Boolean(user);
 
   // Fetch listing
-  const { data: rawListing } = await supabase
-    .from("listings")
-    .select("*")
-    .eq("id", id)
-    .eq("status", "live")
-    .single();
+  const { data: rawListing } = await applyVisibleExpiryFilter(
+    supabase.from("listings").select("*").eq("id", id).eq("status", "live")
+  ).single();
 
   const listing = rawListing ? normalizeOwnerRecord(rawListing) : null;
 
@@ -95,18 +90,20 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
     : null;
 
   // Fetch similar listings (same category, excluding current)
-  const { data: similarListings } = await supabase
-    .from("listings")
-    .select(
-      withOwnerColumn(
-        "id, title, price_cents, price_negotiable, condition, photos, videos, video_thumbnail, media_width, media_height, focal_x, focal_y, logo_url, location_province, location_city, category, attributes, created_at, boost_until, featured, owner_id",
-        listingOwnerColumn
+  const { data: similarListings } = await applyVisibleExpiryFilter(
+    supabase
+      .from("listings")
+      .select(
+        withOwnerColumn(
+          "id, title, price_cents, price_negotiable, condition, photos, videos, video_thumbnail, media_width, media_height, focal_x, focal_y, logo_url, location_province, location_city, category, attributes, created_at, boost_until, featured, owner_id",
+          listingOwnerColumn
+        )
       )
-    )
-    .eq("status", "live")
-    .eq("area", "MZANSI_MARKET")
-    .eq("category", listing.category)
-    .neq("id", listing.id)
+      .eq("status", "live")
+      .eq("area", "MZANSI_MARKET")
+      .eq("category", listing.category)
+      .neq("id", listing.id)
+  )
     .order("created_at", { ascending: false })
     .limit(4);
 

@@ -79,6 +79,7 @@ const AUTH_USERS_PAGE_SIZE = 200;
 const AUTH_USERS_MAX_PAGES = 5;
 const ORPHAN_AUTH_MIN_AGE_MS = 30 * 60 * 1000;
 const ORPHAN_AUTH_DELETE_CAP = 50;
+const PAID_POST_DURATION_DAYS = 30;
 
 function buildInFilter(values: string[]): string {
   return `(${values.map((value) => JSON.stringify(value)).join(",")})`;
@@ -270,41 +271,59 @@ async function expireContentTable(
   env: Env,
   headers: Record<string, string>,
   table: ExpirableContentTable,
-  nowIso: string
+  nowIso: string,
+  paidCutoffIso: string
 ): Promise<number> {
-  const response = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/${table}?status=eq.live&expires_at=not.is.null&expires_at=lte.${encodeURIComponent(nowIso)}`,
-    {
-      method: "PATCH",
-      headers: {
-        ...headers,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify({
-        status: "expired",
-        status_reason: "Free post visibility period expired",
-      }),
+  const expireRows = async (filter: string, statusReason: string) => {
+    const response = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/${table}?status=in.(live,active)&${filter}`,
+      {
+        method: "PATCH",
+        headers: {
+          ...headers,
+          Prefer: "return=representation",
+        },
+        body: JSON.stringify({
+          status: "expired",
+          status_reason: statusReason,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      console.error(`Failed to expire ${table}:`, await response.text());
+      return 0;
     }
+
+    const rows = (await response.json()) as Array<{ id: string }>;
+    return rows.length;
+  };
+
+  const elapsedExpiryRows = await expireRows(
+    `expires_at=not.is.null&expires_at=lte.${encodeURIComponent(nowIso)}`,
+    "Post visibility period expired"
+  );
+  const legacyPaidRows = await expireRows(
+    `expires_at=is.null&created_at=lte.${encodeURIComponent(paidCutoffIso)}`,
+    "Paid post visibility period expired"
   );
 
-  if (!response.ok) {
-    console.error(`Failed to expire ${table}:`, await response.text());
-    return 0;
-  }
-
-  const rows = (await response.json()) as Array<{ id: string }>;
-  return rows.length;
+  return elapsedExpiryRows + legacyPaidRows;
 }
 
-async function expireElapsedFreePosts(
+async function expireElapsedPosts(
   env: Env,
   headers: Record<string, string>
 ): Promise<Record<ExpirableContentTable, number>> {
-  const nowIso = new Date().toISOString();
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const paidCutoffIso = new Date(
+    now.getTime() - PAID_POST_DURATION_DAYS * 24 * 60 * 60 * 1000
+  ).toISOString();
   const [listings, businesses, promotions] = await Promise.all([
-    expireContentTable(env, headers, "listings", nowIso),
-    expireContentTable(env, headers, "businesses", nowIso),
-    expireContentTable(env, headers, "promotions", nowIso),
+    expireContentTable(env, headers, "listings", nowIso, paidCutoffIso),
+    expireContentTable(env, headers, "businesses", nowIso, paidCutoffIso),
+    expireContentTable(env, headers, "promotions", nowIso, paidCutoffIso),
   ]);
 
   return { listings, businesses, promotions };
@@ -487,12 +506,12 @@ const worker: ExportedHandler<Env> = {
       console.error("Orphan auth user cleanup failed:", orphanAuthErr);
     }
 
-    // 6. Expire free posts whose visibility window has elapsed.
+    // 6. Expire posts whose visibility window has elapsed.
     let expiredContent = { listings: 0, businesses: 0, promotions: 0 };
     try {
-      expiredContent = await expireElapsedFreePosts(env, headers);
+      expiredContent = await expireElapsedPosts(env, headers);
     } catch (expireErr) {
-      console.error("Free post expiry sweep failed:", expireErr);
+      console.error("Post expiry sweep failed:", expireErr);
     }
 
     // 7. Log cleanup summary to audit_logs via REST API

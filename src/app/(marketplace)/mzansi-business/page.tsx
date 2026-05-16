@@ -28,6 +28,7 @@ import {
   shouldHidePlaywrightFixtures,
 } from "@/lib/supabase/playwright-visual-fixtures";
 import { getRequiredVerifyMzansiCategorySeo } from "@/lib/seo/public-categories";
+import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com";
 const categorySeo = getRequiredVerifyMzansiCategorySeo("mzansi-business");
@@ -69,11 +70,9 @@ export default async function MzansiBusinessPage() {
   const supabase = await createClient();
 
   // Fetch top businesses for showroom hero
-  const { data: topBusinesses } = await supabase
-    .from("businesses")
-    .select("*")
-    .eq("status", "live")
-    .eq("area", "MZANSI_BUSINESS")
+  const { data: topBusinesses } = await applyVisibleExpiryFilter(
+    supabase.from("businesses").select("*").eq("status", "live").eq("area", "MZANSI_BUSINESS")
+  )
     .order("boost_until", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(10);

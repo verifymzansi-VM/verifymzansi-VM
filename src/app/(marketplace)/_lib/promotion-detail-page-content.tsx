@@ -6,16 +6,15 @@ import { ContentViewCountText } from "@/components/listings/content-view-count-t
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
 import { ACCOUNT_PROFILE_TABLE, normalizeOwnerRecord, readOwnerId } from "@/lib/account/compat";
 import { getOptionalContentViewCountMap } from "@/lib/engagement-server";
+import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export async function generatePromotionDetailMetadata(id: string): Promise<Metadata> {
   const supabase = await createClient();
-  const { data: promotion } = await supabase
-    .from("promotions")
-    .select("title, description")
-    .eq("id", id)
-    .single();
+  const { data: promotion } = await applyVisibleExpiryFilter(
+    supabase.from("promotions").select("title, description").eq("id", id).eq("status", "live")
+  ).single();
 
   if (!promotion) {
     return { title: "Tourism & Events Listing Not Found" };
@@ -33,12 +32,9 @@ export async function generatePromotionDetailMetadata(id: string): Promise<Metad
 export async function PromotionDetailPageContent({ id }: { id: string }) {
   const supabase = await createClient();
   const engagementAdmin = tryCreateAdminClient();
-  const { data: rawPromotion } = await supabase
-    .from("promotions")
-    .select("*")
-    .eq("id", id)
-    .eq("status", "live")
-    .single();
+  const { data: rawPromotion } = await applyVisibleExpiryFilter(
+    supabase.from("promotions").select("*").eq("id", id).eq("status", "live")
+  ).single();
 
   const promotion = rawPromotion ? normalizeOwnerRecord(rawPromotion) : null;
 
@@ -59,11 +55,13 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
 
   const linkedBusiness = promotion.business_id
     ? (
-        await supabase
-          .from("businesses")
-          .select("id, business_name, logo_url")
-          .eq("id", promotion.business_id)
-          .maybeSingle()
+        await applyVisibleExpiryFilter(
+          supabase
+            .from("businesses")
+            .select("id, business_name, logo_url")
+            .eq("id", promotion.business_id)
+            .eq("status", "live")
+        ).maybeSingle()
       ).data
     : null;
   const promotionViewCounts = await getOptionalContentViewCountMap(engagementAdmin, "promotion", [

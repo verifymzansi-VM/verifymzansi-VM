@@ -22,6 +22,7 @@ import {
 } from "@/lib/supabase/playwright-visual-fixtures";
 import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
 import { getRequiredVerifyMzansiCategorySeo } from "@/lib/seo/public-categories";
+import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com";
 const categorySeo = getRequiredVerifyMzansiCategorySeo("mzansi-market");
@@ -62,11 +63,9 @@ export default async function MzansiMarketPage() {
   );
   const supabase = await createClient();
 
-  const { data: listings } = await supabase
-    .from("listings")
-    .select("*")
-    .eq("status", "live")
-    .eq("area", "MZANSI_MARKET")
+  const { data: listings } = await applyVisibleExpiryFilter(
+    supabase.from("listings").select("*").eq("status", "live").eq("area", "MZANSI_MARKET")
+  )
     .order("boost_until", { ascending: false, nullsFirst: false })
     .order("featured", { ascending: false })
     .order("created_at", { ascending: false })

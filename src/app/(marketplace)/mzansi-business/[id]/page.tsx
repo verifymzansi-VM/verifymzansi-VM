@@ -26,6 +26,7 @@ import {
   getOptionalContentViewCountMap,
 } from "@/lib/engagement-server";
 import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
+import { applyVisibleExpiryFilter, isVisibleByExpiry } from "@/lib/posting/visibility";
 
 interface BusinessDetailPageProps {
   params: Promise<{ id: string }>;
@@ -46,6 +47,7 @@ type BusinessDetailSection = "business" | "tourism";
 type BusinessDetailOwnerRecord = BusinessDetailRecord & {
   owner_id?: string | null;
   seller_id?: string | null;
+  expires_at?: string | null;
 };
 
 const BUSINESS_DETAIL_SELECT = `
@@ -54,7 +56,7 @@ const BUSINESS_DETAIL_SELECT = `
   location_city, store_number, map_directions, phone, whatsapp, email, website, social_links,
   services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
   delivery_options, boost_until, featured_until, published_at, status, area, layout_template, view_count,
-  created_at, updated_at
+  expires_at, created_at, updated_at
 `;
 
 const BUSINESS_DETAIL_SELECT_LEGACY = `
@@ -63,7 +65,7 @@ const BUSINESS_DETAIL_SELECT_LEGACY = `
   location_city, store_number, map_directions, phone, whatsapp, email, website, social_links,
   services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
   delivery_options, boost_until, featured_until, published_at, status, area, view_count,
-  created_at, updated_at
+  expires_at, created_at, updated_at
 `;
 
 const BUSINESS_DETAIL_SELECT_VIEW_COUNT_LEGACY = `
@@ -72,10 +74,19 @@ const BUSINESS_DETAIL_SELECT_VIEW_COUNT_LEGACY = `
   location_city, store_number, map_directions, phone, whatsapp, email, website, social_links,
   services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
   delivery_options, boost_until, featured_until, published_at, status, area, layout_template,
-  created_at, updated_at
+  expires_at, created_at, updated_at
 `;
 
 const BUSINESS_DETAIL_SELECT_MIN_LEGACY = `
+  id, owner_id, business_type, business_name, slug, description, category, subcategory, category_details,
+  logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province,
+  location_city, store_number, map_directions, phone, whatsapp, email, website, social_links,
+  services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
+  delivery_options, boost_until, featured_until, published_at, status, area,
+  expires_at, created_at, updated_at
+`;
+
+const BUSINESS_DETAIL_SELECT_MIN_SCHEMA_LEGACY = `
   id, owner_id, business_type, business_name, slug, description, category, subcategory, category_details,
   logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province,
   location_city, store_number, map_directions, phone, whatsapp, email, website, social_links,
@@ -100,7 +111,11 @@ function isMissingBusinessOptionalColumnError(
 
   if (error.code === "42703") {
     const message = (error.message ?? "").toLowerCase();
-    return message.includes("layout_template") || message.includes("view_count");
+    return (
+      message.includes("layout_template") ||
+      message.includes("view_count") ||
+      message.includes("expires_at")
+    );
   }
 
   return false;
@@ -114,6 +129,7 @@ async function loadBusinessDetail(id: string): Promise<LoadedBusinessDetail | nu
     BUSINESS_DETAIL_SELECT_LEGACY,
     BUSINESS_DETAIL_SELECT_VIEW_COUNT_LEGACY,
     BUSINESS_DETAIL_SELECT_MIN_LEGACY,
+    BUSINESS_DETAIL_SELECT_MIN_SCHEMA_LEGACY,
   ];
 
   let rawBusiness: Record<string, unknown> | null = null;
@@ -144,8 +160,9 @@ async function loadBusinessDetail(id: string): Promise<LoadedBusinessDetail | nu
 
   const business = normalizeOwnerRecord(
     rawBusiness as unknown as BusinessDetailOwnerRecord
-  ) as BusinessDetailRecord;
-  const isOwnerPreview = business.status !== "live";
+  ) as BusinessDetailRecord & { expires_at?: string | null };
+  const isExpiredLivePost = business.status === "live" && !isVisibleByExpiry(business.expires_at);
+  const isOwnerPreview = business.status !== "live" || isExpiredLivePost;
 
   if (isOwnerPreview) {
     const {
@@ -166,11 +183,13 @@ async function loadBusinessDetail(id: string): Promise<LoadedBusinessDetail | nu
         .maybeSingle()
     : { data: null };
 
-  const { data: promotions } = await supabase
-    .from("promotions")
-    .select(BUSINESS_PROMOTION_SELECT)
-    .eq("business_id", id)
-    .eq("status", "live")
+  const { data: promotions } = await applyVisibleExpiryFilter(
+    supabase
+      .from("promotions")
+      .select(BUSINESS_PROMOTION_SELECT)
+      .eq("business_id", id)
+      .eq("status", "live")
+  )
     .order("created_at", { ascending: false })
     .limit(12);
 

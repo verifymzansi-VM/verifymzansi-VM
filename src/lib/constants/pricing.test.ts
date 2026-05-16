@@ -5,6 +5,7 @@ import {
   PAY_PER_POST,
   TRIAL_CONFIG,
   FREE_POST_CONFIG,
+  PAID_POST_CONFIG,
   ACTIVE_MARKETPLACE_AREAS,
   LEGACY_MARKETPLACE_AREAS,
   getPlansForArea,
@@ -93,6 +94,10 @@ describe("pricing constants", () => {
     expect(FREE_POST_CONFIG.maxVideos).toBe(1);
     expect(FREE_POST_CONFIG.videoAllowed).toBe(true);
     expect(FREE_POST_CONFIG.maxAllowed).toBe(1);
+  });
+
+  it("defines paid post visibility config", () => {
+    expect(PAID_POST_CONFIG.durationDays).toBe(30);
   });
 });
 

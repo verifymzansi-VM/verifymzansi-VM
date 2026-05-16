@@ -19,6 +19,7 @@ import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content
 import { PastEventsAccordion } from "./past-events-accordion";
 import Link from "next/link";
 import { getOptionalContentViewCountMap } from "@/lib/engagement-server";
+import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 
 export const metadata = {
   title: "Events in South Africa",
@@ -89,19 +90,22 @@ export default async function EventsPage() {
   const now = new Date().toISOString();
 
   // Fetch event promotions — prioritise upcoming (end_date in the future), boosted first
-  const { data: events } = await admin
-    .from("promotions")
-    .select(
-      withOwnerColumn(
-        `id, owner_id, business_id, title, description, promotion_type, category,
+  const { data: events } = await applyVisibleExpiryFilter(
+    admin
+      .from("promotions")
+      .select(
+        withOwnerColumn(
+          `id, owner_id, business_id, title, description, promotion_type, category,
        photos, videos, video_thumbnail, focal_x, focal_y, media_width, media_height, logo_url, price_cents, price_negotiable, location_province, location_city,
        start_date, end_date, boost_until, featured_until, view_count, created_at`,
-        promotionOwnerColumn
+          promotionOwnerColumn
+        )
       )
-    )
-    .eq("status", "live")
-    .eq("promotion_type", "event")
-    .or(`end_date.is.null,end_date.gte.${now}`)
+      .eq("status", "live")
+      .eq("promotion_type", "event")
+      .or(`end_date.is.null,end_date.gte.${now}`),
+    now
+  )
     .order("boost_until", { ascending: false, nullsFirst: false })
     .order("featured_until", { ascending: false, nullsFirst: false })
     .order("start_date", { ascending: true, nullsFirst: false })
@@ -109,19 +113,22 @@ export default async function EventsPage() {
     .limit(48);
 
   // Also fetch past events
-  const { data: pastEvents } = await admin
-    .from("promotions")
-    .select(
-      withOwnerColumn(
-        `id, owner_id, business_id, title, promotion_type,
+  const { data: pastEvents } = await applyVisibleExpiryFilter(
+    admin
+      .from("promotions")
+      .select(
+        withOwnerColumn(
+          `id, owner_id, business_id, title, promotion_type,
        photos, videos, video_thumbnail, focal_x, focal_y, media_width, media_height, logo_url, price_cents, price_negotiable, location_province, location_city,
        start_date, end_date, view_count, created_at`,
-        promotionOwnerColumn
+          promotionOwnerColumn
+        )
       )
-    )
-    .eq("status", "live")
-    .eq("promotion_type", "event")
-    .lt("end_date", now)
+      .eq("status", "live")
+      .eq("promotion_type", "event")
+      .lt("end_date", now),
+    now
+  )
     .order("end_date", { ascending: false })
     .limit(24);
 
@@ -160,11 +167,10 @@ export default async function EventsPage() {
   // Gather unique business IDs for linked business names
   const businessIds = [...new Set(allEvents.map((e) => e.business_id).filter(Boolean))] as string[];
   const { data: businesses } = businessIds.length
-    ? await admin
-        .from("businesses")
-        .select("id, business_name, logo_url")
-        .eq("status", "live")
-        .in("id", businessIds)
+    ? await applyVisibleExpiryFilter(
+        admin.from("businesses").select("id, business_name, logo_url").eq("status", "live"),
+        now
+      ).in("id", businessIds)
     : { data: [] };
 
   const businessMap = new Map((businesses ?? []).map((b) => [b.id, b.business_name]));

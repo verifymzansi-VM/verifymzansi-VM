@@ -58,7 +58,7 @@ import {
   MediaUploadConfirmationError,
 } from "@/lib/media/confirm-media-uploads";
 import {
-  getFreePostExpiryIso,
+  getPostExpiryIso,
   hasAcceptedPostTerms,
   recordPostTermsAcceptance,
 } from "@/lib/posting/post-lifecycle";
@@ -306,7 +306,7 @@ export async function POST(request: NextRequest) {
       area: effectiveArea,
       ...buildBusinessMutationPayload(data),
       status: "pending_moderation" as const,
-      expires_at: hasPaidPlan ? null : getFreePostExpiryIso(),
+      expires_at: getPostExpiryIso({ hasPaidPlan }),
     };
 
     const { data: business, error: insertError } = await supabase

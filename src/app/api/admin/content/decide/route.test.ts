@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   mockCreateClient,
@@ -99,6 +99,10 @@ describe("POST /api/admin/content/decide", () => {
     mockCreateNotification.mockResolvedValue(true);
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("rejects cross-origin moderation requests before auth or body parsing", async () => {
     mockEnforceSameOriginMutation.mockReturnValue(
       new Response(JSON.stringify({ error: "Cross-origin request blocked" }), {
@@ -128,21 +132,30 @@ describe("POST /api/admin/content/decide", () => {
         const eqStatus = vi.fn().mockReturnValue({
           select: vi.fn().mockResolvedValue({ data: [{ id: itemId }], error: null }),
         });
+        const pendingRow = {
+          id: itemId,
+          created_at: "2026-05-16T10:00:00.000Z",
+          expires_at: "2026-05-23T10:00:00.000Z",
+        };
+        const notificationRow = {
+          owner_id: "owner-1",
+          title: "Weekend Promo Blast",
+        };
         return {
           update: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({ eq: eqStatus }),
           }),
-          select: vi.fn().mockReturnValue({
+          select: vi.fn((fields: string) => ({
             eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: pendingRow, error: null }),
+              }),
               maybeSingle: vi.fn().mockResolvedValue({
-                data: {
-                  owner_id: "owner-1",
-                  title: "Weekend Promo Blast",
-                },
+                data: fields.includes("created_at") ? pendingRow : notificationRow,
                 error: null,
               }),
             }),
-          }),
+          })),
         };
       }
 
@@ -220,5 +233,65 @@ describe("POST /api/admin/content/decide", () => {
         href: "/dashboard/businesses",
       })
     );
+  });
+
+  it("resets the visibility window from approval time", async () => {
+    const itemId = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
+    const updateSpy = vi.fn();
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-18T08:00:00.000Z"));
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "promotions") {
+        const eqStatus = vi.fn().mockReturnValue({
+          select: vi.fn().mockResolvedValue({ data: [{ id: itemId }], error: null }),
+        });
+        const pendingRow = {
+          id: itemId,
+          created_at: "2026-05-16T10:00:00.000Z",
+          expires_at: "2026-05-23T10:00:00.000Z",
+        };
+        updateSpy.mockReturnValue({
+          eq: vi.fn().mockReturnValue({ eq: eqStatus }),
+        });
+        return {
+          update: updateSpy,
+          select: vi.fn((fields: string) => ({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: pendingRow, error: null }),
+              }),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: fields.includes("created_at")
+                  ? pendingRow
+                  : { owner_id: "owner-1", title: "Weekend Promo Blast" },
+                error: null,
+              }),
+            }),
+          })),
+        };
+      }
+
+      return {};
+    });
+
+    const response = await POST(
+      createMockRequest({
+        itemId,
+        area: "PROMOTIONS_EVENTS",
+        decision: "approve",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(updateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        published_at: "2026-05-18T08:00:00.000Z",
+        expires_at: "2026-05-25T08:00:00.000Z",
+      })
+    );
+
+    vi.useRealTimers();
   });
 });

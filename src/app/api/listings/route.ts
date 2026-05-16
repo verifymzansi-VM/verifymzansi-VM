@@ -55,7 +55,7 @@ import {
   MediaUploadConfirmationError,
 } from "@/lib/media/confirm-media-uploads";
 import {
-  getFreePostExpiryIso,
+  getPostExpiryIso,
   hasAcceptedPostTerms,
   recordPostTermsAcceptance,
 } from "@/lib/posting/post-lifecycle";
@@ -699,7 +699,7 @@ export async function POST(request: NextRequest) {
         media_height: data.media_height ?? null,
         focal_x: data.focal_x ?? 0.5,
         focal_y: data.focal_y ?? 0.5,
-        expires_at: hasPaidPlan ? null : getFreePostExpiryIso(),
+        expires_at: getPostExpiryIso({ hasPaidPlan }),
       },
       ownerColumn,
       user.id
