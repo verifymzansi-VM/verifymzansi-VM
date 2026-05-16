@@ -1,15 +1,15 @@
-import { PAID_POST_CONFIG } from "@/lib/constants/pricing";
+import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export function getLegacyPaidPostCutoffIso(now = new Date()): string {
-  return new Date(now.getTime() - PAID_POST_CONFIG.durationDays * DAY_MS).toISOString();
+export function getLegacyFreePostCutoffIso(now = new Date()): string {
+  return new Date(now.getTime() - FREE_POST_CONFIG.durationDays * DAY_MS).toISOString();
 }
 
 export function applyVisibleExpiryFilter<T>(query: T, nowIso = new Date().toISOString()): T {
   const maybeQuery = query as T & { or?: (filter: string) => T };
   const now = new Date(nowIso);
-  const legacyCutoffIso = getLegacyPaidPostCutoffIso(
+  const legacyCutoffIso = getLegacyFreePostCutoffIso(
     Number.isFinite(now.getTime()) ? now : new Date()
   );
 
@@ -31,7 +31,7 @@ export function isVisibleByExpiry(
     const createdTime = new Date(createdAt).getTime();
     return (
       Number.isFinite(createdTime) &&
-      now.getTime() - createdTime < PAID_POST_CONFIG.durationDays * DAY_MS
+      now.getTime() - createdTime < FREE_POST_CONFIG.durationDays * DAY_MS
     );
   }
 

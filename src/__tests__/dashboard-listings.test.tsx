@@ -77,6 +77,7 @@ describe("ListingsPage", () => {
             status: "active",
             price_cents: 10000,
             created_at: "2023-01-01T00:00:00.000Z",
+            expires_at: "2099-01-08T00:00:00.000Z",
             area: "MZANSI_MARKET",
             photos: [],
           },

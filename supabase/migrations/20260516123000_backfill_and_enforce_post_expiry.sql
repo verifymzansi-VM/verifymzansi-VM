@@ -25,41 +25,41 @@ WHERE p.expires_at IS NULL
   AND fpu.content_id = p.id
   AND fpu.area = 'PROMOTIONS_EVENTS'::public.marketplace_area;
 
--- Legacy paid/unknown rows predate expires_at. Give them the maximum paid
--- visibility window so old rows cannot remain public forever.
+-- Legacy unknown rows predate expires_at. Treat them as free posts so old rows
+-- cannot remain public beyond the launch free-post visibility window.
 UPDATE public.listings
-SET expires_at = created_at + INTERVAL '30 days'
+SET expires_at = created_at + INTERVAL '7 days'
 WHERE expires_at IS NULL
-  AND status IN ('live', 'active');
+  AND status::text IN ('live', 'active');
 
 UPDATE public.businesses
-SET expires_at = created_at + INTERVAL '30 days'
+SET expires_at = created_at + INTERVAL '7 days'
 WHERE expires_at IS NULL
-  AND status IN ('live', 'active');
+  AND status::text IN ('live', 'active');
 
 UPDATE public.promotions
-SET expires_at = created_at + INTERVAL '30 days'
+SET expires_at = created_at + INTERVAL '7 days'
 WHERE expires_at IS NULL
-  AND status IN ('live', 'active');
+  AND status::text IN ('live', 'active');
 
 -- Expire rows immediately in the database as a backstop for environments where
 -- the Cloudflare cron has not run yet.
 UPDATE public.listings
 SET status = 'expired',
     status_reason = COALESCE(status_reason, 'Post visibility period expired')
-WHERE status IN ('live', 'active')
+WHERE status::text IN ('live', 'active')
   AND expires_at <= now();
 
 UPDATE public.businesses
 SET status = 'expired',
     status_reason = COALESCE(status_reason, 'Post visibility period expired')
-WHERE status IN ('live', 'active')
+WHERE status::text IN ('live', 'active')
   AND expires_at <= now();
 
 UPDATE public.promotions
 SET status = 'expired',
     status_reason = COALESCE(status_reason, 'Post visibility period expired')
-WHERE status IN ('live', 'active')
+WHERE status::text IN ('live', 'active')
   AND expires_at <= now();
 
 DROP POLICY IF EXISTS "Public reads live listings" ON public.listings;

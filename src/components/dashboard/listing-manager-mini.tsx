@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { ExpiryCountdownBadge } from "@/components/dashboard/expiry-countdown-badge";
 import { cn } from "@/lib/utils";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
-import { PAID_POST_CONFIG } from "@/lib/constants/pricing";
+import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -141,7 +141,7 @@ function addDaysIso(value: string | null | undefined, days: number) {
 
 function getPostExpiresAt(post: MiniListingPost) {
   if (post.expires_at) return post.expires_at;
-  return addDaysIso(post.created_at, PAID_POST_CONFIG.durationDays);
+  return addDaysIso(post.created_at, FREE_POST_CONFIG.durationDays);
 }
 
 function getDisplayStatus(post: MiniListingPost, nowMs = Date.now()) {
