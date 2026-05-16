@@ -35,6 +35,32 @@ const footerSections = [
   },
 ] as const;
 
+function SouthAfricanFlagMark() {
+  return (
+    <svg
+      className="h-4 w-6 shrink-0 rounded-[3px] shadow-[0_0_0_1px_rgba(15,23,42,0.18),0_1px_2px_rgba(15,23,42,0.16)]"
+      viewBox="0 0 300 200"
+      role="img"
+      aria-label="South African flag"
+      focusable="false"
+    >
+      <defs>
+        <clipPath id="south-african-flag-clip">
+          <rect width="300" height="200" rx="10" />
+        </clipPath>
+      </defs>
+      <g clipPath="url(#south-african-flag-clip)">
+        <path fill="#e03c31" d="M0 0h300v100H0z" />
+        <path fill="#001489" d="M0 100h300v100H0z" />
+        <path fill="#fff" d="M0 0h50l110 73.333H300v53.334H160L50 200H0l150-100L0 0Z" />
+        <path fill="#007a4d" d="M0 20h38l108 72h154v16H146L38 180H0l120-80L0 20Z" />
+        <path fill="#ffb81c" d="M0 0l150 100L0 200V0Z" />
+        <path fill="#000" d="M0 20l120 80L0 180V20Z" />
+      </g>
+    </svg>
+  );
+}
+
 export function Footer() {
   const currentYear = new Date().getFullYear();
   const runtimeConfig = getServerPublicRuntimeConfig();
@@ -86,31 +112,8 @@ export function Footer() {
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
           <p>&copy; {currentYear} VerifyMzansi. All rights reserved.</p>
-          <div className="flex items-center gap-1">
-            <svg
-              className="h-3 w-5 rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.16)]"
-              viewBox="0 0 90 60"
-              role="img"
-              aria-label="South African flag"
-            >
-              <clipPath id="south-african-flag-clip">
-                <rect width="90" height="60" rx="4" />
-              </clipPath>
-              <g clipPath="url(#south-african-flag-clip)">
-                <path fill="#de3831" d="M0 0h90v30H45z" />
-                <path fill="#002395" d="M45 30h45v30H0z" />
-                <path
-                  fill="#fff"
-                  d="M0 0v60l39-30L0 0Zm90 20H39l-13-10h64v10Zm0 20H39L26 50h64V40Z"
-                />
-                <path fill="#ffb81c" d="M0 6v48l31-24L0 6Z" />
-                <path fill="#000" d="M0 12v36l23-18L0 12Z" />
-                <path
-                  fill="#007a4d"
-                  d="M0 0v9l27 21L0 51v9l39-30L0 0Zm90 24H37l-8-6h61v6Zm0 12H37l-8 6h61v-6Z"
-                />
-              </g>
-            </svg>
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background/70 px-2.5 py-1 shadow-sm">
+            <SouthAfricanFlagMark />
             <span>Made in South Africa</span>
           </div>
         </div>
