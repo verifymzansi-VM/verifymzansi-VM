@@ -503,7 +503,7 @@ export default async function ListingsPage({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 max-w-full space-y-6 overflow-x-hidden">
       {successAlert && (
         <Alert variant="success">
           <div>
@@ -530,13 +530,15 @@ export default async function ListingsPage({
         <AreaFilter />
       </Suspense>
 
-      <Tabs defaultValue="active">
-        <TabsList>
-          <TabsTrigger value="active">Active ({filteredActive.length})</TabsTrigger>
-          <TabsTrigger value="pending">Under Review ({filteredPending.length})</TabsTrigger>
-          <TabsTrigger value="rejected">Rejected ({filteredRejected.length})</TabsTrigger>
-          <TabsTrigger value="expired">Ended ({filteredExpired.length})</TabsTrigger>
-        </TabsList>
+      <Tabs defaultValue="active" className="min-w-0 max-w-full">
+        <div className="-mx-4 overflow-x-auto px-4 pb-1 scrollbar-hide sm:mx-0 sm:px-0">
+          <TabsList className="w-max max-w-none">
+            <TabsTrigger value="active">Active ({filteredActive.length})</TabsTrigger>
+            <TabsTrigger value="pending">Under Review ({filteredPending.length})</TabsTrigger>
+            <TabsTrigger value="rejected">Rejected ({filteredRejected.length})</TabsTrigger>
+            <TabsTrigger value="expired">Ended ({filteredExpired.length})</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="active" className="mt-4">
           <ListingList
