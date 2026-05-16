@@ -161,7 +161,10 @@ async function loadBusinessDetail(id: string): Promise<LoadedBusinessDetail | nu
   const business = normalizeOwnerRecord(
     rawBusiness as unknown as BusinessDetailOwnerRecord
   ) as BusinessDetailRecord & { expires_at?: string | null };
-  const isExpiredLivePost = business.status === "live" && !isVisibleByExpiry(business.expires_at);
+  const businessCreatedAt = (business as { created_at?: string | null }).created_at;
+  const isExpiredLivePost =
+    business.status === "live" &&
+    !isVisibleByExpiry(business.expires_at, new Date(), businessCreatedAt);
   const isOwnerPreview = business.status !== "live" || isExpiredLivePost;
 
   if (isOwnerPreview) {

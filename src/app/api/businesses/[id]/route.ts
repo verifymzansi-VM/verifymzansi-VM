@@ -123,8 +123,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     let currentUser: { id: string } | null = null;
 
     // Only allow public access to live businesses
+    const normalizedBusinessCreatedAt = (normalizedBusiness as { created_at?: string | null })
+      .created_at;
     const isExpiredLivePost =
-      normalizedBusiness.status === "live" && !isVisibleByExpiry(normalizedBusiness.expires_at);
+      normalizedBusiness.status === "live" &&
+      !isVisibleByExpiry(normalizedBusiness.expires_at, new Date(), normalizedBusinessCreatedAt);
 
     if (normalizedBusiness.status !== "live" || isExpiredLivePost) {
       const {

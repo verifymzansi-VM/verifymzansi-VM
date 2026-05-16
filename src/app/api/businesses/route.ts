@@ -62,16 +62,10 @@ import {
   hasAcceptedPostTerms,
   recordPostTermsAcceptance,
 } from "@/lib/posting/post-lifecycle";
+import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 
 const log = createLogger("BusinessesCRUD");
 const AREA: MarketplaceArea = "MZANSI_BUSINESS";
-
-function applyVisibleExpiryFilter<T>(query: T, nowIso = new Date().toISOString()): T {
-  const maybeQuery = query as T & { or?: (filter: string) => T };
-  return typeof maybeQuery.or === "function"
-    ? maybeQuery.or(`expires_at.is.null,expires_at.gt.${nowIso}`)
-    : query;
-}
 
 /**
  * Route ownership:
@@ -474,12 +468,13 @@ export async function GET(request: NextRequest) {
 
       if (error) {
         // Fallback: manual query
-        const { data: businesses } = await admin
-          .from("businesses")
-          .select("category, business_name, description")
-          .eq("status", "live")
-          .in("area", ["MZANSI_BUSINESS", "PROMOTIONS_EVENTS"])
-          .limit(500);
+        const { data: businesses } = await applyVisibleExpiryFilter(
+          admin
+            .from("businesses")
+            .select("category, business_name, description, created_at")
+            .eq("status", "live")
+            .in("area", ["MZANSI_BUSINESS", "PROMOTIONS_EVENTS"])
+        ).limit(500);
 
         const categoryCounts: Record<string, number> = {};
         for (const b of businesses ?? []) {

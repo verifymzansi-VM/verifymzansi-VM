@@ -79,10 +79,19 @@ const AUTH_USERS_PAGE_SIZE = 200;
 const AUTH_USERS_MAX_PAGES = 5;
 const ORPHAN_AUTH_MIN_AGE_MS = 30 * 60 * 1000;
 const ORPHAN_AUTH_DELETE_CAP = 50;
+const FREE_POST_DURATION_DAYS = 7;
 const PAID_POST_DURATION_DAYS = 30;
 
 function buildInFilter(values: string[]): string {
   return `(${values.map((value) => JSON.stringify(value)).join(",")})`;
+}
+
+function chunkArray<T>(values: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    chunks.push(values.slice(index, index + size));
+  }
+  return chunks;
 }
 
 function isPrivateBucket(bucket: string): boolean {
@@ -272,6 +281,7 @@ async function expireContentTable(
   headers: Record<string, string>,
   table: ExpirableContentTable,
   nowIso: string,
+  freeCutoffIso: string,
   paidCutoffIso: string
 ): Promise<number> {
   const expireRows = async (filter: string, statusReason: string) => {
@@ -303,12 +313,51 @@ async function expireContentTable(
     `expires_at=not.is.null&expires_at=lte.${encodeURIComponent(nowIso)}`,
     "Post visibility period expired"
   );
+  const areaFilter =
+    table === "promotions"
+      ? "area=eq.PROMOTIONS_EVENTS"
+      : table === "businesses"
+        ? "area=in.(MZANSI_BUSINESS,PROMOTIONS_EVENTS)"
+        : "area=eq.MZANSI_MARKET";
+  const freePostContentIds: string[] = [];
+  let legacyFreeRows = 0;
+
+  for (let from = 0; ; from += 1000) {
+    const freeRowsResponse = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/free_posts_used?select=content_id&released_at=is.null&content_id=not.is.null&${areaFilter}&order=created_at.asc&limit=1000&offset=${from}`,
+      { headers }
+    );
+
+    if (!freeRowsResponse.ok) {
+      console.error(
+        `Failed to resolve free post ledger for ${table}:`,
+        await freeRowsResponse.text()
+      );
+      break;
+    }
+
+    const rows = (await freeRowsResponse.json()) as Array<{ content_id: string | null }>;
+    freePostContentIds.push(
+      ...rows.map((row) => row.content_id).filter((contentId): contentId is string => !!contentId)
+    );
+
+    if (rows.length < 1000) {
+      break;
+    }
+  }
+
+  for (const contentIdBatch of chunkArray(freePostContentIds, 100)) {
+    legacyFreeRows += await expireRows(
+      `expires_at=is.null&id=in.${encodeURIComponent(buildInFilter(contentIdBatch))}&created_at=lte.${encodeURIComponent(freeCutoffIso)}`,
+      "Free post visibility period expired"
+    );
+  }
   const legacyPaidRows = await expireRows(
     `expires_at=is.null&created_at=lte.${encodeURIComponent(paidCutoffIso)}`,
     "Paid post visibility period expired"
   );
 
-  return elapsedExpiryRows + legacyPaidRows;
+  return elapsedExpiryRows + legacyFreeRows + legacyPaidRows;
 }
 
 async function expireElapsedPosts(
@@ -317,13 +366,16 @@ async function expireElapsedPosts(
 ): Promise<Record<ExpirableContentTable, number>> {
   const now = new Date();
   const nowIso = now.toISOString();
+  const freeCutoffIso = new Date(
+    now.getTime() - FREE_POST_DURATION_DAYS * 24 * 60 * 60 * 1000
+  ).toISOString();
   const paidCutoffIso = new Date(
     now.getTime() - PAID_POST_DURATION_DAYS * 24 * 60 * 60 * 1000
   ).toISOString();
   const [listings, businesses, promotions] = await Promise.all([
-    expireContentTable(env, headers, "listings", nowIso, paidCutoffIso),
-    expireContentTable(env, headers, "businesses", nowIso, paidCutoffIso),
-    expireContentTable(env, headers, "promotions", nowIso, paidCutoffIso),
+    expireContentTable(env, headers, "listings", nowIso, freeCutoffIso, paidCutoffIso),
+    expireContentTable(env, headers, "businesses", nowIso, freeCutoffIso, paidCutoffIso),
+    expireContentTable(env, headers, "promotions", nowIso, freeCutoffIso, paidCutoffIso),
   ]);
 
   return { listings, businesses, promotions };

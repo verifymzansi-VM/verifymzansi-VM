@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { ListingManagerMini } from "@/components/dashboard/listing-manager-mini";
 
 vi.mock("next/link", () => ({
@@ -64,5 +64,34 @@ describe("ListingManagerMini", () => {
     );
 
     expect(screen.getByText("Expires in 2h")).toBeInTheDocument();
+  });
+
+  it("moves expired live posts into the expired tab before cleanup changes status", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-16T10:00:00.000Z"));
+
+    render(
+      <ListingManagerMini
+        posts={[
+          {
+            id: "listing-expired",
+            title: "Old listing",
+            status: "live",
+            area: "MZANSI_MARKET",
+            photos: [],
+            view_count: 1,
+            expires_at: "2026-05-15T12:00:00.000Z",
+            created_at: "2026-05-08T10:00:00.000Z",
+            updated_at: "2026-05-08T10:00:00.000Z",
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: "Live" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Expired\s*1/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Expired\s*1/ }));
+    expect(screen.getByText("Old listing")).toBeInTheDocument();
+    expect(screen.getAllByText("Expired").length).toBeGreaterThan(0);
   });
 });

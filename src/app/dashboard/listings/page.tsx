@@ -37,7 +37,7 @@ import {
   type PlanTier,
   type PromotionType,
 } from "@/types/enums";
-import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
+import { FREE_POST_CONFIG, PAID_POST_CONFIG } from "@/lib/constants/pricing";
 
 const LISTING_DASHBOARD_FALLBACK_FIELDS = ["view_count", "featured_until", "urgent_until"] as const;
 const BUSINESS_DASHBOARD_FALLBACK_FIELDS = ["view_count", "expires_at"] as const;
@@ -200,7 +200,29 @@ function getPostExpiresAt(item: DashboardItem) {
     return addDaysIso(item.published_at ?? item.created_at, FREE_POST_CONFIG.durationDays);
   }
 
-  return null;
+  return addDaysIso(item.created_at, PAID_POST_CONFIG.durationDays);
+}
+
+function isExpiredByVisibilityWindow(item: DashboardItem, now = new Date()) {
+  if (!(item.status === "active" || item.status === "live")) {
+    return false;
+  }
+
+  const expiresAt = getPostExpiresAt(item);
+  if (!expiresAt) return false;
+
+  const expiryTime = new Date(expiresAt).getTime();
+  return Number.isFinite(expiryTime) && expiryTime <= now.getTime();
+}
+
+function applyDashboardExpiryStatus(item: DashboardItem, now = new Date()): DashboardItem {
+  return isExpiredByVisibilityWindow(item, now)
+    ? {
+        ...item,
+        status: "expired",
+        status_reason: item.status_reason ?? "Post visibility period expired",
+      }
+    : item;
 }
 
 export default async function ListingsPage({
@@ -440,10 +462,12 @@ export default async function ListingsPage({
   };
 
   const items = sortByNewest(
-    baseItems.map((item) => ({
-      ...item,
-      view_count: getViewCountForItem(item, viewCounts),
-    }))
+    baseItems
+      .map((item) => ({
+        ...item,
+        view_count: getViewCountForItem(item, viewCounts),
+      }))
+      .map((item) => applyDashboardExpiryStatus(item))
   );
 
   const active = items.filter((item) => item.status === "active" || item.status === "live");

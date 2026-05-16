@@ -1,12 +1,39 @@
+import { PAID_POST_CONFIG } from "@/lib/constants/pricing";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export function getLegacyPaidPostCutoffIso(now = new Date()): string {
+  return new Date(now.getTime() - PAID_POST_CONFIG.durationDays * DAY_MS).toISOString();
+}
+
 export function applyVisibleExpiryFilter<T>(query: T, nowIso = new Date().toISOString()): T {
   const maybeQuery = query as T & { or?: (filter: string) => T };
+  const now = new Date(nowIso);
+  const legacyCutoffIso = getLegacyPaidPostCutoffIso(
+    Number.isFinite(now.getTime()) ? now : new Date()
+  );
+
   return typeof maybeQuery.or === "function"
-    ? maybeQuery.or(`expires_at.is.null,expires_at.gt.${nowIso}`)
+    ? maybeQuery.or(
+        `expires_at.gt.${nowIso},and(expires_at.is.null,created_at.gt.${legacyCutoffIso})`
+      )
     : query;
 }
 
-export function isVisibleByExpiry(expiresAt: string | null | undefined, now = new Date()): boolean {
-  if (!expiresAt) return true;
+export function isVisibleByExpiry(
+  expiresAt: string | null | undefined,
+  now = new Date(),
+  createdAt?: string | null | undefined
+): boolean {
+  if (!expiresAt) {
+    if (!createdAt) return true;
+
+    const createdTime = new Date(createdAt).getTime();
+    return (
+      Number.isFinite(createdTime) &&
+      now.getTime() - createdTime < PAID_POST_CONFIG.durationDays * DAY_MS
+    );
+  }
 
   const expiryTime = new Date(expiresAt).getTime();
   return Number.isFinite(expiryTime) && expiryTime > now.getTime();

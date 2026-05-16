@@ -59,6 +59,7 @@ import {
   hasAcceptedPostTerms,
   recordPostTermsAcceptance,
 } from "@/lib/posting/post-lifecycle";
+import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 import {
   LISTING_INSERT_COMPAT_FIELDS,
   LISTING_SELECT_FALLBACK_FIELDS,
@@ -74,13 +75,6 @@ import {
 
 const log = createLogger("ListingCreate");
 const AREA: MarketplaceArea = "MZANSI_MARKET";
-
-function applyVisibleExpiryFilter<T>(query: T, nowIso = new Date().toISOString()): T {
-  const maybeQuery = query as T & { or?: (filter: string) => T };
-  return typeof maybeQuery.or === "function"
-    ? maybeQuery.or(`expires_at.is.null,expires_at.gt.${nowIso}`)
-    : query;
-}
 
 /**
  * Route ownership:

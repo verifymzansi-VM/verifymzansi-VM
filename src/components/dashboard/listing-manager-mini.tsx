@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { ExpiryCountdownBadge } from "@/components/dashboard/expiry-countdown-badge";
 import { cn } from "@/lib/utils";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
+import { PAID_POST_CONFIG } from "@/lib/constants/pricing";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -42,7 +43,17 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
     className:
       "bg-brand-green-50 text-brand-green border-brand-green-200 dark:bg-brand-green-950 dark:border-brand-green-800",
   },
+  active: {
+    label: "Live",
+    className:
+      "bg-brand-green-50 text-brand-green border-brand-green-200 dark:bg-brand-green-950 dark:border-brand-green-800",
+  },
   pending_moderation: {
+    label: "Pending",
+    className:
+      "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:border-amber-800",
+  },
+  pending_review: {
     label: "Pending",
     className:
       "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:border-amber-800",
@@ -82,8 +93,12 @@ type TabKey = "all" | "live" | "pending" | "rejected" | "expired";
 
 const TABS: { key: TabKey; label: string; statuses: string[] }[] = [
   { key: "all", label: "All", statuses: [] },
-  { key: "live", label: "Live", statuses: ["live"] },
-  { key: "pending", label: "Pending", statuses: ["pending_moderation", "flagged_for_review"] },
+  { key: "live", label: "Live", statuses: ["live", "active"] },
+  {
+    key: "pending",
+    label: "Pending",
+    statuses: ["pending_moderation", "pending_review", "flagged_for_review"],
+  },
   { key: "rejected", label: "Rejected", statuses: ["rejected"] },
   { key: "expired", label: "Expired", statuses: ["expired", "sold", "hidden"] },
 ];
@@ -117,30 +132,63 @@ function getRelativeDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-ZA", { day: "numeric", month: "short" });
 }
 
+function addDaysIso(value: string | null | undefined, days: number) {
+  if (!value) return null;
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return null;
+  return new Date(timestamp + days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function getPostExpiresAt(post: MiniListingPost) {
+  if (post.expires_at) return post.expires_at;
+  return addDaysIso(post.created_at, PAID_POST_CONFIG.durationDays);
+}
+
+function getDisplayStatus(post: MiniListingPost, nowMs = Date.now()) {
+  if (!(post.status === "live" || post.status === "active")) {
+    return post.status;
+  }
+
+  const expiresAt = getPostExpiresAt(post);
+  if (!expiresAt) return post.status;
+
+  const expiryMs = new Date(expiresAt).getTime();
+  return Number.isFinite(expiryMs) && expiryMs <= nowMs ? "expired" : post.status;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
 export function ListingManagerMini({ posts, limit = 5 }: ListingManagerMiniProps) {
   const [activeTab, setActiveTab] = useState<TabKey>("all");
+  const displayPosts = posts.map((post) => ({
+    ...post,
+    status: getDisplayStatus(post),
+    expires_at: getPostExpiresAt(post),
+  }));
 
   const countsPerTab: Record<TabKey, number> = {
-    all: posts.length,
+    all: displayPosts.length,
     live: 0,
     pending: 0,
     rejected: 0,
     expired: 0,
   };
-  for (const p of posts) {
-    if (["live"].includes(p.status)) countsPerTab.live++;
-    if (["pending_moderation", "flagged_for_review"].includes(p.status)) countsPerTab.pending++;
+  for (const p of displayPosts) {
+    if (["live", "active"].includes(p.status)) countsPerTab.live++;
+    if (["pending_moderation", "pending_review", "flagged_for_review"].includes(p.status)) {
+      countsPerTab.pending++;
+    }
     if (p.status === "rejected") countsPerTab.rejected++;
     if (["expired", "sold", "hidden"].includes(p.status)) countsPerTab.expired++;
   }
 
   const tabDef = TABS.find((t) => t.key === activeTab)!;
   const filtered =
-    tabDef.statuses.length === 0 ? posts : posts.filter((p) => tabDef.statuses.includes(p.status));
+    tabDef.statuses.length === 0
+      ? displayPosts
+      : displayPosts.filter((p) => tabDef.statuses.includes(p.status));
   const visible = filtered.slice(0, limit);
 
   /* ---- Empty state (entire section — no posts at all) ------------ */
