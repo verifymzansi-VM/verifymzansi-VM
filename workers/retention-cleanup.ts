@@ -404,20 +404,17 @@ async function expireContentTable(
   paidCutoffIso: string
 ): Promise<number> {
   const expireRows = async (filter: string, statusReason: string) => {
-    const response = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/${table}?status=in.(live,active)&${filter}`,
-      {
-        method: "PATCH",
-        headers: {
-          ...headers,
-          Prefer: "return=representation",
-        },
-        body: JSON.stringify({
-          status: "expired",
-          status_reason: statusReason,
-        }),
-      }
-    );
+    const response = await fetch(`${env.SUPABASE_URL}/rest/v1/${table}?status=eq.live&${filter}`, {
+      method: "PATCH",
+      headers: {
+        ...headers,
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        status: "expired",
+        status_reason: statusReason,
+      }),
+    });
 
     if (!response.ok) {
       console.error(`Failed to expire ${table}:`, await response.text());

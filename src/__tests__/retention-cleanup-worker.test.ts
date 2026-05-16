@@ -111,9 +111,9 @@ describe("retention cleanup worker", () => {
       }
 
       if (
-        url.includes("/rest/v1/listings?status=in.(live,active)") ||
-        url.includes("/rest/v1/businesses?status=in.(live,active)") ||
-        url.includes("/rest/v1/promotions?status=in.(live,active)")
+        url.includes("/rest/v1/listings?status=eq.live") ||
+        url.includes("/rest/v1/businesses?status=eq.live") ||
+        url.includes("/rest/v1/promotions?status=eq.live")
       ) {
         return {
           ok: true,
@@ -179,8 +179,11 @@ describe("retention cleanup worker", () => {
     );
     expect(authDeleteCall).toBeDefined();
 
+    expect(
+      fetchMock.mock.calls.some(([url]) => String(url).includes("status=in.(live,active)"))
+    ).toBe(false);
     const contentExpiryCalls = fetchMock.mock.calls.filter(([url]) =>
-      String(url).includes("status=in.(live,active)")
+      String(url).includes("status=eq.live")
     );
     expect(contentExpiryCalls).toHaveLength(6);
     expect(
@@ -226,9 +229,9 @@ describe("retention cleanup worker", () => {
       }
 
       if (
-        url.includes("/rest/v1/listings?status=in.(live,active)") ||
-        url.includes("/rest/v1/businesses?status=in.(live,active)") ||
-        url.includes("/rest/v1/promotions?status=in.(live,active)")
+        url.includes("/rest/v1/listings?status=eq.live") ||
+        url.includes("/rest/v1/businesses?status=eq.live") ||
+        url.includes("/rest/v1/promotions?status=eq.live")
       ) {
         return { ok: true, json: async () => [] } satisfies Partial<Response>;
       }
