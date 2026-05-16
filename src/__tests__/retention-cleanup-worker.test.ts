@@ -275,7 +275,18 @@ describe("retention cleanup worker", () => {
       }
 
       if (url.includes("/rest/v1/promotions?select=id,photos")) {
-        return { ok: true, json: async () => [] } satisfies Partial<Response>;
+        return {
+          ok: true,
+          json: async () => [
+            {
+              id: "promotion-1",
+              photos: ["https://media.verifymzansi.com/promotions/legacy-photo.jpg"],
+              videos: null,
+              video_thumbnail: null,
+              logo_url: null,
+            },
+          ],
+        } satisfies Partial<Response>;
       }
 
       if (url.includes("/rest/v1/content_edit_requests?")) {
@@ -283,7 +294,11 @@ describe("retention cleanup worker", () => {
         return { ok: true, text: async () => "" } satisfies Partial<Response>;
       }
 
-      if (url.includes("/rest/v1/listings?id=in.") || url.includes("/rest/v1/businesses?id=in.")) {
+      if (
+        url.includes("/rest/v1/listings?id=in.") ||
+        url.includes("/rest/v1/businesses?id=in.") ||
+        url.includes("/rest/v1/promotions?id=in.")
+      ) {
         expect(init?.method).toBe("DELETE");
         return { ok: true, text: async () => "" } satisfies Partial<Response>;
       }
@@ -309,21 +324,43 @@ describe("retention cleanup worker", () => {
       "business/gallery.jpg",
       "business/mall.jpg",
     ]);
+    expect(publicDelete).toHaveBeenCalledWith(["promotions/legacy-photo.jpg"]);
 
     const tableDeletes = fetchMock.mock.calls.filter(
       ([url, init]) =>
         init?.method === "DELETE" &&
         (String(url).includes("/rest/v1/listings?id=in.") ||
-          String(url).includes("/rest/v1/businesses?id=in."))
+          String(url).includes("/rest/v1/businesses?id=in.") ||
+          String(url).includes("/rest/v1/promotions?id=in."))
     );
-    expect(tableDeletes).toHaveLength(2);
+    expect(tableDeletes).toHaveLength(3);
+
+    const expiredContentFetches = fetchMock.mock.calls.filter(
+      ([url, init]) =>
+        !init?.method &&
+        (String(url).includes("/rest/v1/listings?select=id,photos") ||
+          String(url).includes("/rest/v1/businesses?select=id,logo_url") ||
+          String(url).includes("/rest/v1/promotions?select=id,photos"))
+    );
+    expect(expiredContentFetches).toHaveLength(3);
+    expect(expiredContentFetches.every(([url]) => String(url).includes("status=eq.expired"))).toBe(
+      true
+    );
+    expect(expiredContentFetches.every(([url]) => String(url).includes("expires_at.lte."))).toBe(
+      true
+    );
+    expect(
+      expiredContentFetches.every(([url]) =>
+        String(url).includes("and(expires_at.is.null,updated_at.lte.")
+      )
+    ).toBe(true);
 
     const auditCall = fetchMock.mock.calls.find(([url]) =>
       String(url).includes("/rest/v1/audit_logs")
     );
     expect(JSON.parse(String(auditCall?.[1]?.body))).toMatchObject({
       metadata: {
-        deleted_expired_content: { listings: 1, businesses: 1, promotions: 0 },
+        deleted_expired_content: { listings: 1, businesses: 1, promotions: 1 },
       },
     });
   });

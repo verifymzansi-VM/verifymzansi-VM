@@ -524,6 +524,14 @@ function getExpiredContentConfig(table: ExpirableContentTable): {
   }
 }
 
+function buildExpiredContentDeleteFilter(cutoffIso: string): string {
+  const encodedCutoff = encodeURIComponent(cutoffIso);
+  return [
+    "status=eq.expired",
+    `or=(expires_at.lte.${encodedCutoff},and(expires_at.is.null,updated_at.lte.${encodedCutoff}))`,
+  ].join("&");
+}
+
 async function deleteExpiredContentTable(
   env: Env,
   headers: Record<string, string>,
@@ -551,8 +559,9 @@ async function deleteExpiredContentBatch(
   cutoffIso: string
 ): Promise<number> {
   const config = getExpiredContentConfig(table);
+  const deleteFilter = buildExpiredContentDeleteFilter(cutoffIso);
   const response = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/${table}?select=${config.select}&status=eq.expired&expires_at=not.is.null&expires_at=lte.${encodeURIComponent(cutoffIso)}&order=expires_at.asc&limit=${EXPIRED_CONTENT_DELETE_LIMIT}`,
+    `${env.SUPABASE_URL}/rest/v1/${table}?select=${config.select}&${deleteFilter}&order=updated_at.asc&limit=${EXPIRED_CONTENT_DELETE_LIMIT}`,
     { headers }
   );
 
