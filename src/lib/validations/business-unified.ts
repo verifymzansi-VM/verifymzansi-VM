@@ -210,6 +210,7 @@ export const businessSchema = z
     media_height: z.number().int().positive().optional(),
     focal_x: z.number().min(0).max(1).optional(),
     focal_y: z.number().min(0).max(1).optional(),
+    termsAccepted: z.boolean().optional().default(false),
   })
   .superRefine((data, ctx) => {
     // Province + city required for all types except online_only

@@ -73,6 +73,8 @@ interface AuthAdminUser {
   email?: string | null;
 }
 
+type ExpirableContentTable = "listings" | "businesses" | "promotions";
+
 const AUTH_USERS_PAGE_SIZE = 200;
 const AUTH_USERS_MAX_PAGES = 5;
 const ORPHAN_AUTH_MIN_AGE_MS = 30 * 60 * 1000;
@@ -264,6 +266,50 @@ async function cleanupOrphanedAuthUsers(
   return deletedCount;
 }
 
+async function expireContentTable(
+  env: Env,
+  headers: Record<string, string>,
+  table: ExpirableContentTable,
+  nowIso: string
+): Promise<number> {
+  const response = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/${table}?status=eq.live&expires_at=not.is.null&expires_at=lte.${encodeURIComponent(nowIso)}`,
+    {
+      method: "PATCH",
+      headers: {
+        ...headers,
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        status: "expired",
+        status_reason: "Free post visibility period expired",
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    console.error(`Failed to expire ${table}:`, await response.text());
+    return 0;
+  }
+
+  const rows = (await response.json()) as Array<{ id: string }>;
+  return rows.length;
+}
+
+async function expireElapsedFreePosts(
+  env: Env,
+  headers: Record<string, string>
+): Promise<Record<ExpirableContentTable, number>> {
+  const nowIso = new Date().toISOString();
+  const [listings, businesses, promotions] = await Promise.all([
+    expireContentTable(env, headers, "listings", nowIso),
+    expireContentTable(env, headers, "businesses", nowIso),
+    expireContentTable(env, headers, "promotions", nowIso),
+  ]);
+
+  return { listings, businesses, promotions };
+}
+
 const worker: ExportedHandler<Env> = {
   /**
    * Cron trigger: runs daily at 03:00 UTC
@@ -294,10 +340,9 @@ const worker: ExportedHandler<Env> = {
 
     if (records.length === 0) {
       console.warn("No R2 files queued for cleanup.");
-      return;
+    } else {
+      console.warn(`Processing ${records.length} R2 cleanup record(s)…`);
     }
-
-    console.warn(`Processing ${records.length} R2 cleanup record(s)…`);
 
     let successCount = 0;
     let failCount = 0;
@@ -442,7 +487,15 @@ const worker: ExportedHandler<Env> = {
       console.error("Orphan auth user cleanup failed:", orphanAuthErr);
     }
 
-    // 6. Log cleanup summary to audit_logs via REST API
+    // 6. Expire free posts whose visibility window has elapsed.
+    let expiredContent = { listings: 0, businesses: 0, promotions: 0 };
+    try {
+      expiredContent = await expireElapsedFreePosts(env, headers);
+    } catch (expireErr) {
+      console.error("Free post expiry sweep failed:", expireErr);
+    }
+
+    // 7. Log cleanup summary to audit_logs via REST API
     const auditPayload = {
       actor_id: "00000000-0000-0000-0000-000000000000", // system actor
       actor_role: "system",
@@ -457,6 +510,7 @@ const worker: ExportedHandler<Env> = {
         held_skipped: heldSkipCount,
         orphan_media_deleted: orphanDeleteCount,
         orphan_auth_users_deleted: orphanAuthUsersDeleted,
+        expired_content: expiredContent,
         run_at: new Date().toISOString(),
       },
       created_at: new Date().toISOString(),
@@ -475,7 +529,7 @@ const worker: ExportedHandler<Env> = {
     }
 
     console.warn(
-      `Retention cleanup complete: ${successCount} deleted, ${failCount} failed, ${heldSkipCount} skipped for legal hold, ${orphanDeleteCount} orphaned media deleted, ${orphanAuthUsersDeleted} orphaned auth users deleted.`
+      `Retention cleanup complete: ${successCount} deleted, ${failCount} failed, ${heldSkipCount} skipped for legal hold, ${orphanDeleteCount} orphaned media deleted, ${orphanAuthUsersDeleted} orphaned auth users deleted, expired content: listings=${expiredContent.listings}, businesses=${expiredContent.businesses}, promotions=${expiredContent.promotions}.`
     );
   },
 

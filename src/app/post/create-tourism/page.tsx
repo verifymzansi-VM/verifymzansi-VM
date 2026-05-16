@@ -435,6 +435,7 @@ function CreateTourismContent() {
   const [videoFiles, setVideoFiles] = useState<File[]>([]);
   const [videoThumbnailFile, setVideoThumbnailFile] = useState<File[]>([]);
   const [focalPoint, setFocalPoint] = useState<CropPosition>({ x: 0.5, y: 0.5 });
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   /* ── Derived ─────────────────────────────────────────────── */
   const {
@@ -973,6 +974,7 @@ function CreateTourismContent() {
       } else if (videoFiles.length > maxVideos) {
         errors.videos = `You can upload up to ${maxVideos} videos on this plan.`;
       }
+      if (!termsAccepted) errors.termsAccepted = "Accept the posting terms before submitting.";
     }
 
     return errors;
@@ -1192,6 +1194,7 @@ function CreateTourismContent() {
             street_address: locationAddress || "",
             suburb: locationTown || "",
           },
+          termsAccepted,
         };
 
         const res = await fetch("/api/businesses", {
@@ -1319,6 +1322,7 @@ function CreateTourismContent() {
           end_date: endDate ? new Date(endDate).toISOString() : undefined,
           business_id: businessId || undefined,
           event_details: Object.keys(eventDetails).length > 0 ? eventDetails : undefined,
+          termsAccepted,
         };
 
         const res = await fetch("/api/promotions", {
@@ -3504,6 +3508,33 @@ function CreateTourismContent() {
                         )}
                       </div>
                     )}
+
+                    <label className="flex items-start gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={termsAccepted}
+                        onChange={(event) => {
+                          setTermsAccepted(event.target.checked);
+                          clearErrors("termsAccepted");
+                        }}
+                        className="mt-1 rounded"
+                        aria-invalid={!!fieldErrors.termsAccepted}
+                      />
+                      <span>
+                        I accept the VerifyMzansi posting terms, including the free-post visibility
+                        period and my responsibility for the accuracy and legality of this tourism
+                        or event post.{" "}
+                        <a className="font-medium text-brand-green underline" href="/terms">
+                          View terms
+                        </a>
+                        .
+                        {fieldErrors.termsAccepted && (
+                          <span className="mt-1 block text-destructive">
+                            {fieldErrors.termsAccepted}
+                          </span>
+                        )}
+                      </span>
+                    </label>
 
                     {renderPreview()}
                   </div>

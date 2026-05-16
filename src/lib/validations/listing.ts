@@ -55,6 +55,7 @@ const listingBase = z.object({
   media_height: z.number().int().positive().optional(),
   focal_x: z.number().min(0).max(1).optional(),
   focal_y: z.number().min(0).max(1).optional(),
+  termsAccepted: z.boolean().optional().default(false),
 });
 
 // ── Category-specific attributes ────────────────────────────

@@ -32,8 +32,7 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 ENVIRONMENT = "production"
-# Set per-environment via: pnpm wrangler secret put SUPABASE_URL -c wrangler.kyc-encryptor.toml
-SUPABASE_URL = ""
+SUPABASE_URL = "https://tnygdgormnofpgjknlhr.supabase.co"
 
 # ────────────────────────────────────────────────────────────────────────────
 # R2 Bucket Bindings

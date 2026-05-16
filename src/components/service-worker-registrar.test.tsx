@@ -2,6 +2,8 @@
  * @vitest-environment jsdom
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { cleanupDevServiceWorkers } from "./service-worker-registrar";
 
 describe("cleanupDevServiceWorkers", () => {
@@ -95,5 +97,17 @@ describe("cleanupDevServiceWorkers", () => {
 
     expect(reload).not.toHaveBeenCalled();
     expect(storage.removeItem).toHaveBeenCalledWith("vm-dev-sw-cleanup-v1");
+  });
+});
+
+describe("production service worker auth routes", () => {
+  it("keeps auth pages network-only so stale cached loading shells are not served", () => {
+    const serviceWorkerSource = readFileSync(join(process.cwd(), "public", "sw.js"), "utf8");
+
+    expect(serviceWorkerSource).toContain('"/login"');
+    expect(serviceWorkerSource).toContain('"/register"');
+    expect(serviceWorkerSource).toContain('"/forgot-password"');
+    expect(serviceWorkerSource).toContain('"/reset-password"');
+    expect(serviceWorkerSource).toContain("networkOnlyWithOffline(request)");
   });
 });

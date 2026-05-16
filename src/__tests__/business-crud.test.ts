@@ -83,6 +83,7 @@ const VALID_BODY = {
     walk_in_policy: "walk_ins_welcome",
   },
   gallery_photos: ["https://media.verifymzansi.com/business/photo-1.jpg"],
+  termsAccepted: true,
 };
 
 function createRequest(body: unknown): NextRequest {

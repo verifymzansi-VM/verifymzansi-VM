@@ -55,6 +55,11 @@ import {
   MediaUploadConfirmationError,
 } from "@/lib/media/confirm-media-uploads";
 import {
+  getFreePostExpiryIso,
+  hasAcceptedPostTerms,
+  recordPostTermsAcceptance,
+} from "@/lib/posting/post-lifecycle";
+import {
   LISTING_INSERT_COMPAT_FIELDS,
   LISTING_SELECT_FALLBACK_FIELDS,
   applyBaseMarketFilters,
@@ -69,6 +74,13 @@ import {
 
 const log = createLogger("ListingCreate");
 const AREA: MarketplaceArea = "MZANSI_MARKET";
+
+function applyVisibleExpiryFilter<T>(query: T, nowIso = new Date().toISOString()): T {
+  const maybeQuery = query as T & { or?: (filter: string) => T };
+  return typeof maybeQuery.or === "function"
+    ? maybeQuery.or(`expires_at.is.null,expires_at.gt.${nowIso}`)
+    : query;
+}
 
 /**
  * Route ownership:
@@ -191,7 +203,9 @@ export async function GET(request: NextRequest) {
             applyBaseMarketFilters(
               // SECURITY: admin client bypasses RLS for efficient JOINs.
               // These application-level status filters are the security boundary.
-              admin.from("listings").select(selectClause).eq("status", "live").eq("area", AREA),
+              applyVisibleExpiryFilter(
+                admin.from("listings").select(selectClause).eq("status", "live").eq("area", AREA)
+              ),
               filters
             ).range(from, from + batchSize - 1),
         });
@@ -258,11 +272,13 @@ export async function GET(request: NextRequest) {
           applyBaseMarketFilters(
             // SECURITY: admin client bypasses RLS for efficient JOINs.
             // These application-level status filters are the security boundary.
-            admin
-              .from("listings")
-              .select(selectClause, { count: "exact" })
-              .eq("status", "live")
-              .eq("area", AREA),
+            applyVisibleExpiryFilter(
+              admin
+                .from("listings")
+                .select(selectClause, { count: "exact" })
+                .eq("status", "live")
+                .eq("area", AREA)
+            ),
             filters
           ).range(offset, offset + limit - 1),
       });
@@ -488,6 +504,12 @@ export async function POST(request: NextRequest) {
     }
 
     const data = parsed.data;
+    if (!hasAcceptedPostTerms(data.termsAccepted)) {
+      return NextResponse.json(
+        { error: "Posting terms must be accepted before creating a post" },
+        { status: 422 }
+      );
+    }
 
     // ── Idempotency guard: reject duplicate submissions ──────
     // If the same user submitted a listing with the identical title
@@ -677,6 +699,7 @@ export async function POST(request: NextRequest) {
         media_height: data.media_height ?? null,
         focal_x: data.focal_x ?? 0.5,
         focal_y: data.focal_y ?? 0.5,
+        expires_at: hasPaidPlan ? null : getFreePostExpiryIso(),
       },
       ownerColumn,
       user.id
@@ -769,6 +792,21 @@ export async function POST(request: NextRequest) {
         { error: "Failed to create listing", details: "Listing could not be saved right now." },
         { status: 500 }
       );
+    }
+
+    try {
+      await recordPostTermsAcceptance(getAdmin(), {
+        userId: user.id,
+        area: AREA,
+        contentId: newListing.id,
+      });
+    } catch (consentError) {
+      log.error("Failed to record post terms acceptance", {
+        userId: user.id,
+        listingId: newListing.id,
+        error: consentError instanceof Error ? consentError.message : "Unknown error",
+      });
+      return NextResponse.json({ error: "Failed to record posting terms" }, { status: 500 });
     }
 
     // ── Post-insert limit check (closes TOCTOU window for paid plans) ──

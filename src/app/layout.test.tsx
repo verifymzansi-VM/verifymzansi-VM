@@ -33,6 +33,7 @@ vi.mock("@/components/service-worker-registrar", () => ({
 }));
 
 import RootLayout from "./layout";
+import { headers } from "next/headers";
 
 describe("RootLayout", () => {
   it("renders the __name bootstrap script before the app shell", async () => {
@@ -51,5 +52,30 @@ describe("RootLayout", () => {
     expect(scriptIndex).toBeGreaterThan(-1);
     expect(scriptIndex).toBeLessThan(skipLinkIndex);
     expect(markup).toContain("Marketplace");
+  });
+
+  it("injects auth cache recovery before the app shell on auth pages", async () => {
+    vi.mocked(headers).mockResolvedValueOnce({
+      get: vi.fn((name: string) => {
+        if (name === "x-nonce") return "nonce-123";
+        if (name === "x-csrf-token") return "a".repeat(64);
+        if (name === "x-current-pathname") return "/register";
+        return null;
+      }),
+    } as unknown as Awaited<ReturnType<typeof headers>>);
+
+    const markup = renderToStaticMarkup(
+      await RootLayout({
+        children: <div id="page-content">Create your account</div>,
+      })
+    );
+
+    const recoveryIndex = markup.indexOf("vmzAuthCacheReset");
+    const pageIndex = markup.indexOf("Create your account");
+
+    expect(recoveryIndex).toBeGreaterThan(-1);
+    expect(recoveryIndex).toBeLessThan(pageIndex);
+    expect(markup).toContain("serviceWorker");
+    expect(markup).toContain("verifymzansi-");
   });
 });

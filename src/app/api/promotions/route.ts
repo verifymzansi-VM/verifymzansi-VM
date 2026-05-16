@@ -57,9 +57,21 @@ import {
   confirmMediaUploads,
   MediaUploadConfirmationError,
 } from "@/lib/media/confirm-media-uploads";
+import {
+  getFreePostExpiryIso,
+  hasAcceptedPostTerms,
+  recordPostTermsAcceptance,
+} from "@/lib/posting/post-lifecycle";
 
 const log = createLogger("PromotionsCRUD");
 const AREA: MarketplaceArea = "PROMOTIONS_EVENTS";
+
+function applyVisibleExpiryFilter<T>(query: T, nowIso = new Date().toISOString()): T {
+  const maybeQuery = query as T & { or?: (filter: string) => T };
+  return typeof maybeQuery.or === "function"
+    ? maybeQuery.or(`expires_at.is.null,expires_at.gt.${nowIso}`)
+    : query;
+}
 
 /**
  * Route ownership:
@@ -87,6 +99,7 @@ type PromotionCompatField =
   | "business_id"
   | "category_key"
   | "event_details"
+  | "expires_at"
   | "focal_x"
   | "focal_y"
   | "location_address"
@@ -99,6 +112,7 @@ const PROMOTION_INSERT_COMPAT_FIELDS: readonly PromotionCompatField[] = [
   "business_id",
   "category_key",
   "event_details",
+  "expires_at",
   "focal_x",
   "focal_y",
   "location_address",
@@ -286,6 +300,12 @@ export async function POST(request: NextRequest) {
     }
 
     const data = parsed.data;
+    if (!hasAcceptedPostTerms(data.termsAccepted)) {
+      return NextResponse.json(
+        { error: "Posting terms must be accepted before creating a post" },
+        { status: 422 }
+      );
+    }
     const categoryKey =
       data.category_key ?? inferPromotionCategoryKey(data.category, data.promotion_type);
 
@@ -401,6 +421,7 @@ export async function POST(request: NextRequest) {
         logo_url: data.logo_url || null,
         event_details: data.event_details ?? null,
         status: "pending_moderation",
+        expires_at: hasPaidPlan ? null : getFreePostExpiryIso(),
       },
       ownerColumn,
       user.id
@@ -456,6 +477,21 @@ export async function POST(request: NextRequest) {
         }
       }
       return NextResponse.json({ error: "Failed to create promotion" }, { status: 500 });
+    }
+
+    try {
+      await recordPostTermsAcceptance(getAdmin(), {
+        userId: user.id,
+        area: AREA,
+        contentId: promotion.id,
+      });
+    } catch (consentError) {
+      log.error("Failed to record post terms acceptance", {
+        userId: user.id,
+        promotionId: promotion.id,
+        error: consentError instanceof Error ? consentError.message : "Unknown error",
+      });
+      return NextResponse.json({ error: "Failed to record posting terms" }, { status: 500 });
     }
 
     if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
@@ -621,11 +657,10 @@ export async function GET(request: NextRequest) {
     const nowIso = new Date().toISOString();
 
     const buildQuery = (selectClause: string) => {
-      let query = admin
-        .from("promotions")
-        .select(selectClause, { count: "exact" })
-        .eq("status", "live")
-        .or(`end_date.is.null,end_date.gte.${nowIso}`);
+      let query = applyVisibleExpiryFilter(
+        admin.from("promotions").select(selectClause, { count: "exact" }).eq("status", "live"),
+        nowIso
+      ).or(`end_date.is.null,end_date.gte.${nowIso}`);
 
       if (promotionType) {
         const storedTypes = getStoredPromotionTypesForFilter(promotionType);

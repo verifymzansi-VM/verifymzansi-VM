@@ -72,6 +72,7 @@ const VALID_BODY = {
   category: "electronics",
   attributes: { device_type: "Smartphone", brand: "Apple" },
   images: [VALID_IMAGE],
+  termsAccepted: true,
 };
 
 function createRequest(body: unknown): NextRequest {

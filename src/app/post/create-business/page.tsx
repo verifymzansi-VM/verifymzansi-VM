@@ -279,6 +279,7 @@ function CreateBusinessContent() {
   const [promoVideoFile, setPromoVideoFile] = useState<File[]>([]);
   const [videoThumbnailFile, setVideoThumbnailFile] = useState<File[]>([]);
   const [focalPoint, setFocalPoint] = useState<CropPosition>({ x: 0.5, y: 0.5 });
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [yearEstablished, setYearEstablished] = useState("");
   const [cipcRegistration, setCipcRegistration] = useState("");
   const [bbbeeLevel, setBbbeeLevel] = useState("");
@@ -730,6 +731,7 @@ function CreateBusinessContent() {
           errors[key] = businessValidationErrors[key];
         }
       }
+      if (!termsAccepted) errors.termsAccepted = "Accept the posting terms before submitting.";
     }
     return errors;
   }
@@ -961,6 +963,7 @@ function CreateBusinessContent() {
         languages_spoken: languagesSpoken || undefined,
         load_shedding_ready: loadSheddingReady || undefined,
         number_of_employees: numberOfEmployees || undefined,
+        termsAccepted,
       };
       const res = await fetch("/api/businesses", {
         method: "POST",
@@ -2428,6 +2431,33 @@ function CreateBusinessContent() {
                         </div>
                       </div>
                     </details>
+
+                    <label className="flex items-start gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={termsAccepted}
+                        onChange={(event) => {
+                          setTermsAccepted(event.target.checked);
+                          clearErrors("termsAccepted");
+                        }}
+                        className="mt-1 rounded"
+                        aria-invalid={!!fieldErrors.termsAccepted}
+                      />
+                      <span>
+                        I accept the VerifyMzansi posting terms, including the free-post visibility
+                        period and my responsibility for the accuracy and legality of this business
+                        post.{" "}
+                        <a className="font-medium text-brand-green underline" href="/terms">
+                          View terms
+                        </a>
+                        .
+                        {fieldErrors.termsAccepted && (
+                          <span className="mt-1 block text-destructive">
+                            {fieldErrors.termsAccepted}
+                          </span>
+                        )}
+                      </span>
+                    </label>
 
                     {renderReview()}
                   </div>

@@ -9,7 +9,7 @@
  *  - API calls: Network-only (no caching of dynamic data)
  */
 
-const CACHE_NAME = "verifymzansi-v3-logo-refresh";
+const CACHE_NAME = "verifymzansi-v4-auth-network-only";
 const MEDIA_CACHE_NAME = "verifymzansi-media-v1";
 const MEDIA_CACHE_MAX_ENTRIES = 100;
 const OFFLINE_URL = "/offline";
@@ -50,7 +50,18 @@ self.addEventListener("activate", (event) => {
 // ── Fetch: route requests to the right strategy ─────────
 // Protected route prefixes — never cache their HTML to avoid serving
 // stale auth-dependent content (common cause of post-login errors on mobile).
-const PROTECTED_PREFIXES = ["/dashboard", "/post", "/billing", "/verification", "/admin"];
+const PROTECTED_PREFIXES = [
+  "/login",
+  "/register",
+  "/forgot-password",
+  "/reset-password",
+  "/auth",
+  "/dashboard",
+  "/post",
+  "/billing",
+  "/verification",
+  "/admin",
+];
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;

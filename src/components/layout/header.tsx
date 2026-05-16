@@ -35,6 +35,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
 import type { TrustLevel } from "@/types/enums";
 
+const LOGIN_HREF = "/login?authFresh=20260515";
+const REGISTER_HREF = "/register?authFresh=20260515";
+
 interface HeaderProps {
   /** Pass `true` to skip the session check (e.g. dashboard layout already knows). */
   isAuthenticated?: boolean;
@@ -271,14 +274,10 @@ function HeaderInner({
                 className="border-brand-green border-2 hover:bg-brand-green/10"
                 size="sm"
               >
-                <Link href="/login" prefetch={false}>
-                  Sign in
-                </Link>
+                <a href={LOGIN_HREF}>Sign in</a>
               </Button>
               <Button asChild variant="trust-verified" size="sm">
-                <Link href="/register" prefetch={false}>
-                  Register
-                </Link>
+                <a href={REGISTER_HREF}>Register</a>
               </Button>
             </>
           )}
@@ -395,14 +394,14 @@ function HeaderInner({
                   </Link>
                 </Button>
                 <Button asChild variant="outline" className="w-full">
-                  <Link href="/login" prefetch={false} onClick={() => setMobileOpen(false)}>
+                  <a href={LOGIN_HREF} onClick={() => setMobileOpen(false)}>
                     Sign in
-                  </Link>
+                  </a>
                 </Button>
                 <Button asChild variant="trust-verified" className="w-full">
-                  <Link href="/register" prefetch={false} onClick={() => setMobileOpen(false)}>
+                  <a href={REGISTER_HREF} onClick={() => setMobileOpen(false)}>
                     Register
-                  </Link>
+                  </a>
                 </Button>
               </>
             )}

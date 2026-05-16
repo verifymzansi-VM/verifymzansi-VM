@@ -224,6 +224,7 @@ export default function CreateListingPage() {
   const [videoFile, setVideoFile] = useState<File[]>([]);
   const [videoCoverFile, setVideoCoverFile] = useState<File[]>([]);
   const [focalPoint, setFocalPoint] = useState<CropPosition>({ x: 0.5, y: 0.5 });
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submissionInFlightRef = useRef(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
@@ -520,6 +521,7 @@ export default function CreateListingPage() {
       } else if (videoFile.length > maxVideos) {
         errors.videos = `You can upload up to ${maxVideos} videos on this plan.`;
       }
+      if (!termsAccepted) errors.termsAccepted = "Accept the posting terms before submitting.";
     }
 
     return errors;
@@ -765,6 +767,7 @@ export default function CreateListingPage() {
           media_height: mediaDimensions?.height,
           focal_x: focalPoint.x,
           focal_y: focalPoint.y,
+          termsAccepted,
         }),
       });
 
@@ -1446,6 +1449,32 @@ export default function CreateListingPage() {
                         </details>
                       </div>
                     )}
+
+                    <label className="flex items-start gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={termsAccepted}
+                        onChange={(event) => {
+                          setTermsAccepted(event.target.checked);
+                          clearErrors("termsAccepted");
+                        }}
+                        className="mt-1 rounded"
+                        aria-invalid={!!fieldErrors.termsAccepted}
+                      />
+                      <span>
+                        I accept the VerifyMzansi posting terms, including the free-post visibility
+                        period and my responsibility for the accuracy and legality of this post.{" "}
+                        <a className="font-medium text-brand-green underline" href="/terms">
+                          View terms
+                        </a>
+                        .
+                        {fieldErrors.termsAccepted && (
+                          <span className="mt-1 block text-destructive">
+                            {fieldErrors.termsAccepted}
+                          </span>
+                        )}
+                      </span>
+                    </label>
 
                     {renderPreview()}
                   </div>

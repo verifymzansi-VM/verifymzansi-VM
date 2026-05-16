@@ -57,9 +57,21 @@ import {
   confirmMediaUploads,
   MediaUploadConfirmationError,
 } from "@/lib/media/confirm-media-uploads";
+import {
+  getFreePostExpiryIso,
+  hasAcceptedPostTerms,
+  recordPostTermsAcceptance,
+} from "@/lib/posting/post-lifecycle";
 
 const log = createLogger("BusinessesCRUD");
 const AREA: MarketplaceArea = "MZANSI_BUSINESS";
+
+function applyVisibleExpiryFilter<T>(query: T, nowIso = new Date().toISOString()): T {
+  const maybeQuery = query as T & { or?: (filter: string) => T };
+  return typeof maybeQuery.or === "function"
+    ? maybeQuery.or(`expires_at.is.null,expires_at.gt.${nowIso}`)
+    : query;
+}
 
 /**
  * Route ownership:
@@ -176,6 +188,12 @@ export async function POST(request: NextRequest) {
     }
 
     const data = parsedBody.data;
+    if (!hasAcceptedPostTerms(data.termsAccepted)) {
+      return NextResponse.json(
+        { error: "Posting terms must be accepted before creating a post" },
+        { status: 422 }
+      );
+    }
 
     // Tourism businesses belong in the PROMOTIONS_EVENTS marketplace area.
     const effectiveArea: MarketplaceArea =
@@ -288,6 +306,7 @@ export async function POST(request: NextRequest) {
       area: effectiveArea,
       ...buildBusinessMutationPayload(data),
       status: "pending_moderation" as const,
+      expires_at: hasPaidPlan ? null : getFreePostExpiryIso(),
     };
 
     const { data: business, error: insertError } = await supabase
@@ -334,6 +353,21 @@ export async function POST(request: NextRequest) {
         }
       }
       return NextResponse.json({ error: "Failed to create business" }, { status: 500 });
+    }
+
+    try {
+      await recordPostTermsAcceptance(getAdmin(), {
+        userId: user.id,
+        area: effectiveArea,
+        contentId: business.id,
+      });
+    } catch (consentError) {
+      log.error("Failed to record post terms acceptance", {
+        userId: user.id,
+        businessId: business.id,
+        error: consentError instanceof Error ? consentError.message : "Unknown error",
+      });
+      return NextResponse.json({ error: "Failed to record posting terms" }, { status: 500 });
     }
 
     // Audit (best-effort)
@@ -598,10 +632,9 @@ export async function GET(request: NextRequest) {
     ] as const;
 
     const buildQuery = (selectClause: string) => {
-      let query = admin
-        .from("businesses")
-        .select(selectClause, { count: "exact" })
-        .eq("status", "live");
+      let query = applyVisibleExpiryFilter(
+        admin.from("businesses").select(selectClause, { count: "exact" }).eq("status", "live")
+      );
 
       // When filtering by category (e.g. showroom tourism tab), skip the
       // area filter so tourism businesses with area=PROMOTIONS_EVENTS are

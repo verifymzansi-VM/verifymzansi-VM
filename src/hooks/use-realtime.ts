@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useId } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { createLogger } from "@/lib/utils/logger";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -49,6 +49,7 @@ export function useRealtime({
   enabled = true,
 }: UseRealtimeOptions) {
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const channelInstanceId = useId().replace(/:/g, "_");
   const callbackRef = useRef(onEvent);
   useEffect(() => {
     callbackRef.current = onEvent;
@@ -76,7 +77,7 @@ export function useRealtime({
     }
 
     const channel = supabase
-      .channel(`realtime:${table}:${event}:${filter || "all"}`)
+      .channel(`realtime:${table}:${event}:${filter || "all"}:${channelInstanceId}`)
       .on(
         "postgres_changes" as "system",
         {
@@ -102,5 +103,5 @@ export function useRealtime({
     channelRef.current = channel;
 
     return cleanup;
-  }, [table, event, filterColumn, filterValue, enabled, cleanup]);
+  }, [table, event, filterColumn, filterValue, enabled, cleanup, channelInstanceId]);
 }

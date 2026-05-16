@@ -50,6 +50,59 @@ if (typeof window !== "undefined" && "serviceWorker" in navigator) {
 }
 `;
 
+const AUTH_SW_CACHE_RESET = `
+(function () {
+  if (typeof window === "undefined") return;
+
+  var marker = "vmzAuthCacheReset";
+  var url = new URL(window.location.href);
+  var markerPresent = url.searchParams.get(marker) === "1";
+
+  if (markerPresent) {
+    url.searchParams.delete(marker);
+    window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+    return;
+  }
+
+  var clearCaches =
+    typeof caches !== "undefined"
+      ? caches
+          .keys()
+          .then(function (keys) {
+            return Promise.allSettled(
+              keys
+                .filter(function (key) {
+                  return key.indexOf("verifymzansi-") === 0;
+                })
+                .map(function (key) {
+                  return caches.delete(key);
+                })
+            );
+          })
+          .catch(function () {})
+      : Promise.resolve();
+
+  var clearWorkers =
+    "serviceWorker" in navigator
+      ? navigator.serviceWorker
+          .getRegistrations()
+          .then(function (registrations) {
+            return Promise.allSettled(
+              registrations.map(function (registration) {
+                return registration.unregister();
+              })
+            );
+          })
+          .catch(function () {})
+      : Promise.resolve();
+
+  Promise.allSettled([clearCaches, clearWorkers]).then(function () {
+    url.searchParams.set(marker, "1");
+    window.location.replace(url.toString());
+  });
+})();
+`;
+
 export const metadata: Metadata = {
   title: {
     default: "VerifyMzansi - South African Listings, Business, Tourism & Events",
@@ -123,6 +176,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const hdrs = await headers();
   const nonce = hdrs.get("x-nonce") ?? undefined;
   const csrfToken = hdrs.get(CSRF_HEADER_NAME) ?? undefined;
+  const currentPathname = hdrs.get("x-current-pathname") ?? "";
+  const shouldResetAuthCache =
+    currentPathname === "/login" ||
+    currentPathname === "/register" ||
+    currentPathname === "/forgot-password" ||
+    currentPathname === "/reset-password" ||
+    currentPathname.startsWith("/auth/");
   const isPlaywrightTestMode = process.env.PLAYWRIGHT_TEST_MODE === "1";
 
   return (
@@ -140,6 +200,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body className="min-h-screen antialiased">
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: TURBOPACK_NAME_POLYFILL }} />
+        {shouldResetAuthCache ? (
+          <script nonce={nonce} dangerouslySetInnerHTML={{ __html: AUTH_SW_CACHE_RESET }} />
+        ) : null}
         {process.env.NODE_ENV === "development" ? (
           <script nonce={nonce} dangerouslySetInnerHTML={{ __html: DEV_SW_CACHE_RESET }} />
         ) : null}

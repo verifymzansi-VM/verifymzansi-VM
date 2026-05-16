@@ -245,8 +245,8 @@ function createBrowserPlaywrightStubClient(): SupabaseClient {
  * The client is a singleton — safe to call repeatedly without causing
  * unnecessary re-renders or re-subscriptions.
  *
- * Session persistence, auto-refresh, and URL detection are disabled
- * because auth state is managed server-side via proxy cookies.
+ * @supabase/ssr stores the browser session in cookies so the server
+ * middleware and Client Components can agree on the current user.
  */
 export function createClient(): SupabaseClient {
   if (_client) return _client;
@@ -282,13 +282,7 @@ export function createClient(): SupabaseClient {
     return _client;
   }
 
-  _client = createBrowserClient(url, anonKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-  }) as SupabaseClient;
+  _client = createBrowserClient(url, anonKey) as SupabaseClient;
 
   return _client;
 }

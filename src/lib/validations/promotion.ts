@@ -66,6 +66,7 @@ export const promotionSchema = z
       "Video thumbnail must be hosted on the VerifyMzansi platform"
     ).optional(),
     ...postMediaMetadataFields,
+    termsAccepted: z.boolean().optional().default(false),
     logo_url: platformMediaUrlSchema("Logo must be hosted on the VerifyMzansi platform").optional(),
     start_date: z.string().datetime().optional(),
     end_date: z.string().datetime().optional(),

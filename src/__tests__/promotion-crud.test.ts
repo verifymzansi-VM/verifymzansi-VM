@@ -65,6 +65,7 @@ const VALID_BODY = {
   city: "Johannesburg",
   contact_methods: ["call"],
   images: [VALID_IMAGE],
+  termsAccepted: true,
 };
 
 function createRequest(url: string, opts: { method?: string; body?: unknown } = {}): NextRequest {

@@ -235,6 +235,7 @@ export function withSecurityHeaders(
 
   // Inject x-nonce so Server Components can read it via `headers()`
   const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-current-pathname", pathname);
   if (nonce) {
     requestHeaders.set("x-nonce", nonce);
   } else {

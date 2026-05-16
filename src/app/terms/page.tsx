@@ -38,6 +38,7 @@ export default function TermsPage() {
         "• Provide accurate descriptions, images, pricing, and business details",
         "• Not list prohibited items (weapons, illegal substances, counterfeit goods)",
         "• Comply with the Consumer Protection Act (CPA) of South Africa and all applicable SA laws",
+        "When you tick the posting terms checkbox and submit a post, that acceptance is recorded against the submitted content and forms part of your agreement with VerifyMzansi.",
       ],
     },
     {
@@ -80,13 +81,22 @@ export default function TermsPage() {
       ],
     },
     {
-      title: "7. Promotion & Distribution Rights",
+      title: "7. Free Posts & Visibility Periods",
+      content: [
+        "Free posts are promotional trial access and do not create an ongoing entitlement.",
+        "A free post remains visible only for the free-post visibility period shown in the posting flow. After that period expires, VerifyMzansi may automatically mark the post as expired and remove it from public browsing, search, detail pages, and promotional surfaces.",
+        "Expired free posts may remain visible to the account holder in dashboard or administrative records unless deleted under platform retention, safety, legal, or support processes.",
+        "Paid plans, add-ons, and moderation decisions do not waive these free-post terms unless the checkout or plan page expressly says otherwise.",
+      ],
+    },
+    {
+      title: "8. Promotion & Distribution Rights",
       content: [
         "When you create a promotion, advertisement, event, or campaign on VerifyMzansi, you confirm that you own it or are authorised to market it.",
       ],
     },
     {
-      title: "8. Limitation of Liability",
+      title: "9. Limitation of Liability",
       content: [
         "VerifyMzansi connects buyers, account holders, businesses, and advertisers — we are not a party to transactions. We do not guarantee quality, safety, or legality of listed items or promotions. Liability is limited to the maximum extent permitted by SA law.",
       ],
@@ -104,7 +114,7 @@ export default function TermsPage() {
               Terms of Service
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              Last updated: March 2026 · Governed by South African law
+              Last updated: May 2026 · Governed by South African law
             </p>
           </div>
         </div>
@@ -142,7 +152,7 @@ export default function TermsPage() {
               <section className="space-y-1.5 pt-1">
                 <h2 className="font-display text-base font-bold flex items-center gap-2">
                   <span className="text-brand-green text-sm font-mono" aria-hidden="true">
-                    09
+                    10
                   </span>
                   Privacy & Contact
                 </h2>
