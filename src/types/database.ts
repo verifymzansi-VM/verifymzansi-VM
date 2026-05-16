@@ -289,6 +289,7 @@ export interface Business {
   boost_until: string | null;
   featured_until: string | null;
   view_count: number;
+  expires_at: string | null;
   published_at: string | null;
   created_at: string;
   updated_at: string;
@@ -340,6 +341,7 @@ export interface Promotion {
   click_count: number;
   entitlement_id: string | null;
   published_at: string | null;
+  expires_at: string | null;
   created_at: string;
   updated_at: string;
   approved_edit_count: number;

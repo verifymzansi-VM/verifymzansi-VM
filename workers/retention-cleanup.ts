@@ -74,6 +74,40 @@ interface AuthAdminUser {
 }
 
 type ExpirableContentTable = "listings" | "businesses" | "promotions";
+type ExpirableContentTargetType = "listing" | "business" | "promotion";
+
+interface ExpiredListingRow {
+  id: string;
+  photos?: string[] | null;
+  videos?: string[] | null;
+  video_thumbnail?: string | null;
+  logo_url?: string | null;
+}
+
+interface ExpiredBusinessRow {
+  id: string;
+  logo_url?: string | null;
+  cover_photo?: string | null;
+  cover_video?: string | null;
+  video_thumbnail?: string | null;
+  gallery_photos?: string[] | null;
+  business_details?: unknown;
+}
+
+interface ExpiredPromotionRow {
+  id: string;
+  photos?: string[] | null;
+  videos?: string[] | null;
+  video_thumbnail?: string | null;
+  logo_url?: string | null;
+}
+
+type ExpiredContentRow = ExpiredListingRow | ExpiredBusinessRow | ExpiredPromotionRow;
+
+const EXPIRED_POST_DELETE_GRACE_MS = 2 * 24 * 60 * 60 * 1000;
+const EXPIRED_CONTENT_DELETE_LIMIT = 100;
+const EXPIRED_CONTENT_DELETE_MAX_PER_RUN = 1000;
+const PUBLIC_MEDIA_HOSTS = new Set(["media.verifymzansi.com", "media-staging.verifymzansi.com"]);
 
 const AUTH_USERS_PAGE_SIZE = 200;
 const AUTH_USERS_MAX_PAGES = 5;
@@ -100,6 +134,91 @@ function isPrivateBucket(bucket: string): boolean {
 
 function isPublicBucket(bucket: string): boolean {
   return bucket === "public" || bucket === "verifymzansi-public";
+}
+
+function collectStringValues(value: unknown): string[] {
+  if (typeof value === "string") {
+    return value.trim() ? [value] : [];
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => collectStringValues(item));
+  }
+
+  if (value && typeof value === "object") {
+    return Object.values(value as Record<string, unknown>).flatMap((item) =>
+      collectStringValues(item)
+    );
+  }
+
+  return [];
+}
+
+function collectMallPhotoUrls(details: unknown): string[] {
+  if (!details || typeof details !== "object") {
+    return [];
+  }
+
+  const candidate = details as { type?: unknown; mall_photos?: unknown };
+  if (candidate.type !== "mall_store") {
+    return [];
+  }
+
+  return collectStringValues(candidate.mall_photos);
+}
+
+function extractTrustedPublicMediaKey(rawUrl: string): string | null {
+  if (!rawUrl.trim()) {
+    return null;
+  }
+
+  if (rawUrl.startsWith("/api/media/serve/")) {
+    return rawUrl.replace(/^\/api\/media\/serve\//, "").replace(/^\/+/, "") || null;
+  }
+
+  try {
+    const parsed = new URL(rawUrl);
+
+    if (PUBLIC_MEDIA_HOSTS.has(parsed.hostname)) {
+      return parsed.pathname.replace(/^\/+/, "") || null;
+    }
+
+    if (parsed.hostname.endsWith(".r2.cloudflarestorage.com")) {
+      const parts = parsed.pathname.replace(/^\/+/, "").split("/");
+      return parts.length > 1 ? parts.slice(1).join("/") : parts[0] || null;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function collectExpiredContentMediaKeys(row: ExpiredContentRow): string[] {
+  const urls =
+    "business_details" in row
+      ? collectStringValues([
+          row.logo_url,
+          row.cover_photo,
+          row.cover_video,
+          row.video_thumbnail,
+          row.gallery_photos,
+          collectMallPhotoUrls(row.business_details),
+        ])
+      : collectStringValues([
+          (row as ExpiredListingRow | ExpiredPromotionRow).photos,
+          (row as ExpiredListingRow | ExpiredPromotionRow).videos,
+          row.video_thumbnail,
+          row.logo_url,
+        ]);
+
+  return [
+    ...new Set(
+      urls
+        .map((url) => extractTrustedPublicMediaKey(url))
+        .filter((key): key is string => Boolean(key))
+    ),
+  ];
 }
 
 async function getHeldKycKeys(
@@ -381,6 +500,133 @@ async function expireElapsedPosts(
   return { listings, businesses, promotions };
 }
 
+function getExpiredContentConfig(table: ExpirableContentTable): {
+  select: string;
+  targetType: ExpirableContentTargetType;
+} {
+  switch (table) {
+    case "listings":
+      return {
+        select: "id,photos,videos,video_thumbnail,logo_url",
+        targetType: "listing",
+      };
+    case "businesses":
+      return {
+        select:
+          "id,logo_url,cover_photo,cover_video,video_thumbnail,gallery_photos,business_details",
+        targetType: "business",
+      };
+    case "promotions":
+      return {
+        select: "id,photos,videos,video_thumbnail,logo_url",
+        targetType: "promotion",
+      };
+  }
+}
+
+async function deleteExpiredContentTable(
+  env: Env,
+  headers: Record<string, string>,
+  table: ExpirableContentTable,
+  cutoffIso: string
+): Promise<number> {
+  let deletedCount = 0;
+
+  while (deletedCount < EXPIRED_CONTENT_DELETE_MAX_PER_RUN) {
+    const batchDeletedCount = await deleteExpiredContentBatch(env, headers, table, cutoffIso);
+    deletedCount += batchDeletedCount;
+
+    if (batchDeletedCount < EXPIRED_CONTENT_DELETE_LIMIT) {
+      break;
+    }
+  }
+
+  return deletedCount;
+}
+
+async function deleteExpiredContentBatch(
+  env: Env,
+  headers: Record<string, string>,
+  table: ExpirableContentTable,
+  cutoffIso: string
+): Promise<number> {
+  const config = getExpiredContentConfig(table);
+  const response = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/${table}?select=${config.select}&status=eq.expired&expires_at=not.is.null&expires_at=lte.${encodeURIComponent(cutoffIso)}&order=expires_at.asc&limit=${EXPIRED_CONTENT_DELETE_LIMIT}`,
+    { headers }
+  );
+
+  if (!response.ok) {
+    console.error(`Failed to fetch expired ${table} for deletion:`, await response.text());
+    return 0;
+  }
+
+  const rows = (await response.json()) as ExpiredContentRow[];
+  if (rows.length === 0) {
+    return 0;
+  }
+
+  const mediaKeys = [...new Set(rows.flatMap((row) => collectExpiredContentMediaKeys(row)))];
+  if (mediaKeys.length > 0) {
+    try {
+      await env.R2_PUBLIC.delete(mediaKeys);
+    } catch (err) {
+      console.error(`Failed to delete expired ${table} public media from R2:`, err);
+      return 0;
+    }
+
+    const mediaUploadDeleteResponse = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/media_uploads?r2_key=in.${encodeURIComponent(buildInFilter(mediaKeys))}`,
+      { method: "DELETE", headers }
+    );
+    if (!mediaUploadDeleteResponse.ok) {
+      console.warn(
+        `Failed to delete expired ${table} media tracking rows:`,
+        await mediaUploadDeleteResponse.text()
+      );
+    }
+  }
+
+  const ids = rows.map((row) => row.id);
+  const editCleanupResponse = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/content_edit_requests?target_type=eq.${config.targetType}&target_id=in.${encodeURIComponent(buildInFilter(ids))}`,
+    { method: "DELETE", headers }
+  );
+  if (!editCleanupResponse.ok) {
+    console.error(
+      `Failed to delete content edit requests for expired ${table}:`,
+      await editCleanupResponse.text()
+    );
+    return 0;
+  }
+
+  const deleteResponse = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/${table}?id=in.${encodeURIComponent(buildInFilter(ids))}`,
+    { method: "DELETE", headers }
+  );
+
+  if (!deleteResponse.ok) {
+    console.error(`Failed to delete expired ${table}:`, await deleteResponse.text());
+    return 0;
+  }
+
+  return rows.length;
+}
+
+async function deleteExpiredPostsAfterGrace(
+  env: Env,
+  headers: Record<string, string>
+): Promise<Record<ExpirableContentTable, number>> {
+  const cutoffIso = new Date(Date.now() - EXPIRED_POST_DELETE_GRACE_MS).toISOString();
+  const [listings, businesses, promotions] = await Promise.all([
+    deleteExpiredContentTable(env, headers, "listings", cutoffIso),
+    deleteExpiredContentTable(env, headers, "businesses", cutoffIso),
+    deleteExpiredContentTable(env, headers, "promotions", cutoffIso),
+  ]);
+
+  return { listings, businesses, promotions };
+}
+
 const worker: ExportedHandler<Env> = {
   /**
    * Cron trigger: runs daily at 03:00 UTC
@@ -566,7 +812,15 @@ const worker: ExportedHandler<Env> = {
       console.error("Post expiry sweep failed:", expireErr);
     }
 
-    // 7. Log cleanup summary to audit_logs via REST API
+    // 7. Delete expired posts after their two-day owner grace period.
+    let deletedExpiredContent = { listings: 0, businesses: 0, promotions: 0 };
+    try {
+      deletedExpiredContent = await deleteExpiredPostsAfterGrace(env, headers);
+    } catch (deleteExpiredErr) {
+      console.error("Expired post deletion sweep failed:", deleteExpiredErr);
+    }
+
+    // 8. Log cleanup summary to audit_logs via REST API
     const auditPayload = {
       actor_id: "00000000-0000-0000-0000-000000000000", // system actor
       actor_role: "system",
@@ -582,6 +836,7 @@ const worker: ExportedHandler<Env> = {
         orphan_media_deleted: orphanDeleteCount,
         orphan_auth_users_deleted: orphanAuthUsersDeleted,
         expired_content: expiredContent,
+        deleted_expired_content: deletedExpiredContent,
         run_at: new Date().toISOString(),
       },
       created_at: new Date().toISOString(),
@@ -600,7 +855,7 @@ const worker: ExportedHandler<Env> = {
     }
 
     console.warn(
-      `Retention cleanup complete: ${successCount} deleted, ${failCount} failed, ${heldSkipCount} skipped for legal hold, ${orphanDeleteCount} orphaned media deleted, ${orphanAuthUsersDeleted} orphaned auth users deleted, expired content: listings=${expiredContent.listings}, businesses=${expiredContent.businesses}, promotions=${expiredContent.promotions}.`
+      `Retention cleanup complete: ${successCount} queued files deleted, ${failCount} failed, ${heldSkipCount} skipped for legal hold, ${orphanDeleteCount} orphaned media deleted, ${orphanAuthUsersDeleted} orphaned auth users deleted, expired content: listings=${expiredContent.listings}, businesses=${expiredContent.businesses}, promotions=${expiredContent.promotions}, deleted expired content: listings=${deletedExpiredContent.listings}, businesses=${deletedExpiredContent.businesses}, promotions=${deletedExpiredContent.promotions}.`
     );
   },
 
