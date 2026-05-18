@@ -21,11 +21,17 @@
 interface R2Bucket {
   delete(key: string | string[]): Promise<void>;
   get(key: string): Promise<R2ObjectBody | null>;
+  list?(options?: {
+    prefix?: string;
+    cursor?: string;
+    limit?: number;
+  }): Promise<{ objects: R2Object[]; truncated: boolean; cursor?: string }>;
   put(key: string, value: ReadableStream | ArrayBuffer | string | null): Promise<R2Object>;
 }
 interface R2Object {
   key: string;
   size: number;
+  uploaded?: Date | string;
 }
 interface R2ObjectBody extends R2Object {
   body: ReadableStream;
@@ -109,9 +115,23 @@ interface MediaUploadLookupRow {
   bucket: string;
 }
 
+interface PublicMediaReferenceRow {
+  photos?: string[] | null;
+  videos?: string[] | null;
+  video_thumbnail?: string | null;
+  logo_url?: string | null;
+  cover_photo?: string | null;
+  cover_video?: string | null;
+  gallery_photos?: string[] | null;
+  business_details?: unknown;
+}
+
 const EXPIRED_POST_DELETE_GRACE_MS = 2 * 24 * 60 * 60 * 1000;
 const EXPIRED_CONTENT_DELETE_LIMIT = 100;
 const EXPIRED_CONTENT_DELETE_MAX_PER_RUN = 1000;
+const LEGACY_PUBLIC_MEDIA_ORPHAN_LIMIT = 200;
+const LEGACY_PUBLIC_MEDIA_ORPHAN_SCAN_LIMIT = 1000;
+const LEGACY_PUBLIC_MEDIA_ORPHAN_MIN_AGE_MS = 2 * 24 * 60 * 60 * 1000;
 const PUBLIC_MEDIA_HOSTS = new Set(["media.verifymzansi.com", "media-staging.verifymzansi.com"]);
 
 const AUTH_USERS_PAGE_SIZE = 200;
@@ -260,6 +280,158 @@ async function resolveTrackedPublicMediaKeys(
   }
 
   return [...keys];
+}
+
+async function resolveTrackedPublicMediaKeysByKey(
+  env: Env,
+  headers: Record<string, string>,
+  keys: string[]
+): Promise<Set<string>> {
+  const tracked = new Set<string>();
+  for (const keyBatch of chunkArray(keys, 100)) {
+    const response = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/media_uploads?select=r2_key,bucket&r2_key=in.${encodeURIComponent(buildInFilter(keyBatch))}`,
+      { headers }
+    );
+
+    if (!response.ok) {
+      console.warn("Failed to resolve tracked R2 media keys:", await response.text());
+      for (const key of keyBatch) tracked.add(key);
+      continue;
+    }
+
+    const rows = (await response.json()) as MediaUploadLookupRow[];
+    for (const row of rows) {
+      if (isPublicBucket(row.bucket)) {
+        tracked.add(row.r2_key);
+      }
+    }
+  }
+
+  return tracked;
+}
+
+function parsePublicMediaOwnerId(key: string): string | null {
+  const match = /^media\/[^/]+\/([0-9a-fA-F-]{36})\//.exec(key);
+  return match?.[1] ?? null;
+}
+
+function publicMediaReferenceRowsContainKey(rows: PublicMediaReferenceRow[], key: string): boolean {
+  return rows.some((row) => collectStringValues(row).some((value) => value.includes(key)));
+}
+
+async function fetchPublicMediaReferenceRows(
+  env: Env,
+  headers: Record<string, string>,
+  table: ExpirableContentTable,
+  ownerId: string
+): Promise<PublicMediaReferenceRow[] | null> {
+  const select =
+    table === "businesses"
+      ? "id,logo_url,cover_photo,cover_video,video_thumbnail,gallery_photos,business_details"
+      : "id,photos,videos,video_thumbnail,logo_url";
+  const response = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/${table}?select=${select}&owner_id=eq.${encodeURIComponent(ownerId)}&limit=1000`,
+    { headers }
+  );
+
+  if (!response.ok) {
+    console.warn(`Failed to check ${table} references for legacy R2 media:`, await response.text());
+    return null;
+  }
+
+  return (await response.json()) as PublicMediaReferenceRow[];
+}
+
+async function isPublicMediaKeyReferenced(
+  env: Env,
+  headers: Record<string, string>,
+  key: string
+): Promise<boolean> {
+  const ownerId = parsePublicMediaOwnerId(key);
+  if (!ownerId) {
+    return true;
+  }
+
+  const [listingRows, businessRows, promotionRows] = await Promise.all([
+    fetchPublicMediaReferenceRows(env, headers, "listings", ownerId),
+    fetchPublicMediaReferenceRows(env, headers, "businesses", ownerId),
+    fetchPublicMediaReferenceRows(env, headers, "promotions", ownerId),
+  ]);
+
+  if (!listingRows || !businessRows || !promotionRows) {
+    return true;
+  }
+
+  return (
+    publicMediaReferenceRowsContainKey(listingRows, key) ||
+    publicMediaReferenceRowsContainKey(businessRows, key) ||
+    publicMediaReferenceRowsContainKey(promotionRows, key)
+  );
+}
+
+function getR2ObjectUploadedTime(object: R2Object): number | null {
+  if (!object.uploaded) {
+    return null;
+  }
+  const timestamp = new Date(object.uploaded).getTime();
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+async function cleanupLegacyUntrackedPublicMedia(
+  env: Env,
+  headers: Record<string, string>
+): Promise<number> {
+  if (!env.R2_PUBLIC.list) {
+    return 0;
+  }
+
+  const cutoffTime = Date.now() - LEGACY_PUBLIC_MEDIA_ORPHAN_MIN_AGE_MS;
+  const candidates: R2Object[] = [];
+  let cursor: string | undefined;
+
+  do {
+    const page = await env.R2_PUBLIC.list({
+      prefix: "media/",
+      cursor,
+      limit: LEGACY_PUBLIC_MEDIA_ORPHAN_SCAN_LIMIT,
+    });
+    for (const object of page.objects) {
+      const uploadedTime = getR2ObjectUploadedTime(object);
+      if (uploadedTime !== null && uploadedTime <= cutoffTime) {
+        candidates.push(object);
+      }
+      if (candidates.length >= LEGACY_PUBLIC_MEDIA_ORPHAN_LIMIT) {
+        break;
+      }
+    }
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor && candidates.length < LEGACY_PUBLIC_MEDIA_ORPHAN_LIMIT);
+
+  if (candidates.length === 0) {
+    return 0;
+  }
+
+  const candidateKeys = candidates.map((candidate) => candidate.key);
+  const trackedKeys = await resolveTrackedPublicMediaKeysByKey(env, headers, candidateKeys);
+  const orphanKeys: string[] = [];
+
+  for (const key of candidateKeys) {
+    if (trackedKeys.has(key)) {
+      continue;
+    }
+    const referenced = await isPublicMediaKeyReferenced(env, headers, key);
+    if (!referenced) {
+      orphanKeys.push(key);
+    }
+  }
+
+  if (orphanKeys.length === 0) {
+    return 0;
+  }
+
+  await env.R2_PUBLIC.delete(orphanKeys);
+  return orphanKeys.length;
 }
 
 async function getHeldKycKeys(
@@ -859,7 +1031,15 @@ const worker: ExportedHandler<Env> = {
       console.error("Orphan media cleanup failed:", orphanErr);
     }
 
-    // 5. Clean up orphaned auth users that have no account_profiles row.
+    // 5. Clean up old public R2 objects that predate media_uploads tracking.
+    let legacyPublicMediaDeleted = 0;
+    try {
+      legacyPublicMediaDeleted = await cleanupLegacyUntrackedPublicMedia(env, headers);
+    } catch (legacyMediaErr) {
+      console.error("Legacy public media cleanup failed:", legacyMediaErr);
+    }
+
+    // 6. Clean up orphaned auth users that have no account_profiles row.
     let orphanAuthUsersDeleted = 0;
     try {
       orphanAuthUsersDeleted = await cleanupOrphanedAuthUsers(env, headers);
@@ -867,7 +1047,7 @@ const worker: ExportedHandler<Env> = {
       console.error("Orphan auth user cleanup failed:", orphanAuthErr);
     }
 
-    // 6. Expire posts whose visibility window has elapsed.
+    // 7. Expire posts whose visibility window has elapsed.
     let expiredContent = { listings: 0, businesses: 0, promotions: 0 };
     try {
       expiredContent = await expireElapsedPosts(env, headers);
@@ -875,7 +1055,7 @@ const worker: ExportedHandler<Env> = {
       console.error("Post expiry sweep failed:", expireErr);
     }
 
-    // 7. Delete expired posts after their two-day owner grace period.
+    // 8. Delete expired posts after their two-day owner grace period.
     let deletedExpiredContent = { listings: 0, businesses: 0, promotions: 0 };
     try {
       deletedExpiredContent = await deleteExpiredPostsAfterGrace(env, headers);
@@ -883,7 +1063,7 @@ const worker: ExportedHandler<Env> = {
       console.error("Expired post deletion sweep failed:", deleteExpiredErr);
     }
 
-    // 8. Log cleanup summary to audit_logs via REST API
+    // 9. Log cleanup summary to audit_logs via REST API
     const auditPayload = {
       actor_id: "00000000-0000-0000-0000-000000000000", // system actor
       actor_role: "system",
@@ -897,6 +1077,7 @@ const worker: ExportedHandler<Env> = {
         failed: failCount,
         held_skipped: heldSkipCount,
         orphan_media_deleted: orphanDeleteCount,
+        legacy_public_media_deleted: legacyPublicMediaDeleted,
         orphan_auth_users_deleted: orphanAuthUsersDeleted,
         expired_content: expiredContent,
         deleted_expired_content: deletedExpiredContent,
@@ -918,7 +1099,7 @@ const worker: ExportedHandler<Env> = {
     }
 
     console.warn(
-      `Retention cleanup complete: ${successCount} queued files deleted, ${failCount} failed, ${heldSkipCount} skipped for legal hold, ${orphanDeleteCount} orphaned media deleted, ${orphanAuthUsersDeleted} orphaned auth users deleted, expired content: listings=${expiredContent.listings}, businesses=${expiredContent.businesses}, promotions=${expiredContent.promotions}, deleted expired content: listings=${deletedExpiredContent.listings}, businesses=${deletedExpiredContent.businesses}, promotions=${deletedExpiredContent.promotions}.`
+      `Retention cleanup complete: ${successCount} queued files deleted, ${failCount} failed, ${heldSkipCount} skipped for legal hold, ${orphanDeleteCount} orphaned media deleted, ${legacyPublicMediaDeleted} legacy public media deleted, ${orphanAuthUsersDeleted} orphaned auth users deleted, expired content: listings=${expiredContent.listings}, businesses=${expiredContent.businesses}, promotions=${expiredContent.promotions}, deleted expired content: listings=${deletedExpiredContent.listings}, businesses=${deletedExpiredContent.businesses}, promotions=${deletedExpiredContent.promotions}.`
     );
   },
 
