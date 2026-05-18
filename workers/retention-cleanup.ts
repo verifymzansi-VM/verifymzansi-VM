@@ -104,6 +104,11 @@ interface ExpiredPromotionRow {
 
 type ExpiredContentRow = ExpiredListingRow | ExpiredBusinessRow | ExpiredPromotionRow;
 
+interface MediaUploadLookupRow {
+  r2_key: string;
+  bucket: string;
+}
+
 const EXPIRED_POST_DELETE_GRACE_MS = 2 * 24 * 60 * 60 * 1000;
 const EXPIRED_CONTENT_DELETE_LIMIT = 100;
 const EXPIRED_CONTENT_DELETE_MAX_PER_RUN = 1000;
@@ -184,8 +189,7 @@ function extractTrustedPublicMediaKey(rawUrl: string): string | null {
     }
 
     if (parsed.hostname.endsWith(".r2.cloudflarestorage.com")) {
-      const parts = parsed.pathname.replace(/^\/+/, "").split("/");
-      return parts.length > 1 ? parts.slice(1).join("/") : parts[0] || null;
+      return parsed.pathname.replace(/^\/+/, "") || null;
     }
   } catch {
     return null;
@@ -194,31 +198,68 @@ function extractTrustedPublicMediaKey(rawUrl: string): string | null {
   return null;
 }
 
-function collectExpiredContentMediaKeys(row: ExpiredContentRow): string[] {
-  const urls =
-    "business_details" in row
-      ? collectStringValues([
-          row.logo_url,
-          row.cover_photo,
-          row.cover_video,
-          row.video_thumbnail,
-          row.gallery_photos,
-          collectMallPhotoUrls(row.business_details),
-        ])
-      : collectStringValues([
-          (row as ExpiredListingRow | ExpiredPromotionRow).photos,
-          (row as ExpiredListingRow | ExpiredPromotionRow).videos,
-          row.video_thumbnail,
-          row.logo_url,
-        ]);
-
+function collectExpiredContentMediaUrls(row: ExpiredContentRow): string[] {
   return [
     ...new Set(
-      urls
+      "business_details" in row
+        ? collectStringValues([
+            row.logo_url,
+            row.cover_photo,
+            row.cover_video,
+            row.video_thumbnail,
+            row.gallery_photos,
+            collectMallPhotoUrls(row.business_details),
+          ])
+        : collectStringValues([
+            (row as ExpiredListingRow | ExpiredPromotionRow).photos,
+            (row as ExpiredListingRow | ExpiredPromotionRow).videos,
+            row.video_thumbnail,
+            row.logo_url,
+          ])
+    ),
+  ];
+}
+
+function collectExpiredContentMediaKeys(row: ExpiredContentRow): string[] {
+  return [
+    ...new Set(
+      collectExpiredContentMediaUrls(row)
         .map((url) => extractTrustedPublicMediaKey(url))
         .filter((key): key is string => Boolean(key))
     ),
   ];
+}
+
+async function resolveTrackedPublicMediaKeys(
+  env: Env,
+  headers: Record<string, string>,
+  urls: string[]
+): Promise<string[]> {
+  if (urls.length === 0) {
+    return [];
+  }
+
+  const keys = new Set<string>();
+  for (const urlBatch of chunkArray(urls, 100)) {
+    const response = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/media_uploads?select=r2_key,bucket&url=in.${encodeURIComponent(buildInFilter(urlBatch))}`,
+      { headers }
+    );
+
+    if (!response.ok) {
+      console.warn("Failed to resolve tracked expired content media:", await response.text());
+      continue;
+    }
+
+    const rows = (await response.json()) as MediaUploadLookupRow[];
+    for (const row of rows) {
+      if (isPublicBucket(row.bucket) && row.r2_key.trim()) {
+        keys.add(row.r2_key);
+      }
+    }
+  }
+
+  return [...keys];
 }
 
 async function getHeldKycKeys(
@@ -572,7 +613,10 @@ async function deleteExpiredContentBatch(
     return 0;
   }
 
-  const mediaKeys = [...new Set(rows.flatMap((row) => collectExpiredContentMediaKeys(row)))];
+  const mediaUrls = [...new Set(rows.flatMap((row) => collectExpiredContentMediaUrls(row)))];
+  const trackedMediaKeys = await resolveTrackedPublicMediaKeys(env, headers, mediaUrls);
+  const fallbackMediaKeys = rows.flatMap((row) => collectExpiredContentMediaKeys(row));
+  const mediaKeys = [...new Set([...trackedMediaKeys, ...fallbackMediaKeys])];
   if (mediaKeys.length > 0) {
     try {
       await env.R2_PUBLIC.delete(mediaKeys);

@@ -224,6 +224,17 @@ describe("retention cleanup worker", () => {
         return { ok: true, text: async () => "" } satisfies Partial<Response>;
       }
 
+      if (url.includes("/rest/v1/media_uploads?select=r2_key,bucket&url=in.")) {
+        const decodedUrl = decodeURIComponent(url);
+        return {
+          ok: true,
+          json: async () =>
+            decodedUrl.includes("https://cdn.verifymzansi.co.za/media/promo-cdn.jpg")
+              ? [{ r2_key: "promotions/cdn-photo.jpg", bucket: "public" }]
+              : [],
+        } satisfies Partial<Response>;
+      }
+
       if (url.includes("/auth/v1/admin/users?page=1&per_page=200")) {
         return { ok: true, json: async () => ({ users: [] }) } satisfies Partial<Response>;
       }
@@ -246,7 +257,10 @@ describe("retention cleanup worker", () => {
           json: async () => [
             {
               id: "listing-1",
-              photos: ["https://media.verifymzansi.com/listings/old-photo.jpg"],
+              photos: [
+                "https://media.verifymzansi.com/listings/old-photo.jpg",
+                "https://verifymzansi-public.account-id.r2.cloudflarestorage.com/media/listing/user-1/native-photo.jpg",
+              ],
               videos: ["https://media.verifymzansi.com/media/listing/user-1/video.mp4"],
               video_thumbnail: "/api/media/serve/media/listing/user-1/thumb.jpg",
               logo_url: "https://evil.example.com/not-ours.jpg",
@@ -283,7 +297,10 @@ describe("retention cleanup worker", () => {
           json: async () => [
             {
               id: "promotion-1",
-              photos: ["https://media.verifymzansi.com/promotions/legacy-photo.jpg"],
+              photos: [
+                "https://media.verifymzansi.com/promotions/legacy-photo.jpg",
+                "https://cdn.verifymzansi.co.za/media/promo-cdn.jpg",
+              ],
               videos: null,
               video_thumbnail: null,
               logo_url: null,
@@ -319,6 +336,7 @@ describe("retention cleanup worker", () => {
 
     expect(publicDelete).toHaveBeenCalledWith([
       "listings/old-photo.jpg",
+      "media/listing/user-1/native-photo.jpg",
       "media/listing/user-1/video.mp4",
       "media/listing/user-1/thumb.jpg",
     ]);
@@ -327,7 +345,10 @@ describe("retention cleanup worker", () => {
       "business/gallery.jpg",
       "business/mall.jpg",
     ]);
-    expect(publicDelete).toHaveBeenCalledWith(["promotions/legacy-photo.jpg"]);
+    expect(publicDelete).toHaveBeenCalledWith([
+      "promotions/cdn-photo.jpg",
+      "promotions/legacy-photo.jpg",
+    ]);
 
     const tableDeletes = fetchMock.mock.calls.filter(
       ([url, init]) =>
