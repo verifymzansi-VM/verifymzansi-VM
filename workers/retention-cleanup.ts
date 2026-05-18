@@ -132,6 +132,7 @@ const EXPIRED_CONTENT_DELETE_MAX_PER_RUN = 1000;
 const LEGACY_PUBLIC_MEDIA_ORPHAN_LIMIT = 200;
 const LEGACY_PUBLIC_MEDIA_ORPHAN_SCAN_LIMIT = 1000;
 const LEGACY_PUBLIC_MEDIA_ORPHAN_MIN_AGE_MS = 2 * 24 * 60 * 60 * 1000;
+const PUBLIC_MEDIA_PURGE_LIMIT = 5000;
 const PUBLIC_MEDIA_HOSTS = new Set(["media.verifymzansi.com", "media-staging.verifymzansi.com"]);
 
 const AUTH_USERS_PAGE_SIZE = 200;
@@ -432,6 +433,64 @@ async function cleanupLegacyUntrackedPublicMedia(
 
   await env.R2_PUBLIC.delete(orphanKeys);
   return orphanKeys.length;
+}
+
+async function hasLiveContent(env: Env, headers: Record<string, string>): Promise<boolean> {
+  const tables: ExpirableContentTable[] = ["listings", "businesses", "promotions"];
+
+  for (const table of tables) {
+    const response = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/${table}?select=id&status=eq.live&limit=1`,
+      { headers }
+    );
+
+    if (!response.ok) {
+      console.warn(
+        `Failed to check live ${table} before public media purge:`,
+        await response.text()
+      );
+      return true;
+    }
+
+    const rows = (await response.json()) as Array<{ id: string }>;
+    if (rows.length > 0) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+async function purgePublicMediaWhenNoLiveContent(
+  env: Env,
+  headers: Record<string, string>
+): Promise<number> {
+  if (!env.R2_PUBLIC.list) {
+    return 0;
+  }
+
+  if (await hasLiveContent(env, headers)) {
+    return 0;
+  }
+
+  const keys: string[] = [];
+  let cursor: string | undefined;
+
+  do {
+    const page = await env.R2_PUBLIC.list({
+      cursor,
+      limit: LEGACY_PUBLIC_MEDIA_ORPHAN_SCAN_LIMIT,
+    });
+    keys.push(...page.objects.map((object) => object.key));
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor && keys.length < PUBLIC_MEDIA_PURGE_LIMIT);
+
+  if (keys.length === 0) {
+    return 0;
+  }
+
+  await env.R2_PUBLIC.delete(keys);
+  return keys.length;
 }
 
 async function getHeldKycKeys(
@@ -1039,7 +1098,15 @@ const worker: ExportedHandler<Env> = {
       console.error("Legacy public media cleanup failed:", legacyMediaErr);
     }
 
-    // 6. Clean up orphaned auth users that have no account_profiles row.
+    // 6. If there is no live content at all, the public media bucket should be empty.
+    let publicMediaPurged = 0;
+    try {
+      publicMediaPurged = await purgePublicMediaWhenNoLiveContent(env, headers);
+    } catch (publicMediaPurgeErr) {
+      console.error("No-live-content public media purge failed:", publicMediaPurgeErr);
+    }
+
+    // 7. Clean up orphaned auth users that have no account_profiles row.
     let orphanAuthUsersDeleted = 0;
     try {
       orphanAuthUsersDeleted = await cleanupOrphanedAuthUsers(env, headers);
@@ -1047,7 +1114,7 @@ const worker: ExportedHandler<Env> = {
       console.error("Orphan auth user cleanup failed:", orphanAuthErr);
     }
 
-    // 7. Expire posts whose visibility window has elapsed.
+    // 8. Expire posts whose visibility window has elapsed.
     let expiredContent = { listings: 0, businesses: 0, promotions: 0 };
     try {
       expiredContent = await expireElapsedPosts(env, headers);
@@ -1055,7 +1122,7 @@ const worker: ExportedHandler<Env> = {
       console.error("Post expiry sweep failed:", expireErr);
     }
 
-    // 8. Delete expired posts after their two-day owner grace period.
+    // 9. Delete expired posts after their two-day owner grace period.
     let deletedExpiredContent = { listings: 0, businesses: 0, promotions: 0 };
     try {
       deletedExpiredContent = await deleteExpiredPostsAfterGrace(env, headers);
@@ -1063,7 +1130,7 @@ const worker: ExportedHandler<Env> = {
       console.error("Expired post deletion sweep failed:", deleteExpiredErr);
     }
 
-    // 9. Log cleanup summary to audit_logs via REST API
+    // 10. Log cleanup summary to audit_logs via REST API
     const auditPayload = {
       actor_id: "00000000-0000-0000-0000-000000000000", // system actor
       actor_role: "system",
@@ -1078,6 +1145,7 @@ const worker: ExportedHandler<Env> = {
         held_skipped: heldSkipCount,
         orphan_media_deleted: orphanDeleteCount,
         legacy_public_media_deleted: legacyPublicMediaDeleted,
+        public_media_purged_no_live_content: publicMediaPurged,
         orphan_auth_users_deleted: orphanAuthUsersDeleted,
         expired_content: expiredContent,
         deleted_expired_content: deletedExpiredContent,
@@ -1099,7 +1167,7 @@ const worker: ExportedHandler<Env> = {
     }
 
     console.warn(
-      `Retention cleanup complete: ${successCount} queued files deleted, ${failCount} failed, ${heldSkipCount} skipped for legal hold, ${orphanDeleteCount} orphaned media deleted, ${legacyPublicMediaDeleted} legacy public media deleted, ${orphanAuthUsersDeleted} orphaned auth users deleted, expired content: listings=${expiredContent.listings}, businesses=${expiredContent.businesses}, promotions=${expiredContent.promotions}, deleted expired content: listings=${deletedExpiredContent.listings}, businesses=${deletedExpiredContent.businesses}, promotions=${deletedExpiredContent.promotions}.`
+      `Retention cleanup complete: ${successCount} queued files deleted, ${failCount} failed, ${heldSkipCount} skipped for legal hold, ${orphanDeleteCount} orphaned media deleted, ${legacyPublicMediaDeleted} legacy public media deleted, ${publicMediaPurged} public media purged because there is no live content, ${orphanAuthUsersDeleted} orphaned auth users deleted, expired content: listings=${expiredContent.listings}, businesses=${expiredContent.businesses}, promotions=${expiredContent.promotions}, deleted expired content: listings=${deletedExpiredContent.listings}, businesses=${deletedExpiredContent.businesses}, promotions=${deletedExpiredContent.promotions}.`
     );
   },
 
