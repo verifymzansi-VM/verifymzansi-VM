@@ -185,10 +185,15 @@ describe("retention cleanup worker", () => {
     const contentExpiryCalls = fetchMock.mock.calls.filter(([url]) =>
       String(url).includes("status=eq.live")
     );
-    expect(contentExpiryCalls).toHaveLength(6);
+    expect(contentExpiryCalls).toHaveLength(7);
     expect(
       contentExpiryCalls.some(([url]) =>
         String(url).includes("expires_at=not.is.null&expires_at=lte.")
+      )
+    ).toBe(true);
+    expect(
+      contentExpiryCalls.some(([url]) =>
+        String(url).includes("promotion_type=eq.event&end_date=not.is.null&end_date=lte.")
       )
     ).toBe(true);
     expect(
@@ -374,9 +379,18 @@ describe("retention cleanup worker", () => {
       true
     );
     expect(
-      expiredContentFetches.every(([url]) =>
-        String(url).includes("and(expires_at.is.null,updated_at.lte.")
-      )
+      expiredContentFetches
+        .filter(([url]) => !String(url).includes("/rest/v1/promotions?select=id,photos"))
+        .every(([url]) => String(url).includes("and(expires_at.is.null,updated_at.lte."))
+    ).toBe(true);
+    expect(
+      expiredContentFetches
+        .filter(([url]) => String(url).includes("/rest/v1/promotions?select=id,photos"))
+        .every(
+          ([url]) =>
+            String(url).includes("end_date.lte.") &&
+            String(url).includes("and(expires_at.is.null,end_date.is.null,updated_at.lte.")
+        )
     ).toBe(true);
 
     const auditCall = fetchMock.mock.calls.find(([url]) =>

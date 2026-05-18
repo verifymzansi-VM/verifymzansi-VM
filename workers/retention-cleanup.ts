@@ -470,6 +470,13 @@ async function expireContentTable(
     `expires_at=not.is.null&expires_at=lte.${encodeURIComponent(nowIso)}`,
     "Post visibility period expired"
   );
+  const endedEventRows =
+    table === "promotions"
+      ? await expireRows(
+          `promotion_type=eq.event&end_date=not.is.null&end_date=lte.${encodeURIComponent(nowIso)}`,
+          "Event end date elapsed"
+        )
+      : 0;
   const areaFilter =
     table === "promotions"
       ? "area=eq.PROMOTIONS_EVENTS"
@@ -514,7 +521,7 @@ async function expireContentTable(
     "Paid post visibility period expired"
   );
 
-  return elapsedExpiryRows + legacyFreeRows + legacyPaidRows;
+  return elapsedExpiryRows + endedEventRows + legacyFreeRows + legacyPaidRows;
 }
 
 async function expireElapsedPosts(
@@ -562,12 +569,18 @@ function getExpiredContentConfig(table: ExpirableContentTable): {
   }
 }
 
-function buildExpiredContentDeleteFilter(cutoffIso: string): string {
+function buildExpiredContentDeleteFilter(table: ExpirableContentTable, cutoffIso: string): string {
   const encodedCutoff = encodeURIComponent(cutoffIso);
-  return [
-    "status=eq.expired",
-    `or=(expires_at.lte.${encodedCutoff},and(expires_at.is.null,updated_at.lte.${encodedCutoff}))`,
-  ].join("&");
+  const staleFallback =
+    table === "promotions"
+      ? `and(expires_at.is.null,end_date.is.null,updated_at.lte.${encodedCutoff})`
+      : `and(expires_at.is.null,updated_at.lte.${encodedCutoff})`;
+  const expiryPredicates =
+    table === "promotions"
+      ? [`expires_at.lte.${encodedCutoff}`, `end_date.lte.${encodedCutoff}`, staleFallback]
+      : [`expires_at.lte.${encodedCutoff}`, staleFallback];
+
+  return ["status=eq.expired", `or=(${expiryPredicates.join(",")})`].join("&");
 }
 
 async function deleteExpiredContentTable(
@@ -597,7 +610,7 @@ async function deleteExpiredContentBatch(
   cutoffIso: string
 ): Promise<number> {
   const config = getExpiredContentConfig(table);
-  const deleteFilter = buildExpiredContentDeleteFilter(cutoffIso);
+  const deleteFilter = buildExpiredContentDeleteFilter(table, cutoffIso);
   const response = await fetch(
     `${env.SUPABASE_URL}/rest/v1/${table}?select=${config.select}&${deleteFilter}&order=updated_at.asc&limit=${EXPIRED_CONTENT_DELETE_LIMIT}`,
     { headers }
