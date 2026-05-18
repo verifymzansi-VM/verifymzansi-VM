@@ -133,6 +133,86 @@ describe("POST /api/content/delete", () => {
     expect(mockCreateAdminClient).not.toHaveBeenCalled();
   });
 
+  it("queues public media cleanup when a user deletes a post", async () => {
+    const cleanupInsert = vi.fn().mockResolvedValue({ error: null });
+    const deleteEq = vi.fn().mockReturnThis();
+    const from = vi.fn((table: string) => {
+      if (table === "listings") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: {
+              id: "listing-1",
+              status: "ended",
+              owner_id: "user-1",
+              photos: [
+                "https://media.verifymzansi.com/media/listing/user-1/photo.jpg",
+                "https://example.com/not-platform.jpg",
+              ],
+              videos: ["https://media.verifymzansi.com/media/listing/user-1/video.mp4"],
+              video_thumbnail: "https://media.verifymzansi.com/media/listing/user-1/thumb.jpg",
+              logo_url: "https://media.verifymzansi.com/media/listing/user-1/logo.jpg",
+            },
+            error: null,
+          }),
+          delete: vi.fn().mockReturnValue({
+            eq: deleteEq,
+          }),
+        };
+      }
+
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    mockCreateClient.mockResolvedValue({
+      from,
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
+    });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "r2_cleanup_queue") {
+          return { insert: cleanupInsert };
+        }
+
+        throw new Error(`Unexpected table ${table}`);
+      }),
+    });
+
+    const res = await POST(
+      createRequest({
+        itemId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        area: "MZANSI_MARKET",
+      })
+    );
+
+    expect(res.status).toBe(200);
+    expect(cleanupInsert).toHaveBeenCalledWith([
+      {
+        bucket: "public",
+        r2_key: "media/listing/user-1/photo.jpg",
+        reason: "listing_deleted",
+      },
+      {
+        bucket: "public",
+        r2_key: "media/listing/user-1/video.mp4",
+        reason: "listing_deleted",
+      },
+      {
+        bucket: "public",
+        r2_key: "media/listing/user-1/thumb.jpg",
+        reason: "listing_deleted",
+      },
+      {
+        bucket: "public",
+        r2_key: "media/listing/user-1/logo.jpg",
+        reason: "listing_deleted",
+      },
+    ]);
+  });
+
   it("releases a rejected free-post claim after delete", async () => {
     const releaseMaybeSingle = vi.fn().mockResolvedValue({
       data: { id: "claim-1" },

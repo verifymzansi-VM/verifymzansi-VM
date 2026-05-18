@@ -15,10 +15,12 @@ import {
 import {
   applyOwnerFilter,
   getOwnerColumn,
+  type OwnerColumn,
   readOwnerId,
   withOwnerColumn,
 } from "@/lib/account/compat";
 import { releaseRejectedDeletedFreePost } from "@/lib/billing/free-posts";
+import { collectMediaUrls, queuePublicMediaCleanup } from "@/lib/services/media-cleanup";
 import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
 import {
   contentAreaSchema,
@@ -32,6 +34,84 @@ const deleteSchema = z.object({
   itemId: z.string().uuid("itemId must be a valid UUID"),
   area: contentAreaSchema,
 });
+
+const targetTypeMap: Record<string, string> = {
+  listings: "listing",
+  businesses: "business",
+  storefronts: "storefront",
+  promotions: "promotion",
+};
+
+type DeletableContentItem = {
+  id: string;
+  status: string;
+  owner_id?: string | null;
+  seller_id?: string | null;
+  photos?: string[] | null;
+  videos?: string[] | null;
+  video_thumbnail?: string | null;
+  logo_url?: string | null;
+  cover_photo?: string | null;
+  cover_video?: string | null;
+  gallery_photos?: string[] | null;
+  business_details?: unknown;
+};
+
+function collectStringValues(value: unknown): string[] {
+  if (typeof value === "string") {
+    return value.trim() ? [value] : [];
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => collectStringValues(item));
+  }
+
+  if (value && typeof value === "object") {
+    return Object.values(value as Record<string, unknown>).flatMap((item) =>
+      collectStringValues(item)
+    );
+  }
+
+  return [];
+}
+
+function collectDeletedMediaUrls(table: string, item: DeletableContentItem): string[] {
+  if (table === "businesses") {
+    return collectMediaUrls(
+      item.logo_url,
+      item.cover_photo,
+      item.cover_video,
+      item.video_thumbnail,
+      item.gallery_photos ?? undefined,
+      collectStringValues(item.business_details)
+    );
+  }
+
+  if (table === "listings" || table === "promotions") {
+    return collectMediaUrls(
+      item.photos ?? undefined,
+      item.videos ?? undefined,
+      item.video_thumbnail,
+      item.logo_url
+    );
+  }
+
+  return [];
+}
+
+function getDeleteSelectColumns(table: string, ownerColumn: OwnerColumn): string {
+  const baseColumns = withOwnerColumn("id, status, owner_id", ownerColumn);
+
+  if (table === "businesses") {
+    return `${baseColumns}, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, business_details`;
+  }
+
+  if (table === "listings" || table === "promotions") {
+    return `${baseColumns}, photos, videos, video_thumbnail, logo_url`;
+  }
+
+  return baseColumns;
+}
 
 /**
  * POST /api/content/delete
@@ -75,12 +155,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid area" }, { status: 400 });
     }
 
-    let item: {
-      id: string;
-      status: string;
-      owner_id?: string | null;
-      seller_id?: string | null;
-    } | null = null;
+    let item: DeletableContentItem | null = null;
     let deleteErrorMessage: string | null = null;
 
     if (config.ownerCompatible && isOwnerCompatibleContentTable(config.table)) {
@@ -88,7 +163,7 @@ export async function POST(request: Request) {
       const { data: fetchedItem, error: fetchError } = await applyOwnerFilter(
         supabase
           .from(config.table)
-          .select(withOwnerColumn("id, status, owner_id", ownerColumn))
+          .select(getDeleteSelectColumns(config.table, ownerColumn))
           .eq("id", itemId),
         ownerColumn,
         user.id
@@ -98,12 +173,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Content item not found" }, { status: 404 });
       }
 
-      const compatibleItem = fetchedItem as unknown as {
-        id: string;
-        status: string;
-        owner_id?: string | null;
-        seller_id?: string | null;
-      };
+      const compatibleItem = fetchedItem as unknown as DeletableContentItem;
       item = compatibleItem;
 
       if (readOwnerId(compatibleItem) !== user.id) {
@@ -168,6 +238,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Failed to delete content" }, { status: 500 });
     }
 
+    const deletedMediaUrls = item ? collectDeletedMediaUrls(config.table, item) : [];
+    if (deletedMediaUrls.length > 0) {
+      try {
+        await queuePublicMediaCleanup(
+          createAdminClient(),
+          deletedMediaUrls,
+          `${targetTypeMap[config.table] || config.table}_deleted`
+        );
+      } catch (cleanupError) {
+        log.error("Failed to queue deleted content media for cleanup", {
+          error: cleanupError instanceof Error ? cleanupError.message : "Unknown",
+          itemId,
+          area,
+        });
+      }
+    }
+
     if (item?.status === "rejected") {
       try {
         await releaseRejectedDeletedFreePost(createAdminClient(), user.id, area, itemId);
@@ -181,12 +268,6 @@ export async function POST(request: Request) {
       }
     }
 
-    const targetTypeMap: Record<string, string> = {
-      listings: "listing",
-      businesses: "business",
-      storefronts: "storefront",
-      promotions: "promotion",
-    };
     const targetType = targetTypeMap[config.table] || config.table;
     const actionMap: Record<string, string> = {
       listing: "listing_deleted",
