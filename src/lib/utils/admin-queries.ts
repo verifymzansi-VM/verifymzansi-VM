@@ -15,6 +15,7 @@ export interface AdminDashboardStats {
   totalMembers: number;
   totalListings: number;
   openReports: number;
+  supportRequests: number;
   pendingVerifications: number;
   activeSuspensions: number;
   pendingModeration: number;
@@ -196,6 +197,7 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
     { count: totalMembers },
     { count: totalListings },
     { count: openReports },
+    { count: supportRequests },
     { count: pendingVerifications },
     { count: activeSuspensions },
     pendingModeration,
@@ -203,6 +205,10 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
     supabase.from(ACCOUNT_PROFILE_WRITE_TABLE).select("*", { count: "exact", head: true }),
     supabase.from("listings").select("*", { count: "exact", head: true }),
     supabase.from("reports").select("*", { count: "exact", head: true }).eq("status", "open"),
+    supabase
+      .from("contact_submissions")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "new"),
     supabase
       .from("verification_steps")
       .select("*", { count: "exact", head: true })
@@ -220,6 +226,7 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
     totalMembers: totalMembers || 0,
     totalListings: totalListings || 0,
     openReports: openReports || 0,
+    supportRequests: supportRequests || 0,
     pendingVerifications: pendingVerifications || 0,
     activeSuspensions: activeSuspensions || 0,
     pendingModeration,

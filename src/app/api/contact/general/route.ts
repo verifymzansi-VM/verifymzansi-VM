@@ -6,6 +6,7 @@ import { createLogger } from "@/lib/utils/logger";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { sanitizeUserMessage } from "@/lib/utils/sanitize-html";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { notifyStaffForAdminEvent } from "@/lib/notifications";
 import {
   emailSchema,
   trimmedStringSchema,
@@ -104,6 +105,13 @@ export async function POST(request: NextRequest) {
       log.error("Failed to store contact submission", { error: insertError.message });
       return NextResponse.json({ error: "Failed to submit message" }, { status: 500 });
     }
+
+    void notifyStaffForAdminEvent({
+      capability: "queue:view",
+      title: "New support request submitted",
+      message: `${name} submitted a ${category.replace(/_/g, " ")} request.`,
+      href: "/admin",
+    });
 
     log.info("Contact form submission received", {
       name,

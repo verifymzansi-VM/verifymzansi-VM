@@ -163,6 +163,15 @@ export function RoleCommandCenter({
       detail: breachedReportCount > 0 ? `${breachedReportCount} breached SLA` : "No breached SLA",
       href: "/admin/reports",
     },
+    {
+      label: "Support requests",
+      value: stats.supportRequests,
+      detail:
+        stats.supportRequests > 0
+          ? `${stats.supportRequests} new contact ${stats.supportRequests === 1 ? "request" : "requests"}`
+          : "No new support requests",
+      href: "/admin",
+    },
   ];
 
   const governanceItems = [
@@ -276,7 +285,7 @@ export function RoleCommandCenter({
             </Link>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {focusItems.map((item) => (
               <Link
                 key={item.label}
@@ -338,14 +347,21 @@ function SignalBoard({
       value:
         stats.openReports > 0
           ? `${stats.openReports} reports`
-          : stats.pendingVerifications > 0
-            ? `${stats.pendingVerifications} KYC`
-            : "Clear",
+          : stats.supportRequests > 0
+            ? `${stats.supportRequests} support`
+            : stats.pendingVerifications > 0
+              ? `${stats.pendingVerifications} KYC`
+              : "Clear",
       icon: RadioTower,
     },
     {
       label: "Backlog pressure",
-      value: `${stats.pendingVerifications + totalPendingContent + stats.pendingModeration} tasks`,
+      value: `${
+        stats.pendingVerifications +
+        totalPendingContent +
+        stats.pendingModeration +
+        stats.supportRequests
+      } tasks`,
       icon: Users,
     },
   ];

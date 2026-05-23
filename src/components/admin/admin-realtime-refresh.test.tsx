@@ -34,6 +34,7 @@ describe("AdminRealtimeRefresh", () => {
       "promotions",
       "reports",
       "dsar_cases",
+      "contact_submissions",
     ]);
 
     const reportsRealtime = realtimeOptions.find((option) => option.table === "reports");

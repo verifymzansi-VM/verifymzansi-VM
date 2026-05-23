@@ -63,6 +63,7 @@ export default async function AdminPage() {
     totalMembers: 0,
     totalListings: 0,
     openReports: 0,
+    supportRequests: 0,
     pendingVerifications: 0,
     activeSuspensions: 0,
     pendingModeration: 0,
@@ -119,7 +120,10 @@ export default async function AdminPage() {
   const healthStatus =
     breachedReports.length > 0
       ? "critical"
-      : stats.pendingVerifications >= 30 || stats.openReports > 0 || stats.pendingModeration >= 20
+      : stats.pendingVerifications >= 30 ||
+          stats.openReports > 0 ||
+          stats.supportRequests > 0 ||
+          stats.pendingModeration >= 20
         ? "warning"
         : "healthy";
 

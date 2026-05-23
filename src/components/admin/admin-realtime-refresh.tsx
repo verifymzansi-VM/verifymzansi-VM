@@ -47,6 +47,10 @@ function isDsarQueueEntry(payload: RealtimePayload) {
   return isQueueEntry(payload, DSAR_ACTIVE_STATUSES);
 }
 
+function isContactSubmissionQueueEntry(payload: RealtimePayload) {
+  return isQueueEntry(payload, new Set(["new"]));
+}
+
 export function AdminRealtimeRefresh() {
   const router = useRouter();
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -136,6 +140,18 @@ export function AdminRealtimeRefresh() {
     event: "*",
     onEvent: (payload) => {
       if (isDsarQueueEntry(payload as RealtimePayload)) {
+        scheduleRefresh();
+      }
+    },
+  });
+
+  useRealtime({
+    table: "contact_submissions",
+    event: "*",
+    filterColumn: "status",
+    filterValue: "new",
+    onEvent: (payload) => {
+      if (isContactSubmissionQueueEntry(payload as RealtimePayload)) {
         scheduleRefresh();
       }
     },

@@ -1,18 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
-const { mockCreateAdminClient, mockCheckRateLimit, mockVerifyTurnstile, mockLogger } = vi.hoisted(
-  () => ({
-    mockCreateAdminClient: vi.fn(),
-    mockCheckRateLimit: vi.fn().mockReturnValue({ limited: false }),
-    mockVerifyTurnstile: vi.fn().mockResolvedValue({ success: true }),
-    mockLogger: {
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-    },
-  })
-);
+const {
+  mockCreateAdminClient,
+  mockCheckRateLimit,
+  mockVerifyTurnstile,
+  mockLogger,
+  mockNotifyStaffForAdminEvent,
+} = vi.hoisted(() => ({
+  mockCreateAdminClient: vi.fn(),
+  mockCheckRateLimit: vi.fn().mockReturnValue({ limited: false }),
+  mockVerifyTurnstile: vi.fn().mockResolvedValue({ success: true }),
+  mockNotifyStaffForAdminEvent: vi.fn().mockResolvedValue(true),
+  mockLogger: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  },
+}));
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/utils/rate-limit", () => ({
@@ -27,6 +32,9 @@ vi.mock("@/lib/utils/logger", () => ({
 }));
 vi.mock("@/lib/utils/mutation-origin", () => ({
   enforceSameOriginMutation: vi.fn().mockReturnValue(null),
+}));
+vi.mock("@/lib/notifications", () => ({
+  notifyStaffForAdminEvent: mockNotifyStaffForAdminEvent,
 }));
 
 import { POST } from "@/app/api/contact/general/route";
@@ -138,6 +146,12 @@ describe("POST /api/contact/general", () => {
       name: "Nomsa",
       category: "general_support",
       email: "nom***",
+    });
+    expect(mockNotifyStaffForAdminEvent).toHaveBeenCalledWith({
+      capability: "queue:view",
+      title: "New support request submitted",
+      message: "Nomsa submitted a general support request.",
+      href: "/admin",
     });
   });
 
