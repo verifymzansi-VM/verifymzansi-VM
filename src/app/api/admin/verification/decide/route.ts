@@ -10,7 +10,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { adminVerificationDecideSchema } from "@/lib/validations/admin";
 import { createLogger } from "@/lib/utils/logger";
-import { verifyCapabilityFromDb, verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
+import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { createNotification } from "@/lib/notifications";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
@@ -48,12 +48,10 @@ export async function POST(request: Request) {
       return unauthorizedResponse();
     }
 
-    const hasCapability = await verifyCapabilityFromDb(user, "decision:approve");
-    if (!hasCapability) {
+    const actorRole = (await verifyStaffActorRoleFromDb(user)) ?? undefined;
+    if (!actorRole) {
       return forbiddenResponse();
     }
-    // Extract role for audit logging (capability check already verified DB role)
-    const adminRole = (await verifyStaffActorRoleFromDb(user)) ?? undefined;
 
     const rl = checkLocalRateLimit(user.id, "admin:verification:decide");
     if (rl.limited) {
@@ -317,7 +315,7 @@ export async function POST(request: Request) {
           try {
             await logAuditEvent({
               actorId: user.id,
-              actorRole: adminRole,
+              actorRole,
               action: "kyc_purge_scheduled",
               targetType: "account_profile",
               targetId: step.user_id,
@@ -412,7 +410,7 @@ export async function POST(request: Request) {
     try {
       await logAuditEvent({
         actorId: user.id,
-        actorRole: adminRole,
+        actorRole,
         action: auditAction as
           | "verification_approved"
           | "verification_rejected"
@@ -498,7 +496,7 @@ export async function POST(request: Request) {
             const result = await sendVerificationApprovedEmail(recipientEmail, accountName);
             await logAuditEvent({
               actorId: user.id,
-              actorRole: adminRole,
+              actorRole,
               action: result.success ? "communication_email_sent" : "communication_email_failed",
               targetType: "account_profile",
               targetId: step.user_id,
@@ -525,7 +523,7 @@ export async function POST(request: Request) {
             );
             await logAuditEvent({
               actorId: user.id,
-              actorRole: adminRole,
+              actorRole,
               action: result.success ? "communication_email_sent" : "communication_email_failed",
               targetType: "account_profile",
               targetId: step.user_id,
@@ -553,7 +551,7 @@ export async function POST(request: Request) {
             );
             await logAuditEvent({
               actorId: user.id,
-              actorRole: adminRole,
+              actorRole,
               action: result.success ? "communication_email_sent" : "communication_email_failed",
               targetType: "account_profile",
               targetId: step.user_id,
