@@ -136,6 +136,80 @@ describe("resolveAccountVerification", () => {
     expect(result.accountVerificationStatus).toBe("incomplete");
   });
 
+  it("uses latest artifact decisions when verification step rows are stale pending", async () => {
+    const client = createMockClient({
+      profile: {
+        id: "profile-1",
+        account_verification_status: "pending_review",
+      },
+      steps: [
+        { user_id: "user-1", step_type: "phone", status: "approved" },
+        { user_id: "user-1", step_type: "id_doc", status: "pending" },
+        { user_id: "user-1", step_type: "selfie", status: "pending" },
+        { user_id: "user-1", step_type: "location", status: "approved" },
+      ],
+      artifacts: [
+        {
+          user_id: "user-1",
+          step_type: "id_doc",
+          status: "approved",
+          created_at: "2026-05-23T12:10:00.000Z",
+        },
+        {
+          user_id: "user-1",
+          step_type: "selfie",
+          status: "rejected",
+          created_at: "2026-05-23T12:11:00.000Z",
+        },
+      ],
+      session: null,
+    });
+
+    const result = await resolveAccountVerification(client as never, "user-1");
+
+    expect(result.accountVerificationStatus).toBe("rejected");
+    expect(result.steps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ step_type: "id_doc", status: "approved" }),
+        expect.objectContaining({ step_type: "selfie", status: "rejected" }),
+      ])
+    );
+  });
+
+  it("lets a newer pending artifact reopen a rejected step after resubmission", async () => {
+    const client = createMockClient({
+      profile: {
+        id: "profile-1",
+        account_verification_status: "rejected",
+      },
+      steps: [
+        { user_id: "user-1", step_type: "phone", status: "approved" },
+        { user_id: "user-1", step_type: "id_doc", status: "rejected" },
+      ],
+      artifacts: [
+        {
+          user_id: "user-1",
+          step_type: "id_doc",
+          status: "rejected",
+          created_at: "2026-05-23T12:10:00.000Z",
+        },
+        {
+          user_id: "user-1",
+          step_type: "id_doc",
+          status: "pending",
+          created_at: "2026-05-23T12:20:00.000Z",
+        },
+      ],
+      session: null,
+    });
+
+    const result = await resolveAccountVerification(client as never, "user-1");
+
+    expect(result.steps).toEqual(
+      expect.arrayContaining([expect.objectContaining({ step_type: "id_doc", status: "pending" })])
+    );
+  });
+
   it("falls back to verification steps when pending artifact recovery fails", async () => {
     const client = {
       from(table: string) {

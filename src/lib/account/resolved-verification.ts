@@ -117,34 +117,52 @@ function mergeRecoveredPendingArtifactSteps(
   steps: VerificationStepRow[],
   pendingArtifacts: PendingArtifactRow[]
 ): { steps: VerificationStepRow[]; recoveredStepTypes: Array<"id_doc" | "selfie"> } {
-  const existingSteps = new Set(
-    steps
-      .map((step) => normalizeRecoverablePendingArtifactStep(step.step_type))
-      .filter((stepType): stepType is "id_doc" | "selfie" => stepType !== null)
-  );
+  const stepMap = new Map(steps.map((step) => [step.step_type, step]));
   const recoveredStepTypes: Array<"id_doc" | "selfie"> = [];
 
-  const recoveredSteps = pendingArtifacts.flatMap((artifact) => {
+  for (const artifact of pendingArtifacts) {
     const stepType = normalizeRecoverablePendingArtifactStep(artifact.step_type);
 
-    if (!stepType || artifact.status !== "pending" || existingSteps.has(stepType)) {
-      return [];
+    if (!stepType || !artifact.status) {
+      continue;
     }
 
-    existingSteps.add(stepType);
-    recoveredStepTypes.push(stepType);
+    const existingStep = stepMap.get(stepType);
+    const recoveredStatus =
+      artifact.status === "approved" ||
+      artifact.status === "rejected" ||
+      artifact.status === "needs_resubmission"
+        ? artifact.status
+        : artifact.status === "pending"
+          ? "pending"
+          : null;
 
-    return [
-      {
+    if (!recoveredStatus) {
+      continue;
+    }
+
+    if (!existingStep) {
+      stepMap.set(stepType, {
         step_type: stepType,
-        status: "pending",
+        status: recoveredStatus,
         submitted_at: artifact.created_at ?? null,
-      } satisfies VerificationStepRow,
-    ];
-  });
+      });
+      recoveredStepTypes.push(stepType);
+      continue;
+    }
+
+    if (existingStep.status !== recoveredStatus) {
+      stepMap.set(stepType, {
+        ...existingStep,
+        status: recoveredStatus,
+        submitted_at: existingStep.submitted_at ?? artifact.created_at ?? null,
+      });
+      recoveredStepTypes.push(stepType);
+    }
+  }
 
   return {
-    steps: [...steps, ...recoveredSteps].sort((left, right) => {
+    steps: [...stepMap.values()].sort((left, right) => {
       const leftIndex = VERIFICATION_STEP_ORDER.indexOf(
         (left.step_type as (typeof VERIFICATION_STEP_ORDER)[number] | undefined) ?? "phone"
       );
@@ -156,6 +174,37 @@ function mergeRecoveredPendingArtifactSteps(
     }),
     recoveredStepTypes,
   };
+}
+
+function latestArtifactByStep(artifacts: PendingArtifactRow[]): PendingArtifactRow[] {
+  const latest = new Map<"id_doc" | "selfie", PendingArtifactRow>();
+
+  for (const artifact of artifacts) {
+    const stepType = normalizeRecoverablePendingArtifactStep(artifact.step_type);
+    if (!stepType) {
+      continue;
+    }
+
+    const status = artifact.status;
+    if (
+      status !== "pending" &&
+      status !== "approved" &&
+      status !== "rejected" &&
+      status !== "needs_resubmission"
+    ) {
+      continue;
+    }
+
+    const current = latest.get(stepType);
+    const artifactTime = Date.parse(artifact.created_at ?? "");
+    const currentTime = Date.parse(current?.created_at ?? "");
+
+    if (!current || Number.isNaN(currentTime) || artifactTime >= currentTime) {
+      latest.set(stepType, artifact);
+    }
+  }
+
+  return [...latest.values()];
 }
 
 function sortVerificationSteps(steps: VerificationStepRow[]): VerificationStepRow[] {
@@ -211,12 +260,11 @@ export async function resolveAccountVerification(
         .from("kyc_artifacts")
         .select("step_type, status, created_at")
         .eq("user_id", userId)
-        .eq("status", "pending")
         .in("step_type", [...RECOVERABLE_PENDING_ARTIFACT_STEPS]);
 
       const recoveredPendingSteps = mergeRecoveredPendingArtifactSteps(
         steps,
-        (pendingArtifactsResult.data as PendingArtifactRow[] | null) ?? []
+        latestArtifactByStep((pendingArtifactsResult.data as PendingArtifactRow[] | null) ?? [])
       );
 
       steps = recoveredPendingSteps.steps;
