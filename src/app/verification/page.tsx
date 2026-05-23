@@ -79,8 +79,8 @@ const REVIEWABLE_STEP_ORDER: VerificationStepType[] = ["phone", "id_doc", "selfi
 const STEP_STATUS_PRIORITY: Record<VerificationStatus, number> = {
   rejected: 4,
   needs_resubmission: 3,
-  pending: 2,
-  approved: 1,
+  approved: 2,
+  pending: 1,
 };
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
@@ -2610,9 +2610,7 @@ export default function VerificationPage() {
                         ? "approved"
                         : stepType === "phone" && isPhoneReady
                           ? "approved"
-                          : verificationInAdminReview
-                            ? "pending"
-                            : (statusEntry?.status ?? "pending");
+                          : (statusEntry?.status ?? "pending");
                       return (
                         <div
                           key={stepType}

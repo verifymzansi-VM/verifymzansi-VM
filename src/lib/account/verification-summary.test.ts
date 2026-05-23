@@ -115,6 +115,20 @@ describe("summarizeVerification", () => {
     expect(summary.allStepsApproved).toBe(false);
   });
 
+  it("does not let stale pending rows hide approved admin decisions", () => {
+    const summary = summarizeVerification("pending_review", [
+      { step_type: "phone", status: "approved" },
+      { step_type: "id_doc", status: "approved", reviewed_at: "2026-04-20T10:00:00.000Z" },
+      { step_type: "id_doc", status: "pending" },
+      { step_type: "selfie", status: "pending" },
+      { step_type: "location", status: "approved" },
+    ]);
+
+    expect(summary.approvedStepCount).toBe(3);
+    expect(summary.submittedStepCount).toBe(4);
+    expect(summary.accountVerificationStatus).toBe("pending_review");
+  });
+
   it("does not let a stale verified profile hide a resubmission step", () => {
     const summary = summarizeVerification("verified", [
       { step_type: "phone", status: "approved" },

@@ -49,8 +49,8 @@ function mergeStepStatus(
   const priority: Record<VerificationStatus, number> = {
     rejected: 4,
     needs_resubmission: 3,
-    pending: 2,
-    approved: 1,
+    approved: 2,
+    pending: 1,
   };
 
   return !current || priority[next] > priority[current] ? next : current;

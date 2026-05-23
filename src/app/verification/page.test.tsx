@@ -246,6 +246,51 @@ describe("VerificationPage", () => {
     );
   });
 
+  it("shows per-step approval decisions on the submitted summary", async () => {
+    sessionResponse = jsonResponse(
+      {
+        sessionId: "session-partial-admin-decisions",
+        completedSteps: ["phone", "id_doc", "selfie", "location"],
+        pendingSteps: [],
+        requiredSteps: ["phone", "id_doc", "selfie", "location"],
+        finalizedAt: "2026-05-23T12:00:00.000Z",
+        phoneVerifiedAt: "2026-05-23T11:00:00.000Z",
+      },
+      200
+    );
+    statusResponse = jsonResponse(
+      buildStatusPayload({
+        accountVerificationStatus: "pending_review",
+        steps: [
+          { step_type: "phone", status: "approved" },
+          {
+            step_type: "id_doc",
+            status: "approved",
+            reviewed_at: "2026-05-23T12:10:00.000Z",
+          },
+          { step_type: "id_doc", status: "pending" },
+          { step_type: "selfie", status: "pending" },
+          { step_type: "location", status: "approved" },
+        ],
+      }),
+      200
+    );
+
+    render(<VerificationPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByRole("heading", { name: /Verification Submitted/i }).length
+      ).toBeGreaterThan(0);
+    });
+
+    expect(within(screen.getByText("id doc").closest("div")!).getByText("Approved")).toBeTruthy();
+    expect(
+      within(screen.getByText("selfie").closest("div")!).getByText("Pending Review")
+    ).toBeTruthy();
+    expect(within(screen.getByText("location").closest("div")!).getByText("Approved")).toBeTruthy();
+  });
+
   it("shows a neutral status check before rendering any verification step", async () => {
     render(<VerificationPage />);
 
