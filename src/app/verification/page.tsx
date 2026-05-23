@@ -333,6 +333,46 @@ function formatStatusLabel(status: VerificationStatus): string {
   }
 }
 
+function getStepLabel(stepType: VerificationStepType): string {
+  switch (stepType) {
+    case "id_doc":
+      return "ID document";
+    case "selfie":
+      return "selfie";
+    case "location":
+      return "location";
+    case "phone":
+      return "phone";
+    default:
+      return stepType;
+  }
+}
+
+function getFallbackRejectionReason(stepType: VerificationStepType): string {
+  switch (stepType) {
+    case "id_doc":
+      return "Your ID document was not accepted. Upload a clear photo showing the full document and all details.";
+    case "selfie":
+      return "Your selfie was not accepted. Retake a clear live selfie with your face fully visible.";
+    case "location":
+      return "Your location could not be verified. Confirm your province and city, then save your address again.";
+    case "phone":
+      return "Your phone verification was not accepted. Please verify your number again.";
+    default:
+      return "This verification step was not accepted. Please submit it again.";
+  }
+}
+
+function getStepStatusDetail(entry: StepStatusEntry | null | undefined): string | null {
+  if (!entry) return null;
+  if (entry.reason_note) return entry.reason_note;
+  if (entry.reason_code) return `Reason: ${formatReasonCode(entry.reason_code)}`;
+  if (entry.status === "rejected" || entry.status === "needs_resubmission") {
+    return getFallbackRejectionReason(entry.step_type);
+  }
+  return null;
+}
+
 function getStatusBannerClasses(status: VerificationStatus): string {
   switch (status) {
     case "approved":
@@ -1631,31 +1671,8 @@ export default function VerificationPage() {
       }));
     }
 
-    // Find the first step that is incomplete, rejected, or needs resubmission
-    // Steps after this one should not appear "approved" even if the server says so,
-    // because the earlier step blocks the flow.
-    let firstIncompleteIdx = REVIEWABLE_STEP_ORDER.length;
-    for (let i = 0; i < REVIEWABLE_STEP_ORDER.length; i++) {
-      const s = serverStepMap.get(REVIEWABLE_STEP_ORDER[i]);
-      if (!s || s.status === "rejected" || s.status === "needs_resubmission") {
-        firstIncompleteIdx = i;
-        break;
-      }
-    }
-
-    const entries = REVIEWABLE_STEP_ORDER.flatMap((stepType, idx) => {
+    const entries = REVIEWABLE_STEP_ORDER.flatMap((stepType) => {
       const persisted = serverStepMap.get(stepType);
-
-      // If this step is after an incomplete earlier step, cap its display
-      if (idx > firstIncompleteIdx) {
-        if (!persisted) return [];
-        // Show persisted status but don't let it appear as "approved"
-        // when an earlier step still blocks the flow
-        if (persisted.status === "approved" || persisted.status === "pending") {
-          return [{ type: stepType, status: "pending" as const }];
-        }
-        return [{ type: stepType, status: persisted.status }];
-      }
 
       if (persisted) {
         return [{ type: stepType, status: persisted.status }];
@@ -1681,6 +1698,7 @@ export default function VerificationPage() {
   const idDocumentStatus = serverStepMap.get("id_doc")?.status;
   const selfieStatus = serverStepMap.get("selfie")?.status;
   const locationStatus = serverStepMap.get("location")?.status;
+  const currentStepStatusDetail = getStepStatusDetail(currentStepStatus);
 
   if (_sessionLoading) {
     return (
@@ -1765,8 +1783,13 @@ export default function VerificationPage() {
                 <CardContent className="space-y-2 p-4 text-sm">
                   <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-destructive">
                     <p className="font-medium">
-                      Action needed on {reviewAttentionStep.replace("_", " ")}.
+                      Action needed on {getStepLabel(reviewAttentionStep)}.
                     </p>
+                    {getStepStatusDetail(serverStepMap.get(reviewAttentionStep)) && (
+                      <p className="mt-1 text-xs">
+                        {getStepStatusDetail(serverStepMap.get(reviewAttentionStep))}
+                      </p>
+                    )}
                     <p className="mt-1 text-xs">
                       Review the notes on that step, replace the document if needed, and submit
                       again.
@@ -1838,8 +1861,8 @@ export default function VerificationPage() {
                       className={`rounded-md border p-3 text-sm ${getStatusBannerClasses(currentStepStatus.status)}`}
                     >
                       <p className="font-medium">{formatStatusLabel(currentStepStatus.status)}</p>
-                      {currentStepStatus.reason_note && (
-                        <p className="mt-1 text-xs">{currentStepStatus.reason_note}</p>
+                      {currentStepStatusDetail && (
+                        <p className="mt-1 text-xs">{currentStepStatusDetail}</p>
                       )}
                     </div>
                   )}
@@ -1978,13 +2001,8 @@ export default function VerificationPage() {
                       className={`rounded-md border p-3 text-sm ${getStatusBannerClasses(currentStepStatus.status)}`}
                     >
                       <p className="font-medium">{formatStatusLabel(currentStepStatus.status)}</p>
-                      {currentStepStatus.reason_note && (
-                        <p className="mt-1 text-xs">{currentStepStatus.reason_note}</p>
-                      )}
-                      {!currentStepStatus.reason_note && currentStepStatus.reason_code && (
-                        <p className="mt-1 text-xs">
-                          Reason: {formatReasonCode(currentStepStatus.reason_code)}
-                        </p>
+                      {currentStepStatusDetail && (
+                        <p className="mt-1 text-xs">{currentStepStatusDetail}</p>
                       )}
                       {(currentStepStatus.status === "rejected" ||
                         currentStepStatus.status === "needs_resubmission") && (
@@ -2155,13 +2173,8 @@ export default function VerificationPage() {
                       className={`rounded-md border p-3 text-sm ${getStatusBannerClasses(currentStepStatus.status)}`}
                     >
                       <p className="font-medium">{formatStatusLabel(currentStepStatus.status)}</p>
-                      {currentStepStatus.reason_note && (
-                        <p className="mt-1 text-xs">{currentStepStatus.reason_note}</p>
-                      )}
-                      {!currentStepStatus.reason_note && currentStepStatus.reason_code && (
-                        <p className="mt-1 text-xs">
-                          Reason: {formatReasonCode(currentStepStatus.reason_code)}
-                        </p>
+                      {currentStepStatusDetail && (
+                        <p className="mt-1 text-xs">{currentStepStatusDetail}</p>
                       )}
                       {(currentStepStatus.status === "rejected" ||
                         currentStepStatus.status === "needs_resubmission") && (
@@ -2260,13 +2273,8 @@ export default function VerificationPage() {
                         className={`rounded-md border p-3 text-sm ${getStatusBannerClasses(currentStepStatus.status)}`}
                       >
                         <p className="font-medium">{formatStatusLabel(currentStepStatus.status)}</p>
-                        {currentStepStatus.reason_note && (
-                          <p className="mt-1 text-xs">{currentStepStatus.reason_note}</p>
-                        )}
-                        {!currentStepStatus.reason_note && currentStepStatus.reason_code && (
-                          <p className="mt-1 text-xs">
-                            Reason: {formatReasonCode(currentStepStatus.reason_code)}
-                          </p>
+                        {currentStepStatusDetail && (
+                          <p className="mt-1 text-xs">{currentStepStatusDetail}</p>
                         )}
                         {(currentStepStatus.status === "rejected" ||
                           currentStepStatus.status === "needs_resubmission") && (
@@ -2622,9 +2630,9 @@ export default function VerificationPage() {
                             </span>
                             <Badge variant="outline">{formatStatusLabel(displayStatus)}</Badge>
                           </div>
-                          {statusEntry?.reason_note && (
+                          {getStepStatusDetail(statusEntry) && (
                             <p className="mt-1 text-xs text-muted-foreground">
-                              {statusEntry.reason_note}
+                              {getStepStatusDetail(statusEntry)}
                             </p>
                           )}
                         </div>

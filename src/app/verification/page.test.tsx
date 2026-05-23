@@ -494,7 +494,7 @@ describe("VerificationPage", () => {
     await waitFor(() => {
       expect(screen.getByText(/Action needed on id doc/i)).toBeInTheDocument();
     });
-    expect(screen.getByText(/Please upload a clearer ID photo/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Please upload a clearer ID photo/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Step 2: ID details/i)).toBeInTheDocument();
     expect(screen.queryByText(/Verification Approved/i)).not.toBeInTheDocument();
   });
@@ -568,9 +568,46 @@ describe("VerificationPage", () => {
       expect(screen.getByText(/Needs resubmission/i)).toBeInTheDocument();
     });
     expect(
-      screen.getByText(/Please upload a clearer photo of the full ID card/i)
-    ).toBeInTheDocument();
+      screen.getAllByText(/Please upload a clearer photo of the full ID card/i).length
+    ).toBeGreaterThan(0);
     expect(screen.getByText(/Action needed on id doc/i)).toBeInTheDocument();
+  });
+
+  it("shows rejected selfie guidance without hiding an approved location", async () => {
+    sessionResponse = jsonResponse(
+      {
+        sessionId: "session-selfie-rejected-location-approved",
+        completedSteps: ["phone", "id_doc", "location"],
+        pendingSteps: [],
+        requiredSteps: ["phone", "id_doc", "selfie", "location"],
+        finalizedAt: "2026-05-23T12:00:00.000Z",
+        phoneVerifiedAt: "2026-05-23T11:50:00.000Z",
+      },
+      200
+    );
+    statusResponse = jsonResponse(
+      buildStatusPayload({
+        accountVerificationStatus: "rejected",
+        steps: [
+          { step_type: "phone", status: "approved" },
+          { step_type: "id_doc", status: "approved" },
+          { step_type: "selfie", status: "rejected" },
+          { step_type: "location", status: "approved" },
+        ],
+      }),
+      200
+    );
+
+    render(<VerificationPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Action needed on selfie/i)).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getAllByText(/Your selfie was not accepted\. Retake a clear live selfie/i).length
+    ).toBeGreaterThan(0);
+    expect(screen.getByLabelText(/Location: approved/i)).toBeInTheDocument();
   });
 
   it("never renders OTP helper hints after sending a real OTP", async () => {
