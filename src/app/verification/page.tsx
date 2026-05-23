@@ -418,6 +418,15 @@ function buildServerStepMap(statusSteps: StepStatusEntry[]) {
   return stepStatusMap;
 }
 
+function areAllReviewStepsSubmitted(statusSteps: StepStatusEntry[]) {
+  const stepStatusMap = buildStepStatusMap(statusSteps);
+
+  return REVIEWABLE_STEP_ORDER.every((stepType) => {
+    const status = stepStatusMap.get(stepType);
+    return status === "approved" || status === "pending";
+  });
+}
+
 function getInitialWizardStep({
   statusSteps,
   phoneDone,
@@ -1399,7 +1408,17 @@ export default function VerificationPage() {
     setIsUploadingSelfie(true);
     try {
       await uploadSelfieIfNeeded();
-      await syncVerificationStatus();
+      const statusSnapshot = await syncVerificationStatus();
+      if (statusSnapshot?.steps && areAllReviewStepsSubmitted(statusSnapshot.steps)) {
+        setStep("complete");
+        toast({
+          title: "Verification submitted",
+          description: "Your selfie has been submitted. Your verification is pending admin review.",
+          variant: "success",
+        });
+        return;
+      }
+
       setStep("location");
     } catch (err) {
       const isEmailBlocker =
@@ -1664,13 +1683,6 @@ export default function VerificationPage() {
       }));
     }
 
-    if (verificationInAdminReview) {
-      return REVIEWABLE_STEP_ORDER.map((stepType) => ({
-        type: stepType,
-        status: "pending" as const,
-      }));
-    }
-
     const entries = REVIEWABLE_STEP_ORDER.flatMap((stepType) => {
       const persisted = serverStepMap.get(stepType);
 
@@ -1691,7 +1703,7 @@ export default function VerificationPage() {
     }
 
     return entries;
-  }, [accountVerified, completedSteps, serverStepMap, step, verificationInAdminReview]);
+  }, [accountVerified, completedSteps, serverStepMap, step]);
 
   const currentStepNumber = step === "complete" ? 4 : STEP_ORDER.indexOf(step) + 1;
   const currentStepStatus = step === "complete" ? null : serverStepMap.get(step);

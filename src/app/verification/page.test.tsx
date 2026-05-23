@@ -610,6 +610,64 @@ describe("VerificationPage", () => {
     expect(screen.getByLabelText(/Location: approved/i)).toBeInTheDocument();
   });
 
+  it("returns to pending status after resubmitting selfie when location is already approved", async () => {
+    sessionResponse = jsonResponse(
+      {
+        sessionId: "session-selfie-resubmit-location-approved",
+        completedSteps: ["phone", "id_doc", "location"],
+        pendingSteps: [],
+        requiredSteps: ["phone", "id_doc", "selfie", "location"],
+        finalizedAt: "2026-05-23T12:00:00.000Z",
+        phoneVerifiedAt: "2026-05-23T11:50:00.000Z",
+      },
+      200
+    );
+    statusResponse = jsonResponse(
+      buildStatusPayload({
+        accountVerificationStatus: "rejected",
+        steps: [
+          { step_type: "phone", status: "approved" },
+          { step_type: "id_doc", status: "approved" },
+          { step_type: "selfie", status: "rejected" },
+          { step_type: "location", status: "approved" },
+        ],
+      }),
+      200
+    );
+
+    render(<VerificationPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Step 3: Selfie/i)).toBeInTheDocument();
+    });
+
+    statusResponse = jsonResponse(
+      buildStatusPayload({
+        accountVerificationStatus: "pending_review",
+        steps: [
+          { step_type: "phone", status: "approved" },
+          { step_type: "id_doc", status: "approved" },
+          { step_type: "selfie", status: "pending", submitted_at: "2026-05-24T08:00:00.000Z" },
+          { step_type: "location", status: "approved" },
+        ],
+      }),
+      200
+    );
+
+    await openCameraAndUseFileFallback(
+      new File(["fake-selfie"], "selfie.jpg", { type: "image/jpeg" })
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/Verification Submitted/i).length).toBeGreaterThan(0);
+    });
+    expect(screen.getByText(/Everything was submitted to admin/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Selfie: pending/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Location: approved/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Step 4: Verify Your Address/i)).not.toBeInTheDocument();
+  });
+
   it("never renders OTP helper hints after sending a real OTP", async () => {
     render(<VerificationPage />);
 
