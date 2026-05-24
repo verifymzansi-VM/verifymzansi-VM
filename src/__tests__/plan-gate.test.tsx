@@ -360,6 +360,113 @@ describe("PlanGate", () => {
     });
   });
 
+  it("shows pending payment recovery actions and can cancel the pending checkout", async () => {
+    const pendingPaymentId = "550e8400-e29b-41d4-a716-446655440001";
+    vi.mocked(global.fetch)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        json: async () => ({
+          error:
+            "You already have a pending payment for this area. Continue the payment or cancel it before choosing another plan.",
+          code: "PENDING_PAYMENT_EXISTS",
+          pendingPayment: {
+            id: pendingPaymentId,
+            checkoutUrl: "https://pay.ozow.com/resume/pay-pending",
+            statusUrl: `/billing/success?payment=${pendingPaymentId}`,
+            canCancel: true,
+          },
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true, paymentId: pendingPaymentId, status: "failed" }),
+      } as Response);
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "account_profiles") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: { id: "sp-1", created_at: new Date().toISOString() },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "entitlements") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  gt: vi.fn().mockReturnValue({
+                    order: vi.fn().mockReturnValue({
+                      limit: vi.fn().mockReturnValue({
+                        maybeSingle: vi.fn().mockResolvedValue({
+                          data: null,
+                          error: null,
+                        }),
+                      }),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "listings") {
+        return createCountQuery(0);
+      }
+      if (table === "free_posts_used") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                is: vi.fn().mockResolvedValue({ count: 1, error: null }),
+              }),
+            }),
+          }),
+        };
+      }
+
+      return {};
+    });
+
+    render(
+      <PlanGate area={"MZANSI_MARKET" as never}>
+        <div>Protected Content</div>
+      </PlanGate>
+    );
+
+    await screen.findByRole("button", { name: /choose starter/i });
+    fireEvent.click(screen.getByRole("button", { name: /choose starter/i }));
+
+    expect(await screen.findByRole("button", { name: /continue payment/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /check status/i })).toHaveAttribute(
+      "href",
+      `/billing/success?payment=${pendingPaymentId}`
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /cancel pending payment/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByText(/checkout unavailable/i)).toBeNull();
+    });
+
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      "/api/billing/cancel-pending",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.any(Headers),
+        body: JSON.stringify({ paymentId: pendingPaymentId }),
+      })
+    );
+  });
+
   it("shows the free-post trial state when one free post remains", async () => {
     mockFrom.mockImplementation((table: string) => {
       if (table === "account_profiles") {

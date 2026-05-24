@@ -65,6 +65,13 @@ interface PlanInfo {
   videoAllowed: boolean;
 }
 
+interface PendingPaymentRecovery {
+  id: string;
+  checkoutUrl?: string | null;
+  statusUrl?: string | null;
+  canCancel?: boolean;
+}
+
 const AREA_LABELS: Record<MarketplaceArea, string> = {
   MZANSI_MARKET: "Mzansi Market",
   MALL_SHOPS: "Mall Shops",
@@ -256,6 +263,66 @@ function InlinePlanGrid({
   );
 }
 
+function CheckoutRecoveryNotice({
+  checkoutError,
+  pendingPayment,
+  cancellingPayment,
+  onCancelPendingPayment,
+}: {
+  checkoutError: string | null;
+  pendingPayment: PendingPaymentRecovery | null;
+  cancellingPayment: boolean;
+  onCancelPendingPayment: (paymentId: string) => void;
+}) {
+  if (!checkoutError) return null;
+
+  return (
+    <Card className="border-destructive/50 bg-destructive/5">
+      <CardContent className="space-y-3 p-4 text-sm">
+        <p className="font-medium text-destructive">Checkout unavailable</p>
+        <p className="mt-1 text-muted-foreground">{checkoutError}</p>
+        {pendingPayment && (
+          <div className="flex flex-wrap gap-2">
+            {pendingPayment.checkoutUrl && (
+              <Button
+                size="sm"
+                className="gap-2"
+                onClick={() => {
+                  window.location.href = pendingPayment.checkoutUrl ?? "";
+                }}
+              >
+                Continue payment <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            {pendingPayment.statusUrl && (
+              <Button asChild size="sm" variant="outline">
+                <Link href={pendingPayment.statusUrl}>Check status</Link>
+              </Button>
+            )}
+            {pendingPayment.canCancel && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={cancellingPayment}
+                onClick={() => onCancelPendingPayment(pendingPayment.id)}
+              >
+                {cancellingPayment ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    Cancelling
+                  </>
+                ) : (
+                  "Cancel pending payment"
+                )}
+              </Button>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 /* ─────────────────────────────────────────────────────────────
    PlanGate — main component
    ───────────────────────────────────────────────────────────── */
@@ -266,6 +333,8 @@ export function PlanGate({ area, children }: PlanGateProps) {
   const [error, setError] = useState<string | null>(null);
   const [subscribing, setSubscribing] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [pendingPayment, setPendingPayment] = useState<PendingPaymentRecovery | null>(null);
+  const [cancellingPayment, setCancellingPayment] = useState(false);
 
   useEffect(() => {
     if (isPlaywrightTestMode()) {
@@ -424,6 +493,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
     const key = `${plan.area}-${plan.tier}`;
     setSubscribing(key);
     setCheckoutError(null);
+    setPendingPayment(null);
     try {
       // Use the checkout API
       const res = await fetch("/api/billing/create-checkout", {
@@ -434,6 +504,17 @@ export function PlanGate({ area, children }: PlanGateProps) {
       const data = await res.json();
       if (data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
+        return;
+      }
+
+      if (data.pendingPayment && typeof data.pendingPayment.id === "string") {
+        setPendingPayment(data.pendingPayment);
+        setCheckoutError(data.error || "You already have a pending payment for this area.");
+        toast({
+          title: "Payment already started",
+          description: "Continue or cancel the pending payment before choosing another plan.",
+          variant: "destructive",
+        });
         return;
       }
 
@@ -450,6 +531,42 @@ export function PlanGate({ area, children }: PlanGateProps) {
       });
     } finally {
       setSubscribing(null);
+    }
+  }
+
+  async function handleCancelPendingPayment(paymentId: string) {
+    setCancellingPayment(true);
+    try {
+      const res = await fetch("/api/billing/cancel-pending", {
+        method: "POST",
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ paymentId }),
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Could not cancel pending payment");
+      }
+
+      setPendingPayment(null);
+      setCheckoutError(null);
+      toast({
+        title: "Pending payment cancelled",
+        description: "You can choose a payment plan again.",
+      });
+    } catch (err) {
+      logger.error("Pending payment cancellation error", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      const errorMessage = err instanceof Error ? err.message : "Could not cancel pending payment";
+      setCheckoutError(`${errorMessage}. Please try again.`);
+      toast({
+        title: "Cancellation failed",
+        description: `${errorMessage}. Please try again.`,
+        variant: "destructive",
+      });
+    } finally {
+      setCancellingPayment(false);
     }
   }
 
@@ -544,6 +661,13 @@ export function PlanGate({ area, children }: PlanGateProps) {
           </p>
         </div>
 
+        <CheckoutRecoveryNotice
+          checkoutError={checkoutError}
+          pendingPayment={pendingPayment}
+          cancellingPayment={cancellingPayment}
+          onCancelPendingPayment={handleCancelPendingPayment}
+        />
+
         <InlinePlanGrid plans={areaPlans} onSubscribe={handleSubscribe} subscribing={subscribing} />
 
         <p className="text-center text-xs text-muted-foreground">
@@ -587,6 +711,13 @@ export function PlanGate({ area, children }: PlanGateProps) {
           </CardContent>
         </Card>
 
+        <CheckoutRecoveryNotice
+          checkoutError={checkoutError}
+          pendingPayment={pendingPayment}
+          cancellingPayment={cancellingPayment}
+          onCancelPendingPayment={handleCancelPendingPayment}
+        />
+
         {upgradePlans.length > 0 && (
           <InlinePlanGrid
             plans={upgradePlans}
@@ -608,6 +739,9 @@ export function PlanGate({ area, children }: PlanGateProps) {
         onSubscribe={handleSubscribe}
         subscribing={subscribing}
         checkoutError={checkoutError}
+        pendingPayment={pendingPayment}
+        cancellingPayment={cancellingPayment}
+        onCancelPendingPayment={handleCancelPendingPayment}
       >
         {children}
       </PlanPickerWithTrial>
@@ -662,6 +796,9 @@ function PlanPickerWithTrial({
   onSubscribe,
   subscribing,
   checkoutError,
+  pendingPayment,
+  cancellingPayment,
+  onCancelPendingPayment,
   children,
 }: {
   area: MarketplaceArea;
@@ -670,6 +807,9 @@ function PlanPickerWithTrial({
   onSubscribe: (plan: PlanDefinition) => void;
   subscribing: string | null;
   checkoutError: string | null;
+  pendingPayment: PendingPaymentRecovery | null;
+  cancellingPayment: boolean;
+  onCancelPendingPayment: (paymentId: string) => void;
   children: ReactNode;
 }) {
   const [showForm, setShowForm] = useState(false);
@@ -714,12 +854,12 @@ function PlanPickerWithTrial({
   return (
     <div className="space-y-3">
       {checkoutError && (
-        <Card className="border-destructive/50 bg-destructive/5">
-          <CardContent className="p-4 text-sm">
-            <p className="font-medium text-destructive">Checkout unavailable</p>
-            <p className="mt-1 text-muted-foreground">{checkoutError}</p>
-          </CardContent>
-        </Card>
+        <CheckoutRecoveryNotice
+          checkoutError={checkoutError}
+          pendingPayment={pendingPayment}
+          cancellingPayment={cancellingPayment}
+          onCancelPendingPayment={onCancelPendingPayment}
+        />
       )}
       {/* Header + Free Post Combined */}
       {planInfo.isTrial ? (

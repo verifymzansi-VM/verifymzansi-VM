@@ -598,7 +598,7 @@ describe("POST /api/billing/create-checkout", () => {
     expect(data.error).toContain("already have an active subscription");
   });
 
-  it("returns 409 when a pending payment already exists for the area", async () => {
+  it("returns 409 with recovery actions when a pending payment already exists for the area", async () => {
     mockAdmin.from.mockImplementation((table: string) => {
       if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
@@ -625,7 +625,13 @@ describe("POST /api/billing/create-checkout", () => {
         return createEntitlementsTableMock({ data: null });
       }
       if (table === "payments") {
-        return createPaymentsSelectMock({ data: { id: "pay-pending" } });
+        return createPaymentsSelectMock({
+          data: {
+            id: "550e8400-e29b-41d4-a716-446655440001",
+            status: "pending",
+            provider_data: { checkout_url: "https://pay.ozow.com/resume/pay-pending" },
+          },
+        });
       }
     });
 
@@ -636,6 +642,14 @@ describe("POST /api/billing/create-checkout", () => {
 
     expect(res.status).toBe(409);
     expect(data.error).toContain("pending payment");
+    expect(data.code).toBe("PENDING_PAYMENT_EXISTS");
+    expect(data.pendingPayment).toEqual({
+      id: "550e8400-e29b-41d4-a716-446655440001",
+      checkoutUrl: "https://pay.ozow.com/resume/pay-pending",
+      statusUrl:
+        "https://verifymzansi.com/billing/success?payment=550e8400-e29b-41d4-a716-446655440001",
+      canCancel: true,
+    });
   });
 
   it("returns 500 when profile fetch encounters a DB error", async () => {

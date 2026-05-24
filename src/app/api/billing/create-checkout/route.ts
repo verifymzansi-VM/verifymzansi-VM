@@ -24,6 +24,38 @@ const checkoutSchema = z.object({
     .optional(),
 });
 
+function getCheckoutUrl(providerData: unknown): string | null {
+  if (!providerData || typeof providerData !== "object" || Array.isArray(providerData)) {
+    return null;
+  }
+
+  const checkoutUrl = (providerData as Record<string, unknown>).checkout_url;
+  return typeof checkoutUrl === "string" && checkoutUrl.startsWith("https://") ? checkoutUrl : null;
+}
+
+function buildPendingPaymentResponse({
+  appUrl,
+  pendingPayment,
+}: {
+  appUrl: string;
+  pendingPayment: { id: string; status?: string; provider_data?: unknown };
+}) {
+  return NextResponse.json(
+    {
+      error:
+        "You already have a pending payment for this area. Continue the payment or cancel it before choosing another plan.",
+      code: "PENDING_PAYMENT_EXISTS",
+      pendingPayment: {
+        id: pendingPayment.id,
+        checkoutUrl: getCheckoutUrl(pendingPayment.provider_data),
+        statusUrl: `${appUrl}/billing/success?payment=${pendingPayment.id}`,
+        canCancel: pendingPayment.status === "pending",
+      },
+    },
+    { status: 409 }
+  );
+}
+
 /**
  * POST /api/billing/create-checkout
  *
@@ -136,7 +168,7 @@ export async function POST(request: NextRequest) {
     // ── Prevent duplicate in-flight payments ─────────────
     const { data: pendingPayment, error: pendingError } = await getAdmin()
       .from("payments")
-      .select("id")
+      .select("id, status, provider_data")
       .eq("user_id", user.id)
       .eq("area", plan.area)
       .in("status", ["pending", "processing"])
@@ -152,19 +184,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unable to verify payment status" }, { status: 503 });
     }
 
-    if (pendingPayment) {
-      return NextResponse.json(
-        {
-          error:
-            "You already have a pending payment for this area. Please wait for it to complete or cancel it.",
-        },
-        { status: 409 }
-      );
-    }
-
     const appUrlResult = resolveSafeBillingAppUrl(log);
     if (appUrlResult.response) return appUrlResult.response;
     const appUrl = appUrlResult.appUrl;
+
+    if (pendingPayment) {
+      return buildPendingPaymentResponse({
+        appUrl,
+        pendingPayment: pendingPayment as { id: string; status?: string; provider_data?: unknown },
+      });
+    }
 
     let paymentId: string;
     let checkoutUrl: string;
@@ -192,10 +221,32 @@ export async function POST(request: NextRequest) {
 
       // Race-condition duplicate caught by DB unique index
       if (message === "A checkout for this area is already in progress") {
+        const { data: racePendingPayment } = await getAdmin()
+          .from("payments")
+          .select("id, status, provider_data")
+          .eq("user_id", user.id)
+          .eq("area", plan.area)
+          .in("status", ["pending", "processing"])
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (racePendingPayment) {
+          return buildPendingPaymentResponse({
+            appUrl,
+            pendingPayment: racePendingPayment as {
+              id: string;
+              status?: string;
+              provider_data?: unknown;
+            },
+          });
+        }
+
         return NextResponse.json(
           {
             error:
-              "You already have a pending payment for this area. Please wait for it to complete or cancel it.",
+              "You already have a pending payment for this area. Please wait a moment, then try again.",
+            code: "PENDING_PAYMENT_EXISTS",
           },
           { status: 409 }
         );
