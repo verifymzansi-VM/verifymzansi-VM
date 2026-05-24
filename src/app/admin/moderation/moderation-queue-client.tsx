@@ -40,6 +40,7 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
     submitDecision,
   } = useContentDecision<ModerationItem>({
     getArea: (item) => item.area,
+    getContentType: (item) => item.contentType,
     getEndpoint: (item) =>
       item.isEditRequest ? "/api/admin/content-edits/decide" : "/api/admin/content/decide",
     onDecisionComplete: () => {

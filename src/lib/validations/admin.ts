@@ -19,6 +19,7 @@ export const adminContentDecideSchema = z
     decision: z.enum(["approve", "reject"], {
       message: "decision must be approve or reject",
     }),
+    contentType: z.enum(["listing", "business", "promotion"]).optional(),
     reason: optionalTrimmedStringSchema.pipe(z.string().max(500).optional()),
   })
   .refine((data) => data.decision === "approve" || (data.reason && data.reason.trim().length > 0), {

@@ -242,14 +242,16 @@ export async function getAreaCardCounts(): Promise<
   // Reports counts by area — map target_type to area
   const { data: openReports } = await supabase
     .from("reports")
-    .select("target_type")
+    .select("target_type, area")
     .eq("status", "open")
     .limit(10000);
 
   const { pendingListings, pendingBusinesses, pendingTourismBusinesses, pendingPromotions } =
     await getPendingModerationCountsByArea();
 
-  // Map target_type to area
+  // Map target_type to area. Prefer the explicit report area when present so
+  // tourism/hospitality businesses stay with Tourism & Events instead of the
+  // generic business bucket.
   const flagCounts = {
     MZANSI_MARKET: 0,
     BUSINESS_ADS: 0,
@@ -258,6 +260,12 @@ export async function getAreaCardCounts(): Promise<
     PROMOTIONS_EVENTS: 0,
   };
   for (const r of openReports || []) {
+    const explicitArea = (r as { area?: MarketplaceArea | null }).area;
+    if (explicitArea && explicitArea in flagCounts) {
+      flagCounts[explicitArea]++;
+      continue;
+    }
+
     if (r.target_type === "listing" || r.target_type === "account_profile")
       flagCounts.MZANSI_MARKET++;
     if (
@@ -684,34 +692,111 @@ export async function getAreaReports(area: MarketplaceArea) {
   const { data } = await supabase
     .from("reports")
     .select("*")
-    .in("target_type", targetTypeMap[area])
     .in("status", ["open", "in_progress"])
     .order("created_at", { ascending: true })
     .limit(100);
 
-  return data || [];
+  return (data || []).filter((report) => {
+    const explicitArea = (report as { area?: MarketplaceArea | null }).area;
+    if (explicitArea) return explicitArea === area;
+    return targetTypeMap[area].includes((report as { target_type: string }).target_type);
+  });
 }
 
 /** Get content pending moderation for an area */
 export async function getPendingContent(area: MarketplaceArea) {
   const supabase = createAdminClient();
 
-  const tableMap: Record<MarketplaceArea, string> = {
-    MZANSI_MARKET: "listings",
-    BUSINESS_ADS: "businesses",
-    MALL_SHOPS: "businesses",
-    MZANSI_BUSINESS: "businesses",
-    PROMOTIONS_EVENTS: "promotions",
-  };
+  if (area === "MZANSI_MARKET") {
+    const { data } = await supabase
+      .from("listings")
+      .select("*")
+      .eq("status", "pending_moderation")
+      .order("created_at", { ascending: true })
+      .limit(50);
+
+    return (data || []).map((item) => ({
+      ...item,
+      title: item.title,
+      itemType: "Listing",
+      contentType: "listing",
+      area: "MZANSI_MARKET",
+      areaLabel: "Mzansi Market",
+    }));
+  }
+
+  if (area === "MZANSI_BUSINESS") {
+    const { data } = await supabase
+      .from("businesses")
+      .select("*")
+      .eq("area", "MZANSI_BUSINESS")
+      .neq("category", "tourism_hospitality")
+      .eq("status", "pending_moderation")
+      .order("created_at", { ascending: true })
+      .limit(50);
+
+    return (data || []).map((item) => ({
+      ...item,
+      title: item.business_name,
+      itemType: "Business",
+      contentType: "business",
+      area: "MZANSI_BUSINESS",
+      areaLabel: "Mzansi Business",
+    }));
+  }
+
+  if (area === "PROMOTIONS_EVENTS") {
+    const [{ data: promotions }, { data: tourismBusinesses }] = await Promise.all([
+      supabase
+        .from("promotions")
+        .select("*")
+        .eq("status", "pending_moderation")
+        .order("created_at", { ascending: true })
+        .limit(50),
+      supabase
+        .from("businesses")
+        .select("*")
+        .or(TOURISM_BUSINESS_FILTER)
+        .eq("status", "pending_moderation")
+        .order("created_at", { ascending: true })
+        .limit(50),
+    ]);
+
+    return [
+      ...(promotions || []).map((item) => ({
+        ...item,
+        title: item.title,
+        itemType: "Promotion",
+        contentType: "promotion",
+        area: "PROMOTIONS_EVENTS",
+        areaLabel: "Tourism & Events",
+      })),
+      ...(tourismBusinesses || []).map((item) => ({
+        ...item,
+        title: item.business_name,
+        itemType: "Tourism business",
+        contentType: "business",
+        area: "PROMOTIONS_EVENTS",
+        areaLabel: "Tourism & Events",
+      })),
+    ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  }
 
   const { data } = await supabase
-    .from(tableMap[area])
+    .from("businesses")
     .select("*")
     .eq("status", "pending_moderation")
     .order("created_at", { ascending: true })
     .limit(50);
 
-  return data || [];
+  return (data || []).map((item) => ({
+    ...item,
+    title: item.business_name,
+    itemType: "Business",
+    contentType: "business",
+    area,
+    areaLabel: area,
+  }));
 }
 
 // ── Dashboard-specific richer queries ────────────────────────

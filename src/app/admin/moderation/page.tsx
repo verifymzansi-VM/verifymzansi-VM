@@ -40,7 +40,7 @@ export default async function AdminModerationPage() {
       admin
         .from("businesses")
         .select(
-          "id, business_name, business_type, status, created_at, owner_id, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, map_directions, phone, whatsapp, email, website, social_links, operating_hours, services_offered, payment_methods_accepted, delivery_options, service_areas, business_details"
+          "id, business_name, business_type, status, created_at, owner_id, area, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, map_directions, phone, whatsapp, email, website, social_links, operating_hours, services_offered, payment_methods_accepted, delivery_options, service_areas, business_details"
         )
         .eq("status", "pending_moderation")
         .order("created_at", { ascending: true })
@@ -135,19 +135,27 @@ export default async function AdminModerationPage() {
       area: "MZANSI_MARKET" as const,
       areaLabel: "Mzansi Market",
       itemType: "Listing",
+      contentType: "listing" as const,
     })),
-    ...(pendingBusinesses || []).map((b) => ({
-      ...b,
-      title: b.business_name,
-      area: "MZANSI_BUSINESS" as const,
-      areaLabel: "Mzansi Business",
-      itemType: "Business",
-    })),
+    ...(pendingBusinesses || []).map((b) => {
+      const isTourismBusiness =
+        b.area === "PROMOTIONS_EVENTS" || b.category === "tourism_hospitality";
+
+      return {
+        ...b,
+        title: b.business_name,
+        area: isTourismBusiness ? ("PROMOTIONS_EVENTS" as const) : ("MZANSI_BUSINESS" as const),
+        areaLabel: isTourismBusiness ? "Tourism & Events" : "Mzansi Business",
+        itemType: isTourismBusiness ? "Tourism business" : "Business",
+        contentType: "business" as const,
+      };
+    }),
     ...(pendingPromotions || []).map((p) => ({
       ...p,
       area: "PROMOTIONS_EVENTS" as const,
       areaLabel: "Tourism & Events",
       itemType: "Promotion",
+      contentType: "promotion" as const,
     })),
     ...editItems,
   ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());

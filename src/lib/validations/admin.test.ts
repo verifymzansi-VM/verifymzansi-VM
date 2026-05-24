@@ -18,6 +18,16 @@ describe("adminContentDecideSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts content type for cross-area moderation rows", () => {
+    const result = adminContentDecideSchema.safeParse({
+      itemId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+      area: "PROMOTIONS_EVENTS",
+      contentType: "business",
+      decision: "approve",
+    });
+    expect(result.success).toBe(true);
+  });
+
   it("accepts valid reject with reason", () => {
     const result = adminContentDecideSchema.safeParse({
       itemId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",

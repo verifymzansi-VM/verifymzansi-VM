@@ -51,6 +51,7 @@ export interface ModerationItem {
   area: string;
   areaLabel: string;
   itemType: string;
+  contentType?: "listing" | "business" | "promotion";
   // Extended fields for preview
   description?: string;
   photos?: string[];

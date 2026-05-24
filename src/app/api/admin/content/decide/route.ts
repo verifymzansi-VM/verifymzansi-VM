@@ -33,7 +33,7 @@ export async function POST(request: Request) {
       return bodyResult.response;
     }
 
-    const { itemId, area, decision, reason } = bodyResult.data;
+    const { itemId, area, decision, reason, contentType } = bodyResult.data;
 
     const admin = createAdminClient();
 
@@ -46,7 +46,14 @@ export async function POST(request: Request) {
       PROMOTIONS_EVENTS: "promotions",
     };
 
-    const table = tableMap[area];
+    const table =
+      contentType === "listing"
+        ? "listings"
+        : contentType === "business"
+          ? "businesses"
+          : contentType === "promotion"
+            ? "promotions"
+            : tableMap[area];
     if (!table) {
       return NextResponse.json({ error: "Invalid area" }, { status: 400 });
     }
