@@ -39,6 +39,16 @@ type NonCompatibleFetchedItem = {
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
+function checkResubmitRateLimit(userId: string, itemId: string) {
+  const rl = checkLocalRateLimit(`${userId}:${itemId}`, "content:resubmit", 1);
+  if (!rl.limited) return null;
+
+  return NextResponse.json(
+    { error: "Please edit your content before resubmitting. Try again shortly." },
+    { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+  );
+}
+
 /**
  * Returns true if the item was edited after the most recent admin rejection.
  * Uses audit_logs to find the last rejection decision timestamp and compares
@@ -91,15 +101,6 @@ export async function POST(request: Request) {
     }
 
     const { itemId, area } = bodyResult.data;
-
-    // Rate-limit resubmits per user+item to prevent unchanged-content spam (#46)
-    const rl = checkLocalRateLimit(`${user.id}:${itemId}`, "content:resubmit", 1);
-    if (rl.limited) {
-      return NextResponse.json(
-        { error: "Please edit your content before resubmitting. Try again shortly." },
-        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
-      );
-    }
 
     const config = contentAreaTableMap[area];
     if (!config) {
@@ -159,6 +160,9 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
+
+      const rateLimitBlock = checkResubmitRateLimit(user.id, itemId);
+      if (rateLimitBlock) return rateLimitBlock;
 
       const updateQuery = applyOwnerFilter(
         supabase
@@ -233,6 +237,9 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
+
+      const rateLimitBlock = checkResubmitRateLimit(user.id, itemId);
+      if (rateLimitBlock) return rateLimitBlock;
 
       const updateResult = await admin
         .from(config.table)

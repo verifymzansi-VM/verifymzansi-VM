@@ -15,8 +15,12 @@ const { mockCreateNotification, mockShouldSendOwnerLifecycleNotifications } = vi
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
+const { mockCheckLocalRateLimit } = vi.hoisted(() => ({
+  mockCheckLocalRateLimit: vi.fn(() => ({ limited: false })),
+}));
+
 vi.mock("@/lib/utils/rate-limit", () => ({
-  checkLocalRateLimit: () => ({ limited: false }),
+  checkLocalRateLimit: mockCheckLocalRateLimit,
 }));
 vi.mock("@/lib/utils/csrf", () => ({ enforceCsrfToken: vi.fn().mockReturnValue(null) }));
 vi.mock("@/lib/notifications", () => ({
@@ -210,6 +214,7 @@ describe("POST /api/content/resubmit", () => {
     expect(response.status).toBe(400);
     const body = await response.json();
     expect(body.error).toMatch(/no changes detected/i);
+    expect(mockCheckLocalRateLimit).not.toHaveBeenCalled();
   });
 
   it("allows resubmit when content WAS edited after the last rejection", async () => {

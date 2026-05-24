@@ -167,13 +167,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       );
     }
 
-    // Prevent editing rejected, expired, or sold listings
-    if (listing.status === "rejected") {
-      return NextResponse.json(
-        { error: "Cannot edit a rejected listing. Use the resubmission flow." },
-        { status: 409 }
-      );
-    }
+    // Rejected listings must remain editable so account holders can make the
+    // requested changes before using the explicit resubmission flow.
     if (listing.status === "expired" || listing.status === "sold") {
       return NextResponse.json(
         { error: `Cannot edit a ${listing.status} listing.` },

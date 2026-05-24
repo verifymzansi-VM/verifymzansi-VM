@@ -431,12 +431,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       throw mediaError;
     }
 
+    const shouldMoveBackToModeration =
+      contentChanged && ["live", "approved"].includes(existing.status);
     const updateQuery = applyOwnerFilter(
       supabase
         .from("promotions")
         .update({
           ...proposedPayload,
-          ...(contentChanged ? { status: "pending_moderation" } : {}),
+          ...(shouldMoveBackToModeration ? { status: "pending_moderation" } : {}),
         })
         .eq("id", id),
       ownerColumn,
@@ -478,16 +480,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     if (shouldSendOwnerLifecycleNotifications()) {
-      const movedBackToReview = Boolean(
-        contentChanged && ["live", "approved"].includes(existing.status)
-      );
       void createNotification({
         userId: user.id,
-        type: movedBackToReview ? "warning" : "info",
-        title: movedBackToReview
+        type: shouldMoveBackToModeration ? "warning" : "info",
+        title: shouldMoveBackToModeration
           ? "Tourism & Event post moved to review"
           : "Tourism & Event post updated",
-        message: movedBackToReview
+        message: shouldMoveBackToModeration
           ? `\"${data.title}\" was updated and is now pending moderation.`
           : `\"${data.title}\" was updated successfully.`,
         href: "/dashboard/tourism-events",

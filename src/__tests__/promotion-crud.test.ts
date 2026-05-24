@@ -1261,6 +1261,79 @@ describe("PUT /api/promotions/[id]", () => {
     expect(updateEq).toHaveBeenCalledWith("id", VALID_UUID);
   });
 
+  it("keeps rejected promotions rejected after saving changes so they can be resubmitted", async () => {
+    const updateEq = vi.fn().mockResolvedValue({ error: null });
+    const updateSpy = vi.fn().mockReturnValue({
+      eq: updateEq,
+    });
+    const from = vi.fn((table: string) => {
+      if (table === "entitlements") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          gt: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }
+      if (table === "promotions") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: {
+              id: VALID_UUID,
+              owner_id: USER_ID,
+              status: "rejected",
+              title: "Old Event Title",
+              description: "Previous event description long enough.",
+              promotion_type: "event",
+              category: null,
+              category_key: null,
+              price_cents: null,
+              location_province: "Gauteng",
+              location_city: "Johannesburg",
+              photos: [VALID_IMAGE],
+              videos: [],
+              video_thumbnail: null,
+              event_details: null,
+            },
+          }),
+          update: updateSpy,
+        };
+      }
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+      };
+    });
+    mockCreateClient.mockResolvedValue({
+      from,
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } }, error: null }),
+      },
+    });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({ insert: vi.fn().mockResolvedValue({ error: null }) }),
+    });
+
+    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`, {
+      method: "PUT",
+      body: {
+        ...VALID_BODY,
+        title: "Updated Event Title",
+      },
+    });
+    const res = await PUT(req, { params: Promise.resolve({ id: VALID_UUID }) });
+
+    expect(res.status).toBe(200);
+    expect(updateSpy).toHaveBeenCalledWith(
+      expect.not.objectContaining({ status: expect.anything() })
+    );
+  });
+
   it("returns 404 when updating to a linked business the caller does not own", async () => {
     const from = vi.fn((table: string) => {
       if (table === "businesses") {
