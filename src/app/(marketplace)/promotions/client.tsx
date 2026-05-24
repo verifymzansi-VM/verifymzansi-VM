@@ -395,6 +395,15 @@ export function PromotionsExplorer() {
     onClearQuery: clearQueryFilter,
     onClearAll: clearAllFilters,
   };
+  const tabBaseClasses =
+    "inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+  const tourismTabActiveClasses =
+    "border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-700 dark:bg-teal-950 dark:text-teal-200";
+  const inactiveTabClasses = "border-transparent text-muted-foreground hover:bg-muted/60";
+  const eventTabActiveClasses =
+    "border-amber-500 bg-amber-500 text-white shadow-sm shadow-amber-500/30 hover:bg-amber-600 dark:border-amber-400 dark:bg-amber-400 dark:text-amber-950";
+  const eventTabInactiveClasses =
+    "border-amber-300 bg-amber-50 text-amber-800 shadow-sm shadow-amber-200/70 hover:border-amber-400 hover:bg-amber-100 hover:text-amber-900 dark:border-amber-500/70 dark:bg-amber-500/15 dark:text-amber-200 dark:shadow-none dark:hover:bg-amber-500/25";
 
   return (
     <div className="container-page py-8 space-y-6">
@@ -423,10 +432,7 @@ export function PromotionsExplorer() {
             role="tab"
             aria-selected="true"
             aria-controls="tab-panel-tourism"
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-              "border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-700 dark:bg-teal-950 dark:text-teal-200"
-            )}
+            className={cn(tabBaseClasses, tourismTabActiveClasses)}
             onClick={() => switchTab("tourism")}
           >
             <TreePalm className="h-4 w-4" />
@@ -438,10 +444,7 @@ export function PromotionsExplorer() {
             role="tab"
             aria-selected="false"
             aria-controls="tab-panel-tourism"
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-              "border-transparent text-muted-foreground hover:bg-muted/60"
-            )}
+            className={cn(tabBaseClasses, inactiveTabClasses)}
             onClick={() => switchTab("tourism")}
           >
             <TreePalm className="h-4 w-4" />
@@ -455,10 +458,7 @@ export function PromotionsExplorer() {
             role="tab"
             aria-selected="true"
             aria-controls="tab-panel-events"
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-              "border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-700 dark:bg-teal-950 dark:text-teal-200"
-            )}
+            className={cn(tabBaseClasses, eventTabActiveClasses)}
             onClick={() => switchTab("events")}
           >
             <CalendarDays className="h-4 w-4" />
@@ -470,10 +470,7 @@ export function PromotionsExplorer() {
             role="tab"
             aria-selected="false"
             aria-controls="tab-panel-events"
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-              "border-transparent text-muted-foreground hover:bg-muted/60"
-            )}
+            className={cn(tabBaseClasses, eventTabInactiveClasses)}
             onClick={() => switchTab("events")}
           >
             <CalendarDays className="h-4 w-4" />

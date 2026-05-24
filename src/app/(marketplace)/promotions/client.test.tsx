@@ -159,6 +159,20 @@ describe("PromotionsExplorer", () => {
     expect(tabs).toEqual(expect.arrayContaining(["Tourism", "Events"]));
   });
 
+  it("highlights the Events tab as a visible discovery option when Tourism is selected", async () => {
+    render(<PromotionsExplorer />);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+
+    const eventsTab = screen.getByRole("tab", { name: /Events/i });
+
+    expect(eventsTab).toHaveClass("border-amber-300");
+    expect(eventsTab).toHaveClass("bg-amber-50");
+    expect(eventsTab).toHaveClass("text-amber-800");
+  });
+
   it("switches to Events tab and updates the query string", async () => {
     render(<PromotionsExplorer />);
 
