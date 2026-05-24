@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useCallback } from "react";
-import { Bell, Check, CheckCheck, Trash2 } from "lucide-react";
+import { Bell, Check, CheckCheck, ExternalLink, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -13,7 +14,7 @@ import { useNotificationStore, type Notification } from "@/stores/notification-s
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { useRealtime } from "@/hooks/use-realtime";
 import { cn } from "@/lib/utils";
-import Link from "next/link";
+import { formatRelativeTime } from "@/lib/utils/format";
 
 const NOTIFICATION_REFRESH_INTERVAL_MS = 10_000;
 
@@ -30,6 +31,21 @@ function mapNotificationRow(n: Record<string, unknown>): Notification {
   };
 }
 
+async function syncNotificationMutation(
+  body: { id: string } | { all: true },
+  method: "PATCH" | "DELETE"
+) {
+  const response = await fetch("/api/notifications", {
+    method,
+    headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Notification update failed with HTTP ${response.status}`);
+  }
+}
+
 /**
  * Notification bell with unread badge + dropdown panel.
  * Hydrates from the API on mount, then listens for Supabase Realtime `INSERT`
@@ -44,6 +60,7 @@ export function NotificationBell({ userId }: { userId?: string }) {
     hydrateNotifications,
     markRead,
     markAllRead,
+    removeNotification,
     clearAll,
   } = useNotificationStore();
   const mountedRef = useRef(true);
@@ -153,11 +170,7 @@ export function NotificationBell({ userId }: { userId?: string }) {
     (id: string) => {
       const prev = useNotificationStore.getState();
       markRead(id);
-      fetch("/api/notifications", {
-        method: "PATCH",
-        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ id }),
-      }).catch(() => {
+      syncNotificationMutation({ id }, "PATCH").catch(() => {
         if (!mountedRef.current) return;
         useNotificationStore.setState({
           notifications: prev.notifications,
@@ -171,11 +184,7 @@ export function NotificationBell({ userId }: { userId?: string }) {
   const handleMarkAllRead = useCallback(() => {
     const prev = useNotificationStore.getState();
     markAllRead();
-    fetch("/api/notifications", {
-      method: "PATCH",
-      headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ all: true }),
-    }).catch(() => {
+    syncNotificationMutation({ all: true }, "PATCH").catch(() => {
       if (!mountedRef.current) return;
       useNotificationStore.setState({
         notifications: prev.notifications,
@@ -187,11 +196,7 @@ export function NotificationBell({ userId }: { userId?: string }) {
   const handleClearAll = useCallback(() => {
     const prev = useNotificationStore.getState();
     clearAll();
-    fetch("/api/notifications", {
-      method: "DELETE",
-      headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ all: true }),
-    }).catch(() => {
+    syncNotificationMutation({ all: true }, "DELETE").catch(() => {
       if (!mountedRef.current) return;
       useNotificationStore.setState({
         notifications: prev.notifications,
@@ -199,6 +204,21 @@ export function NotificationBell({ userId }: { userId?: string }) {
       });
     });
   }, [clearAll]);
+
+  const handleDismiss = useCallback(
+    (id: string) => {
+      const prev = useNotificationStore.getState();
+      removeNotification(id);
+      syncNotificationMutation({ id }, "DELETE").catch(() => {
+        if (!mountedRef.current) return;
+        useNotificationStore.setState({
+          notifications: prev.notifications,
+          unreadCount: prev.unreadCount,
+        });
+      });
+    },
+    [removeNotification]
+  );
 
   return (
     <DropdownMenu>
@@ -218,42 +238,67 @@ export function NotificationBell({ userId }: { userId?: string }) {
         </Button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="w-[calc(100vw-2rem)] sm:w-80 max-w-sm p-0">
+      <DropdownMenuContent align="end" className="w-[calc(100vw-2rem)] max-w-md p-0 sm:w-96">
         {/* Header */}
-        <div className="flex items-center justify-between border-b px-4 py-3">
-          <h3 className="text-sm font-semibold">Notifications</h3>
-          <div className="flex gap-1">
-            {unreadCount > 0 && (
-              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleMarkAllRead}>
-                <CheckCheck className="mr-1 h-3 w-3" />
-                Mark all read
-              </Button>
-            )}
-            {notifications.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-xs text-muted-foreground"
-                onClick={handleClearAll}
-              >
-                <Trash2 className="mr-1 h-3 w-3" />
-                Clear
-              </Button>
-            )}
+        <div className="border-b px-4 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold">Notifications</h3>
+              <p className="mt-0.5 text-xs text-muted-foreground" aria-live="polite">
+                {notifications.length === 0
+                  ? "You are all caught up"
+                  : unreadCount > 0
+                    ? `${unreadCount} unread update${unreadCount === 1 ? "" : "s"}`
+                    : "Everything has been read"}
+              </p>
+            </div>
+            <div className="flex flex-wrap justify-end gap-1">
+              {unreadCount > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={handleMarkAllRead}
+                >
+                  <CheckCheck className="mr-1 h-3 w-3" />
+                  Mark all read
+                </Button>
+              )}
+              {notifications.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs text-muted-foreground"
+                  onClick={handleClearAll}
+                  aria-label="Clear all notifications"
+                >
+                  <Trash2 className="mr-1 h-3 w-3" />
+                  Clear all
+                </Button>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Notification list */}
         {notifications.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-6 text-sm text-muted-foreground">
+          <div className="flex flex-col items-center justify-center px-6 py-8 text-center text-sm text-muted-foreground">
             <Bell className="mb-1.5 h-6 w-6 opacity-20" />
-            No notifications yet
+            <p className="font-medium text-foreground">No notifications yet</p>
+            <p className="mt-1 text-xs">
+              Verification, billing, content, and account updates will appear here.
+            </p>
           </div>
         ) : (
-          <ScrollArea className="max-h-80">
+          <ScrollArea className="max-h-96">
             <ul className="divide-y" aria-label="Notifications">
               {notifications.map((n) => (
-                <NotificationItem key={n.id} notification={n} onRead={handleMarkRead} />
+                <NotificationItem
+                  key={n.id}
+                  notification={n}
+                  onRead={handleMarkRead}
+                  onDismiss={handleDismiss}
+                />
               ))}
             </ul>
           </ScrollArea>
@@ -266,74 +311,103 @@ export function NotificationBell({ userId }: { userId?: string }) {
 function NotificationItem({
   notification: n,
   onRead,
+  onDismiss,
 }: {
   notification: Notification;
   onRead: (id: string) => void;
+  onDismiss: (id: string) => void;
 }) {
-  const timeAgo = getRelativeTime(n.createdAt);
+  const timeAgo = formatRelativeTime(n.createdAt);
+  const typeLabel = getNotificationTypeLabel(n.type);
 
-  const inner = (
-    <div
+  return (
+    <li
       className={cn(
-        "flex gap-3 px-4 py-3 transition-colors hover:bg-muted/50",
+        "group flex gap-3 px-4 py-3 transition-colors hover:bg-muted/50 focus-within:bg-muted/50",
         !n.read && "bg-muted/30"
       )}
     >
       {/* Type indicator */}
       <div
         className={cn(
-          "mt-1 h-2 w-2 flex-shrink-0 rounded-full",
+          "mt-1.5 h-2.5 w-2.5 flex-shrink-0 rounded-full",
           n.type === "success" && "bg-brand-green",
           n.type === "warning" && "bg-brand-gold",
           n.type === "error" && "bg-destructive",
           n.type === "info" && "bg-primary"
         )}
+        aria-hidden="true"
       />
 
-      <div className="flex-1 min-w-0">
-        <p className={cn("text-sm", !n.read && "font-medium")}>{n.title}</p>
-        {n.message && (
-          <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{n.message}</p>
-        )}
-        <p className="mt-1 text-[10px] text-muted-foreground">{timeAgo}</p>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className={cn("text-sm leading-snug", !n.read && "font-semibold")}>{n.title}</p>
+            {n.message && (
+              <p className="mt-1 line-clamp-3 text-xs leading-relaxed text-muted-foreground">
+                {n.message}
+              </p>
+            )}
+          </div>
+
+          {!n.read && (
+            <span className="mt-0.5 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+              New
+            </span>
+          )}
+        </div>
+
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          <span>{typeLabel}</span>
+          <span aria-hidden="true"> · </span>
+          <time dateTime={n.createdAt} title={new Date(n.createdAt).toLocaleString("en-ZA")}>
+            {timeAgo}
+          </time>
+        </p>
+
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {n.href && (
+            <Button asChild variant="outline" size="sm" className="h-7 px-2 text-xs">
+              <Link href={n.href} onClick={() => onRead(n.id)}>
+                <ExternalLink className="mr-1 h-3 w-3" />
+                Open
+              </Link>
+            </Button>
+          )}
+          {!n.read && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-muted-foreground"
+              onClick={() => onRead(n.id)}
+            >
+              <Check className="mr-1 h-3 w-3" />
+              Mark read
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+            onClick={() => onDismiss(n.id)}
+          >
+            <Trash2 className="mr-1 h-3 w-3" />
+            Dismiss
+          </Button>
+        </div>
       </div>
-
-      {!n.read && (
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onRead(n.id);
-          }}
-          className="mt-1 flex-shrink-0 rounded p-1 text-muted-foreground hover:bg-muted"
-          aria-label="Mark as read"
-        >
-          <Check className="h-3 w-3" />
-        </button>
-      )}
-    </div>
+    </li>
   );
-
-  if (n.href) {
-    return (
-      <li>
-        <Link href={n.href} onClick={() => onRead(n.id)}>
-          {inner}
-        </Link>
-      </li>
-    );
-  }
-
-  return <li>{inner}</li>;
 }
 
-function getRelativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
+function getNotificationTypeLabel(type: Notification["type"]): string {
+  switch (type) {
+    case "success":
+      return "Success";
+    case "warning":
+    case "error":
+      return "Needs attention";
+    default:
+      return "Update";
+  }
 }

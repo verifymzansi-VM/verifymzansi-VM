@@ -34,6 +34,9 @@ vi.mock("lucide-react", () => ({
   CheckCheck: (props: React.SVGProps<SVGSVGElement>) => (
     <svg data-testid="check-check-icon" {...props} />
   ),
+  ExternalLink: (props: React.SVGProps<SVGSVGElement>) => (
+    <svg data-testid="external-link-icon" {...props} />
+  ),
   Trash2: (props: React.SVGProps<SVGSVGElement>) => <svg data-testid="trash-icon" {...props} />,
 }));
 
@@ -183,5 +186,53 @@ describe("NotificationBell", () => {
       filterValue: "admin-1",
       enabled: true,
     });
+  });
+
+  it("lets people dismiss a single notification without clearing the whole list", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        mockNotificationsResponse(
+          [
+            {
+              id: "notification-1",
+              type: "error",
+              title: "Selfie verification rejected",
+              message: "Please retake the selfie in better light.",
+              read: false,
+              created_at: "2026-05-07T08:00:00.000Z",
+            },
+            {
+              id: "notification-2",
+              type: "success",
+              title: "ID document verification approved",
+              read: true,
+              created_at: "2026-05-07T07:00:00.000Z",
+            },
+          ],
+          1
+        )
+      )
+      .mockImplementationOnce(() => Promise.resolve({ ok: true } as Response));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<NotificationBell userId="admin-1" />);
+
+    await flushNotificationFetch();
+
+    await act(async () => {
+      screen.getAllByRole("button", { name: /dismiss/i })[0].click();
+    });
+
+    expect(screen.queryByText("Selfie verification rejected")).toBeNull();
+    expect(screen.getByText("ID document verification approved")).toBeTruthy();
+    expect(useNotificationStore.getState().unreadCount).toBe(0);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/notifications",
+      expect.objectContaining({
+        method: "DELETE",
+        body: JSON.stringify({ id: "notification-1" }),
+      })
+    );
   });
 });
