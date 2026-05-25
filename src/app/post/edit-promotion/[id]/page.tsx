@@ -115,6 +115,7 @@ export default function EditPromotionPage() {
   const maxPhotos = usePlanMaxPhotos("PROMOTIONS_EVENTS");
   const maxVideos = usePlanMaxVideos("PROMOTIONS_EVENTS");
   const videoAllowed = usePlanVideoAllowed("PROMOTIONS_EVENTS");
+  const effectiveMaxVideos = Math.max(maxVideos, existingVideos.length);
   const previewPhotoUrls = useMemo(
     () => newPhotoFiles.map((file) => URL.createObjectURL(file)),
     [newPhotoFiles]
@@ -295,10 +296,10 @@ export default function EditPromotionPage() {
       if (totalImageCount > maxPhotos) {
         validationErrors.images = `You can upload up to ${maxPhotos} photos on this plan.`;
       }
-      if (!videoAllowed && totalVideoCount > 0) {
+      if (!videoAllowed && newVideoFiles.length > 0) {
         validationErrors.videos = "Video upload is not available on your current plan.";
-      } else if (totalVideoCount > maxVideos) {
-        validationErrors.videos = `You can upload up to ${maxVideos} videos on this plan.`;
+      } else if (totalVideoCount > effectiveMaxVideos) {
+        validationErrors.videos = `You can upload up to ${effectiveMaxVideos} videos on this plan.`;
       }
       if (Object.keys(validationErrors).length > 0) {
         setFieldErrors(validationErrors);
@@ -979,8 +980,8 @@ export default function EditPromotionPage() {
 
               {/* Add new videos */}
               <MediaUpload
-                label={`Add Videos (optional, max ${maxVideos})${!videoAllowed ? " — Upgrade to unlock" : ""}`}
-                maxFiles={Math.max(0, maxVideos - existingVideos.length)}
+                label={`Add Videos (optional, max ${effectiveMaxVideos})${!videoAllowed ? " — Upgrade to unlock" : ""}`}
+                maxFiles={Math.max(0, effectiveMaxVideos - existingVideos.length)}
                 files={newVideoFiles}
                 onChange={setNewVideoFiles}
                 accept="video/*"

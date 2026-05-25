@@ -997,12 +997,10 @@ function fetchSharedEntitlements(area: MarketplaceArea): Promise<PlanEntitlement
       };
     }
 
-    const freePostUsage = await getActiveFreePostUsage(supabase, user.id, area);
-
     return {
       maxPhotos: FREE_POST_CONFIG.maxPhotos,
-      maxVideos: freePostUsage.available ? FREE_POST_CONFIG.maxVideos : 0,
-      videoAllowed: freePostUsage.available,
+      maxVideos: FREE_POST_CONFIG.maxVideos,
+      videoAllowed: FREE_POST_CONFIG.videoAllowed,
     };
   })();
 

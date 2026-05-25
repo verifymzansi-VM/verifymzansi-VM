@@ -8,6 +8,12 @@ const { promotionDetailPreviewSpy } = vi.hoisted(() => ({
   promotionDetailPreviewSpy: vi.fn(),
 }));
 
+const planGateMock = vi.hoisted(() => ({
+  maxPhotos: 5,
+  maxVideos: 1,
+  videoAllowed: true,
+}));
+
 vi.mock("next/navigation", () => ({
   useRouter: vi.fn(),
   useParams: vi.fn(),
@@ -67,9 +73,9 @@ vi.mock("@/lib/constants/sa-provinces", () => ({
 }));
 
 vi.mock("@/components/billing/plan-gate", () => ({
-  usePlanMaxPhotos: () => 5,
-  usePlanMaxVideos: () => 1,
-  usePlanVideoAllowed: () => true,
+  usePlanMaxPhotos: () => planGateMock.maxPhotos,
+  usePlanMaxVideos: () => planGateMock.maxVideos,
+  usePlanVideoAllowed: () => planGateMock.videoAllowed,
 }));
 
 describe("EditPromotionPage", () => {
@@ -135,6 +141,9 @@ describe("EditPromotionPage", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    planGateMock.maxPhotos = 5;
+    planGateMock.maxVideos = 1;
+    planGateMock.videoAllowed = true;
     (useRouter as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ push: mockPush });
     (useParams as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ id: "promotion-1" });
     (useToast as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ toast: mockToast });
@@ -218,6 +227,32 @@ describe("EditPromotionPage", () => {
     expect(payload.images).toEqual([]);
     expect(payload.videos).toEqual(["https://example.com/promo-video.mp4"]);
     expect(payload.video_thumbnail).toBe("https://example.com/promo-video-thumb.jpg");
+  });
+
+  it("allows saving an existing video when the media entitlement check has not refreshed yet", async () => {
+    planGateMock.videoAllowed = false;
+    planGateMock.maxVideos = 0;
+    mockEditPromotionFetch({
+      photos: [],
+      videos: ["https://example.com/promo-video.mp4"],
+      video_thumbnail: "https://example.com/promo-video-thumb.jpg",
+    });
+
+    render(<EditPromotionPage />);
+
+    const saveButton = await screen.findByRole("button", { name: /Save Changes/i });
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(3);
+    });
+
+    expect(
+      screen.queryByText("Video upload is not available on your current plan.")
+    ).not.toBeInTheDocument();
+    const request = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[2];
+    const payload = JSON.parse(request[1].body as string);
+    expect(payload.videos).toEqual(["https://example.com/promo-video.mp4"]);
   });
 
   it("returns to the dashboard when a live promotion edit is already pending review", async () => {
