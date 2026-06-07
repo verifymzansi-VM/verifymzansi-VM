@@ -23,10 +23,10 @@ import {
 } from "@/lib/seo/public-categories";
 
 export const metadata: Metadata = {
-  title: "VerifyMzansi - South African Listings, Business, Tourism & Events",
+  title: "VerifyMzansi - Mzansi Market, Mzansi Business, Tourism and Events",
   description: VERIFY_MZANSI_SITE_DESCRIPTION,
   openGraph: {
-    title: "VerifyMzansi - South African Listings, Business, Tourism & Events",
+    title: "VerifyMzansi - Mzansi Market, Mzansi Business, Tourism and Events",
     description: VERIFY_MZANSI_SITE_DESCRIPTION,
     images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "VerifyMzansi" }],
   },
@@ -78,6 +78,14 @@ export default async function HomePage() {
         name: "VerifyMzansi",
         url,
         description: VERIFY_MZANSI_SITE_DESCRIPTION,
+        about: VERIFY_MZANSI_CATEGORY_SEO.map((category) => category.searchName),
+        hasPart: VERIFY_MZANSI_CATEGORY_SEO.map((category) => ({
+          "@type": "CollectionPage",
+          name: category.searchName,
+          alternateName: category.name,
+          url: `${url}${category.href}`,
+          description: category.searchSummary,
+        })),
         potentialAction: {
           "@type": "SearchAction",
           target: {
@@ -100,6 +108,18 @@ export default async function HomePage() {
         },
       },
       {
+        "@type": "SiteNavigationElement",
+        name: "VerifyMzansi category navigation",
+        hasPart: VERIFY_MZANSI_CATEGORY_SEO.map((category, index) => ({
+          "@type": "SiteNavigationElement",
+          position: index + 1,
+          name: category.searchName,
+          alternateName: category.name,
+          url: `${url}${category.href}`,
+          description: category.searchSummary,
+        })),
+      },
+      {
         "@type": "ItemList",
         name: "VerifyMzansi categories",
         itemListElement: VERIFY_MZANSI_CATEGORY_SEO.map((category, index) => ({
@@ -107,9 +127,10 @@ export default async function HomePage() {
           position: index + 1,
           item: {
             "@type": "WebPage",
-            name: category.name,
+            name: category.searchName,
+            alternateName: category.name,
             url: `${url}${category.href}`,
-            description: category.description,
+            description: category.searchSummary,
           },
         })),
       },

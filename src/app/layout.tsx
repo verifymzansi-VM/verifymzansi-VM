@@ -105,7 +105,7 @@ const AUTH_SW_CACHE_RESET = `
 
 export const metadata: Metadata = {
   title: {
-    default: "VerifyMzansi - South African Listings, Business, Tourism & Events",
+    default: "VerifyMzansi - Mzansi Market, Mzansi Business, Tourism and Events",
     template: "%s | VerifyMzansi",
   },
   description: VERIFY_MZANSI_SITE_DESCRIPTION,
@@ -130,20 +130,20 @@ export const metadata: Metadata = {
     locale: "en_ZA",
     url: process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com",
     siteName: "VerifyMzansi",
-    title: "VerifyMzansi - South African Listings, Business, Tourism & Events",
+    title: "VerifyMzansi - Mzansi Market, Mzansi Business, Tourism and Events",
     description: VERIFY_MZANSI_SITE_DESCRIPTION,
     images: [
       {
         url: "/opengraph-image",
         width: 1200,
         height: 630,
-        alt: "VerifyMzansi - South African Listings, Business, Tourism & Events",
+        alt: "VerifyMzansi - Mzansi Market, Mzansi Business, Tourism and Events",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "VerifyMzansi - South African Listings, Business, Tourism & Events",
+    title: "VerifyMzansi - Mzansi Market, Mzansi Business, Tourism and Events",
     description: VERIFY_MZANSI_SITE_DESCRIPTION,
     images: ["/twitter-image"],
   },

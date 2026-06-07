@@ -53,9 +53,10 @@ export default async function MzansiBusinessPage() {
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
-    name: categorySeo.name,
+    name: categorySeo.searchName,
+    alternateName: categorySeo.name,
     url: `${BASE_URL}/mzansi-business`,
-    description: categorySeo.description,
+    description: categorySeo.searchSummary,
     isPartOf: {
       "@type": "WebSite",
       name: "VerifyMzansi",

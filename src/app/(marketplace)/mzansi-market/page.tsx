@@ -47,9 +47,10 @@ export default async function MzansiMarketPage() {
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
-    name: categorySeo.name,
+    name: categorySeo.searchName,
+    alternateName: categorySeo.name,
     url: `${BASE_URL}/mzansi-market`,
-    description: categorySeo.description,
+    description: categorySeo.searchSummary,
     isPartOf: {
       "@type": "WebSite",
       name: "VerifyMzansi",
