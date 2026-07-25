@@ -499,7 +499,7 @@ describe("KYC Security", () => {
   });
 
   describe("Session-bound artifact access", () => {
-    it("continues with admin override when the artifact is not linked to the current verification session", async () => {
+    it("denies access when the artifact is not linked to the active verification session", async () => {
       mockAuth({ id: "admin-1", app_metadata: { role: "admin" } });
       mockGetLinkedEvidenceArtifactIds.mockResolvedValue([]);
       mockDownloadKycDocumentWithMetrics.mockResolvedValue({
@@ -564,7 +564,11 @@ describe("KYC Security", () => {
         )
       );
 
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(403);
+      await expect(res.json()).resolves.toMatchObject({
+        code: "artifact_not_linked",
+      });
+      expect(mockDownloadKycDocumentWithMetrics).not.toHaveBeenCalled();
     });
   });
 });

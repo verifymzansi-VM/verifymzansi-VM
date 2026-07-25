@@ -142,6 +142,7 @@ describe("POST /api/admin/flagging/action", () => {
   });
 
   it("hides reported content and resolves the report", async () => {
+    mockVerifyStaffActorRoleFromDb.mockResolvedValue("governance_controller");
     const reportsEq = vi.fn().mockReturnValue({
       single: vi.fn().mockResolvedValue({
         data: {
@@ -181,7 +182,11 @@ describe("POST /api/admin/flagging/action", () => {
               eq: reportsEq,
             }),
             update: vi.fn().mockReturnValue({
-              eq: vi.fn().mockResolvedValue({ error: null }),
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  select: vi.fn().mockResolvedValue({ data: [{ id: "report-1" }], error: null }),
+                }),
+              }),
             }),
           };
         }
@@ -227,12 +232,13 @@ describe("POST /api/admin/flagging/action", () => {
     expect(mockLogAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         actorId: "mod-1",
-        actorRole: "moderator",
+        actorRole: "governance_controller",
       })
     );
   });
 
   it("sends account enforcement email for warning actions", async () => {
+    mockVerifyStaffActorRoleFromDb.mockResolvedValue("governance_controller");
     const reportsEq = vi.fn().mockReturnValue({
       single: vi.fn().mockResolvedValue({
         data: {
@@ -259,7 +265,11 @@ describe("POST /api/admin/flagging/action", () => {
           return {
             select: vi.fn().mockReturnValue({ eq: reportsEq }),
             update: vi.fn().mockReturnValue({
-              eq: vi.fn().mockResolvedValue({ error: null }),
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  select: vi.fn().mockResolvedValue({ data: [{ id: "report-1" }], error: null }),
+                }),
+              }),
             }),
           };
         }
@@ -345,7 +355,11 @@ describe("POST /api/admin/flagging/action", () => {
           return {
             select: vi.fn().mockReturnValue({ eq: reportsEq }),
             update: vi.fn().mockReturnValue({
-              eq: vi.fn().mockResolvedValue({ error: null }),
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  select: vi.fn().mockResolvedValue({ data: [{ id: "report-1" }], error: null }),
+                }),
+              }),
             }),
           };
         }
@@ -420,6 +434,13 @@ describe("POST /api/admin/flagging/action", () => {
         if (table === "reports") {
           return {
             select: vi.fn().mockReturnValue({ eq: reportsEq }),
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  select: vi.fn().mockResolvedValue({ data: [{ id: "report-1" }], error: null }),
+                }),
+              }),
+            }),
           };
         }
 
@@ -464,6 +485,7 @@ describe("POST /api/admin/flagging/action", () => {
   });
 
   it("returns 500 when moderation_actions audit trail insert fails", async () => {
+    mockVerifyStaffActorRoleFromDb.mockResolvedValue("governance_controller");
     const reportsEq = vi.fn().mockReturnValue({
       single: vi.fn().mockResolvedValue({
         data: {
@@ -503,7 +525,11 @@ describe("POST /api/admin/flagging/action", () => {
               eq: reportsEq,
             }),
             update: vi.fn().mockReturnValue({
-              eq: vi.fn().mockResolvedValue({ error: null }),
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  select: vi.fn().mockResolvedValue({ data: [{ id: "report-1" }], error: null }),
+                }),
+              }),
             }),
           };
         }
@@ -585,6 +611,7 @@ describe("POST /api/admin/flagging/action", () => {
   });
 
   it("returns 404 when report lookup returns null (not found)", async () => {
+    mockVerifyStaffActorRoleFromDb.mockResolvedValue("governance_controller");
     const reportsEq = vi.fn().mockReturnValue({
       single: vi.fn().mockResolvedValue({
         data: null,
@@ -623,6 +650,7 @@ describe("POST /api/admin/flagging/action", () => {
   });
 
   it("returns 404 when owner-targeted enforcement has no account holder", async () => {
+    mockVerifyStaffActorRoleFromDb.mockResolvedValue("governance_controller");
     const reportsEq = vi.fn().mockReturnValue({
       single: vi.fn().mockResolvedValue({
         data: {
@@ -653,6 +681,13 @@ describe("POST /api/admin/flagging/action", () => {
         if (table === "reports") {
           return {
             select: vi.fn().mockReturnValue({ eq: reportsEq }),
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  select: vi.fn().mockResolvedValue({ data: [{ id: "report-1" }], error: null }),
+                }),
+              }),
+            }),
           };
         }
 
