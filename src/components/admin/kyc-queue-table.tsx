@@ -28,24 +28,13 @@ import {
   Eye,
 } from "lucide-react";
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { KycComparisonViewer } from "./kyc-comparison-viewer";
+import { KycPreviewLightbox } from "./kyc-preview-lightbox";
 import { getKycEvidenceErrorMessage } from "./kyc-evidence-errors";
 import { KYC_REVIEW_REASON_CODES } from "./kyc-review-constants";
 import type { PendingVerificationGroup } from "@/lib/utils/admin-queries";
 import { OVERRIDE_REASON_CODES } from "@/lib/constants/verification";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
-
-const KycPreviewLightbox = dynamic(
-  () => import("./kyc-preview-lightbox").then((m) => m.KycPreviewLightbox),
-  {
-    loading: () => (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-6 w-6 animate-spin" />
-      </div>
-    ),
-  }
-);
 
 interface VerificationStep {
   id: string;

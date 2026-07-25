@@ -110,6 +110,7 @@ export function KycPreviewLightbox({
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [visibilityReloadToken, setVisibilityReloadToken] = useState(0);
   const [zoom, setZoom] = useState(1);
   const mousePanRef = useRef<{
     element: HTMLDivElement;
@@ -136,9 +137,10 @@ export function KycPreviewLightbox({
 
   // Fetch decrypted blob when lightbox opens
   useEffect(() => {
-    if (!open) return;
+    if (!open || document.hidden) return;
 
     let cancelled = false;
+    const controller = new AbortController();
     queueMicrotask(() => {
       if (cancelled) return;
       setLoading(true);
@@ -170,6 +172,7 @@ export function KycPreviewLightbox({
             method: "POST",
             headers: withCsrfHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify({ artifactId: targetArtifactId }),
+            signal: controller.signal,
           });
 
           if (res.ok) {
@@ -196,6 +199,7 @@ export function KycPreviewLightbox({
             method: "POST",
             headers: withCsrfHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify({ userId: step.user_id }),
+            signal: controller.signal,
           });
 
           if (retryMetaRes.ok) {
@@ -235,7 +239,7 @@ export function KycPreviewLightbox({
           });
         }
       } catch (err) {
-        if (!cancelled) {
+        if (!cancelled && !controller.signal.aborted) {
           setError(err instanceof Error ? err.message : "Failed to load document");
         }
       } finally {
@@ -247,8 +251,9 @@ export function KycPreviewLightbox({
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [open, artifact.id, artifact.step_type, step.user_id]);
+  }, [open, artifact.id, artifact.step_type, step.user_id, visibilityReloadToken]);
 
   // Revoke blob when lightbox closes
   useEffect(() => {
@@ -260,18 +265,21 @@ export function KycPreviewLightbox({
     }
   }, [open, blobUrl]);
 
-  // Security: revoke on visibility change
+  // Clear the visible URL while backgrounded, then reload automatically when
+  // the reviewer returns. Cached blobs make this immediate in the common case.
   useEffect(() => {
     function handleVisibility() {
       if (document.hidden && blobUrl) {
         URL.revokeObjectURL(blobUrl);
         setBlobUrl(null);
-        setError("Document cleared for security. Reopen to reload.");
+        setError(null);
+      } else if (!document.hidden && open) {
+        setVisibilityReloadToken((token) => token + 1);
       }
     }
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [blobUrl]);
+  }, [blobUrl, open]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();

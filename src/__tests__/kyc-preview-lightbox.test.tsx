@@ -343,6 +343,31 @@ describe("KycPreviewLightbox", () => {
     });
   });
 
+  it("reloads the document automatically after the tab becomes visible", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      blob: () => Promise.resolve(new Blob(["img"], { type: "image/jpeg" })),
+    });
+
+    await renderOpenLightbox();
+
+    await waitFor(() => {
+      expect(mockCreateObjectURL).toHaveBeenCalledTimes(1);
+    });
+
+    Object.defineProperty(document, "hidden", { configurable: true, value: true });
+    fireEvent(document, new Event("visibilitychange"));
+
+    expect(screen.queryByText(/cleared for security/i)).toBeNull();
+
+    Object.defineProperty(document, "hidden", { configurable: true, value: false });
+    fireEvent(document, new Event("visibilitychange"));
+
+    await waitFor(() => {
+      expect(mockCreateObjectURL).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it("shows purge warning when purge_after is set", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
