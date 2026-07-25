@@ -59,7 +59,7 @@ jobs:
         run: pnpm run jscpd:check
       - name: Upload jscpd report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: jscpd-budget-${{ github.run_id }}-${{ github.run_attempt }}
           path: tmp/jscpd/**
@@ -311,7 +311,7 @@ jobs:
             grafana/k6:latest run --summary-export /workspace/tmp/k6/summary.json scripts/load-test.js
       - name: Upload k6 summary
         if: always() && steps.check-url.outputs.skip != 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: k6-advisory-${{ github.run_id }}-${{ github.run_attempt }}
           path: tmp/k6/**
@@ -385,7 +385,7 @@ jobs:
         run: pnpm run safety:ci-review -- --fail-fast
       - name: Upload safety gate artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: safety-gate-snapshot-${{ github.run_id }}-${{ github.run_attempt }}
           path: tmp/safety-gate/**
