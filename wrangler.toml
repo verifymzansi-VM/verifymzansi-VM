@@ -8,6 +8,14 @@ preview_urls = false
 # Objects can be exported alongside the adapter output.
 main = "workers/open-next-entry.mjs"
 
+# Custom build hook: Workers Builds (Cloudflare Git integration) runs a plain
+# Next.js build, which never produces .open-next/. This hook runs the full
+# OpenNext build when the output is missing (and skips when it already exists,
+# e.g. GitHub Actions deploys). Without it `wrangler versions upload` fails
+# with: assets.directory (.open-next/assets) does not exist.
+[build]
+command = "node scripts/ensure-opennext-build.mjs"
+
 [limits]
 cpu_ms = 30000
 
