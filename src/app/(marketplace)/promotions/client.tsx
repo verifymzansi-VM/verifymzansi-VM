@@ -14,7 +14,8 @@ import { PromotionCard } from "@/components/listings/promotion-card";
 import { PromotionFilterPanel } from "@/components/listings/promotion-filter-panel";
 import { PromotionFilterDrawer } from "@/components/listings/promotion-filter-drawer";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { GridStateMessage } from "@/components/listings/grid-state-message";
+import { ListingGridSkeleton } from "@/components/listings/listing-skeleton";
 import { getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { parsePromotionFilterType, type PromotionFilterType } from "@/lib/promotions/type-taxonomy";
 import {
@@ -138,6 +139,7 @@ export function PromotionsExplorer() {
   });
 
   const [loading, setLoading] = useState(true);
+  const [reloadToken, setReloadToken] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const filters = useMemo(
@@ -336,7 +338,7 @@ export function PromotionsExplorer() {
     return () => {
       active = false;
     };
-  }, [activeTab, filters]);
+  }, [activeTab, filters, reloadToken]);
 
   /* ── Events data maps ── */
   const businessMap = useMemo(
@@ -509,54 +511,57 @@ export function PromotionsExplorer() {
 
           {/* ── Grid / Loading / Error / Empty ── */}
           {loading ? (
-            <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-5 xl:gap-6">
-              {Array.from({ length: 8 }).map((_, index) => (
-                <div key={index} className="aspect-[9/16] rounded-xl bg-muted animate-pulse" />
-              ))}
+            <div data-testid="promotions-grid-loading">
+              <ListingGridSkeleton />
             </div>
           ) : error ? (
-            <Card>
-              <CardContent className="space-y-3 p-6 text-center">
-                <TreePalm className="mx-auto h-8 w-8 text-muted-foreground" />
-                <h3 className="font-display text-lg font-semibold">
-                  {activeTab === "tourism"
-                    ? "Unable to load tourism businesses"
-                    : "Unable to load events"}
-                </h3>
-                <p className="text-sm text-muted-foreground">{error}</p>
-              </CardContent>
-            </Card>
+            <GridStateMessage
+              tone="teal"
+              state="error"
+              title={
+                activeTab === "tourism"
+                  ? "Unable to load tourism businesses"
+                  : "Unable to load events"
+              }
+              body={error}
+              icon={<TreePalm className="h-7 w-7 text-teal-600 dark:text-teal-300" />}
+              testId="promotions-grid-empty"
+            >
+              <Button variant="outline" onClick={() => setReloadToken((token) => token + 1)}>
+                Retry
+              </Button>
+            </GridStateMessage>
           ) : (
               activeTab === "tourism" ? tourismBusinesses.length === 0 : promotions.length === 0
             ) ? (
-            <Card>
-              <CardContent className="space-y-3 p-6 text-center">
-                {activeTab === "tourism" ? (
-                  <TreePalm className="mx-auto h-8 w-8 text-muted-foreground" />
+            <GridStateMessage
+              tone="teal"
+              state="filtered-empty"
+              title={
+                activeTab === "tourism"
+                  ? "No tourism businesses match your filters"
+                  : "No events match your filters"
+              }
+              body="Try broadening the filters or clearing a location filter."
+              icon={
+                activeTab === "tourism" ? (
+                  <TreePalm className="h-7 w-7 text-teal-600 dark:text-teal-300" />
                 ) : (
-                  <CalendarDays className="mx-auto h-8 w-8 text-muted-foreground" />
-                )}
-                <h3 className="font-display text-lg font-semibold">
-                  {activeTab === "tourism"
-                    ? "No tourism businesses match your filters"
-                    : "No events match your filters"}
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Try broadening the filters or clearing a location filter.
-                </p>
-                <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-                  <Button asChild size="sm" className="h-11 gap-1">
-                    <Link href={createHref}>
-                      {createLabel}
-                      <ArrowRight className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                  <Button variant="outline" size="sm" className="h-11" onClick={clearAllFilters}>
-                    Clear all filters
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+                  <CalendarDays className="h-7 w-7 text-teal-600 dark:text-teal-300" />
+                )
+              }
+              testId="promotions-grid-empty"
+            >
+              <Button asChild size="sm" className="h-11 gap-1">
+                <Link href={createHref}>
+                  {createLabel}
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+              <Button variant="outline" size="sm" className="h-11" onClick={clearAllFilters}>
+                Clear all filters
+              </Button>
+            </GridStateMessage>
           ) : activeTab === "tourism" ? (
             /* ── Tourism Grid ── */
             <>

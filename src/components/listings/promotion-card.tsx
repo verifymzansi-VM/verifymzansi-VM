@@ -179,7 +179,7 @@ export const PromotionCard = memo(function PromotionCard({
       eyebrowClassName={
         price != null && price > 0
           ? undefined
-          : "text-sm font-semibold uppercase tracking-[0.18em] text-white/84 sm:text-base"
+          : "text-[11px] font-bold uppercase tracking-[0.14em] text-brand-green-700 dark:text-brand-green-300 sm:text-xs"
       }
       statusLabel={status?.label}
       statusClassName={status?.className}

@@ -49,7 +49,7 @@ export async function HomeMzansiMarketShowcase() {
       <HomeShowcaseShell
         badge="Mzansi Market"
         title="Latest on Mzansi Market"
-        description="Local sellers. Real products. Video and photos arranged in a calmer, more premium browsing surface."
+        description="Local sellers, real products, identity-reviewed members."
         href="/mzansi-market"
         ctaLabel="View All Listings"
         tone="green"
@@ -70,7 +70,7 @@ export async function HomeMzansiMarketShowcase() {
     <HomeShowcaseShell
       badge="Mzansi Market"
       title="Latest on Mzansi Market"
-      description="Local sellers. Real products. Video and photos arranged in a calmer, more premium browsing surface."
+      description="Local sellers, real products, identity-reviewed members."
       href="/mzansi-market"
       ctaLabel="View All Listings"
       tone="green"

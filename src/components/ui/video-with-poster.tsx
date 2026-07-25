@@ -192,7 +192,10 @@ export function VideoWithPoster({
       role="button"
       tabIndex={0}
       aria-label="Play video"
-      className={cn("relative cursor-pointer select-none", wrapperClassName)}
+      className={cn(
+        "relative cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-green-500",
+        wrapperClassName
+      )}
       onClick={() => setActivated(true)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {

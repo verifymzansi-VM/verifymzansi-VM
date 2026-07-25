@@ -5,9 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Building2, Loader2, TreePalm, ShieldAlert, ShoppingBag } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { buildPostCategoryHref } from "@/app/post/_lib/post-access";
 import { normalizeAccountVerificationStatus } from "@/lib/account/compat";
 import type { AccountVerificationStatus } from "@/types/enums";
@@ -23,8 +21,6 @@ const POST_OPTIONS = [
     ],
     icon: ShoppingBag,
     href: "/post/create-listing",
-    badge: "Mzansi Market",
-    badgeColor: "bg-brand-green text-white",
     iconColor: "text-brand-green",
     iconBg: "bg-brand-green/10",
   },
@@ -38,8 +34,6 @@ const POST_OPTIONS = [
     ],
     icon: Building2,
     href: "/post/create-business",
-    badge: "Mzansi Business",
-    badgeColor: "bg-brand-blue text-white",
     iconColor: "text-brand-blue",
     iconBg: "bg-brand-blue/10",
   },
@@ -53,8 +47,6 @@ const POST_OPTIONS = [
     ],
     icon: TreePalm,
     href: "/post/create-tourism",
-    badge: "Tourism & Events",
-    badgeColor: "bg-teal-600 text-white",
     iconColor: "text-teal-600",
     iconBg: "bg-teal-600/10",
   },
@@ -158,7 +150,7 @@ export function PostCreateClient({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {hasConfirmedAuth && !canPost && (
         <Alert className="border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
           <ShieldAlert className="mt-0.5 h-4 w-4 flex-shrink-0" />
@@ -168,26 +160,6 @@ export function PostCreateClient({
           </div>
         </Alert>
       )}
-
-      <Card className="border-brand-green/20 bg-brand-green/5 shadow-sm dark:border-brand-green/30 dark:bg-brand-green/10">
-        <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-1.5">
-            <p className="text-sm font-semibold text-foreground">
-              Need more visibility after launch?
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Start with the category that matches what you offer, then use advertising or boosts
-              when you want stronger placement after your post is live.
-            </p>
-          </div>
-          <Button asChild variant="outline" className="gap-2 self-start sm:self-center">
-            <Link href="/advertise">
-              See advertising options
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
-        </CardContent>
-      </Card>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {POST_OPTIONS.map((option) => {
@@ -202,21 +174,18 @@ export function PostCreateClient({
               type="button"
               onClick={() => handleCategoryClick(option.href)}
               disabled={isDisabled}
-              className="group block h-full w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/50 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-100"
+              className="group block h-full w-full rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/50 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-100"
             >
               <Card
-                className={`h-full transition-all duration-300 ${
+                className={`h-full transition-all duration-200 ${
                   isPending
-                    ? "border-brand-green/50 bg-brand-green/5 shadow-lg shadow-brand-green/10"
-                    : "cursor-pointer hover:border-brand-green/40 hover:shadow-lg"
+                    ? "border-brand-green/50 bg-brand-green/5"
+                    : "cursor-pointer hover:border-brand-green/40 hover:bg-accent/30"
                 } ${isDisabled && !isPending ? "opacity-75" : ""}`}
               >
                 <CardContent className="flex h-full flex-col gap-4 p-5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className={`rounded-xl p-3 ${option.iconBg}`}>
-                      <Icon className={`h-8 w-8 ${option.iconColor}`} />
-                    </div>
-                    <Badge className={option.badgeColor}>{option.badge}</Badge>
+                  <div className={`w-fit rounded-xl p-3 ${option.iconBg}`}>
+                    <Icon className={`h-7 w-7 ${option.iconColor}`} />
                   </div>
 
                   <div>
@@ -228,18 +197,15 @@ export function PostCreateClient({
                     {option.bullets.map((bullet) => (
                       <li key={bullet} className="flex items-start gap-2">
                         <span
-                          className={`mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full ${option.badgeColor.split(" ")[0]}`}
+                          aria-hidden="true"
+                          className="mt-2 h-1 w-1 flex-shrink-0 rounded-full bg-muted-foreground/50"
                         />
                         {bullet}
                       </li>
                     ))}
                   </ul>
 
-                  <div
-                    className={`mt-auto flex items-center gap-1 text-sm font-medium ${
-                      isPending ? "text-brand-green" : "text-brand-green"
-                    }`}
-                  >
+                  <div className="mt-auto flex items-center gap-1 text-sm font-medium text-brand-green">
                     {isPending ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -248,7 +214,7 @@ export function PostCreateClient({
                     ) : (
                       <>
                         Get Started
-                        <ArrowRight className="h-4 w-4" />
+                        <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
                       </>
                     )}
                   </div>
@@ -258,6 +224,17 @@ export function PostCreateClient({
           );
         })}
       </div>
+
+      <p className="text-sm text-muted-foreground">
+        Need more visibility after launch?{" "}
+        <Link
+          href="/advertise"
+          prefetch={false}
+          className="font-medium text-brand-green underline-offset-4 transition-colors hover:text-brand-green-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          See advertising options
+        </Link>
+      </p>
     </div>
   );
 }

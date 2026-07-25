@@ -171,7 +171,7 @@ export async function HomePromotionsShowcase() {
     <HomeShowcaseShell
       badge="Tourism & Events"
       title="Tourism & Events"
-      description="Destinations, stays, and live experiences across South Africa presented in the same hero-led visual language."
+      description="Destinations, stays, and live experiences across South Africa."
       href="/tourism-events"
       ctaLabel="View All"
       tone="teal"

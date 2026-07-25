@@ -177,9 +177,9 @@ export function PosterCardShell({
   const cardClassName = cn(
     "relative h-full w-full flex flex-col overflow-hidden border-transparent transition-all duration-300",
     isHeroVariant
-      ? "border border-slate-200 bg-white text-slate-950 shadow-[0_34px_110px_-52px_rgba(15,23,42,0.72)] ring-1 ring-black/5 hover:-translate-y-0.5 hover:shadow-[0_44px_125px_-56px_rgba(15,23,42,0.82)] dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:ring-white/10"
+      ? "border border-slate-200 bg-white text-slate-950 shadow-[0_24px_64px_-36px_rgba(15,23,42,0.4)] ring-1 ring-black/5 hover:-translate-y-0.5 hover:shadow-[0_30px_72px_-38px_rgba(15,23,42,0.46)] dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:ring-white/10"
       : isShowcaseVariant
-        ? "border border-slate-200/75 bg-white/96 shadow-[0_22px_50px_-34px_rgba(15,23,42,0.38)] backdrop-blur-sm hover:-translate-y-1 hover:shadow-[0_28px_65px_-38px_rgba(15,23,42,0.42)] dark:border-white/10 dark:bg-slate-950/80"
+        ? "border border-slate-200/75 bg-white/96 shadow-[0_12px_32px_-20px_rgba(15,23,42,0.25)] backdrop-blur-sm hover:-translate-y-0.5 hover:shadow-[0_18px_40px_-22px_rgba(15,23,42,0.3)] dark:border-white/10 dark:bg-slate-950/80"
         : "bg-warm-100 shadow-[0_2px_10px_-6px_rgba(15,23,42,0.16)] hover:-translate-y-px hover:shadow-[0_6px_18px_-10px_rgba(15,23,42,0.22)] dark:border-white/10 dark:bg-slate-950 dark:text-white dark:ring-1 dark:ring-white/10",
     rootRadiusClassName,
     accentClassName
@@ -218,7 +218,7 @@ export function PosterCardShell({
         )}
       </div>
 
-      {/* Text meta */}
+      {/* Text meta — title, optional supporting line, one combined info row */}
       <div className="min-w-0 flex-1">
         <h3
           className={cn(
@@ -231,34 +231,42 @@ export function PosterCardShell({
         {description ? (
           <p
             className={cn(
-              "leading-tight text-slate-600 line-clamp-1 dark:text-slate-300",
+              "mt-0.5 leading-tight text-slate-500 line-clamp-1 dark:text-slate-400",
               descriptionClassName
             )}
           >
             {description}
           </p>
         ) : null}
-        {location ? (
+        {eyebrow || location ? (
           <p
             className={cn(
-              "flex items-center gap-1 text-slate-600 dark:text-slate-300",
+              "mt-0.5 flex min-w-0 items-center gap-1 leading-tight text-slate-500 dark:text-slate-400",
               locationClassName
             )}
           >
-            <MapPin className="h-3 w-3 shrink-0" />
-            <span className="truncate">{location}</span>
-          </p>
-        ) : null}
-        {/* Eyebrow row (price / date) */}
-        {eyebrow ? (
-          <p
-            className={cn(
-              "flex items-center gap-1 text-slate-600 dark:text-slate-300",
-              eyebrowTextClassName,
-              eyebrowClassName
-            )}
-          >
-            <span className="font-semibold">{eyebrow}</span>
+            {eyebrow ? (
+              <span
+                className={cn(
+                  "shrink-0 font-semibold text-slate-900 dark:text-white",
+                  eyebrowTextClassName,
+                  eyebrowClassName
+                )}
+              >
+                {eyebrow}
+              </span>
+            ) : null}
+            {eyebrow && location ? (
+              <span aria-hidden="true" className="shrink-0 text-slate-300 dark:text-slate-600">
+                ·
+              </span>
+            ) : null}
+            {location ? (
+              <span className="flex min-w-0 items-center gap-0.5">
+                <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
+                <span className="truncate">{location}</span>
+              </span>
+            ) : null}
           </p>
         ) : null}
       </div>
@@ -287,13 +295,13 @@ export function PosterCardShell({
         </div>
       </div>
     ) : (
-      <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.16),rgba(15,23,42,0)_55%),linear-gradient(180deg,rgba(15,23,42,0.12),rgba(15,23,42,0.24))] px-6 text-center text-white/88">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/12 bg-black/30 backdrop-blur-sm">
-          <ImageOff className="h-6 w-6" />
+      <div className="flex h-full w-full flex-col items-center justify-center gap-2.5 bg-[linear-gradient(160deg,hsl(37_30%_95%)_0%,hsl(37_24%_89%)_100%)] px-6 text-center dark:bg-[linear-gradient(160deg,hsl(30_12%_14%)_0%,hsl(30_10%_10%)_100%)]">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/70 text-warm-400 shadow-sm ring-1 ring-black/5 dark:bg-white/5 dark:text-warm-500 dark:ring-white/10">
+          <ImageOff className="h-5 w-5" aria-hidden="true" />
         </div>
         <div className="space-y-1">
-          <p className="text-sm font-semibold">Preview unavailable</p>
-          <p className="text-xs text-white/70">{title}</p>
+          <p className="text-sm font-semibold text-warm-700 dark:text-warm-300">No photo yet</p>
+          <p className="line-clamp-2 text-xs text-warm-500 dark:text-warm-400">{title}</p>
         </div>
       </div>
     ));

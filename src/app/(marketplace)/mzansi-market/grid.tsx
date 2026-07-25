@@ -7,7 +7,8 @@ import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import type { ListingCondition, AccountVerificationStatus } from "@/types/enums";
 import { useMarketplaceStore } from "@/stores";
 import { ListingGridSkeleton } from "@/components/listings/listing-skeleton";
-import { PackageOpen, Plus, AlertTriangle, LayoutGrid, List } from "lucide-react";
+import { GridStateMessage } from "@/components/listings/grid-state-message";
+import { Plus, LayoutGrid, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MarketplacePaginationControls } from "@/components/listings/marketplace-pagination-controls";
@@ -254,6 +255,11 @@ export function MzansiMarketGrid() {
   if (listings.length === 0) {
     const hasFilters = activeFilterCount > 0 && !fetchError;
     const hasQueryError = Boolean(fetchError);
+    const gridState: "error" | "filtered-empty" | "empty" = hasQueryError
+      ? "error"
+      : hasFilters
+        ? "filtered-empty"
+        : "empty";
     const emptyTitle = fetchError?.title
       ? fetchError.title
       : hasFilters
@@ -267,38 +273,24 @@ export function MzansiMarketGrid() {
     const suggestedCats = CATEGORIES.slice(0, 4);
 
     return (
-      <div
-        className="flex flex-col items-center justify-center py-6 sm:py-8 space-y-3"
-        data-testid="mzansi-market-grid-empty"
-        data-grid-state={hasQueryError ? "error" : hasFilters ? "filtered-empty" : "empty"}
+      <GridStateMessage
+        tone="green"
+        state={gridState}
+        title={emptyTitle}
+        body={emptyBody}
+        errorCode={fetchError?.code}
+        testId="mzansi-market-grid-empty"
       >
-        <div className="rounded-2xl bg-gradient-to-br from-brand-green-50 to-brand-green-100 dark:from-brand-green-950 dark:to-brand-green-900 p-5 shadow-sm">
-          {hasQueryError ? (
-            <AlertTriangle className="h-8 w-8 text-brand-green" />
-          ) : (
-            <PackageOpen className="h-8 w-8 text-brand-green" />
-          )}
-        </div>
-        <div className="text-center space-y-2 max-w-md">
-          <p className="text-lg font-display font-semibold">{emptyTitle}</p>
-          <p className="text-sm text-muted-foreground">{emptyBody}</p>
-          {fetchError?.code && (
-            <Badge variant="outline" className="font-mono text-[10px]">
-              {fetchError.code}
-            </Badge>
-          )}
-        </div>
-
         {hasFilters && (
           <div className="flex flex-wrap items-center justify-center gap-2">
-            <span className="text-xs text-muted-foreground mr-1">Try:</span>
+            <span className="mr-1 text-xs text-muted-foreground">Try:</span>
             {suggestedCats.map((cat) => {
               const Icon = cat.icon;
               return (
                 <Badge
                   key={cat.value}
                   variant="secondary"
-                  className="gap-1 cursor-pointer hover:bg-brand-green/10 transition-colors"
+                  className="cursor-pointer gap-1 transition-colors hover:bg-brand-green/10"
                   onClick={() => {
                     resetFilters();
                     setFilter("category", cat.value);
@@ -333,14 +325,14 @@ export function MzansiMarketGrid() {
         )}
 
         {!hasFilters && !hasQueryError && (
-          <Button asChild size="lg" className="mt-2 shadow-md">
+          <Button asChild size="lg">
             <Link href="/post/create">
               <Plus className="mr-1.5 h-4 w-4" />
               Post Your First Ad
             </Link>
           </Button>
         )}
-      </div>
+      </GridStateMessage>
     );
   }
 

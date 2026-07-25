@@ -181,9 +181,24 @@ describe("ShowroomCardCarousel", () => {
     expect(cards.length).toBeGreaterThanOrEqual(mockItems.length);
   });
 
-  it("does not render visible navigation dots over showroom cards", () => {
+  it("renders visible progress dots that expose and control slide position", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
-    expect(screen.queryAllByRole("button", { name: /go to slide/i })).toHaveLength(0);
+
+    const dots = screen.getAllByRole("button", { name: /go to slide/i });
+    expect(dots).toHaveLength(3);
+    expect(dots[0]).toHaveAttribute("aria-current", "true");
+    expect(dots[1]).not.toHaveAttribute("aria-current");
+
+    // Dots sit below the card stage, not overlaid on top of cards.
+    const progress = screen.getByTestId("showroom-progress");
+    expect(progress.className).not.toContain("absolute");
+
+    fireEvent.click(dots[2]);
+    expect(screen.getByText("Slide 3 of 3")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Go to slide 3 of 3" })).toHaveAttribute(
+      "aria-current",
+      "true"
+    );
   });
 
   it("renders empty state when no items provided", () => {
@@ -459,13 +474,23 @@ describe("ShowroomCardCarousel", () => {
     expect(sideCards[0]).toHaveAttribute("data-media-url", "/images/fallbacks/hero-business.svg");
   });
 
-  it("relies on swipe and keyboard gestures rather than visible mobile button controls", () => {
+  it("keeps arrow controls desktop-only while mobile relies on swipe and keyboard", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
-    expect(
-      screen.queryByRole("button", { name: /return to previous card/i })
-    ).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /skip to next card/i })).not.toBeInTheDocument();
-    expect(screen.queryAllByRole("button", { name: /go to slide/i })).toHaveLength(0);
+
+    const prevButton = screen.getByRole("button", { name: "Previous slide" });
+    const nextButton = screen.getByRole("button", { name: "Next slide" });
+
+    // Hidden below the lg breakpoint so mobile stays swipe-first.
+    expect(prevButton.className).toContain("hidden");
+    expect(prevButton.className).toContain("lg:flex");
+    expect(nextButton.className).toContain("hidden");
+    expect(nextButton.className).toContain("lg:flex");
+
+    // Arrows drive the same sequence as swipe/keyboard.
+    fireEvent.click(nextButton);
+    expect(screen.getByText("Slide 2 of 3")).toBeInTheDocument();
+    fireEvent.click(prevButton);
+    expect(screen.getByText("Slide 1 of 3")).toBeInTheDocument();
   });
 
   it("renders an active card link to the detail page", () => {

@@ -51,7 +51,7 @@ export function QuickLinks({ planLabel }: QuickLinksProps) {
               href={link.href}
               className={cn(
                 "flex items-center gap-3 rounded-xl border border-border/60 bg-card px-3.5 py-3.5 transition-all",
-                "hover:border-foreground/15 hover:shadow-md active:scale-[0.97]"
+                "hover:border-foreground/20 hover:bg-accent/40 active:scale-[0.98]"
               )}
             >
               <div

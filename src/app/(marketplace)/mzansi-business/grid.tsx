@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { AlertTriangle, Building2, Plus } from "lucide-react";
+import { Building2, Plus } from "lucide-react";
+import { GridStateMessage } from "@/components/listings/grid-state-message";
 import {
   BusinessCardGridItem,
   type BusinessCardGridRow,
@@ -175,24 +176,14 @@ export function MzansiBusinessGrid() {
         : "Be the first identity-reviewed representative to post a business profile on Mzansi Business.";
 
     return (
-      <div
-        className="flex flex-col items-center justify-center py-6 sm:py-8 space-y-3"
-        data-testid="mzansi-business-grid-empty"
-        data-grid-state={hasQueryError ? "error" : hasFilters ? "filtered-empty" : "empty"}
+      <GridStateMessage
+        tone="blue"
+        state={hasQueryError ? "error" : hasFilters ? "filtered-empty" : "empty"}
+        title={emptyTitle}
+        body={emptyBody}
+        icon={<Building2 className="h-7 w-7 text-brand-blue" />}
+        testId="mzansi-business-grid-empty"
       >
-        <div className="rounded-2xl bg-gradient-to-br from-brand-blue/10 to-brand-blue/20 p-5 shadow-sm">
-          {hasQueryError ? (
-            <AlertTriangle className="h-8 w-8 text-brand-blue" />
-          ) : (
-            <Building2 className="h-8 w-8 text-brand-blue" />
-          )}
-        </div>
-
-        <div className="text-center space-y-2 max-w-md">
-          <p className="text-lg font-display font-semibold">{emptyTitle}</p>
-          <p className="text-sm text-muted-foreground">{emptyBody}</p>
-        </div>
-
         {hasQueryError && (
           <Button variant="outline" onClick={handleRetry}>
             Retry
@@ -206,14 +197,14 @@ export function MzansiBusinessGrid() {
         )}
 
         {!hasFilters && !hasQueryError && (
-          <Button asChild size="lg" className="mt-2 shadow-md">
+          <Button asChild size="lg">
             <Link href="/post/create-business">
               <Plus className="mr-1.5 h-4 w-4" />
               Create Business Profile
             </Link>
           </Button>
         )}
-      </div>
+      </GridStateMessage>
     );
   }
 

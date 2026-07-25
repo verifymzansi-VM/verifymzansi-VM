@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { useGlobalMute } from "@/hooks/use-global-mute";
 import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { useDataSaver } from "@/hooks/use-data-saver";
 
 interface ProfileVideoPlayerProps {
   src: string;
@@ -77,6 +78,8 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
     const containerRef = useRef<HTMLDivElement>(null);
     const isPausedByUserRef = useRef(!autoPlay);
     const reducedMotion = useReducedMotion();
+    const dataSaver = useDataSaver();
+    const autoplayBlocked = reducedMotion || dataSaver;
 
     const { isMuted, toggleMute, setMuted } = useGlobalMute(localVideoRef);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -121,7 +124,7 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
 
       const observer = new IntersectionObserver(
         ([entry]) => {
-          if (isPausedByUserRef.current || reducedMotion) {
+          if (isPausedByUserRef.current || autoplayBlocked) {
             manager.updateVisibility(video, 0);
             return;
           }
@@ -136,7 +139,7 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
         observer.disconnect();
         manager.unregister(video);
       };
-    }, [manager, retryKey, reducedMotion]);
+    }, [manager, retryKey, autoplayBlocked]);
 
     const handleLoadedMetadata = useCallback(() => {
       const video = localVideoRef.current;

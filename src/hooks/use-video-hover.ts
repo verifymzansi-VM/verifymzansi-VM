@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "./use-reduced-motion";
+import { useDataSaver } from "./use-data-saver";
 import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
 
 /**
@@ -10,7 +11,8 @@ import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
  * - Video plays on `mouseenter` and pauses + rewinds on `mouseleave`.
  * - Hover claims **exclusive playback priority** in the global playback manager
  *   so only the hovered video plays (other ambient videos are paused).
- * - Respects `prefers-reduced-motion: reduce` — auto-play on hover is skipped.
+ * - Respects `prefers-reduced-motion: reduce` and `Save-Data` — auto-play on
+ *   hover is skipped for both preferences.
  *
  * @param videoSrc The video URL. Pass `undefined` when the media is not a video.
  * @returns Attach `videoRef` to the `<video>`, `containerRef` to the outer wrapper.
@@ -19,6 +21,8 @@ export function useVideoHover(videoSrc?: string) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const reducedMotion = useReducedMotion();
+  const dataSaver = useDataSaver();
+  const autoplayBlocked = reducedMotion || dataSaver;
   const [isHovering, setIsHovering] = useState(false);
   const manager = useVideoPlaybackManager();
 
@@ -55,11 +59,11 @@ export function useVideoHover(videoSrc?: string) {
   const onMouseEnter = useCallback(() => {
     setIsHovering(true);
     const el = videoRef.current;
-    if (!el || reducedMotion) return;
+    if (!el || autoplayBlocked) return;
     if (el.src) {
       manager.requestPriority(el);
     }
-  }, [reducedMotion, manager]);
+  }, [autoplayBlocked, manager]);
 
   const onMouseLeave = useCallback(() => {
     setIsHovering(false);
@@ -83,5 +87,5 @@ export function useVideoHover(videoSrc?: string) {
     };
   }, [onMouseEnter, onMouseLeave]);
 
-  return { videoRef, containerRef, reducedMotion, isHovering };
+  return { videoRef, containerRef, reducedMotion: autoplayBlocked, isHovering };
 }

@@ -15,6 +15,7 @@ import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
 import { isVideoUrl } from "@/components/ui/video-card-player";
 import { Button } from "@/components/ui/button";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TrustLevel } from "@/types/enums";
 
@@ -95,7 +96,9 @@ const TYPE_FALLBACK_MEDIA: Record<CarouselItem["type"], string> = {
 const CARD_W = "showroom-card-frame";
 const SECTION_SPACING =
   "pt-0 pb-8 sm:pt-0 sm:pb-10 md:pt-4 md:pb-12 lg:min-h-[clamp(31rem,64vh,42rem)] lg:py-10";
-const SECTION_SURFACE = "bg-[linear-gradient(180deg,#f8f5ec_0%,#f1e8da_48%,#e8decd_100%)]";
+const SECTION_SURFACE =
+  "bg-[linear-gradient(180deg,#faf8f3_0%,#f3eee4_52%,#ece5d6_100%)] dark:bg-[linear-gradient(180deg,#0c0f14_0%,#0a0d12_52%,#080a0f_100%)]";
+const MAX_VISIBLE_DOTS = 7;
 
 function getBackgroundOverlayClasses(preset: ShowroomBackgroundOverlayPreset = "market") {
   switch (preset) {
@@ -149,6 +152,118 @@ function clamp(value: number, min: number, max: number): number {
 
 function lerp(start: number, end: number, progress: number): number {
   return start + (end - start) * progress;
+}
+
+/* ── Visible progress + arrow controls ─────────────────────── */
+
+interface ShowroomProgressDotsProps {
+  count: number;
+  activeIndex: number;
+  onSelect: (index: number) => void;
+  /** Duration of the active slide — drives the fill animation on the active dot. */
+  activeDurationMs: number;
+  /** Fill animation only runs for timed image slides while autoplay is live. */
+  fillActive: boolean;
+  isPaused: boolean;
+}
+
+function getVisibleDotRange(count: number, activeIndex: number) {
+  if (count <= MAX_VISIBLE_DOTS) return { start: 0, end: count - 1 };
+  const start = Math.max(
+    0,
+    Math.min(activeIndex - Math.floor(MAX_VISIBLE_DOTS / 2), count - MAX_VISIBLE_DOTS)
+  );
+  return { start, end: start + MAX_VISIBLE_DOTS - 1 };
+}
+
+function ShowroomProgressDots({
+  count,
+  activeIndex,
+  onSelect,
+  activeDurationMs,
+  fillActive,
+  isPaused,
+}: ShowroomProgressDotsProps) {
+  if (count <= 1) return null;
+  const { start, end } = getVisibleDotRange(count, activeIndex);
+  const indexes = Array.from({ length: end - start + 1 }, (_, i) => start + i);
+
+  return (
+    <div
+      className="relative z-20 flex items-center justify-center gap-1 pb-1 pt-3 sm:pt-4"
+      aria-label="Showroom slide position"
+      data-testid="showroom-progress"
+    >
+      {indexes.map((index) => {
+        const isActive = index === activeIndex;
+        return (
+          <button
+            key={index}
+            type="button"
+            aria-current={isActive ? "true" : undefined}
+            aria-label={`Go to slide ${index + 1} of ${count}`}
+            data-carousel-control="true"
+            data-showroom-dot={isActive ? "active" : "inactive"}
+            onClick={() => onSelect(index)}
+            className="group/dot flex min-h-[32px] min-w-[32px] items-center justify-center rounded-full p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/40 dark:focus-visible:ring-white/40"
+          >
+            <span
+              className={cn(
+                "relative block h-1.5 overflow-hidden rounded-full transition-all duration-300",
+                isActive
+                  ? "w-6 bg-slate-900/25 dark:bg-white/25"
+                  : "w-1.5 bg-slate-900/30 group-hover/dot:bg-slate-900/50 dark:bg-white/30 dark:group-hover/dot:bg-white/50"
+              )}
+            >
+              {isActive && fillActive ? (
+                <span
+                  key={activeIndex}
+                  className="animate-progress-fill absolute inset-y-0 left-0 rounded-full bg-slate-900/80 dark:bg-white/90"
+                  style={
+                    {
+                      "--progress-fill-duration": `${activeDurationMs}ms`,
+                      animationPlayState: isPaused ? "paused" : "running",
+                    } as CSSProperties
+                  }
+                />
+              ) : isActive ? (
+                <span className="absolute inset-0 rounded-full bg-slate-900/80 dark:bg-white/90" />
+              ) : null}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ShowroomArrowButton({
+  direction,
+  onClick,
+}: {
+  direction: "prev" | "next";
+  onClick: () => void;
+}) {
+  const isPrev = direction === "prev";
+  return (
+    <button
+      type="button"
+      data-carousel-control="true"
+      onClick={onClick}
+      aria-label={isPrev ? "Previous slide" : "Next slide"}
+      className={cn(
+        "absolute top-1/2 z-30 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full",
+        "border border-slate-900/10 bg-white/75 text-slate-800 shadow-[0_10px_30px_-12px_rgba(15,23,42,0.35)] backdrop-blur-md",
+        "transition-all duration-200 hover:scale-105 hover:bg-white active:scale-95",
+        "dark:border-white/15 dark:bg-slate-950/60 dark:text-white dark:hover:bg-slate-950/80",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/40 dark:focus-visible:ring-white/40",
+        "lg:flex",
+        isPrev ? "left-4 xl:left-10" : "right-4 xl:right-10"
+      )}
+    >
+      {isPrev ? <ChevronLeft className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+    </button>
+  );
 }
 
 /* ── SA flag section wrapper ───────────────────────────────── */
@@ -238,7 +353,7 @@ function SectionShell({
           "absolute inset-0 z-[1]",
           hasBackground
             ? overlayClasses.wash
-            : "bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.88),transparent_30%),radial-gradient(circle_at_top_right,rgba(34,197,94,0.14),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.08),rgba(15,23,42,0.06)_48%,rgba(15,23,42,0.12)_100%)]"
+            : "bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.88),transparent_30%),radial-gradient(circle_at_top_right,rgba(34,197,94,0.14),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.08),rgba(15,23,42,0.06)_48%,rgba(15,23,42,0.12)_100%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.06),transparent_32%),radial-gradient(circle_at_top_right,rgba(34,197,94,0.08),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(0,0,0,0.12)_48%,rgba(0,0,0,0.28)_100%)]"
         )}
         aria-hidden="true"
       />
@@ -289,7 +404,7 @@ export function ShowroomCardCarousel({
   const pausedRef = useRef(false);
   const pauseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isVisible, setIsVisible] = useState(false);
-  const [, setIsPaused] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
 
   /* ── Drag / pointer state ──────────────────────────────── */
   const [isDragging, setIsDragging] = useState(false);
@@ -833,13 +948,14 @@ export function ShowroomCardCarousel({
               <div className="mt-5 flex flex-col gap-2.5 sm:flex-row sm:justify-center lg:justify-start">
                 <Button
                   asChild
+                  size="lg"
                   className="rounded-full bg-brand-green px-6 text-white hover:bg-brand-green-600"
                 >
                   <Link href="/post/create" prefetch={false}>
                     Post for free
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="rounded-full px-6">
+                <Button asChild size="lg" variant="outline" className="rounded-full px-6">
                   <Link href="/advertise" prefetch={false}>
                     Advertise
                   </Link>
@@ -896,7 +1012,7 @@ export function ShowroomCardCarousel({
       <div
         ref={coverflowRef}
         className={cn(
-          "relative mx-auto max-w-[1680px] overflow-x-clip overflow-y-visible select-none touch-pan-y pb-4 [perspective:1200px] sm:pb-6 md:pb-8 lg:flex lg:min-h-[clamp(28rem,60vh,39rem)] lg:items-center lg:pb-2",
+          "relative mx-auto max-w-[1680px] overflow-x-clip overflow-y-visible select-none touch-pan-y pb-2 [perspective:1200px] sm:pb-3 md:pb-4 lg:flex lg:min-h-[clamp(28rem,60vh,39rem)] lg:items-center lg:pb-1",
           isDragging ? "cursor-grabbing" : "cursor-grab"
         )}
         onPointerDown={handlePointerDown}
@@ -995,6 +1111,39 @@ export function ShowroomCardCarousel({
           {`Slide ${displayIndex + 1} of ${count}`}
         </div>
       )}
+
+      {/* Desktop arrow controls */}
+      {count > 1 && (
+        <>
+          <ShowroomArrowButton
+            direction="prev"
+            onClick={() => {
+              pauseAutoSwipe();
+              prev();
+            }}
+          />
+          <ShowroomArrowButton
+            direction="next"
+            onClick={() => {
+              pauseAutoSwipe();
+              next();
+            }}
+          />
+        </>
+      )}
+
+      {/* Visible progress / state */}
+      <ShowroomProgressDots
+        count={count}
+        activeIndex={displayIndex}
+        onSelect={(index) => {
+          pauseAutoSwipe();
+          goTo(index);
+        }}
+        activeDurationMs={imageDisplayMs}
+        fillActive={!reducedMotion && isVisible && !activeIsVideo && count > 1}
+        isPaused={isPaused}
+      />
     </SectionShell>
   );
 }

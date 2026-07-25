@@ -49,9 +49,9 @@ export default function BillingPage() {
 
           {/* Free Post Banner */}
           <div className="max-w-4xl mx-auto">
-            <div className="group flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 py-2.5 px-4 rounded-xl bg-gradient-to-r from-brand-green/10 to-brand-green/5 backdrop-blur-sm shadow-sm ring-1 ring-brand-green/20 hover:from-brand-green/15 hover:to-brand-green/10 transition-all duration-300">
+            <div className="flex flex-col items-start justify-between gap-3 rounded-xl border border-brand-green/20 bg-brand-green/5 px-4 py-3 dark:border-brand-green/25 dark:bg-brand-green/10 sm:flex-row sm:items-center">
               <div className="flex items-center gap-2">
-                <Badge className="inline-flex items-center bg-brand-green/20 text-brand-green hover:bg-brand-green/30 px-2 py-0.5 border-0 transition-colors">
+                <Badge className="inline-flex items-center border-0 bg-brand-green/15 px-2 py-0.5 text-brand-green-700 dark:text-brand-green-300">
                   <Gift className="mr-1.5 h-3.5 w-3.5 shrink-0" /> Free
                 </Badge>
                 <span className="text-xs font-medium leading-tight text-foreground/90">
@@ -65,9 +65,9 @@ export default function BillingPage() {
               <Button
                 asChild
                 size="default"
-                className="bg-brand-green text-white shadow-md shadow-brand-green/20 font-semibold shrink-0 hover:bg-brand-green/90 transition-all duration-300 hover:shadow-lg hover:shadow-brand-green/30"
+                className="shrink-0 bg-brand-green font-semibold text-white transition-colors hover:bg-brand-green-600"
               >
-                <Link href="/post/create" className="flex items-center gap-1 group/btn">
+                <Link href="/post/create" className="group/btn flex items-center gap-1">
                   Start with a Free Post
                   <ArrowRight className="h-4 w-4 shrink-0 transition-transform duration-300 group-hover/btn:translate-x-1" />
                 </Link>

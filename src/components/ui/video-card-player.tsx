@@ -462,11 +462,15 @@ function getInitialAmbientPlaybackPaused(
     return false;
   }
 
-  if (typeof window.matchMedia !== "function") {
-    return false;
+  if (typeof window.matchMedia === "function") {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return true;
+    }
   }
 
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Save-Data preference: start paused so playback is always user-initiated.
+  const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+  return Boolean(connection?.saveData);
 }
 
 interface VideoCardPlayerInnerProps {

@@ -24,7 +24,7 @@ const TABS: TabDef[] = [
     id: "trust-safety",
     href: "/trust-safety",
     icon: ShieldAlert,
-    label: "Trust & Safety",
+    label: "Safety",
   },
   {
     id: "dashboard",
@@ -81,12 +81,7 @@ export function MobileNav() {
               >
                 <Icon className={cn("h-5 w-5", tab.id === "post" && "h-6 w-6")} />
               </span>
-              <span
-                className={cn(
-                  "max-w-16 text-center text-xs font-medium leading-tight",
-                  tab.id === "trust-safety" && "text-[10px] leading-[1.05]"
-                )}
-              >
+              <span className="max-w-16 text-center text-xs font-medium leading-tight">
                 {tab.label}
               </span>
             </Link>

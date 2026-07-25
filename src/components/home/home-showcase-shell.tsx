@@ -75,7 +75,7 @@ export function HomeShowcaseShell({
       <div className="container-page">
         <div
           className={cn(
-            "group relative overflow-hidden rounded-[2rem] border shadow-[0_28px_90px_-56px_rgba(15,23,42,0.5)] backdrop-blur-xl",
+            "group relative overflow-hidden rounded-[2rem] border shadow-[0_18px_54px_-40px_rgba(15,23,42,0.35)]",
             styles.panelClassName
           )}
         >

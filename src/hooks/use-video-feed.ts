@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "./use-reduced-motion";
+import { useDataSaver } from "./use-data-saver";
 import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
 
 /**
@@ -22,6 +23,10 @@ import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
 export function useVideoFeed(videoSrc?: string, isPlaybackEligible = true) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const reducedMotion = useReducedMotion();
+  const dataSaver = useDataSaver();
+  // Autoplay stays off when the user prefers reduced motion or data saving;
+  // the card falls back to a poster with a manual play button.
+  const autoplayBlocked = reducedMotion || dataSaver;
   const manager = useVideoPlaybackManager();
 
   // Track whether the user explicitly paused via tap
@@ -70,10 +75,10 @@ export function useVideoFeed(videoSrc?: string, isPlaybackEligible = true) {
           // Reset user-pause when element scrolls back into view from being mostly hidden
           // (handled below in the !isIntersecting branch)
 
-          if (!reducedMotion && isPlaybackEligible && !isPausedByUserRef.current) {
+          if (!autoplayBlocked && isPlaybackEligible && !isPausedByUserRef.current) {
             manager.updateVisibility(el, entry.intersectionRatio);
           } else {
-            // User paused or reduced-motion — don't compete for playback
+            // User paused or autoplay blocked — don't compete for playback
             el.pause();
             manager.updateVisibility(el, 0);
           }
@@ -97,7 +102,7 @@ export function useVideoFeed(videoSrc?: string, isPlaybackEligible = true) {
       observer.disconnect();
       manager.unregister(el);
     };
-  }, [videoSrc, reducedMotion, manager, isPlaybackEligible]);
+  }, [videoSrc, autoplayBlocked, manager, isPlaybackEligible]);
 
   useEffect(() => {
     const el = videoRef.current;
@@ -129,5 +134,5 @@ export function useVideoFeed(videoSrc?: string, isPlaybackEligible = true) {
     }
   }, [videoSrc, manager]);
 
-  return { videoRef, isPlaying, isPausedByUser, togglePlayback, reducedMotion };
+  return { videoRef, isPlaying, isPausedByUser, togglePlayback, reducedMotion: autoplayBlocked };
 }

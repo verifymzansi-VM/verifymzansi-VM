@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useReducedMotion } from "./use-reduced-motion";
+import { useDataSaver } from "./use-data-saver";
 import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
 
 /**
@@ -9,16 +10,20 @@ import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
  *   with many video cards make **zero** video network requests on initial load.
  * - Playback is **managed globally** — only the most-visible video plays at any
  *   given time (Facebook / YouTube-style single-video autoplay).
- * - Respects `prefers-reduced-motion: reduce` — the video `src` is still lazy-
- *   loaded (so poster-frame extraction works), but auto-play is skipped.
+ * - Respects `prefers-reduced-motion: reduce` and `Save-Data` — the video `src`
+ *   is still lazy-loaded (so poster-frame extraction works), but auto-play is
+ *   skipped and the card shows a manual play affordance instead.
  *
  * @param videoSrc  The video URL. Pass `undefined` when the media is not a video.
  * @param shouldAutoplay When false, the video still lazy-loads but will not auto-play.
- * @returns `{ videoRef, reducedMotion }` — attach `videoRef` to the `<video>` element.
+ * @returns `{ videoRef, autoplayBlocked }` — attach `videoRef` to the `<video>` element.
+ *   `autoplayBlocked` is true when the user prefers reduced motion or data saving.
  */
 export function useVideoVisibility(videoSrc?: string, shouldAutoplay = true) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const reducedMotion = useReducedMotion();
+  const dataSaver = useDataSaver();
+  const autoplayBlocked = reducedMotion || dataSaver;
   const manager = useVideoPlaybackManager();
 
   useEffect(() => {
@@ -35,7 +40,7 @@ export function useVideoVisibility(videoSrc?: string, shouldAutoplay = true) {
             el.src = videoSrc;
           }
 
-          if (!reducedMotion && shouldAutoplay) {
+          if (!autoplayBlocked && shouldAutoplay) {
             // Report visibility to the global manager — it decides which video plays
             manager.updateVisibility(el, entry.intersectionRatio);
           } else {
@@ -55,7 +60,7 @@ export function useVideoVisibility(videoSrc?: string, shouldAutoplay = true) {
       observer.disconnect();
       manager.unregister(el);
     };
-  }, [videoSrc, reducedMotion, shouldAutoplay, manager]);
+  }, [videoSrc, autoplayBlocked, shouldAutoplay, manager]);
 
-  return { videoRef, reducedMotion };
+  return { videoRef, reducedMotion: autoplayBlocked, autoplayBlocked };
 }

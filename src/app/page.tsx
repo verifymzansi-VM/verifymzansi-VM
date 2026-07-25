@@ -175,86 +175,79 @@ export default async function HomePage() {
           {/* ═══ Onboarding Guide Section ═══ */}
           <section className="relative py-4 sm:py-5 lg:py-6">
             <div className="container-page">
-              <div className="relative overflow-hidden rounded-[2rem] border border-slate-200/80 bg-[linear-gradient(145deg,rgba(255,255,255,0.98),rgba(248,250,252,0.96))] shadow-[0_28px_90px_-56px_rgba(15,23,42,0.5)] backdrop-blur-xl dark:border-white/10 dark:bg-[linear-gradient(145deg,rgba(8,11,16,0.96),rgba(6,9,14,0.98))]">
+              <div className="relative overflow-hidden rounded-[2rem] border border-slate-200/80 bg-white shadow-[0_18px_54px_-40px_rgba(15,23,42,0.35)] dark:border-white/10 dark:bg-slate-950">
                 <div
-                  className="pointer-events-none absolute -right-12 top-0 h-48 w-48 rounded-full bg-brand-green/15 blur-3xl"
+                  className="pointer-events-none absolute -right-12 top-0 h-48 w-48 rounded-full bg-brand-green/10 blur-3xl"
                   aria-hidden="true"
                 />
-                <div className="relative grid gap-6 px-4 py-5 sm:px-6 sm:py-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:gap-8 lg:px-8 lg:py-7">
-                  <div className="space-y-5">
-                    <div className="inline-flex items-center gap-2 rounded-full border border-brand-green/15 bg-brand-green/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-green-800 shadow-sm dark:border-brand-green/20 dark:bg-brand-green/15 dark:text-brand-green-100">
+                <div className="relative grid gap-8 px-5 py-6 sm:px-7 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:gap-10 lg:px-9 lg:py-8">
+                  <div className="space-y-6">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-brand-green/15 bg-brand-green/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-green-800 dark:border-brand-green/20 dark:bg-brand-green/15 dark:text-brand-green-100">
                       <span className="h-2 w-2 rounded-full bg-brand-green-500" />
                       Get Started
                     </div>
 
                     <div className="space-y-3">
+                      <h1 className="font-display text-2xl font-bold leading-[1.05] tracking-tight text-slate-950 dark:text-white sm:text-4xl">
+                        Find and post trusted listings across South Africa.
+                      </h1>
+
+                      <p className="max-w-xl text-base text-slate-600 dark:text-slate-300 sm:text-lg">
+                        Marketplace items, business services, tourism stays, venues, and events —
+                        free to start.
+                      </p>
+
                       <div className="flex flex-wrap items-center gap-2">
                         {freePostHighlights.map((highlight) => (
                           <span
                             key={highlight}
-                            className="inline-flex rounded-full border border-slate-200/80 bg-white/80 px-3 py-1 text-[11px] font-medium text-slate-600 shadow-sm dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200"
+                            className="inline-flex rounded-full border border-slate-200/80 bg-warm-50 px-3 py-1 text-[11px] font-medium text-slate-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200"
                           >
                             {highlight}
                           </span>
                         ))}
                       </div>
-                      <h1 className="font-display text-2xl font-bold leading-[1.05] tracking-tight text-slate-950 dark:text-white sm:text-4xl">
-                        Find and post trusted listings across South Africa.
-                      </h1>
-
-                      <p className="max-w-2xl text-base text-slate-600 dark:text-slate-300 sm:text-lg">
-                        Browse or advertise marketplace items, business services, tourism stays and
-                        experiences, venues, and events. Start with free posts, add photos or
-                        videos, complete verification, and upgrade when you want more visibility.
-                      </p>
                     </div>
 
-                    <div className="rounded-[1.5rem] border border-slate-200/80 bg-white/80 p-4 shadow-inner dark:border-white/10 dark:bg-white/[0.03] sm:p-5">
-                      <p className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-                        How it works
-                      </p>
-                      <ol className="mt-4 space-y-3">
-                        {[
-                          {
-                            title: "Create your profile",
-                            detail: "Set up an account for your business, brand, or selling goals.",
-                          },
-                          {
-                            title: "Complete verification",
-                            detail:
-                              "Complete person-level checks with phone, ID evidence, selfie, and location.",
-                          },
-                          {
-                            title: "Choose your category",
-                            detail:
-                              "Post marketplace listings, business profiles, tourism offers, venues, or events.",
-                          },
-                        ].map((step, index) => (
-                          <li
-                            key={step.title}
-                            className="flex items-start gap-3 text-slate-700 dark:text-slate-200"
+                    <ol className="divide-y divide-slate-200/70 border-y border-slate-200/70 dark:divide-white/8 dark:border-white/8">
+                      {[
+                        {
+                          title: "Create your profile",
+                          detail: "For your business, brand, or selling goals.",
+                        },
+                        {
+                          title: "Complete verification",
+                          detail: "Phone, ID evidence, selfie, and location.",
+                        },
+                        {
+                          title: "Choose your category",
+                          detail: "Marketplace, business, tourism, venues, or events.",
+                        },
+                      ].map((step, index) => (
+                        <li key={step.title} className="flex items-baseline gap-4 py-3">
+                          <span
+                            className="font-display text-sm font-bold tabular-nums text-brand-green"
+                            aria-hidden="true"
                           >
-                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-green/12 text-sm font-semibold text-brand-green-700 dark:bg-brand-green/15 dark:text-brand-green-200">
-                              {index + 1}
+                            {String(index + 1).padStart(2, "0")}
+                          </span>
+                          <div className="min-w-0">
+                            <span className="text-sm font-semibold text-slate-900 dark:text-white sm:text-base">
+                              {step.title}
                             </span>
-                            <div className="pt-1">
-                              <span className="text-sm font-semibold sm:text-base">
-                                {step.title}
-                              </span>
-                              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 sm:text-sm">
-                                {step.detail}
-                              </p>
-                            </div>
-                          </li>
-                        ))}
-                      </ol>
-                    </div>
+                            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 sm:text-sm">
+                              {step.detail}
+                            </p>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
 
                     <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
                       <Button
                         asChild
                         size="lg"
-                        className="h-12 w-full gap-2 rounded-full bg-brand-green px-8 text-base font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-brand-green-600 sm:w-auto"
+                        className="h-12 w-full gap-2 rounded-full bg-brand-green px-8 text-base font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-brand-green-600 sm:w-auto"
                       >
                         <Link href="/post/create" prefetch={false}>
                           Post for Free
@@ -265,7 +258,7 @@ export default async function HomePage() {
                         asChild
                         size="lg"
                         variant="outline"
-                        className="h-12 w-full rounded-full border-slate-300/80 bg-white/90 px-8 text-base text-slate-700 transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-white dark:border-white/15 dark:bg-white/[0.04] dark:text-white dark:hover:bg-white/[0.08] sm:w-auto"
+                        className="h-12 w-full rounded-full border-slate-300/80 bg-white px-8 text-base text-slate-700 transition-all duration-200 hover:-translate-y-0.5 hover:bg-warm-50 dark:border-white/15 dark:bg-white/[0.04] dark:text-white dark:hover:bg-white/[0.08] sm:w-auto"
                       >
                         <Link href="/register" prefetch={false}>
                           Create Account
