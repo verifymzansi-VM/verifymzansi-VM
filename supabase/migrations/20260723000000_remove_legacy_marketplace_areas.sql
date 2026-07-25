@@ -89,7 +89,7 @@ BEGIN
     IF r.column_default IS NOT NULL THEN
       -- Strip any cast decoration from the old default expression,
       -- then re-apply it against the new enum type.
-      new_default := regexp_replace(r.column_default, '::\s*public\.?\s*marketplace_area', '', 'g');
+      new_default := regexp_replace(r.column_default, '::\s*(public\s*\.\s*)?marketplace_area', '', 'g');
       EXECUTE format(
         'ALTER TABLE %I.%I ALTER COLUMN %I SET DEFAULT %s::public.marketplace_area_new',
         r.table_schema, r.table_name, r.column_name, new_default
