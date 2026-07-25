@@ -1834,23 +1834,22 @@ export default function VerificationPage() {
                 </Card>
               )}
 
-            {verificationSubmissionBlocked && (
+            {/* When verification is in admin review the gold banner above
+                already communicates the state — rendering this card too would
+                duplicate the same message on the complete screen. */}
+            {verificationSubmissionBlocked && !verificationInAdminReview && (
               <Card className="border-amber-300/70 bg-amber-50/80 dark:border-amber-700/70 dark:bg-amber-950/20">
                 <CardContent className="space-y-2 p-4 text-sm">
                   <div className="rounded-md border border-amber-400/40 bg-amber-50 p-3 text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
                     <p className="font-medium">
                       {verificationUnavailable
                         ? "Verification temporarily unavailable."
-                        : verificationInAdminReview
-                          ? "Verification pending admin review."
-                          : "Confirm your email before submitting documents and location."}
+                        : "Confirm your email before submitting documents and location."}
                     </p>
                     <p className="mt-1 text-xs">
                       {verificationUnavailable
                         ? VERIFICATION_TEMPORARILY_UNAVAILABLE_DESCRIPTION
-                        : verificationInAdminReview
-                          ? blockedSubmissionDescription
-                          : EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION}
+                        : EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION}
                     </p>
                   </div>
                 </CardContent>
@@ -2587,6 +2586,27 @@ export default function VerificationPage() {
                                   : "Address saved"}
                               {locationVerified && gpsConfidence ? ` (GPS: ${gpsConfidence})` : ""}
                             </span>
+                          </div>
+                        </div>
+                      ) : hasSelectedLocation ? (
+                        // Selected or GPS-estimated but not saved yet — show the
+                        // address so the review panel never says "Not set" while
+                        // a verified address is sitting in the form.
+                        <div className="mt-1 space-y-1">
+                          <p className="text-muted-foreground">{locationSummary}</p>
+                          <div className="flex items-center gap-1 text-xs">
+                            {locationVerified ? (
+                              <span className="text-brand-green flex items-center gap-1">
+                                <CheckCircle2 className="h-3 w-3" />
+                                GPS verified — not saved yet
+                                {gpsConfidence ? ` (GPS: ${gpsConfidence})` : ""}
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 text-muted-foreground">
+                                <Clock3 className="h-3 w-3" />
+                                Selected — not saved yet
+                              </span>
+                            )}
                           </div>
                         </div>
                       ) : (

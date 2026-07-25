@@ -123,8 +123,8 @@ describe("tourism validation schemas", () => {
       const result = tourismBusinessSchema.safeParse(
         validTourismBusiness({
           operating_hours: {
-            weekday: "08:00-17:00",
-            saturday: "09:00-13:00",
+            Mon_Fri: "08:00-17:00",
+            Sat: "09:00-13:00",
           },
         })
       );

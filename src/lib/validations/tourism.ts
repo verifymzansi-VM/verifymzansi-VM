@@ -176,9 +176,9 @@ export const tourismBusinessSchema = z.object({
   category_details: tourismCategoryDetailsSchema,
   operating_hours: z
     .object({
-      weekday: z.string().max(50).optional(),
-      saturday: z.string().max(50).optional(),
-      sunday: z.string().max(50).optional(),
+      Mon_Fri: z.string().max(50).optional(),
+      Sat: z.string().max(50).optional(),
+      Sun: z.string().max(50).optional(),
     })
     .optional(),
 });

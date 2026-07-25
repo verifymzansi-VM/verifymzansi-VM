@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { validateTourismStep } from "@/lib/forms/tourism-form";
 
-describe("validateTourismStep socialAuthorization compatibility", () => {
-  it("accepts event values containing socialAuthorization without introducing validation errors", () => {
+describe("validateTourismStep event compatibility", () => {
+  it("accepts valid event basics without introducing validation errors", () => {
     const errors = validateTourismStep(
       0,
       {
@@ -50,14 +50,6 @@ describe("validateTourismStep socialAuthorization compatibility", () => {
         venueName: "Green Point",
         venueCapacity: "",
         ticketsUrl: "",
-        socialAuthorization: {
-          granted: true,
-          authorizerName: "Jane Owner",
-          authorizerRole: "Director",
-          relationship: "owner",
-          monetizationAcknowledged: true,
-          acceptedVersion: "v1",
-        },
       },
       0
     );

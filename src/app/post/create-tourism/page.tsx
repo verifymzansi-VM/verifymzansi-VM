@@ -70,7 +70,6 @@ import { useAuth } from "@/hooks/use-auth";
 import { usePostDraftAutosave } from "@/hooks/use-post-draft-autosave";
 import { validateTourismStep } from "@/lib/forms/tourism-form";
 import type { TourismListingType } from "@/types/tourism-details";
-import type { SocialAuthorizerRelationship } from "@/types/enums";
 import {
   OperatingHoursInput,
   formatHoursValue,
@@ -191,7 +190,7 @@ const FIELD_LABELS: Record<string, string> = {
   bookingUrl: "Booking URL",
   starRating: "Star rating",
   numberOfRooms: "Number of rooms",
-  socialAuthorization: "Content authorization",
+  termsAccepted: "Posting terms",
 };
 
 function normalizeTourismFieldErrors(errors: Record<string, string>): Record<string, string> {
@@ -214,7 +213,11 @@ function getFieldId(key: string | undefined): string | undefined {
 function getStepForFieldKey(key: string): number {
   const normalizedKey = FIELD_KEY_ALIASES[key] ?? key;
 
-  if (normalizedKey === "images" || normalizedKey === "videos") {
+  if (
+    normalizedKey === "images" ||
+    normalizedKey === "videos" ||
+    normalizedKey === "termsAccepted"
+  ) {
     return 3;
   }
 
@@ -416,18 +419,6 @@ function CreateTourismContent() {
   const [rainPolicy, setRainPolicy] = useState("");
   const [earlyBirdDeadline, setEarlyBirdDeadline] = useState("");
   const [groupDiscountAvailable, setGroupDiscountAvailable] = useState(false);
-  const [socialAuthorization, setSocialAuthorization] = useState<{
-    granted: boolean;
-    authorizerName?: string;
-    authorizerRole?: string;
-    relationship?: SocialAuthorizerRelationship;
-    monetizationAcknowledged?: boolean;
-    acceptedVersion?: string;
-  }>({
-    granted: false,
-    monetizationAcknowledged: false,
-    acceptedVersion: "v1",
-  });
 
   /* ── Media state ─────────────────────────────────────────── */
   const [logoFiles, setLogoFiles] = useState<File[]>([]);
@@ -674,16 +665,6 @@ function CreateTourismContent() {
       if (d.socialTwitter) setSocialTwitter(d.socialTwitter);
       if (d.socialTiktok) setSocialTiktok(d.socialTiktok);
       if (d.businessId) setBusinessId(d.businessId);
-      if (d.socialAuthorization) {
-        setSocialAuthorization({
-          granted: !!d.socialAuthorization.granted,
-          authorizerName: d.socialAuthorization.authorizerName,
-          authorizerRole: d.socialAuthorization.authorizerRole,
-          relationship: d.socialAuthorization.relationship,
-          monetizationAcknowledged: !!d.socialAuthorization.monetizationAcknowledged,
-          acceptedVersion: d.socialAuthorization.acceptedVersion || "v1",
-        });
-      }
       toast({ title: "Draft restored", description: "Continuing where you left off." });
     });
   }, [user?.id, isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -760,7 +741,6 @@ function CreateTourismContent() {
       socialTwitter,
       socialTiktok,
       businessId,
-      socialAuthorization: listingType === "event" ? socialAuthorization : undefined,
     };
 
     const autosaveSignature = JSON.stringify({ step, draftData });
@@ -844,7 +824,6 @@ function CreateTourismContent() {
     socialTwitter,
     socialTiktok,
     businessId,
-    socialAuthorization,
   ]);
 
   /* ── Helpers ─────────────────────────────────────────────── */
@@ -956,7 +935,6 @@ function CreateTourismContent() {
         venueName,
         venueCapacity,
         ticketsUrl,
-        socialAuthorization,
         locationAddress,
         locationTown,
       },
@@ -978,6 +956,77 @@ function CreateTourismContent() {
     }
 
     return errors;
+  }
+
+  /* ── Category details builder (shared by submit + preview) ── */
+
+  function buildTourismCategoryDetails(): Record<string, unknown> {
+    const group = TOURISM_SUBCATEGORY_FIELD_GROUPS[subcategory] ?? "";
+    const categoryDetails: Record<string, unknown> = {};
+    if (subcategory) categoryDetails.subcategory = subcategory;
+
+    // Group A/B: Accommodation & Spa
+    if (group === "A" || group === "B") {
+      if (starRating) categoryDetails.star_rating = Number(starRating);
+      if (numberOfRooms) categoryDetails.number_of_rooms = Number(numberOfRooms);
+      if (accommodationTypes.length) categoryDetails.accommodation_types = accommodationTypes;
+      if (checkInTime) categoryDetails.check_in_time = checkInTime;
+      if (checkOutTime) categoryDetails.check_out_time = checkOutTime;
+      if (mealOptions.length) categoryDetails.meal_options = mealOptions;
+      categoryDetails.pets_allowed = petsAllowed;
+      categoryDetails.smoking_allowed = smokingAllowed;
+    }
+    // Group B extra: Spa
+    if (group === "B") {
+      if (treatmentTypes.length) categoryDetails.treatment_types = treatmentTypes;
+    }
+    // Group C: Tours & Safaris
+    if (group === "C") {
+      if (activityTypes.length) categoryDetails.activity_types = activityTypes;
+      if (tourDuration) categoryDetails.tour_duration = tourDuration;
+      if (maxGroupSize) categoryDetails.max_group_size = Number(maxGroupSize);
+      if (difficultyLevel) categoryDetails.difficulty_level = difficultyLevel;
+      categoryDetails.equipment_provided = equipmentProvided;
+      if (whatsIncluded) categoryDetails.whats_included = whatsIncluded;
+      if (tourismAgeRestriction) categoryDetails.age_restriction = tourismAgeRestriction;
+    }
+    // Group D: Travel Agency
+    if (group === "D") {
+      if (servicesOffered.length) categoryDetails.services_offered = servicesOffered;
+      if (tourismSpecializations.length) categoryDetails.specializations = tourismSpecializations;
+    }
+    // Group E: Attractions
+    if (group === "E") {
+      categoryDetails.guided_tours = guidedTours;
+      categoryDetails.audio_guide = audioGuide;
+      if (visitDuration) categoryDetails.visit_duration = visitDuration;
+      if (tourismAgeRestriction) categoryDetails.age_restriction = tourismAgeRestriction;
+    }
+    // Group F: Car Rental
+    if (group === "F") {
+      if (vehicleTypes.length) categoryDetails.vehicle_types = vehicleTypes;
+      categoryDetails.delivery_collection = deliveryCollection;
+      if (minDriverAge) categoryDetails.min_driver_age = Number(minDriverAge);
+      categoryDetails.insurance_included = insuranceIncluded;
+      categoryDetails.gps_available = gpsAvailable;
+    }
+    // Shared fields
+    if (priceRange) categoryDetails.price_range = priceRange;
+    if (amenities.length && group !== "D" && group !== "F") {
+      categoryDetails.amenities = amenities;
+    }
+    if (languagesSpoken) categoryDetails.languages_spoken = languagesSpoken;
+    if (cancellationPolicy) categoryDetails.cancellation_policy = cancellationPolicy;
+    if (bookingUrl) categoryDetails.booking_url = normalizeUserEnteredUrl(bookingUrl);
+
+    // SA tourism additions
+    if (tgcsaGrading) categoryDetails.tgcsa_grading = tgcsaGrading;
+    if (minimumStayNights) categoryDetails.minimum_stay_nights = Number(minimumStayNights);
+    if (childPolicy) categoryDetails.child_policy = childPolicy;
+    if (seasonalPricing) categoryDetails.seasonal_pricing = seasonalPricing;
+    if (nearbyAttractions) categoryDetails.nearby_attractions = nearbyAttractions;
+
+    return categoryDetails;
   }
 
   /* ── Submit ──────────────────────────────────────────────── */
@@ -1068,75 +1117,14 @@ function CreateTourismContent() {
         setSubmitProgress("Saving tourism business...");
         setUploadStatuses((c) => ({ ...c, saving: "uploading" }));
 
-        const categoryDetails: Record<string, unknown> = {};
-        if (subcategory) categoryDetails.subcategory = subcategory;
-
-        // Group A/B: Accommodation & Spa
-        if (fieldGroup === "A" || fieldGroup === "B") {
-          if (starRating) categoryDetails.star_rating = Number(starRating);
-          if (numberOfRooms) categoryDetails.number_of_rooms = Number(numberOfRooms);
-          if (accommodationTypes.length) categoryDetails.accommodation_types = accommodationTypes;
-          if (checkInTime) categoryDetails.check_in_time = checkInTime;
-          if (checkOutTime) categoryDetails.check_out_time = checkOutTime;
-          if (mealOptions.length) categoryDetails.meal_options = mealOptions;
-          categoryDetails.pets_allowed = petsAllowed;
-          categoryDetails.smoking_allowed = smokingAllowed;
-        }
-        // Group B extra: Spa
-        if (fieldGroup === "B") {
-          if (treatmentTypes.length) categoryDetails.treatment_types = treatmentTypes;
-        }
-        // Group C: Tours & Safaris
-        if (fieldGroup === "C") {
-          if (activityTypes.length) categoryDetails.activity_types = activityTypes;
-          if (tourDuration) categoryDetails.tour_duration = tourDuration;
-          if (maxGroupSize) categoryDetails.max_group_size = Number(maxGroupSize);
-          if (difficultyLevel) categoryDetails.difficulty_level = difficultyLevel;
-          categoryDetails.equipment_provided = equipmentProvided;
-          if (whatsIncluded) categoryDetails.whats_included = whatsIncluded;
-          if (tourismAgeRestriction) categoryDetails.age_restriction = tourismAgeRestriction;
-        }
-        // Group D: Travel Agency
-        if (fieldGroup === "D") {
-          if (servicesOffered.length) categoryDetails.services_offered = servicesOffered;
-          if (tourismSpecializations.length)
-            categoryDetails.specializations = tourismSpecializations;
-        }
-        // Group E: Attractions
-        if (fieldGroup === "E") {
-          categoryDetails.guided_tours = guidedTours;
-          categoryDetails.audio_guide = audioGuide;
-          if (visitDuration) categoryDetails.visit_duration = visitDuration;
-          if (tourismAgeRestriction) categoryDetails.age_restriction = tourismAgeRestriction;
-        }
-        // Group F: Car Rental
-        if (fieldGroup === "F") {
-          if (vehicleTypes.length) categoryDetails.vehicle_types = vehicleTypes;
-          categoryDetails.delivery_collection = deliveryCollection;
-          if (minDriverAge) categoryDetails.min_driver_age = Number(minDriverAge);
-          categoryDetails.insurance_included = insuranceIncluded;
-          categoryDetails.gps_available = gpsAvailable;
-        }
-        // Shared fields
-        if (priceRange) categoryDetails.price_range = priceRange;
-        if (amenities.length && fieldGroup !== "D" && fieldGroup !== "F") {
-          categoryDetails.amenities = amenities;
-        }
-        if (languagesSpoken) categoryDetails.languages_spoken = languagesSpoken;
-        if (cancellationPolicy) categoryDetails.cancellation_policy = cancellationPolicy;
-        if (bookingUrl) categoryDetails.booking_url = normalizeUserEnteredUrl(bookingUrl);
-
-        // SA tourism additions
-        if (tgcsaGrading) categoryDetails.tgcsa_grading = tgcsaGrading;
-        if (minimumStayNights) categoryDetails.minimum_stay_nights = Number(minimumStayNights);
-        if (childPolicy) categoryDetails.child_policy = childPolicy;
-        if (seasonalPricing) categoryDetails.seasonal_pricing = seasonalPricing;
-        if (nearbyAttractions) categoryDetails.nearby_attractions = nearbyAttractions;
+        const categoryDetails = buildTourismCategoryDetails();
 
         const operatingHours: Record<string, string> = {};
-        if (hoursMonFri) operatingHours.weekday = hoursMonFri;
-        if (hoursSat) operatingHours.saturday = hoursSat;
-        if (hoursSun) operatingHours.sunday = hoursSun;
+        // Display components read the Mon_Fri/Sat/Sun keys (same as the
+        // business form) — do not use the legacy weekday/saturday/sunday keys.
+        if (hoursMonFri) operatingHours.Mon_Fri = hoursMonFri;
+        if (hoursSat) operatingHours.Sat = hoursSat;
+        if (hoursSun) operatingHours.Sun = hoursSun;
 
         // Tourism businesses use the business API with category "tourism_hospitality"
         const slug =
@@ -1186,7 +1174,6 @@ function CreateTourismContent() {
           website: website || undefined,
           social_links: Object.keys(socialLinks).length > 0 ? socialLinks : undefined,
           operating_hours: Object.keys(operatingHours).length > 0 ? operatingHours : undefined,
-          services_offered: [],
           category_details: categoryDetails,
           contact_methods: contactMethods,
           business_details: {
@@ -1479,11 +1466,6 @@ function CreateTourismContent() {
     setSocialTwitter("");
     setSocialTiktok("");
     setBusinessId("");
-    setSocialAuthorization({
-      granted: false,
-      monetizationAcknowledged: false,
-      acceptedVersion: "v1",
-    });
     setPhotoFiles([]);
     setVideoFiles([]);
     setVideoThumbnailFile([]);
@@ -1533,11 +1515,6 @@ function CreateTourismContent() {
     setEventAccessibility([]);
     setFoodDrinksAvailable(false);
     setBringYourOwn("");
-    setSocialAuthorization({
-      granted: false,
-      monetizationAcknowledged: false,
-      acceptedVersion: "v1",
-    });
   }
 
   function handleListingTypeChange(nextType: TourismListingType) {
@@ -1574,9 +1551,13 @@ function CreateTourismContent() {
         }).filter(([, v]) => v.trim().length > 0)
       );
       const operatingHours: Record<string, string> = {};
-      if (hoursMonFri) operatingHours.weekday = hoursMonFri;
-      if (hoursSat) operatingHours.saturday = hoursSat;
-      if (hoursSun) operatingHours.sunday = hoursSun;
+      if (hoursMonFri) operatingHours.Mon_Fri = hoursMonFri;
+      if (hoursSat) operatingHours.Sat = hoursSat;
+      if (hoursSun) operatingHours.Sun = hoursSun;
+
+      // Mirror what the submit body stores so the preview shows the
+      // category-specific details exactly as the live listing will.
+      const categoryDetails = buildTourismCategoryDetails();
 
       const previewBusiness: BusinessDetailRecord = {
         id: "preview-tourism",
@@ -1587,7 +1568,7 @@ function CreateTourismContent() {
         business_type: "standalone_shop",
         category: "tourism_hospitality",
         subcategory: subcategory || null,
-        category_details: null,
+        category_details: Object.keys(categoryDetails).length > 0 ? categoryDetails : null,
         cover_photo: photoPreviewUrls[0] || null,
         logo_url: logoPreviewUrl,
         cover_video: previewVideoUrls[0] || null,
@@ -1643,6 +1624,27 @@ function CreateTourismContent() {
     const cardMediaUrl = previewVideoUrls[0] || photoPreviewUrls[0];
     const cardPosterUrl = videoThumbnailUrl || photoPreviewUrls[0] || undefined;
 
+    // Mirror the submit body so the preview shows event details exactly as
+    // the live listing will.
+    const previewEventDetails: Record<string, unknown> = {};
+    if (eventType) previewEventDetails.event_type = eventType;
+    if (venueName) previewEventDetails.venue_name = venueName;
+    if (venueCapacity) previewEventDetails.venue_capacity = Number(venueCapacity);
+    if (ticketTiers.length) previewEventDetails.ticket_tiers = ticketTiers;
+    if (ticketsUrl) previewEventDetails.tickets_url = ticketsUrl;
+    if (ageRestriction) previewEventDetails.age_restriction = ageRestriction;
+    if (dressCode) previewEventDetails.dress_code = dressCode;
+    if (lineup) previewEventDetails.lineup = lineup;
+    previewEventDetails.parking_available = parkingAvailable;
+    if (eventAccessibility.length) previewEventDetails.accessibility = eventAccessibility;
+    previewEventDetails.food_drinks_available = foodDrinksAvailable;
+    if (bringYourOwn) previewEventDetails.bring_your_own = bringYourOwn;
+    if (recurring) previewEventDetails.recurring = recurring;
+    if (rainPolicy) previewEventDetails.rain_policy = rainPolicy;
+    if (earlyBirdDeadline) previewEventDetails.early_bird_deadline = earlyBirdDeadline;
+    if (groupDiscountAvailable)
+      previewEventDetails.group_discount_available = groupDiscountAvailable;
+
     const previewPromotion: PromotionDetailRecord = {
       id: "preview-event",
       owner_id: "preview-owner",
@@ -1669,6 +1671,10 @@ function CreateTourismContent() {
       featured_until: null,
       view_count: null,
       created_at: new Date().toISOString(),
+      event_details:
+        Object.keys(previewEventDetails).length > 0
+          ? (previewEventDetails as PromotionDetailRecord["event_details"])
+          : null,
     };
 
     const previewAdvertiser: PromotionAdvertiserRecord = {
@@ -1754,7 +1760,11 @@ function CreateTourismContent() {
                 errorStepLabel={
                   formError ? `Step ${step + 1} \u2014 ${STEPS[step].label}` : undefined
                 }
-                stepHasErrors={STEPS.map((_, i) => Object.keys(validateStep(i)).length > 0)}
+                stepHasErrors={STEPS.map((_, i) =>
+                  // Only flag steps after a validation attempt has surfaced
+                  // errors — never show red on a pristine form.
+                  Object.keys(fieldErrors).some((key) => getStepForFieldKey(key) === i)
+                )}
                 onRetry={
                   formError && !isSubmitting
                     ? () => handleSubmit(new Event("submit") as unknown as React.FormEvent)
@@ -2010,7 +2020,8 @@ function CreateTourismContent() {
                       <>
                         {!fieldGroup && (
                           <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
-                            Select a tourism category above to see the relevant detail fields.
+                            Go back to Step 1 to choose a tourism category — the matching detail
+                            fields will appear here.
                           </p>
                         )}
 
@@ -3319,7 +3330,7 @@ function CreateTourismContent() {
 
                     {/* Photos */}
                     <div className="space-y-2">
-                      <Label>Photos *</Label>
+                      <Label>{listingType === "event" ? "Photos or video *" : "Photos *"}</Label>
                       <p className="text-xs text-muted-foreground">
                         Up to {maxPhotos} photos. The first photo becomes the public hero image.
                         Portrait 9:16 photos are recommended for tourism stays, destinations, and
@@ -3460,30 +3471,32 @@ function CreateTourismContent() {
                     )}
 
                     {/* Video */}
-                    {videoAllowed && (
-                      <div className="space-y-2">
-                        <Label>Video (optional)</Label>
-                        <p className="text-xs text-muted-foreground">
-                          Up to {maxVideos} video{maxVideos > 1 ? "s" : ""}. A single portrait 9:16
-                          clip works best for the event or tourism hero.
-                        </p>
-                        <MediaUpload
-                          id="tourism-videos-input"
-                          label="Upload video"
-                          description="Optional. Upload clips that clearly show the destination, venue, or experience."
-                          error={fieldErrors.videos}
-                          maxFiles={maxVideos}
-                          files={videoFiles}
-                          onChange={(files) => {
-                            setVideoFiles(files);
-                            prewarmVideosForFastUpload(files);
-                            setVideoThumbnailFile([]);
-                            clearErrors("videos");
-                          }}
-                          accept="video/*"
-                        />
-                      </div>
-                    )}
+                    <div className="space-y-2">
+                      <Label>
+                        Video (optional)
+                        {!videoAllowed ? " — Upgrade to unlock" : ""}
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Up to {maxVideos} video{maxVideos > 1 ? "s" : ""}. A single portrait 9:16
+                        clip works best for the event or tourism hero.
+                      </p>
+                      <MediaUpload
+                        id="tourism-videos-input"
+                        label="Upload video"
+                        description="Optional. Upload clips that clearly show the destination, venue, or experience."
+                        error={fieldErrors.videos}
+                        maxFiles={maxVideos}
+                        files={videoFiles}
+                        onChange={(files) => {
+                          setVideoFiles(files);
+                          prewarmVideosForFastUpload(files);
+                          setVideoThumbnailFile([]);
+                          clearErrors("videos");
+                        }}
+                        accept="video/*"
+                        disabled={!videoAllowed}
+                      />
+                    </div>
 
                     {/* Video thumbnail */}
                     {videoFiles.length > 0 && (

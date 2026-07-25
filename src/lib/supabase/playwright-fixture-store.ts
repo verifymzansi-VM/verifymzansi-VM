@@ -239,9 +239,10 @@ export function ensurePlaywrightVerifiedMember(persona: string): StubUser {
 
   if (existingProfileIndex === -1) {
     profiles.push(profile);
-  } else {
-    profiles[existingProfileIndex] = { ...profiles[existingProfileIndex], ...profile };
   }
+  // When the profile already exists, keep its current fields: flows under test
+  // (OTP phone change, verification status transitions) mutate the profile and
+  // those mutations must survive across requests instead of being reset here.
 
   return user;
 }

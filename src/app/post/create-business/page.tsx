@@ -102,6 +102,7 @@ const FIELD_IDS: Record<string, string> = {
   business_name: "businessName",
   slug: "slug",
   category: "category",
+  description: "description",
   location_province: "province",
   location_city: "city",
   store_number: "storeNumber",
@@ -136,6 +137,7 @@ const BUSINESS_FIELD_LABELS: Record<string, string> = {
   business_name: "Business name",
   slug: "URL slug",
   category: "Category",
+  description: "Description",
   location_province: "Province",
   location_city: "City",
   store_number: "Store number",
@@ -154,6 +156,7 @@ const BUSINESS_FIELD_LABELS: Record<string, string> = {
   gallery_photos: "Gallery photos",
   cover_video: "Cover video",
   video_thumbnail: "Video thumbnail",
+  termsAccepted: "Posting terms",
   "business_details.mall_name": "Mall name",
   "business_details.street_address": "Street address",
   "business_details.suburb": "Suburb",
@@ -181,7 +184,7 @@ function getStepForFieldKey(key: string): number {
     key === "gallery_photos" ||
     key === "cover_video" ||
     key === "video_thumbnail" ||
-    STEP_SOCIAL_FIELDS.includes(key as (typeof STEP_SOCIAL_FIELDS)[number])
+    key === "termsAccepted"
   ) {
     return 2;
   }
@@ -189,7 +192,8 @@ function getStepForFieldKey(key: string): number {
   if (
     key === "location_province" ||
     key === "location_city" ||
-    STEP_CONTACT_FIELDS.includes(key as (typeof STEP_CONTACT_FIELDS)[number])
+    STEP_CONTACT_FIELDS.includes(key as (typeof STEP_CONTACT_FIELDS)[number]) ||
+    STEP_SOCIAL_FIELDS.includes(key as (typeof STEP_SOCIAL_FIELDS)[number])
   ) {
     return 1;
   }
@@ -621,9 +625,10 @@ function CreateBusinessContent() {
         "business_name",
         "slug",
         "category",
+        "description",
       ],
-      ["location_province", "location_city", ...STEP_CONTACT_FIELDS],
-      ["gallery_photos", "cover_video", ...STEP_SOCIAL_FIELDS],
+      ["location_province", "location_city", ...STEP_CONTACT_FIELDS, ...STEP_SOCIAL_FIELDS],
+      ["gallery_photos", "cover_video", "termsAccepted"],
     ][targetStep];
     const firstKey = orderByStep?.find((key) => errors[key]) ?? Object.keys(errors)[0];
     if (!firstKey) return;
@@ -697,6 +702,9 @@ function CreateBusinessContent() {
       else if (!/^[a-z0-9-]+$/.test(currentSlug))
         errors.slug = "Use lowercase letters, numbers, and hyphens only.";
       if (!category) errors.category = "Select a category.";
+      if (!description.trim()) errors.description = "Tell customers about your business.";
+      else if (description.trim().length < 20)
+        errors.description = "Description must be at least 20 characters.";
       for (const [key, message] of Object.entries(businessValidationErrors)) {
         if (
           key === "store_number" ||
@@ -718,6 +726,11 @@ function CreateBusinessContent() {
           errors[field] = businessValidationErrors[field];
         }
       }
+      for (const key of STEP_SOCIAL_FIELDS) {
+        if (businessValidationErrors[key]) {
+          errors[key] = businessValidationErrors[key];
+        }
+      }
     }
     if (targetStep === 2) {
       if (galleryFiles.length > maxPhotos) {
@@ -725,11 +738,6 @@ function CreateBusinessContent() {
       }
       if (promoVideoFile.length > 0 && !videoAllowed) {
         errors.cover_video = "Video is not available on your current plan.";
-      }
-      for (const key of STEP_SOCIAL_FIELDS) {
-        if (businessValidationErrors[key]) {
-          errors[key] = businessValidationErrors[key];
-        }
       }
       if (!termsAccepted) errors.termsAccepted = "Accept the posting terms before submitting.";
     }
@@ -1148,6 +1156,21 @@ function CreateBusinessContent() {
           : previewBusinessDetails;
     const normalizedDeliveryOptions = getNormalizedDeliveryOptions(deliveryAvailable);
 
+    // Mirror the API payload builder: profile extras are stored under
+    // category_details.business_profile, so the preview must nest them the
+    // same way for the layout's facts tiles to show.
+    const previewBusinessProfile: Record<string, unknown> = {};
+    if (yearEstablished) previewBusinessProfile.year_established = Number(yearEstablished);
+    if (cipcRegistration) previewBusinessProfile.cipc_registration = cipcRegistration;
+    if (bbbeeLevel) previewBusinessProfile.bbbee_level = bbbeeLevel;
+    if (languagesSpoken) previewBusinessProfile.languages_spoken = languagesSpoken;
+    if (loadSheddingReady) previewBusinessProfile.load_shedding_ready = true;
+    if (numberOfEmployees) previewBusinessProfile.number_of_employees = numberOfEmployees;
+    const previewCategoryDetails =
+      Object.keys(previewBusinessProfile).length > 0
+        ? { ...categoryDetails, business_profile: previewBusinessProfile }
+        : categoryDetails;
+
     const previewBusiness = {
       id: "preview-business",
       owner_id: "preview-seller",
@@ -1156,6 +1179,9 @@ function CreateBusinessContent() {
       status: "preview",
       business_type: businessType || selectedType?.value || "standalone_shop",
       category: category || "general_other",
+      subcategory: subcategory || null,
+      category_details:
+        Object.keys(previewCategoryDetails).length > 0 ? previewCategoryDetails : null,
       cover_photo: coverPreviewUrl,
       logo_url: logoPreviewUrl,
       cover_video: promoVideoPreviewUrl,
@@ -1236,7 +1262,11 @@ function CreateBusinessContent() {
                 errorStepLabel={
                   formError ? `Step ${step + 1} \u2014 ${STEPS[step].label}` : undefined
                 }
-                stepHasErrors={STEPS.map((_, i) => Object.keys(validateStep(i)).length > 0)}
+                stepHasErrors={STEPS.map((_, i) =>
+                  // Only flag steps after a validation attempt has surfaced
+                  // errors — never show red on a pristine form.
+                  Object.keys(fieldErrors).some((key) => getStepForFieldKey(key) === i)
+                )}
                 onRetry={
                   formError && !isSubmitting
                     ? () => handleSubmit(new Event("submit") as unknown as React.FormEvent)
@@ -1457,27 +1487,34 @@ function CreateBusinessContent() {
                       )}
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="slug">URL Slug *</Label>
-                      <Input
-                        id="slug"
-                        value={slug}
-                        onChange={(event) => {
-                          setSlugManual(true);
-                          setSlug(generateSlug(event.target.value));
-                          clearErrors("slug");
-                        }}
-                        placeholder="your-business-name"
-                        maxLength={60}
-                        aria-invalid={!!fieldErrors.slug}
-                        className={cn(fieldErrors.slug && "border-destructive")}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Keep it short and readable. We use lowercase letters, numbers, and hyphens
-                        only.
-                      </p>
-                      {fieldErrors.slug && <p className="inline-form-error">{fieldErrors.slug}</p>}
-                    </div>
+                    <details className="rounded-lg border bg-muted/30 p-3">
+                      <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground">
+                        Advanced: customise your link
+                      </summary>
+                      <div className="mt-3 space-y-2">
+                        <Label htmlFor="slug">URL Slug</Label>
+                        <Input
+                          id="slug"
+                          value={slug}
+                          onChange={(event) => {
+                            setSlugManual(true);
+                            setSlug(generateSlug(event.target.value));
+                            clearErrors("slug");
+                          }}
+                          placeholder="your-business-name"
+                          maxLength={60}
+                          aria-invalid={!!fieldErrors.slug}
+                          className={cn(fieldErrors.slug && "border-destructive")}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          We create this automatically from your business name. Keep it short and
+                          readable — lowercase letters, numbers, and hyphens only.
+                        </p>
+                        {fieldErrors.slug && (
+                          <p className="inline-form-error">{fieldErrors.slug}</p>
+                        )}
+                      </div>
+                    </details>
 
                     <div className="space-y-2">
                       <Label>Category *</Label>
@@ -1693,7 +1730,7 @@ function CreateBusinessContent() {
 
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <Label htmlFor="description">About Your Business</Label>
+                        <Label htmlFor="description">About Your Business *</Label>
                         <span className="text-xs text-muted-foreground">
                           {description.length}/3000
                         </span>
@@ -1701,11 +1738,19 @@ function CreateBusinessContent() {
                       <Textarea
                         id="description"
                         value={description}
-                        onChange={(event) => setDescription(event.target.value)}
+                        onChange={(event) => {
+                          setDescription(event.target.value);
+                          clearErrors("description");
+                        }}
                         placeholder="Describe what you offer, who you help, and what makes your business reliable."
                         rows={5}
                         maxLength={3000}
+                        aria-invalid={!!fieldErrors.description}
+                        className={cn(fieldErrors.description && "border-destructive")}
                       />
+                      {fieldErrors.description && (
+                        <p className="inline-form-error">{fieldErrors.description}</p>
+                      )}
                     </div>
 
                     {/* Services Offered (moved from Step 2 optional extras) */}
@@ -2082,6 +2127,94 @@ function CreateBusinessContent() {
                         </div>
                       </div>
                     )}
+
+                    <details className="rounded-xl border bg-muted/30 p-4">
+                      <summary className="cursor-pointer list-none font-medium">
+                        Optional extras
+                      </summary>
+                      <div className="mt-4 space-y-5">
+                        <div className="space-y-3">
+                          <h3 className="text-sm font-medium">Social Links</h3>
+                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <Input
+                              id="socialFacebook"
+                              value={socialFacebook}
+                              onChange={(event) => {
+                                setSocialFacebook(event.target.value);
+                                clearErrors("socialFacebook");
+                              }}
+                              placeholder="Facebook URL"
+                              className={cn(fieldErrors.socialFacebook && "border-destructive")}
+                            />
+                            {fieldErrors.socialFacebook && (
+                              <p className="inline-form-error">{fieldErrors.socialFacebook}</p>
+                            )}
+                            <Input
+                              id="socialInstagram"
+                              value={socialInstagram}
+                              onChange={(event) => {
+                                setSocialInstagram(event.target.value);
+                                clearErrors("socialInstagram");
+                              }}
+                              placeholder="Instagram URL"
+                              className={cn(fieldErrors.socialInstagram && "border-destructive")}
+                            />
+                            {fieldErrors.socialInstagram && (
+                              <p className="inline-form-error">{fieldErrors.socialInstagram}</p>
+                            )}
+                            <Input
+                              id="socialTwitter"
+                              value={socialTwitter}
+                              onChange={(event) => {
+                                setSocialTwitter(event.target.value);
+                                clearErrors("socialTwitter");
+                              }}
+                              placeholder="X (Twitter) URL"
+                              className={cn(fieldErrors.socialTwitter && "border-destructive")}
+                            />
+                            {fieldErrors.socialTwitter && (
+                              <p className="inline-form-error">{fieldErrors.socialTwitter}</p>
+                            )}
+                            <Input
+                              id="socialTiktok"
+                              value={socialTiktok}
+                              onChange={(event) => {
+                                setSocialTiktok(event.target.value);
+                                clearErrors("socialTiktok");
+                              }}
+                              placeholder="TikTok URL"
+                              className={cn(fieldErrors.socialTiktok && "border-destructive")}
+                            />
+                            {fieldErrors.socialTiktok && (
+                              <p className="inline-form-error">{fieldErrors.socialTiktok}</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          <Label className="flex items-center gap-2">
+                            <CreditCard className="h-4 w-4 text-muted-foreground" />
+                            Payment Methods Accepted
+                          </Label>
+                          <div className="flex flex-wrap gap-3">
+                            {PAYMENT_METHOD_OPTIONS.map((option) => (
+                              <label
+                                key={option.value}
+                                className="flex cursor-pointer items-center gap-2 text-sm"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={paymentMethods.includes(option.value)}
+                                  onChange={() => togglePaymentMethod(option.value)}
+                                  className="rounded"
+                                />
+                                {option.label}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </details>
                   </div>
                 )}
 
@@ -2343,94 +2476,6 @@ function CreateBusinessContent() {
                         </details>
                       </div>
                     )}
-
-                    <details className="rounded-xl border bg-muted/30 p-4">
-                      <summary className="cursor-pointer list-none font-medium">
-                        Optional extras
-                      </summary>
-                      <div className="mt-4 space-y-5">
-                        <div className="space-y-3">
-                          <h3 className="text-sm font-medium">Social Links</h3>
-                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                            <Input
-                              id="socialFacebook"
-                              value={socialFacebook}
-                              onChange={(event) => {
-                                setSocialFacebook(event.target.value);
-                                clearErrors("socialFacebook");
-                              }}
-                              placeholder="Facebook URL"
-                              className={cn(fieldErrors.socialFacebook && "border-destructive")}
-                            />
-                            {fieldErrors.socialFacebook && (
-                              <p className="inline-form-error">{fieldErrors.socialFacebook}</p>
-                            )}
-                            <Input
-                              id="socialInstagram"
-                              value={socialInstagram}
-                              onChange={(event) => {
-                                setSocialInstagram(event.target.value);
-                                clearErrors("socialInstagram");
-                              }}
-                              placeholder="Instagram URL"
-                              className={cn(fieldErrors.socialInstagram && "border-destructive")}
-                            />
-                            {fieldErrors.socialInstagram && (
-                              <p className="inline-form-error">{fieldErrors.socialInstagram}</p>
-                            )}
-                            <Input
-                              id="socialTwitter"
-                              value={socialTwitter}
-                              onChange={(event) => {
-                                setSocialTwitter(event.target.value);
-                                clearErrors("socialTwitter");
-                              }}
-                              placeholder="X (Twitter) URL"
-                              className={cn(fieldErrors.socialTwitter && "border-destructive")}
-                            />
-                            {fieldErrors.socialTwitter && (
-                              <p className="inline-form-error">{fieldErrors.socialTwitter}</p>
-                            )}
-                            <Input
-                              id="socialTiktok"
-                              value={socialTiktok}
-                              onChange={(event) => {
-                                setSocialTiktok(event.target.value);
-                                clearErrors("socialTiktok");
-                              }}
-                              placeholder="TikTok URL"
-                              className={cn(fieldErrors.socialTiktok && "border-destructive")}
-                            />
-                            {fieldErrors.socialTiktok && (
-                              <p className="inline-form-error">{fieldErrors.socialTiktok}</p>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="space-y-3">
-                          <Label className="flex items-center gap-2">
-                            <CreditCard className="h-4 w-4 text-muted-foreground" />
-                            Payment Methods Accepted
-                          </Label>
-                          <div className="flex flex-wrap gap-3">
-                            {PAYMENT_METHOD_OPTIONS.map((option) => (
-                              <label
-                                key={option.value}
-                                className="flex cursor-pointer items-center gap-2 text-sm"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={paymentMethods.includes(option.value)}
-                                  onChange={() => togglePaymentMethod(option.value)}
-                                  className="rounded"
-                                />
-                                {option.label}
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </details>
 
                     <label className="flex items-start gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
                       <input

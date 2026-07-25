@@ -83,6 +83,9 @@ function getTourismQuickFacts(business: BusinessDetailRecord): QuickFact[] {
   const details = (business.category_details ?? {}) as Record<string, unknown>;
   const facts: QuickFact[] = [];
 
+  if (typeof details.star_rating === "number" && details.star_rating > 0) {
+    facts.push({ label: "Star Rating", value: `${details.star_rating}-star` });
+  }
   if (typeof details.price_range === "string") {
     facts.push({ label: "Price Range", value: details.price_range.replace(/_/g, " ") });
   }
@@ -106,6 +109,80 @@ function getTourismQuickFacts(business: BusinessDetailRecord): QuickFact[] {
   }
 
   return facts.slice(0, 6);
+}
+
+/* ── Self-reported business profile extras (category_details.business_profile) ── */
+const BBBEE_LEVEL_LABELS: Record<string, string> = {
+  level_1: "Level 1",
+  level_2: "Level 2",
+  level_3: "Level 3",
+  level_4: "Level 4",
+  level_5: "Level 5",
+  level_6: "Level 6",
+  level_7: "Level 7",
+  level_8: "Level 8",
+  non_compliant: "Non-Compliant",
+  exempt: "Exempt (EME)",
+};
+
+const EMPLOYEE_COUNT_LABELS: Record<string, string> = {
+  "1": "1 (Solo)",
+  "2_5": "2 – 5",
+  "6_10": "6 – 10",
+  "11_50": "11 – 50",
+  "51_200": "51 – 200",
+  "200_plus": "200+",
+};
+
+const CHILD_POLICY_LABELS: Record<string, string> = {
+  children_welcome: "Children welcome",
+  children_over_6: "Children 6+",
+  children_over_12: "Children 12+",
+  adults_only: "Adults only",
+};
+
+/**
+ * Facts the owner entered under "Additional Business Details" in the create
+ * form. The API folds them into `category_details.business_profile` — render
+ * them so the form data actually reaches the public profile.
+ */
+function getBusinessProfileFacts(
+  business: BusinessDetailRecord,
+  options?: { includeLanguages?: boolean }
+): QuickFact[] {
+  const details = (business.category_details ?? {}) as Record<string, unknown>;
+  const profile = details.business_profile;
+  if (!profile || typeof profile !== "object") return [];
+  const p = profile as Record<string, unknown>;
+  const facts: QuickFact[] = [];
+
+  if (typeof p.year_established === "number" && p.year_established > 0) {
+    facts.push({ label: "Established", value: String(p.year_established) });
+  }
+  if (typeof p.number_of_employees === "string" && p.number_of_employees) {
+    facts.push({
+      label: "Team Size",
+      value: EMPLOYEE_COUNT_LABELS[p.number_of_employees] ?? p.number_of_employees,
+    });
+  }
+  if (typeof p.bbbee_level === "string" && p.bbbee_level) {
+    facts.push({ label: "B-BBEE", value: BBBEE_LEVEL_LABELS[p.bbbee_level] ?? p.bbbee_level });
+  }
+  if (typeof p.cipc_registration === "string" && p.cipc_registration) {
+    facts.push({ label: "CIPC Reg.", value: p.cipc_registration });
+  }
+  if (
+    options?.includeLanguages !== false &&
+    typeof p.languages_spoken === "string" &&
+    p.languages_spoken
+  ) {
+    facts.push({ label: "Languages", value: p.languages_spoken });
+  }
+  if (p.load_shedding_ready === true) {
+    facts.push({ label: "Load-Shedding", value: "Backup power ready" });
+  }
+
+  return facts;
 }
 
 function getBusinessQuickFacts(
@@ -482,6 +559,10 @@ export function UnifiedLayout({
   const businessCategory = business.category as BusinessCategory;
   const ctaConfig = CATEGORY_CTA_CONFIG[businessCategory];
   const quickFacts = getBusinessQuickFacts(family, business, deliveryAvailable, promotions);
+  // Tourism already shows languages in the spotlight section — skip duplicate.
+  const profileFacts = getBusinessProfileFacts(business, {
+    includeLanguages: family !== "tourism",
+  });
   const tourismDetails = (business.category_details ?? {}) as Record<string, unknown>;
   const amenityHighlights = normalizeList(tourismDetails.amenities).slice(0, 8);
   const bookingUrl =
@@ -541,7 +622,7 @@ export function UnifiedLayout({
       ) : null}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {quickFacts.map((fact) => (
+        {[...quickFacts, ...profileFacts].map((fact) => (
           <div
             key={`${fact.label}-${fact.value}`}
             className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]"
@@ -644,6 +725,55 @@ export function UnifiedLayout({
               <p className="mt-1 text-sm font-medium">
                 {normalizeList(tourismDetails.activity_types).slice(0, 3).join(", ")}
               </p>
+            </div>
+          ) : null}
+          {typeof tourismDetails.tgcsa_grading === "string" && tourismDetails.tgcsa_grading ? (
+            <div className="rounded-2xl bg-muted/40 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                TGCSA Grading
+              </p>
+              <p className="mt-1 text-sm font-medium">
+                {tourismDetails.tgcsa_grading.replace(/_star$/, "-star").replace(/_/g, " ")}
+              </p>
+            </div>
+          ) : null}
+          {typeof tourismDetails.minimum_stay_nights === "number" ? (
+            <div className="rounded-2xl bg-muted/40 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Minimum Stay
+              </p>
+              <p className="mt-1 text-sm font-medium">
+                {tourismDetails.minimum_stay_nights}{" "}
+                {tourismDetails.minimum_stay_nights === 1 ? "night" : "nights"}
+              </p>
+            </div>
+          ) : null}
+          {typeof tourismDetails.child_policy === "string" && tourismDetails.child_policy ? (
+            <div className="rounded-2xl bg-muted/40 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Child Policy
+              </p>
+              <p className="mt-1 text-sm font-medium">
+                {CHILD_POLICY_LABELS[tourismDetails.child_policy] ??
+                  tourismDetails.child_policy.replace(/_/g, " ")}
+              </p>
+            </div>
+          ) : null}
+          {tourismDetails.seasonal_pricing === true ? (
+            <div className="rounded-2xl bg-muted/40 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Seasonal Pricing
+              </p>
+              <p className="mt-1 text-sm font-medium">Peak / off-peak rates apply</p>
+            </div>
+          ) : null}
+          {typeof tourismDetails.nearby_attractions === "string" &&
+          tourismDetails.nearby_attractions ? (
+            <div className="rounded-2xl bg-muted/40 p-3 sm:col-span-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Nearby Attractions
+              </p>
+              <p className="mt-1 text-sm font-medium">{tourismDetails.nearby_attractions}</p>
             </div>
           ) : null}
         </div>

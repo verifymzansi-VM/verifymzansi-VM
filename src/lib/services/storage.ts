@@ -532,6 +532,19 @@ export async function uploadKycDocument(
   // Generate storage key
   const key = generateStorageKey(`kyc/${docType}`, ownerId, "encrypted.bin");
 
+  // Playwright e2e stub: persist the encrypted artifact on local disk instead
+  // of reaching real R2 with fixture credentials (mirrors uploadToR2's stub).
+  if (process.env.PLAYWRIGHT_TEST_MODE === "1" && process.env.PLAYWRIGHT_SUPABASE_MODE === "stub") {
+    assertSafeStorageKey(key);
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const root = path.join(process.cwd(), "tmp", "e2e-private-storage");
+    const destination = path.join(root, key);
+    await fs.mkdir(path.dirname(destination), { recursive: true });
+    await fs.writeFile(destination, encryptedBuffer);
+    return { url: `private://${privateBucket}/${key}`, key };
+  }
+
   // Prefer native R2 binding when running on Cloudflare Workers (no S3 credentials needed).
   const r2Binding = await getR2BucketBinding(privateBucket);
   if (r2Binding) {

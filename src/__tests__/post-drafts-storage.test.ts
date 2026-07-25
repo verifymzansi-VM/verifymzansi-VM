@@ -73,44 +73,26 @@ describe("post-drafts storage", () => {
     expect(localStorage.getItem(key)).toBeNull();
   });
 
-  it("round-trips tourism social authorization draft data", () => {
+  it("round-trips tourism event draft data", () => {
     saveDraft("tourism", userId, 3, {
       listingType: "event",
       title: "Sample Event",
       description: "Sample description with enough content",
-      socialAuthorization: {
-        granted: true,
-        authorizerName: "Jane Owner",
-        authorizerRole: "Director",
-        relationship: "owner",
-        monetizationAcknowledged: true,
-        acceptedVersion: "v1",
-      },
+      eventType: "festival",
+      venueName: "Green Point",
     });
 
     const loaded = loadDraft<{
       listingType: string;
       title: string;
       description: string;
-      socialAuthorization?: {
-        granted: boolean;
-        authorizerName?: string;
-        authorizerRole?: string;
-        relationship?: string;
-        monetizationAcknowledged?: boolean;
-        acceptedVersion?: string;
-      };
+      eventType?: string;
+      venueName?: string;
     }>("tourism", userId);
 
     expect(loaded).toBeTruthy();
     expect(loaded?.step).toBe(3);
-    expect(loaded?.data.socialAuthorization).toEqual({
-      granted: true,
-      authorizerName: "Jane Owner",
-      authorizerRole: "Director",
-      relationship: "owner",
-      monetizationAcknowledged: true,
-      acceptedVersion: "v1",
-    });
+    expect(loaded?.data.eventType).toBe("festival");
+    expect(loaded?.data.venueName).toBe("Green Point");
   });
 });

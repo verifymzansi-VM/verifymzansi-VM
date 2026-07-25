@@ -205,7 +205,7 @@ describe("CreateListingPage", () => {
 
     expect(screen.getByText("Quick guide")).toBeInTheDocument();
     expect(within(stepNav).getAllByText("Details").length).toBeGreaterThan(0);
-    expect(within(stepNav).getAllByText("Pricing").length).toBeGreaterThan(0);
+    expect(within(stepNav).getAllByText("Price & Location").length).toBeGreaterThan(0);
     expect(within(stepNav).getAllByText("Media").length).toBeGreaterThan(0);
   });
 

@@ -95,6 +95,17 @@ export interface TourismCategoryDetails {
   min_driver_age?: number;
   insurance_included?: boolean;
   gps_available?: boolean;
+
+  /* ── SA tourism additions ── */
+  /** TGCSA grading, e.g. "3_star" */
+  tgcsa_grading?: string;
+  minimum_stay_nights?: number;
+  /** e.g. "children_welcome" | "children_over_6" | "children_over_12" | "adults_only" */
+  child_policy?: string;
+  /** True when peak / off-peak seasonal pricing applies */
+  seasonal_pricing?: boolean;
+  /** Free-text list of nearby attractions */
+  nearby_attractions?: string;
 }
 
 /* ── Event (stored in promotions.event_details) ── */
@@ -126,4 +137,13 @@ export interface EventDetails {
   food_drinks_available?: boolean;
   /** Guidance text: what attendees can bring */
   bring_your_own?: string;
+
+  /* ── SA event additions ── */
+  /** "one_off" | "weekly" | "monthly" | "annual" */
+  recurring?: string;
+  /** "outdoor_rain_or_shine" | "moved_indoors" | "postponed" | "refunded" */
+  rain_policy?: string;
+  /** Free-text early-bird cutoff, e.g. "15 April 2026" */
+  early_bird_deadline?: string;
+  group_discount_available?: boolean;
 }

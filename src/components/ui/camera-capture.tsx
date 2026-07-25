@@ -99,6 +99,8 @@ export function CameraCapture({
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const streamContainerRef = useRef<HTMLDivElement>(null);
+  const takePhotoButtonRef = useRef<HTMLButtonElement>(null);
   const [state, setState] = useState<CameraState>("idle");
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [capturedUrl, setCapturedUrl] = useState<string>("");
@@ -368,10 +370,47 @@ export function CameraCapture({
     }
   }, [state]);
 
+  // Bring the camera frame into view as soon as streaming starts so the user
+  // never has to scroll to find it (the "Open Camera" button can sit low on
+  // the page, and the video + capture button render below the fold).
+  // block:"start" + scroll-margin keeps the frame right under the sticky
+  // header — block:"center" gets clamped when the capture card sits near the
+  // bottom of a short page, leaving the frame cut off.
+  // The scroll must wait for loadedmetadata: before that the video has zero
+  // height, so the browser clamps the scroll to a too-short page and the
+  // expanded frame ends up below the fold.
+  useEffect(() => {
+    if (state !== "streaming") return;
+
+    const container = streamContainerRef.current;
+    const video = videoRef.current;
+    if (!container) return;
+
+    const scrollToFrame = () => {
+      container.scrollIntoView({ behavior: "smooth", block: "start" });
+      // Move keyboard/screen-reader focus to the capture control without an
+      // extra scroll jump.
+      takePhotoButtonRef.current?.focus({ preventScroll: true });
+    };
+
+    if (video && video.readyState < 1) {
+      video.addEventListener("loadedmetadata", scrollToFrame, { once: true });
+      return () => video.removeEventListener("loadedmetadata", scrollToFrame);
+    }
+
+    scrollToFrame();
+  }, [state]);
+
   const takePhoto = useCallback(() => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
+
+    // Guard against capturing before the stream has produced a frame —
+    // otherwise a blank 0x0 image would be uploaded as the "photo".
+    if (video.videoWidth === 0 || video.videoHeight === 0 || video.readyState < 2) {
+      return;
+    }
 
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -514,7 +553,10 @@ export function CameraCapture({
 
       {state === "streaming" && (
         <>
-          <div className="relative overflow-hidden rounded-md border">
+          <div
+            ref={streamContainerRef}
+            className="relative scroll-mt-24 overflow-hidden rounded-md border"
+          >
             <video
               ref={videoRef}
               autoPlay
@@ -525,6 +567,7 @@ export function CameraCapture({
           </div>
           <Button
             type="button"
+            ref={takePhotoButtonRef}
             onClick={takePhoto}
             disabled={disabled}
             variant="trust-verified"

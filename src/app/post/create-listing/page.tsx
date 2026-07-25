@@ -10,9 +10,9 @@ import {
   FileText,
   Inbox,
   Mail,
-  MapPin,
   MessageCircle,
   Phone,
+  Tag,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -64,7 +64,7 @@ import { readMediaDimensions } from "@/lib/utils/media-metadata";
 
 const STEPS: PostFormStep[] = [
   { label: "Details", icon: FileText, description: "Category, title, and description" },
-  { label: "Pricing", icon: MapPin, description: "Price, location, and contact" },
+  { label: "Price & Location", icon: Tag, description: "Price, location, and contact" },
   { label: "Media", icon: Camera, description: "Photos, video, and final review" },
 ];
 
@@ -141,6 +141,7 @@ const LISTING_FIELD_LABELS: Record<string, string> = {
   contactMethods: "Contact methods",
   images: "Photos",
   videos: "Videos",
+  termsAccepted: "Posting terms",
 };
 
 function getFieldId(key: string | undefined): string | undefined {
@@ -163,7 +164,11 @@ function normalizeListingFieldErrors(errors: Record<string, string>): Record<str
 function getStepForFieldKey(key: string): number {
   const normalizedKey = LISTING_FIELD_KEY_ALIASES[key] ?? key;
 
-  if (normalizedKey === "images" || normalizedKey === "videos") {
+  if (
+    normalizedKey === "images" ||
+    normalizedKey === "videos" ||
+    normalizedKey === "termsAccepted"
+  ) {
     return 2;
   }
 
@@ -656,26 +661,28 @@ export default function CreateListingPage() {
         return `${fallback} (HTTP ${response.status})`;
       };
 
-      let logoUrls: string[] = [];
-      if (logoFile.length > 0) {
-        const uploadData = new FormData();
-        uploadData.append("area", "listing_logo");
-        uploadData.append("files", logoFile[0]);
-        const uploadRes = await fetchWithRetry("/api/media/upload", {
-          method: "POST",
-          headers: withCsrfHeaders(),
-          body: uploadData,
-        });
-        if (!uploadRes.ok) {
-          throw new Error(await readUploadError(uploadRes, "Failed to upload listing logo"));
-        }
-        const uploadJson = await uploadRes.json();
-        logoUrls = (uploadJson.urls || []) as string[];
-        setUploadStatuses((current) => ({ ...current, logo: "done" }));
-      }
+      // Upload logo, photos, video, and video cover in parallel.
+      const [logoUrls, photoUrls, videoUrls, videoThumbnailUrl] = await Promise.all([
+        // Logo via server proxy
+        logoFile.length > 0
+          ? (async () => {
+              const uploadData = new FormData();
+              uploadData.append("area", "listing_logo");
+              uploadData.append("files", logoFile[0]);
+              const uploadRes = await fetchWithRetry("/api/media/upload", {
+                method: "POST",
+                headers: withCsrfHeaders(),
+                body: uploadData,
+              });
+              if (!uploadRes.ok) {
+                throw new Error(await readUploadError(uploadRes, "Failed to upload listing logo"));
+              }
+              const uploadJson = await uploadRes.json();
+              setUploadStatuses((current) => ({ ...current, logo: "done" }));
+              return (uploadJson.urls || []) as string[];
+            })()
+          : Promise.resolve([] as string[]),
 
-      // Upload photos, video, and video cover in parallel after the logo upload settles.
-      const [photoUrls, videoUrls, videoThumbnailUrl] = await Promise.all([
         // Photos via server proxy (small files)
         photoFiles.length > 0
           ? (async () => {
@@ -996,7 +1003,11 @@ export default function CreateListingPage() {
                 errorStepLabel={
                   formError ? `Step ${step + 1} \u2014 ${STEPS[step].label}` : undefined
                 }
-                stepHasErrors={STEPS.map((_, i) => Object.keys(validateStep(i)).length > 0)}
+                stepHasErrors={STEPS.map((_, i) =>
+                  // Only flag steps after a validation attempt has surfaced
+                  // errors — never show red on a pristine form.
+                  Object.keys(fieldErrors).some((key) => getStepForFieldKey(key) === i)
+                )}
                 onRetry={
                   formError && !isSubmitting
                     ? () => handleSubmit(new Event("submit") as unknown as React.FormEvent)
@@ -1264,7 +1275,7 @@ export default function CreateListingPage() {
                       <p className="text-xs text-muted-foreground">
                         Choose how buyers should reach you.
                       </p>
-                      <div className="grid grid-cols-1 xs:grid-cols-3 gap-2">
+                      <div className="grid grid-cols-2 xs:grid-cols-4 gap-2">
                         {CONTACT_OPTIONS.map((option) => {
                           const Icon = option.icon;
                           const isSelected = contactMethods.includes(option.id);

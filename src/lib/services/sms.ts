@@ -98,7 +98,12 @@ function isRetryable(error: unknown, statusCode?: number): boolean {
 }
 
 export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
-  if (process.env.NODE_ENV === "development" && process.env.SMS_MOCK === "true") {
+  // Explicit e2e runtime (Playwright stub server) never leaves the local
+  // machine — mock SMS the same way storage/auth are stubbed there.
+  const runtimeMode = process.env.VERIFYMZANSI_RUNTIME_MODE?.trim().toLowerCase();
+  const isE2eRuntime =
+    runtimeMode === "e2e" || runtimeMode === "playwright" || runtimeMode === "test";
+  if ((process.env.NODE_ENV === "development" && process.env.SMS_MOCK === "true") || isE2eRuntime) {
     const rawTo = Array.isArray(params.to) ? params.to[0] : params.to;
     log.info("Mock SMS sent", { to: maskPhone(rawTo) });
     return {

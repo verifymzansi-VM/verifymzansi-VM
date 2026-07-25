@@ -99,7 +99,9 @@ function createDeterministicEnv() {
     R2_PRIVATE_BUCKET: "verifymzansi-private",
     KYC_ENCRYPTION_KEY: "a".repeat(64),
     ID_ENCRYPTION_KEY: "b".repeat(64),
-    HMAC_SECRET: "c".repeat(64),
+    // Must clear the kyc-engine low-entropy guard (>= 8 distinct chars) while
+    // remaining a deterministic, non-secret fixture value.
+    HMAC_SECRET: "0123456789abcdef".repeat(4),
     IP_HASH_SECRET: "playwright-ip-hash-secret-32-chars",
     AFRICASTALKING_API_KEY: "playwright-africas-talking-key",
     AFRICASTALKING_USERNAME: "sandbox",
@@ -173,7 +175,11 @@ function runBuild(env) {
 
 function main() {
   const env = createDeterministicEnv();
-  runBuild(env);
+  // Local iteration escape hatch: when the .next output was already built with
+  // the deterministic e2e env, skip the lengthy rebuild and just serve it.
+  if (process.env.PLAYWRIGHT_SKIP_BUILD !== "1") {
+    runBuild(env);
+  }
 
   const server = spawnPnpm(["start"], env);
   wireOutputFilters(server);

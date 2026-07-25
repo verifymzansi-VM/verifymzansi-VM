@@ -482,6 +482,17 @@ describe("CameraCapture", () => {
         callback(new Blob(["img"], { type: "image/jpeg" }));
       });
 
+    // Simulate a video stream that has loaded its first frame.
+    const videoWidthSpy = vi
+      .spyOn(HTMLVideoElement.prototype, "videoWidth", "get")
+      .mockReturnValue(640);
+    const videoHeightSpy = vi
+      .spyOn(HTMLVideoElement.prototype, "videoHeight", "get")
+      .mockReturnValue(480);
+    const readyStateSpy = vi
+      .spyOn(HTMLVideoElement.prototype, "readyState", "get")
+      .mockReturnValue(4);
+
     render(<CameraCapture onCapture={vi.fn()} facingMode="user" />);
     await clickOpenCamera();
 
@@ -497,5 +508,25 @@ describe("CameraCapture", () => {
 
     getContextSpy.mockRestore();
     toBlobSpy.mockRestore();
+    videoWidthSpy.mockRestore();
+    videoHeightSpy.mockRestore();
+    readyStateSpy.mockRestore();
+  });
+
+  it("does not capture a photo before the video stream has a frame", async () => {
+    const stream = createMockStream();
+    mockGetUserMedia.mockResolvedValueOnce(stream);
+
+    const onCapture = vi.fn();
+    render(<CameraCapture onCapture={onCapture} facingMode="user" />);
+    await clickOpenCamera();
+
+    const takePhotoBtn = await screen.findByRole("button", { name: /take photo/i });
+    fireEvent.click(takePhotoBtn);
+
+    // jsdom videos never load (videoWidth 0 / readyState 0), so the capture
+    // guard must block the blank-frame capture.
+    expect(onCapture).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /retake/i })).not.toBeInTheDocument();
   });
 });

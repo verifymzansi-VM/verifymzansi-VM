@@ -94,6 +94,13 @@ export const promotionSchema = z
         accessibility: z.array(z.string().max(80)).optional(),
         food_drinks_available: z.boolean().optional(),
         bring_your_own: z.string().max(500).optional(),
+        /* SA event additions — must be whitelisted or zod strips them */
+        recurring: z.enum(["one_off", "weekly", "monthly", "annual"]).optional(),
+        rain_policy: z
+          .enum(["outdoor_rain_or_shine", "moved_indoors", "postponed", "refunded"])
+          .optional(),
+        early_bird_deadline: z.string().max(30).optional(),
+        group_discount_available: z.boolean().optional(),
       })
       .optional(),
   })

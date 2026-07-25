@@ -124,6 +124,20 @@ const CONTACT_METHOD_LABELS: Record<string, string> = {
   form: "Contact Form",
 };
 
+const EVENT_RECURRING_LABELS: Record<string, string> = {
+  one_off: "One-off",
+  weekly: "Weekly",
+  monthly: "Monthly",
+  annual: "Annual",
+};
+
+const EVENT_RAIN_POLICY_LABELS: Record<string, string> = {
+  outdoor_rain_or_shine: "Outdoor — rain or shine",
+  moved_indoors: "Moved indoors",
+  postponed: "Postponed",
+  refunded: "Refunded",
+};
+
 /* ─── Countdown timer hook ─── */
 function useCountdown(targetDate: string | null) {
   const [timeLeft, setTimeLeft] = useState<{
@@ -767,7 +781,11 @@ export function PromotionDetailContent({
                 ed.parking_available != null ||
                 ed.accessibility?.length ||
                 ed.food_drinks_available != null ||
-                ed.bring_your_own;
+                ed.bring_your_own ||
+                ed.recurring ||
+                ed.rain_policy ||
+                ed.early_bird_deadline ||
+                ed.group_discount_available != null;
               if (!hasContent) return null;
               return (
                 <Card>
@@ -835,6 +853,40 @@ export function PromotionDetailContent({
                           </dt>
                           <dd className="font-medium">
                             {ed.food_drinks_available ? "Available" : "Not available"}
+                          </dd>
+                        </>
+                      )}
+
+                      {ed.recurring && (
+                        <>
+                          <dt className="text-muted-foreground">Recurring</dt>
+                          <dd className="font-medium">
+                            {EVENT_RECURRING_LABELS[ed.recurring] ?? ed.recurring}
+                          </dd>
+                        </>
+                      )}
+
+                      {ed.rain_policy && (
+                        <>
+                          <dt className="text-muted-foreground">Rain policy</dt>
+                          <dd className="font-medium">
+                            {EVENT_RAIN_POLICY_LABELS[ed.rain_policy] ?? ed.rain_policy}
+                          </dd>
+                        </>
+                      )}
+
+                      {ed.early_bird_deadline && (
+                        <>
+                          <dt className="text-muted-foreground">Early-bird deadline</dt>
+                          <dd className="font-medium">{ed.early_bird_deadline}</dd>
+                        </>
+                      )}
+
+                      {ed.group_discount_available != null && (
+                        <>
+                          <dt className="text-muted-foreground">Group discounts</dt>
+                          <dd className="font-medium">
+                            {ed.group_discount_available ? "Available" : "Not available"}
                           </dd>
                         </>
                       )}

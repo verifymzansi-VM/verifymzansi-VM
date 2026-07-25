@@ -6,7 +6,6 @@
  * File objects are intentionally excluded — only text/choice data is persisted.
  */
 
-import type { SocialAuthorizerRelationship } from "@/types/enums";
 import type { TourismCategorySpecificFormFields } from "@/types/tourism-details";
 
 const STORAGE_VERSION = 1;
@@ -128,14 +127,6 @@ export interface TourismDraftData extends TourismCategorySpecificFormFields {
   socialTwitter: string;
   socialTiktok: string;
   businessId: string;
-  socialAuthorization?: {
-    granted: boolean;
-    authorizerName?: string;
-    authorizerRole?: string;
-    relationship?: SocialAuthorizerRelationship;
-    monetizationAcknowledged?: boolean;
-    acceptedVersion?: string;
-  };
 }
 
 /* ------------------------------------------------------------------ */
