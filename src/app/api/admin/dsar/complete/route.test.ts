@@ -7,6 +7,7 @@ const {
   mockCheckLocalRateLimit,
   mockSendDsarCompletedEmail,
   mockVerifyAdminActorRoleFromDb,
+  mockVerifyCapabilityRoleFromDb,
   mockEnforceSameOriginMutation,
   mockEnforceCsrfToken,
 } = vi.hoisted(() => ({
@@ -18,6 +19,9 @@ const {
   mockVerifyAdminActorRoleFromDb: vi.fn<(user: unknown) => Promise<string | null>>(
     async () => "admin"
   ),
+  mockVerifyCapabilityRoleFromDb: vi.fn<
+    (user: unknown, capability: unknown) => Promise<string | null>
+  >(async () => "admin"),
   mockEnforceSameOriginMutation: vi.fn<(request: Request) => Response | null>(() => null),
   mockEnforceCsrfToken: vi.fn<(request: Request) => Response | null>(() => null),
 }));
@@ -44,6 +48,7 @@ vi.mock("@/lib/utils/rate-limit", () => ({
 
 vi.mock("@/lib/auth/admin-access", () => ({
   verifyAdminActorRoleFromDb: mockVerifyAdminActorRoleFromDb,
+  verifyCapabilityRoleFromDb: mockVerifyCapabilityRoleFromDb,
 }));
 
 vi.mock("@/lib/utils/logger", () => ({
@@ -77,6 +82,7 @@ describe("POST /api/admin/dsar/complete", () => {
     mockEnforceSameOriginMutation.mockReturnValue(null);
     mockEnforceCsrfToken.mockReturnValue(null);
     mockVerifyAdminActorRoleFromDb.mockResolvedValue("admin");
+    mockVerifyCapabilityRoleFromDb.mockResolvedValue("admin");
     mockCreateClient.mockResolvedValue({
       auth: {
         getUser: vi.fn().mockResolvedValue({
@@ -88,6 +94,19 @@ describe("POST /api/admin/dsar/complete", () => {
     mockLogAuditEvent.mockResolvedValue(undefined);
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "case-1",
+                type: "access",
+                status: "in_progress",
+                identity_verified: true,
+              },
+              error: null,
+            }),
+          }),
+        }),
         update: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
@@ -137,7 +156,7 @@ describe("POST /api/admin/dsar/complete", () => {
   });
 
   it("returns 403 when actor role validation fails", async () => {
-    mockVerifyAdminActorRoleFromDb.mockResolvedValue(null);
+    mockVerifyCapabilityRoleFromDb.mockResolvedValue(null);
 
     const response = await POST(
       createMockRequest({ requestId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11" })
@@ -168,6 +187,19 @@ describe("POST /api/admin/dsar/complete", () => {
   it("returns 500 when DSAR completion DB update fails", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "case-1",
+                type: "access",
+                status: "in_progress",
+                identity_verified: true,
+              },
+              error: null,
+            }),
+          }),
+        }),
         update: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
@@ -192,6 +224,19 @@ describe("POST /api/admin/dsar/complete", () => {
   it("returns 409 when request is not in progress", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "case-1",
+                type: "access",
+                status: "in_progress",
+                identity_verified: true,
+              },
+              error: null,
+            }),
+          }),
+        }),
         update: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({

@@ -163,8 +163,8 @@ describe("launch env validation", () => {
     expect(env.STRICT_ENV_STARTUP_BLOCK).toBeUndefined();
   });
 
-  it("accepts production launch validation with native R2 bindings and no S3 credentials", () => {
-    const nativeBindingEnv = {
+  it("requires S3-compatible R2 credentials in production when bucket names alone are set", () => {
+    const bucketNamesOnlyEnv = {
       ...validProductionEnv,
       R2_ACCOUNT_ID: "",
       R2_ACCESS_KEY_ID: "",
@@ -172,6 +172,34 @@ describe("launch env validation", () => {
       R2_PRIVATE_BUCKET: "verifymzansi-private",
       R2_PUBLIC_BUCKET: "verifymzansi-public",
     };
+
+    const summary = validateLaunchConfiguration(bucketNamesOnlyEnv, { mode: "production" });
+
+    expect(summary.isValid).toBe(false);
+    expect(summary.errors).toContainEqual(
+      expect.objectContaining({
+        name: "R2 storage",
+        status: "fail",
+      })
+    );
+  });
+
+  it("accepts production launch validation with native R2 bindings and no S3 credentials", () => {
+    const fakeR2Bucket = {
+      put: async () => ({}),
+      get: async () => null,
+      delete: async () => undefined,
+    };
+    const nativeBindingEnv = {
+      ...validProductionEnv,
+      R2_ACCOUNT_ID: "",
+      R2_ACCESS_KEY_ID: "",
+      R2_SECRET_ACCESS_KEY: "",
+      R2_PRIVATE_BUCKET: "verifymzansi-private",
+      R2_PUBLIC_BUCKET: "verifymzansi-public",
+      PRIVATE_BUCKET: fakeR2Bucket,
+      PUBLIC_BUCKET: fakeR2Bucket,
+    } as unknown as Record<string, string>;
 
     const summary = validateLaunchConfiguration(nativeBindingEnv, { mode: "production" });
 
