@@ -44,6 +44,12 @@ const RISK_COLORS: Record<string, string> = {
   low: "bg-green-100 text-green-800 border-green-200",
 };
 
+const SIGNAL_SEVERITY_COLORS: Record<string, string> = {
+  block: "bg-red-100 text-red-800 border-red-200",
+  warn: "bg-yellow-100 text-yellow-800 border-yellow-200",
+  info: "bg-green-100 text-green-800 border-green-200",
+};
+
 function getLatestArtifactForStep(artifacts: Artifact[], stepType: string): Artifact | null {
   const matches = artifacts
     .filter((artifact) => artifact.step_type === stepType)
@@ -307,11 +313,23 @@ export function EvidenceDeskClient({
                     <div
                       key={rs.id}
                       className={`rounded-md border p-2 text-xs ${
-                        RISK_COLORS[rs.severity] ?? "border-warm-200/70 dark:border-warm-700/70"
+                        SIGNAL_SEVERITY_COLORS[rs.severity] ??
+                        "border-warm-200/70 dark:border-warm-700/70"
                       }`}
                     >
-                      <p className="font-medium capitalize">{rs.signal_type.replace(/_/g, " ")}</p>
-                      {rs.detail && <p className="mt-0.5 text-muted-foreground">{rs.detail}</p>}
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-medium capitalize">
+                          {rs.signal_code.replace(/_/g, " ")}
+                        </p>
+                        <Badge variant="outline" className="text-[10px] uppercase">
+                          {rs.severity}
+                        </Badge>
+                      </div>
+                      {rs.value_json && Object.keys(rs.value_json).length > 0 && (
+                        <pre className="mt-1 max-h-24 overflow-auto rounded bg-warm-50 p-1.5 text-[10px] break-all whitespace-pre-wrap text-muted-foreground dark:bg-muted">
+                          {JSON.stringify(rs.value_json, null, 2)}
+                        </pre>
+                      )}
                     </div>
                   ))}
                 </CardContent>

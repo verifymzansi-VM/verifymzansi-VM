@@ -17,6 +17,17 @@ import { authorizeEvidenceRequest } from "../../_lib/evidence-route-auth";
 import { forwardEvidencePostBodyToGet } from "../../_lib/evidence-post-wrapper";
 
 const log = createLogger("EvidenceMetadata");
+
+function rejectCrossSiteEvidenceRequest(request: NextRequest): NextResponse | null {
+  const fetchSite = request.headers.get("sec-fetch-site")?.toLowerCase();
+  if (fetchSite === "cross-site") {
+    log.warn("Blocked cross-site evidence metadata request");
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  return null;
+}
+
 const evidenceMetadataQuerySchema = z
   .object({
     stepId: optionalUuidSchema,
@@ -48,6 +59,12 @@ export async function GET(request: NextRequest) {
   let resolvedUserId: string | null = null;
 
   try {
+    const crossSiteBlock = rejectCrossSiteEvidenceRequest(request);
+    if (crossSiteBlock) {
+      responseStatus = 403;
+      return crossSiteBlock;
+    }
+
     const authStartedAt = Date.now();
     const auth = await authorizeEvidenceRequest({
       log,
@@ -169,7 +186,7 @@ export async function GET(request: NextRequest) {
       "auto_rejected",
     ];
     const hasActiveCase = steps.some((s) => REVIEWABLE_STATES.includes(String(s.status)));
-    if (steps.length > 0 && !hasActiveCase) {
+    if (!hasActiveCase) {
       log.warn("Evidence metadata access denied: no active review case", {
         actorId: user.id,
         targetStepId: stepId,
@@ -227,7 +244,7 @@ export async function GET(request: NextRequest) {
     const [riskSignalsResult, accountProfileResult, accessLogResult] = await Promise.all([
       adminClient
         .from("kyc_risk_signals")
-        .select("id, user_id, artifact_id, signal_type, signal_key, score, detail, created_at")
+        .select("id, user_id, artifact_id, signal_code, severity, value_json, created_at")
         .eq("user_id", targetUserId)
         .order("created_at", { ascending: false })
         .limit(50),
@@ -259,7 +276,7 @@ export async function GET(request: NextRequest) {
       const { data, error: providerErr } = await adminClient
         .from("kyc_provider_results")
         .select(
-          "id, artifact_id, provider_status, face_match_score, liveness_score, doc_auth_score, provider_ref, created_at"
+          "id, artifact_id, provider_name, provider_status, face_match_score, liveness_score, doc_auth_score, provider_ref, created_at"
         )
         .in("artifact_id", artifactIds);
       providerResults = data || [];

@@ -25,9 +25,7 @@ function createPendingArtifactsQuery(data: Array<Record<string, unknown>> = []) 
   return {
     select: vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          in: vi.fn().mockResolvedValue({ data }),
-        }),
+        in: vi.fn().mockResolvedValue({ data }),
       }),
     }),
   };

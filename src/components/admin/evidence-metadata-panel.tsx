@@ -139,19 +139,32 @@ export function EvidenceMetadataPanel({
                   <Badge
                     variant="outline"
                     className={`text-[10px] ${
-                      pr.normalized_decision === "approved"
+                      pr.provider_status === "approved"
                         ? "border-brand-green/40 text-brand-green"
-                        : pr.normalized_decision === "rejected"
+                        : pr.provider_status === "rejected"
                           ? "border-destructive/40 text-destructive"
                           : "border-amber-400/40 text-amber-600"
                     }`}
                   >
-                    {pr.normalized_decision}
+                    {pr.provider_status}
                   </Badge>
                 </div>
-                <p className="mt-0.5 text-muted-foreground">
-                  {pr.check_type} — Raw: {pr.raw_status}
-                </p>
+                {(pr.face_match_score !== null ||
+                  pr.liveness_score !== null ||
+                  pr.doc_auth_score !== null) && (
+                  <p className="mt-0.5 text-muted-foreground">
+                    {[
+                      pr.face_match_score !== null ? `Face match: ${pr.face_match_score}` : null,
+                      pr.liveness_score !== null ? `Liveness: ${pr.liveness_score}` : null,
+                      pr.doc_auth_score !== null ? `Doc auth: ${pr.doc_auth_score}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" — ")}
+                  </p>
+                )}
+                {pr.provider_ref && (
+                  <p className="mt-0.5 text-muted-foreground">Ref: {pr.provider_ref}</p>
+                )}
                 <p className="text-muted-foreground">
                   <time dateTime={pr.created_at}>{formatDate(pr.created_at)}</time>
                 </p>

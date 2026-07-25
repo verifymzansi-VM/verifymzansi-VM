@@ -232,4 +232,74 @@ describe("launch validation", () => {
       })
     );
   });
+
+  it("fails production mode when only R2 bucket names are set without S3 credentials", () => {
+    // Bucket names are always populated via defaults/wrangler vars and native
+    // bindings are deliberately not bound (wrangler.toml, error 10136), so
+    // names alone must not satisfy the R2 storage check.
+    const summary = validateLaunchConfiguration(
+      {
+        ...BASE_ENV,
+        R2_ACCOUNT_ID: undefined,
+        R2_ACCESS_KEY_ID: undefined,
+        R2_SECRET_ACCESS_KEY: undefined,
+        R2_PRIVATE_BUCKET: "verifymzansi-private",
+        R2_PUBLIC_BUCKET: "verifymzansi-public",
+      },
+      { mode: "production" }
+    );
+
+    expect(summary.isValid).toBe(false);
+    expect(summary.errors).toContainEqual(
+      expect.objectContaining({
+        name: "R2 storage",
+        status: "fail",
+      })
+    );
+  });
+
+  it("passes production mode with S3-compatible R2 credentials", () => {
+    const summary = validateLaunchConfiguration(
+      {
+        ...BASE_ENV,
+        R2_PRIVATE_BUCKET: "verifymzansi-private",
+        R2_PUBLIC_BUCKET: "verifymzansi-public",
+      },
+      { mode: "production" }
+    );
+
+    expect(summary.errors.filter((error) => error.name === "R2 storage")).toHaveLength(0);
+    expect(summary.checks).toContainEqual(
+      expect.objectContaining({
+        name: "R2 storage",
+        status: "pass",
+      })
+    );
+  });
+
+  it("passes the R2 storage check when a genuine native bucket binding is present", () => {
+    const nativeBinding = {
+      put: async () => ({}),
+      get: async () => null,
+      delete: async () => undefined,
+    };
+    const summary = validateLaunchConfiguration(
+      {
+        ...BASE_ENV,
+        R2_ACCOUNT_ID: undefined,
+        R2_ACCESS_KEY_ID: undefined,
+        R2_SECRET_ACCESS_KEY: undefined,
+        PRIVATE_BUCKET: nativeBinding,
+      } as unknown as EnvSource,
+      { mode: "production" }
+    );
+
+    expect(summary.checks).toContainEqual(
+      expect.objectContaining({
+        name: "R2 storage",
+        status: "pass",
+        detail: "Native Cloudflare R2 bucket binding configuration is present",
+      })
+    );
+  });
 });

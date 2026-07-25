@@ -195,4 +195,51 @@ describe("businessSchema", () => {
       expect(result.data.website).toBe("https://www.booking.co.za");
     }
   });
+
+  it("accepts optional business profile extras", () => {
+    const result = businessSchema.safeParse({
+      ...base,
+      business_type: "standalone_shop",
+      business_details: {
+        type: "standalone_shop",
+        street_address: "24 Vilakazi Street",
+        suburb: "Orlando West",
+      },
+      year_established: 2018,
+      cipc_registration: "2023/123456/07",
+      bbbee_level: "level_2",
+      languages_spoken: "English, isiZulu",
+      load_shedding_ready: true,
+      number_of_employees: "2_5",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.year_established).toBe(2018);
+      expect(result.data.bbbee_level).toBe("level_2");
+      expect(result.data.load_shedding_ready).toBe(true);
+      expect(result.data.number_of_employees).toBe("2_5");
+    }
+  });
+
+  it("rejects invalid business profile extras", () => {
+    const result = businessSchema.safeParse({
+      ...base,
+      business_type: "standalone_shop",
+      business_details: {
+        type: "standalone_shop",
+        street_address: "24 Vilakazi Street",
+        suburb: "Orlando West",
+      },
+      year_established: 1700,
+      bbbee_level: "level_9",
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const paths = result.error.issues.map((issue) => issue.path.join("."));
+      expect(paths).toContain("year_established");
+      expect(paths).toContain("bbbee_level");
+    }
+  });
 });

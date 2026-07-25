@@ -236,12 +236,6 @@ test.describe("Posting flows in Chromium", () => {
 
     await expectFirstStepValidationGate(
       page,
-      "/post/create-promotion",
-      page.getByRole("button", { name: "Next" })
-    );
-
-    await expectFirstStepValidationGate(
-      page,
       "/post/create-tourism",
       page.locator("#listing-type-group")
     );
@@ -315,7 +309,7 @@ test.describe("Posting flows in Chromium", () => {
     await expectSuccessfulEditSubmission(updatePromise);
     await expect(page).toHaveURL(PROMOTION_DASHBOARD_URL);
 
-    await page.goto(`/promotion/${promotionId}`);
+    await page.goto(`/tourism-events/${promotionId}`);
     await expect(page.getByText(promotionTitle).first()).toBeVisible();
     await expect(page.getByText(updatedPromotionTitle)).toHaveCount(0);
   });

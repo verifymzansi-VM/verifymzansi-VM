@@ -178,4 +178,129 @@ describe("rate-limiter worker", () => {
     expect(kvStore.get("auth:register:203.0.113.5:600")).toBe("1");
     expect(kvStore.get("auth:register:203.0.113.5:3600")).toBe("1");
   });
+
+  it("applies the dedicated OTP tiers to the otp:send action", async () => {
+    const { env } = createWorkerEnv();
+
+    const first = await rateLimiterWorker.fetch(
+      createWorkerRequest("otp:send", "user-1:+27821234567"),
+      env as never
+    );
+    expect(first.status).toBe(200);
+
+    // Second send inside 60 s must be blocked by the 1-per-60s tier —
+    // before the fix, otp:send silently got the 30/minute default.
+    const limited = await rateLimiterWorker.fetch(
+      createWorkerRequest("otp:send", "user-1:+27821234567"),
+      env as never
+    );
+    expect(limited.status).toBe(429);
+    await expect(limited.json()).resolves.toMatchObject({
+      error: "rate_limited",
+      retryAfter: expect.any(Number),
+    });
+  });
+
+  it("stores otp:send fallback counters for all three OTP tiers", async () => {
+    const { env, kvStore } = createWorkerEnv({ useDurableObject: false });
+
+    const res = await rateLimiterWorker.fetch(
+      createWorkerRequest("otp:send", "user-2:+27821234567"),
+      env as never
+    );
+
+    expect(res.status).toBe(200);
+    expect(kvStore.get("otp:send:user-2:+27821234567:60")).toBe("1");
+    expect(kvStore.get("otp:send:user-2:+27821234567:3600")).toBe("1");
+    expect(kvStore.get("otp:send:user-2:+27821234567:86400")).toBe("1");
+  });
+
+  it("applies the underscore listing_create limits the app actually sends", async () => {
+    const { env } = createWorkerEnv();
+
+    // listing_create is 10 per minute — the 30/minute unknown-action default
+    // would let the 11th request through, pinning the exact action string.
+    for (let attempt = 1; attempt <= 10; attempt += 1) {
+      const res = await rateLimiterWorker.fetch(
+        createWorkerRequest("listing_create", "user-3"),
+        env as never
+      );
+      expect(res.status).toBe(200);
+    }
+
+    const limited = await rateLimiterWorker.fetch(
+      createWorkerRequest("listing_create", "user-3"),
+      env as never
+    );
+    expect(limited.status).toBe(429);
+  });
+
+  it("does not consume earlier-tier quota when a later KV tier blocks", async () => {
+    const { env, kvStore } = createWorkerEnv({ useDurableObject: false });
+    kvStore.set("auth:register:203.0.113.9:600", "9");
+    kvStore.set("auth:register:203.0.113.9:3600", "30");
+
+    const limited = await rateLimiterWorker.fetch(
+      createWorkerRequest("auth:register", "203.0.113.9"),
+      env as never
+    );
+
+    expect(limited.status).toBe(429);
+    // The 600s tier passed its check but must NOT have been incremented.
+    expect(kvStore.get("auth:register:203.0.113.9:600")).toBe("9");
+    expect(kvStore.get("auth:register:203.0.113.9:3600")).toBe("30");
+  });
+
+  it("treats corrupted KV counters as zero for generic actions", async () => {
+    const { env, kvStore } = createWorkerEnv({ useDurableObject: false });
+    kvStore.set("media:upload:user-4:60", "corrupted");
+
+    const res = await rateLimiterWorker.fetch(
+      createWorkerRequest("media:upload", "user-4"),
+      env as never
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("X-RateLimit-Remaining")).toBe("19");
+    expect(kvStore.get("media:upload:user-4:60")).toBe("1");
+  });
+
+  it("treats corrupted KV counters as zero on the legacy OTP path", async () => {
+    const { env, kvStore } = createWorkerEnv({ useDurableObject: false });
+    kvStore.set("otp:send:+27821234567", "not-a-number");
+
+    const res = await rateLimiterWorker.fetch(
+      new Request("https://worker.example", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer worker-key",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ key: "+27821234567" }),
+      }),
+      env as never
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("X-RateLimit-Remaining")).not.toBe("NaN");
+  });
+
+  it("rejects wrong API keys of any length with 401", async () => {
+    const { env } = createWorkerEnv();
+
+    for (const key of ["worker-key-extra", "w", ""]) {
+      const res = await rateLimiterWorker.fetch(
+        new Request("https://worker.example", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${key}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ action: "auth:login", key: "198.51.100.20" }),
+        }),
+        env as never
+      );
+      expect(res.status).toBe(401);
+    }
+  });
 });

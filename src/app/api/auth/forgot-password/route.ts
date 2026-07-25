@@ -79,10 +79,9 @@ export async function POST(request: NextRequest) {
       });
 
       if (!captcha.success) {
-        return NextResponse.json(
-          { error: captcha.error || "CAPTCHA verification failed" },
-          { status: 400 }
-        );
+        // Upstream Turnstile detail stays in the server logs written by
+        // verifyTurnstileToken; clients get a generic message.
+        return NextResponse.json({ error: "CAPTCHA verification failed" }, { status: 400 });
       }
     }
 

@@ -55,8 +55,8 @@ describe("entitlements service", () => {
     });
 
     it("works for all three marketplace areas", () => {
-      expect(getEntitlements("growth", "MALL_SHOPS").boostAllowed).toBe(true);
-      expect(getEntitlements("starter", "BUSINESS_ADS").boostAllowed).toBe(false);
+      expect(getEntitlements("growth", "MZANSI_BUSINESS").boostAllowed).toBe(true);
+      expect(getEntitlements("starter", "PROMOTIONS_EVENTS").boostAllowed).toBe(false);
     });
   });
 

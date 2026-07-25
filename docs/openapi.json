@@ -363,34 +363,6 @@
         }
       }
     },
-    "/api/business-ads/{id}/boost": {
-      "post": {
-        "tags": ["Listings"],
-        "summary": "Boost a business ad",
-        "operationId": "boostBusinessAd",
-        "security": [{ "cookieAuth": [] }],
-        "parameters": [{ "$ref": "#/components/parameters/ResourceId" }],
-        "responses": {
-          "200": { "description": "Business ad boosted" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" }
-        }
-      }
-    },
-    "/api/storefronts/{id}/boost": {
-      "post": {
-        "tags": ["Listings"],
-        "summary": "Boost a storefront",
-        "operationId": "boostStorefront",
-        "security": [{ "cookieAuth": [] }],
-        "parameters": [{ "$ref": "#/components/parameters/ResourceId" }],
-        "responses": {
-          "200": { "description": "Storefront boosted" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" }
-        }
-      }
-    },
     "/api/billing/create-checkout": {
       "post": {
         "tags": ["Billing"],

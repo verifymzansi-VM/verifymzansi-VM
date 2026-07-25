@@ -36,9 +36,17 @@ import { UPLOAD_AREAS } from "@/types/enums";
 
 const ORIGINAL_ENABLE_DIRECT_R2_UPLOADS = process.env.ENABLE_DIRECT_R2_UPLOADS;
 
-function createRequest(body: unknown): NextRequest {
+const CSRF_TOKEN = "a".repeat(64);
+
+function createRequest(body: unknown, headers: Record<string, string> = {}): NextRequest {
   return {
     method: "POST",
+    url: "http://localhost:3000/api/media/upload-url",
+    headers: new Headers({
+      cookie: `vm_csrf=${CSRF_TOKEN}`,
+      "x-csrf-token": CSRF_TOKEN,
+      ...headers,
+    }),
     json: async () => body,
   } as unknown as NextRequest;
 }
@@ -71,6 +79,39 @@ describe("POST /api/media/upload-url", () => {
     await expect(res.json()).resolves.toMatchObject({
       code: "direct_media_uploads_disabled",
     });
+    expect(mockCreateClient).not.toHaveBeenCalled();
+  });
+
+  it("rejects requests without a valid CSRF token", async () => {
+    const res = await POST(
+      createRequest(
+        {
+          filename: "clip.mp4",
+          contentType: "video/mp4",
+          size: 1024,
+        },
+        { cookie: "", "x-csrf-token": "" }
+      )
+    );
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toEqual({ error: "Invalid CSRF token" });
+    expect(mockCreateClient).not.toHaveBeenCalled();
+  });
+
+  it("rejects cross-site requests", async () => {
+    const res = await POST(
+      createRequest(
+        {
+          filename: "clip.mp4",
+          contentType: "video/mp4",
+          size: 1024,
+        },
+        { origin: "https://evil.example" }
+      )
+    );
+
+    expect(res.status).toBe(403);
     expect(mockCreateClient).not.toHaveBeenCalled();
   });
 
@@ -266,6 +307,21 @@ describe("POST /api/media/upload-url", () => {
       key: "media/listing/user-1/video.mp4",
       publicUrl: "https://media.verifymzansi.com/media/listing/user-1/video.mp4",
     });
+    // Declared content type is forwarded for key derivation and is what the
+    // presigned URL pins via signableHeaders (see storage service tests).
+    expect(mockGenerateStorageKey).toHaveBeenCalledWith(
+      "media/listing_video",
+      "user-1",
+      "clip.mp4",
+      "video/mp4"
+    );
+    expect(mockGeneratePresignedUploadUrl).toHaveBeenCalledWith(
+      "verifymzansi-public",
+      "media/listing/user-1/video.mp4",
+      "video/mp4",
+      3600,
+      2048
+    );
     expect(insert).toHaveBeenCalledWith(
       expect.objectContaining({
         user_id: "user-1",

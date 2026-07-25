@@ -2,6 +2,7 @@ import {
   resolveLaunchValidationMode,
   validateLaunchConfiguration,
 } from "@/lib/config/launch-validation";
+import { checkCriticalEnvVars } from "@/lib/config/env";
 import { createLogger } from "@/lib/utils/logger";
 
 const logger = createLogger("Health");
@@ -24,6 +25,7 @@ export interface LaunchHealthSnapshot {
   timestamp: string;
   checks: {
     config: HealthCheckStatus;
+    criticalEnv: HealthCheckStatus;
     supabase: HealthCheckStatus;
     schema: HealthCheckStatus;
     r2: HealthCheckStatus;
@@ -58,6 +60,29 @@ function readinessFromEnv(names: readonly string[], detail: string): HealthCheck
     status: "ok",
     detail,
   };
+}
+
+function probeCriticalEnvVars(): HealthCheckStatus {
+  try {
+    const missing = checkCriticalEnvVars();
+    if (missing.length > 0) {
+      return {
+        status: "degraded",
+        detail: `Missing critical env vars: ${missing.join(", ")}`,
+        failedChecks: [...missing],
+      };
+    }
+
+    return {
+      status: "ok",
+      detail: "Critical env vars are present",
+    };
+  } catch {
+    return {
+      status: "skipped",
+      detail: "Critical env var check is unavailable in this runtime",
+    };
+  }
 }
 
 async function probeSupabase(
@@ -240,7 +265,9 @@ function probeTurnstile(mode: ReturnType<typeof resolveLaunchValidationMode>): H
   );
 }
 
-function probeRateLimiter(mode: ReturnType<typeof resolveLaunchValidationMode>): HealthCheckStatus {
+async function probeRateLimiter(
+  mode: ReturnType<typeof resolveLaunchValidationMode>
+): Promise<HealthCheckStatus> {
   if (mode !== "production") {
     return {
       status: "skipped",
@@ -254,9 +281,10 @@ function probeRateLimiter(mode: ReturnType<typeof resolveLaunchValidationMode>):
   );
   if (base.status !== "ok") return base;
 
+  let limiterUrl: URL;
   try {
-    const parsed = new URL(process.env.OTP_RATE_LIMITER_URL!);
-    if (parsed.protocol !== "https:") {
+    limiterUrl = new URL(process.env.OTP_RATE_LIMITER_URL!);
+    if (limiterUrl.protocol !== "https:") {
       return {
         status: "degraded",
         detail: "OTP_RATE_LIMITER_URL must be HTTPS in production",
@@ -271,10 +299,59 @@ function probeRateLimiter(mode: ReturnType<typeof resolveLaunchValidationMode>):
     };
   }
 
-  return {
-    status: "ok",
-    detail: "Shared rate limiter env is present",
-  };
+  // Live authenticated probe: the app sends RATE_LIMITER_API_KEY while the
+  // worker requires WORKER_API_KEY — a pairing mismatch 401s every call and
+  // silently degrades the app to per-isolate limits. The worker checks the
+  // bearer token before parsing the body, so a harmless read-only check
+  // proves the shared secret matches on any non-401 response.
+  const timeoutMs = Number(process.env.OTP_RATE_LIMITER_TIMEOUT_MS) || 2500;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let response: Response;
+    try {
+      response = await fetch(limiterUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.RATE_LIMITER_API_KEY}`,
+        },
+        body: JSON.stringify({
+          key: "health:probe",
+          action: "businesses:read",
+          readOnly: true,
+        }),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (response.status === 401) {
+      return {
+        status: "degraded",
+        detail:
+          "Rate limiter rejected RATE_LIMITER_API_KEY with 401 — it must match the worker's WORKER_API_KEY",
+        failedChecks: ["RATE_LIMITER_API_KEY"],
+      };
+    }
+
+    return {
+      status: "ok",
+      detail: "Shared rate limiter authenticated probe succeeded",
+    };
+  } catch (error) {
+    // Network/timeout failures stay lenient so health does not flap on
+    // transient worker unavailability.
+    const message = error instanceof Error ? error.message : "Unknown error";
+    logger.warn("Rate limiter authenticated probe unreachable; skipping live check", {
+      error: message,
+    });
+    return {
+      status: "ok",
+      detail: "Shared rate limiter env is present (live probe unreachable)",
+    };
+  }
 }
 
 /**
@@ -345,17 +422,18 @@ async function probeSchema(
 export async function getLaunchHealthSnapshot(): Promise<LaunchHealthSnapshot> {
   const mode = resolveLaunchValidationMode(process.env);
   const configSummary = validateLaunchConfiguration(process.env, { mode });
-  const [supabase, schema, r2, audit] = await Promise.all([
+  const [supabase, schema, r2, audit, rateLimiter] = await Promise.all([
     probeSupabase(mode),
     probeSchema(mode),
     probeR2(mode),
     getAuditHealth(),
+    probeRateLimiter(mode),
   ]);
   const ozow = probeOzow(mode);
   const resend = probeResend(mode);
   const africasTalking = probeAfricasTalking(mode);
   const turnstile = probeTurnstile(mode);
-  const rateLimiter = probeRateLimiter(mode);
+  const criticalEnv = probeCriticalEnvVars();
 
   const config: HealthCheckStatus = {
     status: configSummary.isValid ? "ok" : "degraded",
@@ -368,6 +446,7 @@ export async function getLaunchHealthSnapshot(): Promise<LaunchHealthSnapshot> {
 
   const degraded =
     config.status === "degraded" ||
+    criticalEnv.status === "degraded" ||
     audit.status === "degraded" ||
     schema.status === "degraded" ||
     r2.status === "degraded" ||
@@ -384,6 +463,7 @@ export async function getLaunchHealthSnapshot(): Promise<LaunchHealthSnapshot> {
     timestamp: new Date().toISOString(),
     checks: {
       config,
+      criticalEnv,
       supabase,
       schema,
       r2,

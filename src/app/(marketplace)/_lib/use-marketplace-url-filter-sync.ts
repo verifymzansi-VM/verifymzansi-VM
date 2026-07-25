@@ -26,12 +26,14 @@ export function useMarketplaceUrlFilterSync<TParsed extends { page: number }>({
   const filters = useMarketplaceStore((state) => state.filters);
   const page = useMarketplaceStore((state) => state.page);
   const hasHydratedRef = useRef(false);
+  const pendingHydrationKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     const parsed = parseSearchParams(searchParams);
 
     hydrateFilters(area, getHydrationFilters(parsed), parsed.page);
     hasHydratedRef.current = true;
+    pendingHydrationKeyRef.current = searchParamKey;
   }, [area, getHydrationFilters, hydrateFilters, parseSearchParams, searchParamKey, searchParams]);
 
   useEffect(() => {
@@ -39,6 +41,11 @@ export function useMarketplaceUrlFilterSync<TParsed extends { page: number }>({
 
     const nextParams = serializeFilters(filters, page);
     const nextKey = nextParams.toString();
+    if (pendingHydrationKeyRef.current === searchParamKey) {
+      pendingHydrationKeyRef.current = null;
+      if (searchParamKey && !nextKey) return;
+    }
+
     if (nextKey === searchParamKey) return;
 
     router.replace(nextKey ? `${pathname}?${nextKey}` : pathname, { scroll: false });

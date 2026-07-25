@@ -57,6 +57,7 @@ vi.mock("@/lib/notifications", () => ({
 }));
 
 import { GET, POST } from "@/app/api/listings/route";
+import { PUT } from "@/app/api/listings/[id]/route";
 
 const USER_ID = "user-1";
 const VALID_IMAGE = "https://media.verifymzansi.com/image.jpg";
@@ -463,14 +464,16 @@ describe("POST /api/listings", () => {
   });
 
   it("allows listing creation when the profile is stale but all verification steps are approved", async () => {
-    const insertSpy = vi.fn().mockReturnValue({
-      select: () => ({
-        single: vi.fn().mockResolvedValue({ data: { id: "listing-1" }, error: null }),
-      }),
-    });
+    const rpcSpy = vi.fn((fn: string) =>
+      Promise.resolve(
+        fn === "insert_listing_with_limit"
+          ? { data: { id: "listing-1" }, error: null }
+          : { data: true }
+      )
+    );
 
     mockCreateAdminClient.mockReturnValue({
-      rpc: vi.fn().mockResolvedValue({ data: true }),
+      rpc: rpcSpy,
       from: vi.fn((table: string) => {
         if (table === "account_profiles") {
           return {
@@ -524,7 +527,6 @@ describe("POST /api/listings", () => {
             neq: vi.fn().mockReturnThis(),
             limit: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-            insert: insertSpy,
           };
         }
         return {
@@ -539,7 +541,10 @@ describe("POST /api/listings", () => {
     const body = await res.json();
 
     expect(res.status).toBe(201);
-    expect(insertSpy).toHaveBeenCalled();
+    expect(rpcSpy).toHaveBeenCalledWith(
+      "insert_listing_with_limit",
+      expect.objectContaining({ p_user_id: USER_ID })
+    );
     expect(body).toMatchObject({
       id: "listing-1",
       message: "Listing submitted for review",
@@ -614,14 +619,18 @@ describe("POST /api/listings", () => {
     });
   });
 
-  it("writes seller_id when listings still use the legacy owner column", async () => {
-    const insertSpy = vi.fn().mockReturnValue({
-      select: () => ({
-        single: vi.fn().mockResolvedValue({ data: { id: "listing-1" }, error: null }),
-      }),
-    });
+  it("scopes duplicate checks to seller_id when listings still use the legacy owner column", async () => {
+    const rpcSpy = vi.fn((fn: string, _args?: unknown) =>
+      Promise.resolve(
+        fn === "insert_listing_with_limit"
+          ? { data: { id: "listing-1" }, error: null }
+          : { data: true, error: null }
+      )
+    );
+    const dupeEqSpy = vi.fn();
 
     mockCreateAdminClient.mockReturnValue({
+      rpc: rpcSpy,
       from: vi.fn((table: string) => {
         if (table === "account_profiles") {
           return {
@@ -671,7 +680,7 @@ describe("POST /api/listings", () => {
                 };
               }
               const chain: Record<string, ReturnType<typeof vi.fn>> = {
-                eq: vi.fn(),
+                eq: dupeEqSpy,
                 gte: vi.fn(),
                 neq: vi.fn(),
                 limit: vi.fn(),
@@ -684,7 +693,6 @@ describe("POST /api/listings", () => {
               return chain;
             }),
             update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
-            insert: insertSpy,
           };
         }
         return {
@@ -698,22 +706,31 @@ describe("POST /api/listings", () => {
     const res = await POST(createRequest(VALID_BODY));
 
     expect(res.status).toBe(201);
-    expect(insertSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        seller_id: USER_ID,
-      })
+    // The duplicate guard must scope to the legacy owner column, and the
+    // insert payload must carry no owner field (the rpc forces ownership).
+    expect(dupeEqSpy).toHaveBeenCalledWith("seller_id", USER_ID);
+    expect(rpcSpy).toHaveBeenCalledWith(
+      "insert_listing_with_limit",
+      expect.objectContaining({ p_user_id: USER_ID })
     );
-    expect(insertSpy).not.toHaveBeenCalledWith(expect.objectContaining({ owner_id: USER_ID }));
+    const insertArgs = rpcSpy.mock.calls.find(([fn]) => fn === "insert_listing_with_limit")?.[1] as
+      | { p_data?: Record<string, unknown> }
+      | undefined;
+    expect(insertArgs?.p_data).not.toHaveProperty("owner_id");
+    expect(insertArgs?.p_data).not.toHaveProperty("seller_id");
   });
 
   it("persists trusted listing logo urls on create", async () => {
-    const insertSpy = vi.fn().mockReturnValue({
-      select: () => ({
-        single: vi.fn().mockResolvedValue({ data: { id: "listing-1" }, error: null }),
-      }),
-    });
+    const rpcSpy = vi.fn((fn: string) =>
+      Promise.resolve(
+        fn === "insert_listing_with_limit"
+          ? { data: { id: "listing-1" }, error: null }
+          : { data: true, error: null }
+      )
+    );
 
     mockCreateAdminClient.mockReturnValue({
+      rpc: rpcSpy,
       from: vi.fn((table: string) => {
         if (table === "account_profiles") {
           return {
@@ -756,7 +773,6 @@ describe("POST /api/listings", () => {
             limit: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({ data: null }),
             update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
-            insert: insertSpy,
           };
         }
         return {
@@ -775,21 +791,27 @@ describe("POST /api/listings", () => {
     );
 
     expect(res.status).toBe(201);
-    expect(insertSpy).toHaveBeenCalledWith(
+    expect(rpcSpy).toHaveBeenCalledWith(
+      "insert_listing_with_limit",
       expect.objectContaining({
-        logo_url: "https://media.verifymzansi.com/listings/logo.jpg",
+        p_data: expect.objectContaining({
+          logo_url: "https://media.verifymzansi.com/listings/logo.jpg",
+        }),
       })
     );
   });
 
   it("persists farming listings with in-app contact methods", async () => {
-    const insertSpy = vi.fn().mockReturnValue({
-      select: () => ({
-        single: vi.fn().mockResolvedValue({ data: { id: "listing-1" }, error: null }),
-      }),
-    });
+    const rpcSpy = vi.fn((fn: string) =>
+      Promise.resolve(
+        fn === "insert_listing_with_limit"
+          ? { data: { id: "listing-1" }, error: null }
+          : { data: true, error: null }
+      )
+    );
 
     mockCreateAdminClient.mockReturnValue({
+      rpc: rpcSpy,
       from: vi.fn((table: string) => {
         if (table === "account_profiles") {
           return {
@@ -832,7 +854,6 @@ describe("POST /api/listings", () => {
             limit: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({ data: null }),
             update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
-            insert: insertSpy,
           };
         }
         return {
@@ -858,38 +879,40 @@ describe("POST /api/listings", () => {
     );
 
     expect(res.status).toBe(201);
-    expect(insertSpy).toHaveBeenCalledWith(
+    expect(rpcSpy).toHaveBeenCalledWith(
+      "insert_listing_with_limit",
       expect.objectContaining({
-        category: "farming_agriculture",
-        contact_methods: ["call", "in_app"],
+        p_data: expect.objectContaining({
+          category: "farming_agriculture",
+          contact_methods: ["call", "in_app"],
+        }),
       })
     );
   });
 
   it("retries listing creation without compatibility-only columns when the live schema is behind", async () => {
     const insertCalls: Array<Record<string, unknown>> = [];
-    const insertSpy = vi.fn().mockImplementation((payload: Record<string, unknown>) => {
-      insertCalls.push(payload);
-
-      return {
-        select: () => ({
-          single: vi.fn().mockResolvedValue(
-            insertCalls.length === 1
-              ? {
-                  data: null,
-                  error: {
-                    code: "42703",
-                    message:
-                      "Could not find the 'video_thumbnail' column of 'listings' in the schema cache",
-                  },
-                }
-              : { data: { id: "listing-compat-1" }, error: null }
-          ),
-        }),
-      };
+    const rpcSpy = vi.fn((fn: string, args: { p_data?: Record<string, unknown> }) => {
+      if (fn !== "insert_listing_with_limit") {
+        return Promise.resolve({ data: true, error: null });
+      }
+      insertCalls.push(args.p_data ?? {});
+      return Promise.resolve(
+        insertCalls.length === 1
+          ? {
+              data: null,
+              error: {
+                code: "42703",
+                message:
+                  "Could not find the 'video_thumbnail' column of 'listings' in the schema cache",
+              },
+            }
+          : { data: { id: "listing-compat-1" }, error: null }
+      );
     });
 
     mockCreateAdminClient.mockReturnValue({
+      rpc: rpcSpy,
       from: vi.fn((table: string) => {
         if (table === "account_profiles") {
           return {
@@ -939,7 +962,6 @@ describe("POST /api/listings", () => {
             neq: vi.fn().mockReturnThis(),
             limit: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-            insert: insertSpy,
           };
         }
         return {
@@ -1147,6 +1169,176 @@ describe("POST /api/listings", () => {
     expect(res.status).toBe(422);
     // free_posts_used.insert must NOT have been called — validation fires before claim
     expect(freePostInsertSpy).not.toHaveBeenCalled();
+  });
+
+  it("returns the existing listing when the same title is resubmitted within two minutes", async () => {
+    const rpcSpy = vi.fn().mockResolvedValue({ data: true, error: null });
+
+    mockCreateAdminClient.mockReturnValue({
+      rpc: rpcSpy,
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        if (table === "listings") {
+          return {
+            select: vi.fn((fields: string) => {
+              if (fields === "id, owner_id") {
+                return {
+                  limit: vi.fn().mockResolvedValue({ error: null }),
+                };
+              }
+              return {
+                eq: vi.fn().mockReturnThis(),
+                gte: vi.fn().mockReturnThis(),
+                limit: vi.fn().mockReturnThis(),
+                maybeSingle: vi.fn().mockResolvedValue({ data: { id: "listing-dupe" } }),
+              };
+            }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const res = await POST(createRequest(VALID_BODY));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body).toMatchObject({ id: "listing-dupe", deduplicated: true });
+    expect(rpcSpy.mock.calls.some(([fn]) => fn === "insert_listing_with_limit")).toBe(false);
+  });
+
+  it("still returns the created listing when terms recording fails", async () => {
+    const rpcSpy = vi.fn((fn: string) =>
+      Promise.resolve(
+        fn === "insert_listing_with_limit"
+          ? { data: { id: "listing-1" }, error: null }
+          : { data: true, error: null }
+      )
+    );
+
+    mockCreateAdminClient.mockReturnValue({
+      rpc: rpcSpy,
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { tier: "basic" } }),
+          };
+        }
+        if (table === "consent_records") {
+          return {
+            insert: vi.fn().mockResolvedValue({ error: { message: "consent insert failed" } }),
+          };
+        }
+        if (table === "listings") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gte: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const res = await POST(createRequest(VALID_BODY));
+    const body = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(body).toMatchObject({ id: "listing-1" });
+    expect(mockLogAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "consent_updated",
+        targetType: "listing",
+        targetId: "listing-1",
+      })
+    );
+  });
+});
+
+describe("PUT /api/listings/[id]", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetOwnerColumnCacheForTesting();
+    mockEnforceCsrfToken.mockReturnValue(null);
+    mockHasPhoneNumber.mockResolvedValue(true);
+  });
+
+  it("returns 503 when owner-column probing fails during update", async () => {
+    mockCreateClient.mockResolvedValue({
+      from: vi.fn((table: string) => {
+        if (table === "listings") {
+          return {
+            select: vi.fn((fields: string) => {
+              if (fields === "id, owner_id") {
+                return {
+                  limit: vi.fn().mockResolvedValue({
+                    error: { code: "XX000", message: "schema cache temporarily unavailable" },
+                  }),
+                };
+              }
+              return {
+                eq: vi.fn().mockReturnThis(),
+                neq: vi.fn().mockReturnThis(),
+              };
+            }),
+          };
+        }
+
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } } }) },
+    });
+
+    const res = await PUT(createRequest(VALID_BODY), {
+      params: Promise.resolve({ id: "00000000-0000-0000-0000-000000000123" }),
+    });
+
+    expect(res.status).toBe(503);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Service temporarily unavailable",
+    });
   });
 });
 
@@ -1369,7 +1561,7 @@ describe("GET /api/listings", () => {
     expect(json.sellers).toHaveLength(1);
   });
 
-  it("falls back to seller_id and normalizes public results back to owner_id", async () => {
+  it("falls back to seller_id for owner scoping and strips owner identifiers from public rows", async () => {
     const rangeSpy = vi.fn().mockResolvedValue({
       data: [
         {
@@ -1442,10 +1634,14 @@ describe("GET /api/listings", () => {
 
     expect(response.status).toBe(200);
     const json = await response.json();
+    expect(json.listings[0]).not.toHaveProperty("owner_id");
+    expect(json.listings[0]).not.toHaveProperty("seller_id");
     expect(json.listings[0]).toMatchObject({
       id: "listing-live",
-      owner_id: USER_ID,
-      seller_id: USER_ID,
+      seller: {
+        display_name: "Nomsa",
+        account_verification_status: "verified",
+      },
     });
     expect(json.sellers).toMatchObject([
       {
@@ -1623,9 +1819,11 @@ describe("GET /api/listings", () => {
       const json = await response.json();
       expect(json.listings[0]).toMatchObject({
         id: "listing-live",
-        owner_id: USER_ID,
         [expectedNullField]: null,
       });
+      // Owner identifiers are stripped from public rows (POPIA)
+      expect(json.listings[0]).not.toHaveProperty("owner_id");
+      expect(json.listings[0]).not.toHaveProperty("seller_id");
     }
   );
 

@@ -52,10 +52,16 @@ describe("getLaunchHealthSnapshot", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     stubLaunchEnv(VALID_PRODUCTION_ENV);
+    // Default: the rate limiter worker accepts the shared secret.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+    );
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
   });
 
   it("returns degraded when schema probes are unavailable in the test harness", async () => {
@@ -73,6 +79,7 @@ describe("getLaunchHealthSnapshot", () => {
     const snapshot = await getLaunchHealthSnapshot();
 
     expect(snapshot.checks.config.status).toBe("ok");
+    expect(snapshot.checks.criticalEnv.status).toBe("ok");
     expect(snapshot.checks.supabase.status).toBe("ok");
     expect(snapshot.checks.schema.status).toBe("degraded");
     expect(snapshot.checks.r2.status).toBe("ok");
@@ -126,6 +133,96 @@ describe("getLaunchHealthSnapshot", () => {
     expect(snapshot.status).toBe("degraded");
     expect(snapshot.checks.rateLimiter.status).toBe("degraded");
     expect(snapshot.checks.rateLimiter.failedChecks).toContain("RATE_LIMITER_API_KEY");
+  });
+
+  it("returns degraded when the rate limiter rejects the shared secret with 401", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }))
+    );
+    vi.mocked(createAdminClient).mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          limit: vi.fn().mockResolvedValue({ error: null }),
+        }),
+      }),
+    } as never);
+    vi.mocked(getAuditFailureCount).mockReturnValue(0);
+
+    const snapshot = await getLaunchHealthSnapshot();
+
+    expect(snapshot.status).toBe("degraded");
+    expect(snapshot.checks.rateLimiter.status).toBe("degraded");
+    expect(snapshot.checks.rateLimiter.detail).toContain("401");
+    expect(snapshot.checks.rateLimiter.failedChecks).toContain("RATE_LIMITER_API_KEY");
+  });
+
+  it("stays lenient when the rate limiter probe hits a network error", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connect ETIMEDOUT")));
+    vi.mocked(createAdminClient).mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          limit: vi.fn().mockResolvedValue({ error: null }),
+        }),
+      }),
+    } as never);
+    vi.mocked(getAuditFailureCount).mockReturnValue(0);
+
+    const snapshot = await getLaunchHealthSnapshot();
+
+    expect(snapshot.checks.rateLimiter.status).toBe("ok");
+    expect(snapshot.checks.rateLimiter.detail).toContain("unreachable");
+  });
+
+  it("sends an authenticated read-only probe to the rate limiter worker", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    vi.mocked(createAdminClient).mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          limit: vi.fn().mockResolvedValue({ error: null }),
+        }),
+      }),
+    } as never);
+    vi.mocked(getAuditFailureCount).mockReturnValue(0);
+
+    const snapshot = await getLaunchHealthSnapshot();
+
+    expect(snapshot.checks.rateLimiter.status).toBe("ok");
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.objectContaining({ protocol: "https:" }),
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: `Bearer ${VALID_PRODUCTION_ENV.RATE_LIMITER_API_KEY}`,
+        }),
+        body: expect.stringContaining('"readOnly":true'),
+      })
+    );
+  });
+
+  it("returns degraded when critical env vars are missing", async () => {
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(createAdminClient).mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          limit: vi.fn().mockResolvedValue({ error: null }),
+        }),
+      }),
+    } as never);
+    vi.mocked(getAuditFailureCount).mockReturnValue(0);
+
+    const snapshot = await getLaunchHealthSnapshot();
+
+    expect(snapshot.status).toBe("degraded");
+    expect(snapshot.checks.criticalEnv.status).toBe("degraded");
+    expect(snapshot.checks.criticalEnv.failedChecks).toContain("SUPABASE_SERVICE_ROLE_KEY");
+    errorSpy.mockRestore();
   });
 
   it("returns degraded when production config drifts from launch requirements", async () => {

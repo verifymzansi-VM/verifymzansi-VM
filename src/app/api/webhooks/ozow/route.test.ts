@@ -270,10 +270,8 @@ describe("POST /api/webhooks/ozow", () => {
     const claimUpdateChain = {
       eq: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
-          neq: vi.fn().mockReturnValue({
-            neq: vi.fn().mockReturnValue({
-              select: claimSelect,
-            }),
+          in: vi.fn().mockReturnValue({
+            select: claimSelect,
           }),
         }),
       }),
@@ -364,10 +362,8 @@ describe("POST /api/webhooks/ozow", () => {
     const claimUpdateChain = {
       eq: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
-          neq: vi.fn().mockReturnValue({
-            neq: vi.fn().mockReturnValue({
-              select: claimSelect,
-            }),
+          in: vi.fn().mockReturnValue({
+            select: claimSelect,
           }),
         }),
       }),
@@ -416,7 +412,9 @@ describe("POST /api/webhooks/ozow", () => {
       "payer@example.com",
       "Payer One",
       25,
-      "Tourism & Events"
+      "Tourism & Events",
+      undefined,
+      { kind: "addon", addonName: "Featured Promotion", durationDays: 7 }
     );
     expect(mockFulfillPayment).toHaveBeenCalledWith(
       expect.anything(),
@@ -524,7 +522,9 @@ describe("POST /api/webhooks/ozow", () => {
       },
     };
 
-    const updateEqProvider = vi.fn().mockResolvedValue({ error: null });
+    const updateSelect = vi.fn().mockResolvedValue({ data: [{ id: "payment-1" }], error: null });
+    const updateInStatus = vi.fn().mockReturnValue({ select: updateSelect });
+    const updateEqProvider = vi.fn().mockReturnValue({ in: updateInStatus });
     const updateEqId = vi.fn().mockReturnValue({ eq: updateEqProvider });
 
     mockCreateAdminClient.mockReturnValue({
@@ -561,6 +561,7 @@ describe("POST /api/webhooks/ozow", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ success: true });
+    expect(updateInStatus).toHaveBeenCalledWith("status", ["pending", "processing"]);
     expect(mockFulfillPayment).not.toHaveBeenCalled();
     expect(mockSendPaymentFailedEmail).toHaveBeenCalledWith(
       "payer@example.com",
@@ -568,6 +569,58 @@ describe("POST /api/webhooks/ozow", () => {
       25,
       "Tourism & Events"
     );
+  });
+
+  it("ignores failure webhooks for already-completed payments", async () => {
+    const body = {
+      eventType: "transaction.complete",
+      data: {
+        merchantReference: "payment-1",
+        id: "ozow-tx-late",
+        status: "error",
+        amount: { value: 25, currency: "ZAR" },
+      },
+    };
+
+    const paymentsUpdate = vi.fn();
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "payments") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: {
+                    id: "payment-1",
+                    area: "PROMOTIONS_EVENTS",
+                    status: "complete",
+                    provider: "ozow",
+                    provider_payment_id: null,
+                    provider_reference: "payment-1",
+                    provider_data: {},
+                    amount_cents: 2500,
+                    user_id: "user-1",
+                  },
+                }),
+              }),
+            }),
+            update: paymentsUpdate,
+          };
+        }
+
+        throw new Error(`Unexpected table ${table}`);
+      }),
+      auth: { admin: { getUserById: mockGetUserById } },
+    });
+
+    const response = await POST(createSignedRequest(body));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ success: true, ignored: true });
+    expect(paymentsUpdate).not.toHaveBeenCalled();
+    expect(mockFulfillPayment).not.toHaveBeenCalled();
+    expect(mockSendPaymentFailedEmail).not.toHaveBeenCalled();
   });
 
   it("rolls back processing when fulfillment fails after claim", async () => {
@@ -618,10 +671,8 @@ describe("POST /api/webhooks/ozow", () => {
     const claimUpdateChain = {
       eq: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
-          neq: vi.fn().mockReturnValue({
-            neq: vi.fn().mockReturnValue({
-              select: claimSelect,
-            }),
+          in: vi.fn().mockReturnValue({
+            select: claimSelect,
           }),
         }),
       }),
@@ -704,10 +755,8 @@ describe("POST /api/webhooks/ozow", () => {
     const claimUpdateChain = {
       eq: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
-          neq: vi.fn().mockReturnValue({
-            neq: vi.fn().mockReturnValue({
-              select: claimSelect,
-            }),
+          in: vi.fn().mockReturnValue({
+            select: claimSelect,
           }),
         }),
       }),
@@ -743,5 +792,314 @@ describe("POST /api/webhooks/ozow", () => {
     expect(data.success).toBe(true);
     expect(data.recovered).toBe(true);
     expect(mockFulfillPayment).not.toHaveBeenCalled();
+  });
+
+  it("ignores error-status payloads that are missing an eventType instead of fulfilling", async () => {
+    const body = {
+      data: {
+        merchantReference: "payment-1",
+        id: "ozow-tx-1",
+        status: "error",
+        amount: { value: 25, currency: "ZAR" },
+      },
+    };
+
+    const paymentsUpdate = vi.fn();
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "payments") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: {
+                    id: "payment-1",
+                    area: "PROMOTIONS_EVENTS",
+                    status: "pending",
+                    provider: "ozow",
+                    provider_payment_id: null,
+                    provider_reference: "payment-1",
+                    provider_data: {},
+                    amount_cents: 2500,
+                    user_id: "user-1",
+                  },
+                }),
+              }),
+            }),
+            update: paymentsUpdate,
+          };
+        }
+
+        throw new Error(`Unexpected table ${table}`);
+      }),
+      auth: { admin: { getUserById: mockGetUserById } },
+    });
+
+    const response = await POST(createSignedRequest(body));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ success: true, ignored: true });
+    expect(mockFulfillPayment).not.toHaveBeenCalled();
+    expect(paymentsUpdate).not.toHaveBeenCalled();
+    expect(mockSendPaymentFailedEmail).not.toHaveBeenCalled();
+  });
+
+  it("ignores successful-status payloads that are missing an eventType instead of fulfilling", async () => {
+    const body = {
+      data: {
+        merchantReference: "payment-1",
+        id: "ozow-tx-1",
+        status: "successful",
+        amount: { value: 25, currency: "ZAR" },
+      },
+    };
+
+    const paymentsUpdate = vi.fn();
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "payments") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: {
+                    id: "payment-1",
+                    area: "PROMOTIONS_EVENTS",
+                    status: "pending",
+                    provider: "ozow",
+                    provider_payment_id: null,
+                    provider_reference: "payment-1",
+                    provider_data: {},
+                    amount_cents: 2500,
+                    user_id: "user-1",
+                  },
+                }),
+              }),
+            }),
+            update: paymentsUpdate,
+          };
+        }
+
+        throw new Error(`Unexpected table ${table}`);
+      }),
+      auth: { admin: { getUserById: mockGetUserById } },
+    });
+
+    const response = await POST(createSignedRequest(body));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ success: true, ignored: true });
+    expect(mockFulfillPayment).not.toHaveBeenCalled();
+    expect(paymentsUpdate).not.toHaveBeenCalled();
+  });
+
+  it("returns a retryable 500 when the payment lookup hits a database error", async () => {
+    const body = {
+      eventType: "transaction.complete",
+      data: {
+        merchantReference: "payment-1",
+        id: "ozow-tx-1",
+        status: "successful",
+        amount: { value: 25, currency: "ZAR" },
+      },
+    };
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "payments") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: null,
+                  error: { message: "connection reset by peer" },
+                }),
+              }),
+            }),
+          };
+        }
+
+        throw new Error(`Unexpected table ${table}`);
+      }),
+      auth: { admin: { getUserById: mockGetUserById } },
+    });
+
+    const response = await POST(createSignedRequest(body));
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get("Retry-After")).toBe("30");
+    expect(mockFulfillPayment).not.toHaveBeenCalled();
+  });
+
+  it("treats a fresh in-flight processing payment as a duplicate instead of fulfilling twice", async () => {
+    const body = {
+      eventType: "transaction.complete",
+      data: {
+        merchantReference: "payment-1",
+        id: "ozow-tx-1",
+        status: "successful",
+        amount: { value: 25, currency: "ZAR" },
+      },
+    };
+
+    const processingPayment = {
+      id: "payment-1",
+      area: "PROMOTIONS_EVENTS",
+      status: "processing",
+      provider: "ozow",
+      provider_payment_id: "ozow-tx-1",
+      provider_reference: "payment-1",
+      provider_data: {
+        type: "featured_promotion",
+        promotion_id: "00000000-0000-0000-0000-000000000001",
+        feature_days: 7,
+        processing_started_at: new Date().toISOString(),
+      },
+      amount_cents: 2500,
+      user_id: "user-1",
+    };
+
+    const maybeSingle = vi
+      .fn()
+      .mockResolvedValueOnce({ data: processingPayment })
+      .mockResolvedValueOnce({ data: processingPayment });
+    const paymentsSelect = {
+      eq: vi.fn().mockReturnValue({
+        maybeSingle,
+      }),
+    };
+    // Claim is refused because the payment is already "processing".
+    const claimSelect = vi.fn().mockResolvedValue({ data: [] });
+    const claimUpdateChain = {
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          in: vi.fn().mockReturnValue({
+            select: claimSelect,
+          }),
+        }),
+      }),
+    };
+    const paymentsFrom = {
+      select: vi.fn().mockReturnValue(paymentsSelect),
+      update: vi.fn().mockReturnValueOnce(claimUpdateChain),
+    };
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "payments") {
+          return paymentsFrom;
+        }
+        throw new Error(`Unexpected table ${table}`);
+      }),
+      auth: { admin: { getUserById: mockGetUserById } },
+    });
+
+    const response = await POST(createSignedRequest(body));
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data).toEqual({ success: true, duplicate: true });
+    expect(mockFulfillPayment).not.toHaveBeenCalled();
+  });
+
+  it("recovers a stale processing payment by fulfilling it again", async () => {
+    const body = {
+      eventType: "transaction.complete",
+      data: {
+        merchantReference: "payment-1",
+        id: "ozow-tx-1",
+        status: "successful",
+        amount: { value: 25, currency: "ZAR" },
+      },
+    };
+
+    const staleProcessingPayment = {
+      id: "payment-1",
+      area: "PROMOTIONS_EVENTS",
+      status: "processing",
+      provider: "ozow",
+      provider_payment_id: "ozow-tx-1",
+      provider_reference: "payment-1",
+      provider_data: {
+        type: "featured_promotion",
+        promotion_id: "00000000-0000-0000-0000-000000000001",
+        feature_days: 7,
+        processing_started_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+      },
+      amount_cents: 2500,
+      user_id: "user-1",
+    };
+
+    const fulfilledPayment = {
+      ...staleProcessingPayment,
+      provider_data: {
+        ...staleProcessingPayment.provider_data,
+        fulfillment_completed_at: new Date().toISOString(),
+        fulfillment_state: "completed",
+      },
+    };
+
+    const maybeSingle = vi
+      .fn()
+      .mockResolvedValueOnce({ data: staleProcessingPayment })
+      .mockResolvedValueOnce({ data: staleProcessingPayment })
+      .mockResolvedValueOnce({ data: fulfilledPayment });
+    const paymentsSelect = {
+      eq: vi.fn().mockReturnValue({
+        maybeSingle,
+      }),
+    };
+    const claimSelect = vi.fn().mockResolvedValue({ data: [] });
+    const claimUpdateChain = {
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          in: vi.fn().mockReturnValue({
+            select: claimSelect,
+          }),
+        }),
+      }),
+    };
+    const markerUpdateChain = {
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ error: null }),
+        }),
+      }),
+    };
+    const completeUpdateChain = {
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ error: null }),
+        }),
+      }),
+    };
+    const paymentsFrom = {
+      select: vi.fn().mockReturnValue(paymentsSelect),
+      update: vi
+        .fn()
+        .mockReturnValueOnce(claimUpdateChain)
+        .mockReturnValueOnce(markerUpdateChain)
+        .mockReturnValueOnce(completeUpdateChain),
+    };
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "payments") {
+          return paymentsFrom;
+        }
+        throw new Error(`Unexpected table ${table}`);
+      }),
+      auth: { admin: { getUserById: mockGetUserById } },
+    });
+    mockFulfillPayment.mockResolvedValue(undefined);
+
+    const response = await POST(createSignedRequest(body));
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data).toMatchObject({ success: true, recovered: true });
+    expect(mockFulfillPayment).toHaveBeenCalledTimes(1);
   });
 });

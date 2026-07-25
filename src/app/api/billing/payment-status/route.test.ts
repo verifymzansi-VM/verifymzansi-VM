@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GET } from "@/app/api/billing/payment-status/route";
 import { createClient } from "@/lib/supabase/server";
+import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import type { NextRequest } from "next/server";
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
+}));
+
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkLocalRateLimit: vi.fn().mockReturnValue({ limited: false }),
 }));
 
 function createRequest(url: string): NextRequest {
@@ -13,6 +18,8 @@ function createRequest(url: string): NextRequest {
     nextUrl: new URL(url),
   }) as NextRequest;
 }
+
+const PAYMENT_ID = "550e8400-e29b-41d4-a716-446655440000";
 
 describe("GET /api/billing/payment-status", () => {
   const mockSupabase = {
@@ -23,16 +30,39 @@ describe("GET /api/billing/payment-status", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(createClient).mockResolvedValue(mockSupabase as never);
+    vi.mocked(checkLocalRateLimit).mockReturnValue({ limited: false });
+  });
+
+  it("returns 400 when the payment id is not a UUID", async () => {
+    const res = await GET(
+      createRequest("https://verifymzansi.com/api/billing/payment-status?payment=abc")
+    );
+
+    expect(res.status).toBe(400);
+    expect(mockSupabase.auth.getUser).not.toHaveBeenCalled();
   });
 
   it("returns 401 when the user is not authenticated", async () => {
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: null } });
 
     const res = await GET(
-      createRequest("https://verifymzansi.com/api/billing/payment-status?payment=pay-1")
+      createRequest(`https://verifymzansi.com/api/billing/payment-status?payment=${PAYMENT_ID}`)
     );
 
     expect(res.status).toBe(401);
+  });
+
+  it("returns 429 when the polling rate limit is exceeded", async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    vi.mocked(checkLocalRateLimit).mockReturnValue({ limited: true, retryAfter: 45 });
+
+    const res = await GET(
+      createRequest(`https://verifymzansi.com/api/billing/payment-status?payment=${PAYMENT_ID}`)
+    );
+
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("45");
+    expect(mockSupabase.from).not.toHaveBeenCalled();
   });
 
   it("treats blank payment ids as missing instead of querying the database", async () => {
@@ -54,7 +84,7 @@ describe("GET /api/billing/payment-status", () => {
     });
 
     const res = await GET(
-      createRequest("https://verifymzansi.com/api/billing/payment-status?payment=pay-1")
+      createRequest(`https://verifymzansi.com/api/billing/payment-status?payment=${PAYMENT_ID}`)
     );
 
     expect(res.status).toBe(200);
@@ -70,7 +100,7 @@ describe("GET /api/billing/payment-status", () => {
     });
 
     const res = await GET(
-      createRequest("https://verifymzansi.com/api/billing/payment-status?payment=pay-1")
+      createRequest(`https://verifymzansi.com/api/billing/payment-status?payment=${PAYMENT_ID}`)
     );
 
     expect(res.status).toBe(200);
@@ -89,7 +119,7 @@ describe("GET /api/billing/payment-status", () => {
     });
 
     const res = await GET(
-      createRequest("https://verifymzansi.com/api/billing/payment-status?payment=pay-1")
+      createRequest(`https://verifymzansi.com/api/billing/payment-status?payment=${PAYMENT_ID}`)
     );
 
     expect(res.status).toBe(500);

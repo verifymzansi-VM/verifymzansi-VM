@@ -63,8 +63,6 @@ export interface Env {
   TEMP_BUCKET: R2Bucket;
   PRIVATE_BUCKET: R2Bucket;
   KYC_ENCRYPTION_KEY: string; // 64-char hex string (32 bytes)
-  /** Previous encryption key kept during rotation so old blobs stay readable. */
-  KYC_ENCRYPTION_KEY_PREVIOUS?: string;
   SUPABASE_URL: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
   WORKER_API_KEY: string; // Shared secret for authenticating callers
@@ -93,6 +91,21 @@ function hexToBytes(hex: string): Uint8Array {
   return bytes;
 }
 
+/**
+ * Constant-time shared-secret comparison. workerd has no node:crypto
+ * `timingSafeEqual`, so use a length-normalized XOR loop instead.
+ */
+function timingSafeEqual(a: string, b: string): boolean {
+  const maxLength = Math.max(a.length, b.length);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < maxLength; i += 1) {
+    const aCode = i < a.length ? a.charCodeAt(i) : 0;
+    const bCode = i < b.length ? b.charCodeAt(i) : 0;
+    diff |= aCode ^ bCode;
+  }
+  return diff === 0;
+}
+
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     // Health check endpoint
@@ -110,9 +123,10 @@ const worker = {
       return new Response("Method Not Allowed", { status: 405 });
     }
 
-    // Authenticate caller via shared secret
+    // Authenticate caller via shared secret (constant-time comparison)
     const authHeader = request.headers.get("Authorization");
-    if (!env.WORKER_API_KEY || authHeader !== `Bearer ${env.WORKER_API_KEY}`) {
+    const expectedAuthHeader = env.WORKER_API_KEY ? `Bearer ${env.WORKER_API_KEY}` : "";
+    if (!expectedAuthHeader || !timingSafeEqual(authHeader ?? "", expectedAuthHeader)) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { "Content-Type": "application/json" },
@@ -166,8 +180,9 @@ const worker = {
         headers: { "Content-Type": "application/json" },
       });
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "Unknown error";
-      return new Response(message, { status: 500 });
+      // Do not leak internal error detail to callers — keep it in the logs.
+      console.error("[KYC Worker] Unhandled error:", e);
+      return new Response("Internal server error", { status: 500 });
     }
   },
 
@@ -267,7 +282,7 @@ const worker = {
     await env.TEMP_BUCKET.delete(tempKey);
 
     // Update Supabase to mark ready — URL-encode artifactId to prevent filter injection
-    await fetch(
+    const patchResponse = await fetch(
       `${env.SUPABASE_URL}/rest/v1/kyc_artifacts?id=eq.${encodeURIComponent(artifactId)}`,
       {
         method: "PATCH",
@@ -280,6 +295,14 @@ const worker = {
         body: JSON.stringify({ r2_key: finalKey, status: "encrypted" }),
       }
     );
+
+    // A failed status update must surface as an error so the caller's
+    // retry / encryption_failed path runs instead of silently dropping it.
+    if (!patchResponse.ok) {
+      throw new Error(
+        `Failed to mark artifact ${artifactId} as encrypted: HTTP ${patchResponse.status}`
+      );
+    }
 
     console.warn(`[KYC Worker] Processing complete for ${artifactId}`);
   },

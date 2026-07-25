@@ -19,12 +19,30 @@ export function buildBusinessMutationPayload(
 ) {
   const mediaFallbacks = options?.mediaFallbacks;
 
+  // Profile extras have no dedicated columns — persist them inside the
+  // category_details jsonb column under a stable key.
+  const businessProfile: Record<string, unknown> = {};
+  if (data.year_established !== undefined) businessProfile.year_established = data.year_established;
+  if (data.cipc_registration) businessProfile.cipc_registration = data.cipc_registration;
+  if (data.bbbee_level) businessProfile.bbbee_level = data.bbbee_level;
+  if (data.languages_spoken) businessProfile.languages_spoken = data.languages_spoken;
+  if (data.load_shedding_ready !== undefined)
+    businessProfile.load_shedding_ready = data.load_shedding_ready;
+  if (data.number_of_employees) businessProfile.number_of_employees = data.number_of_employees;
+
+  const categoryDetails = data.category_details ?? {};
+
   return {
     business_type: data.business_type,
     business_name: data.business_name,
     slug: data.slug,
     description: data.description,
     category: data.category,
+    subcategory: data.subcategory || null,
+    category_details:
+      Object.keys(businessProfile).length > 0
+        ? { ...categoryDetails, business_profile: businessProfile }
+        : categoryDetails,
     logo_url: data.logo_url || null,
     cover_photo: data.cover_photo || null,
     cover_video: data.cover_video || null,

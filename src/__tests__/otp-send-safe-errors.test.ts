@@ -104,7 +104,7 @@ describe("POST /api/otp/send safe error envelopes", () => {
 
       if (table === "otp_challenges") {
         const challengeQuery = {
-          update: vi.fn(),
+          delete: vi.fn(),
           insert: vi.fn(),
         };
 
@@ -113,7 +113,7 @@ describe("POST /api/otp/send safe error envelopes", () => {
           is: vi.fn().mockResolvedValue({ error: null }),
         };
         invalidateQuery.eq.mockReturnValue(invalidateQuery);
-        challengeQuery.update.mockReturnValue(invalidateQuery);
+        challengeQuery.delete.mockReturnValue(invalidateQuery);
         challengeQuery.insert.mockResolvedValue({
           error: {
             message: "duplicate key value violates unique constraint",

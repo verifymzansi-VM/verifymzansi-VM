@@ -8,7 +8,10 @@ export type PaymentStoreClient = {
         column: string,
         value: string
       ) => {
-        maybeSingle: () => Promise<{ data: PaymentRow | null }>;
+        maybeSingle: () => Promise<{
+          data: PaymentRow | null;
+          error?: { message?: string } | null;
+        }>;
       };
     };
     update: (value: Record<string, unknown>) => {
@@ -31,6 +34,15 @@ export type PaymentStoreClient = {
             ) => {
               select: (columns: string) => Promise<{ data: { id: string }[] | null }>;
             };
+          };
+          in: (
+            column: string,
+            values: string[]
+          ) => {
+            select: (columns: string) => Promise<{
+              data: { id: string }[] | null;
+              error?: { message?: string } | null;
+            }>;
           };
         };
         neq: (
@@ -92,13 +104,19 @@ export async function getPaymentById(
   supabase: PaymentStoreClient,
   paymentId: string
 ): Promise<PaymentRow | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("payments")
     .select(
       "id, area, status, provider, provider_payment_id, provider_reference, provider_data, amount_cents, user_id"
     )
     .eq("id", paymentId)
     .maybeSingle();
+
+  // A query failure must be distinguishable from "not found" — callers that
+  // treat null as "missing" would otherwise ack webhooks that must be retried.
+  if (error) {
+    throw new Error(`Payment lookup failed: ${error.message ?? "unknown error"}`);
+  }
 
   return (data as PaymentRow | null) ?? null;
 }
@@ -107,13 +125,17 @@ export async function getPaymentByProviderReference(
   supabase: PaymentStoreClient,
   providerReference: string
 ): Promise<PaymentRow | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("payments")
     .select(
       "id, area, status, provider, provider_payment_id, provider_reference, provider_data, amount_cents, user_id"
     )
     .eq("provider_reference", providerReference)
     .maybeSingle();
+
+  if (error) {
+    throw new Error(`Payment lookup failed: ${error.message ?? "unknown error"}`);
+  }
 
   return (data as PaymentRow | null) ?? null;
 }
@@ -145,7 +167,10 @@ export async function markPaymentFailed(
     webhookPayload
   );
 
-  const { error } = await supabase
+  // CAS guard: only pending/processing payments may transition to failed.
+  // A terminal "complete" payment must never be downgraded by a late,
+  // duplicated, or contradictory error webhook (see Ozow webhook route).
+  const { data, error } = await supabase
     .from("payments")
     .update({
       status: "failed",
@@ -157,9 +182,14 @@ export async function markPaymentFailed(
       },
     })
     .eq("id", payment.id)
-    .eq("provider", "ozow");
+    .eq("provider", "ozow")
+    .in("status", ["pending", "processing"])
+    .select("id");
 
-  return !error;
+  if (error) return false;
+  // Zero rows means the payment was already in a terminal state (e.g. a
+  // concurrent webhook completed it between our read and this update).
+  return Boolean(data?.length);
 }
 
 export async function claimPaymentProcessing(
@@ -167,6 +197,8 @@ export async function claimPaymentProcessing(
   payment: PaymentRow,
   payload: OzowNormalizedPayload
 ): Promise<boolean> {
+  // CAS guard: only re-usable source statuses may enter processing. Terminal
+  // states (complete, refunded) must never be resurrected by a late webhook.
   const { data: claimedRows } = await supabase
     .from("payments")
     .update({
@@ -182,8 +214,7 @@ export async function claimPaymentProcessing(
     })
     .eq("id", payment.id)
     .eq("provider", "ozow")
-    .neq("status", "complete")
-    .neq("status", "processing")
+    .in("status", ["pending", "failed", "expired"])
     .select("id");
 
   return Boolean(claimedRows?.length);

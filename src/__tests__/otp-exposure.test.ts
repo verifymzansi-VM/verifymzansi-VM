@@ -81,7 +81,7 @@ function mockOtpDbSuccess() {
         select: vi.fn(),
         eq: vi.fn(),
         gte: vi.fn(),
-        update: vi.fn(),
+        delete: vi.fn(),
         insert: vi.fn(),
       };
       challengeQuery.select.mockReturnValue(challengeQuery);
@@ -93,7 +93,7 @@ function mockOtpDbSuccess() {
         is: vi.fn().mockResolvedValue({ error: null }),
       };
       invalidateQuery.eq.mockReturnValue(invalidateQuery);
-      challengeQuery.update.mockReturnValue(invalidateQuery);
+      challengeQuery.delete.mockReturnValue(invalidateQuery);
       challengeQuery.insert.mockResolvedValue({ error: null });
 
       return challengeQuery;

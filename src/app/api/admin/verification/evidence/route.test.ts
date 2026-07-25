@@ -128,6 +128,96 @@ describe("/api/admin/verification/evidence", () => {
     });
   });
 
+  it("returns 403 when the target user has no active review case", async () => {
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "kyc_artifacts") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({
+              data: {
+                id: "artifact-1",
+                user_id: "user-1",
+                r2_key: "kyc/id_document/user-1/file.bin",
+                content_type: "image/jpeg",
+                artifact_kind: "document",
+                step_type: "id_doc",
+              },
+              error: null,
+            }),
+          };
+        }
+
+        if (table === "verification_steps") {
+          return createVerificationStepsBuilder(0);
+        }
+
+        if (table === "kyc_evidence_access_logs") {
+          return createAccessLogsBuilder();
+        }
+
+        throw new Error(`Unexpected table lookup: ${table}`);
+      }),
+    });
+
+    const response = await GET(
+      createGetRequest(
+        "http://localhost:3000/api/admin/verification/evidence?artifactId=123e4567-e89b-42d3-a456-426614174000"
+      )
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ code: "no_active_case" });
+    expect(mockDownloadKycDocument).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when the artifact is not linked to the active verification session", async () => {
+    mockGetLinkedEvidenceArtifactIds.mockResolvedValue(["artifact-99"]);
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "kyc_artifacts") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({
+              data: {
+                id: "artifact-1",
+                user_id: "user-1",
+                r2_key: "kyc/id_document/user-1/file.bin",
+                content_type: "image/jpeg",
+                artifact_kind: "document",
+                step_type: "id_doc",
+              },
+              error: null,
+            }),
+          };
+        }
+
+        if (table === "verification_steps") {
+          return createVerificationStepsBuilder(1);
+        }
+
+        if (table === "kyc_evidence_access_logs") {
+          return createAccessLogsBuilder();
+        }
+
+        throw new Error(`Unexpected table lookup: ${table}`);
+      }),
+    });
+
+    const response = await GET(
+      createGetRequest(
+        "http://localhost:3000/api/admin/verification/evidence?artifactId=123e4567-e89b-42d3-a456-426614174000"
+      )
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ code: "artifact_not_linked" });
+    expect(mockDownloadKycDocument).not.toHaveBeenCalled();
+  });
+
   it("falls back to a newer authorized artifact for the same step when the requested file is missing", async () => {
     let artifactQueryCount = 0;
     mockCreateAdminClient.mockReturnValue({

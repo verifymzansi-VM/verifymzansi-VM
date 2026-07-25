@@ -34,6 +34,7 @@ const mockCreateHostedCheckout = vi.fn().mockResolvedValue({
 });
 vi.mock("@/lib/payments/checkout", () => ({
   createHostedCheckout: (...args: unknown[]) => mockCreateHostedCheckout(...args),
+  CHECKOUT_IN_PROGRESS_ERROR_MESSAGE: "A checkout for this area is already in progress",
 }));
 
 const mockCanFeatured = vi.fn().mockReturnValue({ allowed: true });
@@ -331,6 +332,27 @@ describe.each([
     expect(res.status).toBe(403);
     const body = await res.json();
     expect(body.error).toBe("Upgrade required");
+  });
+
+  it("returns 409 when the payments unique index catches a racing duplicate checkout", async () => {
+    setupHappyPath(addonField);
+    mockCanFeatured.mockReturnValue({ allowed: true });
+    mockCanBoost.mockReturnValue({ allowed: true });
+    mockCanUrgent.mockReturnValue({ allowed: true });
+    mockCreateHostedCheckout.mockRejectedValueOnce(
+      new Error("A checkout for this area is already in progress")
+    );
+
+    const res = await handler()(makeRequest(), makeParams(VALID_UUID));
+
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    const expectedMessages: Record<string, string> = {
+      featured: "A featured payment is already in progress for this listing",
+      boost: "A boost payment is already in progress for this listing",
+      urgent: "An urgent payment is already in progress for this listing",
+    };
+    expect(body.error).toBe(expectedMessages[name]);
   });
 
   it("happy path: returns checkout URL and payment ID", async () => {

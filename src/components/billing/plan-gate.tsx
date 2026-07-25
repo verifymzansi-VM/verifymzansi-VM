@@ -74,34 +74,26 @@ interface PendingPaymentRecovery {
 
 const AREA_LABELS: Record<MarketplaceArea, string> = {
   MZANSI_MARKET: "Mzansi Market",
-  MALL_SHOPS: "Mall Shops",
-  BUSINESS_ADS: "Business Ads",
   MZANSI_BUSINESS: "Mzansi Business",
   PROMOTIONS_EVENTS: "Tourism & Events",
 };
 
 const AREA_COLORS: Record<MarketplaceArea, string> = {
   MZANSI_MARKET: "bg-brand-green text-white",
-  MALL_SHOPS: "bg-brand-gold text-amber-950",
-  BUSINESS_ADS: "bg-sky-700 text-white",
   MZANSI_BUSINESS: "bg-brand-blue text-white",
   PROMOTIONS_EVENTS: "bg-purple-600 text-white",
 };
 
 const AREA_ITEM_LABELS: Record<MarketplaceArea, string> = {
   MZANSI_MARKET: "listings",
-  MALL_SHOPS: "storefronts",
-  BUSINESS_ADS: "profiles",
   MZANSI_BUSINESS: "businesses",
-  PROMOTIONS_EVENTS: "promotions",
+  PROMOTIONS_EVENTS: "events",
 };
 
 const AREA_COUNT_TARGETS: Record<MarketplaceArea, { table: string; area?: MarketplaceArea }[]> = {
   MZANSI_MARKET: [{ table: "listings", area: "MZANSI_MARKET" }],
   MZANSI_BUSINESS: [{ table: "businesses", area: "MZANSI_BUSINESS" }],
   PROMOTIONS_EVENTS: [{ table: "promotions" }, { table: "businesses", area: "PROMOTIONS_EVENTS" }],
-  BUSINESS_ADS: [{ table: "business_profiles", area: "BUSINESS_ADS" }],
-  MALL_SHOPS: [{ table: "storefronts", area: "MALL_SHOPS" }],
 };
 
 /* ─────────────────────────────────────────────────────────────
@@ -111,18 +103,13 @@ function planFeatureList(plan: PlanDefinition): { text: string; enabled: boolean
   const f = plan.features;
   const rows: { text: string; enabled: boolean }[] = [];
 
-  const maxItems =
-    f.maxListings ?? f.maxStorefronts ?? f.maxProfiles ?? f.maxBusinesses ?? f.maxPromotions ?? 0;
+  const maxItems = f.maxListings ?? f.maxBusinesses ?? f.maxPromotions ?? 0;
   const itemLabel =
-    plan.area === "MALL_SHOPS"
-      ? "storefronts"
-      : plan.area === "BUSINESS_ADS"
-        ? "profiles"
-        : plan.area === "MZANSI_BUSINESS"
-          ? "businesses"
-          : plan.area === "PROMOTIONS_EVENTS"
-            ? "promotions"
-            : "listings";
+    plan.area === "MZANSI_BUSINESS"
+      ? "businesses"
+      : plan.area === "PROMOTIONS_EVENTS"
+        ? "events"
+        : "listings";
 
   rows.push({ text: `${maxItems === -1 ? "Unlimited" : maxItems} ${itemLabel}`, enabled: true });
   rows.push({ text: `${f.maxPhotos} photos per listing`, enabled: true });

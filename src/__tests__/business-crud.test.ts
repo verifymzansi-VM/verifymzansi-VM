@@ -220,6 +220,8 @@ describe("POST /api/businesses", () => {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
+          gte: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
           maybeSingle: vi.fn().mockResolvedValue({ data: null }),
         };
       }),
@@ -269,6 +271,8 @@ describe("POST /api/businesses", () => {
 
               return {
                 eq: vi.fn().mockReturnThis(),
+                gte: vi.fn().mockReturnThis(),
+                limit: vi.fn().mockReturnThis(),
                 neq: vi.fn().mockReturnThis(),
                 maybeSingle: vi.fn().mockResolvedValue({ data: null }),
               };
@@ -278,6 +282,8 @@ describe("POST /api/businesses", () => {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
+          gte: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
           maybeSingle: vi.fn().mockResolvedValue({ data: null }),
         };
       }),
@@ -391,6 +397,7 @@ describe("POST /api/businesses", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            gte: vi.fn().mockReturnThis(),
             neq: vi.fn().mockReturnThis(),
             limit: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({ data: null }),
@@ -411,7 +418,13 @@ describe("POST /api/businesses", () => {
     });
 
     mockCreateAdminClient.mockReturnValue({
-      rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
+      rpc: vi.fn((fn: string) =>
+        Promise.resolve(
+          fn === "insert_business_with_limit"
+            ? { data: { id: VALID_BUSINESS_ID }, error: null }
+            : { data: true, error: null }
+        )
+      ),
       from: vi.fn((table: string) => {
         if (table === "account_profiles") {
           return {
@@ -505,7 +518,9 @@ describe("POST /api/businesses", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            gte: vi.fn().mockReturnThis(),
             neq: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({ data: null }),
           };
         }
@@ -576,6 +591,21 @@ describe("POST /api/businesses", () => {
     const freePostCleanup = vi.fn().mockResolvedValue({ error: null });
 
     mockCreateAdminClient.mockReturnValue({
+      rpc: vi.fn((fn: string) =>
+        Promise.resolve(
+          fn === "insert_business_with_limit"
+            ? {
+                data: null,
+                error: {
+                  code: "23505",
+                  message:
+                    'duplicate key value violates unique constraint "idx_businesses_slug_unique"',
+                  constraint: "idx_businesses_slug_unique",
+                },
+              }
+            : { data: true, error: null }
+        )
+      ),
       from: vi.fn((table: string) => {
         if (table === "account_profiles") {
           return {
@@ -639,22 +669,11 @@ describe("POST /api/businesses", () => {
 
               return {
                 eq: vi.fn().mockReturnThis(),
+                gte: vi.fn().mockReturnThis(),
+                limit: vi.fn().mockReturnThis(),
                 neq: vi.fn().mockReturnThis(),
                 maybeSingle: vi.fn().mockResolvedValue({ data: null }),
               };
-            }),
-            insert: vi.fn().mockReturnValue({
-              select: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({
-                  data: null,
-                  error: {
-                    code: "23505",
-                    message:
-                      'duplicate key value violates unique constraint "idx_businesses_slug_unique"',
-                    constraint: "idx_businesses_slug_unique",
-                  },
-                }),
-              }),
             }),
           };
         }
@@ -705,7 +724,12 @@ describe("POST /api/businesses", () => {
       .mockReturnValue(generatedBusinessId);
 
     mockCreateAdminClient.mockReturnValue({
-      rpc: claimRpc,
+      rpc: vi.fn((fn: string, args: unknown) => {
+        if (fn === "insert_business_with_limit") {
+          return Promise.resolve({ data: null, error: { message: "insert failed" } });
+        }
+        return claimRpc(fn, args);
+      }),
       from: vi.fn((table: string) => {
         if (table === "account_profiles") {
           return {
@@ -747,17 +771,11 @@ describe("POST /api/businesses", () => {
 
               return {
                 eq: vi.fn().mockReturnThis(),
+                gte: vi.fn().mockReturnThis(),
+                limit: vi.fn().mockReturnThis(),
                 neq: vi.fn().mockReturnThis(),
                 maybeSingle: vi.fn().mockResolvedValue({ data: null }),
               };
-            }),
-            insert: vi.fn().mockReturnValue({
-              select: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({
-                  data: null,
-                  error: { message: "insert failed" },
-                }),
-              }),
             }),
           };
         }
@@ -837,12 +855,16 @@ describe("POST /api/businesses", () => {
   });
 
   it("persists business_details on successful create", async () => {
-    const insertSpy = vi.fn().mockReturnThis();
-    const selectSpy = vi.fn().mockReturnThis();
-    const singleSpy = vi.fn().mockResolvedValue({ data: { id: "business-1" }, error: null });
+    const rpcSpy = vi.fn((fn: string) =>
+      Promise.resolve(
+        fn === "insert_business_with_limit"
+          ? { data: { id: "business-1" }, error: null }
+          : { data: true, error: null }
+      )
+    );
 
     mockCreateAdminClient.mockReturnValue({
-      rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
+      rpc: rpcSpy,
       from: vi.fn((table: string) => {
         if (table === "account_profiles") {
           return {
@@ -870,35 +892,32 @@ describe("POST /api/businesses", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            gte: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({ data: null }),
             neq: vi.fn().mockReturnThis(),
-            insert: insertSpy,
-            single: singleSpy,
           };
         }
         return {
-          select: selectSpy,
+          select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
           maybeSingle: vi.fn().mockResolvedValue({ data: null }),
         };
       }),
     });
 
-    insertSpy.mockImplementation(() => ({
-      select: () => ({
-        single: singleSpy,
-      }),
-    }));
-
     const res = await POST(createRequest(VALID_BODY));
 
     expect(res.status).toBe(201);
-    expect(insertSpy).toHaveBeenCalledWith(
+    expect(rpcSpy).toHaveBeenCalledWith(
+      "insert_business_with_limit",
       expect.objectContaining({
-        business_details: expect.objectContaining({
-          type: "standalone_shop",
-          street_address: "24 Vilakazi Street",
-          suburb: "Orlando West",
+        p_data: expect.objectContaining({
+          business_details: expect.objectContaining({
+            type: "standalone_shop",
+            street_address: "24 Vilakazi Street",
+            suburb: "Orlando West",
+          }),
         }),
       })
     );
@@ -980,14 +999,16 @@ describe("POST /api/businesses", () => {
   });
 
   it("allows business creation when the profile is stale but all verification steps are approved", async () => {
-    const insertSpy = vi.fn().mockReturnValue({
-      select: () => ({
-        single: vi.fn().mockResolvedValue({ data: { id: "business-1" }, error: null }),
-      }),
-    });
+    const rpcSpy = vi.fn((fn: string) =>
+      Promise.resolve(
+        fn === "insert_business_with_limit"
+          ? { data: { id: "business-1" }, error: null }
+          : { data: true, error: null }
+      )
+    );
 
     mockCreateAdminClient.mockReturnValue({
-      rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
+      rpc: rpcSpy,
       from: vi.fn((table: string) => {
         if (table === "account_profiles") {
           return {
@@ -1037,10 +1058,10 @@ describe("POST /api/businesses", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            gte: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({ data: null }),
             neq: vi.fn().mockReturnThis(),
-            insert: insertSpy,
-            single: vi.fn().mockResolvedValue({ data: { id: "business-1" }, error: null }),
           };
         }
         return {
@@ -1054,17 +1075,23 @@ describe("POST /api/businesses", () => {
     const res = await POST(createRequest(VALID_BODY));
 
     expect(res.status).toBe(201);
-    expect(insertSpy).toHaveBeenCalled();
+    expect(rpcSpy).toHaveBeenCalledWith(
+      "insert_business_with_limit",
+      expect.objectContaining({ p_user_id: USER_ID })
+    );
   });
 
-  it("writes owner_id when creating businesses", async () => {
-    const insertSpy = vi.fn().mockReturnValue({
-      select: () => ({
-        single: vi.fn().mockResolvedValue({ data: { id: "business-1" }, error: null }),
-      }),
-    });
+  it("passes the authenticated user id to the insert rpc without embedding an owner field", async () => {
+    const rpcSpy = vi.fn((fn: string, _args?: unknown) =>
+      Promise.resolve(
+        fn === "insert_business_with_limit"
+          ? { data: { id: "business-1" }, error: null }
+          : { data: true, error: null }
+      )
+    );
 
     mockCreateAdminClient.mockReturnValue({
+      rpc: rpcSpy,
       from: vi.fn((table: string) => {
         if (table === "account_profiles") {
           return {
@@ -1106,17 +1133,13 @@ describe("POST /api/businesses", () => {
                   limit: vi.fn().mockResolvedValue({ error: null }),
                 };
               }
-              if (fields === "id") {
-                return {
-                  eq: vi.fn().mockReturnThis(),
-                  maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-                };
-              }
               return {
-                neq: vi.fn().mockResolvedValue({ count: 0 }),
+                eq: vi.fn().mockReturnThis(),
+                gte: vi.fn().mockReturnThis(),
+                limit: vi.fn().mockReturnThis(),
+                maybeSingle: vi.fn().mockResolvedValue({ data: null }),
               };
             }),
-            insert: insertSpy,
           };
         }
         return {
@@ -1130,10 +1153,223 @@ describe("POST /api/businesses", () => {
     const res = await POST(createRequest(VALID_BODY));
 
     expect(res.status).toBe(201);
-    expect(insertSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        owner_id: USER_ID,
+    // Ownership is enforced inside insert_business_with_limit (forced to the
+    // authenticated user), so the payload must carry no owner field.
+    expect(rpcSpy).toHaveBeenCalledWith(
+      "insert_business_with_limit",
+      expect.objectContaining({ p_user_id: USER_ID })
+    );
+    const insertArgs = rpcSpy.mock.calls.find(
+      ([fn]) => fn === "insert_business_with_limit"
+    )?.[1] as { p_data?: Record<string, unknown> } | undefined;
+    expect(insertArgs?.p_data).not.toHaveProperty("owner_id");
+    expect(insertArgs?.p_data).not.toHaveProperty("seller_id");
+  });
+
+  function mockBusinessCreateSuccess(insertResult: unknown = { id: VALID_BUSINESS_ID }) {
+    const rpcSpy = vi.fn((fn: string, _args?: unknown) =>
+      Promise.resolve(
+        fn === "insert_business_with_limit"
+          ? { data: insertResult, error: null }
+          : { data: true, error: null }
+      )
+    );
+    mockCreateAdminClient.mockReturnValue({
+      rpc: rpcSpy,
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { tier: "growth" } }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          gte: vi.fn().mockReturnThis(),
+          neq: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+    return rpcSpy;
+  }
+
+  it("persists subcategory, category_details and business profile extras on create", async () => {
+    const rpcSpy = mockBusinessCreateSuccess();
+
+    const res = await POST(
+      createRequest({
+        ...VALID_BODY,
+        subcategory: "Streetwear",
+        category_details: { fitting_room: true },
+        year_established: 2018,
+        cipc_registration: "2023/123456/07",
+        bbbee_level: "level_2",
+        languages_spoken: "English, isiZulu",
+        load_shedding_ready: true,
+        number_of_employees: "2_5",
       })
+    );
+
+    expect(res.status).toBe(201);
+    expect(rpcSpy).toHaveBeenCalledWith(
+      "insert_business_with_limit",
+      expect.objectContaining({
+        p_data: expect.objectContaining({
+          subcategory: "Streetwear",
+          category_details: expect.objectContaining({
+            fitting_room: true,
+            business_profile: {
+              year_established: 2018,
+              cipc_registration: "2023/123456/07",
+              bbbee_level: "level_2",
+              languages_spoken: "English, isiZulu",
+              load_shedding_ready: true,
+              number_of_employees: "2_5",
+            },
+          }),
+        }),
+      })
+    );
+  });
+
+  it("does not add a business_profile key when no profile extras are submitted", async () => {
+    const rpcSpy = mockBusinessCreateSuccess();
+
+    const res = await POST(createRequest(VALID_BODY));
+
+    expect(res.status).toBe(201);
+    const insertArgs = rpcSpy.mock.calls.find(
+      ([fn]) => fn === "insert_business_with_limit"
+    )?.[1] as { p_data?: Record<string, unknown> } | undefined;
+    expect(insertArgs?.p_data?.subcategory).toBeNull();
+    expect(insertArgs?.p_data?.category_details).toEqual({});
+  });
+
+  it("returns the existing business when the same name is resubmitted within two minutes", async () => {
+    const rpcSpy = mockBusinessCreateSuccess();
+    const adminClient = mockCreateAdminClient();
+    const baseFrom = adminClient.from as (table: string) => unknown;
+    adminClient.from = vi.fn((table: string) => {
+      if (table === "businesses") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          gte: vi.fn().mockReturnThis(),
+          neq: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: { id: "business-dupe" } }),
+        };
+      }
+      return baseFrom(table);
+    });
+
+    const res = await POST(createRequest(VALID_BODY));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      business: { id: "business-dupe" },
+      deduplicated: true,
+    });
+    expect(rpcSpy.mock.calls.some(([fn]) => fn === "insert_business_with_limit")).toBe(false);
+  });
+
+  it("still returns the created business when terms recording fails", async () => {
+    const rpcSpy = mockBusinessCreateSuccess();
+    const adminClient = mockCreateAdminClient();
+    const baseFrom = adminClient.from as (table: string) => unknown;
+    adminClient.from = vi.fn((table: string) => {
+      if (table === "consent_records") {
+        return {
+          insert: vi.fn().mockResolvedValue({ error: { message: "consent insert failed" } }),
+        };
+      }
+      return baseFrom(table);
+    });
+
+    const res = await POST(createRequest(VALID_BODY));
+    const body = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(body).toMatchObject({ success: true, business: { id: VALID_BUSINESS_ID } });
+    expect(rpcSpy.mock.calls.some(([fn]) => fn === "insert_business_with_limit")).toBe(true);
+    expect(mockLogAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "consent_updated",
+        targetType: "business",
+        targetId: VALID_BUSINESS_ID,
+      })
+    );
+  });
+
+  it("uses the Tourism & Events free-post message for tourism businesses", async () => {
+    const claimRpc = vi.fn().mockResolvedValue({ data: false, error: null });
+    mockCreateAdminClient.mockReturnValue({
+      rpc: claimRpc,
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          gte: vi.fn().mockReturnThis(),
+          neq: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const res = await POST(createRequest({ ...VALID_BODY, category: "tourism_hospitality" }));
+    const body = await res.json();
+
+    expect(res.status).toBe(403);
+    expect(body).toMatchObject({ error: "Free post limit reached" });
+    expect(body.reason).toContain("Tourism & Events");
+    expect(body.reason).not.toContain("Mzansi Business");
+    expect(claimRpc).toHaveBeenCalledWith(
+      "claim_free_post_slot",
+      expect.objectContaining({ p_area: "PROMOTIONS_EVENTS" })
     );
   });
 });
@@ -1687,4 +1923,112 @@ describe("GET /api/businesses", () => {
       });
     }
   );
+
+  it("forces an empty result when the search token sanitizes to nothing", async () => {
+    const eqSpy = vi.fn().mockReturnThis();
+    const orSpy = vi.fn().mockReturnThis();
+    const rangeSpy = vi.fn().mockResolvedValue({ data: [], count: 0, error: null });
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "businesses") {
+          return {
+            select: vi.fn((fields: string) => {
+              if (fields === "id, owner_id") {
+                return {
+                  limit: vi.fn().mockResolvedValue({ error: null }),
+                };
+              }
+
+              return {
+                eq: eqSpy,
+                in: vi.fn().mockReturnThis(),
+                or: orSpy,
+                order: vi.fn().mockReturnThis(),
+                range: rangeSpy,
+              };
+            }),
+          };
+        }
+
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const request = {
+      nextUrl: new URL("http://localhost:3000/api/businesses?q=!!!&page=1&limit=24"),
+    } as NextRequest;
+
+    const response = await GET(request);
+
+    expect(response.status).toBe(200);
+    expect(eqSpy).toHaveBeenCalledWith("id", "00000000-0000-0000-0000-000000000000");
+    expect(orSpy).not.toHaveBeenCalledWith(expect.stringContaining("business_name.ilike"));
+  });
+
+  it("paginates the categories_only fallback beyond the first page", async () => {
+    const firstBatch = Array.from({ length: 1000 }, () => ({
+      category: "food_dining",
+      business_name: "Real Shop",
+      description: "A real business",
+    }));
+    const secondBatch = [
+      {
+        category: "automotive_transport",
+        business_name: "Auto One",
+        description: "A real business",
+      },
+      {
+        category: "automotive_transport",
+        business_name: "Auto Two",
+        description: "A real business",
+      },
+    ];
+    const rangeSpy = vi
+      .fn()
+      .mockResolvedValueOnce({ data: firstBatch, error: null })
+      .mockResolvedValueOnce({ data: secondBatch, error: null });
+
+    mockCreateAdminClient.mockReturnValue({
+      rpc: vi.fn().mockResolvedValue({ data: null, error: { message: "rpc unavailable" } }),
+      from: vi.fn((table: string) => {
+        if (table === "businesses") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            in: vi.fn().mockReturnThis(),
+            or: vi.fn().mockReturnThis(),
+            range: rangeSpy,
+          };
+        }
+
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const request = {
+      nextUrl: new URL("http://localhost:3000/api/businesses?categories_only=true"),
+    } as NextRequest;
+
+    const response = await GET(request);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      categoryCounts: {
+        food_dining: 1000,
+        automotive_transport: 2,
+      },
+    });
+    expect(rangeSpy).toHaveBeenCalledTimes(2);
+    expect(rangeSpy).toHaveBeenNthCalledWith(1, 0, 999);
+    expect(rangeSpy).toHaveBeenNthCalledWith(2, 1000, 1999);
+  });
 });

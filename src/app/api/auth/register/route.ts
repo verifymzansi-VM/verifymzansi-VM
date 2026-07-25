@@ -17,6 +17,7 @@ import {
 } from "@/lib/security/pwned-passwords";
 import { isPlaywrightTestMode as checkPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 
 const log = createLogger("Register");
 
@@ -27,7 +28,7 @@ const REGISTRATION_UNAVAILABLE_ERROR = "Registration temporarily unavailable. Pl
  * Route ownership:
  * - Auth creation: Supabase signup and orphaned-auth-user cleanup.
  * - Validation: registerSchema, phone normalization, pwned-password checks, and Turnstile.
- * - Abuse controls: same-origin guard and shared fail-closed registration rate limit.
+ * - Abuse controls: same-origin + CSRF double-submit guards and shared fail-closed registration rate limit.
  * - Profile/contact uniqueness: service-role account profile checks and pending phone/email writes.
  * - Notifications: already-registered email is best-effort and must not enumerate accounts.
  */
@@ -99,6 +100,9 @@ export async function POST(request: NextRequest) {
   try {
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) return originBlock;
+
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     const isPlaywrightTestMode = checkPlaywrightTestMode();
     const turnstileStatus = getTurnstileConfigStatus({ requestHost: request.nextUrl.hostname });
@@ -182,10 +186,10 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        return NextResponse.json(
-          { error: captcha.error || "CAPTCHA verification failed" },
-          { status: 400 }
-        );
+        // Keep upstream Turnstile detail (HTTP status, error codes) in the
+        // server logs written by verifyTurnstileToken; clients get a generic
+        // message.
+        return NextResponse.json({ error: "CAPTCHA verification failed" }, { status: 400 });
       }
     }
 

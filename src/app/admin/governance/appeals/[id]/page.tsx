@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FileText, MessageSquare } from "lucide-react";
+import { AppealResolveForm } from "./appeal-resolve-form";
 
 export const metadata = {
   title: "Appeal Detail — Governance",
@@ -118,6 +119,21 @@ export default async function AppealDetailPage({ params }: Props) {
           )}
         </CardContent>
       </Card>
+
+      {/* Resolution form — only while the appeal is unresolved */}
+      {(appeal.status === "submitted" || appeal.status === "under_review") && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5" />
+              Resolve Appeal
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AppealResolveForm appealId={appeal.id} />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Linked Decision */}
       {decision && (

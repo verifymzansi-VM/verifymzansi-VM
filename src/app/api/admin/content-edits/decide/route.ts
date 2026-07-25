@@ -71,6 +71,31 @@ function collectRequestMedia(data: Record<string, unknown>) {
   );
 }
 
+async function releaseApprovalClaim({
+  admin,
+  requestId,
+  reviewerId,
+}: {
+  admin: ReturnType<typeof createAdminClient>;
+  requestId: string;
+  reviewerId: string;
+}) {
+  const { error } = await admin
+    .from("content_edit_requests")
+    .update({ status: "pending", reviewed_by: null, reviewed_at: null })
+    .eq("id", requestId)
+    .eq("status", "processing")
+    .eq("reviewed_by", reviewerId);
+
+  if (error) {
+    log.error("Failed to release content edit approval claim", {
+      requestId,
+      reviewerId,
+      error: error.message,
+    });
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const guard = await enforceAdminMutationGuard({
@@ -111,9 +136,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Edit request not found" }, { status: 404 });
     }
 
-    const editRequest = requestRow as ContentEditRequest;
-    const config = targetConfig[editRequest.target_type];
-    const contentTitle = getContentTitle(editRequest);
+    let editRequest = requestRow as ContentEditRequest;
+    let config = targetConfig[editRequest.target_type];
+    let contentTitle = getContentTitle(editRequest);
 
     if (decision === "reject") {
       const { data: rejectedRows, error: rejectError } = await admin
@@ -178,6 +203,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, decision });
     }
 
+    // Claim the request before reading or changing the target.  This is the
+    // serialization point for approve-vs-reject and concurrent approvals.
+    const { data: claimedRequest, error: claimError } = await admin
+      .from("content_edit_requests")
+      .update({
+        status: "processing",
+        reviewed_by: guard.user.id,
+        reviewed_at: new Date().toISOString(),
+      })
+      .eq("id", requestId)
+      .eq("status", "pending")
+      .select("*")
+      .maybeSingle();
+
+    if (claimError) {
+      log.error("Failed to claim content edit approval", {
+        requestId,
+        error: claimError.message,
+      });
+      return NextResponse.json({ error: "Failed to claim edit request" }, { status: 500 });
+    }
+
+    if (!claimedRequest) {
+      return NextResponse.json({ error: "Edit request was already reviewed" }, { status: 409 });
+    }
+
+    editRequest = claimedRequest as ContentEditRequest;
+    config = targetConfig[editRequest.target_type];
+    contentTitle = getContentTitle(editRequest);
+
     const { data: targetRow, error: targetFetchError } = await admin
       .from(config.table)
       .select("*")
@@ -190,15 +245,18 @@ export async function POST(request: Request) {
         targetId: editRequest.target_id,
         error: targetFetchError.message,
       });
+      await releaseApprovalClaim({ admin, requestId, reviewerId: guard.user.id });
       return NextResponse.json({ error: "Failed to load content item" }, { status: 500 });
     }
 
     if (!targetRow || targetRow.status !== "live") {
+      await releaseApprovalClaim({ admin, requestId, reviewerId: guard.user.id });
       return NextResponse.json({ error: "Live content item not found" }, { status: 409 });
     }
 
     const approvedEditCount = Number(targetRow.approved_edit_count ?? 0);
     if (approvedEditCount >= MAX_APPROVED_CONTENT_EDITS) {
+      await releaseApprovalClaim({ admin, requestId, reviewerId: guard.user.id });
       return NextResponse.json(
         {
           error: "This post has reached the maximum of two approved edits.",
@@ -219,6 +277,7 @@ export async function POST(request: Request) {
       .update(updatePayload)
       .eq("id", editRequest.target_id)
       .eq("status", "live")
+      .eq("approved_edit_count", approvedEditCount)
       .select("id");
 
     if (updateError) {
@@ -227,14 +286,16 @@ export async function POST(request: Request) {
         targetId: editRequest.target_id,
         error: updateError.message,
       });
+      await releaseApprovalClaim({ admin, requestId, reviewerId: guard.user.id });
       return NextResponse.json({ error: "Failed to apply edit" }, { status: 500 });
     }
 
     if (!updatedTargets || updatedTargets.length === 0) {
+      await releaseApprovalClaim({ admin, requestId, reviewerId: guard.user.id });
       return NextResponse.json({ error: "Edit could not be applied" }, { status: 409 });
     }
 
-    const { error: markApprovedError } = await admin
+    const { data: approvedRequests, error: markApprovedError } = await admin
       .from("content_edit_requests")
       .update({
         status: "approved",
@@ -243,12 +304,25 @@ export async function POST(request: Request) {
         reviewed_at: new Date().toISOString(),
       })
       .eq("id", requestId)
-      .eq("status", "pending");
+      .eq("status", "processing")
+      .eq("reviewed_by", guard.user.id)
+      .select("id");
 
     if (markApprovedError) {
       log.error("Applied content edit but failed to mark request approved", {
         requestId,
         error: markApprovedError.message,
+      });
+      return NextResponse.json(
+        { error: "Edit was applied but review state was not updated" },
+        { status: 500 }
+      );
+    }
+
+    if (!approvedRequests || approvedRequests.length === 0) {
+      log.error("Content edit target was updated but approval claim was lost", {
+        requestId,
+        targetId: editRequest.target_id,
       });
       return NextResponse.json(
         { error: "Edit was applied but review state was not updated" },

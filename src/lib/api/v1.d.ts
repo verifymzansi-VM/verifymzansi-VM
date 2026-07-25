@@ -242,40 +242,6 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/api/business-ads/{id}/boost": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Boost a business ad */
-    post: operations["boostBusinessAd"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/storefronts/{id}/boost": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Boost a storefront */
-    post: operations["boostStorefront"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
   "/api/billing/create-checkout": {
     parameters: {
       query?: never;
@@ -904,52 +870,6 @@ export interface operations {
       401: components["responses"]["Unauthorized"];
       403: components["responses"]["Forbidden"];
       404: components["responses"]["NotFound"];
-    };
-  };
-  boostBusinessAd: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Resource UUID */
-        id: components["parameters"]["ResourceId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Business ad boosted */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  boostStorefront: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Resource UUID */
-        id: components["parameters"]["ResourceId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Storefront boosted */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
     };
   };
   createCheckout: {

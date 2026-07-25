@@ -1308,7 +1308,7 @@ describe("POST /api/verification/upload", () => {
       createFormDataRequest({
         file: createTestFile(),
         docType: "id_document",
-        idNumber: "9001015009087",
+        idNumber: "8001015009087",
       })
     );
 
@@ -1379,6 +1379,161 @@ describe("POST /api/verification/upload", () => {
       expect.objectContaining({
         error: "Upload processing failed",
       })
+    );
+  });
+
+  it("rejects a too-short SA ID number before any storage writes", async () => {
+    mockAuth({ id: "user-1" });
+
+    const response = await POST(
+      createFormDataRequest({
+        file: createTestFile(),
+        docType: "id_document",
+        idNumber: "1234567",
+      })
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        error: expect.stringContaining("Invalid SA ID number"),
+      })
+    );
+    expect(mockUploadKycDocument).not.toHaveBeenCalled();
+  });
+
+  it("rejects an SA ID number that fails the Luhn checksum", async () => {
+    mockAuth({ id: "user-1" });
+
+    const response = await POST(
+      createFormDataRequest({
+        file: createTestFile(),
+        docType: "id_document",
+        idNumber: "8001015009088", // valid format/DOB, wrong check digit
+      })
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        error: expect.stringContaining("Invalid SA ID number"),
+      })
+    );
+    expect(mockUploadKycDocument).not.toHaveBeenCalled();
+  });
+
+  it("returns 503 in production when ID_ENCRYPTION_KEY is malformed", async () => {
+    mockAuth({ id: "user-1" });
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("ID_ENCRYPTION_KEY", "not-a-hex-key");
+    mockHasR2WriteAccess.mockResolvedValue(true);
+
+    const response = await POST(
+      createFormDataRequest({
+        file: createTestFile(),
+        docType: "id_document",
+      })
+    );
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        code: "config_missing",
+      })
+    );
+    expect(mockUploadKycDocument).not.toHaveBeenCalled();
+  });
+
+  it("rolls back the persisted artifact and R2 object when the risk engine throws", async () => {
+    mockAuth({ id: "user-1", email: "test@example.com" });
+    setupDefaultAdminMocks();
+
+    const baseFromImpl = mockFrom.getMockImplementation();
+    if (!baseFromImpl) {
+      throw new Error("Expected default admin mock implementation");
+    }
+
+    const artifactDeleteEq = vi.fn().mockResolvedValue({ error: null });
+    const artifactDelete = vi.fn().mockReturnValue({ eq: artifactDeleteEq });
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "kyc_artifacts") {
+        return {
+          ...baseFromImpl(table),
+          delete: artifactDelete,
+        };
+      }
+
+      return baseFromImpl(table);
+    });
+
+    mockProcessKycArtifact.mockRejectedValue(
+      new Error("HMAC_SECRET is not configured — cannot process KYC artifacts in production")
+    );
+
+    const response = await POST(
+      createFormDataRequest({
+        file: createTestFile(),
+        docType: "id_document",
+      })
+    );
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        error: "Upload processing failed",
+        code: "engine_failed",
+      })
+    );
+    // Artifact row and R2 object rolled back so a re-upload is not blocked
+    // by idx_kyc_artifacts_pending_unique.
+    expect(artifactDelete).toHaveBeenCalled();
+    expect(artifactDeleteEq).toHaveBeenCalledWith("id", "artifact-1");
+    expect(mockDeleteFromR2).toHaveBeenCalled();
+  });
+
+  it("stamps location_submitted_at on the session for proof_of_address uploads", async () => {
+    mockAuth({ id: "user-1" });
+    setupDefaultAdminMocks();
+
+    const baseFromImpl = mockFrom.getMockImplementation();
+    if (!baseFromImpl) {
+      throw new Error("Expected default admin mock implementation");
+    }
+
+    const sessionUpsert = vi.fn().mockResolvedValue({ error: null });
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "verification_sessions") {
+        return {
+          upsert: sessionUpsert,
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ error: null }),
+          }),
+        };
+      }
+
+      return baseFromImpl(table);
+    });
+
+    const response = await POST(
+      createFormDataRequest({
+        file: createTestFile("poa-data", "image/jpeg", "poa.jpg"),
+        docType: "proof_of_address",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(sessionUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_id: "user-1",
+        location_submitted_at: expect.any(String),
+      }),
+      { onConflict: "user_id" }
     );
   });
 });

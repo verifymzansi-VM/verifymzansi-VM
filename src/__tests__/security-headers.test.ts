@@ -19,6 +19,7 @@ vi.mock("@/lib/config/env", () => ({
     const map: Record<string, string> = {
       NEXT_PUBLIC_SUPABASE_URL: "https://test.supabase.co",
       R2_PUBLIC_URL: "https://cdn.example.com",
+      NEXT_PUBLIC_APP_URL: "https://app.verifymzansi.com",
     };
     return map[key] ?? "";
   },
@@ -156,6 +157,20 @@ describe("applySecurityHeaders", () => {
     expect(response.headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
     expect(response.headers.get("Permissions-Policy")).toBe(DEFAULT_PERMISSIONS_POLICY);
     expect(response.headers.get("Report-To")).toContain("csp-endpoint");
+  });
+
+  it("emits an absolute CSP report endpoint in Report-To and Reporting-Endpoints", () => {
+    const response = NextResponse.next();
+    applySecurityHeaders(response, "default-src 'self'");
+
+    const reportTo = JSON.parse(response.headers.get("Report-To")!) as {
+      group: string;
+      endpoints: Array<{ url: string }>;
+    };
+    expect(reportTo.endpoints[0].url).toBe("https://app.verifymzansi.com/api/csp-report");
+    expect(response.headers.get("Reporting-Endpoints")).toBe(
+      'csp-endpoint="https://app.verifymzansi.com/api/csp-report"'
+    );
   });
 
   it("uses custom permissions policy when provided", () => {

@@ -1,10 +1,11 @@
 /**
  * EXIF metadata stripping for uploaded images.
  *
- * Removes EXIF, XMP, and ICC profile data from JPEG files to prevent
+ * Removes EXIF, XMP, and ICC profile data from JPEG files, PII text/EXIF
+ * chunks from PNG files, and EXIF/XMP chunks from WebP files to prevent
  * leaking GPS coordinates, device info, and other PII (POPIA compliance).
  *
- * Only processes JPEG files — PNG/WebP/GIF/AVIF don't typically contain
+ * Only JPEG/PNG/WebP files are processed — GIF/AVIF don't typically contain
  * sensitive EXIF data in the same way, and stripping them requires
  * format-specific handling that adds complexity without proportional benefit.
  */
@@ -152,21 +153,18 @@ export function stripMetadataFromPng(buffer: Uint8Array): Uint8Array {
     return buffer; // Not a PNG, return as-is
   }
 
-  const result: number[] = [];
-
-  // Copy PNG signature
-  for (let i = 0; i < 8; i++) {
-    result.push(buffer[i]);
-  }
+  const chunks: Uint8Array[] = [buffer.slice(0, 8)];
+  let outputLength = 8;
 
   let offset = 8;
   while (offset + 12 <= buffer.length) {
     // Read chunk length (big-endian u32)
     const chunkLength =
-      (buffer[offset] << 24) |
-      (buffer[offset + 1] << 16) |
-      (buffer[offset + 2] << 8) |
-      buffer[offset + 3];
+      ((buffer[offset] << 24) |
+        (buffer[offset + 1] << 16) |
+        (buffer[offset + 2] << 8) |
+        buffer[offset + 3]) >>>
+      0;
 
     // Read chunk type (4 ASCII bytes)
     const chunkType = String.fromCharCode(
@@ -179,12 +177,12 @@ export function stripMetadataFromPng(buffer: Uint8Array): Uint8Array {
     // Total chunk size: 4 (length) + 4 (type) + data + 4 (CRC)
     const totalChunkSize = 12 + chunkLength;
 
-    if (offset + totalChunkSize > buffer.length) break; // Truncated
+    if (chunkLength > buffer.length - offset - 12) break; // Truncated or corrupt
 
     if (!PNG_PII_CHUNKS.has(chunkType)) {
-      for (let i = offset; i < offset + totalChunkSize; i++) {
-        result.push(buffer[i]);
-      }
+      const chunk = buffer.slice(offset, offset + totalChunkSize);
+      chunks.push(chunk);
+      outputLength += chunk.length;
     }
 
     offset += totalChunkSize;
@@ -193,5 +191,93 @@ export function stripMetadataFromPng(buffer: Uint8Array): Uint8Array {
     if (chunkType === "IEND") break;
   }
 
-  return new Uint8Array(result);
+  const result = new Uint8Array(outputLength);
+  let writeOffset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, writeOffset);
+    writeOffset += chunk.length;
+  }
+  return result;
+}
+
+// ── WebP metadata stripping ─────────────────────────────────────────────────
+
+/**
+ * Strip EXIF/XMP chunks from a WebP buffer that may contain PII (GPS, camera
+ * info, XMP sidecar data).
+ *
+ * WebP is a RIFF container: "RIFF" + u32le size + "WEBP" + chunks. Each chunk
+ * is [4-byte FourCC][4-byte u32le size][data][1 pad byte when size is odd].
+ * Extended files carry a VP8X chunk whose flags byte advertises the presence
+ * of EXIF (bit 0x08) and XMP (bit 0x04) chunks — those chunks are removed and
+ * the flags cleared so decoders don't look for metadata that is no longer
+ * there. The RIFF size field is rewritten to match the new payload length.
+ */
+export function stripMetadataFromWebp(buffer: Uint8Array): Uint8Array {
+  // Verify RIFF/WEBP container magic
+  if (
+    buffer.length < 12 ||
+    buffer[0] !== 0x52 || // R
+    buffer[1] !== 0x49 || // I
+    buffer[2] !== 0x46 || // F
+    buffer[3] !== 0x46 || // F
+    buffer[8] !== 0x57 || // W
+    buffer[9] !== 0x45 || // E
+    buffer[10] !== 0x42 || // B
+    buffer[11] !== 0x50 // P
+  ) {
+    return buffer; // Not a WebP, return as-is
+  }
+
+  const kept: Uint8Array[] = [];
+  let keptLength = 0;
+
+  let offset = 12;
+  while (offset + 8 <= buffer.length) {
+    const chunkType = String.fromCharCode(
+      buffer[offset],
+      buffer[offset + 1],
+      buffer[offset + 2],
+      buffer[offset + 3]
+    );
+    const chunkSize =
+      (buffer[offset + 4] |
+        (buffer[offset + 5] << 8) |
+        (buffer[offset + 6] << 16) |
+        (buffer[offset + 7] << 24)) >>>
+      0;
+
+    if (chunkSize > buffer.length - offset - 8) break; // Truncated or corrupt
+
+    // Chunks are padded to even sizes
+    const totalChunkSize = 8 + chunkSize + (chunkSize % 2);
+
+    if (chunkType !== "EXIF" && chunkType !== "XMP ") {
+      const chunk = buffer.slice(offset, offset + totalChunkSize);
+      if (chunkType === "VP8X" && chunkSize >= 1) {
+        // Clear the EXIF (0x08) and XMP (0x04) feature flags
+        chunk[8] &= ~(0x08 | 0x04);
+      }
+      kept.push(chunk);
+      keptLength += chunk.length;
+    }
+
+    offset += totalChunkSize;
+  }
+
+  const result = new Uint8Array(12 + keptLength);
+  result.set(buffer.slice(0, 12), 0);
+  // Rewrite the RIFF size: "WEBP" (4 bytes) + kept chunks
+  const riffSize = 4 + keptLength;
+  result[4] = riffSize & 0xff;
+  result[5] = (riffSize >> 8) & 0xff;
+  result[6] = (riffSize >> 16) & 0xff;
+  result[7] = (riffSize >>> 24) & 0xff;
+
+  let writeOffset = 12;
+  for (const chunk of kept) {
+    result.set(chunk, writeOffset);
+    writeOffset += chunk.length;
+  }
+  return result;
 }

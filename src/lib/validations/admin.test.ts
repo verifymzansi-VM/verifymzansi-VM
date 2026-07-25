@@ -31,7 +31,7 @@ describe("adminContentDecideSchema", () => {
   it("accepts valid reject with reason", () => {
     const result = adminContentDecideSchema.safeParse({
       itemId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-      area: "MALL_SHOPS",
+      area: "MZANSI_BUSINESS",
       decision: "reject",
       reason: "Inappropriate content",
     });

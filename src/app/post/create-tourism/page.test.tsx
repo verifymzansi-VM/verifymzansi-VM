@@ -257,6 +257,13 @@ vi.mock("@/lib/post-drafts/defaults", () => ({
   getDefaultEventDates: vi.fn().mockReturnValue({ startDate: "", endDate: "" }),
 }));
 
+/** Tick the posting-terms checkbox shown on the review step before submitting. */
+function acceptPostingTerms() {
+  fireEvent.click(
+    screen.getByRole("checkbox", { name: /I accept the VerifyMzansi posting terms/i })
+  );
+}
+
 describe("CreateTourismPage type switch behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -376,6 +383,7 @@ describe("CreateTourismPage type switch behavior", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
+    acceptPostingTerms();
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
     await waitFor(() => {
@@ -439,6 +447,7 @@ describe("CreateTourismPage type switch behavior", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
+    acceptPostingTerms();
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
     await waitFor(() => {
@@ -506,6 +515,7 @@ describe("CreateTourismPage type switch behavior", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
+    acceptPostingTerms();
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
     await waitFor(() => {
@@ -566,6 +576,7 @@ describe("CreateTourismPage type switch behavior", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
+    acceptPostingTerms();
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
     await waitFor(() => {
@@ -643,6 +654,7 @@ describe("CreateTourismPage type switch behavior", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
+    acceptPostingTerms();
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
     await waitFor(() => {
@@ -716,6 +728,7 @@ describe("CreateTourismPage type switch behavior", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     fireEvent.click(screen.getByRole("button", { name: /Add media for Upload video/i }));
+    acceptPostingTerms();
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
     await waitFor(() => {
@@ -806,6 +819,7 @@ describe("CreateTourismPage type switch behavior", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     fireEvent.click(screen.getByRole("button", { name: /Add media for Upload video/i }));
+    acceptPostingTerms();
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
     await waitFor(() => {
@@ -909,6 +923,7 @@ describe("CreateTourismPage type switch behavior", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
+    acceptPostingTerms();
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
     await waitFor(() => {
@@ -957,6 +972,7 @@ describe("CreateTourismPage type switch behavior", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
+    acceptPostingTerms();
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
     await waitFor(() => {
@@ -1012,6 +1028,7 @@ describe("CreateTourismPage type switch behavior", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     fireEvent.click(screen.getByRole("button", { name: /Add media for Upload video/i }));
+    acceptPostingTerms();
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
     await waitFor(() => {

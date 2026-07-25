@@ -10,10 +10,11 @@ const logger = createLogger("MediaServe");
  * with long-lived cache headers.  Supports HTTP Range requests for video
  * seeking and progressive playback.
  *
- * Performance: When running on Cloudflare Workers, this route uses the
- * native R2 bucket binding (in-worker, zero network hop) instead of
- * the S3-compatible HTTP API. This eliminates external TLS handshakes
- * and network round-trips, serving images ~2-5x faster — similar to
+ * Performance: In production this route proxies R2 over the S3-compatible
+ * HTTP API — wrangler.toml deliberately omits native R2 bindings because
+ * Cloudflare rejects Worker version creation for this account (error 10136).
+ * When a native R2 bucket binding IS present (e.g. a future re-enablement),
+ * it is used as an in-worker fast path with zero network hop, similar to
  * how YouTube/Facebook serve media from edge CDN rather than proxying
  * through application servers.
  *
@@ -103,6 +104,9 @@ function getClient(): S3Client {
     region: "auto",
     endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
     credentials: { accessKeyId, secretAccessKey },
+    // R2 rejects the SDK ≥3.729 default flexible checksums.
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
   });
   _configKey = ck;
   return _client;
@@ -119,11 +123,10 @@ function buildPublicMediaUrl(key: string, bucket: string): string | null {
     return `${mediaBase}/${key}`;
   }
 
-  const accountId = process.env.R2_ACCOUNT_ID;
-  if (accountId) {
-    return `https://${bucket}.${accountId}.r2.cloudflarestorage.com/${key}`;
-  }
-
+  // Deliberately no fallback to https://<bucket>.<account>.r2.cloudflarestorage.com:
+  // that endpoint requires auth and returns AccessDenied XML, so redirecting
+  // there would just serve a broken response. Callers must 503 instead.
+  void bucket;
   return null;
 }
 
@@ -149,8 +152,10 @@ const MIME_MAP: Record<string, string> = {
 const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "ogg", "mov"]);
 
 /**
- * Derive a human-friendly filename from the storage key.
- * e.g. "media/listing/abc123/17200000-photo.jpg" → "photo.jpg"
+ * Derive a filename for the Content-Disposition header from the storage key.
+ * Generated keys never contain the original filename (e.g.
+ * "media/listing/<ownerId>/17200000-a1b2c3d4.jpg"), so this returns the last
+ * segment with any leading hex timestamp/random prefix stripped.
  */
 function deriveFilename(key: string): string {
   const lastSegment = key.split("/").pop() ?? key;
@@ -227,8 +232,11 @@ async function serveViaR2Binding(
 
     const { start, end } = range;
     const contentLength = end - start + 1;
+    // Prefer the extension-derived MIME over stored metadata: a direct upload
+    // could have stored a bogus contentType (e.g. text/html on a .jpg key),
+    // and serving it inline from the app origin would enable stored XSS.
     const contentType =
-      head.httpMetadata?.contentType || MIME_MAP[ext] || "application/octet-stream";
+      MIME_MAP[ext] || head.httpMetadata?.contentType || "application/octet-stream";
 
     const obj = await r2.get(key, { range: { offset: start, length: contentLength } });
     if (!obj) {
@@ -261,7 +269,7 @@ async function serveViaR2Binding(
     return new NextResponse(null, { status: 304 });
   }
 
-  const contentType = obj.httpMetadata?.contentType || MIME_MAP[ext] || "application/octet-stream";
+  const contentType = MIME_MAP[ext] || obj.httpMetadata?.contentType || "application/octet-stream";
 
   // Video without Range → stream with Accept-Ranges
   if (isVideo) {
@@ -381,7 +389,13 @@ export async function GET(
           return NextResponse.redirect(new URL(publicUrl), { status: 307 });
         }
 
-        return NextResponse.json({ error: "Media service not configured" }, { status: 503 });
+        return NextResponse.json(
+          {
+            error:
+              "Media service misconfigured: no R2 credentials and no public media URL configured",
+          },
+          { status: 503 }
+        );
       }
 
       throw credentialError;
@@ -408,7 +422,7 @@ export async function GET(
 
       const { start, end } = range;
       const contentLength = end - start + 1;
-      const contentType = headResponse.ContentType || MIME_MAP[ext] || "application/octet-stream";
+      const contentType = MIME_MAP[ext] || headResponse.ContentType || "application/octet-stream";
 
       // Fetch only the requested range from R2
       const rangeCommand = new GetObjectCommand({
@@ -453,7 +467,8 @@ export async function GET(
       return new NextResponse(null, { status: 304 });
     }
 
-    const contentType = response.ContentType || MIME_MAP[ext] || "application/octet-stream";
+    // Prefer the extension-derived MIME over stored metadata (see note above).
+    const contentType = MIME_MAP[ext] || response.ContentType || "application/octet-stream";
 
     // For video files, stream the response and include Accept-Ranges
     if (isVideo) {

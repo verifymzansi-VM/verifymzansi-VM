@@ -3,7 +3,7 @@ import type { ZodType } from "zod";
 
 import { ACCOUNT_PROFILE_NOT_FOUND_ERROR } from "@/lib/account/compat";
 import { resolveSafeBillingAppUrl } from "@/lib/billing/app-url";
-import { createHostedCheckout } from "@/lib/payments/checkout";
+import { CHECKOUT_IN_PROGRESS_ERROR_MESSAGE, createHostedCheckout } from "@/lib/payments/checkout";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { logAuditEvent, type AuditAction } from "@/lib/services/audit";
@@ -236,20 +236,38 @@ export function createAddonCheckoutRouteCore<
       const appUrlResult = resolveSafeBillingAppUrl(log);
       if (appUrlResult.response) return appUrlResult.response;
       const appUrl = appUrlResult.appUrl;
-      const { paymentId, checkoutUrl } = await createHostedCheckout({
-        admin: admin as never,
-        userId: user.id,
-        area: checkoutPayload.area,
-        amountCents: config.amountCents,
-        itemName: checkoutPayload.itemName.slice(0, 100),
-        itemDescription: config.itemDescription,
-        returnUrl: `${appUrl}/billing/success?payment=__PAYMENT_ID__`,
-        cancelUrl: `${appUrl}/billing/cancel?payment=__PAYMENT_ID__`,
-        providerData: {
-          type: config.paymentType,
-          ...checkoutPayload.providerData,
-        },
-      });
+      let paymentId: string;
+      let checkoutUrl: string;
+      try {
+        const checkout = await createHostedCheckout({
+          admin: admin as never,
+          userId: user.id,
+          area: checkoutPayload.area,
+          amountCents: config.amountCents,
+          itemName: checkoutPayload.itemName.slice(0, 100),
+          itemDescription: config.itemDescription,
+          returnUrl: `${appUrl}/billing/success?payment=__PAYMENT_ID__`,
+          cancelUrl: `${appUrl}/billing/cancel?payment=__PAYMENT_ID__`,
+          providerData: {
+            type: config.paymentType,
+            ...checkoutPayload.providerData,
+          },
+        });
+        paymentId = checkout.paymentId;
+        checkoutUrl = checkout.checkoutUrl;
+      } catch (checkoutError) {
+        // The payments partial unique index on in-flight add-on checkouts
+        // closes the check-then-act race above: a concurrent request that
+        // passed the pending-payment lookup loses the insert race and lands
+        // here as a 23505 from createHostedCheckout.
+        if (
+          checkoutError instanceof Error &&
+          checkoutError.message === CHECKOUT_IN_PROGRESS_ERROR_MESSAGE
+        ) {
+          return NextResponse.json({ error: config.pendingPaymentMessage }, { status: 409 });
+        }
+        throw checkoutError;
+      }
 
       try {
         const auditPayload = config.buildAuditPayload(entityId, checkoutPayload.area);

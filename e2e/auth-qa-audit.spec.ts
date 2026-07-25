@@ -453,10 +453,20 @@ test.describe("Rate Limiting", () => {
       "x-real-ip": `198.51.100.${rateLimitIpOctet}`,
     };
 
+    // Login enforces the CSRF double-submit check — fetch a token first and
+    // send it as both cookie and header, like the browser flow does.
+    const csrfResponse = await request.get("/api/csrf");
+    const csrfBody = (await csrfResponse.json().catch(() => ({}))) as { token?: string };
+    const csrfToken = csrfBody.token ?? "";
+
     // Send 25 rapid login attempts
     for (let i = 0; i < 25; i++) {
       const resp = await request.post("/api/auth/login", {
-        headers: rateLimitHeaders,
+        headers: {
+          ...rateLimitHeaders,
+          "x-csrf-token": csrfToken,
+          cookie: `vm_csrf=${csrfToken}`,
+        },
         data: {
           email: "ratelimit-test@example.com",
           password: "WrongPassword1",

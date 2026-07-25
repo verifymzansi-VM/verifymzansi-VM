@@ -56,19 +56,21 @@ export async function getKycOverviewMetrics(periodDays = 30): Promise<KycOvervie
     .select("*", { count: "exact", head: true })
     .gte("created_at", since);
 
-  // Completed sessions
+  // Completed sessions (verification_sessions has no status column — a
+  // session is complete once finalized_at is stamped)
   const { count: completedSessions } = await adminClient
     .from("verification_sessions")
     .select("*", { count: "exact", head: true })
-    .eq("status", "completed")
+    .not("finalized_at", "is", null)
     .gte("created_at", since);
 
-  // Pending review steps
+  // Pending review steps (verification_steps.status is NOT NULL DEFAULT
+  // 'pending', so unreviewed steps are matched with eq, not is-null)
   const { count: pendingReview } = await adminClient
     .from("verification_steps")
     .select("*", { count: "exact", head: true })
     .eq("auto_status", "needs_manual_review")
-    .is("status", null)
+    .eq("status", "pending")
     .gte("submitted_at", since);
 
   // Risk distribution
@@ -125,9 +127,10 @@ export async function getRejectionBreakdown(periodDays = 30): Promise<RejectionB
   const adminClient = createAdminClient();
   const since = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000).toISOString();
 
+  // The decide route writes rejection reasons to reason_code
   const { data } = await adminClient
     .from("verification_steps")
-    .select("override_reason_code")
+    .select("reason_code")
     .eq("status", "rejected")
     .gte("submitted_at", since)
     .limit(5000);
@@ -136,7 +139,7 @@ export async function getRejectionBreakdown(periodDays = 30): Promise<RejectionB
 
   const counts: Record<string, number> = {};
   for (const row of data) {
-    const code = row.override_reason_code || "unspecified";
+    const code = row.reason_code || "unspecified";
     counts[code] = (counts[code] || 0) + 1;
   }
 

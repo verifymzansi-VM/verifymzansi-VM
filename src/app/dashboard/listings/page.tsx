@@ -144,10 +144,6 @@ function getEditHref(item: DashboardItem) {
   switch (item.area) {
     case "PROMOTIONS_EVENTS":
       return `/post/edit-tourism/${item.id}`;
-    case "BUSINESS_ADS":
-      return `/post/edit-business-ad/${item.id}`;
-    case "MALL_SHOPS":
-      return `/post/edit-mall-shop/${item.id}`;
     case "MZANSI_MARKET":
     default:
       return `/post/edit-listing/${item.id}`;
@@ -485,19 +481,14 @@ export default async function ListingsPage({
   const filteredExpired = byArea(expired);
   const filteredRejected = byArea(rejected);
 
-  const [mzansiTier, businessTier, mallTier, mzansiBusinessTier, promotionsTier] =
-    await Promise.all([
-      getActivePlanTierForArea(user.id, "MZANSI_MARKET"),
-      getActivePlanTierForArea(user.id, "BUSINESS_ADS"),
-      getActivePlanTierForArea(user.id, "MALL_SHOPS"),
-      getActivePlanTierForArea(user.id, "MZANSI_BUSINESS"),
-      getActivePlanTierForArea(user.id, "PROMOTIONS_EVENTS"),
-    ]);
+  const [mzansiTier, mzansiBusinessTier, promotionsTier] = await Promise.all([
+    getActivePlanTierForArea(user.id, "MZANSI_MARKET"),
+    getActivePlanTierForArea(user.id, "MZANSI_BUSINESS"),
+    getActivePlanTierForArea(user.id, "PROMOTIONS_EVENTS"),
+  ]);
 
   const planTiers: Record<MarketplaceArea, PlanTier> = {
     MZANSI_MARKET: mzansiTier,
-    BUSINESS_ADS: businessTier,
-    MALL_SHOPS: mallTier,
     MZANSI_BUSINESS: mzansiBusinessTier,
     PROMOTIONS_EVENTS: promotionsTier,
   };

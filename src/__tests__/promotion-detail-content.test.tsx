@@ -55,7 +55,7 @@ vi.mock("@/components/trust/trust-badge", () => ({
   TrustBadge: ({ level }: { level: number }) => <span>{level}</span>,
 }));
 
-vi.mock("@/app/promotion/[id]/promotion-contact-actions", () => ({
+vi.mock("@/components/listings/promotion-contact-actions", () => ({
   PromotionContactActions: () => <div>Contact actions</div>,
 }));
 

@@ -217,6 +217,39 @@ describe("EvidenceDeskClient", () => {
     });
   });
 
+  it("renders risk signals with signal code, severity, and detail payload", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...METADATA_RESPONSE,
+        riskSignals: [
+          {
+            id: "signal-1",
+            user_id: "seller-1",
+            artifact_id: "art-1",
+            signal_code: "duplicate_sha256",
+            severity: "block",
+            value_json: { matchingArtifactId: "art-9" },
+            created_at: "2025-01-02T00:00:00Z",
+          },
+        ],
+      }),
+    } as Response);
+
+    render(<EvidenceDeskClient initialStepId="step-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Risk Signals/i)).toBeDefined();
+    });
+
+    // signal_code rendered as a humanized label
+    expect(screen.getByText(/duplicate sha256/i)).toBeDefined();
+    // severity badge
+    expect(screen.getByText("block")).toBeDefined();
+    // value_json payload surfaced for reviewer context
+    expect(screen.getByText(/matchingArtifactId/)).toBeDefined();
+  });
+
   it("aligns the selected artifact with the selected step", async () => {
     vi.mocked(fetch).mockResolvedValue({
       ok: true,

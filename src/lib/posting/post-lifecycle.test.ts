@@ -21,7 +21,7 @@ describe("post lifecycle expiry", () => {
     expect(getPostExpiryIso({ hasPaidPlan: true }, baseDate)).toBe("2026-06-15T10:00:00.000Z");
   });
 
-  it("preserves the original free post expiry when approved after moderation", () => {
+  it("resets free post expiry from approval time after moderation", () => {
     expect(
       getApprovedPostExpiryIso(
         {
@@ -30,10 +30,10 @@ describe("post lifecycle expiry", () => {
         },
         new Date("2026-05-18T08:00:00.000Z")
       )
-    ).toBe("2026-05-23T10:00:00.000Z");
+    ).toBe("2026-05-25T08:00:00.000Z");
   });
 
-  it("preserves the original paid post expiry when approved after moderation", () => {
+  it("resets paid post expiry from approval time after moderation", () => {
     expect(
       getApprovedPostExpiryIso(
         {
@@ -42,7 +42,7 @@ describe("post lifecycle expiry", () => {
         },
         new Date("2026-05-18T08:00:00.000Z")
       )
-    ).toBe("2026-06-15T10:00:00.000Z");
+    ).toBe("2026-06-17T08:00:00.000Z");
   });
 
   it("treats legacy null expiry rows as free visibility", () => {
@@ -54,7 +54,7 @@ describe("post lifecycle expiry", () => {
     ).toBe(7);
   });
 
-  it("falls back to seven days from creation for legacy rows without expiry", () => {
+  it("falls back to seven days from approval for legacy rows without expiry", () => {
     expect(
       getApprovedPostExpiryIso(
         {
@@ -63,6 +63,6 @@ describe("post lifecycle expiry", () => {
         },
         new Date("2026-05-18T08:00:00.000Z")
       )
-    ).toBe("2026-05-23T10:00:00.000Z");
+    ).toBe("2026-05-25T08:00:00.000Z");
   });
 });

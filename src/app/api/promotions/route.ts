@@ -32,7 +32,7 @@ import {
   normalizeOwnerRecords,
   readAccountVerificationStatus,
   withOwnerColumn,
-  withOwnerField,
+  type OwnerColumn,
 } from "@/lib/account/compat";
 import { userOwnsBusiness } from "@/lib/account/owned-business";
 import { enforceVerifiedPostingAccess } from "@/app/api/_lib/verified-posting-access";
@@ -254,7 +254,6 @@ export async function POST(request: NextRequest) {
     if (session.response) return session.response;
     const { supabase, user, getAdmin } = session;
 
-    const ownerColumn = await getOwnerColumn(supabase, "promotions");
     const ip = getClientIp(request);
     const rl = await checkRateLimit({
       key: user.id,
@@ -264,7 +263,24 @@ export async function POST(request: NextRequest) {
     if (rl.limited) {
       return NextResponse.json(
         { error: "Too many requests. Please try again later.", retryAfter: rl.retryAfter },
-        { status: 429 }
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
+    }
+
+    let ownerColumn: OwnerColumn;
+    try {
+      ownerColumn = await getOwnerColumn(supabase, "promotions");
+    } catch (ownerColumnError) {
+      log.warn("Promotion owner-column probe failed during create", {
+        error: ownerColumnError instanceof Error ? ownerColumnError.message : "Unknown error",
+        userId: user.id,
+      });
+      return NextResponse.json(
+        {
+          error: "Service temporarily unavailable",
+          detail: "Promotion ownership metadata is unavailable. Please retry shortly.",
+        },
+        { status: 503 }
       );
     }
 
@@ -300,6 +316,36 @@ export async function POST(request: NextRequest) {
         { status: 422 }
       );
     }
+
+    // ── Idempotency guard: reject duplicate submissions ──────
+    // If the same user submitted a post with the identical title
+    // within the last 2 minutes, return the existing post instead
+    // of creating a duplicate (protects against network retries).
+    {
+      const { data: recentDupe } = await applyOwnerFilter(
+        supabase
+          .from("promotions")
+          .select("id")
+          .eq("title", data.title)
+          .gte("created_at", new Date(Date.now() - 120_000).toISOString()),
+        ownerColumn,
+        user.id
+      )
+        .limit(1)
+        .maybeSingle();
+
+      if (recentDupe) {
+        log.warn("Duplicate promotion submission detected", {
+          userId: user.id,
+          existingId: recentDupe.id,
+        });
+        return NextResponse.json(
+          { success: true, promotion: { id: recentDupe.id }, deduplicated: true },
+          { status: 200 }
+        );
+      }
+    }
+
     const categoryKey =
       data.category_key ?? inferPromotionCategoryKey(data.category, data.promotion_type);
 
@@ -317,26 +363,13 @@ export async function POST(request: NextRequest) {
     });
     if (mediaLimitBlock) return mediaLimitBlock;
 
-    if (hasPaidPlan && tier && !postingLimitBypassEnabled && ent.maxAllowed !== -1) {
-      const { data: underLimit, error: rpcError } = await getAdmin().rpc("check_promotion_limit", {
-        p_user_id: user.id,
-        p_area: AREA,
-        p_max_allowed: ent.maxAllowed,
-      });
-
-      if (rpcError) {
-        log.error("check_promotion_limit RPC failed", { error: rpcError.message });
-        return NextResponse.json({ error: "Unable to verify promotion limit" }, { status: 500 });
-      }
-
-      if (!underLimit) {
-        const check = canCreateListing(ent.maxAllowed, tier, AREA);
-        return NextResponse.json(
-          { error: "Promotion limit reached", reason: check.reason },
-          { status: 403 }
-        );
-      }
-    }
+    // The paid-plan post limit is enforced atomically inside
+    // insert_promotion_with_limit: the per-user advisory lock is held across
+    // both the count check and the INSERT, closing the TOCTOU race (#25/M1).
+    // -1 skips the check (unlimited plans, bypass mode, and free-post users
+    // whose limit is enforced by the free_posts_used ledger).
+    const maxAllowedForInsert =
+      hasPaidPlan && tier && !postingLimitBypassEnabled ? ent.maxAllowed : -1;
 
     const freePostContentId = crypto.randomUUID();
     let freePostClaimed = false;
@@ -387,51 +420,65 @@ export async function POST(request: NextRequest) {
     // Build the promotion row
     const priceCents =
       data.price_zar != null ? Math.round(+(data.price_zar * 100).toPrecision(12)) : null;
-    const promotionRecord = withOwnerField(
-      {
-        id: freePostContentId,
-        title: data.title,
-        description: data.description,
-        promotion_type: data.promotion_type,
-        category: data.category || null,
-        category_key: categoryKey,
-        photos: data.images,
-        videos: data.videos,
-        video_thumbnail: data.video_thumbnail || null,
-        media_width: data.media_width ?? null,
-        media_height: data.media_height ?? null,
-        focal_x: data.focal_x ?? 0.5,
-        focal_y: data.focal_y ?? 0.5,
-        price_cents: priceCents,
-        price_negotiable: data.negotiable,
-        location_province: data.province,
-        location_city: data.city,
-        location_town: data.location_town || null,
-        location_address: data.location_address || null,
-        contact_methods: data.contact_methods,
-        start_date: data.start_date || null,
-        end_date: data.end_date || null,
-        business_id: data.business_id || null,
-        logo_url: data.logo_url || null,
-        event_details: data.event_details ?? null,
-        status: "pending_moderation",
-        expires_at: getPostExpiryIso({ hasPaidPlan }),
-      },
-      ownerColumn,
-      user.id
-    );
+    // Ownership is enforced inside insert_promotion_with_limit (forced to the
+    // authenticated user), so the payload deliberately carries no owner field.
+    const promotionRecord = {
+      id: freePostContentId,
+      title: data.title,
+      description: data.description,
+      promotion_type: data.promotion_type,
+      category: data.category || null,
+      category_key: categoryKey,
+      photos: data.images,
+      videos: data.videos,
+      video_thumbnail: data.video_thumbnail || null,
+      media_width: data.media_width ?? null,
+      media_height: data.media_height ?? null,
+      focal_x: data.focal_x ?? 0.5,
+      focal_y: data.focal_y ?? 0.5,
+      price_cents: priceCents,
+      price_negotiable: data.negotiable,
+      location_province: data.province,
+      location_city: data.city,
+      location_town: data.location_town || null,
+      location_address: data.location_address || null,
+      contact_methods: data.contact_methods,
+      start_date: data.start_date || null,
+      end_date: data.end_date || null,
+      business_id: data.business_id || null,
+      logo_url: data.logo_url || null,
+      event_details: data.event_details ?? null,
+      status: "pending_moderation",
+      expires_at: getPostExpiryIso({ hasPaidPlan }),
+    };
 
     let promotion: { id: string } | null = null;
     let insertError: PromotionInsertErrorLike = null;
+    let limitReached = false;
     const insertAttempts = [[], PROMOTION_INSERT_COMPAT_FIELDS] as const;
 
     for (let attemptIndex = 0; attemptIndex < insertAttempts.length; attemptIndex += 1) {
       const omittedFields = insertAttempts[attemptIndex];
       const insertPayload = omitPromotionCompatFields(promotionRecord, omittedFields);
-      const result = await supabase.from("promotions").insert(insertPayload).select("id").single();
+      const { data: rpcData, error: rpcError } = await getAdmin().rpc(
+        "insert_promotion_with_limit",
+        {
+          p_user_id: user.id,
+          p_area: AREA,
+          p_max_allowed: maxAllowedForInsert,
+          p_data: insertPayload,
+        }
+      );
 
-      promotion = result.data;
-      insertError = result.error;
+      const limitRow = rpcData as { limit_reached?: boolean } | null;
+      if (!rpcError && limitRow?.limit_reached === true) {
+        limitReached = true;
+        break;
+      }
+
+      const insertedRow = rpcData as { id?: string } | null;
+      promotion = !rpcError && insertedRow?.id ? { id: insertedRow.id } : null;
+      insertError = rpcError;
 
       if (!insertError && promotion) {
         break;
@@ -451,6 +498,14 @@ export async function POST(request: NextRequest) {
         error: insertError?.message,
         omittedFields: nextOmittedFields,
       });
+    }
+
+    if (limitReached) {
+      const check = canCreateListing(maxAllowedForInsert, tier as PlanTier, AREA);
+      return NextResponse.json(
+        { error: "Promotion limit reached", reason: check.reason },
+        { status: 403 }
+      );
     }
 
     if (insertError || !promotion) {
@@ -480,48 +535,25 @@ export async function POST(request: NextRequest) {
         contentId: promotion.id,
       });
     } catch (consentError) {
+      // Best-effort: the promotion row already exists, so failing the response
+      // here would orphan the create and make client retries duplicate it.
       log.error("Failed to record post terms acceptance", {
         userId: user.id,
         promotionId: promotion.id,
         error: consentError instanceof Error ? consentError.message : "Unknown error",
       });
-      return NextResponse.json({ error: "Failed to record posting terms" }, { status: 500 });
-    }
-
-    if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
-      const postCountQuery = applyOwnerFilter(
-        supabase
-          .from("promotions")
-          .select("id", { count: "exact", head: true })
-          .neq("status", "rejected"),
-        ownerColumn,
-        user.id
-      );
-
-      const { count: postInsertCount } = await postCountQuery;
-      const postCheck = canCreateListing((postInsertCount ?? 0) - 1, tier as PlanTier, AREA);
-
-      if (!postCheck.allowed) {
-        const { error: rollbackErr } = await getAdmin()
-          .from("promotions")
-          .delete()
-          .eq("id", promotion.id);
-        if (rollbackErr) {
-          log.error("Failed to roll back promotion — orphaned record", {
-            promotionId: promotion.id,
-            userId: user.id,
-            error: rollbackErr.message,
-          });
-        }
-        log.warn("Rolled back promotion due to concurrent limit breach", {
-          promotionId: promotion.id,
-          userId: user.id,
-          count: postInsertCount,
+      try {
+        await logAuditEvent({
+          actorId: user.id,
+          actorRole: "member",
+          action: "consent_updated",
+          targetType: "promotion",
+          targetId: promotion.id,
+          area: AREA,
+          metadata: { termsAcceptanceRecorded: false },
         });
-        return NextResponse.json(
-          { error: "Promotion limit reached", reason: postCheck.reason },
-          { status: 403 }
-        );
+      } catch {
+        // non-fatal
       }
     }
 
@@ -613,7 +645,21 @@ export async function GET(request: NextRequest) {
       request.cookies?.get?.(ENGAGEMENT_VIEWER_COOKIE)?.value ?? null,
       userId
     );
-    const ownerColumn = await getOwnerColumn(admin, "promotions");
+    let ownerColumn: OwnerColumn;
+    try {
+      ownerColumn = await getOwnerColumn(admin, "promotions");
+    } catch (ownerColumnError) {
+      log.warn("Promotions owner-column probe failed", {
+        error: ownerColumnError instanceof Error ? ownerColumnError.message : "Unknown error",
+      });
+      return NextResponse.json(
+        {
+          error: "Marketplace temporarily unavailable",
+          detail: "Promotion ownership metadata is unavailable. Please retry shortly.",
+        },
+        { status: 503 }
+      );
+    }
     const parsedQuery = parseAndValidateSearchParams(
       request.nextUrl.searchParams,
       promotionsQuerySchema,
@@ -654,7 +700,13 @@ export async function GET(request: NextRequest) {
       let query = applyVisibleExpiryFilter(
         admin.from("promotions").select(selectClause, { count: "exact" }).eq("status", "live"),
         nowIso
-      ).or(`end_date.is.null,end_date.gte.${nowIso}`);
+      );
+
+      // Skip the "not yet ended" base filter for event_state=ended — PostgREST
+      // ANDs it with the ended filter (end_date < now), which can never match.
+      if (eventState !== "ended") {
+        query = query.or(`end_date.is.null,end_date.gte.${nowIso}`);
+      }
 
       if (promotionType) {
         const storedTypes = getStoredPromotionTypesForFilter(promotionType);
@@ -774,24 +826,6 @@ export async function GET(request: NextRequest) {
         likeErrorCode: likeSummaryResult.errorCode,
       });
     }
-    const serializedPromotions = filteredPromotions.map((promotion) => {
-      const likeSummary = engagementAvailable
-        ? likeSummaryResult.data.get(promotion.id)
-        : undefined;
-
-      return {
-        ...promotion,
-        view_count:
-          typeof promotion.view_count === "number"
-            ? promotion.view_count
-            : engagementAvailable
-              ? (viewCountResult.data.get(promotion.id) ?? null)
-              : null,
-        like_count: engagementAvailable ? (likeSummary?.likeCount ?? null) : null,
-        viewer_has_liked: likeSummary?.viewerHasLiked ?? false,
-      };
-    });
-
     const accountIds = Array.from(
       new Set(filteredPromotions.map((promotion) => promotion.owner_id).filter(Boolean))
     );
@@ -819,6 +853,37 @@ export async function GET(request: NextRequest) {
         display_name: accountProfile.display_name,
         trust: computeTrustLevel(readAccountVerificationStatus(accountProfile)),
       })) ?? [];
+    const accountProfileByUserId = new Map(
+      serializedAccountProfiles.map((accountProfile) => [accountProfile.user_id, accountProfile])
+    );
+
+    const serializedPromotions = filteredPromotions.map((promotion) => {
+      const likeSummary = engagementAvailable
+        ? likeSummaryResult.data.get(promotion.id)
+        : undefined;
+      const accountProfile = promotion.owner_id
+        ? accountProfileByUserId.get(promotion.owner_id)
+        : undefined;
+
+      // Strip owner identifiers from public rows (POPIA data minimization);
+      // the embedded account_profile carries the public-safe display fields.
+      const { owner_id: _ownerId, seller_id: _sellerId, ...publicPromotion } = promotion;
+
+      return {
+        ...publicPromotion,
+        account_profile: accountProfile
+          ? { display_name: accountProfile.display_name, trust: accountProfile.trust }
+          : null,
+        view_count:
+          typeof promotion.view_count === "number"
+            ? promotion.view_count
+            : engagementAvailable
+              ? (viewCountResult.data.get(promotion.id) ?? null)
+              : null,
+        like_count: engagementAvailable ? (likeSummary?.likeCount ?? null) : null,
+        viewer_has_liked: likeSummary?.viewerHasLiked ?? false,
+      };
+    });
 
     return NextResponse.json({
       promotions: serializedPromotions,

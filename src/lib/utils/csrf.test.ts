@@ -51,6 +51,25 @@ describe("csrf utilities", () => {
     expect(getCsrfTokenFromDocumentCookie(`foo=bar; ${CSRF_COOKIE_NAME}=${token}`)).toBe(token);
   });
 
+  it("treats a malformed percent-encoded cookie value as no token", () => {
+    expect(getCsrfTokenFromDocumentCookie(`${CSRF_COOKIE_NAME}=%`)).toBeNull();
+    expect(getCsrfTokenFromDocumentCookie(`foo=bar; ${CSRF_COOKIE_NAME}=%E0%A4%A`)).toBeNull();
+  });
+
+  it("does not throw on a malformed cookie value when enforcing CSRF", () => {
+    const request = {
+      url: "https://verifymzansi.com/api/test",
+      headers: new Headers({
+        cookie: `${CSRF_COOKIE_NAME}=%`,
+        [CSRF_HEADER_NAME]: "a".repeat(64),
+      }),
+    };
+
+    const response = enforceCsrfToken(request);
+
+    expect(response?.status).toBe(403);
+  });
+
   it("rejects requests with mismatched CSRF header and cookie", () => {
     const request = {
       url: "https://verifymzansi.com/api/test",

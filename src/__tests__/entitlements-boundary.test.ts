@@ -24,13 +24,7 @@ import type { PlanTier, MarketplaceArea } from "@/types/enums";
 
 // ── Plan matrix ───────────────────────────────────────────────
 
-const AREAS: MarketplaceArea[] = [
-  "MZANSI_MARKET",
-  "MZANSI_BUSINESS",
-  "PROMOTIONS_EVENTS",
-  "MALL_SHOPS",
-  "BUSINESS_ADS",
-];
+const AREAS: MarketplaceArea[] = ["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"];
 const TIERS: PlanTier[] = ["basic", "starter", "growth", "pro"];
 
 /** Expected addon flags per tier (consistent across all areas) */
@@ -142,16 +136,16 @@ describe("Plan-tier entitlement boundaries", () => {
     });
 
     it("uses correct item type label per area", () => {
-      // MALL_SHOPS should say "storefronts"
-      const mallResult = canCreateListing(100, "starter", "MALL_SHOPS");
-      if (!mallResult.allowed) {
-        expect(mallResult.reason).toContain("storefronts");
+      // MZANSI_BUSINESS should say "businesses"
+      const bizResult = canCreateListing(100, "starter", "MZANSI_BUSINESS");
+      if (!bizResult.allowed) {
+        expect(bizResult.reason).toContain("businesses");
       }
 
-      // BUSINESS_ADS should say "profiles"
-      const bizResult = canCreateListing(100, "starter", "BUSINESS_ADS");
-      if (!bizResult.allowed) {
-        expect(bizResult.reason).toContain("profiles");
+      // PROMOTIONS_EVENTS should say "events"
+      const eventResult = canCreateListing(100, "starter", "PROMOTIONS_EVENTS");
+      if (!eventResult.allowed) {
+        expect(eventResult.reason).toContain("events");
       }
 
       // MZANSI_MARKET should say "live listings"

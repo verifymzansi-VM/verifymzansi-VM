@@ -37,11 +37,10 @@ export async function POST(request: Request) {
 
     const admin = createAdminClient();
 
-    // Map area to table
+    // Map area to table. The validation schema only allows the three active
+    // marketplace areas, so no legacy BUSINESS_ADS/MALL_SHOPS tables appear here.
     const tableMap: Record<string, string> = {
       MZANSI_MARKET: "listings",
-      BUSINESS_ADS: "business_profiles",
-      MALL_SHOPS: "storefronts",
       MZANSI_BUSINESS: "businesses",
       PROMOTIONS_EVENTS: "promotions",
     };
@@ -116,32 +115,14 @@ export async function POST(request: Request) {
       string,
       {
         targetType: string;
-        approveAction:
-          | "listing_updated"
-          | "business_profile_updated"
-          | "storefront_updated"
-          | "moderation_action";
-        rejectAction:
-          | "listing_deleted"
-          | "business_profile_deleted"
-          | "storefront_deleted"
-          | "moderation_action";
+        approveAction: "listing_updated" | "moderation_action";
+        rejectAction: "listing_deleted" | "moderation_action";
       }
     > = {
       listings: {
         targetType: "listing",
         approveAction: "listing_updated",
         rejectAction: "listing_deleted",
-      },
-      business_profiles: {
-        targetType: "business_profile",
-        approveAction: "business_profile_updated",
-        rejectAction: "business_profile_deleted",
-      },
-      storefronts: {
-        targetType: "storefront",
-        approveAction: "storefront_updated",
-        rejectAction: "storefront_deleted",
       },
       businesses: {
         targetType: "business",
@@ -178,14 +159,7 @@ export async function POST(request: Request) {
       const ownerField = compatTable
         ? await getOwnerColumn(admin as never, compatTable).catch(() => "owner_id")
         : "owner_id";
-      const titleField =
-        table === "listings"
-          ? "title"
-          : table === "storefronts"
-            ? "mall_name"
-            : table === "promotions"
-              ? "title"
-              : "business_name";
+      const titleField = table === "businesses" ? "business_name" : "title";
       const { data: contentItem, error: contentFetchErr } = await admin
         .from(table)
         .select(`${ownerField}, ${titleField}`)
@@ -205,25 +179,13 @@ export async function POST(request: Request) {
         const accountHolderId = (record[ownerField] ?? readOwnerId(record)) as string;
         const contentTitle = (record[titleField] as string)?.slice(0, 40) || "your content";
         const contentLabel =
-          table === "listings"
-            ? "Listing"
-            : table === "storefronts"
-              ? "Storefront"
-              : table === "promotions"
-                ? "Promotion"
-                : table === "business_profiles"
-                  ? "Business profile"
-                  : "Business";
+          table === "listings" ? "Listing" : table === "promotions" ? "Event" : "Business";
         const dashboardHref =
           table === "listings"
             ? "/dashboard/listings"
-            : table === "storefronts"
-              ? "/dashboard/storefronts"
-              : table === "promotions"
-                ? "/dashboard/tourism-events"
-                : table === "business_profiles"
-                  ? "/dashboard/business-profiles"
-                  : "/dashboard/businesses";
+            : table === "promotions"
+              ? "/dashboard/tourism-events"
+              : "/dashboard/businesses";
 
         if (decision === "approve") {
           await createNotification({

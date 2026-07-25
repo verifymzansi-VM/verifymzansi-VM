@@ -115,3 +115,6 @@ e2e/visual-regression.spec.ts-snapshots/*
 
 # ── Claude IDE / planning ────────────────────────────────────
 .claude/
+
+# generated render + audit outputs (regenerate via pnpm video:render / capture scripts)
+output/

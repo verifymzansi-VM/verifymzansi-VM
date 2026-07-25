@@ -190,6 +190,11 @@ export function applyBaseMarketFilters<T>(
     if (safeSearch) {
       builder = builder.or(`title.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%`) as T &
         MarketQueryOps;
+    } else {
+      // The search token sanitized to nothing (e.g. "!!!") — force an empty
+      // result so it matches the active filter chip instead of silently
+      // returning the unfiltered page.
+      builder = builder.eq("id", "00000000-0000-0000-0000-000000000000") as T & MarketQueryOps;
     }
   }
 

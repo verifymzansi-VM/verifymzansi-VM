@@ -32,7 +32,7 @@ type ActiveTab = "tourism" | "events";
 
 interface PromotionRow {
   id: string;
-  owner_id: string;
+  account_profile: Pick<AccountProfileSummary, "display_name" | "trust"> | null;
   business_id: string | null;
   title: string;
   promotion_type: PromotionType;
@@ -339,16 +339,6 @@ export function PromotionsExplorer() {
   }, [activeTab, filters]);
 
   /* ── Events data maps ── */
-  const accountProfileMap = useMemo(
-    () =>
-      new Map(
-        (eventsResponse.accountProfiles ?? eventsResponse.sellers ?? []).map((accountProfile) => [
-          accountProfile.user_id,
-          accountProfile,
-        ])
-      ),
-    [eventsResponse.accountProfiles, eventsResponse.sellers]
-  );
   const businessMap = useMemo(
     () =>
       new Map(
@@ -603,7 +593,7 @@ export function PromotionsExplorer() {
                 className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-5 xl:gap-6"
               >
                 {promotions.map((promotion, index) => {
-                  const accountProfile = accountProfileMap.get(promotion.owner_id);
+                  const accountProfile = promotion.account_profile;
                   const businessName = promotion.business_id
                     ? businessMap.get(promotion.business_id)
                     : undefined;

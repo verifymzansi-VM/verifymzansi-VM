@@ -8,6 +8,11 @@ const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent } = vi.hoiste
   mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
+const { mockCheckRateLimit, mockCheckLocalRateLimit } = vi.hoisted(() => ({
+  mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
+  mockCheckLocalRateLimit: vi.fn().mockReturnValue({ limited: false }),
+}));
+
 const { mockEnforceCsrfToken } = vi.hoisted(() => ({
   mockEnforceCsrfToken: vi.fn(),
 }));
@@ -29,6 +34,11 @@ const {
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkRateLimit: mockCheckRateLimit,
+  checkLocalRateLimit: mockCheckLocalRateLimit,
+  getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
+}));
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }));
@@ -160,7 +170,13 @@ function mockAdmin(tableOverrides: Record<string, Record<string, unknown>> = {})
   });
   mockCreateAdminClient.mockReturnValue({
     from: vi.fn((table: string) => makeChain(table)),
-    rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
+    rpc: vi.fn((fn: string) =>
+      Promise.resolve(
+        fn === "insert_promotion_with_limit"
+          ? { data: { id: VALID_UUID }, error: null }
+          : { data: true, error: null }
+      )
+    ),
   });
 }
 
@@ -314,6 +330,8 @@ describe("POST /api/promotions", () => {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
+          gte: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
           maybeSingle: vi.fn().mockResolvedValue({ data: null }),
         };
       }),
@@ -369,6 +387,8 @@ describe("POST /api/promotions", () => {
 
               return {
                 eq: vi.fn().mockReturnThis(),
+                gte: vi.fn().mockReturnThis(),
+                limit: vi.fn().mockReturnThis(),
                 neq: vi.fn().mockReturnThis(),
                 maybeSingle: vi.fn().mockResolvedValue({ data: null }),
               };
@@ -378,6 +398,8 @@ describe("POST /api/promotions", () => {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
+          gte: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
           maybeSingle: vi.fn().mockResolvedValue({ data: null }),
         };
       }),
@@ -509,6 +531,8 @@ describe("POST /api/promotions", () => {
 
               return {
                 eq: vi.fn().mockReturnThis(),
+                gte: vi.fn().mockReturnThis(),
+                limit: vi.fn().mockReturnThis(),
                 neq: vi.fn().mockReturnThis(),
                 maybeSingle: vi.fn().mockResolvedValue({ data: null }),
               };
@@ -643,18 +667,21 @@ describe("POST /api/promotions", () => {
   });
 
   it("retries promotion creation without compatibility columns when category_key is unavailable", async () => {
-    const singleSpy = vi
-      .fn()
-      .mockResolvedValueOnce({
-        data: null,
-        error: { code: "42703", message: "column promotions.category_key does not exist" },
-      })
-      .mockResolvedValueOnce({ data: { id: VALID_UUID }, error: null });
-    const insertSpy = vi.fn().mockImplementation((_payload: Record<string, unknown>) => ({
-      select: vi.fn().mockReturnValue({
-        single: singleSpy,
-      }),
-    }));
+    const insertCalls: Array<Record<string, unknown>> = [];
+    const rpcSpy = vi.fn((fn: string, args: { p_data?: Record<string, unknown> }) => {
+      if (fn !== "insert_promotion_with_limit") {
+        return Promise.resolve({ data: true, error: null });
+      }
+      insertCalls.push(args.p_data ?? {});
+      return Promise.resolve(
+        insertCalls.length === 1
+          ? {
+              data: null,
+              error: { code: "42703", message: "column promotions.category_key does not exist" },
+            }
+          : { data: { id: VALID_UUID }, error: null }
+      );
+    });
 
     mockAuth({ id: USER_ID });
     mockAdmin({
@@ -666,10 +693,8 @@ describe("POST /api/promotions", () => {
           },
         }),
       },
-      promotions: {
-        insert: insertSpy,
-      },
     });
+    mockCreateAdminClient().rpc = rpcSpy;
 
     const req = createRequest("http://localhost:3000/api/promotions", {
       method: "POST",
@@ -678,11 +703,11 @@ describe("POST /api/promotions", () => {
     const res = await POST(req);
 
     expect(res.status).toBe(201);
-    expect(insertSpy).toHaveBeenCalledTimes(2);
-    expect(insertSpy.mock.calls[0][0]).toMatchObject({
+    expect(insertCalls).toHaveLength(2);
+    expect(insertCalls[0]).toMatchObject({
       category_key: "tourism_hospitality",
     });
-    expect(insertSpy.mock.calls[1][0]).not.toHaveProperty("category_key");
+    expect(insertCalls[1]).not.toHaveProperty("category_key");
   });
 
   it("returns 404 when linked business is not owned by the caller", async () => {
@@ -765,7 +790,10 @@ describe("POST /api/promotions", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            gte: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
             neq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
           };
         }
         return {
@@ -848,7 +876,10 @@ describe("POST /api/promotions", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            gte: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
             neq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
           };
         }
         return {
@@ -873,6 +904,88 @@ describe("POST /api/promotions", () => {
     await expect(res.json()).resolves.toMatchObject({
       error: "Maximum 1 videos allowed on your plan",
     });
+  });
+
+  it("sets Retry-After when creation is rate limited", async () => {
+    mockCheckRateLimit.mockResolvedValueOnce({ limited: true, retryAfter: 45 });
+    mockAuth({ id: USER_ID });
+
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: VALID_BODY,
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("45");
+  });
+
+  it("returns the existing promotion when the same title is resubmitted within two minutes", async () => {
+    mockAuth({ id: USER_ID });
+    mockAdmin({
+      account_profiles: {
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: {
+            id: "sp-1",
+            account_verification_status: "verified",
+          },
+        }),
+      },
+      promotions: {
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "promo-dupe" } }),
+      },
+    });
+    const adminClient = mockCreateAdminClient();
+    const rpcSpy = adminClient.rpc as ReturnType<typeof vi.fn>;
+
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: VALID_BODY,
+    });
+    const res = await POST(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      promotion: { id: "promo-dupe" },
+      deduplicated: true,
+    });
+    expect(rpcSpy.mock.calls.some(([fn]) => fn === "insert_promotion_with_limit")).toBe(false);
+  });
+
+  it("still returns the created promotion when terms recording fails", async () => {
+    mockAuth({ id: USER_ID });
+    mockAdmin({
+      account_profiles: {
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: {
+            id: "sp-1",
+            account_verification_status: "verified",
+          },
+        }),
+      },
+      consent_records: {
+        insert: vi.fn().mockResolvedValue({ error: { message: "consent insert failed" } }),
+      },
+    });
+
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: VALID_BODY,
+    });
+    const res = await POST(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(body).toMatchObject({ success: true, promotion: { id: VALID_UUID } });
+    expect(mockLogAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "consent_updated",
+        targetType: "promotion",
+        targetId: VALID_UUID,
+      })
+    );
   });
 });
 
@@ -908,6 +1021,14 @@ describe("GET /api/promotions", () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.promotions).toHaveLength(1);
+    // Owner identifiers are stripped from public rows (POPIA); the embedded
+    // account_profile carries the public-safe display fields instead.
+    expect(json.promotions[0]).not.toHaveProperty("owner_id");
+    expect(json.promotions[0]).not.toHaveProperty("seller_id");
+    expect(json.promotions[0].account_profile).toMatchObject({
+      display_name: "Nomsa",
+      trust: expect.any(Number),
+    });
     expect(json.accountProfiles).toMatchObject([
       { user_id: USER_ID, display_name: "Nomsa", trust: expect.any(Number) },
     ]);
@@ -1098,7 +1219,7 @@ describe("GET /api/promotions/[id]", () => {
     expect(res.status).toBe(404);
   });
 
-  it("returns live promotion publicly", async () => {
+  it("returns live promotion publicly and strips owner identifiers", async () => {
     mockCreateClient.mockResolvedValue({
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
@@ -1108,6 +1229,7 @@ describe("GET /api/promotions/[id]", () => {
             id: VALID_UUID,
             status: "live",
             view_count: 5,
+            owner_id: "owner-9",
           },
           error: null,
         }),
@@ -1122,6 +1244,8 @@ describe("GET /api/promotions/[id]", () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.promotion.id).toBe(VALID_UUID);
+    expect(json.promotion).not.toHaveProperty("owner_id");
+    expect(json.promotion).not.toHaveProperty("seller_id");
   });
 
   it("returns 404 for non-live promotions when the viewer is not the owner", async () => {
@@ -1332,6 +1456,96 @@ describe("PUT /api/promotions/[id]", () => {
     expect(updateSpy).toHaveBeenCalledWith(
       expect.not.objectContaining({ status: expect.anything() })
     );
+  });
+
+  it("routes start_date changes on a live promotion to moderation review", async () => {
+    const updateSpy = vi.fn();
+    const contentEditChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      insert: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: { id: "edit-1" }, error: null }),
+    };
+    const from = vi.fn((table: string) => {
+      if (table === "entitlements") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          gt: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }
+      if (table === "content_edit_requests") {
+        return contentEditChain;
+      }
+      if (table === "promotions") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: {
+              id: VALID_UUID,
+              owner_id: USER_ID,
+              status: "live",
+              title: VALID_BODY.title,
+              description: VALID_BODY.description,
+              promotion_type: "event",
+              category: null,
+              category_key: "tourism_hospitality",
+              price_cents: null,
+              location_province: "Gauteng",
+              location_city: "Johannesburg",
+              location_town: null,
+              location_address: null,
+              contact_methods: ["call"],
+              start_date: "2026-08-01T00:00:00.000Z",
+              end_date: null,
+              logo_url: null,
+              photos: [VALID_IMAGE],
+              videos: [],
+              video_thumbnail: null,
+              event_details: null,
+              approved_edit_count: 0,
+            },
+          }),
+          update: updateSpy,
+        };
+      }
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+      };
+    });
+    mockCreateClient.mockResolvedValue({
+      from,
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } }, error: null }),
+      },
+    });
+    mockCreateAdminClient.mockReturnValue({ from });
+
+    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`, {
+      method: "PUT",
+      body: {
+        ...VALID_BODY,
+        category_key: "tourism_hospitality",
+        start_date: "2026-09-01T00:00:00.000Z",
+      },
+    });
+    const res = await PUT(req, { params: Promise.resolve({ id: VALID_UUID }) });
+
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json).toMatchObject({
+      success: true,
+      pendingReview: true,
+      message: "Edit submitted for admin review",
+    });
+    // The edit went through the review queue — no direct update happened.
+    expect(updateSpy).not.toHaveBeenCalled();
   });
 
   it("returns 404 when updating to a linked business the caller does not own", async () => {

@@ -93,6 +93,13 @@ describe("POST /api/media/upload-complete", () => {
       from: vi.fn().mockReturnValue({
         delete: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              is: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          }),
+        }),
       }),
     });
   });
@@ -125,6 +132,30 @@ describe("POST /api/media/upload-complete", () => {
       publicUrl: "https://media.example.com/media/listing/user-1/clip.mp4",
     });
     expect(mockDeleteFromR2).not.toHaveBeenCalled();
+  });
+
+  it("rejects and cleans up when the request does not match the tracking row", async () => {
+    mockTrackedUpload(); // tracking row declares video/mp4
+
+    const res = await POST(
+      createRequest({
+        key: "media/listing/user-1/clip.mp4",
+        publicUrl: "https://media.example.com/media/listing/user-1/clip.mp4",
+        contentType: "video/webm",
+        size: MP4_HEADER.byteLength,
+        area: "listing",
+      })
+    );
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      code: "upload_metadata_mismatch",
+    });
+    expect(mockDeleteFromR2).toHaveBeenCalledWith(
+      "verifymzansi-public",
+      "media/listing/user-1/clip.mp4"
+    );
+    expect(mockGetR2ObjectBytes).not.toHaveBeenCalled();
   });
 
   it("rejects and cleans up direct uploads with invalid video bytes", async () => {

@@ -26,6 +26,10 @@ function isE2eLoggingContext(): boolean {
  * Resolve the active plan tier for a user in a marketplace area.
  * Queries the `entitlements` table, filters expired rows, and returns
  * the highest-priority active tier (or `"starter"` as the default).
+ *
+ * Kept aligned with the posting gate in
+ * `src/app/api/_lib/posting-entitlements.ts`: only `status = 'active'`
+ * entitlements with a future `expires_at` count.
  */
 export async function getActivePlanTierForArea(
   userId: string,
@@ -41,8 +45,8 @@ export async function getActivePlanTierForArea(
       .select("tier, expires_at")
       .eq("user_id", userId)
       .eq("area", area)
-      .in("status", ["active", "pending_verification"])
-      .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
+      .eq("status", "active")
+      .gt("expires_at", nowIso)
       .order("started_at", { ascending: false })
       .limit(20);
 
@@ -73,7 +77,7 @@ export async function getActivePlanTierForArea(
         return false;
       }
       if (!row.expires_at) {
-        return true;
+        return false;
       }
       return new Date(row.expires_at).getTime() > now;
     });

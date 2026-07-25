@@ -7,7 +7,7 @@ import {
   readOwnerId,
   withOwnerColumn,
 } from "@/lib/account/compat";
-import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { uuidSchema } from "@/lib/validations/shared";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
 import {
@@ -75,9 +75,11 @@ export function createPromotionAddonCheckoutRoute(config: PromotionAddonRouteCon
     auditDurationKey: config.auditDurationKey,
     failureMessage: config.failureMessage,
     getEntityId: ({ id }) => id,
-    enforceRateLimit: async ({ request }) => {
+    enforceRateLimit: async ({ user }) => {
+      // Key on the authenticated user (like the listing/business variants) so
+      // CGNAT mobile users sharing an IP are not punished for each other.
       const rateCheck = await checkRateLimit({
-        key: getClientIp(request),
+        key: user.id,
         action: config.rateLimitAction,
         degradedMode: "block",
       });

@@ -1457,4 +1457,165 @@ describe("POST /api/verification/location/gps", () => {
       })
     );
   });
+
+  it("rejects a future-dated GPS timestamp beyond the allowed clock skew", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },
+      error: null,
+    });
+    mockIsFeatureEnabled.mockResolvedValue(true);
+
+    const futureTimestamp = Date.now() + 120_000; // 2 minutes in the future, > 60s skew
+    mockParseAndValidateJsonRequest.mockResolvedValue({
+      success: true,
+      data: {
+        latitude: -26.2041,
+        longitude: 28.0473,
+        accuracy: 12,
+        timestamp: futureTimestamp,
+      },
+    });
+
+    const res = await POST(
+      makeRequest({
+        latitude: -26.2041,
+        longitude: 28.0473,
+        accuracy: 12,
+        timestamp: futureTimestamp,
+      })
+    );
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toEqual(
+      expect.objectContaining({
+        code: "gps_timestamp_future",
+      })
+    );
+    expect(mockReverseGeocode).not.toHaveBeenCalled();
+  });
+
+  it("keeps a province-mismatched GPS confirmation pending and does not overwrite the profile address", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },
+      error: null,
+    });
+    mockIsFeatureEnabled.mockResolvedValue(true);
+    mockParseAndValidateJsonRequest.mockResolvedValue({
+      success: true,
+      data: {
+        latitude: -33.9249,
+        longitude: 18.4241,
+        accuracy: 15,
+        timestamp: Date.now(),
+        declaredProvince: "Gauteng",
+        declaredCity: "Johannesburg",
+      },
+    });
+    mockReverseGeocode.mockResolvedValue({
+      province: "Western Cape",
+      city: "Cape Town",
+      source: "nominatim",
+    });
+    mockComputeLocationConfidence.mockReturnValue("low");
+
+    const upsertVerificationStep = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: { id: "step-province-mismatch" }, error: null }),
+    });
+    const updateProfile = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    });
+    const insertedSignals: unknown[] = [];
+
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: "profile-1", account_verification_status: "incomplete" },
+              }),
+            }),
+          }),
+          update: updateProfile,
+        };
+      }
+
+      if (table === "verification_sessions") {
+        return createVerificationSessionsTable();
+      }
+
+      if (table === "verification_steps") {
+        return createVerificationStepsTable({
+          upsert: upsertVerificationStep,
+        });
+      }
+
+      if (table === "kyc_risk_signals") {
+        return {
+          insert: vi.fn((rows: unknown[]) => {
+            insertedSignals.push(...rows);
+            return Promise.resolve({ error: null });
+          }),
+        };
+      }
+
+      if (table === "kyc_artifacts") {
+        return {
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              is: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          }),
+        };
+      }
+
+      return {};
+    });
+
+    const res = await POST(
+      makeRequest({
+        latitude: -33.9249,
+        longitude: 18.4241,
+        accuracy: 15,
+        timestamp: Date.now(),
+        declaredProvince: "Gauteng",
+        declaredCity: "Johannesburg",
+      })
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual(
+      expect.objectContaining({
+        success: true,
+        verified: false,
+        stepStatus: "pending",
+        mismatch: {
+          province: true,
+          city: false,
+        },
+      })
+    );
+
+    // Block-severity signal: step stays pending for admin review, not approved
+    expect(upsertVerificationStep).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "pending",
+        auto_status: "needs_manual_review",
+      }),
+      expect.objectContaining({ onConflict: "user_id,step_type" })
+    );
+    expect(insertedSignals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ signal_code: "gps_province_mismatch", severity: "block" }),
+      ])
+    );
+    // The mismatched declared address must NOT be written to the profile
+    expect(updateProfile).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        location_province: expect.anything(),
+        location_city: expect.anything(),
+      })
+    );
+  });
 });

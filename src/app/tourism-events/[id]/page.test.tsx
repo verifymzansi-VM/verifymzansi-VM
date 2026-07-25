@@ -74,12 +74,21 @@ function buildClient(options?: {
       }
 
       if (table === "businesses") {
+        // Supports both query shapes used on this table:
+        //   loadBusinessDetail:      select → eq → maybeSingle
+        //   linkedBusiness lookup:   select → eq → eq → maybeSingle (via applyVisibleExpiryFilter)
+        const result = { data: options?.linkedBusiness ?? null };
+        const chain: {
+          eq: () => typeof chain;
+          or: () => typeof chain;
+          maybeSingle: () => Promise<typeof result>;
+        } = {
+          eq: () => chain,
+          or: () => chain,
+          maybeSingle: async () => result,
+        };
         return {
-          select: () => ({
-            eq: () => ({
-              maybeSingle: async () => ({ data: options?.linkedBusiness ?? null }),
-            }),
-          }),
+          select: () => chain,
         };
       }
 

@@ -1,8 +1,10 @@
 # VerifyMzansi
 
-South African marketplace built on Next.js, Supabase, and Cloudflare. The main
-business surface is `Mzansi Business`, with legacy `business-ads` and
-`mall-shops` routes preserved for compatibility.
+South African marketplace built on Next.js, Supabase, and Cloudflare. The
+platform has exactly three marketplace areas: `Mzansi Market`,
+`Mzansi Business`, and `Tourism & Events`. Legacy `business-ads`, `mall-shops`,
+and standalone `promotions` surfaces have been removed; their old URLs
+permanently redirect to the canonical area.
 
 [![CI](https://github.com/verifymzansi/verifymzansi/actions/workflows/ci.yml/badge.svg)](https://github.com/verifymzansi/verifymzansi/actions/workflows/ci.yml)
 
@@ -154,6 +156,18 @@ pnpm supabase:advisor:security:strict
 The advisor script classifies plan-gated findings separately. On free Supabase
 plans, `auth_leaked_password_protection` is reported as plan-blocked instead of
 being treated as an unresolved repo-owned issue.
+
+To check live Supabase Performance Advisor findings from workspace env:
+
+```bash
+pnpm supabase:advisor:performance
+pnpm supabase:advisor:performance -- --json
+pnpm supabase:advisor:performance:strict
+```
+
+The performance advisor script keeps foreign-key support indexes and documented
+application guardrail indexes in an accepted baseline, while strict mode still
+fails for new actionable findings.
 
 To use a different env file, pass it through the generic wrapper:
 

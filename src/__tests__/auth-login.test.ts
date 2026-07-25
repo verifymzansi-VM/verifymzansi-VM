@@ -91,9 +91,28 @@ vi.mock("@/lib/utils/api", async () => {
 
 import { POST } from "@/app/api/auth/login/route";
 
+const CSRF_TOKEN = "a".repeat(64);
+
+function csrfHeaderValue(name: string): string | null {
+  const lowered = name.toLowerCase();
+  if (lowered === "cookie") return `vm_csrf=${CSRF_TOKEN}`;
+  if (lowered === "x-csrf-token") return CSRF_TOKEN;
+  return null;
+}
+
 function createRequest(body: unknown, method = "POST") {
   return {
     method,
+    json: async () => body,
+    url: "https://verifymzansi.com/api/auth/login",
+    headers: { get: vi.fn(csrfHeaderValue) },
+    nextUrl: new URL("https://verifymzansi.com/api/auth/login"),
+  } as unknown as NextRequest;
+}
+
+function createRequestWithoutCsrf(body: unknown) {
+  return {
+    method: "POST",
     json: async () => body,
     url: "https://verifymzansi.com/api/auth/login",
     headers: { get: vi.fn().mockReturnValue(null) },
@@ -199,7 +218,7 @@ describe("POST /api/auth/login", () => {
     });
   });
 
-  it("returns generic 401 when credentials are correct but email is unconfirmed (anti-enumeration)", async () => {
+  it("returns 403 with email_not_confirmed code when credentials are correct but email is unconfirmed", async () => {
     mockAuth({
       data: { user: null, session: null },
       error: { message: "Email not confirmed", status: 400 },
@@ -213,10 +232,51 @@ describe("POST /api/auth/login", () => {
       })
     );
 
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(403);
     const body = await res.json();
     expect(body).toEqual({
-      error: "Invalid email or password",
+      error: "Please confirm your email address before signing in.",
+      code: "email_not_confirmed",
+    });
+    // Still recorded as a failed attempt so unconfirmed accounts cannot
+    // bypass the lockout counters.
+    expect(mockRecordFailedLogin).toHaveBeenCalledWith("unconfirmed@test.com");
+  });
+
+  it("returns 403 when the CSRF token is missing", async () => {
+    const res = await POST(
+      createRequestWithoutCsrf({
+        email: "test@example.com",
+        password: "validPass123",
+        turnstileToken: "tok",
+      })
+    );
+
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toBe("Invalid CSRF token");
+    expect(mockCreateClient).not.toHaveBeenCalled();
+  });
+
+  it("returns a generic message when Turnstile verification fails (no upstream detail)", async () => {
+    process.env.TURNSTILE_SECRET_KEY = "secret";
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "site-key";
+    mockVerifyTurnstile.mockResolvedValue({
+      success: false,
+      error: "Turnstile verification request failed (HTTP 400)",
+    });
+
+    const res = await POST(
+      createRequest({
+        email: "test@example.com",
+        password: "validPass123",
+        turnstileToken: "tok-bad",
+      })
+    );
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toEqual({
+      error: "CAPTCHA verification failed",
     });
   });
 
@@ -349,23 +409,28 @@ describe("POST /api/auth/login", () => {
     expect(mockRecordDistributedFailedLogin).toHaveBeenCalledWith("bad@test.com");
   });
 
-  it("blocks suspended accounts at pre-session check with generic 401", async () => {
+  it("blocks suspended accounts post-login and signs the user out", async () => {
+    const mockSignOut = vi.fn().mockResolvedValue({ error: null });
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        signInWithPassword: vi.fn().mockResolvedValue({
+          data: { user: { id: "user-susp" }, session: { access_token: "tok" } },
+          error: null,
+        }),
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-susp" } } }),
+        signOut: mockSignOut,
+      },
+    });
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
             maybeSingle: vi.fn().mockResolvedValue({
-              data: { account_status: "suspended", user_id: "user-susp" },
+              data: { account_status: "suspended" },
             }),
           }),
         }),
       }),
-    });
-    mockCreateClient.mockResolvedValue({
-      auth: {
-        signInWithPassword: vi.fn(),
-        getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
-      },
     });
 
     const res = await POST(
@@ -376,8 +441,11 @@ describe("POST /api/auth/login", () => {
       })
     );
 
-    expect(res.status).toBe(401);
-    await expect(res.json()).resolves.toEqual({ error: "Invalid email or password" });
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toEqual({
+      error: "Your account has been suspended. Contact support for assistance.",
+    });
+    expect(mockSignOut).toHaveBeenCalled();
   });
 
   it("blocks cross-origin mutation requests", async () => {

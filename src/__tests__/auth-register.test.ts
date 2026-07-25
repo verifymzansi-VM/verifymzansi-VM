@@ -89,12 +89,21 @@ vi.mock("@/lib/utils/api", async () => {
 
 import { POST } from "@/app/api/auth/register/route";
 
+const CSRF_TOKEN = "b".repeat(64);
+
+function csrfHeaderValue(name: string): string | null {
+  const lowered = name.toLowerCase();
+  if (lowered === "cookie") return `vm_csrf=${CSRF_TOKEN}`;
+  if (lowered === "x-csrf-token") return CSRF_TOKEN;
+  return null;
+}
+
 function createRequest(body: unknown): NextRequest {
   return {
     method: "POST",
     json: async () => body,
     url: "https://verifymzansi.com/api/auth/register",
-    headers: { get: vi.fn().mockReturnValue(null) },
+    headers: { get: vi.fn(csrfHeaderValue) },
     nextUrl: new URL("https://verifymzansi.com/api/auth/register"),
   } as unknown as NextRequest;
 }
@@ -164,7 +173,8 @@ describe("POST /api/auth/register", () => {
       json: async () => {
         throw new Error("bad json");
       },
-      headers: { get: vi.fn().mockReturnValue(null) },
+      headers: { get: vi.fn(csrfHeaderValue) },
+      url: "http://localhost:3000/api/auth/register",
       nextUrl: new URL("http://localhost:3000/api/auth/register"),
     } as unknown as NextRequest;
 
@@ -172,6 +182,22 @@ describe("POST /api/auth/register", () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toContain("Invalid");
+  });
+
+  it("returns 403 when the CSRF token is missing", async () => {
+    const req = {
+      method: "POST",
+      json: async () => validBody,
+      url: "https://verifymzansi.com/api/auth/register",
+      headers: { get: vi.fn().mockReturnValue(null) },
+      nextUrl: new URL("https://verifymzansi.com/api/auth/register"),
+    } as unknown as NextRequest;
+
+    const res = await POST(req);
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toBe("Invalid CSRF token");
+    expect(mockCreateClient).not.toHaveBeenCalled();
   });
 
   it("returns 400 for missing required fields", async () => {
@@ -365,15 +391,18 @@ describe("POST /api/auth/register", () => {
     );
   });
 
-  it("rejects failed Turnstile verification", async () => {
+  it("rejects failed Turnstile verification with a generic message (no upstream detail)", async () => {
     vi.stubEnv("TURNSTILE_SECRET_KEY", "secret");
     vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "site-key");
-    mockVerifyTurnstile.mockResolvedValue({ success: false, error: "Bot detected" });
+    mockVerifyTurnstile.mockResolvedValue({
+      success: false,
+      error: "Turnstile verification request failed (HTTP 400)",
+    });
 
     const res = await POST(createRequest(validBody));
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toContain("Bot detected");
+    expect(body.error).toBe("CAPTCHA verification failed");
   });
 
   it("returns 503 when the client reports Turnstile is temporarily unavailable", async () => {

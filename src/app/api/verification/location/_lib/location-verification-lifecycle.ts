@@ -68,6 +68,12 @@ type PersistArgs = {
   currentAccountVerificationStatus: string | null;
   profileUpdateErrorMessage: string;
   preserveFinalizedSession?: boolean;
+  /**
+   * When false, the account profile's location fields are left untouched
+   * (e.g. a block-severity GPS mismatch must not overwrite the declared
+   * address before admin review). Defaults to true.
+   */
+  persistProfileLocation?: boolean;
 };
 
 async function finalizeVerificationSessionIfReady(
@@ -252,6 +258,7 @@ export async function persistLocationVerificationLifecycle({
   currentAccountVerificationStatus,
   profileUpdateErrorMessage,
   preserveFinalizedSession = false,
+  persistProfileLocation = true,
 }: PersistArgs): Promise<NextResponse | null> {
   const submittedAt = new Date().toISOString();
   const sessionPatch = preserveFinalizedSession
@@ -275,10 +282,11 @@ export async function persistLocationVerificationLifecycle({
 
   await finalizeVerificationSessionIfReady(adminClient, userId, logger);
 
-  const profilePatch: Record<string, unknown> = {
-    location_province: locationProvince,
-    location_city: locationCity,
-  };
+  const profilePatch: Record<string, unknown> = {};
+  if (persistProfileLocation) {
+    profilePatch.location_province = locationProvince;
+    profilePatch.location_city = locationCity;
+  }
 
   const { data: allSteps, error: allStepsErr } = await adminClient
     .from("verification_steps")

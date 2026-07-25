@@ -38,7 +38,7 @@ interface ListingRow {
   logo_url: string | null;
   boost_until: string | null;
   featured: boolean;
-  owner_id: string;
+  seller: SellerRow | null;
   focal_x: number | null;
   focal_y: number | null;
   media_width: number | null;
@@ -48,15 +48,13 @@ interface ListingRow {
   viewer_has_liked?: boolean;
 }
 
-interface OwnerRow {
-  user_id: string;
+interface SellerRow {
   display_name: string;
   account_verification_status: string;
 }
 
 interface ListingsResponse {
   listings?: ListingRow[];
-  sellers?: OwnerRow[];
   total?: number;
   page?: number;
   limit?: number;
@@ -89,9 +87,9 @@ function getStaggerDelayClass(index: number) {
   return STAGGER_DELAY_CLASSES[Math.min(index, STAGGER_DELAY_CLASSES.length - 1)];
 }
 
-function getListingCardProps(listing: ListingRow, sellers: Map<string, OwnerRow>) {
+function getListingCardProps(listing: ListingRow) {
   const videoUrl = listing.videos?.[0];
-  const seller = sellers.get(listing.owner_id);
+  const seller = listing.seller;
 
   return {
     id: listing.id,
@@ -124,7 +122,6 @@ function getListingCardProps(listing: ListingRow, sellers: Map<string, OwnerRow>
 export function MzansiMarketGrid() {
   const { filters, page, setPage, setFilter, resetFilters } = useMarketplaceStore();
   const [listings, setListings] = useState<ListingRow[]>([]);
-  const [sellers, setSellers] = useState<Map<string, OwnerRow>>(new Map());
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<GridFetchError | null>(null);
@@ -198,7 +195,6 @@ export function MzansiMarketGrid() {
 
           setFetchError(nextError);
           setListings([]);
-          setSellers(new Map());
           setTotalCount(0);
           setLoading(false);
           return;
@@ -206,7 +202,6 @@ export function MzansiMarketGrid() {
 
         setFetchError(null);
         setListings(payload.listings ?? []);
-        setSellers(new Map((payload.sellers ?? []).map((seller) => [seller.user_id, seller])));
         setTotalCount(payload.total ?? 0);
         setLoading(false);
       } catch (error) {
@@ -219,7 +214,6 @@ export function MzansiMarketGrid() {
           body: "We could not fetch listings right now. Please try again.",
         });
         setListings([]);
-        setSellers(new Map());
         setTotalCount(0);
         setLoading(false);
       }
@@ -398,7 +392,7 @@ export function MzansiMarketGrid() {
       {viewMode === "grid" ? (
         <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-5 xl:gap-6">
           {listings.map((listing, index) => {
-            const cardProps = getListingCardProps(listing, sellers);
+            const cardProps = getListingCardProps(listing);
 
             return (
               <div
@@ -413,7 +407,7 @@ export function MzansiMarketGrid() {
       ) : (
         <div className="flex flex-col gap-3">
           {listings.map((listing, index) => {
-            const cardProps = getListingCardProps(listing, sellers);
+            const cardProps = getListingCardProps(listing);
 
             return (
               <div

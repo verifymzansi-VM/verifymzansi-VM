@@ -127,7 +127,9 @@ export async function register() {
   }
 
   try {
-    validateEnv();
+    // STRICT_ENV_STARTUP_BLOCK=1 opts into fail-closed startup: launch
+    // validation failures become fatal in production instead of degrading.
+    validateEnv({ strict: process.env.STRICT_ENV_STARTUP_BLOCK === "1" });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
 

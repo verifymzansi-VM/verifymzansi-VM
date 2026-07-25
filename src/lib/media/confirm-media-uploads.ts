@@ -16,7 +16,7 @@ type MediaUploadsQueryBuilder = {
         column: string,
         values: unknown[]
       ) => PromiseLike<{
-        data?: Array<{ url: string | null }> | null;
+        data?: Array<{ url: string | null; validated_at?: string | null }> | null;
         error?: { message?: string } | null;
       }>;
     };
@@ -69,7 +69,7 @@ export async function confirmMediaUploads({
   try {
     const mediaUploads = supabase.from("media_uploads") as MediaUploadsQueryBuilder;
     const { data: savedUploads, error: lookupError } = await mediaUploads
-      .select("url")
+      .select("url, validated_at")
       .eq("user_id", userId)
       .in("url", uniqueUrls);
 
@@ -84,11 +84,19 @@ export async function confirmMediaUploads({
       throw new MediaUploadConfirmationError("Unable to verify media uploads");
     }
 
-    const savedUrlSet = new Set((savedUploads ?? []).map((upload) => upload.url).filter(Boolean));
+    // Only uploads that passed server-side validation (validated_at set) may
+    // be attached to content. Direct-R2 uploads that skipped the
+    // /api/media/upload-complete validation step are rejected here.
+    const savedUrlSet = new Set(
+      (savedUploads ?? [])
+        .filter((upload) => upload.validated_at != null)
+        .map((upload) => upload.url)
+        .filter(Boolean)
+    );
     const missingUrls = uniqueUrls.filter((url) => !savedUrlSet.has(url));
 
     if (missingUrls.length > 0) {
-      log.warn("Rejected unowned or missing media uploads", {
+      log.warn("Rejected unowned, missing, or unvalidated media uploads", {
         userId,
         contentType,
         contentId,

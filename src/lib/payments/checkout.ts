@@ -47,6 +47,11 @@ export interface PaymentCheckoutResult {
   checkoutUrl: string;
 }
 
+/** Message of the error thrown when the payments unique index catches a
+ * racing duplicate in-flight checkout (SQLSTATE 23505). Callers map this to
+ * a 409 "payment already in progress" response. */
+export const CHECKOUT_IN_PROGRESS_ERROR_MESSAGE = "A checkout for this area is already in progress";
+
 function getOzowFailureCode(error: unknown): string | undefined {
   if (
     error instanceof OzowConfigurationError ||
@@ -105,7 +110,7 @@ export async function createHostedCheckout(
     // catches the TOCTOU race where two concurrent checkouts both pass the
     // application-level "no pending payment" check.
     if (insertError?.code === "23505") {
-      throw new Error("A checkout for this area is already in progress");
+      throw new Error(CHECKOUT_IN_PROGRESS_ERROR_MESSAGE);
     }
     log.error("Failed to create pending payment", { error: insertError?.message });
     throw new Error("Failed to create payment");

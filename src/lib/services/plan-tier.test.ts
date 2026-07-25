@@ -13,6 +13,8 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 import { getActivePlanTierForArea } from "./plan-tier";
 
+const FUTURE_ISO = new Date(Date.now() + 30 * 86_400_000).toISOString();
+
 describe("getActivePlanTierForArea", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -26,6 +28,7 @@ describe("getActivePlanTierForArea", () => {
   function mockQueryChain(data: unknown[] | null, error: unknown = null) {
     const chain = {
       eq: vi.fn().mockReturnThis(),
+      gt: vi.fn().mockReturnThis(),
       in: vi.fn().mockReturnThis(),
       or: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
@@ -49,26 +52,28 @@ describe("getActivePlanTierForArea", () => {
 
   it("returns the tier from the first valid entitlement", async () => {
     mockQueryChain([
-      { tier: "pro", expires_at: null },
-      { tier: "basic", expires_at: null },
+      { tier: "pro", expires_at: FUTURE_ISO },
+      { tier: "basic", expires_at: FUTURE_ISO },
     ]);
     const tier = await getActivePlanTierForArea("user-3", "MZANSI_MARKET");
     expect(tier).toBe("pro");
   });
 
-  it("queries active and pending_verification subscription statuses", async () => {
-    const chain = mockQueryChain([{ tier: "growth", expires_at: null }]);
+  it("restricts the query to active entitlements with a future expiry, matching the posting gate", async () => {
+    const chain = mockQueryChain([{ tier: "growth", expires_at: FUTURE_ISO }]);
 
     await getActivePlanTierForArea("user-pending", "MZANSI_MARKET");
 
-    expect(chain.in).toHaveBeenCalledWith("status", ["active", "pending_verification"]);
+    expect(chain.eq).toHaveBeenCalledWith("status", "active");
+    expect(chain.gt).toHaveBeenCalledWith("expires_at", expect.any(String));
+    expect(chain.in).not.toHaveBeenCalledWith("status", ["active", "pending_verification"]);
   });
 
   it("skips expired entitlements", async () => {
     const pastDate = new Date(Date.now() - 86_400_000).toISOString();
     mockQueryChain([
       { tier: "pro", expires_at: pastDate },
-      { tier: "basic", expires_at: null },
+      { tier: "basic", expires_at: FUTURE_ISO },
     ]);
     const tier = await getActivePlanTierForArea("user-4", "MZANSI_MARKET");
     expect(tier).toBe("basic");
@@ -83,10 +88,19 @@ describe("getActivePlanTierForArea", () => {
 
   it("skips entitlements with null tier", async () => {
     mockQueryChain([
-      { tier: null, expires_at: null },
-      { tier: "basic", expires_at: null },
+      { tier: null, expires_at: FUTURE_ISO },
+      { tier: "basic", expires_at: FUTURE_ISO },
     ]);
     const tier = await getActivePlanTierForArea("user-6", "MZANSI_MARKET");
+    expect(tier).toBe("basic");
+  });
+
+  it("skips entitlements without an expiry, matching the posting gate", async () => {
+    mockQueryChain([
+      { tier: "pro", expires_at: null },
+      { tier: "basic", expires_at: FUTURE_ISO },
+    ]);
+    const tier = await getActivePlanTierForArea("user-7", "MZANSI_MARKET");
     expect(tier).toBe("basic");
   });
 });

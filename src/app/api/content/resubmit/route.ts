@@ -164,8 +164,14 @@ export async function POST(request: Request) {
       const rateLimitBlock = checkResubmitRateLimit(user.id, itemId);
       if (rateLimitBlock) return rateLimitBlock;
 
+      // Status transitions are guard-trigger restricted for non-service-role
+      // actors (draft → pending_moderation and live → hidden only), so the
+      // rejected → pending_moderation resubmit must run through the
+      // service-role admin client. Ownership, current-status CAS, and the
+      // edited-after-rejection check above still gate the write.
+      const admin = createAdminClient();
       const updateQuery = applyOwnerFilter(
-        supabase
+        admin
           .from(config.table)
           .update({ status: "pending_moderation", status_reason: null })
           .eq("id", itemId)
@@ -298,8 +304,6 @@ export async function POST(request: Request) {
       const hrefByArea: Record<keyof typeof contentAreaTableMap, string> = {
         MZANSI_MARKET: "/dashboard/listings",
         MZANSI_BUSINESS: "/dashboard/businesses",
-        BUSINESS_ADS: "/dashboard/businesses",
-        MALL_SHOPS: "/dashboard/storefronts",
         PROMOTIONS_EVENTS: "/dashboard/tourism-events",
       };
       void createNotification({

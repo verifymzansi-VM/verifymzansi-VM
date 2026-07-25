@@ -14,8 +14,9 @@ function createMockAdminClient(options?: {
   planRows?: Array<Record<string, unknown>>;
   accountStatus?: "active" | "restricted";
   addonUpdateRows?: Array<Record<string, unknown>>;
+  invoiceInsertError?: { message: string; code?: string } | null;
 }) {
-  const invoiceInsert = vi.fn().mockResolvedValue({ error: null });
+  const invoiceInsert = vi.fn().mockResolvedValue({ error: options?.invoiceInsertError ?? null });
   const entitlementsUpsert = vi.fn().mockResolvedValue({ error: null });
   const entitlementsUpdate = vi.fn().mockReturnValue({
     eq: vi.fn().mockReturnValue({
@@ -207,6 +208,64 @@ describe("fulfillPayment invoice creation", () => {
 
     expect(mock.spies.entitlementsUpsert).toHaveBeenCalledOnce();
     expect(mock.spies.invoiceInsert).not.toHaveBeenCalled();
+  });
+
+  it("treats a 23505 unique conflict on invoice insert as already-created", async () => {
+    const mock = createMockAdminClient({
+      existingInvoice: false,
+      invoiceInsertError: {
+        message: "duplicate key value violates unique constraint",
+        code: "23505",
+      },
+    });
+
+    await fulfillPayment(mock.client as never, {
+      id: "pay-23505",
+      user_id: "user-1",
+      area: "MZANSI_MARKET",
+      amount_cents: 25000,
+      status: "processing",
+      provider: "ozow",
+      provider_payment_id: "ozow-23505",
+      provider_reference: "pay-23505",
+      provider_data: {
+        type: "subscription",
+        plan_id: "plan-1",
+        plan_tier: "growth",
+        area: "MZANSI_MARKET",
+      },
+      created_at: "2026-03-26T10:00:00.000Z",
+    });
+
+    expect(mock.spies.entitlementsUpsert).toHaveBeenCalledOnce();
+    expect(mock.spies.invoiceInsert).toHaveBeenCalledOnce();
+  });
+
+  it("throws when invoice creation fails for a non-conflict reason", async () => {
+    const mock = createMockAdminClient({
+      existingInvoice: false,
+      invoiceInsertError: { message: "relation invoices does not exist", code: "42P01" },
+    });
+
+    await expect(
+      fulfillPayment(mock.client as never, {
+        id: "pay-invoice-error",
+        user_id: "user-1",
+        area: "MZANSI_MARKET",
+        amount_cents: 25000,
+        status: "processing",
+        provider: "ozow",
+        provider_payment_id: "ozow-invoice-error",
+        provider_reference: "pay-invoice-error",
+        provider_data: {
+          type: "subscription",
+          plan_id: "plan-1",
+          plan_tier: "growth",
+          area: "MZANSI_MARKET",
+        },
+        created_at: "2026-03-26T10:00:00.000Z",
+      })
+    ).rejects.toThrow("Invoice creation failed");
   });
 
   it("cancels previous active entitlement for plan-change payments", async () => {

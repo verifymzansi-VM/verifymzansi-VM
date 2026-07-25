@@ -208,40 +208,96 @@ export async function sendVerificationResubmissionEmail(
   return sendEmail({ to: email, subject, html, text });
 }
 
+export type PaymentReceiptDetails = {
+  /** "subscription" (default) for 30-day plans; "addon" for one-off purchases. */
+  kind?: "subscription" | "addon";
+  /** ISO timestamp of subscription expiry — plans end, they do not auto-renew. */
+  expiresAt?: string | null;
+  /** Human-readable add-on name (e.g. "Listing Boost") for add-on receipts. */
+  addonName?: string;
+  /** Add-on active duration in days. */
+  durationDays?: number;
+};
+
+function formatReceiptDate(isoDate: string): string | null {
+  const ms = Date.parse(isoDate);
+  if (!Number.isFinite(ms)) return null;
+  return new Date(ms).toLocaleDateString("en-ZA", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    timeZone: "Africa/Johannesburg",
+  });
+}
+
 export async function sendPaymentReceiptEmail(
   email: string,
   accountName: string,
   amount: number,
   planName: string,
-  invoiceUrl?: string
+  invoiceUrl?: string,
+  details?: PaymentReceiptDetails
 ): Promise<SendEmailResult> {
-  const subject = `Payment Receipt - ${planName}`;
+  const isAddon = details?.kind === "addon";
+  const itemName = isAddon ? (details?.addonName ?? planName) : planName;
+  const subject = isAddon ? `Payment Receipt - ${itemName}` : `Payment Receipt - ${planName}`;
   const safeInvoiceUrl = isSafeHttpUrl(invoiceUrl) ? invoiceUrl : undefined;
   const invoiceButton = isSafeHttpUrl(invoiceUrl)
     ? { label: "Download invoice", href: invoiceUrl, tone: "info" as const }
     : undefined;
+
+  let bodyHtml: string;
+  let textBody: string;
+
+  if (isAddon) {
+    const durationDays =
+      typeof details?.durationDays === "number" && details.durationDays > 0
+        ? details.durationDays
+        : null;
+    bodyHtml = `
+      ${paragraph(`Hi ${accountName},`)}
+      ${paragraph(`Thank you for your payment. Your ${itemName} is now active.`)}
+      ${detailList([
+        ["Add-on", itemName],
+        ["Amount", `R ${amount.toFixed(2)}`],
+        ["Status", "Active"],
+        ...(durationDays !== null
+          ? ([["Duration", `${durationDays} days`]] as [string, string][])
+          : []),
+      ])}
+      ${paragraph("This add-on is a one-time purchase and does not renew.")}
+    `;
+    textBody = `Hi ${accountName},\n\nThank you for your payment. Your ${itemName} is now active.\n\nAdd-on: ${itemName}\nAmount: R ${amount.toFixed(2)}\nStatus: Active${durationDays !== null ? `\nDuration: ${durationDays} days` : ""}${safeInvoiceUrl ? `\nInvoice: ${safeInvoiceUrl}` : ""}\n\nThis add-on is a one-time purchase and does not renew.\n\nThis receipt was sent because a payment was processed for your VerifyMzansi account.`;
+  } else {
+    const expiryDate = details?.expiresAt ? formatReceiptDate(details.expiresAt) : null;
+    const activeUntilLine = expiryDate
+      ? `Your subscription is active until ${expiryDate}.`
+      : "Your subscription is active for 30 days from the payment date.";
+    bodyHtml = `
+      ${paragraph(`Hi ${accountName},`)}
+      ${paragraph(`Thank you for your payment. ${activeUntilLine}`)}
+      ${detailList([
+        ["Plan", planName],
+        ["Amount", `R ${amount.toFixed(2)}`],
+        ["Status", "Active"],
+        ...(expiryDate ? ([["Active until", expiryDate]] as [string, string][]) : []),
+      ])}
+      ${paragraph("Plans do not auto-renew. You can renew from your billing page when your plan ends.")}
+    `;
+    textBody = `Hi ${accountName},\n\nThank you for your payment. ${activeUntilLine}\n\nPlan: ${planName}\nAmount: R ${amount.toFixed(2)}\nStatus: Active${expiryDate ? `\nActive until: ${expiryDate}` : ""}${safeInvoiceUrl ? `\nInvoice: ${safeInvoiceUrl}` : ""}\n\nPlans do not auto-renew. You can renew from your billing page when your plan ends.\n\nThis receipt was sent because a payment was processed for your VerifyMzansi account.`;
+  }
+
   const html = brandedEmail({
     tone: "success",
     eyebrow: "Payment receipt",
     title: "Payment received",
     intro: "This receipt confirms a payment was processed for your VerifyMzansi account.",
-    bodyHtml: `
-      ${paragraph(`Hi ${accountName},`)}
-      ${paragraph("Thank you for your payment. Your subscription is now active.")}
-      ${detailList([
-        ["Plan", planName],
-        ["Amount", `R ${amount.toFixed(2)}`],
-        ["Status", "Active"],
-      ])}
-      ${paragraph("Your subscription will renew automatically in 30 days.")}
-    `,
+    bodyHtml,
     cta: invoiceButton,
     reason: "A payment was processed for your VerifyMzansi account.",
   });
 
-  const text = `Hi ${accountName},\n\nThank you for your payment.\n\nPlan: ${planName}\nAmount: R ${amount.toFixed(2)}\nStatus: Active${safeInvoiceUrl ? `\nInvoice: ${safeInvoiceUrl}` : ""}\n\nYour subscription will renew automatically in 30 days.\n\nThis receipt was sent because a payment was processed for your VerifyMzansi account.`;
-
-  return sendEmail({ to: email, subject, html, text });
+  return sendEmail({ to: email, subject, html, text: textBody });
 }
 
 export async function sendPaymentFailedEmail(
@@ -338,6 +394,38 @@ export async function sendDsarCompletedEmail(
   });
 
   const text = `Hi,\n\nYour VerifyMzansi data request has been marked as completed.\n\nReference: ${reference}${summary ? `\nSummary: ${summary}` : ""}\n\nIf you still need assistance or believe something is missing, please contact support.\n\nMore information: ${appUrl}/dsar`;
+
+  return sendEmail({ to: email, subject, html, text });
+}
+
+export async function sendDsarRejectedEmail(
+  email: string,
+  reference: string,
+  notes?: string
+): Promise<SendEmailResult> {
+  const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
+  const notesHtml = notes
+    ? `<div class="details"><strong>Reason:</strong><br>${escapeHtml(notes)}</div>`
+    : "";
+  const subject = `VerifyMzansi data request update (${reference})`;
+  const html = brandedEmail({
+    tone: "danger",
+    eyebrow: "Data request",
+    title: "Data request could not be processed",
+    intro:
+      "This email lets you know that your VerifyMzansi data request was reviewed and could not be processed.",
+    bodyHtml: `
+      ${paragraph("Hi,")}
+      ${paragraph("Your VerifyMzansi data request was reviewed by our team and unfortunately could not be processed.")}
+      ${detailList([["Reference", reference]])}
+      ${notesHtml}
+      ${paragraph("If you believe this decision is incorrect, or you can provide additional information to support your request, please reply to this email or contact support.")}
+    `,
+    cta: { label: "Data request information", href: `${appUrl}/dsar`, tone: "danger" },
+    reason: "A data request connected to this email address was reviewed by VerifyMzansi.",
+  });
+
+  const text = `Hi,\n\nYour VerifyMzansi data request was reviewed and could not be processed.\n\nReference: ${reference}${notes ? `\nReason: ${notes}` : ""}\n\nIf you believe this decision is incorrect, please contact support.\n\nMore information: ${appUrl}/dsar`;
 
   return sendEmail({ to: email, subject, html, text });
 }

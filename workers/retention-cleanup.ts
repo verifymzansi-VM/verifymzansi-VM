@@ -10,7 +10,7 @@
  *   - R2_PRIVATE: R2 bucket binding for private files
  *   - R2_PUBLIC: R2 bucket binding for public media files
  *   - SUPABASE_URL: Supabase REST API URL
- *   - SUPABASE_SERVICE_KEY: Supabase service role key
+ *   - SUPABASE_SERVICE_ROLE_KEY: Supabase service role key
  */
 
 // ---------------------------------------------------------------------------
@@ -135,6 +135,21 @@ function chunkArray<T>(values: T[], size: number): T[][] {
 
 function isPrivateBucket(bucket: string): boolean {
   return bucket === "private" || bucket === "verifymzansi-private";
+}
+
+/**
+ * Constant-time shared-secret comparison. workerd has no node:crypto
+ * `timingSafeEqual`, so use a length-normalized XOR loop instead.
+ */
+function timingSafeEqual(a: string, b: string): boolean {
+  const maxLength = Math.max(a.length, b.length);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < maxLength; i += 1) {
+    const aCode = i < a.length ? a.charCodeAt(i) : 0;
+    const bCode = i < b.length ? b.charCodeAt(i) : 0;
+    diff |= aCode ^ bCode;
+  }
+  return diff === 0;
 }
 
 function isPublicBucket(bucket: string): boolean {
@@ -262,11 +277,18 @@ async function resolveTrackedPublicMediaKeys(
   return [...keys];
 }
 
+/**
+ * Resolve which queued private-bucket KYC keys are under an active legal
+ * hold. Returns null when either lookup fails — the caller MUST treat null
+ * as "legal-hold state unknown" and skip ALL private-bucket deletions for
+ * the run (fail closed; a transient Supabase error must never disable the
+ * legal-hold exemption and delete held KYC documents).
+ */
 async function getHeldKycKeys(
   records: CleanupRecord[],
   env: Env,
   headers: Record<string, string>
-): Promise<Set<string>> {
+): Promise<Set<string> | null> {
   const candidateKeys = records
     .filter((record) => isPrivateBucket(record.bucket))
     .map((r) => r.r2_key);
@@ -284,7 +306,7 @@ async function getHeldKycKeys(
       "Failed to resolve queued KYC artifacts for legal-hold check:",
       await artifactsResponse.text()
     );
-    return new Set<string>();
+    return null;
   }
 
   const artifacts = (await artifactsResponse.json()) as KycArtifactOwnership[];
@@ -303,7 +325,7 @@ async function getHeldKycKeys(
       "Failed to resolve legal holds for queued KYC artifacts:",
       await holdsResponse.text()
     );
-    return new Set<string>();
+    return null;
   }
 
   const heldUsers = new Set(
@@ -341,11 +363,17 @@ async function listAuthUsersPage(
   return payload.users ?? [];
 }
 
+/**
+ * Resolve which candidate auth user IDs still have an account_profiles row.
+ * Returns null on query failure — the caller MUST abort the orphan sweep for
+ * the run rather than treat every candidate as an orphan (an empty set here
+ * would delete real users whose profiles exist).
+ */
 async function resolveExistingProfileUserIds(
   env: Env,
   headers: Record<string, string>,
   userIds: string[]
-): Promise<Set<string>> {
+): Promise<Set<string> | null> {
   if (userIds.length === 0) {
     return new Set<string>();
   }
@@ -357,7 +385,7 @@ async function resolveExistingProfileUserIds(
 
   if (!response.ok) {
     console.error("Failed to resolve account profiles for orphan sweep:", await response.text());
-    return new Set<string>();
+    return null;
   }
 
   const rows = (await response.json()) as Array<{ user_id: string }>;
@@ -420,6 +448,13 @@ async function cleanupOrphanedAuthUsers(
     headers,
     candidates.map((user) => user.id)
   );
+
+  // Fail closed: without the profile list we cannot tell orphans from real
+  // users — abort the sweep for this run instead of deleting anyone.
+  if (existingProfileUserIds === null) {
+    console.error("Aborting orphan auth user sweep: account profile lookup failed.");
+    return 0;
+  }
 
   const orphans = candidates
     .filter((user) => !existingProfileUserIds.has(user.id))
@@ -626,30 +661,8 @@ async function deleteExpiredContentBatch(
     return 0;
   }
 
-  const mediaUrls = [...new Set(rows.flatMap((row) => collectExpiredContentMediaUrls(row)))];
-  const trackedMediaKeys = await resolveTrackedPublicMediaKeys(env, headers, mediaUrls);
-  const fallbackMediaKeys = rows.flatMap((row) => collectExpiredContentMediaKeys(row));
-  const mediaKeys = [...new Set([...trackedMediaKeys, ...fallbackMediaKeys])];
-  if (mediaKeys.length > 0) {
-    try {
-      await env.R2_PUBLIC.delete(mediaKeys);
-    } catch (err) {
-      console.error(`Failed to delete expired ${table} public media from R2:`, err);
-      return 0;
-    }
-
-    const mediaUploadDeleteResponse = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/media_uploads?r2_key=in.${encodeURIComponent(buildInFilter(mediaKeys))}`,
-      { method: "DELETE", headers }
-    );
-    if (!mediaUploadDeleteResponse.ok) {
-      console.warn(
-        `Failed to delete expired ${table} media tracking rows:`,
-        await mediaUploadDeleteResponse.text()
-      );
-    }
-  }
-
+  // Delete DB rows FIRST, then media. If media deletion ran first and a DB
+  // delete then failed, the remaining rows would point at dead media.
   const ids = rows.map((row) => row.id);
   const editCleanupResponse = await fetch(
     `${env.SUPABASE_URL}/rest/v1/content_edit_requests?target_type=eq.${config.targetType}&target_id=in.${encodeURIComponent(buildInFilter(ids))}`,
@@ -671,6 +684,32 @@ async function deleteExpiredContentBatch(
   if (!deleteResponse.ok) {
     console.error(`Failed to delete expired ${table}:`, await deleteResponse.text());
     return 0;
+  }
+
+  const mediaUrls = [...new Set(rows.flatMap((row) => collectExpiredContentMediaUrls(row)))];
+  const trackedMediaKeys = await resolveTrackedPublicMediaKeys(env, headers, mediaUrls);
+  const fallbackMediaKeys = rows.flatMap((row) => collectExpiredContentMediaKeys(row));
+  const mediaKeys = [...new Set([...trackedMediaKeys, ...fallbackMediaKeys])];
+  if (mediaKeys.length > 0) {
+    try {
+      await env.R2_PUBLIC.delete(mediaKeys);
+    } catch (err) {
+      // Keep the media_uploads tracking rows so the orphaned objects stay
+      // discoverable; the rows themselves are already deleted above.
+      console.error(`Failed to delete expired ${table} public media from R2:`, err);
+      return rows.length;
+    }
+
+    const mediaUploadDeleteResponse = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/media_uploads?r2_key=in.${encodeURIComponent(buildInFilter(mediaKeys))}`,
+      { method: "DELETE", headers }
+    );
+    if (!mediaUploadDeleteResponse.ok) {
+      console.warn(
+        `Failed to delete expired ${table} media tracking rows:`,
+        await mediaUploadDeleteResponse.text()
+      );
+    }
   }
 
   return rows.length;
@@ -729,6 +768,16 @@ const worker: ExportedHandler<Env> = {
     let heldSkipCount = 0;
 
     const heldKeys = await getHeldKycKeys(records, env, headers);
+    // Fail closed: when the legal-hold lookup errors, heldKeys is null and
+    // EVERY private-bucket deletion is skipped for this run — deleting held
+    // KYC documents would be a POPIA/legal-hold violation.
+    const legalHoldLookupFailed = heldKeys === null;
+    if (legalHoldLookupFailed) {
+      console.error(
+        "Legal-hold lookup failed — skipping ALL private-bucket deletions for this run (fail closed)."
+      );
+    }
+    const heldKeySet = heldKeys ?? new Set<string>();
 
     // Batch R2 deletes (the API accepts an array of keys) and track results.
     // Records can target different buckets, so each batch is grouped per bucket.
@@ -755,8 +804,18 @@ const worker: ExportedHandler<Env> = {
           continue;
         }
 
-        const actionableRecords = bucketRecords.filter((record) => !heldKeys.has(record.r2_key));
-        const skippedRecords = bucketRecords.filter((record) => heldKeys.has(record.r2_key));
+        if (legalHoldLookupFailed && isPrivateBucket(bucket)) {
+          // Leave the records unprocessed so the next run retries them once
+          // the legal-hold lookup is healthy again.
+          heldSkipCount += bucketRecords.length;
+          console.error(
+            `Skipping ${bucketRecords.length} private-bucket cleanup record(s): legal-hold lookup failed.`
+          );
+          continue;
+        }
+
+        const actionableRecords = bucketRecords.filter((record) => !heldKeySet.has(record.r2_key));
+        const skippedRecords = bucketRecords.filter((record) => heldKeySet.has(record.r2_key));
 
         if (skippedRecords.length > 0) {
           heldSkipCount += skippedRecords.length;
@@ -826,9 +885,15 @@ const worker: ExportedHandler<Env> = {
           const publicKeys = orphans.filter((o) => isPublicBucket(o.bucket)).map((o) => o.r2_key);
           const privateKeys = orphans.filter((o) => isPrivateBucket(o.bucket)).map((o) => o.r2_key);
 
+          // Track which bucket deletes succeeded — tracking rows may only be
+          // removed for objects that were actually deleted, otherwise the R2
+          // object leaks permanently with no retry path.
+          let publicDeleted = false;
+          let privateDeleted = false;
           if (publicKeys.length > 0) {
             try {
               await env.R2_PUBLIC.delete(publicKeys);
+              publicDeleted = true;
             } catch (e) {
               console.error("Failed to delete orphaned public R2 keys:", e);
             }
@@ -836,20 +901,31 @@ const worker: ExportedHandler<Env> = {
           if (privateKeys.length > 0) {
             try {
               await env.R2_PRIVATE.delete(privateKeys);
+              privateDeleted = true;
             } catch (e) {
               console.error("Failed to delete orphaned private R2 keys:", e);
             }
           }
 
-          const orphanIds = orphans.map((o) => o.id);
-          const deleteRes = await fetch(
-            `${supabaseUrl}/rest/v1/media_uploads?id=in.(${orphanIds.join(",")})`,
-            { method: "DELETE", headers }
-          );
-          if (deleteRes.ok) {
-            orphanDeleteCount = orphans.length;
-          } else {
-            console.error("Failed to delete orphan tracking records:", await deleteRes.text());
+          const deletedOrphanIds = orphans
+            .filter((o) =>
+              isPublicBucket(o.bucket)
+                ? publicDeleted
+                : isPrivateBucket(o.bucket)
+                  ? privateDeleted
+                  : false
+            )
+            .map((o) => o.id);
+          if (deletedOrphanIds.length > 0) {
+            const deleteRes = await fetch(
+              `${supabaseUrl}/rest/v1/media_uploads?id=in.(${deletedOrphanIds.join(",")})`,
+              { method: "DELETE", headers }
+            );
+            if (deleteRes.ok) {
+              orphanDeleteCount = deletedOrphanIds.length;
+            } else {
+              console.error("Failed to delete orphan tracking records:", await deleteRes.text());
+            }
           }
         }
       } else {
@@ -889,9 +965,12 @@ const worker: ExportedHandler<Env> = {
       actor_role: "system",
       action: "retention_r2_cleanup",
       target_type: "r2_cleanup_queue",
-      target_id: "batch",
+      // audit_logs.target_id is UUID NOT NULL — use the nil-UUID sentinel
+      // (same as src/lib/services/audit.ts) and keep batch detail in metadata.
+      target_id: "00000000-0000-0000-0000-000000000000",
       area: null,
       metadata: {
+        target: "batch",
         total: records.length,
         success: successCount,
         failed: failCount,
@@ -927,9 +1006,10 @@ const worker: ExportedHandler<Env> = {
    */
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (request.method === "POST") {
-      // Authenticate manual trigger via shared secret
+      // Authenticate manual trigger via shared secret (constant-time comparison)
       const authHeader = request.headers.get("Authorization");
-      if (!env.WORKER_API_KEY || authHeader !== `Bearer ${env.WORKER_API_KEY}`) {
+      const expectedAuthHeader = env.WORKER_API_KEY ? `Bearer ${env.WORKER_API_KEY}` : "";
+      if (!expectedAuthHeader || !timingSafeEqual(authHeader ?? "", expectedAuthHeader)) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), {
           status: 401,
           headers: { "Content-Type": "application/json" },

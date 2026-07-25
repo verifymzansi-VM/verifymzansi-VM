@@ -1,5 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { sendSms, sendOtpSms, sendNotificationSms } from "./sms";
+import { maskPhone } from "@/lib/utils/mask";
+
+const { mockLog } = vi.hoisted(() => ({
+  mockLog: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  },
+}));
+
+vi.mock("@/lib/utils/logger", () => ({
+  createLogger: () => mockLog,
+}));
 
 /** Helper to build a mock fetch Response returning a JSON body */
 function mockFetchResponse(body: unknown, status = 200) {
@@ -321,6 +335,83 @@ describe("sms service", () => {
       const callArgs = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
       const body = new URLSearchParams(callArgs[1].body as string);
       expect(body.get("message")).toBe("VerifyMzansi: Your listing was approved");
+    });
+  });
+
+  describe("log hygiene", () => {
+    it("logs masked recipient numbers and no raw provider response on success", async () => {
+      globalThis.fetch = mockFetchResponse({
+        SMSMessageData: {
+          Recipients: [
+            {
+              number: "+27821234567",
+              statusCode: 101,
+              messageId: "sms-123",
+              status: "Success",
+              cost: "R0.50",
+            },
+          ],
+        },
+      });
+
+      await sendSms({ to: "+27821234567", message: "Hello" });
+
+      const infoCall = mockLog.info.mock.calls.find(
+        (call) => call[0] === "Africa's Talking response received"
+      );
+      expect(infoCall).toBeDefined();
+      const meta = infoCall![1] as Record<string, unknown>;
+      expect(meta).not.toHaveProperty("rawResponse");
+      const recipients = meta.recipients as Array<Record<string, unknown>>;
+      expect(recipients[0]).toEqual({
+        number: maskPhone("+27821234567"),
+        status: "Success",
+        statusCode: 101,
+        messageId: "sms-123",
+        cost: "R0.50",
+      });
+      expect(JSON.stringify(meta)).not.toContain("+27821234567");
+    });
+
+    it("does not log the raw error body on provider HTTP errors", async () => {
+      globalThis.fetch = mockFetchResponse("Unauthorized +27821234567", 401);
+
+      await sendSms({ to: "+27821234567", message: "test" });
+
+      const errorCall = mockLog.error.mock.calls.find(
+        (call) => call[0] === "Africa's Talking HTTP error"
+      );
+      expect(errorCall).toBeDefined();
+      const meta = errorCall![1] as Record<string, unknown>;
+      expect(meta).not.toHaveProperty("body");
+      expect(meta.status).toBe(401);
+      expect(JSON.stringify(meta)).not.toContain("+27821234567");
+    });
+
+    it("masks recipient numbers when logging non-success recipient statuses", async () => {
+      globalThis.fetch = mockFetchResponse({
+        SMSMessageData: {
+          Recipients: [
+            {
+              number: "+27821234567",
+              statusCode: 403,
+              status: "Insufficient balance",
+              messageId: "sms-fail-1",
+              cost: "R0.00",
+            },
+          ],
+        },
+      });
+
+      await sendSms({ to: "+27821234567", message: "Fail test" });
+
+      const warnCall = mockLog.warn.mock.calls.find(
+        (call) => call[0] === "AT recipients with non-success status"
+      );
+      expect(warnCall).toBeDefined();
+      const meta = warnCall![1] as { failed: Array<Record<string, unknown>> };
+      expect(meta.failed[0].number).toBe(maskPhone("+27821234567"));
+      expect(JSON.stringify(meta)).not.toContain("+27821234567");
     });
   });
 });

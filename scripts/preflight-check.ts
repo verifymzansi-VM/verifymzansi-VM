@@ -478,6 +478,47 @@ async function checkResend(mode: LaunchValidationMode): Promise<void> {
   }
 }
 
+// Error codes siteverify may return for the dummy token we send: these mean
+// the SECRET was accepted and only the (intentionally fake) response token
+// was rejected — the only acceptable failure modes for this check.
+const TURNSTILE_ACCEPTABLE_ERROR_CODES = new Set([
+  "invalid-input-response",
+  "missing-input-response",
+]);
+
+export function classifyTurnstileSiteverifyPayload(
+  payload: unknown
+): Pick<CheckResult, "status" | "detail"> {
+  const parsed = (payload ?? {}) as { success?: unknown; "error-codes"?: unknown };
+  const errorCodes = Array.isArray(parsed["error-codes"])
+    ? parsed["error-codes"].filter((code): code is string => typeof code === "string")
+    : [];
+
+  if (errorCodes.includes("invalid-input-secret")) {
+    return {
+      status: "fail",
+      detail: "TURNSTILE_SECRET_KEY was rejected by siteverify (invalid-input-secret)",
+    };
+  }
+
+  if (parsed.success === true) {
+    return { status: "pass", detail: "Turnstile secret accepted by siteverify" };
+  }
+
+  const unexpected = errorCodes.filter((code) => !TURNSTILE_ACCEPTABLE_ERROR_CODES.has(code));
+  if (unexpected.length > 0) {
+    return {
+      status: "warn",
+      detail: `Turnstile siteverify returned unexpected error codes: ${unexpected.join(", ")}`,
+    };
+  }
+
+  return {
+    status: "pass",
+    detail: "Turnstile secret accepted by siteverify (dummy token rejected as expected)",
+  };
+}
+
 async function checkTurnstile(mode: LaunchValidationMode): Promise<void> {
   if (mode !== "production") {
     addResult(
@@ -499,11 +540,22 @@ async function checkTurnstile(mode: LaunchValidationMode): Promise<void> {
       signal: AbortSignal.timeout(10_000),
     });
 
-    if (response.ok) {
-      addResult("Turnstile", "pass", "Turnstile endpoint reachable");
-    } else {
+    if (!response.ok) {
       addResult("Turnstile", "warn", `Turnstile returned HTTP ${response.status}`);
+      return;
     }
+
+    // siteverify answers HTTP 200 even for a bad secret — inspect the payload.
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      addResult("Turnstile", "warn", "Turnstile siteverify returned a non-JSON payload");
+      return;
+    }
+
+    const result = classifyTurnstileSiteverifyPayload(payload);
+    addResult("Turnstile", result.status, result.detail);
   } catch (error) {
     addResult("Turnstile", "fail", (error as Error).message);
   }

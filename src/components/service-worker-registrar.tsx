@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("ServiceWorker");
-const SERVICE_WORKER_VERSION = "20260515-auth-network-only";
+const SERVICE_WORKER_VERSION = "20260607-no-next-static-cache";
 const DEV_SW_CLEANUP_SESSION_KEY = "vm-dev-sw-cleanup-v1";
 
 type CleanupDeps = {

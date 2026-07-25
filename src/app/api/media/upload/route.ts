@@ -10,7 +10,11 @@ import { detectMimeFromMagicBytes } from "@/lib/utils/file-validation";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
-import { stripExifFromJpeg, stripMetadataFromPng } from "@/lib/utils/exif-strip";
+import {
+  stripExifFromJpeg,
+  stripMetadataFromPng,
+  stripMetadataFromWebp,
+} from "@/lib/utils/exif-strip";
 import { scanForMalware } from "@/lib/utils/malware-scan";
 import { parseAndValidateFormData } from "@/lib/utils/api";
 import { z } from "zod";
@@ -205,8 +209,10 @@ export async function POST(request: NextRequest) {
       const headerSlice = file.slice(0, 12);
       const headerBytes = new Uint8Array(await headerSlice.arrayBuffer());
       const detectedMime = detectMimeFromMagicBytes(headerBytes);
-      // Require magic bytes to match for both images and videos
-      if (isImage && (!detectedMime || !IMAGE_TYPES.has(detectedMime))) {
+      // Require magic bytes to exactly match the declared type for images too:
+      // cross-type mismatches (e.g. GIF bytes declared as PNG) would otherwise
+      // be stored under the wrong ContentType.
+      if (isImage && detectedMime !== file.type) {
         errors.push(`"${file.name}": file content does not match declared type`);
         continue;
       }
@@ -236,7 +242,7 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      const key = generateStorageKey(`media/${area}`, user.id, file.name);
+      const key = generateStorageKey(`media/${area}`, user.id, file.name, file.type);
 
       try {
         // Strip metadata from images to prevent GPS/PII leaks (POPIA)
@@ -246,6 +252,9 @@ export async function POST(request: NextRequest) {
           uploadFile = new Blob([toArrayBuffer(stripped)], { type: file.type });
         } else if (file.type === "image/png") {
           const stripped = stripMetadataFromPng(fileBuffer);
+          uploadFile = new Blob([toArrayBuffer(stripped)], { type: file.type });
+        } else if (file.type === "image/webp") {
+          const stripped = stripMetadataFromWebp(fileBuffer);
           uploadFile = new Blob([toArrayBuffer(stripped)], { type: file.type });
         } else if (file.type === "image/heic" || file.type === "image/heif") {
           // HEIC/HEIF EXIF stripping is not supported server-side.
@@ -263,15 +272,19 @@ export async function POST(request: NextRequest) {
         });
         uploadedUrls.push(result.url);
 
-        // Track upload for orphan detection — blocking to ensure R2/DB consistency
+        // Track upload for orphan detection — blocking to ensure R2/DB consistency.
+        // This route validates inline (magic bytes, malware scan, EXIF strip)
+        // before storage, so the row is marked validated at insert time.
+        // file_size records the post-strip size so the row matches the stored object.
         const { error: trackErr } = await supabase.from("media_uploads").insert({
           user_id: user.id,
           r2_key: key,
           bucket,
           url: result.url,
           content_type: file.type,
-          file_size: file.size,
+          file_size: uploadFile.size,
           area,
+          validated_at: new Date().toISOString(),
         });
 
         if (trackErr) {

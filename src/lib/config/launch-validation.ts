@@ -189,8 +189,29 @@ function isPlaceholderValue(value?: string): boolean {
   );
 }
 
+function isR2BucketBindingValue(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.put === "function" &&
+    typeof candidate.get === "function" &&
+    typeof candidate.delete === "function"
+  );
+}
+
 function hasNativeR2BindingConfig(env: EnvSource): boolean {
-  return hasValue(env.R2_PRIVATE_BUCKET) || hasValue(env.R2_PUBLIC_BUCKET);
+  // R2_PRIVATE_BUCKET / R2_PUBLIC_BUCKET are bucket NAMES — always populated
+  // via Zod defaults and wrangler vars — so they cannot prove a native
+  // binding exists. Native Worker R2 bindings are also deliberately NOT
+  // bound for this app (wrangler.toml: Cloudflare rejects version creation
+  // with error 10136); storage writes go through the S3-compatible API.
+  // Only a real R2Bucket object (put/get/delete) exposed on the env counts
+  // as a binding signal — the same test storage.ts uses for write access.
+  const candidate = env as Record<string, unknown>;
+  return (
+    isR2BucketBindingValue(candidate.PRIVATE_BUCKET) ||
+    isR2BucketBindingValue(candidate.PUBLIC_BUCKET)
+  );
 }
 
 function hasS3R2CredentialConfig(env: EnvSource): boolean {

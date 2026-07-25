@@ -74,6 +74,8 @@
     "supabase:db:push": "tsx scripts/run-supabase-cli.ts db push",
     "supabase:advisor:security": "tsx scripts/check-supabase-security-advisor.ts",
     "supabase:advisor:security:strict": "tsx scripts/check-supabase-security-advisor.ts --strict",
+    "supabase:advisor:performance": "tsx scripts/check-supabase-performance-advisor.ts",
+    "supabase:advisor:performance:strict": "tsx scripts/check-supabase-performance-advisor.ts --strict",
     "db:verify-schema": "tsx scripts/check-supabase-schema.ts",
     "db:check-invariants": "tsx scripts/check-db-invariants.ts",
     "preflight": "tsx scripts/check-node-version.ts && tsx scripts/preflight-check.ts",

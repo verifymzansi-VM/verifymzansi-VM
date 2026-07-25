@@ -8,10 +8,20 @@ import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/li
 import { sendAccountEnforcementEmail } from "@/lib/services/email";
 import { hasCapability } from "@/lib/auth/roles";
 import { createDecisionRecord } from "@/lib/services/decision-ledger";
+import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import type { StaffRole } from "@/types/enums";
 import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
 
 const log = createLogger("AdminFlagging");
+
+/** Target types that can actually be hidden, mapped to their table. */
+const HIDE_TARGET_TABLES: Record<string, string> = {
+  listing: "listings",
+  promotion: "promotions",
+  storefront: "businesses",
+  business_profile: "businesses",
+  business: "businesses",
+};
 
 /**
  * POST /api/admin/flagging/action
@@ -39,9 +49,27 @@ export async function POST(request: Request) {
 
     const { reportId, action, reason, durationDays } = parsedBody.data;
 
+    // Direct warn/hide enforcement is reserved for roles holding
+    // enforcement:execute (governance_controller, admin). Moderators stay at
+    // the base staff level here so they can still dismiss reports and
+    // recommend ban/suspend through the decision-ledger gate below.
+    const dbVerifiedActor = {
+      app_metadata: { role: guard.actorRole },
+      is_anonymous: false,
+    };
+    if (
+      (action === "warn" || action === "hide") &&
+      !hasCapability(dbVerifiedActor, "enforcement:execute")
+    ) {
+      return NextResponse.json(
+        { error: "Forbidden — enforcement capability required" },
+        { status: 403 }
+      );
+    }
+
     const admin = createAdminClient();
 
-    // Get the report
+    // Get the report (existence + target validation before claiming)
     const { data: report, error: reportError } = await admin
       .from("reports")
       .select("*")
@@ -50,6 +78,37 @@ export async function POST(request: Request) {
 
     if (reportError || !report) {
       return NextResponse.json({ error: "Report not found" }, { status: 404 });
+    }
+
+    // Hide requires a mappable target table — otherwise it would record the
+    // action and resolve the report without hiding anything.
+    if (action === "hide" && !HIDE_TARGET_TABLES[report.target_type]) {
+      return NextResponse.json(
+        { error: "Report target type cannot be hidden", code: "unmappable_hide_target" },
+        { status: 422 }
+      );
+    }
+
+    // Claim the report before any enforcement so two admins cannot
+    // double-apply actions to the same report. The claim is the
+    // serialization point; losers get 409 and must not retry enforcement.
+    const { data: claimedRows, error: claimError } = await admin
+      .from("reports")
+      .update({ status: "in_progress", assigned_to: guard.user.id })
+      .eq("id", reportId)
+      .eq("status", "open")
+      .select("id");
+
+    if (claimError) {
+      log.error("Failed to claim report", { error: claimError.message, reportId });
+      return internalApiError();
+    }
+
+    if (!claimedRows || claimedRows.length === 0) {
+      return NextResponse.json(
+        { error: "Report already claimed or actioned", code: "report_already_claimed" },
+        { status: 409 }
+      );
     }
 
     // Resolve owner columns via compat layer
@@ -123,10 +182,6 @@ export async function POST(request: Request) {
     // Sensitive actions (ban/suspend) require governance approval unless
     // the actor already has the decision:approve capability.
     const SENSITIVE_ACTIONS = ["ban", "suspend"];
-    const dbVerifiedActor = {
-      app_metadata: { role: guard.actorRole },
-      is_anonymous: false,
-    };
     if (SENSITIVE_ACTIONS.includes(action) && !hasCapability(dbVerifiedActor, "decision:approve")) {
       let record: { id: string } | null = null;
       try {
@@ -205,11 +260,39 @@ export async function POST(request: Request) {
       );
     }
 
+    // Record the moderation action BEFORE applying enforcement. The report
+    // claim above already serializes retries, and recording first means an
+    // enforcement failure never leaves an unaccounted-for status change.
+    const { error: modInsertErr } = await admin.from("moderation_actions").insert({
+      report_id: reportId,
+      actor_id: guard.user.id,
+      action,
+      target_owner_id: ownerId,
+      area: report.area || null,
+      reason: reason || null,
+      duration_days: action === "suspend" ? durationDays : null,
+    });
+    if (modInsertErr) {
+      log.error("Failed to record moderation action", {
+        error: modInsertErr.message,
+        reportId,
+        action,
+      });
+      return NextResponse.json({ error: "Failed to record enforcement action" }, { status: 500 });
+    }
+
     // Execute action
     if (action === "warn" && ownerId) {
       const { error: rpcErr } = await admin.rpc("increment_strikes", { owner_id_input: ownerId });
       if (rpcErr) {
-        // If RPC doesn't exist, do manual update
+        // Distinct log: the RPC owns the strike increment + status transition.
+        // The direct update below is a degraded fallback that only marks the
+        // account warned — a silently failing RPC would mask a regression.
+        log.error("increment_strikes RPC failed; falling back to direct status update", {
+          error: rpcErr.message,
+          ownerId,
+          reportId,
+        });
         const { error: warnErr } = await admin
           .from(ACCOUNT_PROFILE_WRITE_TABLE)
           .update({ account_status: "warned" })
@@ -223,14 +306,7 @@ export async function POST(request: Request) {
         }
       }
     } else if (action === "hide") {
-      const tableMap: Record<string, string> = {
-        listing: "listings",
-        promotion: "promotions",
-        storefront: "businesses",
-        business_profile: "businesses",
-        business: "businesses",
-      };
-      const table = tableMap[report.target_type];
+      const table = HIDE_TARGET_TABLES[report.target_type];
       if (table) {
         const { error: hideErr } = await admin
           .from(table)
@@ -373,36 +449,34 @@ export async function POST(request: Request) {
               ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString()
               : null;
 
-          void (async () => {
-            const result = await sendAccountEnforcementEmail({
-              email: ownerEmail,
-              accountName,
-              action,
-              reason,
-              suspendedUntil,
-            });
+          // scheduleBackgroundTask keeps the send alive after the response on
+          // Cloudflare Workers (a bare unawaited chain can be dropped there).
+          scheduleBackgroundTask(
+            (async () => {
+              const result = await sendAccountEnforcementEmail({
+                email: ownerEmail,
+                accountName,
+                action,
+                reason,
+                suspendedUntil,
+              });
 
-            await logAuditEvent({
-              actorId: guard.user.id,
-              actorRole: guard.actorRole,
-              action: result.success ? "communication_email_sent" : "communication_email_failed",
-              targetType: "account_profile",
-              targetId: ownerId,
-              metadata: {
-                template: `account_${action}`,
-                channel: "email",
-                error: result.error,
-                owner_user_id: ownerId,
-              },
-            });
-          })().catch((emailErr) => {
-            log.warn("Failed to send enforcement email", {
-              action,
-              ownerId,
-              reportId,
-              error: emailErr instanceof Error ? emailErr.message : "Unknown",
-            });
-          });
+              await logAuditEvent({
+                actorId: guard.user.id,
+                actorRole: guard.actorRole,
+                action: result.success ? "communication_email_sent" : "communication_email_failed",
+                targetType: "account_profile",
+                targetId: ownerId,
+                metadata: {
+                  template: `account_${action}`,
+                  channel: "email",
+                  error: result.error,
+                  owner_user_id: ownerId,
+                },
+              });
+            })(),
+            `enforcement email (${action})`
+          );
         }
       } catch (emailLookupErr) {
         log.warn("Failed to resolve enforcement email recipient", {
@@ -412,25 +486,6 @@ export async function POST(request: Request) {
           error: emailLookupErr instanceof Error ? emailLookupErr.message : "Unknown",
         });
       }
-    }
-
-    // Record moderation action
-    const { error: modInsertErr } = await admin.from("moderation_actions").insert({
-      report_id: reportId,
-      actor_id: guard.user.id,
-      action,
-      target_owner_id: ownerId,
-      area: report.area || null,
-      reason: reason || null,
-      duration_days: action === "suspend" ? durationDays : null,
-    });
-    if (modInsertErr) {
-      log.error("Failed to record moderation action", {
-        error: modInsertErr.message,
-        reportId,
-        action,
-      });
-      return NextResponse.json({ error: "Failed to record enforcement action" }, { status: 500 });
     }
 
     // Resolve the report

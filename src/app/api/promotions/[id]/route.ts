@@ -63,6 +63,9 @@ type PromotionOwnerRow = {
   location_city?: string | null;
   location_town?: string | null;
   location_address?: string | null;
+  contact_methods?: string[] | null;
+  start_date?: string | null;
+  end_date?: string | null;
   photos?: string[] | null;
   videos?: string[] | null;
   video_thumbnail?: string | null;
@@ -159,11 +162,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }
     }
 
+    // Strip owner identifiers from public response (POPIA data minimization)
+    const { owner_id: _oid, seller_id: _sid, ...publicPromotion } = normalizedPromotion;
+
     return createViewerCookieJsonResponse(
       {
-        promotion: {
-          ...normalizedPromotion,
-        },
+        promotion: publicPromotion,
       },
       existingViewerId,
       nextViewerId
@@ -294,6 +298,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       existing.location_city !== data.city ||
       (existing.location_town ?? null) !== (data.location_town || null) ||
       (existing.location_address ?? null) !== (data.location_address || null) ||
+      (existing.start_date ?? null) !== (data.start_date || null) ||
+      (existing.end_date ?? null) !== (data.end_date || null) ||
+      (existing.logo_url ?? null) !== (data.logo_url || null) ||
+      JSON.stringify(existing.contact_methods ?? null) !==
+        JSON.stringify(data.contact_methods ?? null) ||
       JSON.stringify(existing.photos) !== JSON.stringify(data.images) ||
       JSON.stringify(existing.videos) !== JSON.stringify(data.videos) ||
       (existing.video_thumbnail ?? null) !== (data.video_thumbnail || null) ||

@@ -145,14 +145,20 @@ export function applySecurityHeaders(
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   response.headers.set("Permissions-Policy", permissionsPolicy);
+  // The Reporting API requires absolute endpoint URLs — a relative path is
+  // silently ignored and CSP reports are never delivered.
+  const appUrl = (env("NEXT_PUBLIC_APP_URL") ?? "").replace(/\/+$/, "");
+  const cspReportUrl = `${appUrl}/api/csp-report`;
   response.headers.set(
     "Report-To",
     JSON.stringify({
       group: "csp-endpoint",
       max_age: 86400,
-      endpoints: [{ url: "/api/csp-report" }],
+      endpoints: [{ url: cspReportUrl }],
     })
   );
+  // Reporting-Endpoints is the modern successor to Report-To; send both.
+  response.headers.set("Reporting-Endpoints", `csp-endpoint="${cspReportUrl}"`);
 
   if (process.env.NODE_ENV === "production") {
     response.headers.set(

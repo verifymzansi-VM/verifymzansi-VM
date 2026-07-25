@@ -306,21 +306,9 @@
   .area-mzansi-market {
     @apply bg-brand-green-100 text-brand-green-800 border-brand-green-300;
   }
-  .area-mall-shops {
-    @apply bg-brand-gold-100 text-brand-gold-800 border-brand-gold-300;
-  }
-  .area-business-ads {
-    @apply bg-brand-blue-100 text-brand-blue-800 border-brand-blue-300;
-  }
 
   .dark .area-mzansi-market {
     @apply bg-brand-green-950 text-brand-green-300 border-brand-green-800;
-  }
-  .dark .area-mall-shops {
-    @apply bg-brand-gold-950 text-brand-gold-300 border-brand-gold-800;
-  }
-  .dark .area-business-ads {
-    @apply bg-brand-blue-950 text-brand-blue-300 border-brand-blue-800;
   }
 }
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { MarketplaceArea } from "@/types/enums";
 import { getCanonicalActivePlanDefinition, validateCanonicalPaidPlan } from "./plan-catalog";
 
 describe("billing plan catalog validation", () => {
@@ -35,7 +36,8 @@ describe("billing plan catalog validation", () => {
     expect(
       validateCanonicalPaidPlan({
         id: "legacy",
-        area: "MALL_SHOPS",
+        // Legacy area removed from the platform — must be rejected at runtime.
+        area: "MALL_SHOPS" as unknown as MarketplaceArea,
         tier: "starter",
         price_cents: 20000,
         active: true,

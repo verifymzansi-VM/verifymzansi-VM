@@ -743,6 +743,50 @@ export function createPlaywrightStubSupabaseClient(
         };
       }
 
+      if (
+        fn === "insert_listing_with_limit" ||
+        fn === "insert_promotion_with_limit" ||
+        fn === "insert_business_with_limit"
+      ) {
+        const table =
+          fn === "insert_listing_with_limit"
+            ? "listings"
+            : fn === "insert_promotion_with_limit"
+              ? "promotions"
+              : "businesses";
+        const userId = String(params?.p_user_id ?? "");
+        const area = String(params?.p_area ?? "");
+        const maxAllowed = Number(params?.p_max_allowed ?? -1);
+        const payload = { ...((params?.p_data ?? {}) as Record<string, unknown>) };
+        const rows = listPlaywrightTableRows(table);
+
+        if (maxAllowed >= 0) {
+          const currentCount = rows.filter(
+            (row) =>
+              (row.owner_id === userId || row.seller_id === userId) &&
+              (table === "promotions" || row.area === area) &&
+              row.status !== "rejected"
+          ).length;
+
+          if (currentCount >= maxAllowed) {
+            return { data: { limit_reached: true }, error: null };
+          }
+        }
+
+        const now = new Date().toISOString();
+        const newRow: Record<string, unknown> = {
+          view_count: 0,
+          ...(table === "promotions" ? { click_count: 0 } : {}),
+          ...payload,
+          owner_id: userId,
+          created_at: payload.created_at ?? now,
+          updated_at: payload.updated_at ?? now,
+        };
+        rows.push(newRow);
+        writePlaywrightTableRows(table, rows);
+        return { data: newRow, error: null };
+      }
+
       return { data: null, error: null };
     },
   } as unknown as SupabaseClient;

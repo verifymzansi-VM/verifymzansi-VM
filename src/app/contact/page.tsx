@@ -129,7 +129,7 @@ export default function ContactPage() {
       <main id="main-content" className="flex-1">
         <div className="container-page py-4 space-y-4">
           <PageHeader
-            title="Contact"
+            title="Contact Us"
             description="Send support, verification, payment, privacy, or security requests to the right team."
             breadcrumbs={[{ label: "Contact" }]}
           />

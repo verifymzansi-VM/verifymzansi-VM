@@ -66,7 +66,7 @@ vi.mock("@/components/ui/separator", () => ({
   Separator: () => <hr />,
 }));
 
-vi.mock("@/app/promotion/[id]/promotion-contact-actions", () => ({
+vi.mock("@/components/listings/promotion-contact-actions", () => ({
   PromotionContactActions: () => <div data-testid="promotion-contact-actions" />,
 }));
 

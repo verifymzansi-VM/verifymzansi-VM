@@ -134,6 +134,7 @@ export interface ValidateEnvOptions {
 }
 
 let _cachedEnv: Env | null = null;
+let _hasLoggedSoftFailFallback = false;
 const _emittedLaunchWarnings = new Set<string>();
 
 /**
@@ -441,6 +442,21 @@ export function env<K extends keyof Env>(key: K): Env[K] {
     if (process.env.VITEST === "true" || process.env.NODE_ENV === "test") {
       return process.env[key] as Env[K];
     }
+    // Production soft-fail mode (STRICT_ENV_STARTUP_BLOCK != 1) keeps the
+    // worker serving with degraded config. Cache a fallback env (defaults
+    // merged with the real parseable values) so per-request callers such as
+    // the security-headers CSP builder don't re-run full validation and
+    // re-throw on every request.
+    if (process.env.NODE_ENV === "production" && process.env.STRICT_ENV_STARTUP_BLOCK !== "1") {
+      _cachedEnv = _createFallbackEnv();
+      if (!_hasLoggedSoftFailFallback) {
+        _hasLoggedSoftFailFallback = true;
+        console.error(
+          "[ENV] Validation failed in soft-fail mode; caching fallback env and serving with degraded config"
+        );
+      }
+      return _cachedEnv[key];
+    }
     throw e;
   }
 }
@@ -451,12 +467,14 @@ export function env<K extends keyof Env>(key: K): Env[K] {
  */
 export function _resetEnvCacheForTesting(): void {
   _cachedEnv = null;
+  _hasLoggedSoftFailFallback = false;
   _emittedLaunchWarnings.clear();
 }
 
 /**
  * Light check for required vars only — doesn't throw, just warns.
- * Useful in middleware where you can't block startup.
+ * Wired into the launch health snapshot (src/lib/health/launch-health.ts)
+ * so deep health checks surface missing critical vars.
  */
 export function checkCriticalEnvVars(): string[] {
   const missing: string[] = [];

@@ -194,6 +194,10 @@ describe("CreateListingPage", () => {
     }) as unknown as typeof fetch;
   });
 
+  function acceptListingTerms() {
+    fireEvent.click(screen.getByLabelText(/I accept the VerifyMzansi posting terms/i));
+  }
+
   it("renders the shared guide and step labels", () => {
     render(<CreateListingPage />);
 
@@ -301,6 +305,7 @@ describe("CreateListingPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Listing logo (optional)" }));
     fireEvent.click(screen.getByRole("button", { name: "Photos (max 5)" }));
+    acceptListingTerms();
 
     expect(listingCardSpy).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -371,6 +376,7 @@ describe("CreateListingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Photos (max 5)" }));
+    acceptListingTerms();
     fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
 
     await waitFor(() => {
@@ -423,6 +429,7 @@ describe("CreateListingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Photos (max 5)" }));
+    acceptListingTerms();
     fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
 
     await waitFor(() => {
@@ -488,6 +495,7 @@ describe("CreateListingPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Photos (max 5)" }));
     fireEvent.click(screen.getByRole("button", { name: "Video (max 1)" }));
+    acceptListingTerms();
     fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
 
     await waitFor(() => {
@@ -577,6 +585,7 @@ describe("CreateListingPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Photos (max 5)" }));
     fireEvent.click(screen.getByRole("button", { name: "Video (max 1)" }));
+    acceptListingTerms();
     fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
 
     await waitFor(() => {
@@ -632,6 +641,7 @@ describe("CreateListingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Photos (max 5)" }));
+    acceptListingTerms();
     fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
 
     await waitFor(() => {
@@ -681,6 +691,7 @@ describe("CreateListingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Photos (max 5)" }));
+    acceptListingTerms();
     fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
 
     await waitFor(() => {

@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Clock, FileText, User } from "lucide-react";
+import { DecisionActionButtons } from "./decision-action-buttons";
 
 export const metadata = {
   title: "Decision Detail — Governance",
@@ -139,6 +140,24 @@ export default async function DecisionDetailPage({ params }: Props) {
           )}
         </CardContent>
       </Card>
+
+      {/* Actions — only while the decision is still open */}
+      {(decision.status === "pending_approval" || decision.status === "escalated") && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Decide
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <DecisionActionButtons
+              decisionId={decision.id}
+              actionCategory={decision.action_category}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Timeline */}
       <Card>

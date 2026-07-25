@@ -294,6 +294,10 @@ function getR2Client(): S3Client {
       accessKeyId,
       secretAccessKey,
     },
+    // R2 rejects the SDK ≥3.729 default flexible checksums: presigned URLs get
+    // a hoisted empty-body CRC32 that breaks PUTs of non-empty files.
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
   });
   _r2ConfigKey = configKey;
   return _r2Client;
@@ -345,9 +349,43 @@ export async function uploadToR2(params: UploadParams): Promise<UploadResult> {
 }
 
 /**
+ * Resolve the file extension for a storage key. Extensionless filenames
+ * (e.g. Android content-picker names like "1000061870") would otherwise make
+ * the whole filename the "extension", so fall back to the validated declared
+ * MIME type — or "jpg" when no type is available.
+ */
+function resolveStorageExtension(filename: string, declaredMimeType?: string): string {
+  const rawExt = filename.includes(".") ? (filename.split(".").pop() ?? "") : "";
+  const sanitized = rawExt.replace(/[^a-zA-Z0-9]/g, "");
+  const plausible = sanitized.length > 0 && sanitized.length <= 5 && !/^\d+$/.test(sanitized);
+  if (plausible) {
+    return sanitized;
+  }
+  return (declaredMimeType ? MIME_TYPE_EXTENSIONS[declaredMimeType] : undefined) ?? "jpg";
+}
+
+/** Canonical file extensions for the MIME types accepted by media uploads. */
+const MIME_TYPE_EXTENSIONS: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+  "image/avif": "avif",
+  "image/heic": "heic",
+  "image/heif": "heif",
+  "video/mp4": "mp4",
+  "video/webm": "webm",
+};
+
+/**
  * Generate a unique key for uploaded files.
  */
-export function generateStorageKey(prefix: string, ownerId: string, filename: string): string {
+export function generateStorageKey(
+  prefix: string,
+  ownerId: string,
+  filename: string,
+  declaredMimeType?: string
+): string {
   // Sanitize inputs to prevent path traversal in R2 keys.
   // Only allow UUID-safe characters (alphanumeric, hyphens, underscores, slashes for prefix).
   const safePrefix = prefix.replace(/[^a-zA-Z0-9/_-]/g, "");
@@ -358,7 +396,7 @@ export function generateStorageKey(prefix: string, ownerId: string, filename: st
   if (safePrefix.includes("..")) {
     throw new Error("Invalid prefix for storage key");
   }
-  const ext = (filename.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "");
+  const ext = resolveStorageExtension(filename, declaredMimeType);
   const timestamp = Date.now();
   const random = globalThis.crypto.randomUUID().slice(0, 8);
   return `${safePrefix}/${safeOwnerId}/${timestamp}-${random}.${ext}`;
@@ -444,7 +482,12 @@ export async function generatePresignedUploadUrl(
     ...(maxContentLength != null ? { ContentLength: maxContentLength } : {}),
   });
 
-  return await getSignedUrl(client, command, { expiresIn: safeExpiry });
+  return await getSignedUrl(client, command, {
+    expiresIn: safeExpiry,
+    // Cryptographically pin the declared Content-Type so clients cannot PUT a
+    // different type (e.g. text/html) than the one the server authorised.
+    signableHeaders: new Set(["content-type"]),
+  });
 }
 
 /**
@@ -538,21 +581,16 @@ export async function downloadKycDocumentWithMetrics(
   assertSafeStorageKey(key);
   const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
 
-  const client = getR2Client();
-  const command = new GetObjectCommand({
-    Bucket: privateBucket,
-    Key: key,
-  });
-
+  // Route through getR2ObjectBytes so the native R2 binding is preferred when
+  // available — binding-only deployments have no S3 credentials configured.
   const downloadStartedAt = Date.now();
-  const response = await client.send(command);
+  const object = await getR2ObjectBytes(privateBucket, key);
 
-  if (!response.Body) {
+  if (!object) {
     throw new Error("Failed to download KYC document");
   }
 
-  // Use the SDK's portable helper to convert stream to byte array
-  const encryptedBuffer = Buffer.from(await response.Body.transformToByteArray());
+  const encryptedBuffer = Buffer.from(object.bytes);
   const downloadMs = Date.now() - downloadStartedAt;
 
   // Decrypt and return

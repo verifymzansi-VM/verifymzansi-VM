@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
+import { resetOwnerColumnCacheForTesting } from "@/lib/account/compat";
 
 const { mockCreateAdminClient, mockCreateClient, mockCheckLocalRateLimit, mockGetClientIp } =
   vi.hoisted(() => ({
@@ -60,6 +61,7 @@ function buildPromotionsChain(result: PromotionsBuilderResult) {
 describe("GET /api/promotions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetOwnerColumnCacheForTesting();
     mockCheckLocalRateLimit.mockReturnValue({ limited: false });
     mockGetClientIp.mockReturnValue("127.0.0.1");
   });
@@ -207,5 +209,102 @@ describe("GET /api/promotions", () => {
       "festival_concert"
     );
     expect(payload.promotions?.[0]?.event_details?.event_type).toBe("festival_concert");
+  });
+
+  it("skips the not-yet-ended base filter when event_state=ended", async () => {
+    const promotionsChain = buildPromotionsChain({ data: [], count: 0, error: null });
+
+    mockCreateAdminClient.mockReturnValue({
+      rpc: vi.fn().mockResolvedValue({ data: [], error: null }),
+      from: vi.fn((table: string) => {
+        if (table === "promotions") {
+          return {
+            select: vi.fn(() => promotionsChain),
+          };
+        }
+
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn().mockResolvedValue({ data: [], error: null }),
+            eq: vi.fn(() => ({ in: vi.fn().mockResolvedValue({ data: [], error: null }) })),
+          })),
+        };
+      }),
+    });
+
+    const request = {
+      nextUrl: new URL("https://example.com/api/promotions?event_state=ended"),
+      headers: new Headers(),
+    } as NextRequest;
+
+    const response = await GET(request);
+
+    expect(response.status).toBe(200);
+    expect(promotionsChain.eq).toHaveBeenCalledWith("promotion_type", "event");
+    expect(promotionsChain.lt).toHaveBeenCalledWith("end_date", expect.any(String));
+    // The base "end_date is null or in the future" filter must not be ANDed in
+    // — it would make the ended state return zero rows.
+    expect(promotionsChain.or).not.toHaveBeenCalledWith(
+      expect.stringContaining("end_date.is.null,end_date.gte.")
+    );
+  });
+
+  it("applies the not-yet-ended base filter for upcoming events", async () => {
+    const promotionsChain = buildPromotionsChain({ data: [], count: 0, error: null });
+
+    mockCreateAdminClient.mockReturnValue({
+      rpc: vi.fn().mockResolvedValue({ data: [], error: null }),
+      from: vi.fn((table: string) => {
+        if (table === "promotions") {
+          return {
+            select: vi.fn(() => promotionsChain),
+          };
+        }
+
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn().mockResolvedValue({ data: [], error: null }),
+            eq: vi.fn(() => ({ in: vi.fn().mockResolvedValue({ data: [], error: null }) })),
+          })),
+        };
+      }),
+    });
+
+    const request = {
+      nextUrl: new URL("https://example.com/api/promotions?event_state=upcoming"),
+      headers: new Headers(),
+    } as NextRequest;
+
+    const response = await GET(request);
+
+    expect(response.status).toBe(200);
+    expect(promotionsChain.or).toHaveBeenCalledWith(
+      expect.stringContaining("end_date.is.null,end_date.gte.")
+    );
+    expect(promotionsChain.gt).toHaveBeenCalledWith("start_date", expect.any(String));
+  });
+
+  it("returns 503 when owner-column probing fails", async () => {
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          limit: vi.fn().mockResolvedValue({
+            error: { code: "XX000", message: "schema cache temporarily unavailable" },
+          }),
+        })),
+      })),
+    });
+
+    const request = {
+      nextUrl: new URL("https://example.com/api/promotions"),
+      headers: new Headers(),
+    } as NextRequest;
+
+    const response = await GET(request);
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Marketplace temporarily unavailable",
+    });
   });
 });

@@ -1,17 +1,37 @@
 import { NextResponse } from "next/server";
+import crypto from "crypto";
 
 /**
  * GET /api/health/storage
  *
  * Diagnostic endpoint to check R2 storage access from the Worker runtime.
  * Returns information about which access paths are available.
- * Protected by a bearer token to avoid leaking internal details.
+ * Protected by a dedicated bearer token (HEALTH_DIAGNOSTIC_TOKEN) to avoid
+ * leaking internal details. The endpoint is disabled (404) when the token
+ * is not configured.
  */
 export async function GET(request: Request) {
   // Only allow if correct diagnostic token is present
-  const authHeader = request.headers.get("authorization");
-  const expectedToken = process.env.HMAC_SECRET;
-  if (!expectedToken || authHeader !== `Bearer ${expectedToken}`) {
+  const expectedToken = process.env.HEALTH_DIAGNOSTIC_TOKEN;
+  if (!expectedToken) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const authHeader = request.headers.get("authorization") ?? "";
+  const providedToken = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : "";
+
+  // Timing-safe comparison to prevent token guessing via timing attacks
+  let authorized = false;
+  try {
+    authorized =
+      providedToken.length > 0 &&
+      crypto.timingSafeEqual(Buffer.from(providedToken), Buffer.from(expectedToken));
+  } catch {
+    // timingSafeEqual throws if buffers have different lengths
+    authorized = false;
+  }
+
+  if (!authorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

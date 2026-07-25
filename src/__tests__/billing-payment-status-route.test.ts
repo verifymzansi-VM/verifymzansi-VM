@@ -11,7 +11,7 @@ vi.mock("@/lib/utils/api", () => ({
   parseAndValidateSearchParams: mockParseAndValidateSearchParams,
 }));
 vi.mock("@/lib/validations/shared", () => ({
-  optionalTrimmedStringSchema: { optional: () => ({}) },
+  optionalUuidSchema: { optional: () => ({}) },
 }));
 
 import { GET } from "@/app/api/billing/payment-status/route";

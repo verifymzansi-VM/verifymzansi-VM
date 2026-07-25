@@ -80,10 +80,19 @@ function makeChainableEq(result: { error: unknown; data?: unknown[] }) {
   return eq;
 }
 
-function makeAuditAdminMock(auditChain: ReturnType<typeof makeAuditLogChain>) {
+function makeAuditAdminMock(
+  auditChain: ReturnType<typeof makeAuditLogChain>,
+  contentUpdate?: { table: string; updateEq: ReturnType<typeof makeChainableEq> }
+) {
   return {
     from: vi.fn((table: string) => {
       if (table === "audit_logs") return auditChain;
+      // The status update runs through the service-role admin client (the
+      // content status-transition guard trigger rejects owner-context
+      // rejected → pending_moderation writes).
+      if (contentUpdate && table === contentUpdate.table) {
+        return { update: vi.fn().mockReturnValue({ eq: contentUpdate.updateEq }) };
+      }
       throw new Error(`Unexpected admin table in audit mock: ${table}`);
     }),
   };
@@ -138,7 +147,6 @@ describe("POST /api/content/resubmit", () => {
             },
             error: null,
           }),
-          update: vi.fn().mockReturnValue({ eq: updateEq }),
         };
       }
       throw new Error(`Unexpected table ${table}`);
@@ -150,7 +158,10 @@ describe("POST /api/content/resubmit", () => {
     });
     // No prior rejection in audit log → fail open → allow
     mockCreateAdminClient.mockReturnValue(
-      makeAuditAdminMock(makeAuditLogChain({ data: null, error: null }))
+      makeAuditAdminMock(makeAuditLogChain({ data: null, error: null }), {
+        table: "businesses",
+        updateEq,
+      })
     );
 
     const response = await POST(createRequest({ itemId: ITEM_UUID, area: "MZANSI_BUSINESS" }));
@@ -236,12 +247,14 @@ describe("POST /api/content/resubmit", () => {
           },
           error: null,
         }),
-        update: vi.fn().mockReturnValue({ eq: updateEq }),
       }),
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-3" } } }) },
     });
     mockCreateAdminClient.mockReturnValue(
-      makeAuditAdminMock(makeAuditLogChain({ data: { created_at: rejectedAt }, error: null }))
+      makeAuditAdminMock(makeAuditLogChain({ data: { created_at: rejectedAt }, error: null }), {
+        table: "listings",
+        updateEq,
+      })
     );
 
     const response = await POST(createRequest({ itemId: ITEM_UUID, area: "MZANSI_MARKET" }));
@@ -266,13 +279,15 @@ describe("POST /api/content/resubmit", () => {
           },
           error: null,
         }),
-        update: vi.fn().mockReturnValue({ eq: updateEq }),
       }),
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-4" } } }) },
     });
     // data: null → no prior rejection found → wasEditedAfterRejection returns true
     mockCreateAdminClient.mockReturnValue(
-      makeAuditAdminMock(makeAuditLogChain({ data: null, error: null }))
+      makeAuditAdminMock(makeAuditLogChain({ data: null, error: null }), {
+        table: "listings",
+        updateEq,
+      })
     );
 
     const response = await POST(createRequest({ itemId: ITEM_UUID, area: "MZANSI_MARKET" }));
@@ -295,14 +310,14 @@ describe("POST /api/content/resubmit", () => {
           },
           error: null,
         }),
-        update: vi.fn().mockReturnValue({ eq: updateEq }),
       }),
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-5" } } }) },
     });
     // error returned → wasEditedAfterRejection returns true → allow
     mockCreateAdminClient.mockReturnValue(
       makeAuditAdminMock(
-        makeAuditLogChain({ data: null, error: { message: "connection error", code: "08006" } })
+        makeAuditLogChain({ data: null, error: { message: "connection error", code: "08006" } }),
+        { table: "listings", updateEq }
       )
     );
 
@@ -359,13 +374,15 @@ describe("POST /api/content/resubmit", () => {
           },
           error: null,
         }),
-        update: vi.fn().mockReturnValue({ eq: updateEq }),
       }),
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-7" } } }) },
     });
     // No prior rejection log → wasEditedAfterRejection returns true
     mockCreateAdminClient.mockReturnValue(
-      makeAuditAdminMock(makeAuditLogChain({ data: null, error: null }))
+      makeAuditAdminMock(makeAuditLogChain({ data: null, error: null }), {
+        table: "listings",
+        updateEq,
+      })
     );
 
     const response = await POST(createRequest({ itemId: ITEM_UUID, area: "MZANSI_MARKET" }));

@@ -103,28 +103,38 @@ export async function GET(request: NextRequest) {
       .in("status", REVIEWABLE_STATES);
 
     if (stepCountErr || !activeStepCount || activeStepCount === 0) {
-      // Log for audit purposes but do not block — admin role already verified above.
-      // The step may have been processed since the queue page was SSR'd, or the
-      // verification_sessions linkage table may be out of sync.
-      log.warn("Evidence accessed: no active review step found for user (admin override)", {
+      // Evidence is only served while an active review case exists — the
+      // admin queue always references one, so anything else is refused.
+      log.warn("Evidence access denied: no active review step found for user", {
         actorId: user.id,
         targetUserId: artifact.user_id,
         artifactId,
         stepCountErr: stepCountErr?.message,
         activeStepCount,
       });
+      responseStatus = 403;
+      return NextResponse.json(
+        { error: "No active verification case for this user", code: "no_active_case" },
+        { status: 403 }
+      );
     }
 
     const allowedArtifactIds = await getLinkedEvidenceArtifactIds(adminClient, artifact.user_id);
 
     if (!allowedArtifactIds.includes(artifact.id)) {
-      // Log for audit purposes but do not block — admin role already verified and
-      // the artifact belongs to the target user (confirmed above).
-      log.warn("Evidence accessed: artifact not in linked session list (admin override)", {
+      log.warn("Evidence access denied: artifact not in linked session list", {
         actorId: user.id,
         targetUserId: artifact.user_id,
         artifactId,
       });
+      responseStatus = 403;
+      return NextResponse.json(
+        {
+          error: "Artifact is not linked to the active verification session",
+          code: "artifact_not_linked",
+        },
+        { status: 403 }
+      );
     }
     dbMs = Date.now() - dbStartedAt;
 

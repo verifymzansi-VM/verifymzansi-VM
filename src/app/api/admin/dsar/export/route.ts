@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
-import { verifyAdminActorRoleFromDb } from "@/lib/auth/admin-access";
+import { verifyCapabilityRoleFromDb } from "@/lib/auth/admin-access";
 import { createLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { ACCOUNT_PROFILE_WRITE_TABLE, getOwnerColumn } from "@/lib/account/compat";
@@ -11,7 +11,7 @@ import { uuidSchema } from "@/lib/validations/shared";
 import { z } from "zod";
 
 const log = createLogger("DSARExport");
-const DSAR_AUTH_LOOKUP_MAX_PAGES = 5;
+const DSAR_AUTH_LOOKUP_MAX_PAGES = 50;
 const DSAR_AUTH_LOOKUP_PER_PAGE = 200;
 const dsarExportQuerySchema = z.object({
   requestId: uuidSchema,
@@ -121,7 +121,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const actorRole = await verifyAdminActorRoleFromDb(user);
+    const actorRole = await verifyCapabilityRoleFromDb(user, "dsar:manage");
     if (!actorRole) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

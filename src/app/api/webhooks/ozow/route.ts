@@ -9,6 +9,12 @@ import {
 } from "@/lib/payments/ozow";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import {
+  BOOST_DURATION_DAYS,
+  FEATURED_DURATION_DAYS,
+  URGENT_DURATION_DAYS,
+} from "@/lib/constants/pricing";
+import { getPaymentMetadata } from "@/lib/payments/types";
+import {
   finalizeCompletedPayment,
   getPaymentById,
   getPaymentByProviderReference,
@@ -16,14 +22,22 @@ import {
   markPaymentFailed,
   persistFulfillmentCompletion,
   claimPaymentProcessing,
+  type PaymentRow,
   type PaymentStoreClient,
 } from "@/lib/payments/store";
 import { logAuditEvent } from "@/lib/services/audit";
-import { sendPaymentFailedEmail, sendPaymentReceiptEmail } from "@/lib/services/email";
+import {
+  sendPaymentFailedEmail,
+  sendPaymentReceiptEmail,
+  type PaymentReceiptDetails,
+} from "@/lib/services/email";
 import { getAuthAdminUserSummary } from "@/lib/supabase/auth-admin-user";
 
 const log = createLogger("OzowWebhook");
 const SUPPORTED_OZOW_EVENT_TYPE = "transaction.complete";
+const SUBSCRIPTION_DURATION_DAYS = 30;
+/** Window in which a fresh "processing" claim is treated as in-flight, not stale. */
+const IN_FLIGHT_DUPLICATE_WINDOW_MS = 60_000;
 
 /**
  * Route ownership:
@@ -58,19 +72,67 @@ function getPlanNameFromArea(area?: string | null): string {
   }
 }
 
+const ADDON_LABELS: Record<string, string> = {
+  boost: "Listing Boost",
+  boost_business: "Business Boost",
+  boost_storefront: "Storefront Boost",
+  boost_promotion: "Promotion Boost",
+  featured: "Featured Listing",
+  featured_business: "Featured Business",
+  featured_promotion: "Featured Promotion",
+  urgent: "Urgent Listing",
+  urgent_business: "Urgent Business",
+  urgent_promotion: "Urgent Promotion",
+};
+
+function getAddonDurationDays(type: string, meta: Record<string, unknown>): number {
+  const specific =
+    typeof meta.boost_days === "number" && meta.boost_days > 0
+      ? meta.boost_days
+      : typeof meta.feature_days === "number" && meta.feature_days > 0
+        ? meta.feature_days
+        : typeof meta.urgent_days === "number" && meta.urgent_days > 0
+          ? meta.urgent_days
+          : null;
+  if (specific !== null) return specific;
+  if (type.startsWith("featured")) return FEATURED_DURATION_DAYS;
+  if (type.startsWith("urgent")) return URGENT_DURATION_DAYS;
+  return BOOST_DURATION_DAYS;
+}
+
+/** Receipt wording differs for 30-day plans (no auto-renew) vs one-off add-ons. */
+function buildReceiptDetails(payment: PaymentRow): PaymentReceiptDetails {
+  const meta = getPaymentMetadata(payment);
+  const type = typeof meta?.type === "string" ? meta.type : null;
+
+  if (!type || type === "subscription") {
+    // Mirrors the entitlement window set during fulfillment (payment + 30 days).
+    return {
+      kind: "subscription",
+      expiresAt: new Date(
+        Date.now() + SUBSCRIPTION_DURATION_DAYS * 24 * 60 * 60 * 1000
+      ).toISOString(),
+    };
+  }
+
+  return {
+    kind: "addon",
+    addonName: ADDON_LABELS[type] ?? "Marketplace Add-on",
+    durationDays: getAddonDurationDays(type, meta ?? {}),
+  };
+}
+
 async function sendPaymentStatusEmail(params: {
   admin: PaymentStoreClient;
-  userId: string;
-  amountCents: number;
-  area?: string | null;
+  payment: PaymentRow;
   status: "success" | "failed";
   logContext: { paymentId: string; providerPaymentId?: string | null };
 }): Promise<void> {
-  const recipient = await getAuthAdminUserSummary(params.admin, params.userId);
+  const recipient = await getAuthAdminUserSummary(params.admin, params.payment.user_id);
   if (recipient.errorMessage || !recipient.email) {
     log.warn("Skipping payment email: recipient lookup failed", {
       ...params.logContext,
-      userId: params.userId,
+      userId: params.payment.user_id,
       error: recipient.errorMessage,
     });
     return;
@@ -78,18 +140,25 @@ async function sendPaymentStatusEmail(params: {
 
   const email = recipient.email;
   const accountName = recipient.accountName;
-  const amount = params.amountCents / 100;
-  const planName = getPlanNameFromArea(params.area);
+  const amount = params.payment.amount_cents / 100;
+  const planName = getPlanNameFromArea(params.payment.area);
 
   const result =
     params.status === "success"
-      ? await sendPaymentReceiptEmail(email, accountName, amount, planName)
+      ? await sendPaymentReceiptEmail(
+          email,
+          accountName,
+          amount,
+          planName,
+          undefined,
+          buildReceiptDetails(params.payment)
+        )
       : await sendPaymentFailedEmail(email, accountName, amount, planName);
 
   if (!result.success) {
     log.warn("Payment email delivery failed", {
       ...params.logContext,
-      userId: params.userId,
+      userId: params.payment.user_id,
       status: params.status,
       error: result.error,
     });
@@ -101,12 +170,12 @@ async function sendPaymentStatusEmail(params: {
       actorRole: "system",
       action: result.success ? "communication_email_sent" : "communication_email_failed",
       targetType: "account_profile",
-      targetId: params.userId,
+      targetId: params.payment.user_id,
       metadata: {
         template: params.status === "success" ? "payment_receipt" : "payment_failed",
         channel: "email",
         error: result.error,
-        owner_user_id: params.userId,
+        owner_user_id: params.payment.user_id,
         payment_id: params.logContext.paymentId,
         provider_payment_id: params.logContext.providerPaymentId,
       },
@@ -158,6 +227,14 @@ function isFailedTransactionStatus(status: string | null): boolean {
 
 function isSuccessfulTransactionStatus(status: string | null): boolean {
   return status?.toLowerCase() === "successful";
+}
+
+/** Milliseconds timestamp of the current processing claim, or null if unknown. */
+function getProcessingStartedAtMs(payment: PaymentRow): number | null {
+  const startedAt = payment.provider_data?.processing_started_at;
+  if (typeof startedAt !== "string") return null;
+  const ms = Date.parse(startedAt);
+  return Number.isFinite(ms) ? ms : null;
 }
 
 /**
@@ -304,13 +381,40 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: true, duplicate: true });
       }
 
-      await markPaymentFailed(supabase, payment, payload.rawPayload);
+      // A terminal "complete" payment must never be downgraded by a late or
+      // contradictory error webhook. The entitlements are already live; the
+      // payment record must stay consistent with them.
+      if (payment.status === "complete") {
+        log.error("Ignoring failure webhook for an already-completed payment", {
+          paymentId: payment.id,
+          providerPaymentId: payload.providerPaymentId,
+        });
+        return NextResponse.json({ success: true, ignored: true });
+      }
+
+      const marked = await markPaymentFailed(supabase, payment, payload.rawPayload);
+      if (!marked) {
+        // Either a DB error, or a concurrent webhook transitioned the payment
+        // (e.g. completed it) between our read and the CAS-guarded update.
+        const currentPayment = await getPaymentById(supabase, payment.id);
+        if (currentPayment?.status === "complete" || currentPayment?.status === "failed") {
+          log.info("Failure webhook superseded by concurrent payment transition", {
+            paymentId: payment.id,
+            currentStatus: currentPayment.status,
+          });
+          return NextResponse.json({ success: true, duplicate: true });
+        }
+
+        log.error("Failed to mark payment as failed", { paymentId: payment.id });
+        return NextResponse.json(
+          { error: "Payment status update failed" },
+          { status: 500, headers: { "Retry-After": "30" } }
+        );
+      }
 
       sendPaymentStatusEmail({
         admin: supabase,
-        userId: payment.user_id,
-        amountCents: payment.amount_cents,
-        area: payment.area,
+        payment,
         status: "failed",
         logContext: {
           paymentId: payment.id,
@@ -326,11 +430,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
-    if (eventType && eventType !== SUPPORTED_OZOW_EVENT_TYPE) {
-      return NextResponse.json({ success: true, ignored: true });
-    }
-
-    if (eventType === SUPPORTED_OZOW_EVENT_TYPE && !isSuccessfulTransactionStatus(status)) {
+    // Only a successful transaction completion may claim and fulfil a payment.
+    // Payloads with a missing/unsupported event type or a missing/non-success
+    // status must never reach fulfillment — they are acknowledged and ignored.
+    if (eventType !== SUPPORTED_OZOW_EVENT_TYPE || !isSuccessfulTransactionStatus(status)) {
       return NextResponse.json({ success: true, ignored: true });
     }
 
@@ -406,9 +509,7 @@ export async function POST(request: NextRequest) {
 
         sendPaymentStatusEmail({
           admin: supabase,
-          userId: currentPayment.user_id,
-          amountCents: currentPayment.amount_cents,
-          area: currentPayment.area,
+          payment: currentPayment,
           status: "success",
           logContext: {
             paymentId: currentPayment.id,
@@ -422,6 +523,21 @@ export async function POST(request: NextRequest) {
         });
 
         return NextResponse.json({ success: true, recovered: true });
+      }
+
+      // In-flight duplicate guard: the claim owner is still mid-fulfillPayment
+      // (fresh processing_started_at, no fulfillment marker yet). Treat this
+      // delivery as a duplicate instead of fulfilling a second time; rows with
+      // a stale or missing timestamp fall through to the recovery fulfillment.
+      const processingStartedAtMs = getProcessingStartedAtMs(currentPayment);
+      if (
+        processingStartedAtMs !== null &&
+        Date.now() - processingStartedAtMs < IN_FLIGHT_DUPLICATE_WINDOW_MS
+      ) {
+        log.info("RECOVERY: Payment is being fulfilled by a concurrent webhook — duplicate", {
+          paymentId: currentPayment.id,
+        });
+        return NextResponse.json({ success: true, duplicate: true });
       }
 
       try {
@@ -480,9 +596,7 @@ export async function POST(request: NextRequest) {
 
       sendPaymentStatusEmail({
         admin: supabase,
-        userId: reloadedPayment.user_id,
-        amountCents: reloadedPayment.amount_cents,
-        area: reloadedPayment.area,
+        payment: reloadedPayment,
         status: "success",
         logContext: {
           paymentId: reloadedPayment.id,
@@ -566,9 +680,7 @@ export async function POST(request: NextRequest) {
 
     sendPaymentStatusEmail({
       admin: supabase,
-      userId: finalPayment.user_id,
-      amountCents: finalPayment.amount_cents,
-      area: finalPayment.area,
+      payment: finalPayment,
       status: "success",
       logContext: {
         paymentId: finalPayment.id,

@@ -25,7 +25,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { PromotionContactActions } from "@/app/promotion/[id]/promotion-contact-actions";
+import { PromotionContactActions } from "@/components/listings/promotion-contact-actions";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { MediaLightbox } from "@/components/ui/media-lightbox";
 import { formatZAR } from "@/lib/utils/format";

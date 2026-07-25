@@ -11,6 +11,11 @@ import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
+import {
+  checkCooldown,
+  PHONE_CHANGE_COOLDOWN_MS,
+  phoneCooldown,
+} from "@/lib/account/identity-policy";
 import { buildVerificationEmailConfirmationRequiredPayload } from "@/lib/constants/verification-email-confirmation";
 
 const log = createLogger("OTP");
@@ -140,7 +145,7 @@ export async function POST(request: NextRequest) {
 
     const { data: existingProfile, error: existingProfileError } = await supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .select("phone")
+      .select("phone, contact_last_phone_change_at")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -160,6 +165,23 @@ export async function POST(request: NextRequest) {
       return otpSendError("This phone number is already verified on your account.", 409, {
         code: "already_verified",
       });
+    }
+
+    // Changing an existing canonical phone is subject to the same 15-day
+    // cooldown the profile-update route enforces — staging pending_phone here
+    // must not bypass it. First-time phone setup is always permitted.
+    if (existingProfile?.phone) {
+      const cooldownUntil = checkCooldown(
+        existingProfile.contact_last_phone_change_at,
+        PHONE_CHANGE_COOLDOWN_MS
+      );
+      if (cooldownUntil) {
+        const policyErr = phoneCooldown(cooldownUntil);
+        return NextResponse.json(
+          { error: policyErr.message, code: policyErr.code, retryAfter: policyErr.retryAfter },
+          { status: 429 }
+        );
+      }
     }
 
     // otp_logs is service-only; use admin client to bypass RLS safely in this server route.
@@ -239,10 +261,13 @@ export async function POST(request: NextRequest) {
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS).toISOString();
 
     // Invalidate any prior pending challenges for this user+phone to prevent
-    // an accumulation of valid OTPs (replay window).
+    // an accumulation of valid OTPs (replay window). Prior unverified rows are
+    // DELETED (not just expired): the otp_challenges_user_id_phone_key partial
+    // unique index admits only one unverified row per (user_id, phone), and
+    // otp_logs below remains the immutable audit trail.
     const { error: invalidateErr } = await adminSupabase
       .from("otp_challenges")
-      .update({ expires_at: new Date().toISOString() })
+      .delete()
       .eq("user_id", user.id)
       .eq("phone", phone)
       .is("verified_at", null);

@@ -485,6 +485,49 @@ describe("POST /api/billing/create-checkout", () => {
     );
   });
 
+  it("returns 400 when the requested area does not match the resolved plan area", async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({
+      data: { user: { ...CONFIRMED_USER, email: "member@test.com" } },
+    });
+
+    const res = await createCheckout(
+      createMockRequest({
+        planId: "550e8400-e29b-41d4-a716-446655440000",
+        area: "MZANSI_BUSINESS",
+      })
+    );
+    const data = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(data.error).toContain("does not belong to the requested area");
+    expect(vi.mocked(createHostedCheckout)).not.toHaveBeenCalled();
+  });
+
+  it("accepts the checkout when the requested area matches the resolved plan area", async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({
+      data: { user: { ...CONFIRMED_USER, email: "member@test.com" } },
+    });
+
+    const res = await createCheckout(
+      createMockRequest({
+        planId: "550e8400-e29b-41d4-a716-446655440000",
+        area: "MZANSI_MARKET",
+      })
+    );
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(vi.mocked(createHostedCheckout)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        area: "MZANSI_MARKET",
+        providerData: expect.objectContaining({
+          plan_id: "550e8400-e29b-41d4-a716-446655440000",
+        }),
+      })
+    );
+  });
+
   it("returns 503 when Ozow credentials are missing", async () => {
     vi.mocked(createHostedCheckout).mockRejectedValueOnce(
       new OzowConfigurationError("Ozow credentials are not configured")

@@ -7,34 +7,6 @@ export const ACTIVE_MARKETPLACE_AREAS = [
   "PROMOTIONS_EVENTS",
 ] as const satisfies readonly MarketplaceArea[];
 
-/**
- * Legacy marketplace areas that have been replaced by MZANSI_BUSINESS.
- * These are kept for backward compatibility with existing database records
- * but should not be used for new subscriptions.
- */
-export const LEGACY_MARKETPLACE_AREAS: readonly MarketplaceArea[] = [
-  "MALL_SHOPS",
-  "BUSINESS_ADS",
-] as const;
-
-/**
- * Returns the canonical replacement for a legacy marketplace area.
- * Returns the original area if it is not deprecated.
- */
-export function getCanonicalArea(area: MarketplaceArea): MarketplaceArea {
-  if (area === "MALL_SHOPS" || area === "BUSINESS_ADS") {
-    return "MZANSI_BUSINESS";
-  }
-  return area;
-}
-
-/**
- * Returns true if the area is a legacy (deprecated) marketplace area.
- */
-export function isLegacyArea(area: MarketplaceArea): boolean {
-  return (LEGACY_MARKETPLACE_AREAS as readonly string[]).includes(area);
-}
-
 export function isActiveMarketplaceArea(area: MarketplaceArea): boolean {
   return (ACTIVE_MARKETPLACE_AREAS as readonly MarketplaceArea[]).includes(area);
 }
@@ -49,8 +21,6 @@ export interface PlanDefinition {
   features: {
     maxListings?: number;
     maxPhotos: number;
-    maxStorefronts?: number;
-    maxProfiles?: number;
     maxBusinesses?: number;
     maxPromotions?: number;
     maxPostsPerMonth: number;
@@ -240,118 +210,6 @@ export const PLANS: PlanDefinition[] = [
       urgentAllowed: true,
     },
   },
-  /**
-   * @deprecated Use MZANSI_BUSINESS plans instead.
-   * Kept for backward compatibility with existing database subscriptions.
-   * Do NOT create new subscriptions with MALL_SHOPS — use MZANSI_BUSINESS.
-   */
-  {
-    area: "MALL_SHOPS",
-    tier: "starter",
-    name: "Mall Shops Starter",
-    priceCents: 20000,
-    billingFrequency: "30_days",
-    features: {
-      maxStorefronts: 1,
-      maxPhotos: 10,
-      maxPostsPerMonth: 5,
-      videoAllowed: true,
-      maxVideos: 1,
-      boostAllowed: false,
-      featuredAllowed: false,
-      urgentAllowed: false,
-    },
-  },
-  {
-    area: "MALL_SHOPS",
-    tier: "growth",
-    name: "Mall Shops Growth",
-    priceCents: 50000,
-    billingFrequency: "30_days",
-    features: {
-      maxStorefronts: 3,
-      maxPhotos: 10,
-      maxPostsPerMonth: 15,
-      videoAllowed: true,
-      maxVideos: 3,
-      boostAllowed: true,
-      featuredAllowed: false,
-      urgentAllowed: false,
-    },
-  },
-  {
-    area: "MALL_SHOPS",
-    tier: "pro",
-    name: "Mall Shops Pro",
-    priceCents: 120000,
-    billingFrequency: "30_days",
-    features: {
-      maxStorefronts: 9, // 3x growth (3 * 3)
-      maxPhotos: 10,
-      maxPostsPerMonth: 45, // 3x growth (15 * 3)
-      videoAllowed: true,
-      maxVideos: 9,
-      boostAllowed: true,
-      featuredAllowed: true,
-      urgentAllowed: true,
-    },
-  },
-  /**
-   * @deprecated Use MZANSI_BUSINESS plans instead.
-   * Kept for backward compatibility with existing database subscriptions.
-   * Do NOT create new subscriptions with BUSINESS_ADS — use MZANSI_BUSINESS.
-   */
-  {
-    area: "BUSINESS_ADS",
-    tier: "starter",
-    name: "Business Ads Starter",
-    priceCents: 15000,
-    billingFrequency: "30_days",
-    features: {
-      maxProfiles: 1,
-      maxPhotos: 10,
-      maxPostsPerMonth: 5,
-      videoAllowed: true,
-      maxVideos: 1,
-      boostAllowed: false,
-      featuredAllowed: false,
-      urgentAllowed: false,
-    },
-  },
-  {
-    area: "BUSINESS_ADS",
-    tier: "growth",
-    name: "Business Ads Growth",
-    priceCents: 40000,
-    billingFrequency: "30_days",
-    features: {
-      maxProfiles: 3,
-      maxPhotos: 10,
-      maxPostsPerMonth: 15,
-      videoAllowed: true,
-      maxVideos: 3,
-      boostAllowed: true,
-      featuredAllowed: false,
-      urgentAllowed: false,
-    },
-  },
-  {
-    area: "BUSINESS_ADS",
-    tier: "pro",
-    name: "Business Ads Pro",
-    priceCents: 100000,
-    billingFrequency: "30_days",
-    features: {
-      maxProfiles: 9, // 3x growth (3 * 3)
-      maxPhotos: 10,
-      maxPostsPerMonth: 45, // 3x growth (15 * 3)
-      videoAllowed: true,
-      maxVideos: 9,
-      boostAllowed: true,
-      featuredAllowed: true,
-      urgentAllowed: true,
-    },
-  },
 ];
 
 /* ── Add-on Prices (cents) ───────────────────────────────── */
@@ -438,8 +296,6 @@ export function getPlanFeatureItems(
   if (features.maxListings !== undefined) {
     push(`Up to ${features.maxListings} listing${features.maxListings === 1 ? "" : "s"}`);
   }
-  if (features.maxStorefronts !== undefined) push(`${features.maxStorefronts} storefronts`);
-  if (features.maxProfiles !== undefined) push(`${features.maxProfiles} profiles`);
   if (features.maxBusinesses !== undefined) {
     push(`${features.maxBusinesses} business${features.maxBusinesses === 1 ? "" : "es"}`);
   }

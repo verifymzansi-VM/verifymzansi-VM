@@ -64,15 +64,8 @@ export function getApprovedPostExpiryIso(
   },
   approvedAt = new Date()
 ): string {
-  if (expiresAt) {
-    const expiryTime = new Date(expiresAt).getTime();
-    if (Number.isFinite(expiryTime)) {
-      return expiresAt;
-    }
-  }
-
   const durationDays = getPostVisibilityDurationDaysFromStoredExpiry({ createdAt, expiresAt });
-  const baseline = createdAt ? new Date(createdAt) : approvedAt;
+  const baseline = approvedAt;
   const baselineTime = baseline.getTime();
   const safeBaseline = Number.isFinite(baselineTime) ? baseline : approvedAt;
   return new Date(safeBaseline.getTime() + durationDays * 24 * 60 * 60 * 1000).toISOString();

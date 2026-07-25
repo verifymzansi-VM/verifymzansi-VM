@@ -37,23 +37,3 @@ test.describe("Addon checkout routes — listings", () => {
     });
   }
 });
-
-// ── Storefront boost route ────────────────────────────────────────────
-
-test.describe("Addon checkout routes — storefronts", () => {
-  test(`@smoke POST storefront boost route exists (not 404)`, async ({ request }) => {
-    const res = await request.post(`/api/storefronts/${SYNTHETIC_ID}/boost`);
-    expect(res.status()).not.toBe(404);
-    expect(res.status()).not.toBe(405);
-  });
-});
-
-// ── Business-ads boost route ──────────────────────────────────────────
-
-test.describe("Addon checkout routes — business-ads", () => {
-  test(`@smoke POST business-ads boost route exists (not 404)`, async ({ request }) => {
-    const res = await request.post(`/api/business-ads/${SYNTHETIC_ID}/boost`);
-    expect(res.status()).not.toBe(404);
-    expect(res.status()).not.toBe(405);
-  });
-});

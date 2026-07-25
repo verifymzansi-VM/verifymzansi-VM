@@ -69,7 +69,14 @@ describe("POST /api/billing/cancel-pending", () => {
     const update = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ error: null }),
+          eq: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: PAYMENT_ID, status: "failed" },
+                error: null,
+              }),
+            }),
+          }),
         }),
       }),
     });
@@ -104,6 +111,36 @@ describe("POST /api/billing/cancel-pending", () => {
         cancelled_at: expect.any(String),
       }),
     });
+  });
+
+  it("returns 409 when the payment changed before the cancellation landed", async () => {
+    const update = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    mockAdmin.from.mockImplementation((table: string) => {
+      if (table !== "payments") throw new Error(`Unexpected table: ${table}`);
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: { id: PAYMENT_ID, status: "pending", provider_data: {} },
+          error: null,
+        }),
+        update,
+      };
+    });
+
+    const res = await cancelPendingPayment(createMockRequest({ paymentId: PAYMENT_ID }));
+    expect(res.status).toBe(409);
   });
 
   it("does not cancel a payment that is already processing", async () => {

@@ -209,6 +209,48 @@ describe("env config", () => {
 
       expect(mod.env("NEXT_PUBLIC_APP_URL")).toBe("http://localhost:3000");
     });
+
+    it("caches a fallback env after production soft-fail so later calls succeed", async () => {
+      vi.resetModules();
+      stubNoBypassFlags();
+      for (const [key, value] of Object.entries(VALID_ENV)) {
+        vi.stubEnv(key, value);
+      }
+      vi.stubEnv("VITEST", "");
+      vi.stubEnv("NODE_ENV", "production");
+      // Force a Zod failure so validateEnv() throws inside env()
+      vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+      delete process.env.STRICT_ENV_STARTUP_BLOCK;
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const mod = await import("./env");
+
+      // First call soft-fails into the cached fallback env
+      expect(mod.env("NEXT_PUBLIC_APP_URL")).toBe("http://localhost:3000");
+      // Second call reuses the cached fallback instead of re-throwing
+      expect(mod.env("NEXT_PUBLIC_SUPABASE_URL")).toBe("http://localhost:54321");
+      const softFailLogs = errorSpy.mock.calls.filter(([message]) =>
+        String(message).includes("caching fallback env")
+      );
+      expect(softFailLogs).toHaveLength(1);
+      errorSpy.mockRestore();
+    });
+
+    it("rethrows in strict startup block mode instead of caching a fallback", async () => {
+      vi.resetModules();
+      stubNoBypassFlags();
+      for (const [key, value] of Object.entries(VALID_ENV)) {
+        vi.stubEnv(key, value);
+      }
+      vi.stubEnv("VITEST", "");
+      vi.stubEnv("NODE_ENV", "production");
+      vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+      vi.stubEnv("STRICT_ENV_STARTUP_BLOCK", "1");
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const mod = await import("./env");
+
+      expect(() => mod.env("NEXT_PUBLIC_APP_URL")).toThrow("Environment Configuration Error");
+      errorSpy.mockRestore();
+    });
   });
 
   describe("IP_HASH_SECRET", () => {

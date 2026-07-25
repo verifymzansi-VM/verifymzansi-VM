@@ -206,16 +206,38 @@ describe("POST /api/auth/resend-confirmation", () => {
     expect(body.error).toContain("rate-limited");
   });
 
+  it("returns generic success when the per-email rate limit trips (anti-enumeration)", async () => {
+    mockCheckRateLimit.mockImplementation(
+      async ({ action }: { action: string }): Promise<{ limited: boolean; retryAfter?: number }> =>
+        action === "auth:resend-confirmation-email"
+          ? { limited: true, retryAfter: 60 }
+          : { limited: false }
+    );
+    const mockResend = vi.fn().mockResolvedValue({ data: {}, error: null });
+    mockCreateClient.mockResolvedValue({ auth: { resend: mockResend } });
+
+    const res = await POST(createRequest({ email: "harassed@example.com", turnstileToken: "tok" }));
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.message).toContain("confirmation link");
+    expect(mockResend).not.toHaveBeenCalled();
+  });
+
   it("validates Turnstile when configured", async () => {
     vi.stubEnv("TURNSTILE_SECRET_KEY", "secret");
     vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "site-key");
-    mockVerifyTurnstile.mockResolvedValue({ success: false, error: "Bot detected" });
+    mockVerifyTurnstile.mockResolvedValue({
+      success: false,
+      error: "Turnstile verification request failed (HTTP 400)",
+    });
 
     const res = await POST(createRequest({ email: "user@example.com", turnstileToken: "bad" }));
 
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toContain("Bot detected");
+    expect(body.error).toBe("CAPTCHA verification failed");
   });
 
   it("accepts long Turnstile tokens when resending confirmation", async () => {

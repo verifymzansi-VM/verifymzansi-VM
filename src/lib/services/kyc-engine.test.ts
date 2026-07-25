@@ -572,4 +572,47 @@ describe("KYC Engine - processKycArtifact", () => {
     expect(result.autoStatus).toBe("needs_manual_review");
     expect(result.riskScore).toBeGreaterThanOrEqual(40);
   });
+
+  // ── Block signals added AFTER the provider call must not auto-approve ──
+
+  it("does not auto-approve when a block-severity signal is added after the provider decision", async () => {
+    // Provider approves…
+    mockSubmitIdentity.mockResolvedValueOnce({
+      status: "approved",
+      providerReference: "ref-ok",
+      scores: {
+        faceMatchScore: 95,
+        livenessScore: 90,
+        docAuthScore: 85,
+        ocrPayload: {},
+        rawResponse: {},
+      },
+    });
+
+    // …but the phone-linked-to-flagged-account block signal is only scored
+    // after the provider block ran, so a provider-time hasBlockSignal check
+    // cannot see it.
+    const result = await processKycArtifact(createInput({ phoneFlagged: true }));
+
+    expect(result.riskScore).toBeGreaterThanOrEqual(40);
+    expect(result.autoStatus).not.toBe("approved");
+    expect(result.autoStatus).toBe("needs_manual_review");
+  });
+
+  it("keeps provider-approved status when no block-severity signals exist", async () => {
+    mockSubmitIdentity.mockResolvedValueOnce({
+      status: "approved",
+      providerReference: "ref-ok",
+      scores: {
+        faceMatchScore: 95,
+        livenessScore: 90,
+        docAuthScore: 85,
+        ocrPayload: {},
+        rawResponse: {},
+      },
+    });
+
+    const result = await processKycArtifact(createInput());
+    expect(result.autoStatus).toBe("approved");
+  });
 });

@@ -15,11 +15,8 @@ describe("validations index barrel", () => {
     // Listing schemas
     expect(v.listingSchema).toBeDefined();
 
-    // Storefront schemas
-    expect(v.storefrontSchema).toBeDefined();
-
     // Business schemas
-    expect(v.businessProfileSchema).toBeDefined();
+    expect(v.businessSchema).toBeDefined();
 
     // Verification schemas
     expect(v.verificationPhoneSchema).toBeDefined();

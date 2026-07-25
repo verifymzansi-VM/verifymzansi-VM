@@ -134,6 +134,11 @@ export async function createDecisionRecord(params: CreateDecisionParams) {
 
 /**
  * Approve a pending decision (governance controller action).
+ *
+ * The status transition is guarded by a compare-and-swap update: only a row
+ * still in `pending_approval`/`escalated` is finalized, so two concurrent
+ * approvers cannot both win. Returns null when the decision is not in an
+ * approvable state (callers map this to 409); genuine DB errors throw.
  */
 export async function approveDecision(params: ApproveDecisionParams) {
   const supabase = createAdminClient();
@@ -145,14 +150,10 @@ export async function approveDecision(params: ApproveDecisionParams) {
     .single();
 
   if (fetchError || !decision) {
-    throw new Error("Decision record not found");
+    return null;
   }
 
-  if (decision.status !== "pending_approval" && decision.status !== "escalated") {
-    throw new Error(`Cannot approve decision in status: ${decision.status}`);
-  }
-
-  const { error } = await supabase
+  const { data: updatedRows, error } = await supabase
     .from("decision_records")
     .update({
       status: "approved" as DecisionStatus,
@@ -162,10 +163,17 @@ export async function approveDecision(params: ApproveDecisionParams) {
       after_state: params.afterState,
       decided_at: new Date().toISOString(),
     })
-    .eq("id", params.decisionId);
+    .eq("id", params.decisionId)
+    .in("status", ["pending_approval", "escalated"])
+    .select("id");
 
   if (error) {
     throw new Error("Failed to approve decision");
+  }
+
+  if (!updatedRows || updatedRows.length === 0) {
+    // Lost the race — another approver finalized it first.
+    return null;
   }
 
   await appendDecisionEvent(params.decisionId, params.approverId, params.approverRole, "approved", {
@@ -190,6 +198,8 @@ export async function approveDecision(params: ApproveDecisionParams) {
 
 /**
  * Reject a pending decision (governance controller action).
+ * Compare-and-swap guarded like `approveDecision` — returns null when the
+ * decision is not in a rejectable state (callers map this to 409).
  */
 export async function rejectDecision(params: RejectDecisionParams) {
   const supabase = createAdminClient();
@@ -201,14 +211,10 @@ export async function rejectDecision(params: RejectDecisionParams) {
     .single();
 
   if (fetchError || !decision) {
-    throw new Error("Decision record not found");
+    return null;
   }
 
-  if (decision.status !== "pending_approval" && decision.status !== "escalated") {
-    throw new Error(`Cannot reject decision in status: ${decision.status}`);
-  }
-
-  const { error } = await supabase
+  const { data: updatedRows, error } = await supabase
     .from("decision_records")
     .update({
       status: "rejected" as DecisionStatus,
@@ -216,10 +222,16 @@ export async function rejectDecision(params: RejectDecisionParams) {
       approval_rationale: params.rationale,
       decided_at: new Date().toISOString(),
     })
-    .eq("id", params.decisionId);
+    .eq("id", params.decisionId)
+    .in("status", ["pending_approval", "escalated"])
+    .select("id");
 
   if (error) {
     throw new Error("Failed to reject decision");
+  }
+
+  if (!updatedRows || updatedRows.length === 0) {
+    return null;
   }
 
   await appendDecisionEvent(params.decisionId, params.approverId, params.approverRole, "rejected", {
@@ -240,17 +252,25 @@ export async function rejectDecision(params: RejectDecisionParams) {
 
 /**
  * Escalate a decision for additional review.
+ * Only open decisions (`recommended`/`pending_approval`) can be escalated —
+ * finalized or already-escalated decisions return null (callers map to 409).
  */
 export async function escalateDecision(params: EscalateDecisionParams) {
   const supabase = createAdminClient();
 
-  const { error } = await supabase
+  const { data: updatedRows, error } = await supabase
     .from("decision_records")
     .update({ status: "escalated" as DecisionStatus })
-    .eq("id", params.decisionId);
+    .eq("id", params.decisionId)
+    .in("status", ["recommended", "pending_approval"])
+    .select("id");
 
   if (error) {
     throw new Error("Failed to escalate decision");
+  }
+
+  if (!updatedRows || updatedRows.length === 0) {
+    return null;
   }
 
   await appendDecisionEvent(params.decisionId, params.actorId, params.actorRole, "escalated", {
@@ -344,11 +364,13 @@ export async function createAppeal(params: CreateAppealParams) {
 
 /**
  * Resolve an appeal (governance controller action).
+ * Only unresolved appeals (`submitted`/`under_review`) can be resolved —
+ * an already-resolved appeal returns null (callers map to 409).
  */
 export async function resolveAppeal(params: ResolveAppealParams) {
   const supabase = createAdminClient();
 
-  const { error } = await supabase
+  const { data: updatedRows, error } = await supabase
     .from("appeal_cases")
     .update({
       status: params.status,
@@ -357,10 +379,16 @@ export async function resolveAppeal(params: ResolveAppealParams) {
       outcome_detail: params.outcomeDetail ?? null,
       resolved_at: new Date().toISOString(),
     })
-    .eq("id", params.appealId);
+    .eq("id", params.appealId)
+    .in("status", ["submitted", "under_review"])
+    .select("id");
 
   if (error) {
     throw new Error("Failed to resolve appeal");
+  }
+
+  if (!updatedRows || updatedRows.length === 0) {
+    return null;
   }
 
   await logAuditEvent({
@@ -409,7 +437,8 @@ export async function recordRoleChange(params: {
   await logAuditEvent({
     actorId: params.assignedBy,
     actorRole: params.assignerRole,
-    action: "role_assigned",
+    // Demotion to plain membership is a revocation, not an assignment.
+    action: params.newRole === "member" ? "role_revoked" : "role_assigned",
     targetType: "user",
     targetId: params.targetUserId,
     metadata: {

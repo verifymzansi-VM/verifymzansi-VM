@@ -157,7 +157,7 @@ describe("OTP Routes", () => {
         select: vi.fn(),
         eq: vi.fn(),
         gte: vi.fn(),
-        update: vi.fn(),
+        delete: vi.fn(),
         insert: vi.fn(),
       };
       adminQuery.select.mockReturnValue(adminQuery);
@@ -169,7 +169,7 @@ describe("OTP Routes", () => {
         is: vi.fn().mockResolvedValue({ error: null }),
       };
       invalidateQuery.eq.mockReturnValue(invalidateQuery);
-      adminQuery.update.mockReturnValue(invalidateQuery);
+      adminQuery.delete.mockReturnValue(invalidateQuery);
       adminQuery.insert.mockResolvedValue({ error: null });
 
       const mockAdminClient = {
@@ -196,7 +196,7 @@ describe("OTP Routes", () => {
         select: vi.fn(),
         eq: vi.fn(),
         gte: vi.fn(),
-        update: vi.fn(),
+        delete: vi.fn(),
         insert: otpLogInsert,
       };
       adminQuery.select.mockReturnValue(adminQuery);
@@ -208,7 +208,7 @@ describe("OTP Routes", () => {
         is: vi.fn().mockResolvedValue({ error: null }),
       };
       invalidateQuery.eq.mockReturnValue(invalidateQuery);
-      adminQuery.update.mockReturnValue(invalidateQuery);
+      adminQuery.delete.mockReturnValue(invalidateQuery);
 
       const mockAdminClient = {
         from: vi.fn().mockReturnValue(adminQuery),
@@ -244,7 +244,7 @@ describe("OTP Routes", () => {
         select: vi.fn(),
         eq: vi.fn(),
         gte: vi.fn(),
-        update: vi.fn(),
+        delete: vi.fn(),
         insert: otpLogInsert,
       };
       adminQuery.select.mockReturnValue(adminQuery);
@@ -256,7 +256,7 @@ describe("OTP Routes", () => {
         is: vi.fn().mockResolvedValue({ error: null }),
       };
       invalidateQuery.eq.mockReturnValue(invalidateQuery);
-      adminQuery.update.mockReturnValue(invalidateQuery);
+      adminQuery.delete.mockReturnValue(invalidateQuery);
 
       const mockAdminClient = {
         from: vi.fn().mockReturnValue(adminQuery),
@@ -351,6 +351,98 @@ describe("OTP Routes", () => {
       });
       expect(smsService.sendOtpSms).not.toHaveBeenCalled();
     });
+
+    it("returns 429 with the phoneCooldown payload when the 15-day phone change cooldown is active", async () => {
+      mockUserClient.from.mockImplementation((table: string) => {
+        if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: {
+                    phone: "+27820000000",
+                    contact_last_phone_change_at: new Date().toISOString(),
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+            update: vi.fn(),
+          };
+        }
+
+        return {};
+      });
+
+      const res = await sendOtp(createMockRequest("/api/otp/send", { phone: "+27821234567" }));
+      const data = await res.json();
+
+      expect(res.status).toBe(429);
+      expect(data.code).toBe("PHONE_COOLDOWN");
+      expect(data.error).toMatch(/change your phone number again after/i);
+      expect(data.retryAfter).toEqual(expect.any(String));
+      expect(smsService.sendOtpSms).not.toHaveBeenCalled();
+    });
+
+    it("proceeds with the OTP send when the phone change cooldown has expired", async () => {
+      mockUserClient.from.mockImplementation((table: string) => {
+        if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: {
+                    phone: "+27820000000",
+                    contact_last_phone_change_at: "2020-01-01T00:00:00.000Z",
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          };
+        }
+
+        return {};
+      });
+
+      const otpLogInsert = vi.fn().mockResolvedValue({ error: null });
+      const adminQuery = {
+        select: vi.fn(),
+        eq: vi.fn(),
+        gte: vi.fn(),
+        delete: vi.fn(),
+        insert: otpLogInsert,
+      };
+      adminQuery.select.mockReturnValue(adminQuery);
+      adminQuery.eq.mockReturnValue(adminQuery);
+      adminQuery.gte.mockResolvedValue({ count: 0 });
+
+      const invalidateQuery = {
+        eq: vi.fn(),
+        is: vi.fn().mockResolvedValue({ error: null }),
+      };
+      invalidateQuery.eq.mockReturnValue(invalidateQuery);
+      adminQuery.delete.mockReturnValue(invalidateQuery);
+
+      const mockAdminClient = {
+        from: vi.fn().mockReturnValue(adminQuery),
+      };
+      vi.mocked(createAdminClient).mockReturnValue(mockAdminClient as never);
+      vi.mocked(smsService.sendOtpSms).mockResolvedValue({
+        success: true,
+        messageId: "sms-cooldown-1",
+      } as never);
+
+      const res = await sendOtp(createMockRequest("/api/otp/send", { phone: "+27821234567" }));
+      const data = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(data).toEqual({ success: true });
+      expect(smsService.sendOtpSms).toHaveBeenCalledWith("+27821234567", expect.any(String));
+    });
   });
 
   it("returns service unavailable when admin client credentials are missing", async () => {
@@ -425,6 +517,9 @@ describe("OTP Routes", () => {
                   attempt_count: 0,
                   locked_until: null,
                   expires_at: new Date(Date.now() + 60_000).toISOString(),
+                  // Stamped so the claim-confirmation re-read in
+                  // claimOtpChallenge's fallback path observes the claim.
+                  verified_at: new Date().toISOString(),
                 },
                 error: null,
               }),
@@ -436,6 +531,57 @@ describe("OTP Routes", () => {
                     }),
                   }),
                 }),
+              }),
+            };
+          }
+
+          return {};
+        }),
+      };
+      vi.mocked(createAdminClient).mockReturnValue(mockAdminClient as never);
+
+      const res = await verifyOtp(
+        createMockRequest("/api/otp/verify", { phone: "+27821234567", otp: "123456" })
+      );
+      const data = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(data.error).toBe("Invalid or expired OTP");
+      expect(smsService.sendSms).not.toHaveBeenCalled();
+    });
+
+    it("returns 400 when the fallback claim path cannot confirm verified_at was stamped", async () => {
+      const storedHash = await hashOtpForTest("123456");
+
+      const mockAdminClient = {
+        from: vi.fn((table: string) => {
+          if (table === "otp_challenges") {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              is: vi.fn().mockReturnThis(),
+              gte: vi.fn().mockReturnThis(),
+              order: vi.fn().mockReturnThis(),
+              limit: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: "challenge-1",
+                  otp_hash: storedHash,
+                  attempt_count: 0,
+                  locked_until: null,
+                  expires_at: new Date(Date.now() + 60_000).toISOString(),
+                  // Zero-row update double: the claim re-read still shows an
+                  // unclaimed row, so the fallback must not report success.
+                  verified_at: null,
+                },
+                error: null,
+              }),
+              // Claim builder without .select() — forces the fallback path.
+              update: vi.fn().mockImplementation(() => {
+                const chain: Record<string, unknown> = {};
+                chain.eq = vi.fn().mockReturnValue(chain);
+                chain.is = vi.fn().mockResolvedValue({ error: null });
+                return chain;
               }),
             };
           }
@@ -578,6 +724,9 @@ describe("OTP Routes", () => {
                   attempt_count: 0,
                   locked_until: null,
                   expires_at: new Date(Date.now() + 60_000).toISOString(),
+                  // Stamped so the claim-confirmation re-read in
+                  // claimOtpChallenge's fallback path observes the claim.
+                  verified_at: new Date().toISOString(),
                 },
                 error: null,
               }),
@@ -606,6 +755,12 @@ describe("OTP Routes", () => {
             };
           }
 
+          if (table === "verification_sessions") {
+            return {
+              upsert: sessionUpsert,
+            };
+          }
+
           if (table === "otp_logs") {
             return {
               update: vi.fn().mockReturnValue({
@@ -628,12 +783,6 @@ describe("OTP Routes", () => {
             update: vi.fn().mockReturnValue({
               eq: profileUpdateEq,
             }),
-          };
-        }
-
-        if (table === "verification_sessions") {
-          return {
-            upsert: sessionUpsert,
           };
         }
 
@@ -714,6 +863,9 @@ describe("OTP Routes", () => {
                   attempt_count: 0,
                   locked_until: null,
                   expires_at: new Date(Date.now() + 60_000).toISOString(),
+                  // Stamped so the claim-confirmation re-read in
+                  // claimOtpChallenge's fallback path observes the claim.
+                  verified_at: new Date().toISOString(),
                 },
                 error: null,
               }),
@@ -742,6 +894,12 @@ describe("OTP Routes", () => {
             };
           }
 
+          if (table === "verification_sessions") {
+            return {
+              upsert: sessionUpsert,
+            };
+          }
+
           if (table === "otp_logs") {
             return {
               update: vi.fn().mockReturnValue({
@@ -764,12 +922,6 @@ describe("OTP Routes", () => {
             update: vi.fn().mockReturnValue({
               eq: profileUpdateEq,
             }),
-          };
-        }
-
-        if (table === "verification_sessions") {
-          return {
-            upsert: sessionUpsert,
           };
         }
 
@@ -834,6 +986,9 @@ describe("OTP Routes", () => {
                   attempt_count: 0,
                   locked_until: null,
                   expires_at: new Date(Date.now() + 60_000).toISOString(),
+                  // Stamped so the claim-confirmation re-read in
+                  // claimOtpChallenge's fallback path observes the claim.
+                  verified_at: new Date().toISOString(),
                 },
                 error: null,
               }),
@@ -867,6 +1022,12 @@ describe("OTP Routes", () => {
             };
           }
 
+          if (table === "verification_sessions") {
+            return {
+              upsert: sessionUpsert,
+            };
+          }
+
           if (table === "otp_logs") {
             return {
               update: vi.fn().mockReturnValue({
@@ -894,12 +1055,6 @@ describe("OTP Routes", () => {
             update: vi.fn().mockReturnValue({
               eq: profileUpdateEq,
             }),
-          };
-        }
-
-        if (table === "verification_sessions") {
-          return {
-            upsert: sessionUpsert,
           };
         }
 
@@ -963,6 +1118,9 @@ describe("OTP Routes", () => {
                   attempt_count: 0,
                   locked_until: null,
                   expires_at: new Date(Date.now() + 60_000).toISOString(),
+                  // Stamped so the claim-confirmation re-read in
+                  // claimOtpChallenge's fallback path observes the claim.
+                  verified_at: new Date().toISOString(),
                 },
                 error: null,
               }),
@@ -994,6 +1152,12 @@ describe("OTP Routes", () => {
             };
           }
 
+          if (table === "verification_sessions") {
+            return {
+              upsert: sessionUpsert,
+            };
+          }
+
           if (table === "otp_logs") {
             return {
               update: vi.fn().mockReturnValue({
@@ -1016,12 +1180,6 @@ describe("OTP Routes", () => {
             update: vi.fn().mockReturnValue({
               eq: profileUpdateEq,
             }),
-          };
-        }
-
-        if (table === "verification_sessions") {
-          return {
-            upsert: sessionUpsert,
           };
         }
 
@@ -1066,6 +1224,9 @@ describe("OTP Routes", () => {
                   attempt_count: 0,
                   locked_until: null,
                   expires_at: new Date(Date.now() + 60_000).toISOString(),
+                  // Stamped so the claim-confirmation re-read in
+                  // claimOtpChallenge's fallback path observes the claim.
+                  verified_at: new Date().toISOString(),
                 },
                 error: null,
               }),
@@ -1119,12 +1280,6 @@ describe("OTP Routes", () => {
           };
         }
 
-        if (table === "verification_sessions") {
-          return {
-            upsert: vi.fn().mockResolvedValue({ error: null }),
-          };
-        }
-
         return {};
       });
 
@@ -1158,6 +1313,9 @@ describe("OTP Routes", () => {
                   attempt_count: 0,
                   locked_until: null,
                   expires_at: new Date(Date.now() + 60_000).toISOString(),
+                  // Stamped so the claim-confirmation re-read in
+                  // claimOtpChallenge's fallback path observes the claim.
+                  verified_at: new Date().toISOString(),
                 },
                 error: null,
               }),
@@ -1213,6 +1371,7 @@ describe("OTP Routes", () => {
       const verificationStepUpsert = vi
         .fn()
         .mockResolvedValue({ error: { message: "DB connection lost" } });
+      const sessionUpsert = vi.fn().mockResolvedValue({ error: null });
       const otpLogVerifyIs = vi.fn().mockResolvedValue({ error: null });
       const otpLogVerifyHashEq = vi.fn().mockReturnValue({ is: otpLogVerifyIs });
       const otpLogVerifyPhoneEq = vi.fn().mockReturnValue({ eq: otpLogVerifyHashEq });
@@ -1234,6 +1393,9 @@ describe("OTP Routes", () => {
                   attempt_count: 0,
                   locked_until: null,
                   expires_at: new Date(Date.now() + 60_000).toISOString(),
+                  // Stamped so the claim-confirmation re-read in
+                  // claimOtpChallenge's fallback path observes the claim.
+                  verified_at: new Date().toISOString(),
                 },
                 error: null,
               }),
@@ -1259,6 +1421,12 @@ describe("OTP Routes", () => {
           if (table === "verification_steps") {
             return {
               upsert: verificationStepUpsert,
+            };
+          }
+
+          if (table === "verification_sessions") {
+            return {
+              upsert: sessionUpsert,
             };
           }
 
@@ -1289,12 +1457,6 @@ describe("OTP Routes", () => {
             update: vi.fn().mockReturnValue({
               eq: profileUpdateEq,
             }),
-          };
-        }
-
-        if (table === "verification_sessions") {
-          return {
-            upsert: vi.fn().mockResolvedValue({ error: null }),
           };
         }
 
@@ -1343,6 +1505,9 @@ describe("OTP Routes", () => {
                   attempt_count: 0,
                   locked_until: null,
                   expires_at: new Date(Date.now() + 60_000).toISOString(),
+                  // Stamped so the claim-confirmation re-read in
+                  // claimOtpChallenge's fallback path observes the claim.
+                  verified_at: new Date().toISOString(),
                 },
                 error: null,
               }),
@@ -1368,6 +1533,12 @@ describe("OTP Routes", () => {
           if (table === "verification_steps") {
             return {
               upsert: verificationStepUpsert,
+            };
+          }
+
+          if (table === "verification_sessions") {
+            return {
+              upsert: sessionUpsert,
             };
           }
 
@@ -1398,12 +1569,6 @@ describe("OTP Routes", () => {
             update: vi.fn().mockReturnValue({
               eq: profileUpdateEq,
             }),
-          };
-        }
-
-        if (table === "verification_sessions") {
-          return {
-            upsert: sessionUpsert,
           };
         }
 

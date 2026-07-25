@@ -19,3 +19,10 @@ bindings = [{ name = "RATE_LIMITER_DO", class_name = "RateLimiterDO" }]
 [[migrations]]
 tag = "v1"
 new_classes = ["RateLimiterDO"]
+
+# ────────────────────────────────────────────────────────────────────────────
+# Secrets (set via `wrangler secret put`, NOT committed to source)
+# ────────────────────────────────────────────────────────────────────────────
+# WORKER_API_KEY — shared secret this worker hard-requires on every POST.
+#   It MUST equal the main app's RATE_LIMITER_API_KEY (see wrangler.toml):
+#   pnpm wrangler secret put WORKER_API_KEY -c wrangler.rate-limiter.toml

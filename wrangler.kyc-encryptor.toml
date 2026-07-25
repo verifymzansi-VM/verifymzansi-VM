@@ -52,3 +52,5 @@ bucket_name = "verifymzansi-private"
 # ────────────────────────────────────────────────────────────────────────────
 # KYC_ENCRYPTION_KEY   — 64-char hex string (32 bytes) for AES-256
 # SUPABASE_SERVICE_ROLE_KEY — Supabase service role key for kyc_artifacts PATCH
+# WORKER_API_KEY — shared secret the worker hard-requires on every POST
+#   (must equal the value the caller sends; set via `wrangler secret put`)

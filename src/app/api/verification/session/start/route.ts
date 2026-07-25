@@ -8,6 +8,7 @@ import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { logAuditEvent } from "@/lib/services/audit";
 import { REQUIRED_VERIFICATION_STEPS } from "@/lib/constants/verification";
 import { createLogger } from "@/lib/utils/logger";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { rateLimitExceededResponse } from "@/lib/utils/rate-limit-responses";
 import { enforceConfirmedVerificationRequest } from "../../_lib/verification-request-prelude";
@@ -93,8 +94,12 @@ export async function POST(_request: NextRequest) {
 
         // Reset the expired session in-place instead of finalize + insert
         // (inserting would violate the UNIQUE(user_id) constraint)
-        // Preserve artifact references for already-approved steps
-        const { data: resetSession, error: resetErr } = await supabase
+        // Preserve artifact references for already-approved steps.
+        // Writes go through the service-role admin client: the owner UPDATE
+        // policy on verification_sessions was dropped and finalized_at /
+        // phone_verified_at are guard-trigger protected signal columns.
+        const admin = createAdminClient();
+        const { data: resetSession, error: resetErr } = await admin
           .from("verification_sessions")
           .update({
             finalized_at: null,
@@ -147,8 +152,11 @@ export async function POST(_request: NextRequest) {
         });
       }
 
-      // Use upsert to handle edge case where a finalized row already exists
-      const { data: newSession, error: insertErr } = await supabase
+      // Use upsert to handle edge case where a finalized row already exists.
+      // Written via the service-role admin client (see note above): inserts
+      // carry phone_verified_at, which only verification workflows may set.
+      const admin = createAdminClient();
+      const { data: newSession, error: insertErr } = await admin
         .from("verification_sessions")
         .upsert(
           {

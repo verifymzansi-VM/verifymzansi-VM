@@ -262,6 +262,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // All validation passed — persist the validated marker. Only validated
+    // uploads may be attached to content (enforced by confirmMediaUploads).
+    // Service-role client: media_uploads has no user UPDATE RLS policy.
+    const { error: validatedError } = await createAdminClient()
+      .from("media_uploads")
+      .update({ validated_at: new Date().toISOString() })
+      .eq("user_id", user.id)
+      .eq("r2_key", key)
+      .is("validated_at", null);
+
+    if (validatedError) {
+      log.error("Failed to persist upload validation marker", {
+        traceId,
+        userId: user.id,
+        key,
+        error: validatedError.message,
+      });
+      return NextResponse.json(
+        { error: "Failed to finalize upload", code: "upload_validation_persist_failed", traceId },
+        { status: 500, headers: { "x-upload-trace-id": traceId } }
+      );
+    }
+
     return NextResponse.json({ success: true, publicUrl });
   } catch (error) {
     log.error("Unexpected direct upload completion failure", {

@@ -2,12 +2,17 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isTerminalPaymentStatusView, toPaymentStatusView } from "@/lib/payments/status-view";
 import { parseAndValidateSearchParams } from "@/lib/utils/api";
-import { optionalTrimmedStringSchema } from "@/lib/validations/shared";
+import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
+import { optionalUuidSchema } from "@/lib/validations/shared";
 import { z } from "zod";
 
 const paymentStatusQuerySchema = z.object({
-  payment: optionalTrimmedStringSchema,
+  payment: optionalUuidSchema,
 });
+
+// This endpoint is polled by the billing success page every few seconds, so
+// the per-user local limit is lenient while still stopping abusive loops.
+const PAYMENT_STATUS_RATE_LIMIT_PER_MINUTE = 60;
 
 export async function GET(request: NextRequest) {
   const parsedQuery = parseAndValidateSearchParams(
@@ -38,6 +43,21 @@ export async function GET(request: NextRequest) {
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const rl = checkLocalRateLimit(
+    user.id,
+    "billing:payment-status:read",
+    PAYMENT_STATUS_RATE_LIMIT_PER_MINUTE
+  );
+  if (rl.limited) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      {
+        status: 429,
+        headers: { "Retry-After": String(rl.retryAfter ?? 60), "Cache-Control": "no-store" },
+      }
+    );
   }
 
   const { data: payment, error: paymentError } = await supabase

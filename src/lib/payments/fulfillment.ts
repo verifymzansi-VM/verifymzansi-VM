@@ -104,7 +104,9 @@ type AdminClient = {
       value: Record<string, unknown>,
       options: { onConflict: string }
     ) => Promise<{ error?: { message?: string } | null }>;
-    insert: (value: Record<string, unknown>) => Promise<{ error?: { message?: string } | null }>;
+    insert: (
+      value: Record<string, unknown>
+    ) => Promise<{ error?: { message?: string; code?: string } | null }>;
     update: (value: Record<string, unknown>) => UpdateFilter;
   };
 };
@@ -234,6 +236,9 @@ export async function fulfillPayment(
       }
 
       // Idempotent invoice creation for successful subscription activations.
+      // The existence check is the fast path; the UNIQUE(invoices.payment_id)
+      // index closes the check-then-insert race — a 23505 conflict means a
+      // concurrent fulfillment already created the invoice, not a failure.
       const { data: existingInvoice } = await supabase
         .from("invoices")
         .select("id")
@@ -252,7 +257,7 @@ export async function fulfillPayment(
           description: `${plan.tier} subscription (${plan.area})`,
         });
 
-        if (invoiceError) {
+        if (invoiceError && invoiceError.code !== "23505") {
           throw new Error(`Invoice creation failed: ${invoiceError.message}`);
         }
       }

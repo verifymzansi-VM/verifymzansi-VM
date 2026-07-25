@@ -31,7 +31,6 @@ const PROTECTED_PREFIXES = [
   "/api/drafts",
   "/api/dsar",
   "/api/dashboard",
-  "/api/post",
   "/api/billing",
   "/api/verification",
   "/api/admin",
@@ -42,6 +41,14 @@ const PROTECTED_PREFIXES = [
   "/api/media/upload-url",
   "/api/notifications",
   "/api/profile",
+];
+
+// Public browse surfaces throttled to deter scraping.
+const MARKETPLACE_BROWSE_PREFIXES = [
+  "/listing/",
+  "/mzansi-market",
+  "/mzansi-business",
+  "/tourism-events",
 ];
 
 // -- Core routing logic (testable without security headers) ------------------
@@ -100,7 +107,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     AUTH_ROUTES.some((r) => pathname === r || pathname.startsWith(r + "/"));
 
   // Rate-limit public marketplace pages to deter scraping.
-  if (!needsAuth && (pathname.startsWith("/listing/") || pathname.startsWith("/marketplace"))) {
+  if (!needsAuth && MARKETPLACE_BROWSE_PREFIXES.some((p) => pathname.startsWith(p))) {
     const ip = getClientIp(request);
     const { limited, retryAfter } = checkLocalRateLimit(ip, "marketplace:browse", 60);
     if (limited) {
@@ -242,7 +249,14 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
 
   // -- Phone-missing gate ---------------------------------------------------
   if (isRealUser && user) {
-    const phoneResult = await checkPhoneGate(request, response, supabase, user.id, cachedProfile);
+    const phoneResult = await checkPhoneGate(
+      request,
+      response,
+      supabase,
+      user.id,
+      cachedProfile,
+      redirectWithCookies
+    );
     cachedProfile = phoneResult.profile;
     if (phoneResult.response) {
       return phoneResult.response;
@@ -275,7 +289,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   }
 
   // -- Admin gate -----------------------------------------------------------
-  const adminResult = checkAdminGate(request, user);
+  const adminResult = checkAdminGate(request, user, redirectWithCookies);
   if (adminResult) {
     return adminResult;
   }
@@ -287,7 +301,8 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
       supabase,
       user.id,
       isProtectedRoute,
-      cachedProfile
+      cachedProfile,
+      redirectWithCookies
     );
     cachedProfile = banResult.profile;
     if (banResult.response) {
@@ -297,7 +312,13 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
 
   // -- Posting gate ---------------------------------------------------------
   if (user) {
-    const postingResult = await checkPostingGate(request, supabase, user.id, cachedProfile);
+    const postingResult = await checkPostingGate(
+      request,
+      supabase,
+      user.id,
+      cachedProfile,
+      redirectWithCookies
+    );
     cachedProfile = postingResult.profile;
     if (postingResult.response) {
       return postingResult.response;

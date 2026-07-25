@@ -5,6 +5,44 @@ import * as Sentry from "@sentry/nextjs";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+const CHUNK_RECOVERY_SESSION_KEY = "vmz-chunk-recovery-v1";
+
+function isLikelyChunkLoadError(error: Error) {
+  const message = `${error.name ?? ""} ${error.message ?? ""} ${error.stack ?? ""}`.toLowerCase();
+
+  return (
+    message.includes("loading chunk") ||
+    message.includes("chunkloaderror") ||
+    message.includes("/_next/static/chunks/")
+  );
+}
+
+async function clearDeploymentCaches() {
+  const cacheCleanup =
+    typeof caches !== "undefined"
+      ? caches
+          .keys()
+          .then((keys) =>
+            Promise.allSettled(
+              keys.filter((key) => key.startsWith("verifymzansi-")).map((key) => caches.delete(key))
+            )
+          )
+          .catch(() => undefined)
+      : Promise.resolve();
+
+  const workerCleanup =
+    typeof navigator !== "undefined" && "serviceWorker" in navigator
+      ? navigator.serviceWorker
+          .getRegistrations()
+          .then((registrations) =>
+            Promise.allSettled(registrations.map((registration) => registration.unregister()))
+          )
+          .catch(() => undefined)
+      : Promise.resolve();
+
+  await Promise.allSettled([cacheCleanup, workerCleanup]);
+}
+
 export default function GlobalError({
   error,
   reset,
@@ -27,6 +65,33 @@ export default function GlobalError({
     Sentry.captureException(error);
     console.error("[GlobalError]", error.digest ?? error.message, error.stack);
   }, [error]);
+
+  useEffect(() => {
+    if (!isLikelyChunkLoadError(error)) {
+      window.sessionStorage.removeItem(CHUNK_RECOVERY_SESSION_KEY);
+      return;
+    }
+
+    if (window.sessionStorage.getItem(CHUNK_RECOVERY_SESSION_KEY) === "1") {
+      return;
+    }
+
+    window.sessionStorage.setItem(CHUNK_RECOVERY_SESSION_KEY, "1");
+    void clearDeploymentCaches().then(() => {
+      window.location.replace(window.location.href);
+    });
+  }, [error]);
+
+  const retry = () => {
+    if (isLikelyChunkLoadError(error)) {
+      void clearDeploymentCaches().then(() => {
+        window.location.replace(window.location.href);
+      });
+      return;
+    }
+
+    reset();
+  };
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-5 px-4 text-center">
@@ -57,7 +122,7 @@ export default function GlobalError({
         <Button variant="outline" onClick={() => (window.location.href = "/")}>
           Go to homepage
         </Button>
-        <Button onClick={() => reset()}>Try Again</Button>
+        <Button onClick={retry}>Try Again</Button>
       </div>
     </div>
   );

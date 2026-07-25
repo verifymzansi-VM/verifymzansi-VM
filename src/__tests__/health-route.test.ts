@@ -25,6 +25,19 @@ describe("Health route", () => {
     vi.useRealTimers();
   });
 
+  it("returns a fast liveness payload by default", async () => {
+    const { GET } = await import("@/app/api/health/route");
+    const response = await GET(new Request("https://verifymzansi.com/api/health"));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      status: "ok",
+      readiness: "ok",
+      timestamp: expect.any(String),
+    });
+    expect(getLaunchHealthSnapshot).not.toHaveBeenCalled();
+  });
+
   it("returns HTTP 200 when the launch snapshot is healthy", async () => {
     vi.mocked(getLaunchHealthSnapshot).mockResolvedValue({
       status: "ok",
@@ -45,7 +58,7 @@ describe("Health route", () => {
     });
 
     const { GET } = await import("@/app/api/health/route");
-    const response = await GET();
+    const response = await GET(new Request("https://verifymzansi.com/api/health?deep=1"));
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toBe(
@@ -86,7 +99,7 @@ describe("Health route", () => {
     });
 
     const { GET } = await import("@/app/api/health/route");
-    const response = await GET();
+    const response = await GET(new Request("https://verifymzansi.com/api/health?deep=1"));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
@@ -105,7 +118,7 @@ describe("Health route", () => {
     vi.mocked(getLaunchHealthSnapshot).mockRejectedValue(new Error("schema probe timed out"));
 
     const { GET } = await import("@/app/api/health/route");
-    const response = await GET();
+    const response = await GET(new Request("https://verifymzansi.com/api/health?deep=1"));
     const payload = await response.json();
 
     expect(response.status).toBe(503);
@@ -124,7 +137,7 @@ describe("Health route", () => {
     vi.mocked(getLaunchHealthSnapshot).mockReturnValue(new Promise(() => undefined));
 
     const { GET } = await import("@/app/api/health/route");
-    const responsePromise = GET();
+    const responsePromise = GET(new Request("https://verifymzansi.com/api/health?deep=1"));
 
     await vi.advanceTimersByTimeAsync(1200);
     const response = await responsePromise;

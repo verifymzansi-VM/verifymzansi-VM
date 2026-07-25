@@ -154,6 +154,10 @@ describe("CreateBusinessPage", () => {
     global.fetch = vi.fn() as unknown as typeof fetch;
   });
 
+  function acceptBusinessTerms() {
+    fireEvent.click(screen.getByLabelText(/I accept the VerifyMzansi posting terms/i));
+  }
+
   async function selectBusinessType(name: RegExp) {
     await act(async () => {
       fireEvent.click(screen.getByRole("radio", { name }));
@@ -391,6 +395,7 @@ describe("CreateBusinessPage", () => {
 
     await completeStandaloneStepOne();
     await completeLocationStep();
+    acceptBusinessTerms();
 
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
@@ -445,6 +450,7 @@ describe("CreateBusinessPage", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /Profile photos \(up to 5\)/i }));
     });
+    acceptBusinessTerms();
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
     });
@@ -489,6 +495,7 @@ describe("CreateBusinessPage", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Business logo (optional)" }));
     });
+    acceptBusinessTerms();
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
     });
@@ -524,6 +531,7 @@ describe("CreateBusinessPage", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /Profile photos \(up to 5\)/i }));
     });
+    acceptBusinessTerms();
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
     });
@@ -551,6 +559,7 @@ describe("CreateBusinessPage", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Business logo (optional)" }));
     });
+    acceptBusinessTerms();
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
     });
@@ -603,6 +612,7 @@ describe("CreateBusinessPage", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /Business logo \(optional\)/i }));
     });
+    acceptBusinessTerms();
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
     });
@@ -640,6 +650,7 @@ describe("CreateBusinessPage", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /Video \(optional\)/i }));
     });
+    acceptBusinessTerms();
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
     });
@@ -695,6 +706,7 @@ describe("CreateBusinessPage", () => {
     fireEvent.change(screen.getByPlaceholderText("Facebook URL"), {
       target: { value: "not-a-url" },
     });
+    acceptBusinessTerms();
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
     });
@@ -729,6 +741,7 @@ describe("CreateBusinessPage", () => {
 
     await completeStandaloneStepOne();
     await completeLocationStep();
+    acceptBusinessTerms();
 
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
@@ -751,6 +764,7 @@ describe("CreateBusinessPage", () => {
 
     await completeStandaloneStepOne();
     await completeLocationStep();
+    acceptBusinessTerms();
 
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
@@ -773,6 +787,7 @@ describe("CreateBusinessPage", () => {
 
     await completeStandaloneStepOne();
     await completeLocationStep();
+    acceptBusinessTerms();
 
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
@@ -795,6 +810,7 @@ describe("CreateBusinessPage", () => {
 
     await completeStandaloneStepOne();
     await completeLocationStep();
+    acceptBusinessTerms();
 
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
@@ -814,6 +830,7 @@ describe("CreateBusinessPage", () => {
 
     await completeStandaloneStepOne();
     await completeLocationStep();
+    acceptBusinessTerms();
 
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
@@ -833,6 +850,7 @@ describe("CreateBusinessPage", () => {
 
     await completeStandaloneStepOne();
     await completeLocationStep();
+    acceptBusinessTerms();
 
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
@@ -870,6 +888,7 @@ describe("CreateBusinessPage", () => {
     await completeLocationStep();
 
     expect(screen.queryByText(/^Delivery Service$/i)).not.toBeInTheDocument();
+    acceptBusinessTerms();
 
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 

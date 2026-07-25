@@ -34,6 +34,26 @@ describe("getKycOverviewMetrics", () => {
     expect(metrics.completionRate).toBe(0);
     expect(metrics.riskDistribution).toEqual({ low: 0, medium: 0, high: 0, critical: 0 });
   });
+
+  it("counts completed sessions via finalized_at and pending steps via status = pending", async () => {
+    const chain = {
+      gte: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      is: vi.fn().mockReturnThis(),
+      not: vi.fn().mockReturnThis(),
+      lte: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue({ data: [], count: 0 }),
+    };
+    mockSelect.mockReturnValue(chain);
+
+    await getKycOverviewMetrics(30);
+
+    // verification_sessions has no status column — completion is finalized_at
+    expect(chain.not).toHaveBeenCalledWith("finalized_at", "is", null);
+    // verification_steps.status is NOT NULL DEFAULT 'pending' — is-null never matches
+    expect(chain.eq).toHaveBeenCalledWith("status", "pending");
+    expect(chain.is).not.toHaveBeenCalledWith("status", null);
+  });
 });
 
 describe("getRejectionBreakdown", () => {
@@ -59,16 +79,18 @@ describe("getRejectionBreakdown", () => {
       gte: vi.fn().mockReturnThis(),
       limit: vi.fn().mockResolvedValue({
         data: [
-          { override_reason_code: "BLURRY_ID" },
-          { override_reason_code: "BLURRY_ID" },
-          { override_reason_code: "FRAUDULENT" },
-          { override_reason_code: null },
+          { reason_code: "BLURRY_ID" },
+          { reason_code: "BLURRY_ID" },
+          { reason_code: "FRAUDULENT" },
+          { reason_code: null },
         ],
       }),
     };
     mockSelect.mockReturnValue(chain);
 
     const breakdown = await getRejectionBreakdown();
+    // The decide route writes rejection reasons to reason_code
+    expect(mockSelect).toHaveBeenCalledWith("reason_code");
     expect(breakdown).toHaveLength(3);
     expect(breakdown[0].reasonCode).toBe("BLURRY_ID");
     expect(breakdown[0].count).toBe(2);

@@ -113,10 +113,6 @@ function getEditHref(id: string, area?: string | null): string {
       return `/post/edit-business/${id}`;
     case "PROMOTIONS_EVENTS":
       return `/post/edit-tourism/${id}`;
-    case "BUSINESS_ADS":
-      return `/post/edit-business/${id}`;
-    case "MALL_SHOPS":
-      return `/post/edit-business/${id}`;
     default:
       return `/post/edit-listing/${id}`;
   }

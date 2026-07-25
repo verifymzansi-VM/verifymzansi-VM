@@ -77,6 +77,20 @@ describe("listing route helpers", () => {
     expect(query.order).toHaveBeenCalledWith("price_cents", { ascending: true });
   });
 
+  it("forces an empty result when the search token sanitizes to nothing", () => {
+    const { query } = createQueryRecorder();
+
+    applyBaseMarketFilters(query, {
+      query: "!!!",
+      sort: "newest",
+      attributes: {},
+      page: 1,
+    } as never);
+
+    expect(query.eq).toHaveBeenCalledWith("id", "00000000-0000-0000-0000-000000000000");
+    expect(query.or).not.toHaveBeenCalledWith(expect.stringContaining("title.ilike"));
+  });
+
   it("matches attribute filters across arrays, booleans, numbers, and strings", () => {
     expect(
       matchesAttributeFilters(

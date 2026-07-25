@@ -67,9 +67,11 @@ function buildTieredCounterKey(baseKey: string, ttl: number): string {
  * Action-specific rate limit configurations.
  * Used for generic (non-OTP) rate limiting via the same DO infrastructure.
  *
- * Every action sent by the app MUST be listed here. Unknown actions that
- * fall through to the OTP path will be treated as OTP sends (1 per 60 s)
- * which is catastrophically wrong for read endpoints.
+ * Every action sent by the app MUST be listed here. Unknown actions do NOT
+ * fall through to the OTP path — they silently get the conservative default
+ * of { limit: 30, ttl: 60 } (30 per minute), which is wrong for both strict
+ * auth/payment flows and lenient read endpoints. Keep this list in sync with
+ * the `checkRateLimit({ action: ... })` call sites under `src/`.
  */
 const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
   // ── Auth ─────────────────────────────────────────────
@@ -78,9 +80,51 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 10, ttl: 60 }, // 10 per minute
     { limit: 30, ttl: 3600 }, // 30 per hour
   ],
+  "auth:login:nocaptcha": [
+    { limit: 5, ttl: 60 }, // stricter than auth:login — no Turnstile token
+    { limit: 15, ttl: 3600 }, // 15 per hour
+  ],
   "auth:register": [
     { limit: 10, ttl: 600 }, // 10 per 10 minutes
     { limit: 30, ttl: 3600 }, // 30 per hour
+  ],
+  "auth:change-password": [
+    { limit: 5, ttl: 60 }, // 5 per minute
+    { limit: 10, ttl: 3600 }, // 10 per hour
+  ],
+  "auth:reset-password": [
+    { limit: 5, ttl: 60 }, // 5 per minute
+    { limit: 10, ttl: 3600 }, // 10 per hour
+  ],
+  "auth:forgot-password": [
+    { limit: 5, ttl: 60 }, // 5 per minute per IP
+    { limit: 15, ttl: 3600 }, // 15 per hour per IP
+  ],
+  "auth:forgot-password-email": [
+    { limit: 3, ttl: 600 }, // 3 per 10 minutes per email
+    { limit: 5, ttl: 3600 }, // 5 per hour per email
+  ],
+  "auth:resend-confirmation": [
+    { limit: 5, ttl: 60 }, // 5 per minute per IP
+    { limit: 15, ttl: 3600 }, // 15 per hour per IP
+  ],
+  "auth:resend-confirmation-email": [
+    { limit: 3, ttl: 600 }, // 3 per 10 minutes per email
+    { limit: 5, ttl: 3600 }, // 5 per hour per email
+  ],
+
+  // ── OTP ──────────────────────────────────────────────
+  // The app always sends action "otp:send" (keyed by `${user.id}:${phone}`)
+  // — mirror the dedicated OTP tier cadence below so it does not fall back
+  // to the 30/minute default.
+  "otp:send": [
+    { limit: 1, ttl: 60 }, // 1 per 60 s
+    { limit: 5, ttl: 3600 }, // 5 per hour
+    { limit: 10, ttl: 86400 }, // 10 per day
+  ],
+  "otp:verify": [
+    { limit: 5, ttl: 60 }, // 5 per minute
+    { limit: 20, ttl: 3600 }, // 20 per hour
   ],
 
   // ── Public reads (generous — browsing with filters/pagination) ──
@@ -100,13 +144,43 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
   ],
   "verification:status": [{ limit: 30, ttl: 60 }], // polling-friendly
   "verification:gps": [{ limit: 10, ttl: 60 }],
+  "verification:manual-location": [{ limit: 10, ttl: 60 }],
+  "verify-buyer": [
+    { limit: 10, ttl: 60 }, // 10 per minute
+    { limit: 30, ttl: 3600 }, // 30 per hour
+  ],
+
+  // ── Account ──────────────────────────────────────────
+  "account:delete": [
+    { limit: 3, ttl: 60 }, // 3 per minute
+    { limit: 5, ttl: 3600 }, // 5 per hour
+  ],
+  "account:email-change": [
+    { limit: 3, ttl: 60 }, // 3 per minute
+    { limit: 5, ttl: 3600 }, // 5 per hour
+  ],
 
   // ── Billing / webhooks ───────────────────────────────
   "billing:checkout": [{ limit: 10, ttl: 60 }],
+  "billing:change-plan": [
+    { limit: 5, ttl: 60 }, // 5 per minute
+    { limit: 10, ttl: 3600 }, // 10 per hour
+  ],
+  "billing:cancel": [
+    { limit: 5, ttl: 60 }, // 5 per minute
+    { limit: 10, ttl: 3600 }, // 10 per hour
+  ],
+  "billing:cancel-pending": [
+    { limit: 5, ttl: 60 }, // 5 per minute
+    { limit: 10, ttl: 3600 }, // 10 per hour
+  ],
   "webhook:ozow": [{ limit: 100, ttl: 60 }], // webhooks can be bursty
+  "webhook:kyc": [{ limit: 100, ttl: 60 }], // webhooks can be bursty
 
   // ── Media ────────────────────────────────────────────
   "media:upload": [{ limit: 20, ttl: 60 }],
+  "media:upload-url": [{ limit: 20, ttl: 60 }],
+  "media:upload-complete": [{ limit: 20, ttl: 60 }],
 
   // ── Contact ──────────────────────────────────────────
   "contact:send": [
@@ -127,15 +201,34 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
   // ── Promotions management ────────────────────────────
   "promotion:featured": [{ limit: 10, ttl: 60 }],
   "promotion:boost": [{ limit: 10, ttl: 60 }],
+  "promotion:urgent": [{ limit: 10, ttl: 60 }],
 
   // ── Listings ─────────────────────────────────────────
+  // NOTE: the app sends these with UNDERSCORES (e.g. src/app/api/listings/
+  // route.ts sends "listing_create") — the strings must match exactly.
   "listing:create": [
+    { limit: 10, ttl: 60 },
+    { limit: 30, ttl: 3600 },
+  ],
+  listing_create: [
+    { limit: 10, ttl: 60 },
+    { limit: 30, ttl: 3600 },
+  ],
+  listing_update: [
+    { limit: 20, ttl: 60 },
+    { limit: 60, ttl: 3600 },
+  ],
+  business_create: [
     { limit: 10, ttl: 60 },
     { limit: 30, ttl: 3600 },
   ],
 
   // ── Promotions creation ──────────────────────────────
   "promotion:create": [
+    { limit: 10, ttl: 60 },
+    { limit: 30, ttl: 3600 },
+  ],
+  promotion_create: [
     { limit: 10, ttl: 60 },
     { limit: 30, ttl: 3600 },
   ],
@@ -230,6 +323,27 @@ function normalizePhone(phone: string): string {
   if (digits.startsWith("27") && digits.length >= 11) return `+${digits}`;
   if (digits.startsWith("0") && digits.length >= 10) return `+27${digits.slice(1)}`;
   return digits; // fallback: use as-is
+}
+
+/**
+ * Constant-time shared-secret comparison. workerd has no node:crypto
+ * `timingSafeEqual`, so use a length-normalized XOR loop instead.
+ */
+function timingSafeEqual(a: string, b: string): boolean {
+  const maxLength = Math.max(a.length, b.length);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < maxLength; i += 1) {
+    const aCode = i < a.length ? a.charCodeAt(i) : 0;
+    const bCode = i < b.length ? b.charCodeAt(i) : 0;
+    diff |= aCode ^ bCode;
+  }
+  return diff === 0;
+}
+
+/** Parse a KV counter, treating missing or corrupted (NaN) values as 0. */
+function parseKvCounter(value: string | null): number {
+  const parsed = parseInt(value ?? "0", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
 // ── Durable Object: Atomic Rate Limiter ─────────────────────────────────────
@@ -351,9 +465,10 @@ const worker = {
       });
     }
 
-    // Authenticate caller via shared secret
+    // Authenticate caller via shared secret (constant-time comparison)
     const authHeader = request.headers.get("Authorization");
-    if (!env.WORKER_API_KEY || authHeader !== `Bearer ${env.WORKER_API_KEY}`) {
+    const expectedAuthHeader = env.WORKER_API_KEY ? `Bearer ${env.WORKER_API_KEY}` : "";
+    if (!expectedAuthHeader || !timingSafeEqual(authHeader ?? "", expectedAuthHeader)) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { "Content-Type": "application/json" },
@@ -405,14 +520,17 @@ const worker = {
         }
       }
 
-      // KV fallback for generic actions
+      // KV fallback for generic actions. Snapshot and check every tier
+      // FIRST, then increment only when all pass — otherwise a request
+      // rejected by a later tier still consumes quota on the earlier tiers.
       let kvTightestLimit = 0;
       let kvTightestRemaining = Infinity;
       let kvTightestReset = 0;
       const kvNow = Date.now();
+      const actionKvSnapshots: { key: string; ttl: number; current: number }[] = [];
       for (const c of limits) {
         const k = buildTieredCounterKey(`${action}:${rateKey}`, c.ttl);
-        const current = parseInt((await env.OTP_RATE_LIMITS.get(k)) || "0", 10);
+        const current = parseKvCounter(await env.OTP_RATE_LIMITS.get(k));
         const resetEpoch = Math.ceil((kvNow + c.ttl * 1000) / 1000);
         if (current >= c.limit) {
           return Response.json(
@@ -426,8 +544,13 @@ const worker = {
           kvTightestLimit = c.limit;
           kvTightestReset = resetEpoch;
         }
-        if (!readOnly) {
-          await env.OTP_RATE_LIMITS.put(k, String(current + 1), { expirationTtl: c.ttl });
+        actionKvSnapshots.push({ key: k, ttl: c.ttl, current });
+      }
+      if (!readOnly) {
+        for (const snapshot of actionKvSnapshots) {
+          await env.OTP_RATE_LIMITS.put(snapshot.key, String(snapshot.current + 1), {
+            expirationTtl: snapshot.ttl,
+          });
         }
       }
       return Response.json(
@@ -480,7 +603,7 @@ const worker = {
     const otpNow = Date.now();
     const kvSnapshots: { check: RateCheck; current: number }[] = [];
     for (const check of checks) {
-      const current = parseInt((await env.OTP_RATE_LIMITS.get(check.key)) || "0", 10);
+      const current = parseKvCounter(await env.OTP_RATE_LIMITS.get(check.key));
       const resetEpoch = Math.ceil((otpNow + check.ttl * 1000) / 1000);
       if (current >= check.limit) {
         return Response.json(

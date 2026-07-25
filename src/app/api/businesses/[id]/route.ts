@@ -455,12 +455,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const updateQuery = applyOwnerFilter(
       supabase
         .from("businesses")
-        .update({
-          ...proposedPayload,
-          // Re-trigger moderation only for live businesses so changed content is reviewed.
-          // Draft and rejected businesses keep their current status.
-          ...(existing.status === "live" ? { status: "pending_moderation" as const } : {}),
-        })
+        // Only non-live businesses reach this direct-update path — live
+        // businesses returned early via the edit-request flow above.
+        .update(proposedPayload)
         .eq("id", id),
       ownerColumn,
       user.id
@@ -503,14 +500,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     if (shouldSendOwnerLifecycleNotifications()) {
-      const movedBackToReview = existing.status === "live";
       void createNotification({
         userId: user.id,
-        type: movedBackToReview ? "warning" : "info",
-        title: movedBackToReview ? "Business profile moved to review" : "Business profile updated",
-        message: movedBackToReview
-          ? `\"${data.business_name}\" was updated and is now pending moderation.`
-          : `\"${data.business_name}\" was updated successfully.`,
+        type: "info",
+        title: "Business profile updated",
+        message: `\"${data.business_name}\" was updated successfully.`,
         href: "/dashboard/businesses",
       });
     }

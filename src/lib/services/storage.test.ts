@@ -1,16 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Use vi.hoisted so mock references are available when vi.mock factories run
-const { mockSend, mockGetSignedUrl, mockEncryptFile, mockDecryptFile } = vi.hoisted(() => ({
-  mockSend: vi.fn().mockResolvedValue({}),
-  mockGetSignedUrl: vi.fn().mockResolvedValue("https://signed-url.example.com"),
-  mockEncryptFile: vi.fn().mockResolvedValue(Buffer.from("encrypted-data")),
-  mockDecryptFile: vi.fn().mockReturnValue(Buffer.from("decrypted-data")),
-}));
+const { mockSend, mockGetSignedUrl, mockEncryptFile, mockDecryptFile, mockS3ClientConfigs } =
+  vi.hoisted(() => ({
+    mockSend: vi.fn().mockResolvedValue({}),
+    mockGetSignedUrl: vi.fn().mockResolvedValue("https://signed-url.example.com"),
+    mockEncryptFile: vi.fn().mockResolvedValue(Buffer.from("encrypted-data")),
+    mockDecryptFile: vi.fn().mockReturnValue(Buffer.from("decrypted-data")),
+    mockS3ClientConfigs: [] as unknown[],
+  }));
 
 vi.mock("@aws-sdk/client-s3", () => {
   class MockS3Client {
     send = mockSend;
+    constructor(config?: unknown) {
+      mockS3ClientConfigs.push(config);
+    }
   }
   return {
     S3Client: MockS3Client,
@@ -71,10 +76,21 @@ describe("storage service", () => {
       expect(key).toMatch(/\.pdf$/);
     });
 
-    it("uses last segment after dot as extension", () => {
-      // "noext" has no dot, so split(".").pop() returns "noext" itself
+    it("falls back to a safe extension for extensionless filenames", () => {
+      // "noext" has no dot — the whole filename must not become the extension
       const key = generateStorageKey("photos", "s3", "noext");
-      expect(key).toMatch(/\.noext$/);
+      expect(key).toMatch(/\.jpg$/);
+    });
+
+    it("derives the extension from the declared MIME type for extensionless filenames", () => {
+      // Android content-picker files arrive without an extension
+      const key = generateStorageKey("media/listing", "user-1", "1000061870", "image/png");
+      expect(key).toMatch(/^media\/listing\/user-1\/\d+-[a-z0-9]+\.png$/);
+    });
+
+    it("derives the extension from the declared MIME type when the filename extension is numeric", () => {
+      const key = generateStorageKey("media/listing", "user-1", "clip.12345", "video/mp4");
+      expect(key).toMatch(/\.mp4$/);
     });
 
     it("generates unique keys each call", () => {
@@ -122,10 +138,32 @@ describe("storage service", () => {
     });
   });
 
+  describe("R2 client configuration", () => {
+    it("disables SDK default checksums for R2 compatibility", async () => {
+      // Force a fresh client construction (the singleton is keyed by credentials)
+      process.env.R2_ACCOUNT_ID = "checksum-account";
+      await deleteFromR2("my-bucket", "some/key.jpg");
+
+      expect(mockS3ClientConfigs.at(-1)).toMatchObject({
+        requestChecksumCalculation: "WHEN_REQUIRED",
+        responseChecksumValidation: "WHEN_REQUIRED",
+      });
+    });
+  });
+
   describe("generatePresignedUploadUrl", () => {
     it("returns a signed URL", async () => {
       const url = await generatePresignedUploadUrl("bucket", "key", "image/png");
       expect(url).toBe("https://signed-url.example.com");
+    });
+
+    it("pins the declared Content-Type into the signature", async () => {
+      await generatePresignedUploadUrl("bucket", "key", "video/mp4", 3600, 1024);
+      expect(mockGetSignedUrl).toHaveBeenCalledTimes(1);
+      const [, command, options] = mockGetSignedUrl.mock.calls[0];
+      expect(command.params).toMatchObject({ ContentType: "video/mp4", ContentLength: 1024 });
+      expect(options.signableHeaders).toBeInstanceOf(Set);
+      expect([...options.signableHeaders]).toContain("content-type");
     });
   });
 
@@ -254,6 +292,27 @@ describe("storage service", () => {
       await expect(downloadKycDocument("kyc/missing.bin")).rejects.toThrow(
         "Failed to download KYC document"
       );
+    });
+
+    it("downloads via a native Cloudflare R2 binding when available", async () => {
+      const get = vi.fn().mockResolvedValue({
+        arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+        size: 3,
+        httpMetadata: { contentType: "application/octet-stream" },
+      });
+      (globalThis as Record<string, unknown>).env = {
+        PRIVATE_BUCKET: {
+          put: vi.fn(),
+          get,
+          delete: vi.fn(),
+        },
+      };
+
+      const buffer = await downloadKycDocument("kyc/id_document/seller-1/file.bin");
+
+      expect(get).toHaveBeenCalledTimes(1);
+      expect(mockSend).not.toHaveBeenCalled();
+      expect(buffer).toEqual(Buffer.from("decrypted-data"));
     });
   });
 

@@ -32,7 +32,7 @@ const demoItems: CarouselItem[] = [
   {
     id: "drag-3",
     type: "promotion",
-    href: "/promotion/drag-3",
+    href: "/tourism-events/drag-3",
     title: "Drag Test Three",
     description: "Third showroom drag card",
     location: "Durban",

@@ -1,8 +1,14 @@
 import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
+import { maskPhone } from "@/lib/utils/mask";
 
 const log = createLogger("SMS");
 const AT_SENDER_ID_REGEX = /^[A-Za-z0-9]{1,12}$/;
+
+/** Mask a recipient number for logs; AT may omit the field in edge responses. */
+function maskRecipientNumber(number: string | undefined): string {
+  return number ? maskPhone(number) : "unknown";
+}
 
 /**
  * Africa's Talking SMS service for South African phone numbers.
@@ -94,7 +100,7 @@ function isRetryable(error: unknown, statusCode?: number): boolean {
 export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
   if (process.env.NODE_ENV === "development" && process.env.SMS_MOCK === "true") {
     const rawTo = Array.isArray(params.to) ? params.to[0] : params.to;
-    log.info("Mock SMS sent", { to: rawTo.slice(0, 4) + "****" + rawTo.slice(-2) });
+    log.info("Mock SMS sent", { to: maskPhone(rawTo) });
     return {
       success: true,
       messageId: "mock-" + Date.now(),
@@ -158,9 +164,10 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
       }
 
       if (!response.ok) {
+        // Never log the raw body — provider error payloads can echo recipient
+        // phone numbers.
         log.error("Africa's Talking HTTP error", {
           status: response.status,
-          body: rawBody,
           username,
           baseUrl,
           hasApiKey: !!apiKey,
@@ -183,7 +190,6 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
         result = JSON.parse(rawBody);
       } catch (parseErr) {
         log.error("Africa's Talking JSON parse error", {
-          rawBody: rawBody.slice(0, 500),
           error: parseErr instanceof Error ? parseErr.message : "Unknown parse error",
           includeSenderId,
         });
@@ -191,9 +197,17 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
         return { success: false, error: "Unexpected response format from SMS provider" };
       }
 
+      // Log only delivery metadata with masked recipient numbers — never the
+      // raw provider response, which contains full phone numbers.
       log.info("Africa's Talking response received", {
         recipientCount: result.SMSMessageData?.Recipients?.length ?? 0,
-        rawResponse: rawBody.slice(0, 500),
+        recipients: result.SMSMessageData?.Recipients?.map((r) => ({
+          number: maskRecipientNumber(r.number),
+          status: r.status,
+          statusCode: r.statusCode,
+          messageId: r.messageId,
+          cost: r.cost,
+        })),
         includeSenderId,
       });
 
@@ -233,7 +247,7 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
         if (failed.length > 0) {
           log.warn("AT recipients with non-success status", {
             failed: failed.map((f) => ({
-              number: f.number,
+              number: maskRecipientNumber(f.number),
               status: f.status,
               statusCode: f.statusCode,
             })),

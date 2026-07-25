@@ -43,6 +43,7 @@ describe("GET /api/media/serve/[...key]", () => {
     process.env.R2_PUBLIC_BUCKET = "public-bucket";
     delete process.env.R2_PUBLIC_URL;
     delete process.env.NEXT_PUBLIC_MEDIA_URL;
+    delete (process.env as unknown as Record<string, unknown>).PUBLIC_BUCKET;
   });
 
   it("rejects invalid storage keys", async () => {
@@ -69,6 +70,47 @@ describe("GET /api/media/serve/[...key]", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Disposition")).toContain("attachment");
     expect(res.headers.get("Content-Security-Policy")).toContain("default-src 'none'");
+  });
+
+  it("prefers the extension MIME over stored object metadata (S3 path)", async () => {
+    // A direct upload could have stored text/html on a .jpg key — serving it
+    // inline would be stored XSS, so the extension mapping must win.
+    mockSend.mockResolvedValue({
+      ContentType: "text/html",
+      ETag: '"etag-html"',
+      Body: {
+        transformToByteArray: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
+      },
+    });
+
+    const res = await GET(createRequest(), {
+      params: Promise.resolve({ key: ["media", "listing", "abc", "1730000-photo.jpg"] }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("image/jpeg");
+  });
+
+  it("prefers the extension MIME over stored object metadata (R2 binding path)", async () => {
+    const obj = {
+      key: "media/listing/abc/1730000-photo.jpg",
+      size: 3,
+      etag: '"etag-binding"',
+      httpMetadata: { contentType: "text/html" },
+      body: new ReadableStream(),
+      arrayBuffer: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3]).buffer),
+    };
+    (process.env as unknown as Record<string, unknown>).PUBLIC_BUCKET = {
+      get: vi.fn().mockResolvedValue(obj),
+      head: vi.fn().mockResolvedValue(obj),
+    };
+
+    const res = await GET(createRequest(), {
+      params: Promise.resolve({ key: ["media", "listing", "abc", "1730000-photo.jpg"] }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("image/jpeg");
   });
 
   it("returns partial content for ranged video requests", async () => {

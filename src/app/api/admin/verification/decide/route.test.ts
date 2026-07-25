@@ -526,6 +526,79 @@ describe("POST /api/admin/verification/decide", () => {
     });
   });
 
+  it("clears stale rejection reason fields when approving a step", async () => {
+    mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
+
+    const previouslyRejectedStep = {
+      ...baseStep,
+      reason_code: "blurry_image",
+      reason_note: "The photo is very blurry",
+    };
+
+    const profileUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        in: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    });
+    const updateMock = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        in: vi.fn().mockReturnValue({
+          select: vi.fn().mockResolvedValue({ data: [{ id: STEP_UUID }], error: null }),
+        }),
+      }),
+    });
+
+    let artifactLookupReturned = false;
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockImplementation((...args: unknown[]) => {
+            if (args[0] === "*") {
+              return {
+                eq: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({ data: previouslyRejectedStep, error: null }),
+                }),
+              };
+            }
+
+            return {
+              eq: vi.fn().mockResolvedValue({
+                data: [{ step_type: "phone", status: "approved" }],
+                error: null,
+              }),
+            };
+          }),
+          update: updateMock,
+        };
+      }
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          update: profileUpdate,
+        };
+      }
+      if (table === "kyc_artifacts") {
+        if (!artifactLookupReturned) {
+          artifactLookupReturned = true;
+          return artifactLookupChain();
+        }
+
+        return artifactStatusUpdateChain();
+      }
+      return {};
+    });
+
+    const response = await POST(createMockRequest({ stepId: STEP_UUID, decision: "approved" }));
+
+    expect(response.status).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "approved",
+        reason_code: null,
+        reason_note: null,
+      })
+    );
+  });
+
   it("rejects step with reason code", async () => {
     mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
 

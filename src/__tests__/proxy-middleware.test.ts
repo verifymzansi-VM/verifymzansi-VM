@@ -22,12 +22,15 @@ import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 function createMockRequest(
   path: string,
-  options?: { hostname?: string; cookieHeader?: string }
+  options?: { hostname?: string; cookieHeader?: string; ip?: string }
 ): NextRequest {
   const hostname = options?.hostname ?? "localhost";
   const url = `http://${hostname}:3000${path}`;
+  const headers: Record<string, string> = {};
+  if (options?.cookieHeader) headers.cookie = options.cookieHeader;
+  if (options?.ip) headers["x-forwarded-for"] = options.ip;
   return new NextRequest(url, {
-    headers: options?.cookieHeader ? { cookie: options.cookieHeader } : undefined,
+    headers: Object.keys(headers).length > 0 ? headers : undefined,
   });
 }
 
@@ -500,36 +503,30 @@ describe("proxy — authenticated routing", () => {
     expect(location.searchParams.get("reason")).toBe("unavailable");
   });
 
-  it("allows /api/post/create for verified users through posting gate", async () => {
-    mockGetUser.mockResolvedValue({
-      data: {
-        user: {
-          id: "user-1",
-          is_anonymous: false,
-          app_metadata: { role: "seller" },
-        },
-      },
-    });
+  it("no longer treats /api/post/* as protected (routes do not exist)", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
 
-    mockFrom.mockReturnValue({
-      select: () => ({
-        eq: () => ({
-          maybeSingle: () =>
-            Promise.resolve({
-              data: {
-                phone: "+27600000000",
-                account_verification_status: "verified",
-                account_status: "active",
-                suspended_until: null,
-              },
-              error: null,
-            }),
-        }),
-      }),
-    });
-
+    // The /api/post/* creation APIs were removed; creation lives under
+    // /api/listings|businesses|promotions, which enforce their own auth.
     const res = await routeRequest(createMockRequest("/api/post/create"));
     expect(res.status).toBe(200);
+  });
+
+  it("rate-limits the public marketplace browse prefixes to deter scraping", async () => {
+    const ip = "203.0.113.77";
+    const browse = (path: string) => routeRequest(createMockRequest(path, { ip }));
+
+    // 60 requests spread across the real browse surfaces all pass…
+    for (let i = 0; i < 20; i++) {
+      expect((await browse("/mzansi-market")).status).toBe(200);
+      expect((await browse("/mzansi-business")).status).toBe(200);
+      expect((await browse("/tourism-events")).status).toBe(200);
+    }
+
+    // …and the 61st request to any of them is throttled.
+    const res = await browse("/mzansi-market");
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBeTruthy();
   });
 
   it("allows verified posting routes when the legacy profile status is stale but all steps are approved", async () => {

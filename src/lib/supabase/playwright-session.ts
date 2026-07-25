@@ -15,9 +15,19 @@ type StubUser = {
 };
 
 function decodeSessionPersona(token: string | null | undefined): string | null {
-  const normalizedToken = token ? decodeURIComponent(token) : null;
+  if (!token) {
+    return null;
+  }
 
-  if (!normalizedToken?.startsWith(PLAYWRIGHT_SESSION_PREFIX)) {
+  let normalizedToken: string;
+  try {
+    normalizedToken = decodeURIComponent(token);
+  } catch {
+    // Malformed percent-encoding — treat as no persona.
+    return null;
+  }
+
+  if (!normalizedToken.startsWith(PLAYWRIGHT_SESSION_PREFIX)) {
     return null;
   }
 

@@ -59,7 +59,9 @@ export interface KycEngineOutput {
 /**
  * Processes a newly uploaded KYC artifact:
  * 1. Computes SHA-256 and checks for duplicate submissions across accounts.
- * 2. Checks upload velocity (≥4 attempts in 24h for same step type).
+ * 2. Checks upload velocity (warn fires on the 3rd upload in 24h for the same
+ *    step type — the RPC default is p_max_per_24h = 3 and the count includes
+ *    the just-inserted artifact).
  * 3. Checks ID number HMAC reuse across accounts (id_doc only).
  * 4. Calls the configured KYC provider and persists the result.
  * 5. Aggregates signals into a risk score and level.
@@ -501,6 +503,20 @@ export async function processKycArtifact(input: KycEngineInput): Promise<KycEngi
   // ── 9. Aggregate risk score ───────────────────────────────
   const riskScore = Math.min(signalScore, 100);
   const riskLevel = deriveRiskLevel(riskScore);
+
+  // Re-evaluate block-level signals against the FINAL aggregate score. The
+  // provider-time decision above only saw the signals known at that point —
+  // a block-severity signal added later (e.g. phone linked to a flagged
+  // account) must never leave an auto-approved/auto-rejected verdict standing.
+  if (signalScore >= SEVERITY_WEIGHT.block && autoStatus !== "needs_manual_review") {
+    log.warn("Block-severity signal present — forcing manual review over provider verdict", {
+      userId,
+      artifactId,
+      signalScore,
+      previousAutoStatus: autoStatus,
+    });
+    autoStatus = "needs_manual_review";
+  }
 
   log.info("KYC engine complete", { artifactId, riskScore, riskLevel, autoStatus });
 

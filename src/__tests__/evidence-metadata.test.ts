@@ -120,6 +120,31 @@ const MOCK_SELLER_PROFILE = {
   location_city: "Johannesburg",
 };
 
+// Matches the real kyc_risk_signals schema
+// (supabase/migrations/20260224000000_kyc_fraud_resistant_schema.sql)
+const MOCK_RISK_SIGNAL = {
+  id: "signal-1",
+  user_id: "seller-1",
+  artifact_id: "art-1",
+  signal_code: "duplicate_sha256",
+  severity: "block",
+  value_json: { matchingArtifactId: "art-9" },
+  created_at: "2025-01-02T00:00:00Z",
+};
+
+// Matches the real kyc_provider_results schema
+const MOCK_PROVIDER_RESULT = {
+  id: "pr-1",
+  artifact_id: "art-1",
+  provider_name: "stub",
+  provider_status: "approved",
+  face_match_score: 95,
+  liveness_score: 90,
+  doc_auth_score: 85,
+  provider_ref: "sim_rev_123",
+  created_at: "2025-01-02T00:00:00Z",
+};
+
 // ── Chainable query builder stub ─────────────────────────────
 
 function chainStub(data: unknown, error: unknown = null) {
@@ -292,9 +317,9 @@ describe("Evidence Metadata API", () => {
           case "kyc_artifacts":
             return chainStub([MOCK_ARTIFACT]);
           case "kyc_provider_results":
-            return chainStub([]);
+            return chainStub([MOCK_PROVIDER_RESULT]);
           case "kyc_risk_signals":
-            return chainStub([]);
+            return chainStub([MOCK_RISK_SIGNAL]);
           case "account_profiles":
             return chainStub(MOCK_SELLER_PROFILE);
           case "kyc_evidence_access_logs":
@@ -319,9 +344,129 @@ describe("Evidence Metadata API", () => {
       expect(body.accountProfile.display_name).toBe("Test Account");
       expect(body.accountProfile.account_verification_status).toBe("pending_review");
       expect(body.sellerProfile.display_name).toBe("Test Account");
-      expect(body.riskSignals).toEqual([]);
-      expect(body.providerResults).toEqual([]);
+      expect(body.riskSignals).toEqual([
+        expect.objectContaining({
+          signal_code: "duplicate_sha256",
+          severity: "block",
+          value_json: { matchingArtifactId: "art-9" },
+        }),
+      ]);
+      expect(body.providerResults).toEqual([
+        expect.objectContaining({
+          provider_name: "stub",
+          provider_status: "approved",
+          face_match_score: 95,
+          liveness_score: 90,
+          doc_auth_score: 85,
+          provider_ref: "sim_rev_123",
+        }),
+      ]);
       expect(body.accessLog).toEqual([]);
+    });
+
+    it("requests provider results with the real kyc_provider_results columns", async () => {
+      mockAuth({ id: "admin-1", app_metadata: { role: "admin" } });
+
+      let providerSelectArg: string | null = null;
+      mockFrom.mockImplementation((table: string) => {
+        switch (table) {
+          case "verification_steps":
+            return chainStub([MOCK_STEP]);
+          case "verification_sessions":
+            return chainStub({
+              id_artifact_id: "art-1",
+              selfie_artifact_id: null,
+              location_submitted_at: null,
+            });
+          case "kyc_artifacts":
+            return chainStub([MOCK_ARTIFACT]);
+          case "kyc_provider_results": {
+            const chain = chainStub([MOCK_PROVIDER_RESULT]);
+            chain.select = vi.fn((columns: string) => {
+              providerSelectArg = columns;
+              return chain;
+            });
+            return chain;
+          }
+          case "kyc_risk_signals":
+            return chainStub([MOCK_RISK_SIGNAL]);
+          case "account_profiles":
+            return chainStub(MOCK_SELLER_PROFILE);
+          case "kyc_evidence_access_logs":
+            return chainStub([]);
+          default:
+            return chainStub([]);
+        }
+      });
+
+      const res = await GET(
+        createMockNextRequest(
+          "/api/admin/verification/evidence/metadata?stepId=00000000-0000-0000-0000-000000000010"
+        )
+      );
+      expect(res.status).toBe(200);
+
+      expect(providerSelectArg).not.toBeNull();
+      expect(providerSelectArg).toContain("provider_name");
+      expect(providerSelectArg).toContain("provider_status");
+      expect(providerSelectArg).toContain("face_match_score");
+      expect(providerSelectArg).toContain("liveness_score");
+      expect(providerSelectArg).toContain("doc_auth_score");
+      expect(providerSelectArg).toContain("provider_ref");
+      expect(providerSelectArg).not.toContain("normalized_decision");
+      expect(providerSelectArg).not.toContain("check_type");
+      expect(providerSelectArg).not.toContain("raw_status");
+    });
+
+    it("requests risk signals with the real kyc_risk_signals columns", async () => {
+      mockAuth({ id: "admin-1", app_metadata: { role: "admin" } });
+
+      let riskSignalSelectArg: string | null = null;
+      mockFrom.mockImplementation((table: string) => {
+        switch (table) {
+          case "verification_steps":
+            return chainStub([MOCK_STEP]);
+          case "verification_sessions":
+            return chainStub({
+              id_artifact_id: "art-1",
+              selfie_artifact_id: null,
+              location_submitted_at: null,
+            });
+          case "kyc_artifacts":
+            return chainStub([MOCK_ARTIFACT]);
+          case "kyc_provider_results":
+            return chainStub([MOCK_PROVIDER_RESULT]);
+          case "kyc_risk_signals": {
+            const chain = chainStub([MOCK_RISK_SIGNAL]);
+            chain.select = vi.fn((columns: string) => {
+              riskSignalSelectArg = columns;
+              return chain;
+            });
+            return chain;
+          }
+          case "account_profiles":
+            return chainStub(MOCK_SELLER_PROFILE);
+          case "kyc_evidence_access_logs":
+            return chainStub([]);
+          default:
+            return chainStub([]);
+        }
+      });
+
+      const res = await GET(
+        createMockNextRequest(
+          "/api/admin/verification/evidence/metadata?stepId=00000000-0000-0000-0000-000000000010"
+        )
+      );
+      expect(res.status).toBe(200);
+
+      expect(riskSignalSelectArg).not.toBeNull();
+      expect(riskSignalSelectArg).toContain("signal_code");
+      expect(riskSignalSelectArg).toContain("severity");
+      expect(riskSignalSelectArg).toContain("value_json");
+      expect(riskSignalSelectArg).not.toContain("signal_type");
+      expect(riskSignalSelectArg).not.toContain("signal_key");
+      expect(riskSignalSelectArg).not.toContain("detail");
     });
 
     it("returns metadata when queried by userId", async () => {

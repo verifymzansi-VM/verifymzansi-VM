@@ -4,17 +4,18 @@
  * VerifyMzansi Service Worker — offline support & caching strategy.
  *
  * Strategy:
- *  - Static assets (JS, CSS, images): Cache-first with long TTL
- *  - HTML pages: Network-first with offline fallback
+ *  - Next.js build assets: Network-only (hashed chunks must never be stale)
+ *  - Public images/icons: Cache-first with long TTL
+ *  - HTML pages: Network-only with offline fallback
  *  - API calls: Network-only (no caching of dynamic data)
  */
 
-const CACHE_NAME = "verifymzansi-v4-auth-network-only";
+const CACHE_NAME = "verifymzansi-v5-no-next-static-cache";
 const MEDIA_CACHE_NAME = "verifymzansi-media-v1";
 const MEDIA_CACHE_MAX_ENTRIES = 100;
 const OFFLINE_URL = "/offline";
 
-const PRECACHE_URLS = ["/", "/offline", "/manifest.json"];
+const PRECACHE_URLS = ["/offline", "/manifest.json"];
 
 const DEFAULT_NOTIFICATION_ICON = "/icons/icon-192.png?v=10";
 const DEFAULT_NOTIFICATION_TAG = "verifymzansi-notification";
@@ -48,21 +49,6 @@ self.addEventListener("activate", (event) => {
 });
 
 // ── Fetch: route requests to the right strategy ─────────
-// Protected route prefixes — never cache their HTML to avoid serving
-// stale auth-dependent content (common cause of post-login errors on mobile).
-const PROTECTED_PREFIXES = [
-  "/login",
-  "/register",
-  "/forgot-password",
-  "/reset-password",
-  "/auth",
-  "/dashboard",
-  "/post",
-  "/billing",
-  "/verification",
-  "/admin",
-];
-
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -80,26 +66,24 @@ self.addEventListener("fetch", (event) => {
 
   if (url.pathname.startsWith("/api/")) return;
 
-  // Static assets — cache-first
-  if (
-    url.pathname.startsWith("/_next/static/") ||
-    url.pathname.startsWith("/icons/") ||
-    url.pathname.startsWith("/images/")
-  ) {
+  // Next.js build assets are content-hashed and deployment-scoped. Serving an
+  // older HTML shell or stale chunk from the service worker can make Safari
+  // request deleted files after a deploy ("Loading chunk ... failed").
+  if (url.pathname.startsWith("/_next/static/")) {
+    event.respondWith(networkOnly(request));
+    return;
+  }
+
+  // Public static assets — cache-first
+  if (url.pathname.startsWith("/icons/") || url.pathname.startsWith("/images/")) {
     event.respondWith(cacheFirst(request));
     return;
   }
 
-  // HTML pages — network-first with offline fallback
+  // HTML pages — network-only with offline fallback. Do not cache app shells:
+  // old HTML can reference Next chunks that no longer exist after deploy.
   if (request.headers.get("accept")?.includes("text/html")) {
-    // Never cache protected (auth-dependent) pages — serve network-only
-    // with an offline fallback so stale cached HTML can't cause errors.
-    const isProtected = PROTECTED_PREFIXES.some((p) => url.pathname.startsWith(p));
-    if (isProtected) {
-      event.respondWith(networkOnlyWithOffline(request));
-      return;
-    }
-    event.respondWith(networkFirstWithOffline(request));
+    event.respondWith(networkOnlyWithOffline(request));
     return;
   }
 
@@ -170,28 +154,8 @@ async function networkFirst(request) {
   }
 }
 
-async function networkFirstWithOffline(request) {
-  try {
-    const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, response.clone());
-    }
-    return response;
-  } catch {
-    const cached = await caches.match(request);
-    if (cached) return cached;
-
-    // Fallback to offline page
-    const offlinePage = await caches.match(OFFLINE_URL);
-    return (
-      offlinePage ??
-      new Response(
-        "<html><body><h1>You are offline</h1><p>Please check your connection.</p></body></html>",
-        { headers: { "Content-Type": "text/html" } }
-      )
-    );
-  }
+async function networkOnly(request) {
+  return fetch(request);
 }
 
 async function networkOnlyWithOffline(request) {

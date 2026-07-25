@@ -80,11 +80,35 @@ export async function POST(request: NextRequest) {
       });
 
       if (!captcha.success) {
-        return NextResponse.json(
-          { error: captcha.error || "CAPTCHA verification failed" },
-          { status: 400 }
-        );
+        // Upstream Turnstile detail stays in the server logs written by
+        // verifyTurnstileToken; clients get a generic message.
+        return NextResponse.json({ error: "CAPTCHA verification failed" }, { status: 400 });
       }
+    }
+
+    // Rate limit by email as well so targeted confirmation-email harassment
+    // cannot rotate IPs to bypass the per-IP limit.
+    const emailRateCheck = await checkRateLimit({
+      key: parsed.email.toLowerCase(),
+      action: "auth:resend-confirmation-email",
+      degradedMode: "local",
+    });
+    if (emailRateCheck.limited) {
+      if (emailRateCheck.degraded) {
+        return rateLimitExceededResponse({
+          degraded: true,
+          retryAfter: emailRateCheck.retryAfter,
+          degradedMessage:
+            "Confirmation email protection is temporarily unavailable. Please try again shortly.",
+          limitedMessage: "Too many requests. Please wait before trying again.",
+        });
+      }
+
+      // Return generic success to preserve anti-enumeration.
+      return NextResponse.json({
+        success: true,
+        message: "If an account exists with that email, a new confirmation link has been sent.",
+      });
     }
 
     const supabase = await createClient();

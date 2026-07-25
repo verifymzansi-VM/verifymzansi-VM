@@ -2,6 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { resolveAccountVerification } from "@/lib/account/resolved-verification";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("VerificationStatus");
 
 export async function GET(_request: NextRequest) {
   try {
@@ -41,7 +44,11 @@ export async function GET(_request: NextRequest) {
         headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" },
       }
     );
-  } catch {
+  } catch (err) {
+    log.error("Unexpected error", {
+      error: err instanceof Error ? err.message : "unknown error",
+      stack: err instanceof Error ? err.stack : undefined,
+    });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

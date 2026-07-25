@@ -2,12 +2,7 @@
    SHARED ENUMS — mirrors PostgreSQL enums in the database
    ══════════════════════════════════════════════════════════════ */
 
-export type MarketplaceArea =
-  | "MZANSI_MARKET"
-  | "MZANSI_BUSINESS"
-  | "PROMOTIONS_EVENTS"
-  | "BUSINESS_ADS"
-  | "MALL_SHOPS";
+export type MarketplaceArea = "MZANSI_MARKET" | "MZANSI_BUSINESS" | "PROMOTIONS_EVENTS";
 
 export type VerificationStepType = "phone" | "id_doc" | "selfie" | "location";
 
@@ -208,16 +203,12 @@ export const AREA_LABELS: Record<MarketplaceArea, string> = {
   MZANSI_MARKET: "Mzansi Market",
   MZANSI_BUSINESS: "Mzansi Business",
   PROMOTIONS_EVENTS: "Tourism & Events",
-  BUSINESS_ADS: "Business Ads",
-  MALL_SHOPS: "Mall Shops",
 };
 
 export const AREA_SLUGS: Record<MarketplaceArea, string> = {
   MZANSI_MARKET: "mzansi-market",
   MZANSI_BUSINESS: "mzansi-business",
   PROMOTIONS_EVENTS: "tourism-events",
-  BUSINESS_ADS: "business-ads",
-  MALL_SHOPS: "mall-shops",
 };
 
 export const CATEGORY_LABELS: Record<ListingCategory, string> = {

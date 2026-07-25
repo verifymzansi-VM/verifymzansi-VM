@@ -174,7 +174,9 @@ async function finalizePhoneVerification(
     };
   }
 
-  const { error: sessionError } = await supabase.from("verification_sessions").upsert(
+  // Session signal columns are service-role only (owner UPDATE policy on
+  // verification_sessions was dropped); write phone_verified_at via admin.
+  const { error: sessionError } = await adminSupabase.from("verification_sessions").upsert(
     {
       user_id: user.id,
       phone_verified_at: nowIso,
@@ -238,13 +240,30 @@ async function claimOtpChallenge(
     return Boolean(data?.id);
   }
 
-  // Fallback: if .select() is unavailable, just await the builder directly.
+  // Fallback: if .select() is unavailable, run the plain update and then
+  // re-read the row to confirm verified_at was actually stamped — a zero-row
+  // update (already claimed concurrently) must not report success.
   const { error } = await builder;
   if (error) {
     log.warn("Failed to claim OTP challenge", { challengeId, error: error.message });
     return false;
   }
-  return true;
+
+  const { data: claimedRow, error: claimReadError } = await adminSupabase
+    .from("otp_challenges")
+    .select("id, verified_at")
+    .eq("id", challengeId)
+    .maybeSingle();
+
+  if (claimReadError) {
+    log.warn("Failed to confirm OTP challenge claim", {
+      challengeId,
+      error: claimReadError.message,
+    });
+    return false;
+  }
+
+  return Boolean(claimedRow?.verified_at);
 }
 
 async function markSiblingChallengesVerified(

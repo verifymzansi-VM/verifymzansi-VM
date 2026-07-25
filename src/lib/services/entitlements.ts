@@ -59,12 +59,6 @@ export function getEntitlements(tier: PlanTier, area: MarketplaceArea): Entitlem
     case "PROMOTIONS_EVENTS":
       maxAllowed = plan.features.maxPromotions ?? 0;
       break;
-    case "MALL_SHOPS":
-      maxAllowed = plan.features.maxStorefronts ?? 0;
-      break;
-    case "BUSINESS_ADS":
-      maxAllowed = plan.features.maxProfiles ?? 0;
-      break;
     default: {
       // Exhaustive check — ensures new MarketplaceArea values cause a
       // compile-time error instead of silently granting unlimited access.
@@ -104,12 +98,8 @@ export function canCreateListing(
       area === "MZANSI_BUSINESS"
         ? "businesses"
         : area === "PROMOTIONS_EVENTS"
-          ? "promotions"
-          : area === "MALL_SHOPS"
-            ? "storefronts"
-            : area === "BUSINESS_ADS"
-              ? "profiles"
-              : "live listings";
+          ? "events"
+          : "live listings";
     return {
       allowed: false,
       reason: `Your ${tier} plan allows up to ${ent.maxAllowed} ${itemType}. Upgrade to post more.`,

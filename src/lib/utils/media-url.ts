@@ -5,12 +5,9 @@
  *   1. An R2 S3-compatible URL (requires auth, not publicly accessible)
  *   2. A custom-domain URL like https://media.verifymzansi.com/…
  *
- * Images are rewritten to use the local media-proxy API route
- * (/api/media/serve/…) for ETag caching and consistent headers.
- *
- * Videos are served directly from the CDN domain to avoid proxying
- * large files through the server, enabling native Range request support
- * and better playback performance.
+ * Both images and videos are rewritten to use the local media-proxy API route
+ * (/api/media/serve/…) for reliable MIME types, ETag caching, consistent
+ * headers, and HTTP Range request support for video playback.
  */
 
 const MEDIA_BASE = process.env.NEXT_PUBLIC_MEDIA_URL || "https://media.verifymzansi.com";
@@ -95,9 +92,9 @@ export function extractMediaStorageKey(url: string): string | null {
 }
 
 /**
- * Rewrite a media URL for optimal delivery:
- * - Videos → local proxy route (reliable MIME types, Range request support)
- * - Images → local proxy route (benefits from ETag/304 caching)
+ * Rewrite a media URL for delivery through the local media proxy:
+ * - Videos → reliable MIME types and Range request support (streamed, no buffering)
+ * - Images → ETag/304 caching and consistent headers
  *
  * Returns the original string unchanged if it doesn't match any known pattern.
  */
@@ -109,14 +106,6 @@ export function normalizeMediaUrl(url: string | null | undefined): string {
   // Not a recognized media URL — return as-is
   if (key === null) return url;
 
-  // Videos: serve through proxy for reliable MIME types and Range support.
-  // The proxy streams video data without buffering, so no memory penalty.
-  if (isVideoUrl(url)) {
-    return `${PROXY_PREFIX}${key}`;
-  }
-
-  // Images: serve through local media proxy for ETag/304 caching.
-  // The proxy streams from R2 with consistent headers.
   return `${PROXY_PREFIX}${key}`;
 }
 
@@ -170,8 +159,10 @@ export function getMediaCdnUrl(keyOrUrl: string): string {
 /**
  * Build a Cloudflare Image Resizing URL for a specific variant.
  *
- * When CF Image Resizing is disabled (dev/staging), returns the proxy path
- * unchanged so images still render (unoptimised but functional).
+ * The `/cdn-cgi/image/` URL is built unconditionally; it only produces a
+ * resized image where Cloudflare Image Resizing is enabled for the zone —
+ * elsewhere Cloudflare passes the request through to the origin image, so
+ * the unoptimised original still renders.
  *
  * @param url     - Any media URL or storage key
  * @param variant - Size preset: "thumb" (400w), "card" (800w), "full" (1600w), "original"

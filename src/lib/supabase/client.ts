@@ -31,9 +31,19 @@ function createPlaceholderClient() {
 const PLAYWRIGHT_SESSION_PREFIX = "persona:";
 
 function decodePlaywrightPersonaFromCookie(token: string | null): string | null {
-  const normalizedToken = token ? decodeURIComponent(token) : null;
+  if (!token) {
+    return null;
+  }
 
-  if (!normalizedToken?.startsWith(PLAYWRIGHT_SESSION_PREFIX)) {
+  let normalizedToken: string;
+  try {
+    normalizedToken = decodeURIComponent(token);
+  } catch {
+    // Malformed percent-encoding — treat as no persona.
+    return null;
+  }
+
+  if (!normalizedToken.startsWith(PLAYWRIGHT_SESSION_PREFIX)) {
     return null;
   }
 

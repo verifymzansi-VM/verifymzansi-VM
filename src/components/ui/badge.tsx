@@ -15,8 +15,6 @@ const badgeVariants = cva(
         outline: "text-foreground",
         // Marketplace area badges
         "mzansi-market": "area-mzansi-market border",
-        "mall-shops": "area-mall-shops border",
-        "business-ads": "area-business-ads border",
         // Status badges
         live: "border-transparent bg-brand-green-100 text-brand-green-800 dark:bg-brand-green-900/40 dark:text-brand-green-300",
         pending:

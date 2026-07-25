@@ -78,19 +78,13 @@ const uploadUrlRequestSchema = z
 export async function POST(request: NextRequest) {
   const traceId = crypto.randomUUID();
   try {
-    const hasRequestContext =
-      typeof request.url === "string" &&
-      request.headers &&
-      typeof request.headers.get === "function";
-
-    if (hasRequestContext) {
-      const originBlock = enforceSameOriginMutation(request, log);
-      if (originBlock) {
-        return originBlock;
-      }
-      const csrfBlock = enforceCsrfToken(request, log);
-      if (csrfBlock) return csrfBlock;
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) {
+      return originBlock;
     }
+
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     if (!directR2UploadsEnabled()) {
       return NextResponse.json(
@@ -185,7 +179,7 @@ export async function POST(request: NextRequest) {
 
     // ── Generate key & presigned URL ─────────────────────────
     const bucket = process.env.R2_PUBLIC_BUCKET || "verifymzansi-public";
-    const key = generateStorageKey(`media/${area}`, user.id, filename);
+    const key = generateStorageKey(`media/${area}`, user.id, filename, contentType);
 
     const uploadUrl = await generatePresignedUploadUrl(
       bucket,

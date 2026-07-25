@@ -19,9 +19,7 @@ const log = createLogger("Checkout");
 
 const checkoutSchema = z.object({
   planId: z.string().uuid("Invalid plan ID"),
-  area: z
-    .enum(["MZANSI_MARKET", "MZANSI_BUSINESS", "BUSINESS_ADS", "MALL_SHOPS", "PROMOTIONS_EVENTS"])
-    .optional(),
+  area: z.enum(["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"]).optional(),
 });
 
 function getCheckoutUrl(providerData: unknown): string | null {
@@ -86,7 +84,7 @@ export async function POST(request: NextRequest) {
       return parsed.response;
     }
 
-    const { planId } = parsed.data;
+    const { planId, area } = parsed.data;
 
     let admin: ReturnType<typeof createAdminClient> | null = null;
     const getAdmin = () => {
@@ -132,6 +130,15 @@ export async function POST(request: NextRequest) {
 
     if (!plan) {
       return NextResponse.json({ error: "Plan not found or inactive" }, { status: 404 });
+    }
+
+    // Clients may echo the area they believe the plan belongs to — reject
+    // mismatches instead of silently checking out a different area.
+    if (area && area !== plan.area) {
+      return NextResponse.json(
+        { error: "Selected plan does not belong to the requested area" },
+        { status: 400 }
+      );
     }
 
     // ── Prevent Duplicate Active Entitlements ─────────────

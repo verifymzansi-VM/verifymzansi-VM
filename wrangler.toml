@@ -8,6 +8,9 @@ preview_urls = false
 # Objects can be exported alongside the adapter output.
 main = "workers/open-next-entry.mjs"
 
+[limits]
+cpu_ms = 30000
+
 [assets]
 directory = ".open-next/assets"
 binding = "ASSETS"
@@ -62,6 +65,13 @@ STRICT_ENV_STARTUP_BLOCK = "1"
 # these classes are not exported yet. OpenNext documents this as expected for
 # cache setup; do not remove or rename these bindings unless the adapter docs
 # change.
+#
+# NOTE: RATE_LIMITER_DO (and the OTP_RATE_LIMITS KV binding further below)
+# exist on the MAIN app worker only to satisfy the RateLimiterDO re-export
+# in workers/open-next-entry.mjs. They are NOT used by the Next.js app for
+# rate limiting (that goes to the standalone verifymzansi-rate-limiter
+# worker) — but they must NOT be "cleaned up": removing them breaks the
+# re-export and deployment.
 # ────────────────────────────────────────────────────────────────────────────
 [durable_objects]
 bindings = [
@@ -81,21 +91,20 @@ new_classes = ["RateLimiterDO"]
 
 # ────────────────────────────────────────────────────────────────────────────
 # KV Namespace for OTP Rate Limiting
+# Exists only to satisfy the RateLimiterDO re-export in
+# workers/open-next-entry.mjs — see the [durable_objects] note above.
 # ────────────────────────────────────────────────────────────────────────────
 [[kv_namespaces]]
 binding = "OTP_RATE_LIMITS"
 id = "247144b6d9b1406093351378a57c62fa"
 
 # ────────────────────────────────────────────────────────────────────────────
-# R2 Bucket Bindings
+# R2 Access
 # ────────────────────────────────────────────────────────────────────────────
-[[r2_buckets]]
-binding = "PUBLIC_BUCKET"
-bucket_name = "verifymzansi-public"
-
-[[r2_buckets]]
-binding = "PRIVATE_BUCKET"
-bucket_name = "verifymzansi-private"
+# The main app uses R2's S3-compatible API via the R2_* secrets below. Native
+# Worker R2 bindings are intentionally omitted here because Cloudflare rejects
+# version creation for this account with code 10136 even when bucket listing
+# succeeds. Re-enable bindings only after Worker version creation accepts them.
 
 # ────────────────────────────────────────────────────────────────────────────
 # Server-Side Secrets (set via `pnpm wrangler secret put <NAME>`)
@@ -143,6 +152,9 @@ name = "verifymzansi"
 workers_dev = false
 preview_urls = false
 
+[env.production.limits]
+cpu_ms = 30000
+
 [[env.production.routes]]
 pattern = "verifymzansi.com"
 zone_name = "verifymzansi.com"
@@ -164,14 +176,6 @@ bindings = [
 [[env.production.kv_namespaces]]
 binding = "OTP_RATE_LIMITS"
 id = "247144b6d9b1406093351378a57c62fa"
-
-[[env.production.r2_buckets]]
-binding = "PUBLIC_BUCKET"
-bucket_name = "verifymzansi-public"
-
-[[env.production.r2_buckets]]
-binding = "PRIVATE_BUCKET"
-bucket_name = "verifymzansi-private"
 
 [env.production.vars]
 NODE_ENV = "production"
@@ -201,6 +205,9 @@ name = "verifymzansi-staging"
 workers_dev = true
 routes = []
 
+[env.staging.limits]
+cpu_ms = 30000
+
 [env.staging.durable_objects]
 bindings = [
   { name = "NEXT_CACHE_DO_QUEUE", class_name = "DOQueueHandler" },
@@ -209,17 +216,15 @@ bindings = [
   { name = "RATE_LIMITER_DO", class_name = "RateLimiterDO" },
 ]
 
+# ⚠️⚠️⚠️  WARNING — SHARED RATE-LIMIT STATE WITH PRODUCTION  ⚠️⚠️⚠️
+# Staging uses the SAME OTP_RATE_LIMITS KV namespace id as production and
+# points OTP_RATE_LIMITER_URL at the PRODUCTION rate-limiter worker (see
+# [env.staging.vars] below). Every staging OTP/auth request consumes REAL
+# production rate-limit quota. This is a deliberate operator decision —
+# do NOT change the values here without operator sign-off.
 [[env.staging.kv_namespaces]]
 binding = "OTP_RATE_LIMITS"
 id = "247144b6d9b1406093351378a57c62fa"
-
-[[env.staging.r2_buckets]]
-binding = "PUBLIC_BUCKET"
-bucket_name = "verifymzansi-public"
-
-[[env.staging.r2_buckets]]
-binding = "PRIVATE_BUCKET"
-bucket_name = "verifymzansi-private"
 
 [env.staging.vars]
 NODE_ENV = "production"
@@ -235,5 +240,7 @@ NEXT_PUBLIC_SUPABASE_URL = "https://tnygdgormnofpgjknlhr.supabase.co"
 NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRueWdkZ29ybW5vZnBnamtubGhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE0OTE3MTYsImV4cCI6MjA4NzA2NzcxNn0.HmPHCahnbYDoT0X8IbCsclCbhg3K2Mr0mlDa8RKFML0"
 NEXT_PUBLIC_TURNSTILE_SITE_KEY = "0x4AAAAAACmVXwJ4jmJSu6fX"
 NEXT_PUBLIC_CF_IMAGE_RESIZING = "true"
+# ⚠️  PRODUCTION rate-limiter URL — staging shares rate-limit state with
+# production. See the warning above [[env.staging.kv_namespaces]].
 OTP_RATE_LIMITER_URL = "https://verifymzansi-rate-limiter.verifymzansi.workers.dev"
 OTP_RATE_LIMITER_TIMEOUT_MS = "2500"

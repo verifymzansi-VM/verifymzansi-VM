@@ -18,6 +18,8 @@ import { optionalTrimmedStringSchema } from "@/lib/validations/shared";
 import { citiesMatch, normalizeProvinceName, resolveCityName } from "@/lib/constants/sa-provinces";
 
 const log = createLogger("GpsVerification");
+// Tolerated client clock skew for GPS reading timestamps (60s).
+const GPS_MAX_FUTURE_SKEW_MS = 60_000;
 import {
   GPS_ACCURACY_WARN_METERS,
   GPS_ACCURACY_REJECT_METERS,
@@ -101,6 +103,18 @@ export async function POST(request: NextRequest) {
       ? normalizeProvinceName(declaredProvince)
       : null;
     const gpsAge = Date.now() - timestamp;
+
+    // Reject future-dated readings — a negative gpsAge would silently pass the
+    // staleness and replay checks below. Allow a small client clock skew.
+    if (timestamp > Date.now() + GPS_MAX_FUTURE_SKEW_MS) {
+      return NextResponse.json(
+        {
+          error: "GPS timestamp is in the future. Check your device clock and try again.",
+          code: "gps_timestamp_future",
+        },
+        { status: 422 }
+      );
+    }
 
     // Reject extremely poor accuracy
     if (accuracy > GPS_ACCURACY_REJECT_METERS) {
@@ -313,8 +327,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Upsert verification step — always auto-approved (location is self-service)
-    const stepStatus = "approved" as const;
+    // Upsert verification step — self-service approvals only when no
+    // block-severity signal fired. A GPS province mismatch (block) keeps the
+    // step pending so it surfaces in the admin review queue instead of being
+    // auto-approved with the mismatched address.
+    const hasBlockSignal = signals.some((sig) => sig.severity === "block");
+    const stepStatus = hasBlockSignal ? ("pending" as const) : ("approved" as const);
     const stepData = buildVerificationStep(
       {
         user_id: user.id,
@@ -327,7 +345,7 @@ export async function POST(request: NextRequest) {
         location_town: declaredTown || null,
         risk_score: riskScore,
         risk_level: riskLevel,
-        auto_status: "approved",
+        auto_status: hasBlockSignal ? "needs_manual_review" : "approved",
         submitted_at: new Date().toISOString(),
         ...(isConfirmationMode
           ? {
@@ -442,6 +460,9 @@ export async function POST(request: NextRequest) {
       profileUpdateErrorMessage: "GPS location saved but failed to update profile status",
       preserveFinalizedSession:
         ensureWritable.finalizedLocationConfirmation || ensureWritable.preserveFinalizedSession,
+      // A block-severity mismatch must not overwrite the declared address on
+      // the profile — the pending step is for admins to review first.
+      persistProfileLocation: !hasBlockSignal,
     });
     if (lifecycleResponse) {
       return lifecycleResponse;

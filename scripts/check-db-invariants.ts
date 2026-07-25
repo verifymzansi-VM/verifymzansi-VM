@@ -42,6 +42,26 @@ const INVARIANTS: Invariant[] = [
       /INSERT\s+INTO\s+public\.plans[\s\S]+MZANSI_MARKET[\s\S]+basic[\s\S]+Mzansi Market Basic[\s\S]+3000/i,
     guidance: "Seed the active Mzansi Market Basic plan row at R30.00.",
   },
+  {
+    name: "Entitlements (user_id, area, type) unique index",
+    regex:
+      /CREATE\s+UNIQUE\s+INDEX\s+IF\s+NOT\s+EXISTS\s+idx_entitlements_user_area_type_unique\s+ON\s+public\.entitlements\s*\(\s*user_id,\s*area,\s*type\s*\)/i,
+    guidance:
+      "Add a migration creating a unique index on public.entitlements (user_id, area, type) so the fulfillment upsert onConflict target exists.",
+  },
+  {
+    name: "contact_submissions table",
+    regex: /CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+public\.contact_submissions/i,
+    guidance:
+      "Add a migration creating public.contact_submissions (contact form inserts and the admin inbox read it).",
+  },
+  {
+    name: "account_profiles enforcement-column guard trigger",
+    regex:
+      /CREATE\s+TRIGGER\s+guard_account_enforcement_columns\s+BEFORE\s+UPDATE\s+ON\s+public\.account_profiles/i,
+    guidance:
+      "Add a migration with a BEFORE UPDATE trigger on public.account_profiles that blocks non-service-role changes to enforcement columns (account_status, strikes, banned_at, ...).",
+  },
 ];
 
 export function getMigrationFiles(migrationsDir = MIGRATIONS_DIR): string[] {
@@ -83,6 +103,43 @@ export function findLegacyIdentifierReferences(
     });
 }
 
+const CLAIM_FREE_POST_SLOT_GRANT_REGEX =
+  /GRANT\s+EXECUTE\s+ON\s+FUNCTION\s+public\.claim_free_post_slot\s*\([^)]*\)\s+TO\s+authenticated/i;
+const CLAIM_FREE_POST_SLOT_REVOKE_REGEX =
+  /REVOKE\s+EXECUTE\s+ON\s+FUNCTION\s+public\.claim_free_post_slot\s*\([^)]*\)\s+FROM\s+authenticated/i;
+
+/**
+ * claim_free_post_slot takes p_user_id with no ownership check, so it must
+ * never stay executable by authenticated. Walk migrations in order: if the
+ * latest migration that grants EXECUTE to authenticated has no revoke in a
+ * later migration, fail.
+ */
+export function findClaimFreePostSlotGrantFailures(migrationsDir = MIGRATIONS_DIR): string[] {
+  const files = getMigrationFiles(migrationsDir);
+  let latestGrantFile: string | null = null;
+  let revokeAfterLatestGrant = false;
+
+  for (const file of files) {
+    const sql = stripSingleLineComments(readFileSync(path.join(migrationsDir, file), "utf8"));
+
+    if (latestGrantFile !== null && CLAIM_FREE_POST_SLOT_REVOKE_REGEX.test(sql)) {
+      revokeAfterLatestGrant = true;
+    }
+    if (CLAIM_FREE_POST_SLOT_GRANT_REGEX.test(sql)) {
+      latestGrantFile = file;
+      revokeAfterLatestGrant = false;
+    }
+  }
+
+  if (latestGrantFile === null || revokeAfterLatestGrant) {
+    return [];
+  }
+
+  return [
+    `claim_free_post_slot is granted to authenticated in ${latestGrantFile} with no revoke in any later migration: add a migration that revokes EXECUTE from PUBLIC/anon/authenticated and grants it to service_role only.`,
+  ];
+}
+
 async function main(): Promise<void> {
   console.log("Checking critical DB migration invariants...");
 
@@ -107,6 +164,13 @@ async function main(): Promise<void> {
         `Legacy identifier ${failure.identifier} found in post-rename migration ${failure.file}: remove seller_* profile references from migrations created after ${HARD_RENAME_MIGRATION_PREFIX}_hard_rename_account_member.sql.`
       );
     }
+  }
+
+  const claimFreePostSlotFailures = findClaimFreePostSlotGrantFailures();
+  if (claimFreePostSlotFailures.length === 0) {
+    console.log("  [OK] claim_free_post_slot is not left executable by authenticated");
+  } else {
+    failures.push(...claimFreePostSlotFailures);
   }
 
   if (failures.length > 0) {

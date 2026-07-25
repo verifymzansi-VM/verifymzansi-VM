@@ -8,7 +8,11 @@ import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { validateBufferIntegrity } from "@/lib/utils/file-validation";
 import { scanForMalware } from "@/lib/utils/malware-scan";
-import { stripExifFromJpeg } from "@/lib/utils/exif-strip";
+import {
+  stripExifFromJpeg,
+  stripMetadataFromPng,
+  stripMetadataFromWebp,
+} from "@/lib/utils/exif-strip";
 
 const log = createLogger("AvatarUpload");
 
@@ -116,9 +120,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── Strip EXIF metadata (POPIA data minimization) ─────────
+    // ── Strip metadata (POPIA data minimization) ─────────────
     if (file.type === "image/jpeg" || integrity.detectedMime === "image/jpeg") {
       fileBuffer = new Uint8Array(stripExifFromJpeg(fileBuffer));
+    } else if (file.type === "image/png") {
+      fileBuffer = new Uint8Array(stripMetadataFromPng(fileBuffer));
+    } else if (file.type === "image/webp") {
+      fileBuffer = new Uint8Array(stripMetadataFromWebp(fileBuffer));
     }
 
     const ext = file.type === "image/jpeg" ? "jpg" : file.type === "image/png" ? "png" : "webp";
@@ -136,15 +144,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to upload avatar" }, { status: 500 });
     }
 
-    // Get the public URL
+    // Best-effort cleanup of avatars previously uploaded with a different
+    // extension (e.g. old PNG when the new one is JPEG) so they don't linger.
+    const stalePaths = ["jpg", "png", "webp"]
+      .filter((candidate) => candidate !== ext)
+      .map((candidate) => `${user.id}/avatar.${candidate}`);
+    try {
+      await storage.from(BUCKET).remove(stalePaths);
+    } catch (cleanupErr) {
+      log.warn("Failed to remove stale avatar variants", {
+        userId: user.id,
+        error: cleanupErr instanceof Error ? cleanupErr.message : "Unknown error",
+      });
+    }
+
+    // Get the public URL. The storage path is stable across re-uploads, so
+    // append a version param to bust CDN/browser caches of the old avatar.
     const {
       data: { publicUrl },
     } = storage.from(BUCKET).getPublicUrl(storagePath);
+    const versionedUrl = `${publicUrl}?v=${Date.now()}`;
 
     // Update profile with avatar URL
     const { error: updateError } = await supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .update({ avatar_url: publicUrl })
+      .update({ avatar_url: versionedUrl })
       .eq("user_id", user.id);
 
     if (updateError) {
@@ -152,7 +176,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to save avatar" }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, avatarUrl: publicUrl });
+    return NextResponse.json({ success: true, avatarUrl: versionedUrl });
   } catch (err) {
     log.error("Avatar upload unexpected error", {
       userId: user.id,

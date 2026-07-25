@@ -257,8 +257,6 @@ describe("admin-queries", () => {
 
       expect(counts.MZANSI_MARKET.pendingFlags).toBe(3);
       expect(counts.MZANSI_BUSINESS.pendingFlags).toBe(1);
-      expect(counts.BUSINESS_ADS.pendingFlags).toBe(0);
-      expect(counts.MALL_SHOPS.pendingFlags).toBe(0);
     });
 
     it("keeps pending tourism businesses in the Tourism & Events content count", async () => {
@@ -566,36 +564,44 @@ describe("admin-queries", () => {
 
   describe("getAreaReports", () => {
     it("fetches reports by area target type", async () => {
-      mockFrom.mockReturnValue(createChainableMock({ data: [{ id: "r1", status: "open" }] }));
+      mockFrom.mockReturnValue(
+        createChainableMock({ data: [{ id: "r1", status: "open", target_type: "listing" }] })
+      );
 
       const result = await getAreaReports("MZANSI_MARKET");
       expect(result).toHaveLength(1);
       expect(mockFrom).toHaveBeenCalledWith("reports");
     });
 
+    it("prefers the explicit report area over the target type", async () => {
+      mockFrom.mockReturnValue(
+        createChainableMock({
+          data: [
+            { id: "r1", status: "open", target_type: "listing", area: "MZANSI_BUSINESS" },
+            { id: "r2", status: "open", target_type: "listing", area: "MZANSI_MARKET" },
+          ],
+        })
+      );
+
+      const result = await getAreaReports("MZANSI_MARKET");
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe("r2");
+    });
+
     it("includes business-profile and storefront reports in the Mzansi Business area", async () => {
-      const limitSpy = vi.fn().mockResolvedValue({ data: [] });
-      const orderSpy = vi.fn().mockReturnValue({ limit: limitSpy });
-      const statusInSpy = vi.fn().mockReturnValue({ order: orderSpy });
-      const targetTypeInSpy = vi.fn().mockReturnValue({ in: statusInSpy });
-      const selectSpy = vi.fn().mockReturnValue({ in: targetTypeInSpy });
+      mockFrom.mockReturnValue(
+        createChainableMock({
+          data: [
+            { id: "r1", status: "open", target_type: "business" },
+            { id: "r2", status: "open", target_type: "business_profile" },
+            { id: "r3", status: "open", target_type: "storefront" },
+            { id: "r4", status: "open", target_type: "listing" },
+          ],
+        })
+      );
 
-      mockFrom.mockImplementation((table: string) => {
-        if (table === "reports") {
-          return { select: selectSpy };
-        }
-
-        return createChainableMock({ data: [] });
-      });
-
-      await getAreaReports("MZANSI_BUSINESS");
-
-      expect(targetTypeInSpy).toHaveBeenCalledWith("target_type", [
-        "business",
-        "business_profile",
-        "storefront",
-      ]);
-      expect(statusInSpy).toHaveBeenCalledWith("status", ["open", "in_progress"]);
+      const result = await getAreaReports("MZANSI_BUSINESS");
+      expect(result.map((r) => r.id)).toEqual(["r1", "r2", "r3"]);
     });
   });
 
@@ -608,15 +614,10 @@ describe("admin-queries", () => {
       expect(mockFrom).toHaveBeenCalledWith("listings");
     });
 
-    it("uses correct table for BUSINESS_ADS", async () => {
+    it("fetches pending events and tourism businesses for PROMOTIONS_EVENTS", async () => {
       mockFrom.mockReturnValue(createChainableMock({ data: [] }));
-      await getPendingContent("BUSINESS_ADS");
-      expect(mockFrom).toHaveBeenCalledWith("businesses");
-    });
-
-    it("uses correct table for MALL_SHOPS", async () => {
-      mockFrom.mockReturnValue(createChainableMock({ data: [] }));
-      await getPendingContent("MALL_SHOPS");
+      await getPendingContent("PROMOTIONS_EVENTS");
+      expect(mockFrom).toHaveBeenCalledWith("promotions");
       expect(mockFrom).toHaveBeenCalledWith("businesses");
     });
   });

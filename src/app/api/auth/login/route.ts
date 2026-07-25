@@ -6,6 +6,7 @@ import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-lim
 import { createLogger } from "@/lib/utils/logger";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import {
   checkAccountLockout,
   recordFailedLogin,
@@ -43,10 +44,23 @@ function logAuthProtectionWarning(message: string, meta: Record<string, unknown>
   log.info(message, meta);
 }
 
+/** Supabase returns "Email not confirmed" when the password is correct but the
+ * account email is still unverified. */
+function isEmailNotConfirmedError(error: { message?: string; code?: unknown }): boolean {
+  return (
+    error.code === "email_not_confirmed" ||
+    (typeof error.message === "string" &&
+      error.message.toLowerCase().includes("email not confirmed"))
+  );
+}
+
 export async function POST(request: NextRequest) {
   try {
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) return originBlock;
+
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     const isPlaywrightTestMode = checkPlaywrightTestMode();
     const turnstileStatus = getTurnstileConfigStatus({ requestHost: request.nextUrl.hostname });
@@ -187,35 +201,12 @@ export async function POST(request: NextRequest) {
             );
           }
 
-          return NextResponse.json(
-            { error: captcha.error || "CAPTCHA verification failed" },
-            { status: 400 }
-          );
+          // Keep upstream Turnstile detail (HTTP status, error codes) in the
+          // server logs written by verifyTurnstileToken; clients get a generic
+          // message.
+          return NextResponse.json({ error: "CAPTCHA verification failed" }, { status: 400 });
         }
       }
-    }
-
-    // Pre-flight: check account status BEFORE creating a session so that
-    // suspended/banned/deleted users never briefly hold a valid session.
-    const adminClient = createAdminClient();
-    const { data: preflightProfile } = await adminClient
-      .from("account_profiles")
-      .select("account_status, user_id")
-      .eq("email", parsedBody.data.email.toLowerCase())
-      .maybeSingle();
-
-    const preflightStatus = preflightProfile?.account_status;
-    if (
-      preflightStatus === "suspended" ||
-      preflightStatus === "banned" ||
-      preflightStatus === "deleted"
-    ) {
-      log.warn("Login blocked: account status (pre-session)", {
-        email: parsedBody.data.email.replace(/(.{2}).*(@.*)/, "$1***$2"),
-        status: preflightStatus,
-      });
-      // Return generic error to avoid leaking account existence
-      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
     }
 
     const supabase = await createClient();
@@ -227,12 +218,13 @@ export async function POST(request: NextRequest) {
     if (!error) {
       clearLockout(parsedBody.data.email);
 
-      // Double-check account status post-login in case preflight missed
-      // (e.g. email column doesn't exist yet on account_profiles).
+      // Enforce account status post-login: suspended/banned/deleted users are
+      // signed out immediately so they never hold a valid session.
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (user) {
+        const adminClient = createAdminClient();
         const { data: accountProfile } = await adminClient
           .from("account_profiles")
           .select("account_status")
@@ -269,8 +261,22 @@ export async function POST(request: NextRequest) {
         });
       });
 
-      // Return the same generic error for ALL auth failures (including
-      // email-not-confirmed) to avoid leaking whether an account exists.
+      // Correct password + unconfirmed email: return a distinct code so the
+      // login page can offer to resend the confirmation link. This reveals
+      // nothing beyond what knowing the correct password already proves;
+      // every other failure still gets the generic 401.
+      if (isEmailNotConfirmedError(error)) {
+        return NextResponse.json(
+          {
+            error: "Please confirm your email address before signing in.",
+            code: "email_not_confirmed",
+          },
+          { status: 403 }
+        );
+      }
+
+      // Return the same generic error for ALL other auth failures to avoid
+      // leaking whether an account exists.
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
     }
 

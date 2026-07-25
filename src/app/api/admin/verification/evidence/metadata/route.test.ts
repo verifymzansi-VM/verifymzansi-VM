@@ -12,6 +12,7 @@ const {
   mockLogAuditEvent,
   mockReadAccountVerificationStatus,
   verificationStepSelect,
+  riskSignalSelect,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
@@ -23,6 +24,7 @@ const {
   mockLogAuditEvent: vi.fn(),
   mockReadAccountVerificationStatus: vi.fn(() => "pending_review"),
   verificationStepSelect: vi.fn(),
+  riskSignalSelect: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -144,13 +146,13 @@ describe("/api/admin/verification/evidence/metadata", () => {
 
         if (table === "kyc_risk_signals") {
           return {
-            select: vi.fn().mockReturnValue({
+            select: riskSignalSelect.mockImplementation((_columns: string) => ({
               eq: vi.fn().mockReturnValue({
                 order: vi.fn().mockReturnValue({
                   limit: vi.fn().mockResolvedValue({ data: [], error: null }),
                 }),
               }),
-            }),
+            })),
           };
         }
 
@@ -209,6 +211,180 @@ describe("/api/admin/verification/evidence/metadata", () => {
       id: STEP_ID,
       user_id: USER_ID,
       decided_at: "2026-03-31T00:00:00.000Z",
+    });
+  });
+
+  it("selects risk signals using the real kyc_risk_signals columns", async () => {
+    const response = await GET(
+      createGetRequest(
+        `http://localhost:3000/api/admin/verification/evidence/metadata?stepId=${STEP_ID}`
+      )
+    );
+
+    expect(response.status).toBe(200);
+    expect(riskSignalSelect).toHaveBeenCalled();
+
+    const selectArg = riskSignalSelect.mock.calls[0]?.[0] as string;
+    expect(selectArg).toContain("signal_code");
+    expect(selectArg).toContain("severity");
+    expect(selectArg).toContain("value_json");
+    expect(selectArg).not.toContain("signal_type");
+    expect(selectArg).not.toContain("signal_key");
+  });
+
+  it("returns risk signals with their real schema shape", async () => {
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "verification_steps") {
+          return {
+            select: verificationStepSelect.mockImplementation((_columns: string) => ({
+              eq: vi.fn().mockResolvedValue({
+                data: [
+                  {
+                    id: STEP_ID,
+                    user_id: USER_ID,
+                    step_type: "id_doc",
+                    status: "pending",
+                  },
+                ],
+                error: null,
+              }),
+            })),
+          };
+        }
+
+        if (table === "kyc_risk_signals") {
+          return {
+            select: riskSignalSelect.mockImplementation((_columns: string) => ({
+              eq: vi.fn().mockReturnValue({
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue({
+                    data: [
+                      {
+                        id: "signal-1",
+                        user_id: USER_ID,
+                        artifact_id: "artifact-1",
+                        signal_code: "duplicate_sha256",
+                        severity: "block",
+                        value_json: { matchingArtifactId: "artifact-9" },
+                        created_at: "2026-04-01T00:00:00.000Z",
+                      },
+                    ],
+                    error: null,
+                  }),
+                }),
+              }),
+            })),
+          };
+        }
+
+        if (table === "kyc_artifacts") {
+          return {
+            select: vi.fn().mockReturnValue({
+              in: vi.fn().mockReturnValue({
+                order: vi.fn().mockResolvedValue({ data: [], error: null }),
+              }),
+              eq: vi.fn().mockReturnValue({
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+                }),
+              }),
+            }),
+          };
+        }
+
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+              }),
+            }),
+          };
+        }
+
+        if (table === "kyc_evidence_access_logs") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+                }),
+              }),
+            }),
+          };
+        }
+
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+        };
+      }),
+    });
+
+    const response = await GET(
+      createGetRequest(
+        `http://localhost:3000/api/admin/verification/evidence/metadata?stepId=${STEP_ID}`
+      )
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.riskSignals).toEqual([
+      expect.objectContaining({
+        signal_code: "duplicate_sha256",
+        severity: "block",
+        value_json: { matchingArtifactId: "artifact-9" },
+      }),
+    ]);
+  });
+
+  it("rejects cross-site evidence metadata requests", async () => {
+    const request = {
+      nextUrl: new URL(
+        `http://localhost:3000/api/admin/verification/evidence/metadata?stepId=${STEP_ID}`
+      ),
+      url: `http://localhost:3000/api/admin/verification/evidence/metadata?stepId=${STEP_ID}`,
+      headers: {
+        get: vi.fn((name: string) =>
+          name.toLowerCase() === "sec-fetch-site" ? "cross-site" : null
+        ),
+      },
+    } as unknown as NextRequest;
+
+    const response = await GET(request);
+
+    expect(response.status).toBe(403);
+    expect(mockLogAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when the resolved user has no verification steps at all", async () => {
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "verification_steps") {
+          return {
+            select: verificationStepSelect.mockImplementation((_columns: string) => ({
+              eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+            })),
+          };
+        }
+
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+        };
+      }),
+    });
+
+    const response = await GET(
+      createGetRequest(
+        `http://localhost:3000/api/admin/verification/evidence/metadata?userId=${USER_ID}`
+      )
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "no_active_case",
     });
   });
 

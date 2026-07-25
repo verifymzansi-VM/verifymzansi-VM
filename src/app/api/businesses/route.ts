@@ -13,10 +13,9 @@ import {
   getOwnerColumn,
   normalizeOwnerRecords,
   withOwnerColumn,
-  withOwnerField,
   type OwnerColumn,
 } from "@/lib/account/compat";
-import type { MarketplaceArea } from "@/types/enums";
+import type { MarketplaceArea, PlanTier } from "@/types/enums";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 import { queryWithSelectFallbacks } from "@/lib/utils/marketplace-select-fallback";
 import {
@@ -139,22 +138,6 @@ export async function POST(request: NextRequest) {
     if (session.response) return session.response;
     const { supabase, user, getAdmin } = session;
 
-    let ownerColumn: OwnerColumn;
-    try {
-      ownerColumn = await getOwnerColumn(supabase, "businesses");
-    } catch (ownerColumnError) {
-      log.warn("Businesses owner-column probe failed during create", {
-        error: ownerColumnError instanceof Error ? ownerColumnError.message : "Unknown error",
-        userId: user.id,
-      });
-      return NextResponse.json(
-        {
-          error: "Service temporarily unavailable",
-          detail: "Business ownership metadata is unavailable. Please retry shortly.",
-        },
-        { status: 503 }
-      );
-    }
     const ip = getClientIp(request);
     const rl = await checkRateLimit({
       key: user.id,
@@ -165,6 +148,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Too many requests. Please try again later.", retryAfter: rl.retryAfter },
         { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
+    }
+
+    let ownerColumn: OwnerColumn;
+    try {
+      ownerColumn = await getOwnerColumn(supabase, "businesses");
+    } catch (ownerColumnError) {
+      log.warn("Business owner-column probe failed during create", {
+        error: ownerColumnError instanceof Error ? ownerColumnError.message : "Unknown error",
+        userId: user.id,
+      });
+      return NextResponse.json(
+        {
+          error: "Service temporarily unavailable",
+          detail: "Business ownership metadata is unavailable. Please retry shortly.",
+        },
+        { status: 503 }
       );
     }
 
@@ -189,6 +189,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ── Idempotency guard: reject duplicate submissions ──────
+    // If the same user submitted a business with the identical name
+    // within the last 2 minutes, return the existing business instead
+    // of creating a duplicate (protects against network retries).
+    {
+      const { data: recentDupe } = await applyOwnerFilter(
+        supabase
+          .from("businesses")
+          .select("id")
+          .eq("business_name", data.business_name)
+          .gte("created_at", new Date(Date.now() - 120_000).toISOString()),
+        ownerColumn,
+        user.id
+      )
+        .limit(1)
+        .maybeSingle();
+
+      if (recentDupe) {
+        log.warn("Duplicate business submission detected", {
+          userId: user.id,
+          existingId: recentDupe.id,
+        });
+        return NextResponse.json(
+          { success: true, business: { id: recentDupe.id }, deduplicated: true },
+          { status: 200 }
+        );
+      }
+    }
+
     // Tourism businesses belong in the PROMOTIONS_EVENTS marketplace area.
     const effectiveArea: MarketplaceArea =
       data.category === "tourism_hospitality" ? "PROMOTIONS_EVENTS" : AREA;
@@ -200,29 +229,13 @@ export async function POST(request: NextRequest) {
     const { hasPaidPlan, tier, entitlements: ent } = planResult;
     const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
 
-    if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
-      // Paid plan — atomic business-count guard to prevent TOCTOU race
-      if (ent.maxAllowed !== -1) {
-        const { data: underLimit, error: rpcError } = await getAdmin().rpc("check_business_limit", {
-          p_user_id: user.id,
-          p_area: effectiveArea,
-          p_max_allowed: ent.maxAllowed,
-        });
-
-        if (rpcError) {
-          log.error("check_business_limit RPC failed", { error: rpcError.message });
-          return NextResponse.json({ error: "Unable to verify business limit" }, { status: 500 });
-        }
-
-        if (!underLimit) {
-          const check = canCreateListing(ent.maxAllowed, tier, effectiveArea);
-          return NextResponse.json(
-            { error: "Business limit reached", reason: check.reason },
-            { status: 403 }
-          );
-        }
-      }
-    }
+    // The paid-plan post limit is enforced atomically inside
+    // insert_business_with_limit: the per-user advisory lock is held across
+    // both the count check and the INSERT, closing the TOCTOU race (#25/M1).
+    // -1 skips the check (unlimited plans, bypass mode, and free-post users
+    // whose limit is enforced by the free_posts_used ledger).
+    const maxAllowedForInsert =
+      hasPaidPlan && tier && !postingLimitBypassEnabled ? ent.maxAllowed : -1;
 
     const mediaLimitBlock = enforcePostingMediaLimits({
       entitlements: ent,
@@ -287,7 +300,9 @@ export async function POST(request: NextRequest) {
           {
             error: "Free post limit reached",
             reason:
-              "You have already used your free post for Mzansi Business. Subscribe to a plan to post more.",
+              effectiveArea === "PROMOTIONS_EVENTS"
+                ? "You have already used your free post for Tourism & Events. Subscribe to a plan to post more."
+                : "You have already used your free post for Mzansi Business. Subscribe to a plan to post more.",
             upgradeUrl: "/billing",
           },
           { status: 403 }
@@ -303,11 +318,29 @@ export async function POST(request: NextRequest) {
       expires_at: getPostExpiryIso({ hasPaidPlan }),
     };
 
-    const { data: business, error: insertError } = await supabase
-      .from("businesses")
-      .insert(withOwnerField(businessPayload, ownerColumn, user.id))
-      .select("id")
-      .single();
+    // Ownership is enforced inside insert_business_with_limit (forced to the
+    // authenticated user), so the payload deliberately carries no owner field.
+    const { data: insertResult, error: insertError } = await getAdmin().rpc(
+      "insert_business_with_limit",
+      {
+        p_user_id: user.id,
+        p_area: effectiveArea,
+        p_max_allowed: maxAllowedForInsert,
+        p_data: businessPayload,
+      }
+    );
+
+    const limitRow = insertResult as { limit_reached?: boolean } | null;
+    if (!insertError && limitRow?.limit_reached === true) {
+      const check = canCreateListing(maxAllowedForInsert, tier as PlanTier, effectiveArea);
+      return NextResponse.json(
+        { error: "Business limit reached", reason: check.reason },
+        { status: 403 }
+      );
+    }
+
+    const insertedRow = insertResult as { id?: string } | null;
+    const business = !insertError && insertedRow?.id ? { id: insertedRow.id } : null;
 
     if (insertError || !business) {
       if (isBusinessSlugConflictError(insertError)) {
@@ -356,12 +389,26 @@ export async function POST(request: NextRequest) {
         contentId: business.id,
       });
     } catch (consentError) {
+      // Best-effort: the business row already exists, so failing the response
+      // here would orphan the create and make client retries duplicate it.
       log.error("Failed to record post terms acceptance", {
         userId: user.id,
         businessId: business.id,
         error: consentError instanceof Error ? consentError.message : "Unknown error",
       });
-      return NextResponse.json({ error: "Failed to record posting terms" }, { status: 500 });
+      try {
+        await logAuditEvent({
+          actorId: user.id,
+          actorRole: "member",
+          action: "consent_updated",
+          targetType: "business",
+          targetId: business.id,
+          area: effectiveArea,
+          metadata: { termsAcceptanceRecorded: false },
+        });
+      } catch {
+        // non-fatal
+      }
     }
 
     // Audit (best-effort)
@@ -467,17 +514,38 @@ export async function GET(request: NextRequest) {
       const { data: counts, error } = await admin.rpc("get_business_category_counts");
 
       if (error) {
-        // Fallback: manual query
-        const { data: businesses } = await applyVisibleExpiryFilter(
-          admin
-            .from("businesses")
-            .select("category, business_name, description, created_at")
-            .eq("status", "live")
-            .in("area", ["MZANSI_BUSINESS", "PROMOTIONS_EVENTS"])
-        ).limit(500);
+        // Fallback: manual query, paged so categories beyond the first page
+        // are not silently undercounted.
+        const businesses: Array<{
+          category: string;
+          business_name: string | null;
+          description: string | null;
+        }> = [];
+        const batchSize = 1000;
+        const maxRows = 10_000;
+
+        for (let from = 0; from < maxRows; from += batchSize) {
+          const { data: batch } = await applyVisibleExpiryFilter(
+            admin
+              .from("businesses")
+              .select("category, business_name, description, created_at")
+              .eq("status", "live")
+              .in("area", ["MZANSI_BUSINESS", "PROMOTIONS_EVENTS"])
+          ).range(from, from + batchSize - 1);
+
+          if (!batch || batch.length === 0) {
+            break;
+          }
+
+          businesses.push(...batch);
+
+          if (batch.length < batchSize) {
+            break;
+          }
+        }
 
         const categoryCounts: Record<string, number> = {};
-        for (const b of businesses ?? []) {
+        for (const b of businesses) {
           if (isPlaceholderMarketplaceContent(b.business_name, b.description)) {
             continue;
           }
@@ -676,6 +744,11 @@ export async function GET(request: NextRequest) {
             searchFields.push(`subcategory.ilike.%${safeSearch}%`);
           }
           query = query.or(searchFields.join(","));
+        } else {
+          // The search token sanitized to nothing (e.g. "!!!") — force an
+          // empty result so it matches the active filter chip instead of
+          // silently returning the unfiltered page.
+          query = query.eq("id", "00000000-0000-0000-0000-000000000000");
         }
       }
 

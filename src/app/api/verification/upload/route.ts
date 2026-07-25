@@ -20,7 +20,11 @@ import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { parseAndValidateFormData } from "@/lib/utils/api";
 import { buildVerificationEmailConfirmationRequiredPayload } from "@/lib/constants/verification-email-confirmation";
-import { extractDobFromSaId, calculateAgeFromDob } from "@/lib/utils/sa-id-validation";
+import {
+  extractDobFromSaId,
+  calculateAgeFromDob,
+  validateSaIdChecksum,
+} from "@/lib/utils/sa-id-validation";
 import { cleanupPersistedKycUpload, cleanupUploadedR2Object } from "./_lib/kyc-upload-cleanup";
 import { analyzeKycUploadFile } from "./_lib/kyc-file-analysis";
 
@@ -104,6 +108,24 @@ export async function POST(request: NextRequest) {
         requestId,
         present: Boolean(kycKey),
         length: kycKey?.length,
+      });
+      if (!allowDevFallback) {
+        return jsonError(
+          {
+            error: "Document encryption is not configured. Please contact support.",
+            code: "config_missing",
+          },
+          { status: 503 }
+        );
+      }
+    }
+
+    const idKey = process.env.ID_ENCRYPTION_KEY;
+    if (!idKey || idKey.length !== 64 || !/^[0-9a-fA-F]+$/.test(idKey)) {
+      log.error("ID_ENCRYPTION_KEY is missing or malformed", {
+        requestId,
+        present: Boolean(idKey),
+        length: idKey?.length,
       });
       if (!allowDevFallback) {
         return jsonError(
@@ -218,6 +240,13 @@ export async function POST(request: NextRequest) {
 
     // ── Age gate: must be 18+ ────────────────────────────────
     if (docType === "id_document" && idNumber) {
+      // Full format + Luhn checksum validation before any encryption/HMAC/storage
+      if (!validateSaIdChecksum(idNumber)) {
+        return jsonError(
+          { error: "Invalid SA ID number. Please check your ID number and try again." },
+          { status: 400 }
+        );
+      }
       const dob = extractDobFromSaId(idNumber);
       if (!dob) {
         return jsonError(
@@ -526,20 +555,44 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Risk engine: SHA-256, velocity, ID reuse, provider ───
-    const engineResult = await processKycArtifact({
-      artifactId: artifact.id,
-      userId: user.id,
-      stepType,
-      fileBuffer,
-      r2Key: uploadResult.key,
-      idNumber,
-      adminClient: admin,
-      captureMethod: captureMethod ?? undefined,
-      exifSignals,
-      blurScore,
-      phash,
-      phoneFlagged: !!phoneFlaggedUserId,
-    });
+    let engineResult: Awaited<ReturnType<typeof processKycArtifact>>;
+    try {
+      engineResult = await processKycArtifact({
+        artifactId: artifact.id,
+        userId: user.id,
+        stepType,
+        fileBuffer,
+        r2Key: uploadResult.key,
+        idNumber,
+        adminClient: admin,
+        captureMethod: captureMethod ?? undefined,
+        exifSignals,
+        blurScore,
+        phash,
+        phoneFlagged: !!phoneFlaggedUserId,
+      });
+    } catch (engineErr) {
+      // The artifact row and R2 object already exist at this point — roll them
+      // back so a later upload is not blocked by idx_kyc_artifacts_pending_unique.
+      log.error("KYC risk engine failed — rolling back persisted upload", {
+        requestId,
+        artifactId: artifact.id,
+        error: engineErr instanceof Error ? engineErr.message : "Unknown",
+      });
+      await cleanupPersistedKycUpload({
+        admin,
+        artifactId: artifact.id,
+        bucket: process.env.R2_PRIVATE_BUCKET || "verifymzansi-private",
+        key: uploadResult.key,
+        requestId,
+        reason: "risk_engine_failed",
+        uploadedToR2,
+      });
+      return jsonError(
+        { error: "Upload processing failed", code: "engine_failed" },
+        { status: 500 }
+      );
+    }
 
     // ── Patch artifact with sha256 and provider_ref ───────────
     const { error: patchErr } = await admin
@@ -858,6 +911,11 @@ export async function POST(request: NextRequest) {
       sessionPatch.id_artifact_id = artifact.id;
     } else if (docType === "selfie") {
       sessionPatch.selfie_artifact_id = artifact.id;
+    } else if (docType === "proof_of_address") {
+      // A PoA upload IS the location-step submission — stamp it so the
+      // session can finalize once the other artifacts are present. The
+      // pending location step stays reviewable via the admin decide route.
+      sessionPatch.location_submitted_at = new Date().toISOString();
     }
 
     const { error: sessionUpsertError } = await admin

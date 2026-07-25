@@ -18,7 +18,6 @@ import {
   normalizeOwnerRecords,
   type OwnerColumn,
   readAccountVerificationStatus,
-  withOwnerField,
 } from "@/lib/account/compat";
 import { ensureAccountProfile } from "@/lib/account/ensure-profile";
 import { hasPhoneNumber } from "@/lib/account/require-phone";
@@ -356,15 +355,29 @@ export async function GET(request: NextRequest) {
         display_name: seller.display_name,
         account_verification_status: readAccountVerificationStatus(seller),
       })) ?? [];
+    const sellersByUserId = new Map(
+      serializedSellers.map((seller) => [String(seller.user_id), seller])
+    );
     const serializedListings = listings.map((listing) => {
       const listingId = String(listing.id ?? "");
       const fallbackViewCount = engagementAvailable
         ? (viewCountResult.data.get(listingId) ?? null)
         : null;
       const likeSummary = engagementAvailable ? likeSummaryResult.data.get(listingId) : undefined;
+      const seller = listing.owner_id ? sellersByUserId.get(String(listing.owner_id)) : undefined;
+
+      // Strip owner identifiers from public rows (POPIA data minimization);
+      // the embedded seller carries the public-safe display fields.
+      const { owner_id: _ownerId, seller_id: _sellerId, ...publicListing } = listing;
 
       return {
-        ...listing,
+        ...publicListing,
+        seller: seller
+          ? {
+              display_name: seller.display_name,
+              account_verification_status: seller.account_verification_status,
+            }
+          : null,
         view_count: typeof listing.view_count === "number" ? listing.view_count : fallbackViewCount,
         like_count: engagementAvailable ? (likeSummary?.likeCount ?? null) : null,
         viewer_has_liked: likeSummary?.viewerHasLiked ?? false,
@@ -638,79 +651,73 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
-      // Paid plan — atomic listing-count guard to prevent TOCTOU race (#25)
-      const ent = getEntitlements(tier as PlanTier, AREA);
-
-      if (ent.maxAllowed !== -1) {
-        const admin = getAdmin();
-        const { data: underLimit, error: rpcError } = await admin.rpc("check_listing_limit", {
-          p_user_id: user.id,
-          p_area: AREA,
-          p_max_allowed: ent.maxAllowed,
-        });
-
-        if (rpcError) {
-          log.error("check_listing_limit RPC failed", { error: rpcError.message });
-          return NextResponse.json({ error: "Unable to verify listing limit" }, { status: 500 });
-        }
-
-        if (!underLimit) {
-          const check = canCreateListing(ent.maxAllowed, tier as PlanTier, AREA);
-          return NextResponse.json(
-            { error: "Listing limit reached", reason: check.reason },
-            { status: 403 }
-          );
-        }
-      }
-    }
+    // The paid-plan post limit is enforced atomically inside
+    // insert_listing_with_limit: the per-user advisory lock is held across
+    // both the count check and the INSERT, closing the TOCTOU race (#25/M1).
+    // -1 skips the check (unlimited plans, bypass mode, and free-post users
+    // whose limit is enforced by the free_posts_used ledger).
+    const maxAllowedForInsert =
+      hasPaidPlan && tier && !postingLimitBypassEnabled
+        ? getEntitlements(tier as PlanTier, AREA).maxAllowed
+        : -1;
 
     // ── Prepare listing record ───────────────────────────────
     const priceCents = Math.round(+(data.price_zar * 100).toPrecision(12));
 
-    const listingRecord = withOwnerField(
-      {
-        id: freePostContentId,
-        title: data.title,
-        description: data.description,
-        price_cents: priceCents,
-        price_negotiable: data.negotiable,
-        category: data.category,
-        attributes: "attributes" in data ? data.attributes : {},
-        condition: data.condition || null,
-        location_province: data.province || null,
-        location_city: data.city || null,
-        location_suburb: data.town || null,
-        location_address: data.address || null,
-        status: "pending_moderation",
-        area: AREA,
-        photos: data.images,
-        videos: data.videos,
-        video_thumbnail: data.videoThumbnail || null,
-        logo_url: data.logo_url || null,
-        contact_methods: data.contactMethods,
-        media_width: data.media_width ?? null,
-        media_height: data.media_height ?? null,
-        focal_x: data.focal_x ?? 0.5,
-        focal_y: data.focal_y ?? 0.5,
-        expires_at: getPostExpiryIso({ hasPaidPlan }),
-      },
-      ownerColumn,
-      user.id
-    );
+    // Ownership is enforced inside insert_listing_with_limit (forced to the
+    // authenticated user), so the payload deliberately carries no owner field.
+    const listingRecord = {
+      id: freePostContentId,
+      title: data.title,
+      description: data.description,
+      price_cents: priceCents,
+      price_negotiable: data.negotiable,
+      category: data.category,
+      attributes: "attributes" in data ? data.attributes : {},
+      condition: data.condition || null,
+      location_province: data.province || null,
+      location_city: data.city || null,
+      location_suburb: data.town || null,
+      location_address: data.address || null,
+      status: "pending_moderation",
+      area: AREA,
+      photos: data.images,
+      videos: data.videos,
+      video_thumbnail: data.videoThumbnail || null,
+      logo_url: data.logo_url || null,
+      contact_methods: data.contactMethods,
+      media_width: data.media_width ?? null,
+      media_height: data.media_height ?? null,
+      focal_x: data.focal_x ?? 0.5,
+      focal_y: data.focal_y ?? 0.5,
+      expires_at: getPostExpiryIso({ hasPaidPlan }),
+    };
 
-    // ── Insert listing ───────────────────────────────────────
+    // ── Insert listing (atomic limit check + insert) ─────────
     let newListing: { id: string } | null = null;
     let insertError: ListingInsertErrorLike = null;
+    let limitReached = false;
     const insertAttempts = [[], LISTING_INSERT_COMPAT_FIELDS] as const;
 
     for (let attemptIndex = 0; attemptIndex < insertAttempts.length; attemptIndex += 1) {
       const omittedFields = insertAttempts[attemptIndex];
       const insertPayload = omitListingCompatFields(listingRecord, omittedFields);
-      const result = await supabase.from("listings").insert(insertPayload).select("id").single();
+      const { data: rpcData, error: rpcError } = await getAdmin().rpc("insert_listing_with_limit", {
+        p_user_id: user.id,
+        p_area: AREA,
+        p_max_allowed: maxAllowedForInsert,
+        p_data: insertPayload,
+      });
 
-      newListing = result.data;
-      insertError = result.error;
+      const limitRow = rpcData as { limit_reached?: boolean } | null;
+      if (!rpcError && limitRow?.limit_reached === true) {
+        limitReached = true;
+        break;
+      }
+
+      const insertedRow = rpcData as { id?: string } | null;
+      newListing = !rpcError && insertedRow?.id ? { id: insertedRow.id } : null;
+      insertError = rpcError;
 
       if (!insertError && newListing) {
         break;
@@ -730,6 +737,14 @@ export async function POST(request: NextRequest) {
         error: insertError?.message,
         omittedFields: nextOmittedFields,
       });
+    }
+
+    if (limitReached) {
+      const check = canCreateListing(maxAllowedForInsert, tier as PlanTier, AREA);
+      return NextResponse.json(
+        { error: "Listing limit reached", reason: check.reason },
+        { status: 403 }
+      );
     }
 
     if (insertError) {
@@ -795,48 +810,25 @@ export async function POST(request: NextRequest) {
         contentId: newListing.id,
       });
     } catch (consentError) {
+      // Best-effort: the listing row already exists, so failing the response
+      // here would orphan the create and make client retries duplicate it.
       log.error("Failed to record post terms acceptance", {
         userId: user.id,
         listingId: newListing.id,
         error: consentError instanceof Error ? consentError.message : "Unknown error",
       });
-      return NextResponse.json({ error: "Failed to record posting terms" }, { status: 500 });
-    }
-
-    // ── Post-insert limit check (closes TOCTOU window for paid plans) ──
-    if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
-      const postCountQuery = applyOwnerFilter(
-        supabase
-          .from("listings")
-          .select("id", { count: "exact", head: true })
-          .neq("status", "rejected"),
-        ownerColumn,
-        user.id
-      );
-      const { count: postInsertCount } = await postCountQuery;
-      const postCheck = canCreateListing((postInsertCount ?? 0) - 1, tier as PlanTier, AREA);
-      if (!postCheck.allowed) {
-        // Over limit due to concurrent insert — roll back
-        const { error: rollbackErr } = await getAdmin()
-          .from("listings")
-          .delete()
-          .eq("id", newListing.id);
-        if (rollbackErr) {
-          log.error("Failed to roll back listing — orphaned record", {
-            listingId: newListing.id,
-            userId: user.id,
-            error: rollbackErr.message,
-          });
-        }
-        log.warn("Rolled back listing due to concurrent limit breach", {
-          listingId: newListing.id,
-          userId: user.id,
-          count: postInsertCount,
+      try {
+        await logAuditEvent({
+          actorId: user.id,
+          actorRole: "member",
+          action: "consent_updated",
+          targetType: "listing",
+          targetId: newListing.id,
+          area: AREA,
+          metadata: { termsAcceptanceRecorded: false },
         });
-        return NextResponse.json(
-          { error: "Listing limit reached", reason: postCheck.reason },
-          { status: 403 }
-        );
+      } catch {
+        // non-fatal
       }
     }
 

@@ -38,7 +38,17 @@ describe("instrumentation register", () => {
     await expect(register()).resolves.toBeUndefined();
 
     expect(mockValidateEnv).toHaveBeenCalledTimes(1);
+    expect(mockValidateEnv).toHaveBeenCalledWith({ strict: false });
     expect(mockError).not.toHaveBeenCalled();
+  });
+
+  it("validates in strict mode when STRICT_ENV_STARTUP_BLOCK=1", async () => {
+    process.env.STRICT_ENV_STARTUP_BLOCK = "1";
+
+    await expect(register()).resolves.toBeUndefined();
+
+    expect(mockValidateEnv).toHaveBeenCalledTimes(1);
+    expect(mockValidateEnv).toHaveBeenCalledWith({ strict: true });
   });
 
   it("logs and blocks launch validation failures", async () => {

@@ -130,7 +130,9 @@ describe("POST /api/admin/content-edits/decide", () => {
     const targetUpdate = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
-          select: vi.fn().mockResolvedValue({ data: [{ id: targetId }], error: null }),
+          eq: vi.fn().mockReturnValue({
+            select: vi.fn().mockResolvedValue({ data: [{ id: targetId }], error: null }),
+          }),
         }),
       }),
     });
@@ -145,10 +147,31 @@ describe("POST /api/admin/content-edits/decide", () => {
               }),
             }),
           }),
-          update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockResolvedValue({ error: null }),
-            }),
+          update: vi.fn((payload: { status?: string }) => {
+            // Claim chain: update → eq(id) → eq(status) → select("*") → maybeSingle
+            if (payload.status === "processing") {
+              return {
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    select: vi.fn().mockReturnValue({
+                      maybeSingle: vi
+                        .fn()
+                        .mockResolvedValue({ data: makeEditRequest(), error: null }),
+                    }),
+                  }),
+                }),
+              };
+            }
+            // Mark-approved chain: update → eq(id) → eq(status) → eq(reviewed_by) → select("id")
+            return {
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    select: vi.fn().mockResolvedValue({ data: [{ id: requestId }], error: null }),
+                  }),
+                }),
+              }),
+            };
           }),
         };
       }

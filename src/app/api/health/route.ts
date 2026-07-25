@@ -8,6 +8,15 @@ import { createLogger } from "@/lib/utils/logger";
 
 const logger = createLogger("HealthRoute");
 const HEALTH_SNAPSHOT_TIMEOUT_MS = 1200;
+const HEALTH_SNAPSHOT_CACHE_MS = 5000;
+
+let cachedSnapshot:
+  | {
+      snapshot: LaunchHealthSnapshot;
+      cachedAt: number;
+    }
+  | undefined;
+let pendingSnapshot: Promise<LaunchHealthSnapshot> | undefined;
 
 function publicChecks(snapshot: LaunchHealthSnapshot) {
   return Object.fromEntries(
@@ -33,9 +42,23 @@ function publicHealthPayload(status: "ok" | "degraded", snapshot?: LaunchHealthS
 }
 
 async function getLaunchHealthSnapshotWithinTimeout() {
+  const now = Date.now();
+  const useSnapshotCache = process.env.VITEST !== "true";
+  if (
+    useSnapshotCache &&
+    cachedSnapshot &&
+    now - cachedSnapshot.cachedAt < HEALTH_SNAPSHOT_CACHE_MS
+  ) {
+    return cachedSnapshot.snapshot;
+  }
+
+  if (useSnapshotCache && pendingSnapshot) {
+    return pendingSnapshot;
+  }
+
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   try {
-    return await Promise.race([
+    pendingSnapshot = Promise.race([
       getLaunchHealthSnapshot(),
       new Promise<never>((_, reject) => {
         timeoutId = setTimeout(() => {
@@ -43,14 +66,36 @@ async function getLaunchHealthSnapshotWithinTimeout() {
         }, HEALTH_SNAPSHOT_TIMEOUT_MS);
       }),
     ]);
+
+    const snapshot = await pendingSnapshot;
+    if (useSnapshotCache) {
+      cachedSnapshot = { snapshot, cachedAt: Date.now() };
+    }
+    return snapshot;
   } finally {
+    pendingSnapshot = undefined;
     if (timeoutId) {
       clearTimeout(timeoutId);
     }
   }
 }
 
-export async function GET() {
+function healthHeaders() {
+  return {
+    "Cache-Control": "private, no-store, no-cache, must-revalidate",
+    "X-Content-Type-Options": "nosniff",
+  };
+}
+
+export async function GET(request: Request) {
+  const deep = new URL(request.url).searchParams.get("deep") === "1";
+  if (!deep) {
+    return NextResponse.json(publicHealthPayload("ok"), {
+      status: 200,
+      headers: healthHeaders(),
+    });
+  }
+
   try {
     const snapshot = await getLaunchHealthSnapshotWithinTimeout();
     const status = snapshot.status === "ok" ? "ok" : "degraded";
@@ -61,10 +106,7 @@ export async function GET() {
 
     return NextResponse.json(publicHealthPayload(status, snapshot), {
       status: 200,
-      headers: {
-        "Cache-Control": "private, no-store, no-cache, must-revalidate",
-        "X-Content-Type-Options": "nosniff",
-      },
+      headers: healthHeaders(),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -72,10 +114,7 @@ export async function GET() {
 
     return NextResponse.json(publicHealthPayload("degraded"), {
       status: 503,
-      headers: {
-        "Cache-Control": "private, no-store, no-cache, must-revalidate",
-        "X-Content-Type-Options": "nosniff",
-      },
+      headers: healthHeaders(),
     });
   }
 }

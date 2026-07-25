@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     }
 
     const now = new Date().toISOString();
-    const { error: updateError } = await admin
+    const { data: cancelledPayment, error: updateError } = await admin
       .from("payments")
       .update({
         status: "failed",
@@ -84,7 +84,9 @@ export async function POST(request: NextRequest) {
       })
       .eq("id", paymentId)
       .eq("user_id", user.id)
-      .eq("status", "pending");
+      .eq("status", "pending")
+      .select("id, status")
+      .maybeSingle();
 
     if (updateError) {
       log.error("Failed to cancel pending payment", {
@@ -95,10 +97,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unable to cancel pending payment" }, { status: 500 });
     }
 
+    // A webhook can settle the payment after the read above. PostgREST does
+    // not treat a zero-row conditional update as an error, so never report a
+    // cancellation that did not actually transition the payment.
+    if (!cancelledPayment) {
+      return NextResponse.json(
+        {
+          error:
+            "This payment changed while it was being cancelled. Check its current status before starting a new checkout.",
+        },
+        { status: 409 }
+      );
+    }
+
     return NextResponse.json({
       success: true,
       paymentId,
-      status: "failed",
+      status: cancelledPayment.status,
     });
   } catch (error) {
     log.error("Unexpected pending payment cancellation error", {

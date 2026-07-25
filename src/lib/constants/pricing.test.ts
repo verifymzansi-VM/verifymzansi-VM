@@ -7,36 +7,26 @@ import {
   FREE_POST_CONFIG,
   PAID_POST_CONFIG,
   ACTIVE_MARKETPLACE_AREAS,
-  LEGACY_MARKETPLACE_AREAS,
   getPlansForArea,
   getPlan,
-  getCanonicalArea,
-  isLegacyArea,
   type PlanDefinition,
 } from "./pricing";
 
 describe("pricing constants", () => {
-  it("defines exactly 16 plans (5 areas × 3 tiers + 1 extra basic)", () => {
-    expect(PLANS).toHaveLength(16);
+  it("defines exactly 10 plans (3 areas × 3 tiers + 1 extra basic)", () => {
+    expect(PLANS).toHaveLength(10);
   });
 
-  it("covers all five marketplace areas", () => {
+  it("covers exactly the three marketplace areas", () => {
     const areas = Array.from(new Set(PLANS.map((p) => p.area)));
+    expect(areas).toHaveLength(3);
     expect(areas).toContain("MZANSI_MARKET");
     expect(areas).toContain("MZANSI_BUSINESS");
     expect(areas).toContain("PROMOTIONS_EVENTS");
-    expect(areas).toContain("MALL_SHOPS");
-    expect(areas).toContain("BUSINESS_ADS");
   });
 
   it("covers all three tiers per area", () => {
-    for (const area of [
-      "MZANSI_MARKET",
-      "MZANSI_BUSINESS",
-      "PROMOTIONS_EVENTS",
-      "MALL_SHOPS",
-      "BUSINESS_ADS",
-    ]) {
+    for (const area of ["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"]) {
       const tiers = PLANS.filter((p) => p.area === area).map((p) => p.tier);
       expect(tiers).toContain("starter");
       expect(tiers).toContain("growth");
@@ -51,13 +41,7 @@ describe("pricing constants", () => {
   });
 
   it("pro plans are the most expensive per area", () => {
-    for (const area of [
-      "MZANSI_MARKET",
-      "MZANSI_BUSINESS",
-      "PROMOTIONS_EVENTS",
-      "MALL_SHOPS",
-      "BUSINESS_ADS",
-    ]) {
+    for (const area of ["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"]) {
       const areaPlans = PLANS.filter((p) => p.area === area);
       const pro = areaPlans.find((p) => p.tier === "pro")!;
       const starter = areaPlans.find((p) => p.tier === "starter")!;
@@ -106,8 +90,6 @@ describe("getPlansForArea", () => {
     expect(getPlansForArea("MZANSI_MARKET")).toHaveLength(4);
     expect(getPlansForArea("MZANSI_BUSINESS")).toHaveLength(3);
     expect(getPlansForArea("PROMOTIONS_EVENTS")).toHaveLength(3);
-    expect(getPlansForArea("MALL_SHOPS")).toHaveLength(3);
-    expect(getPlansForArea("BUSINESS_ADS")).toHaveLength(3);
   });
 
   it("returns plans only for the requested area", () => {
@@ -118,10 +100,10 @@ describe("getPlansForArea", () => {
 
 describe("getPlan", () => {
   it("finds a specific plan", () => {
-    const plan = getPlan("MALL_SHOPS", "growth");
+    const plan = getPlan("MZANSI_BUSINESS", "growth");
     expect(plan).toBeDefined();
-    expect(plan?.name).toBe("Mall Shops Growth");
-    expect(plan?.priceCents).toBe(50000);
+    expect(plan?.name).toBe("Mzansi Business Growth");
+    expect(plan?.priceCents).toBe(40000);
   });
 
   it("returns undefined for non-existent combo", () => {
@@ -130,50 +112,11 @@ describe("getPlan", () => {
   });
 });
 
-describe("legacy marketplace area helpers", () => {
-  it("identifies MALL_SHOPS as legacy", () => {
-    expect(isLegacyArea("MALL_SHOPS")).toBe(true);
-  });
-
-  it("identifies BUSINESS_ADS as legacy", () => {
-    expect(isLegacyArea("BUSINESS_ADS")).toBe(true);
-  });
-
-  it("identifies MZANSI_MARKET as not legacy", () => {
-    expect(isLegacyArea("MZANSI_MARKET")).toBe(false);
-  });
-
-  it("identifies MZANSI_BUSINESS as not legacy", () => {
-    expect(isLegacyArea("MZANSI_BUSINESS")).toBe(false);
-  });
-
-  it("identifies PROMOTIONS_EVENTS as not legacy", () => {
-    expect(isLegacyArea("PROMOTIONS_EVENTS")).toBe(false);
-  });
-
-  it("maps MALL_SHOPS to MZANSI_BUSINESS", () => {
-    expect(getCanonicalArea("MALL_SHOPS")).toBe("MZANSI_BUSINESS");
-  });
-
-  it("maps BUSINESS_ADS to MZANSI_BUSINESS", () => {
-    expect(getCanonicalArea("BUSINESS_ADS")).toBe("MZANSI_BUSINESS");
-  });
-
-  it("returns active areas unchanged", () => {
-    expect(getCanonicalArea("MZANSI_MARKET")).toBe("MZANSI_MARKET");
-    expect(getCanonicalArea("MZANSI_BUSINESS")).toBe("MZANSI_BUSINESS");
-    expect(getCanonicalArea("PROMOTIONS_EVENTS")).toBe("PROMOTIONS_EVENTS");
-  });
-
-  it("ACTIVE_MARKETPLACE_AREAS does not include legacy areas", () => {
-    for (const legacy of LEGACY_MARKETPLACE_AREAS) {
-      expect(ACTIVE_MARKETPLACE_AREAS as readonly string[]).not.toContain(legacy);
-    }
-  });
-
-  it("LEGACY_MARKETPLACE_AREAS contains only MALL_SHOPS and BUSINESS_ADS", () => {
-    expect(LEGACY_MARKETPLACE_AREAS).toHaveLength(2);
-    expect(LEGACY_MARKETPLACE_AREAS).toContain("MALL_SHOPS");
-    expect(LEGACY_MARKETPLACE_AREAS).toContain("BUSINESS_ADS");
+describe("active marketplace areas", () => {
+  it("ACTIVE_MARKETPLACE_AREAS contains exactly the three platform areas", () => {
+    expect(ACTIVE_MARKETPLACE_AREAS).toHaveLength(3);
+    expect(ACTIVE_MARKETPLACE_AREAS).toContain("MZANSI_MARKET");
+    expect(ACTIVE_MARKETPLACE_AREAS).toContain("MZANSI_BUSINESS");
+    expect(ACTIVE_MARKETPLACE_AREAS).toContain("PROMOTIONS_EVENTS");
   });
 });

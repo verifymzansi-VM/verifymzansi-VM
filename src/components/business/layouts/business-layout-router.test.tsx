@@ -56,7 +56,6 @@ function makeBusiness(overrides: Partial<BusinessDetailRecord> = {}): BusinessDe
     is_featured: false,
     is_boosted: false,
     boosted_until: null,
-    mall_id: null,
     ...overrides,
   } as unknown as BusinessDetailRecord;
 }

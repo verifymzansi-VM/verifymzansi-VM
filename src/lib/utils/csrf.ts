@@ -56,7 +56,12 @@ function parseCookieHeader(
   for (const part of cookieHeader.split(";")) {
     const trimmed = part.trim();
     if (trimmed.startsWith(prefix)) {
-      return decodeURIComponent(trimmed.slice(prefix.length));
+      try {
+        return decodeURIComponent(trimmed.slice(prefix.length));
+      } catch {
+        // Malformed percent-encoding (e.g. "vm_csrf=%") — treat as no token.
+        return null;
+      }
     }
   }
 

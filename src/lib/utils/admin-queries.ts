@@ -254,8 +254,6 @@ export async function getAreaCardCounts(): Promise<
   // generic business bucket.
   const flagCounts = {
     MZANSI_MARKET: 0,
-    BUSINESS_ADS: 0,
-    MALL_SHOPS: 0,
     MZANSI_BUSINESS: 0,
     PROMOTIONS_EVENTS: 0,
   };
@@ -281,14 +279,6 @@ export async function getAreaCardCounts(): Promise<
     MZANSI_MARKET: {
       pendingFlags: flagCounts.MZANSI_MARKET,
       pendingContent: pendingListings,
-    },
-    BUSINESS_ADS: {
-      pendingFlags: flagCounts.BUSINESS_ADS,
-      pendingContent: 0,
-    },
-    MALL_SHOPS: {
-      pendingFlags: flagCounts.MALL_SHOPS,
-      pendingContent: 0,
     },
     MZANSI_BUSINESS: {
       pendingFlags: flagCounts.MZANSI_BUSINESS,
@@ -683,8 +673,6 @@ export async function getAreaReports(area: MarketplaceArea) {
 
   const targetTypeMap: Record<MarketplaceArea, string[]> = {
     MZANSI_MARKET: ["listing", "account_profile"],
-    BUSINESS_ADS: ["business"],
-    MALL_SHOPS: ["business"],
     MZANSI_BUSINESS: ["business", "business_profile", "storefront"],
     PROMOTIONS_EVENTS: ["promotion"],
   };
@@ -766,7 +754,7 @@ export async function getPendingContent(area: MarketplaceArea) {
       ...(promotions || []).map((item) => ({
         ...item,
         title: item.title,
-        itemType: "Promotion",
+        itemType: "Event",
         contentType: "promotion",
         area: "PROMOTIONS_EVENTS",
         areaLabel: "Tourism & Events",
@@ -782,21 +770,7 @@ export async function getPendingContent(area: MarketplaceArea) {
     ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   }
 
-  const { data } = await supabase
-    .from("businesses")
-    .select("*")
-    .eq("status", "pending_moderation")
-    .order("created_at", { ascending: true })
-    .limit(50);
-
-  return (data || []).map((item) => ({
-    ...item,
-    title: item.business_name,
-    itemType: "Business",
-    contentType: "business",
-    area,
-    areaLabel: area,
-  }));
+  return [];
 }
 
 // ── Dashboard-specific richer queries ────────────────────────

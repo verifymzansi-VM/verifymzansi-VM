@@ -23,6 +23,7 @@ import {
   getOwnerColumn,
   readOwnerId,
   withOwnerColumn,
+  type OwnerColumn,
 } from "@/lib/account/compat";
 import { uuidSchema } from "@/lib/validations/shared";
 import { z } from "zod";
@@ -136,7 +137,22 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     // Extract optimistic-lock token (outside Zod schema — optional for backward compat)
     const expectedUpdatedAt =
       typeof body.expected_updated_at === "string" ? body.expected_updated_at : null;
-    const ownerColumn = await getOwnerColumn(supabase, "listings");
+    let ownerColumn: OwnerColumn;
+    try {
+      ownerColumn = await getOwnerColumn(supabase, "listings");
+    } catch (ownerColumnError) {
+      log.warn("Listing owner-column probe failed during update", {
+        error: ownerColumnError instanceof Error ? ownerColumnError.message : "Unknown error",
+        userId: user.id,
+      });
+      return NextResponse.json(
+        {
+          error: "Service temporarily unavailable",
+          detail: "Listing ownership metadata is unavailable. Please retry shortly.",
+        },
+        { status: 503 }
+      );
+    }
 
     // ── Check listing exists and user owns it ────────────────
     const { data: rawListing } = await applyOwnerFilter(

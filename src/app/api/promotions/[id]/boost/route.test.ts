@@ -223,6 +223,11 @@ describe("POST /api/promotions/[id]/boost", () => {
       checkoutUrl: "https://checkout.example/boost",
       paymentId: "pay-boost-1",
     });
+    // Rate limiting is keyed on the authenticated user, not the client IP,
+    // so CGNAT mobile users are not punished for sharing an address.
+    expect(mockCheckRateLimit).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "user-1", action: "promotion:boost" })
+    );
     expect(mockGetActivePlanTierForArea).toHaveBeenCalledWith("user-1", "PROMOTIONS_EVENTS");
     expect(mockCanBoost).toHaveBeenCalled();
     expect(mockCreateHostedCheckout).toHaveBeenCalledTimes(1);

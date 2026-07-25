@@ -35,18 +35,23 @@ export interface Artifact {
 
 export interface ProviderResult {
   id: string;
+  artifact_id: string;
   provider_name: string;
-  check_type: string;
-  raw_status: string;
-  normalized_decision: string;
+  provider_status: string;
+  face_match_score: number | null;
+  liveness_score: number | null;
+  doc_auth_score: number | null;
+  provider_ref: string | null;
   created_at: string;
 }
 
 export interface RiskSignal {
   id: string;
-  signal_type: string;
+  user_id: string;
+  artifact_id: string | null;
+  signal_code: string;
   severity: string;
-  detail: string | null;
+  value_json: Record<string, unknown>;
   created_at: string;
 }
 

@@ -14,6 +14,15 @@ export type CachedProfile = {
   account_verification_status?: string | null;
 } | null;
 
+/**
+ * Creates redirect responses for gate decisions. proxy-handler passes a
+ * factory that forwards Supabase session cookies (token refreshes) onto the
+ * redirect; the default is a bare redirect for tests/legacy callers.
+ */
+export type GateRedirectFactory = (url: URL | string) => NextResponse;
+
+const bareRedirect: GateRedirectFactory = (url) => NextResponse.redirect(url);
+
 // -- Cookie helpers ----------------------------------------------------------
 
 function setPhoneOkCookie(response: NextResponse): void {
@@ -41,7 +50,8 @@ export async function checkPhoneGate(
   response: NextResponse,
   supabase: SupabaseClient,
   userId: string,
-  cachedProfile: CachedProfile
+  cachedProfile: CachedProfile,
+  createRedirect: GateRedirectFactory = bareRedirect
 ): Promise<{ response: NextResponse | null; profile: CachedProfile }> {
   const pathname = request.nextUrl.pathname;
   const isApiRoute = pathname.startsWith("/api/");
@@ -56,18 +66,36 @@ export async function checkPhoneGate(
   try {
     let profile = cachedProfile;
     if (!profile) {
-      const { data } = await supabase
+      // supabase-js reports failures in the result object instead of throwing.
+      // A returned error must fail closed to the error page — misreading it as
+      // "no profile" would wrongly redirect phone-verified users to
+      // complete-profile.
+      const { data, error: profileError } = await supabase
         .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .select("phone, account_status, suspended_until, account_verification_status")
         .eq("user_id", userId)
         .maybeSingle();
+
+      if (profileError) {
+        logger.error("Phone gate DB check failed — redirecting to error page", {
+          path: pathname,
+          userId,
+          error: profileError.message,
+          code: profileError.code,
+        });
+        return {
+          response: createRedirect(new URL("/error?reason=unavailable", request.url)),
+          profile: cachedProfile,
+        };
+      }
+
       profile = data;
     }
 
     if (!profile?.phone) {
       const completeProfileUrl = new URL("/dashboard/complete-profile", request.url);
       completeProfileUrl.searchParams.set("returnUrl", `${pathname}${request.nextUrl.search}`);
-      const redirect = NextResponse.redirect(completeProfileUrl);
+      const redirect = createRedirect(completeProfileUrl);
       clearPhoneOkCookie(redirect);
       return { response: redirect, profile };
     }
@@ -81,7 +109,7 @@ export async function checkPhoneGate(
       error: phoneGateErr instanceof Error ? phoneGateErr.message : "Unknown",
     });
     return {
-      response: NextResponse.redirect(new URL("/error?reason=unavailable", request.url)),
+      response: createRedirect(new URL("/error?reason=unavailable", request.url)),
       profile: cachedProfile,
     };
   }
@@ -95,7 +123,8 @@ export async function checkPhoneGate(
  */
 export function checkAdminGate(
   request: NextRequest,
-  user: { app_metadata: Record<string, unknown>; is_anonymous?: boolean } | null
+  user: { app_metadata: Record<string, unknown>; is_anonymous?: boolean } | null,
+  createRedirect: GateRedirectFactory = bareRedirect
 ): NextResponse | null {
   const pathname = request.nextUrl.pathname;
   const isApiRoute = pathname.startsWith("/api/");
@@ -112,14 +141,14 @@ export function checkAdminGate(
     if (isApiRoute) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    return NextResponse.redirect(new URL("/login", request.url));
+    return createRedirect(new URL("/login", request.url));
   }
 
   if (!isStaff(user)) {
     if (isApiRoute) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return createRedirect(new URL("/dashboard", request.url));
   }
 
   return null;
@@ -136,7 +165,8 @@ export async function checkBanEnforcement(
   supabase: SupabaseClient,
   userId: string,
   isProtectedRoute: boolean,
-  cachedProfile: CachedProfile
+  cachedProfile: CachedProfile,
+  createRedirect: GateRedirectFactory = bareRedirect
 ): Promise<{ response: NextResponse | null; profile: CachedProfile }> {
   const pathname = request.nextUrl.pathname;
   const isApiRoute = pathname.startsWith("/api/");
@@ -174,7 +204,7 @@ export async function checkBanEnforcement(
         };
       }
       return {
-        response: NextResponse.redirect(new URL("/error?reason=unavailable", request.url)),
+        response: createRedirect(new URL("/error?reason=unavailable", request.url)),
         profile: cachedProfile,
       };
     }
@@ -189,7 +219,7 @@ export async function checkBanEnforcement(
         };
       }
       return {
-        response: NextResponse.redirect(new URL("/banned", request.url)),
+        response: createRedirect(new URL("/banned", request.url)),
         profile: statusProfile,
       };
     }
@@ -199,7 +229,8 @@ export async function checkBanEnforcement(
         request,
         supabase,
         userId,
-        statusProfile.suspended_until ?? null
+        statusProfile.suspended_until ?? null,
+        createRedirect
       );
       if (suspendResult) {
         return { response: suspendResult, profile: statusProfile };
@@ -220,16 +251,15 @@ export async function checkPostingGate(
   request: NextRequest,
   supabase: SupabaseClient,
   userId: string,
-  cachedProfile: CachedProfile
+  cachedProfile: CachedProfile,
+  createRedirect: GateRedirectFactory = bareRedirect
 ): Promise<{ response: NextResponse | null; profile: CachedProfile }> {
   const pathname = request.nextUrl.pathname;
   const isApiRoute = pathname.startsWith("/api/");
 
   const isPostingRoute =
     (pathname.startsWith("/post/create") && pathname !== "/post/create") ||
-    pathname.startsWith("/post/edit") ||
-    pathname.startsWith("/api/post/create") ||
-    pathname.startsWith("/api/post/edit");
+    pathname.startsWith("/post/edit");
 
   if (!isPostingRoute) {
     return { response: null, profile: cachedProfile };
@@ -262,7 +292,7 @@ export async function checkPostingGate(
     if (isApiRoute) {
       return { response: NextResponse.json({ error: "Banned" }, { status: 403 }), profile };
     }
-    return { response: NextResponse.redirect(new URL("/banned", request.url)), profile };
+    return { response: createRedirect(new URL("/banned", request.url)), profile };
   }
 
   if (profile?.account_status === "suspended") {
@@ -270,7 +300,8 @@ export async function checkPostingGate(
       request,
       supabase,
       userId,
-      profile.suspended_until ?? null
+      profile.suspended_until ?? null,
+      createRedirect
     );
     if (suspendResult) {
       return { response: suspendResult, profile };
@@ -304,7 +335,7 @@ export async function checkPostingGate(
     }
     const verificationUrl = new URL("/verification", request.url);
     verificationUrl.searchParams.set("returnUrl", pathname);
-    return { response: NextResponse.redirect(verificationUrl), profile };
+    return { response: createRedirect(verificationUrl), profile };
   }
 
   return { response: null, profile };
@@ -316,7 +347,8 @@ async function handleSuspension(
   request: NextRequest,
   supabase: SupabaseClient,
   userId: string,
-  suspendedUntil: string | null
+  suspendedUntil: string | null,
+  createRedirect: GateRedirectFactory
 ): Promise<NextResponse | null> {
   const pathname = request.nextUrl.pathname;
   const isApiRoute = pathname.startsWith("/api/");
@@ -359,5 +391,5 @@ async function handleSuspension(
   if (suspendedUntil) {
     suspendedUrl.searchParams.set("until", suspendedUntil);
   }
-  return NextResponse.redirect(suspendedUrl);
+  return createRedirect(suspendedUrl);
 }

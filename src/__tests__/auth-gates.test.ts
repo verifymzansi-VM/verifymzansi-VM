@@ -144,6 +144,16 @@ describe("checkAdminGate", () => {
     });
     expect(result).toBeNull();
   });
+
+  it("routes admin gate redirects through the redirect factory", () => {
+    const factory = vi.fn((url: URL | string) => NextResponse.redirect(url));
+
+    const result = checkAdminGate(createRequest("/admin"), null, factory);
+
+    expect(factory).toHaveBeenCalledTimes(1);
+    expect(result).not.toBeNull();
+    expect(new URL(result!.headers.get("location")!).pathname).toBe("/login");
+  });
 });
 
 // ── checkPhoneGate ──────────────────────────────────────────────────
@@ -271,6 +281,58 @@ describe("checkPhoneGate", () => {
     expect(result.response).not.toBeNull();
     expect(result.response!.status).toBe(307);
     expect(new URL(result.response!.headers.get("location")!).pathname).toBe("/error");
+  });
+
+  it("redirects to the error page when the profile lookup returns a PostgREST error", async () => {
+    // supabase-js returns errors in the result object (never throws) — a
+    // transient failure must not be misread as "user has no phone".
+    const supabase = mockSupabase({
+      profileData: null,
+      profileError: { message: "postgrest unavailable", code: "PGRST000" },
+    });
+
+    const result = await checkPhoneGate(
+      createRequest("/dashboard"),
+      NextResponse.next(),
+      supabase,
+      "user-1",
+      null
+    );
+
+    expect(result.response).not.toBeNull();
+    expect(result.response!.status).toBe(307);
+    const location = new URL(result.response!.headers.get("location")!);
+    expect(location.pathname).toBe("/error");
+    expect(location.searchParams.get("reason")).toBe("unavailable");
+  });
+
+  it("forwards cookies from the redirect factory onto gate redirects", async () => {
+    const supabase = mockSupabase({
+      profileData: { phone: null, account_status: "active" },
+    });
+    const redirectWithCookies = (url: URL | string) => {
+      const res = NextResponse.redirect(url);
+      res.cookies.set("sb-example-auth-token", "refreshed-token", { path: "/" });
+      return res;
+    };
+
+    const result = await checkPhoneGate(
+      createRequest("/dashboard"),
+      NextResponse.next(),
+      supabase,
+      "user-1",
+      null,
+      redirectWithCookies
+    );
+
+    expect(result.response).not.toBeNull();
+    expect(result.response!.status).toBe(307);
+    expect(new URL(result.response!.headers.get("location")!).pathname).toBe(
+      "/dashboard/complete-profile"
+    );
+    expect(result.response!.headers.get("set-cookie")).toContain(
+      "sb-example-auth-token=refreshed-token"
+    );
   });
 });
 
@@ -509,22 +571,16 @@ describe("checkPostingGate", () => {
     expect(location.searchParams.get("returnUrl")).toBe("/post/create-business");
   });
 
-  it("returns 403 for unverified users on API posting routes", async () => {
-    const supabase = mockSupabase({
-      profileData: {
-        account_verification_status: "incomplete",
-        account_status: "active",
-      },
-      stepsData: [],
-    });
+  it("skips the removed /api/post prefixes (creation APIs enforce their own auth)", async () => {
+    const supabase = mockSupabase({ profileData: null });
     const result = await checkPostingGate(
       createRequest("/api/post/create"),
       supabase,
       "user-1",
       null
     );
-    expect(result.response).not.toBeNull();
-    expect(result.response!.status).toBe(403);
+    expect(result.response).toBeNull();
+    expect(supabase.from).not.toHaveBeenCalled();
   });
 
   it("allows posting when legacy status is stale but all steps are approved", async () => {

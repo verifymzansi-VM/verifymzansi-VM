@@ -195,6 +195,28 @@ export const businessSchema = z
     service_areas: serviceAreasSchema.optional(),
     business_details: businessDetailsSchema.nullable().optional(),
     category_details: z.record(z.string(), z.unknown()).optional().default({}),
+    // Optional public business profile extras. These have no dedicated DB
+    // columns — the API payload builder folds them into
+    // category_details.business_profile.
+    year_established: z.number().int().min(1900).max(new Date().getFullYear()).optional(),
+    cipc_registration: optionalText(30),
+    bbbee_level: z
+      .enum([
+        "level_1",
+        "level_2",
+        "level_3",
+        "level_4",
+        "level_5",
+        "level_6",
+        "level_7",
+        "level_8",
+        "non_compliant",
+        "exempt",
+      ])
+      .optional(),
+    languages_spoken: optionalText(200),
+    load_shedding_ready: z.boolean().optional(),
+    number_of_employees: z.enum(["1", "2_5", "6_10", "11_50", "51_200", "200_plus"]).optional(),
     operating_hours: z.record(z.string().max(20), z.unknown()).optional().default({}),
     payment_methods_accepted: z
       .array(z.enum(["cash", "card", "eft", "snapscan", "capitec_pay", "other"]))

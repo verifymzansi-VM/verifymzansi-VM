@@ -26,7 +26,31 @@ interface PaymentRow {
   area?: string | null;
   status?: string;
   provider_data: Record<string, unknown> | null;
+  created_at?: string | null;
   updated_at?: string | null;
+}
+
+/**
+ * Fallback expiry window for pending payments that never received an
+ * `expire_at` timestamp (e.g. a crash between the insert and the update).
+ * Without this they would stay `pending` forever and block the user from
+ * ever checking out again via the unique in-flight payment index.
+ */
+const PENDING_PAYMENT_FALLBACK_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+/**
+ * Constant-time shared-secret comparison. workerd has no node:crypto
+ * `timingSafeEqual`, so use a length-normalized XOR loop instead.
+ */
+function timingSafeEqual(a: string, b: string): boolean {
+  const maxLength = Math.max(a.length, b.length);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < maxLength; i += 1) {
+    const aCode = i < a.length ? a.charCodeAt(i) : 0;
+    const bCode = i < b.length ? b.charCodeAt(i) : 0;
+    diff |= aCode ^ bCode;
+  }
+  return diff === 0;
 }
 
 function getExpireAt(providerData: Record<string, unknown> | null): string | null {
@@ -143,8 +167,10 @@ const worker: ExportedHandler<Env> = {
       "Content-Type": "application/json",
     };
 
+    // Order by created_at so expired rows beyond the first page are not
+    // starved by newer unexpired pending payments.
     const response = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/payments?provider=eq.ozow&status=eq.pending&select=id,user_id,area,provider_data&limit=200`,
+      `${env.SUPABASE_URL}/rest/v1/payments?provider=eq.ozow&status=eq.pending&select=id,user_id,area,provider_data,created_at&order=created_at.asc&limit=200`,
       { headers }
     );
 
@@ -155,7 +181,16 @@ const worker: ExportedHandler<Env> = {
 
     const payments = ((await response.json()) as PaymentRow[]).filter((payment) => {
       const expireAt = getExpireAt(payment.provider_data);
-      return expireAt ? new Date(expireAt) <= new Date() : false;
+      if (expireAt) {
+        return new Date(expireAt) <= new Date();
+      }
+      // Pending payments that never received expire_at (crash between insert
+      // and update) still block checkout via the unique in-flight index —
+      // expire them once they pass the fallback window.
+      const createdAt = payment.created_at ? new Date(payment.created_at).getTime() : NaN;
+      return (
+        Number.isFinite(createdAt) && Date.now() - createdAt >= PENDING_PAYMENT_FALLBACK_EXPIRY_MS
+      );
     });
 
     const processingResponse = await fetch(
@@ -255,9 +290,12 @@ const worker: ExportedHandler<Env> = {
       actor_role: "system",
       action: "payment_cleanup_reconciliation",
       target_type: "payment",
-      target_id: "batch",
+      // audit_logs.target_id is UUID NOT NULL — use the nil-UUID sentinel
+      // (same as src/lib/services/audit.ts) and keep batch detail in metadata.
+      target_id: "00000000-0000-0000-0000-000000000000",
       area: null,
       metadata: {
+        target: "batch",
         expired_pending: expiredPending,
         recovered_complete: recoveredComplete,
         failed_stale_processing: failedStaleProcessing,
@@ -282,7 +320,8 @@ const worker: ExportedHandler<Env> = {
   async fetch(request, env, ctx) {
     if (request.method === "POST") {
       const authHeader = request.headers.get("Authorization");
-      if (!env.WORKER_API_KEY || authHeader !== `Bearer ${env.WORKER_API_KEY}`) {
+      const expectedAuthHeader = env.WORKER_API_KEY ? `Bearer ${env.WORKER_API_KEY}` : "";
+      if (!expectedAuthHeader || !timingSafeEqual(authHeader ?? "", expectedAuthHeader)) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), {
           status: 401,
           headers: { "Content-Type": "application/json" },

@@ -9,13 +9,9 @@ import { OVERRIDE_REASON_CODES, REASON_CODES } from "@/lib/constants/verificatio
 export const adminContentDecideSchema = z
   .object({
     itemId: uuidSchema,
-    area: z.enum(
-      ["MZANSI_MARKET", "BUSINESS_ADS", "MALL_SHOPS", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"],
-      {
-        message:
-          "area must be MZANSI_MARKET, BUSINESS_ADS, MALL_SHOPS, MZANSI_BUSINESS, or PROMOTIONS_EVENTS",
-      }
-    ),
+    area: z.enum(["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"], {
+      message: "area must be MZANSI_MARKET, MZANSI_BUSINESS, or PROMOTIONS_EVENTS",
+    }),
     decision: z.enum(["approve", "reject"], {
       message: "decision must be approve or reject",
     }),
@@ -25,7 +21,24 @@ export const adminContentDecideSchema = z
   .refine((data) => data.decision === "approve" || (data.reason && data.reason.trim().length > 0), {
     message: "A reason is required when rejecting content",
     path: ["reason"],
-  });
+  })
+  .refine(
+    (data) => {
+      // Cross-validate: when contentType is supplied it must agree with the
+      // marketplace area (a business cannot live in MZANSI_MARKET, etc.).
+      if (!data.contentType) return true;
+      const areaForType: Record<string, string> = {
+        listing: "MZANSI_MARKET",
+        business: "MZANSI_BUSINESS",
+        promotion: "PROMOTIONS_EVENTS",
+      };
+      return areaForType[data.contentType] === data.area;
+    },
+    {
+      message: "contentType does not match the marketplace area",
+      path: ["contentType"],
+    }
+  );
 
 export const adminContentEditDecideSchema = z
   .object({
@@ -83,8 +96,8 @@ export const adminFlaggingActionSchema = z
 
 export const adminDsarDecideSchema = z.object({
   requestId: uuidSchema,
-  decision: z.enum(["approve", "reject"], {
-    message: "decision must be approve or reject",
+  decision: z.enum(["approve", "reject", "verify_identity"], {
+    message: "decision must be approve, reject, or verify_identity",
   }),
   notes: optionalTrimmedStringSchema.pipe(z.string().max(2000).optional()),
 });
@@ -92,4 +105,7 @@ export const adminDsarDecideSchema = z.object({
 export const adminDsarCompleteSchema = z.object({
   requestId: uuidSchema,
   notes: optionalTrimmedStringSchema.pipe(z.string().max(2000).optional()),
+  // Required for deletion-type DSARs: an explicit operator confirmation that
+  // the underlying data deletion was actually performed (manual process).
+  deletionAttestation: optionalTrimmedStringSchema.pipe(z.string().max(2000).optional()),
 });

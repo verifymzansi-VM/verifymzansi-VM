@@ -118,6 +118,43 @@ const nextConfig = {
         destination: "/admin/tourism-events",
         permanent: true,
       },
+      // Legacy Business Ads / Mall Shops surfaces removed — forward old links
+      // to the unified Mzansi Business area.
+      {
+        source: "/business-ads",
+        destination: "/mzansi-business",
+        permanent: true,
+      },
+      {
+        source: "/business-ad/:id",
+        destination: "/mzansi-business/:id",
+        permanent: true,
+      },
+      {
+        source: "/mall-shops",
+        destination: "/mzansi-business?type=mall_store",
+        permanent: true,
+      },
+      {
+        source: "/mall-shops/:path*",
+        destination: "/mzansi-business?type=mall_store",
+        permanent: true,
+      },
+      {
+        source: "/mall-shop/:id",
+        destination: "/mzansi-business/:id",
+        permanent: true,
+      },
+      {
+        source: "/post/create-business-ad",
+        destination: "/post/create-business",
+        permanent: true,
+      },
+      {
+        source: "/post/create-mall-shop",
+        destination: "/post/create-business",
+        permanent: true,
+      },
     ];
   },
   async headers() {

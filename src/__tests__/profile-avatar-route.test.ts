@@ -1,10 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
-const { mockCreateClient, mockCreateAdminClient, mockCheckRateLimit } = vi.hoisted(() => ({
+const {
+  mockCreateClient,
+  mockCreateAdminClient,
+  mockCheckRateLimit,
+  mockStripExifFromJpeg,
+  mockStripMetadataFromPng,
+  mockStripMetadataFromWebp,
+} = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
   mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
+  mockStripExifFromJpeg: vi.fn((buf: Uint8Array) => buf),
+  mockStripMetadataFromPng: vi.fn((buf: Uint8Array) => buf),
+  mockStripMetadataFromWebp: vi.fn((buf: Uint8Array) => buf),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
@@ -24,7 +34,9 @@ vi.mock("@/lib/utils/malware-scan", () => ({
   scanForMalware: vi.fn(() => ({ safe: true })),
 }));
 vi.mock("@/lib/utils/exif-strip", () => ({
-  stripExifFromJpeg: vi.fn((buf: Uint8Array) => buf),
+  stripExifFromJpeg: mockStripExifFromJpeg,
+  stripMetadataFromPng: mockStripMetadataFromPng,
+  stripMetadataFromWebp: mockStripMetadataFromWebp,
 }));
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
@@ -106,17 +118,15 @@ describe("POST /api/profile/avatar", () => {
 
   it("uploads and persists the avatar URL", async () => {
     const upload = vi.fn().mockResolvedValue({ error: null });
+    const remove = vi.fn().mockResolvedValue({ data: [], error: null });
     const getPublicUrl = vi.fn().mockReturnValue({
       data: { publicUrl: "https://cdn.example.com/avatar.png" },
     });
     const updateEq = vi.fn().mockResolvedValue({ error: null });
+    const update = vi.fn().mockReturnValue({ eq: updateEq });
 
     mockCreateClient.mockResolvedValue({
-      from: vi.fn().mockReturnValue({
-        update: vi.fn().mockReturnValue({
-          eq: updateEq,
-        }),
-      }),
+      from: vi.fn().mockReturnValue({ update }),
       auth: {
         getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
       },
@@ -125,6 +135,7 @@ describe("POST /api/profile/avatar", () => {
       storage: {
         from: vi.fn().mockReturnValue({
           upload,
+          remove,
           getPublicUrl,
         }),
       },
@@ -141,6 +152,88 @@ describe("POST /api/profile/avatar", () => {
       action: "profile:avatar",
     });
     expect(upload).toHaveBeenCalled();
+    // PNG metadata must be stripped before upload
+    expect(mockStripMetadataFromPng).toHaveBeenCalled();
+    // Stale variants with other extensions are cleaned up best-effort
+    expect(remove).toHaveBeenCalledWith(["user-1/avatar.jpg", "user-1/avatar.webp"]);
+    // The persisted URL carries a cache-busting version param
+    expect(update).toHaveBeenCalledWith({
+      avatar_url: expect.stringMatching(/^https:\/\/cdn\.example\.com\/avatar\.png\?v=\d+$/),
+    });
     expect(updateEq).toHaveBeenCalledWith("user_id", "user-1");
+    await expect(res.json()).resolves.toMatchObject({
+      success: true,
+      avatarUrl: expect.stringContaining("?v="),
+    });
+  });
+
+  it("strips EXIF from JPEG avatars and removes stale png/webp variants", async () => {
+    const upload = vi.fn().mockResolvedValue({ error: null });
+    const remove = vi.fn().mockResolvedValue({ data: [], error: null });
+    const getPublicUrl = vi.fn().mockReturnValue({
+      data: { publicUrl: "https://cdn.example.com/avatar.jpg" },
+    });
+    const update = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) });
+
+    mockCreateClient.mockResolvedValue({
+      from: vi.fn().mockReturnValue({ update }),
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
+      },
+    });
+    mockCreateAdminClient.mockReturnValue({
+      storage: {
+        from: vi.fn().mockReturnValue({
+          upload,
+          remove,
+          getPublicUrl,
+        }),
+      },
+    });
+
+    const formData = new FormData();
+    formData.set("file", new File(["hello"], "avatar.jpg", { type: "image/jpeg" }));
+
+    const res = await POST(createRequest(formData));
+
+    expect(res.status).toBe(200);
+    expect(mockStripExifFromJpeg).toHaveBeenCalled();
+    expect(mockStripMetadataFromPng).not.toHaveBeenCalled();
+    expect(mockStripMetadataFromWebp).not.toHaveBeenCalled();
+    expect(remove).toHaveBeenCalledWith(["user-1/avatar.png", "user-1/avatar.webp"]);
+  });
+
+  it("strips metadata from WebP avatars", async () => {
+    const upload = vi.fn().mockResolvedValue({ error: null });
+    const remove = vi.fn().mockResolvedValue({ data: [], error: null });
+    const getPublicUrl = vi.fn().mockReturnValue({
+      data: { publicUrl: "https://cdn.example.com/avatar.webp" },
+    });
+    const update = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) });
+
+    mockCreateClient.mockResolvedValue({
+      from: vi.fn().mockReturnValue({ update }),
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
+      },
+    });
+    mockCreateAdminClient.mockReturnValue({
+      storage: {
+        from: vi.fn().mockReturnValue({
+          upload,
+          remove,
+          getPublicUrl,
+        }),
+      },
+    });
+
+    const formData = new FormData();
+    formData.set("file", new File(["hello"], "avatar.webp", { type: "image/webp" }));
+
+    const res = await POST(createRequest(formData));
+
+    expect(res.status).toBe(200);
+    expect(mockStripMetadataFromWebp).toHaveBeenCalled();
+    expect(remove).toHaveBeenCalledWith(["user-1/avatar.jpg", "user-1/avatar.png"]);
   });
 });

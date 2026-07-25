@@ -128,10 +128,10 @@ export async function GET(request: Request) {
         payment?.provider_data && typeof payment.provider_data === "object"
           ? payment.provider_data
           : null;
+      // Mock payments are created with provider='ozow' like real ones; the
+      // mock flow is only detectable via provider_data flags.
       const isMockFlow =
-        payment?.provider === "mock-ozow" ||
-        providerData?.mock_flow === true ||
-        providerData?.checkout?.mockFlow === true;
+        providerData?.mock_flow === true || providerData?.checkout?.mockFlow === true;
 
       if (!payment || !isMockFlow) {
         log.warn("Mock Ozow attempted on non-mock payment", { paymentId });
@@ -169,7 +169,7 @@ export async function GET(request: Request) {
       ? new Webhook(secret).sign(signatureId, signatureTimestamp, body)
       : undefined;
 
-    await fetch(webhookUrl, {
+    const webhookResponse = await fetch(webhookUrl, {
       method: "POST",
       body,
       signal: AbortSignal.timeout(10_000),
@@ -187,7 +187,18 @@ export async function GET(request: Request) {
       log.error("Mock Ozow webhook failed", {
         error: error instanceof Error ? error.message : "Unknown error",
       });
+      return null;
     });
+
+    // A non-2xx webhook response (e.g. 401 when OZOW_WEBHOOK_SECRET is missing
+    // locally) means the payment was NOT confirmed — surface a failure instead
+    // of redirecting to a success page with the payment still pending.
+    if (webhookResponse && !webhookResponse.ok) {
+      log.error("Mock Ozow webhook rejected", { paymentId, status: webhookResponse.status });
+    }
+    if (!webhookResponse?.ok) {
+      return new NextResponse("Mock payment confirmation failed", { status: 502 });
+    }
   }
 
   const safeReturnUrl = returnUrl && isSafeUrl(returnUrl) ? returnUrl : "/";

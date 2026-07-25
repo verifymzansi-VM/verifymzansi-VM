@@ -100,14 +100,14 @@ describe("cleanupDevServiceWorkers", () => {
   });
 });
 
-describe("production service worker auth routes", () => {
-  it("keeps auth pages network-only so stale cached loading shells are not served", () => {
+describe("production service worker caching", () => {
+  it("keeps Next.js app shells and chunks out of the service-worker cache", () => {
     const serviceWorkerSource = readFileSync(join(process.cwd(), "public", "sw.js"), "utf8");
 
-    expect(serviceWorkerSource).toContain('"/login"');
-    expect(serviceWorkerSource).toContain('"/register"');
-    expect(serviceWorkerSource).toContain('"/forgot-password"');
-    expect(serviceWorkerSource).toContain('"/reset-password"');
+    expect(serviceWorkerSource).toContain('const PRECACHE_URLS = ["/offline", "/manifest.json"]');
+    expect(serviceWorkerSource).toContain('url.pathname.startsWith("/_next/static/")');
+    expect(serviceWorkerSource).toContain("event.respondWith(networkOnly(request))");
     expect(serviceWorkerSource).toContain("networkOnlyWithOffline(request)");
+    expect(serviceWorkerSource).not.toContain("networkFirstWithOffline(request)");
   });
 });

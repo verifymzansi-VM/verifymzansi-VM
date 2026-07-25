@@ -52,6 +52,7 @@ export type AuditAction =
   | "dsar_completed"
   | "dsar_exported"
   | "dsar_rejected"
+  | "dsar_identity_verified"
   | "consent_updated"
   | "moderation_action"
   | "kyc_evidence_viewed"
@@ -89,7 +90,7 @@ interface AuditLogEntry {
   action: AuditAction;
   targetType?: string;
   targetId?: string;
-  area?: "MZANSI_MARKET" | "MALL_SHOPS" | "BUSINESS_ADS" | "MZANSI_BUSINESS" | "PROMOTIONS_EVENTS";
+  area?: "MZANSI_MARKET" | "MZANSI_BUSINESS" | "PROMOTIONS_EVENTS";
   metadata?: Record<string, unknown>;
 }
 
