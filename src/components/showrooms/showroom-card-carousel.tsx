@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import {
   useState,
   useEffect,
@@ -14,7 +13,6 @@ import {
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
 import { isVideoUrl } from "@/components/ui/video-card-player";
-import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TrustLevel } from "@/types/enums";
@@ -934,37 +932,8 @@ export function ShowroomCardCarousel({
       >
         <div className="container-page flex items-center justify-center lg:h-full">
           <div className="flex w-full max-w-5xl flex-col items-center gap-6 py-6 sm:gap-8 lg:flex-row lg:justify-center lg:gap-14">
-            {/* Branded message panel */}
-            <div className="order-2 w-full max-w-md rounded-[1.75rem] border border-white/60 bg-white/90 p-6 text-center shadow-[0_28px_70px_-40px_rgba(15,23,42,0.55)] backdrop-blur-md dark:border-white/10 dark:bg-slate-950/85 sm:p-7 lg:order-1 lg:text-left">
-              <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-brand-green">
-                VerifyMzansi
-              </p>
-              <h2 className="mt-2 font-display text-2xl font-bold leading-tight tracking-tight text-slate-950 dark:text-white sm:text-[1.75rem]">
-                {emptyTitle}
-              </h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-                {emptyDescription}
-              </p>
-              <div className="mt-5 flex flex-col gap-2.5 sm:flex-row sm:justify-center lg:justify-start">
-                <Button
-                  asChild
-                  size="lg"
-                  className="rounded-full bg-brand-green px-6 text-white hover:bg-brand-green-600"
-                >
-                  <Link href="/post/create" prefetch={false}>
-                    Post for free
-                  </Link>
-                </Button>
-                <Button asChild size="lg" variant="outline" className="rounded-full px-6">
-                  <Link href="/advertise" prefetch={false}>
-                    Advertise
-                  </Link>
-                </Button>
-              </div>
-            </div>
-
             {/* Area-branded artwork card */}
-            <div className={cn(CARD_W, "order-1 shrink-0 lg:order-2")}>
+            <div className={cn(CARD_W, "shrink-0")}>
               <PosterCardShell
                 href="#"
                 title={emptyTitle}
