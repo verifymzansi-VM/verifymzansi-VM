@@ -129,17 +129,9 @@ export function externalUrlSchema(message = "Enter a valid URL", max = 2000) {
   return z.preprocess(normalizeUserEnteredUrlInput, z.string().url(message).max(max));
 }
 
-export const urlOrEmptySchema = externalUrlOrEmptySchema();
+const provinceSchema = z.string().min(1, "Province is required").max(50);
 
-export const slugSchema = z
-  .string()
-  .min(3, "Slug must be at least 3 characters")
-  .max(60, "Slug cannot exceed 60 characters")
-  .regex(/^[a-z0-9-]+$/, "Only lowercase letters, numbers and hyphens");
-
-export const provinceSchema = z.string().min(1, "Province is required").max(50);
-
-export const citySchema = z.string().min(1, "City is required").max(80);
+const citySchema = z.string().min(1, "City is required").max(80);
 
 export const platformMediaUrlSchema = (
   message = "Media must be hosted on the VerifyMzansi platform"
@@ -164,19 +156,6 @@ export const postMediaMetadataFields = {
   focal_x: z.number().min(0).max(1).optional(),
   focal_y: z.number().min(0).max(1).optional(),
 };
-
-export const saNumberOrEmptySchema = z
-  .string()
-  .regex(/^(\+27|0)[6-8][0-9]{8}$/, "Enter a valid SA number")
-  .optional()
-  .or(z.literal(""));
-
-export function createPostTitleSchema(entityName = "Title") {
-  return z
-    .string()
-    .min(3, `${entityName} must be at least 3 characters`)
-    .max(120, `${entityName} cannot exceed 120 characters`);
-}
 
 /**
  * Create a bounded integer schema for query params or form fields.

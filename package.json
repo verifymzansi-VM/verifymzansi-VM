@@ -122,14 +122,14 @@
     "framer-motion": "^12.38.0",
     "heic2any": "^0.0.4",
     "lucide-react": "^0.574.0",
-    "next": "16.2.6",
+    "next": "16.2.11",
     "next-themes": "^0.4.6",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-hook-form": "^7.72.0",
     "resend": "^6.12.2",
     "server-only": "^0.0.1",
-    "sharp": "^0.34.4",
+    "sharp": "^0.35.3",
     "svix": "^1.92.2",
     "tailwind-merge": "^3.5.0",
     "tailwindcss-animate": "^1.0.7",
@@ -139,7 +139,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.11.2",
     "@lhci/cli": "^0.15.1",
-    "@next/env": "16.2.6",
+    "@next/env": "16.2.11",
     "@opennextjs/cloudflare": "^1.19.1",
     "@playwright/test": "^1.59.1",
     "@remotion/cli": "^4.0.448",
@@ -155,7 +155,7 @@
     "autoprefixer": "^10.5.0",
     "dependency-cruiser": "^17.3.10",
     "eslint": "^9.39.3",
-    "eslint-config-next": "16.2.4",
+    "eslint-config-next": "16.2.11",
     "husky": "^9.1.7",
     "jimp": "0.22.10",
     "jscpd": "^4.0.5",
@@ -166,7 +166,7 @@
     "openapi-typescript": "^7.13.0",
     "playwright": "^1.59.1",
     "png-to-ico": "^3.0.1",
-    "postcss": "^8.5.10",
+    "postcss": "^8.5.23",
     "prettier": "^3.8.3",
     "remotion": "^4.0.448",
     "tailwindcss": "3.4.19",
@@ -186,10 +186,12 @@
     ],
     "overrides": {
       "tailwindcss": "3.4.19",
-      "fast-uri": "3.1.2",
+      "fast-uri": "3.1.4",
       "fast-xml-builder": "1.2.0",
       "fast-xml-parser": ">=5.7.0",
-      "postcss": "8.5.10",
+      "postcss": "8.5.23",
+      "brace-expansion@^5.0.0": "5.0.8",
+      "next>sharp": "$sharp",
       "yaml@>=2.0.0 <2.8.3": "2.8.3",
       "picomatch@<2.3.2": "2.3.2",
       "picomatch@>=4.0.0 <4.0.4": "4.0.4",
@@ -201,10 +203,14 @@
   "overrides": {
     "tailwindcss": "3.4.19",
     "@aws-sdk/xml-builder": "^3.972.5",
-    "fast-uri": "3.1.2",
+    "fast-uri": "3.1.4",
     "fast-xml-builder": "1.2.0",
     "fast-xml-parser": ">=5.7.0",
-    "postcss": "$postcss"
+    "postcss": "$postcss",
+    "brace-expansion@^5.0.0": "5.0.8",
+    "next": {
+      "sharp": "$sharp"
+    }
   },
   "lint-staged": {
     "*.{ts,tsx}": [

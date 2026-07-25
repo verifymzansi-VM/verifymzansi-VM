@@ -42,24 +42,6 @@ export interface ListingDraftData {
   contactMethods: string[];
 }
 
-export interface PromotionDraftData {
-  promotionType: string;
-  title: string;
-  description: string;
-  category: string;
-  categoryKey: string;
-  priceZar: string;
-  negotiable: boolean;
-  province: string;
-  city: string;
-  locationTown: string;
-  locationAddress: string;
-  contactMethods: string[];
-  startDate: string;
-  endDate: string;
-  businessId: string;
-}
-
 export interface BusinessDraftData {
   businessType: string;
   businessName: string;

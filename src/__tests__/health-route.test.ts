@@ -45,6 +45,7 @@ describe("Health route", () => {
       timestamp: "2026-03-06T00:00:00.000Z",
       checks: {
         config: { status: "ok", errorCount: 0, warningCount: 0 },
+        criticalEnv: { status: "ok", detail: "Critical environment variables are present" },
         supabase: { status: "ok", detail: "Supabase query probe succeeded" },
         schema: { status: "ok", detail: "Schema verification passed" },
         r2: { status: "ok", detail: "R2 private bucket write path is available" },
@@ -86,6 +87,7 @@ describe("Health route", () => {
       timestamp: "2026-03-06T00:00:00.000Z",
       checks: {
         config: { status: "degraded", errorCount: 1, warningCount: 0, failedChecks: ["App URL"] },
+        criticalEnv: { status: "ok", detail: "Critical environment variables are present" },
         supabase: { status: "degraded", detail: "Supabase launch probe failed" },
         schema: { status: "ok", detail: "Schema verification passed" },
         r2: { status: "ok", detail: "R2 private bucket write path is available" },

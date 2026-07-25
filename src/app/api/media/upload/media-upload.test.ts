@@ -53,7 +53,7 @@ function createFormDataRequest(files: File[], headers: Record<string, string> = 
 }
 
 /** Build a minimal WebP (RIFF) buffer with a VP8X chunk and an EXIF chunk. */
-function buildWebpWithExif(): Uint8Array {
+function buildWebpWithExif(): Uint8Array<ArrayBuffer> {
   const ascii = (s: string) => [...s].map((c) => c.charCodeAt(0));
   const chunks: number[] = [];
   const pushChunk = (type: string, data: number[]) => {

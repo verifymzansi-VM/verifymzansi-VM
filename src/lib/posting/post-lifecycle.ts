@@ -3,11 +3,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { FREE_POST_CONFIG, PAID_POST_CONFIG } from "@/lib/constants/pricing";
 import type { MarketplaceArea } from "@/types/enums";
 
-export const POST_TERMS_VERSION = "post-terms-2026-05-15";
+const POST_TERMS_VERSION = "post-terms-2026-05-15";
 
 type ConsentSupabase = Pick<SupabaseClient, "from">;
 
-export function getFreePostExpiryDate(from = new Date()): Date {
+function getFreePostExpiryDate(from = new Date()): Date {
   return new Date(from.getTime() + FREE_POST_CONFIG.durationDays * 24 * 60 * 60 * 1000);
 }
 
@@ -15,7 +15,7 @@ export function getFreePostExpiryIso(from = new Date()): string {
   return getFreePostExpiryDate(from).toISOString();
 }
 
-export function getPaidPostExpiryDate(from = new Date()): Date {
+function getPaidPostExpiryDate(from = new Date()): Date {
   return new Date(from.getTime() + PAID_POST_CONFIG.durationDays * 24 * 60 * 60 * 1000);
 }
 
