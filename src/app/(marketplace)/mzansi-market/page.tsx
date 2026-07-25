@@ -93,6 +93,7 @@ export default async function MzansiMarketPage() {
         items={carouselItems}
         emptyTitle="Mzansi Market"
         emptyDescription={categorySeo.description}
+        emptyMediaUrl="/images/fallbacks/hero-listing.svg"
         background={mzansiMarketShowroomBackground}
       />
 

@@ -125,7 +125,7 @@ export function promotionToCarouselItem(
     description: p.description ?? undefined,
     location: p.location_city || p.location_province || "South Africa",
     mediaUrl: normalizeMediaUrl(
-      p.videos?.[0] ?? p.photos?.[0] ?? "/images/fallbacks/hero-listing.svg"
+      p.videos?.[0] ?? p.photos?.[0] ?? "/images/fallbacks/hero-shop.svg"
     ),
     posterUrl: p.video_thumbnail
       ? normalizeMediaUrl(p.video_thumbnail)

@@ -67,7 +67,18 @@ export function MobileNav() {
                 isActive ? "text-brand-green" : "text-muted-foreground hover:text-foreground"
               )}
             >
-              <span className="relative">
+              {isActive ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute top-0 h-[3px] w-9 rounded-full bg-brand-green"
+                />
+              ) : null}
+              <span
+                className={cn(
+                  "relative flex items-center justify-center rounded-full px-3 py-0.5 transition-colors",
+                  isActive && "bg-brand-green-50 dark:bg-brand-green-950"
+                )}
+              >
                 <Icon className={cn("h-5 w-5", tab.id === "post" && "h-6 w-6")} />
               </span>
               <span

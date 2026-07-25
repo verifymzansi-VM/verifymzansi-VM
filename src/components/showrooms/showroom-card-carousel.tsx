@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import {
   useState,
   useEffect,
@@ -13,6 +14,7 @@ import {
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
 import { isVideoUrl } from "@/components/ui/video-card-player";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { TrustLevel } from "@/types/enums";
 
@@ -52,6 +54,8 @@ export interface ShowroomCardCarouselProps {
   emptyTitle?: string;
   /** Fallback description when items is empty */
   emptyDescription?: string;
+  /** Area-branded artwork for the empty-state card (default: homepage artwork). */
+  emptyMediaUrl?: string;
   /** Optional decorative photo background for market pages. */
   background?: ShowroomDecorativeBackground;
 }
@@ -275,6 +279,7 @@ export function ShowroomCardCarousel({
   className,
   emptyTitle = "Welcome to VerifyMzansi",
   emptyDescription = "Explore business profiles, listings, tourism, and events.",
+  emptyMediaUrl = "/images/fallbacks/hero-home.svg",
   background,
 }: ShowroomCardCarouselProps) {
   const carouselItems = items.slice(0, DESKTOP_SHOWROOM_ITEM_LIMIT);
@@ -813,16 +818,47 @@ export function ShowroomCardCarousel({
         background={background}
       >
         <div className="container-page flex items-center justify-center lg:h-full">
-          <div className={CARD_W}>
-            <PosterCardShell
-              href="#"
-              title={emptyTitle}
-              description={emptyDescription}
-              location="South Africa"
-              mediaUrl="/images/fallbacks/hero-shop.svg"
-              cardVariant="hero"
-              mediaControlVariant="hero"
-            />
+          <div className="flex w-full max-w-5xl flex-col items-center gap-6 py-6 sm:gap-8 lg:flex-row lg:justify-center lg:gap-14">
+            {/* Branded message panel */}
+            <div className="order-2 w-full max-w-md rounded-[1.75rem] border border-white/60 bg-white/90 p-6 text-center shadow-[0_28px_70px_-40px_rgba(15,23,42,0.55)] backdrop-blur-md dark:border-white/10 dark:bg-slate-950/85 sm:p-7 lg:order-1 lg:text-left">
+              <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-brand-green">
+                VerifyMzansi
+              </p>
+              <h2 className="mt-2 font-display text-2xl font-bold leading-tight tracking-tight text-slate-950 dark:text-white sm:text-[1.75rem]">
+                {emptyTitle}
+              </h2>
+              <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                {emptyDescription}
+              </p>
+              <div className="mt-5 flex flex-col gap-2.5 sm:flex-row sm:justify-center lg:justify-start">
+                <Button
+                  asChild
+                  className="rounded-full bg-brand-green px-6 text-white hover:bg-brand-green-600"
+                >
+                  <Link href="/post/create" prefetch={false}>
+                    Post for free
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="rounded-full px-6">
+                  <Link href="/advertise" prefetch={false}>
+                    Advertise
+                  </Link>
+                </Button>
+              </div>
+            </div>
+
+            {/* Area-branded artwork card */}
+            <div className={cn(CARD_W, "order-1 shrink-0 lg:order-2")}>
+              <PosterCardShell
+                href="#"
+                title={emptyTitle}
+                description={emptyDescription}
+                location="South Africa"
+                mediaUrl={emptyMediaUrl}
+                cardVariant="hero"
+                mediaControlVariant="hero"
+              />
+            </div>
           </div>
         </div>
       </SectionShell>

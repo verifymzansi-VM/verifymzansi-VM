@@ -96,7 +96,7 @@ export default async function MzansiBusinessPage() {
             title: "Mzansi Business",
             description: categorySeo.description,
             location: "South Africa",
-            mediaUrl: "/images/fallbacks/hero-shop.svg",
+            mediaUrl: "/images/fallbacks/hero-business.svg",
           },
         ];
 

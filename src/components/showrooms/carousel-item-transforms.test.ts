@@ -201,9 +201,9 @@ describe("promotionToCarouselItem", () => {
     expect(item.mediaUrl).toContain("/event.jpg");
   });
 
-  it("falls back to SVG when no media", () => {
+  it("falls back to area-branded SVG when no media", () => {
     const item = promotionToCarouselItem({ ...base, videos: null, photos: null });
-    expect(item.mediaUrl).toContain("hero-listing.svg");
+    expect(item.mediaUrl).toContain("hero-shop.svg");
   });
 
   it("returns null price/eyebrow when no price_cents", () => {

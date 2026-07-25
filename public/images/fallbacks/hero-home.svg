@@ -4,9 +4,9 @@
   <rect width="1200" height="900" rx="56" fill="url(#mesh)"/>
   <g opacity="0.9">
     <rect x="92" y="84" width="1016" height="84" rx="30" fill="white" fill-opacity="0.88"/>
-    <rect x="120" y="112" width="228" height="28" rx="14" fill="#00833E" fill-opacity="0.18"/>
+    <rect x="120" y="112" width="228" height="28" rx="14" fill="#006B32" fill-opacity="0.16"/>
     <rect x="860" y="106" width="112" height="40" rx="20" fill="white"/>
-    <rect x="986" y="106" width="92" height="40" rx="20" fill="#00833E"/>
+    <rect x="986" y="106" width="92" height="40" rx="20" fill="#006B32"/>
   </g>
   <g filter="url(#shadow)">
     <rect x="156" y="214" width="888" height="448" rx="48" fill="white" fill-opacity="0.8"/>
@@ -17,24 +17,24 @@
     <rect x="212" y="306" width="310" height="58" rx="18" fill="white" fill-opacity="0.96"/>
     <rect x="212" y="388" width="388" height="18" rx="9" fill="white" fill-opacity="0.74"/>
     <rect x="212" y="420" width="276" height="18" rx="9" fill="white" fill-opacity="0.58"/>
-    <rect x="212" y="498" width="188" height="54" rx="27" fill="#00833E"/>
-    <rect x="212" y="578" width="420" height="12" rx="6" fill="#00833E" fill-opacity="0.5"/>
-    <rect x="770" y="282" width="208" height="22" rx="11" fill="#00833E" fill-opacity="0.18"/>
-    <rect x="770" y="322" width="166" height="48" rx="16" fill="#00833E" fill-opacity="0.95"/>
-    <rect x="770" y="488" width="164" height="20" rx="10" fill="#00833E" fill-opacity="0.18"/>
+    <rect x="212" y="498" width="188" height="54" rx="27" fill="#006B32"/>
+    <rect x="212" y="578" width="420" height="12" rx="6" fill="#FFB81C" fill-opacity="0.7"/>
+    <rect x="770" y="282" width="208" height="22" rx="11" fill="#006B32" fill-opacity="0.16"/>
+    <rect x="770" y="322" width="166" height="48" rx="16" fill="#006B32" fill-opacity="0.95"/>
+    <rect x="770" y="488" width="164" height="20" rx="10" fill="#FFB81C" fill-opacity="0.35"/>
     <rect x="770" y="526" width="198" height="16" rx="8" fill="#111827" fill-opacity="0.14"/>
   </g>
-  <text x="182" y="730" fill="#111827" font-family="Segoe UI, sans-serif" font-size="30" font-weight="700" letter-spacing="6">MZANSI MARKET</text>
-  <text x="182" y="784" fill="#0F172A" font-family="Segoe UI, sans-serif" font-size="56" font-weight="800">Products with real visibility</text>
-  <text x="182" y="830" fill="#334155" font-family="Segoe UI, sans-serif" font-size="30">Buy and sell with verified local sellers</text>
+  <text x="182" y="730" fill="#111827" font-family="Segoe UI, sans-serif" font-size="30" font-weight="700" letter-spacing="6">VERIFYMZANSI</text>
+  <text x="182" y="784" fill="#0F172A" font-family="Segoe UI, sans-serif" font-size="56" font-weight="800">Trusted local marketplace</text>
+  <text x="182" y="830" fill="#334155" font-family="Segoe UI, sans-serif" font-size="30">Listings, businesses, tourism and events</text>
   <defs>
     <linearGradient id="mesh" x1="0" y1="0" x2="1200" y2="900" gradientUnits="userSpaceOnUse">
       <stop stop-color="#F7F3E8"/>
-      <stop offset="0.56" stop-color="#F6FBF8"/>
+      <stop offset="0.56" stop-color="#F2FAF4"/>
       <stop offset="1" stop-color="#F4F0E8"/>
     </linearGradient>
     <linearGradient id="cardbg" x1="192" y1="252" x2="712" y2="624" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#DFF8EB"/>
+      <stop stop-color="#DFF7E7"/>
       <stop offset="1" stop-color="#F6F8FB"/>
     </linearGradient>
     <filter id="shadow" x="116" y="190" width="968" height="512" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">

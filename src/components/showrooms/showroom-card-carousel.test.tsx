@@ -197,8 +197,9 @@ describe("ShowroomCardCarousel", () => {
     expect(section).toBeInTheDocument();
     expect(section.className).toContain("lg:min-h-[clamp(31rem,64vh,42rem)]");
     expect(emptyStateCard).toBeDefined();
-    expect(screen.getByText("No Items")).toBeInTheDocument();
-    expect(screen.getByText("Nothing to show")).toBeInTheDocument();
+    // Title renders in the branded message panel and on the artwork card.
+    expect(screen.getAllByText("No Items").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Nothing to show").length).toBeGreaterThanOrEqual(1);
   });
 
   it("renders decorative showroom background layers when configured", () => {
@@ -236,7 +237,7 @@ describe("ShowroomCardCarousel", () => {
       />
     );
 
-    expect(screen.getByText("No Items")).toBeInTheDocument();
+    expect(screen.getAllByText("No Items").length).toBeGreaterThanOrEqual(1);
     expect(container.querySelector('[data-showroom-background="desktop"]')).toBeTruthy();
   });
 

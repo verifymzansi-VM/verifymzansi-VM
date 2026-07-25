@@ -25,8 +25,8 @@
     <rect x="770" y="526" width="198" height="16" rx="8" fill="#111827" fill-opacity="0.14"/>
   </g>
   <text x="182" y="730" fill="#111827" font-family="Segoe UI, sans-serif" font-size="30" font-weight="700" letter-spacing="6">TOURISM &amp; EVENTS</text>
-  <text x="182" y="784" fill="#0F172A" font-family="Segoe UI, sans-serif" font-size="60" font-weight="800">Tourism and campaigns that convert</text>
-  <text x="182" y="830" fill="#334155" font-family="Segoe UI, sans-serif" font-size="30">Live-inspired fallback for current promotions surfaces</text>
+  <text x="182" y="784" fill="#0F172A" font-family="Segoe UI, sans-serif" font-size="56" font-weight="800">Stays, experiences and events</text>
+  <text x="182" y="830" fill="#334155" font-family="Segoe UI, sans-serif" font-size="30">Trusted tourism posts across South Africa</text>
   <defs>
     <linearGradient id="mesh" x1="0" y1="0" x2="1200" y2="900" gradientUnits="userSpaceOnUse">
       <stop stop-color="#F7F3E8"/>
