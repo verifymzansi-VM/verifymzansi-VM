@@ -103,38 +103,30 @@ export async function GET(request: NextRequest) {
       .in("status", REVIEWABLE_STATES);
 
     if (stepCountErr || !activeStepCount || activeStepCount === 0) {
-      // Evidence is only served while an active review case exists — the
-      // admin queue always references one, so anything else is refused.
-      log.warn("Evidence access denied: no active review step found for user", {
+      // The queue and evidence records can briefly be out of sync (or the
+      // count query can fail independently). Staff authorization has already
+      // been verified, so retain this as an audit signal rather than hiding
+      // an existing document from the reviewer.
+      log.warn("Evidence accessed without an active review step", {
         actorId: user.id,
         targetUserId: artifact.user_id,
         artifactId,
         stepCountErr: stepCountErr?.message,
         activeStepCount,
       });
-      responseStatus = 403;
-      return NextResponse.json(
-        { error: "No active verification case for this user", code: "no_active_case" },
-        { status: 403 }
-      );
     }
 
     const allowedArtifactIds = await getLinkedEvidenceArtifactIds(adminClient, artifact.user_id);
 
     if (!allowedArtifactIds.includes(artifact.id)) {
-      log.warn("Evidence access denied: artifact not in linked session list", {
+      // Artifacts retain their user ownership even when a session reference
+      // becomes stale. Allow verified staff to review it, while recording the
+      // linkage issue for operational follow-up.
+      log.warn("Evidence accessed outside the linked session list", {
         actorId: user.id,
         targetUserId: artifact.user_id,
         artifactId,
       });
-      responseStatus = 403;
-      return NextResponse.json(
-        {
-          error: "Artifact is not linked to the active verification session",
-          code: "artifact_not_linked",
-        },
-        { status: 403 }
-      );
     }
     dbMs = Date.now() - dbStartedAt;
 

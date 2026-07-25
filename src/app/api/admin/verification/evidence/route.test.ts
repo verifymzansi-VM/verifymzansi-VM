@@ -128,7 +128,7 @@ describe("/api/admin/verification/evidence", () => {
     });
   });
 
-  it("returns 403 when the target user has no active review case", async () => {
+  it("streams evidence for an authorized admin when the active-case lookup is stale", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
         if (table === "kyc_artifacts") {
@@ -161,18 +161,23 @@ describe("/api/admin/verification/evidence", () => {
       }),
     });
 
+    mockDownloadKycDocument.mockResolvedValue({
+      buffer: Buffer.from("document-image"),
+      downloadMs: 4,
+      decryptMs: 6,
+    });
+
     const response = await GET(
       createGetRequest(
         "http://localhost:3000/api/admin/verification/evidence?artifactId=123e4567-e89b-42d3-a456-426614174000"
       )
     );
 
-    expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toMatchObject({ code: "no_active_case" });
-    expect(mockDownloadKycDocument).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(mockDownloadKycDocument).toHaveBeenCalledWith("kyc/id_document/user-1/file.bin");
   });
 
-  it("returns 403 when the artifact is not linked to the active verification session", async () => {
+  it("streams evidence for an authorized admin when session linkage is stale", async () => {
     mockGetLinkedEvidenceArtifactIds.mockResolvedValue(["artifact-99"]);
 
     mockCreateAdminClient.mockReturnValue({
@@ -207,15 +212,20 @@ describe("/api/admin/verification/evidence", () => {
       }),
     });
 
+    mockDownloadKycDocument.mockResolvedValue({
+      buffer: Buffer.from("document-image"),
+      downloadMs: 4,
+      decryptMs: 6,
+    });
+
     const response = await GET(
       createGetRequest(
         "http://localhost:3000/api/admin/verification/evidence?artifactId=123e4567-e89b-42d3-a456-426614174000"
       )
     );
 
-    expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toMatchObject({ code: "artifact_not_linked" });
-    expect(mockDownloadKycDocument).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(mockDownloadKycDocument).toHaveBeenCalledWith("kyc/id_document/user-1/file.bin");
   });
 
   it("falls back to a newer authorized artifact for the same step when the requested file is missing", async () => {
