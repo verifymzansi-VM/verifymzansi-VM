@@ -105,7 +105,11 @@ describe("decision-ledger service", () => {
   });
 
   it("approves a pending decision and records the approval event", async () => {
-    const updateEq = vi.fn().mockResolvedValue({ error: null });
+    const updateEq = vi.fn().mockReturnValue({
+      in: vi.fn().mockReturnValue({
+        select: vi.fn().mockResolvedValue({ data: [{ id: "decision-1" }], error: null }),
+      }),
+    });
     const eventInsert = vi.fn().mockResolvedValue({ error: null });
 
     mockCreateAdminClient.mockReturnValue({
@@ -155,7 +159,7 @@ describe("decision-ledger service", () => {
     );
   });
 
-  it("rejects invalid decision states", async () => {
+  it("returns null when rejecting an already-finalized decision", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn(() => ({
         select: vi.fn().mockReturnValue({
@@ -166,17 +170,24 @@ describe("decision-ledger service", () => {
             case_id: "report-1",
           }),
         }),
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            in: vi.fn().mockReturnValue({
+              select: vi.fn().mockResolvedValue({ data: [], error: null }),
+            }),
+          }),
+        }),
       })),
     });
 
-    await expect(
-      rejectDecision({
-        decisionId: "decision-1",
-        approverId: "gov-1",
-        approverRole: "governance_controller",
-        rationale: "Late rejection",
-      })
-    ).rejects.toThrow("Cannot reject decision in status: approved");
+    const result = await rejectDecision({
+      decisionId: "decision-1",
+      approverId: "gov-1",
+      approverRole: "governance_controller",
+      rationale: "Late rejection",
+    });
+
+    expect(result).toBeNull();
   });
 
   it("creates an appeal and audits the submission", async () => {
@@ -228,7 +239,11 @@ describe("decision-ledger service", () => {
   });
 
   it("resolves an appeal and writes the correct audit action", async () => {
-    const updateEq = vi.fn().mockResolvedValue({ error: null });
+    const updateEq = vi.fn().mockReturnValue({
+      in: vi.fn().mockReturnValue({
+        select: vi.fn().mockResolvedValue({ data: [{ id: "appeal-1" }], error: null }),
+      }),
+    });
 
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {

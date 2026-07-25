@@ -6,6 +6,7 @@ const {
   mockLogAuditEvent,
   mockGetOwnerColumn,
   mockVerifyAdminActorRoleFromDb,
+  mockVerifyCapabilityRoleFromDb,
   mockCheckLocalRateLimit,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
@@ -13,6 +14,7 @@ const {
   mockLogAuditEvent: vi.fn(),
   mockGetOwnerColumn: vi.fn(),
   mockVerifyAdminActorRoleFromDb: vi.fn(),
+  mockVerifyCapabilityRoleFromDb: vi.fn(),
   mockCheckLocalRateLimit: vi.fn(),
 }));
 
@@ -30,6 +32,7 @@ vi.mock("@/lib/services/audit", () => ({
 
 vi.mock("@/lib/auth/admin-access", () => ({
   verifyAdminActorRoleFromDb: mockVerifyAdminActorRoleFromDb,
+  verifyCapabilityRoleFromDb: mockVerifyCapabilityRoleFromDb,
 }));
 
 vi.mock("@/lib/utils/rate-limit", () => ({
@@ -78,6 +81,7 @@ describe("GET /api/admin/dsar/export", () => {
     mockGetOwnerColumn.mockResolvedValue("owner_id");
     mockLogAuditEvent.mockResolvedValue(undefined);
     mockVerifyAdminActorRoleFromDb.mockResolvedValue("admin");
+    mockVerifyCapabilityRoleFromDb.mockResolvedValue("admin");
     mockCheckLocalRateLimit.mockReturnValue({ limited: false });
     mockCreateClient.mockResolvedValue({
       auth: {
@@ -205,7 +209,7 @@ describe("GET /api/admin/dsar/export", () => {
     expect(mockLogAuditEvent).not.toHaveBeenCalled();
   });
 
-  it("caps auth user lookup to five pages", async () => {
+  it("caps auth user lookup at the maximum page bound", async () => {
     const listUsers = vi.fn().mockResolvedValue({
       data: { users: Array.from({ length: 200 }, (_, i) => ({ id: `u${i}` })) },
       error: null,
@@ -241,6 +245,6 @@ describe("GET /api/admin/dsar/export", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(listUsers).toHaveBeenCalledTimes(5);
+    expect(listUsers).toHaveBeenCalledTimes(50);
   });
 });
