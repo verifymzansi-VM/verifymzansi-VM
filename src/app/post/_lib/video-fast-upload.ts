@@ -23,7 +23,22 @@ type DirectUploadDescriptor = {
 
 const preparedVideoUploads = new WeakMap<File, Promise<File>>();
 const VIDEO_PREPARE_TIMEOUT_MS = 60_000;
-const DIRECT_UPLOAD_TIMEOUT_MS = 60_000;
+// Minimum floor for the direct-to-R2 PUT. The effective timeout scales with
+// file size (see directUploadTimeoutMs) so large videos on slow mobile links
+// are not aborted prematurely and forced onto the slower server-proxy fallback.
+const DIRECT_UPLOAD_MIN_TIMEOUT_MS = 120_000;
+// Assumed worst-case uplink for sizing the PUT timeout (~0.5 Mbps ≈ 62.5 KB/s).
+const DIRECT_UPLOAD_MIN_BYTES_PER_SEC = 62_500;
+const DIRECT_UPLOAD_MAX_TIMEOUT_MS = 10 * 60_000; // 10 min hard cap
+
+/**
+ * Scale the direct-upload timeout with file size so large videos on slow
+ * connections are not aborted mid-PUT. Floor of 2 min, cap of 10 min.
+ */
+function directUploadTimeoutMs(sizeBytes: number): number {
+  const sizeBased = Math.ceil((sizeBytes / DIRECT_UPLOAD_MIN_BYTES_PER_SEC) * 1000);
+  return Math.min(DIRECT_UPLOAD_MAX_TIMEOUT_MS, Math.max(DIRECT_UPLOAD_MIN_TIMEOUT_MS, sizeBased));
+}
 
 function createTimeoutSignal(ms: number): { signal: AbortSignal; cancel: () => void } {
   const controller = new AbortController();
@@ -120,7 +135,7 @@ async function uploadVideoDirectToR2(file: File, area: UploadArea): Promise<stri
       area,
     };
 
-    const timeout = createTimeoutSignal(DIRECT_UPLOAD_TIMEOUT_MS);
+    const timeout = createTimeoutSignal(directUploadTimeoutMs(file.size));
     let uploadResponse: Response;
     try {
       uploadResponse = await fetch(uploadUrl, {

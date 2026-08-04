@@ -230,7 +230,14 @@ function convertToWebP(file: File): Promise<File> {
     const url = URL.createObjectURL(file);
     const img = new window.Image();
 
-    const cleanup = () => URL.revokeObjectURL(url);
+    let settled = false;
+    const finish = (result: File) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      URL.revokeObjectURL(url);
+      resolve(result);
+    };
 
     img.addEventListener("load", () => {
       try {
@@ -239,44 +246,33 @@ function convertToWebP(file: File): Promise<File> {
         canvas.height = img.naturalHeight;
         const ctx = canvas.getContext("2d");
         if (!ctx) {
-          cleanup();
-          resolve(file);
+          finish(file);
           return;
         }
 
         ctx.drawImage(img, 0, 0);
         canvas.toBlob(
           (blob) => {
-            cleanup();
             if (!blob || blob.size >= file.size) {
               // Conversion produced a larger file — keep original
-              resolve(file);
+              finish(file);
               return;
             }
             const baseName = file.name.replace(/\.[^.]+$/, "");
-            resolve(new File([blob], `${baseName}.webp`, { type: "image/webp" }));
+            finish(new File([blob], `${baseName}.webp`, { type: "image/webp" }));
           },
           "image/webp",
           0.85
         );
       } catch {
-        cleanup();
-        resolve(file);
+        finish(file);
       }
     });
 
-    img.addEventListener("error", () => {
-      cleanup();
-      resolve(file);
-    });
+    img.addEventListener("error", () => finish(file));
 
     // Timeout — if image is too large to decode, skip conversion
-    const timer = setTimeout(() => {
-      cleanup();
-      resolve(file);
-    }, 10_000);
-    img.addEventListener("load", () => clearTimeout(timer), { once: true });
-    img.addEventListener("error", () => clearTimeout(timer), { once: true });
+    const timer = setTimeout(() => finish(file), 10_000);
 
     img.src = url;
   });
