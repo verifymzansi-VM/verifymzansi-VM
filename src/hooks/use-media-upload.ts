@@ -133,36 +133,29 @@ function getVideoMeta(
     const video = document.createElement("video");
     video.preload = "metadata";
 
-    const cleanup = () => {
+    let settled = false;
+    const finish = (result: { duration: number | null; width: number; height: number } | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
       URL.revokeObjectURL(url);
       video.remove();
+      resolve(result);
     };
 
     video.addEventListener("loadedmetadata", () => {
       const duration = video.duration;
-      const width = video.videoWidth;
-      const height = video.videoHeight;
-      cleanup();
-      resolve({
+      finish({
         duration: Number.isFinite(duration) ? duration : null,
-        width: width || 0,
-        height: height || 0,
+        width: video.videoWidth || 0,
+        height: video.videoHeight || 0,
       });
     });
 
-    video.addEventListener("error", () => {
-      cleanup();
-      resolve(null);
-    });
+    video.addEventListener("error", () => finish(null));
 
     // Timeout after 10 s — metadata should load nearly instantly from a local blob
-    const timer = setTimeout(() => {
-      cleanup();
-      resolve(null);
-    }, 10_000);
-
-    video.addEventListener("loadedmetadata", () => clearTimeout(timer), { once: true });
-    video.addEventListener("error", () => clearTimeout(timer), { once: true });
+    const timer = setTimeout(() => finish(null), 10_000);
 
     video.src = url;
   });
@@ -176,29 +169,22 @@ function getImageDimensions(file: File): Promise<{ width: number; height: number
     const url = URL.createObjectURL(file);
     const img = new window.Image();
 
-    const cleanup = () => {
+    let settled = false;
+    const finish = (result: { width: number; height: number } | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
       URL.revokeObjectURL(url);
+      resolve(result);
     };
 
     img.addEventListener("load", () => {
-      const width = img.naturalWidth;
-      const height = img.naturalHeight;
-      cleanup();
-      resolve({ width, height });
+      finish({ width: img.naturalWidth, height: img.naturalHeight });
     });
 
-    img.addEventListener("error", () => {
-      cleanup();
-      resolve(null);
-    });
+    img.addEventListener("error", () => finish(null));
 
-    const timer = setTimeout(() => {
-      cleanup();
-      resolve(null);
-    }, 5_000);
-
-    img.addEventListener("load", () => clearTimeout(timer), { once: true });
-    img.addEventListener("error", () => clearTimeout(timer), { once: true });
+    const timer = setTimeout(() => finish(null), 5_000);
 
     img.src = url;
   });
@@ -435,14 +421,31 @@ export function useMediaUpload(options: UploadOptions = {}) {
           let uploadFile = file;
           try {
             const { compressVideo } = await import("@/lib/media/video-compressor");
-            const result = await compressVideo(file, {
-              onProgress: (pct) => {
-                setState((prev) => ({ ...prev, compressionProgress: pct }));
-              },
-              signal: compAbort.signal,
+            // Bound compression so a hung FFmpeg WASM worker cannot stall the
+            // upload forever — fall back to the original file on timeout.
+            const COMPRESSION_TIMEOUT_MS = 90_000;
+            let timeoutId: ReturnType<typeof setTimeout> | undefined;
+            const timeoutPromise = new Promise<never>((_resolve, reject) => {
+              timeoutId = setTimeout(() => {
+                compAbort.abort(new DOMException("Compression timed out", "AbortError"));
+                reject(new DOMException("Compression timed out", "TimeoutError"));
+              }, COMPRESSION_TIMEOUT_MS);
             });
-            setCompressionResult(result);
-            uploadFile = result.file;
+            try {
+              const result = await Promise.race([
+                compressVideo(file, {
+                  onProgress: (pct) => {
+                    setState((prev) => ({ ...prev, compressionProgress: pct }));
+                  },
+                  signal: compAbort.signal,
+                }),
+                timeoutPromise,
+              ]);
+              setCompressionResult(result);
+              uploadFile = result.file;
+            } finally {
+              if (timeoutId !== undefined) clearTimeout(timeoutId);
+            }
           } catch (compErr) {
             // Abort means user cancelled — bail out
             if (compErr instanceof DOMException && compErr.name === "AbortError") {
@@ -456,7 +459,7 @@ export function useMediaUpload(options: UploadOptions = {}) {
               });
               return null;
             }
-            // Other errors — upload original file with a console warning
+            // Timeout or other errors — upload original file with a console warning
             console.warn("[use-media-upload] Compression failed, uploading original:", compErr);
           }
 
@@ -623,13 +626,20 @@ export function useMediaUpload(options: UploadOptions = {}) {
         }
 
         return url;
-      } catch {
+      } catch (err) {
+        // Surface a more actionable message for the common failure modes:
+        // caller abort (component unmount / reset), network timeout after
+        // retries, and generic network failures.
+        const isAbort = err instanceof DOMException && err.name === "AbortError";
+        const message = isAbort
+          ? "Upload was cancelled or timed out. Check your connection and try again."
+          : "Upload failed. Please try again.";
         setState({
           isUploading: false,
           isCompressing: false,
           compressionProgress: 0,
           progress: 0,
-          error: "Upload failed. Please try again.",
+          error: message,
           url: null,
         });
         return null;

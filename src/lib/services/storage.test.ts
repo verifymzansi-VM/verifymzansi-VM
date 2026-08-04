@@ -161,7 +161,12 @@ describe("storage service", () => {
       await generatePresignedUploadUrl("bucket", "key", "video/mp4", 3600, 1024);
       expect(mockGetSignedUrl).toHaveBeenCalledTimes(1);
       const [, command, options] = mockGetSignedUrl.mock.calls[0];
-      expect(command.params).toMatchObject({ ContentType: "video/mp4", ContentLength: 1024 });
+      // Content-Type is pinned so clients cannot PUT a different type.
+      expect(command.params).toMatchObject({ ContentType: "video/mp4" });
+      // Content-Length must NOT be pinned: browsers forbid setting the
+      // Content-Length header manually, so a pinned length would cause
+      // 403 SignatureDoesNotMatch on direct browser PUT uploads.
+      expect(command.params).not.toHaveProperty("ContentLength");
       expect(options.signableHeaders).toBeInstanceOf(Set);
       expect([...options.signableHeaders]).toContain("content-type");
     });
