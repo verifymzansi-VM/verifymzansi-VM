@@ -9,7 +9,6 @@ export const REQUIRED_TABLES = [
   "promotions",
   "account_profiles",
   "plans",
-  "storefronts",
   "businesses",
   "otp_challenges",
   "verification_steps",
@@ -17,7 +16,7 @@ export const REQUIRED_TABLES = [
   "kyc_artifacts",
 ] as const;
 
-export const LEGACY_FORBIDDEN_TABLES = ["seller_profiles"] as const;
+export const LEGACY_FORBIDDEN_TABLES = ["seller_profiles", "storefronts"] as const;
 
 export const REQUIRED_ACCOUNT_PROFILE_COLUMNS = [
   "id",
