@@ -43,6 +43,24 @@ const COMPRESSIBLE_VIDEO_TYPES = new Set([...UPLOAD_VIDEO_TYPES, "video/quicktim
 /** Max video duration default: 2 minutes */
 const DEFAULT_MAX_DURATION_SEC = 120;
 
+// Minimum floor for the server-proxied video upload. The effective timeout
+// scales with file size so large videos on slow mobile links are not aborted
+// mid-upload by the default 45s fetch timeout. Mirrors the size-scaled direct
+// upload timeout in video-fast-upload.ts.
+const VIDEO_UPLOAD_MIN_TIMEOUT_MS = 120_000;
+// Assumed worst-case uplink for sizing the timeout (~0.5 Mbps ≈ 62.5 KB/s).
+const VIDEO_UPLOAD_MIN_BYTES_PER_SEC = 62_500;
+const VIDEO_UPLOAD_MAX_TIMEOUT_MS = 10 * 60_000; // 10 min hard cap
+
+/**
+ * Scale the video upload timeout with file size so large videos on slow
+ * connections are not aborted prematurely. Floor of 2 min, cap of 10 min.
+ */
+function videoUploadTimeoutMs(sizeBytes: number): number {
+  const sizeBased = Math.ceil((sizeBytes / VIDEO_UPLOAD_MIN_BYTES_PER_SEC) * 1000);
+  return Math.min(VIDEO_UPLOAD_MAX_TIMEOUT_MS, Math.max(VIDEO_UPLOAD_MIN_TIMEOUT_MS, sizeBased));
+}
+
 /**
  * Extract a poster frame from a video at a given seek time.
  * Returns a JPEG File (or null if extraction fails).
@@ -485,11 +503,16 @@ export function useMediaUpload(options: UploadOptions = {}) {
           videoForm.append("area", area);
           videoForm.append("bucket", bucket);
 
-          const uploadResponse = await fetchWithRetry("/api/media/upload", {
-            method: "POST",
-            headers: withCsrfHeaders(),
-            body: videoForm,
-          });
+          const uploadResponse = await fetchWithRetry(
+            "/api/media/upload",
+            {
+              method: "POST",
+              headers: withCsrfHeaders(),
+              body: videoForm,
+            },
+            undefined,
+            videoUploadTimeoutMs(uploadFile.size)
+          );
 
           if (!uploadResponse.ok) {
             const data = await uploadResponse.json().catch(() => ({}));

@@ -18,14 +18,22 @@ import { formatRelativeTime } from "@/lib/utils/format";
 
 const NOTIFICATION_REFRESH_INTERVAL_MS = 10_000;
 
-function mapNotificationRow(n: Record<string, unknown>): Notification {
-  const dbId = n.id as string | undefined;
+function mapNotificationRow(n: Record<string, unknown>): Notification | null {
+  const dbId = n.id;
+  // Rows without a valid DB id cannot be mutated (PATCH/DELETE would no-op
+  // against a fabricated UUID), so skip them rather than render a broken item.
+  if (typeof dbId !== "string" || dbId.length === 0) {
+    return null;
+  }
+  // Only allow relative hrefs to prevent open-redirect via crafted notifications.
+  const rawHref = n.href as string | undefined;
+  const href = typeof rawHref === "string" && rawHref.startsWith("/") ? rawHref : undefined;
   return {
-    id: dbId ?? crypto.randomUUID(),
+    id: dbId,
     type: (n.type as "info" | "success" | "warning" | "error") ?? "info",
     title: (n.title as string) ?? "Notification",
     message: (n.message as string) ?? undefined,
-    href: (n.href as string) ?? undefined,
+    href,
     read: (n.read as boolean) ?? false,
     createdAt: (n.created_at as string) ?? new Date().toISOString(),
   };
@@ -93,7 +101,10 @@ export function NotificationBell({ userId }: { userId?: string }) {
           }
           if (data.notifications && Array.isArray(data.notifications)) {
             // Map DB rows -> store Notification objects, preserving id + read status.
-            const mapped = data.notifications.map(mapNotificationRow);
+            // Rows without a valid id are dropped (they can't be mutated server-side).
+            const mapped = data.notifications
+              .map(mapNotificationRow)
+              .filter((n: Notification | null): n is Notification => n !== null);
             hydrateNotifications(
               mapped,
               typeof data.unreadCount === "number" ? data.unreadCount : undefined
@@ -166,30 +177,39 @@ export function NotificationBell({ userId }: { userId?: string }) {
   });
 
   // ── API-synced action wrappers ─────────────────────────────────────
+  // Rollback strategy: re-apply the inverse operation on the *current* state
+  // rather than restoring a stale snapshot, so realtime additions that arrived
+  // after the optimistic update are not lost.
   const handleMarkRead = useCallback(
     (id: string) => {
-      const prev = useNotificationStore.getState();
       markRead(id);
       syncNotificationMutation({ id }, "PATCH").catch(() => {
         if (!mountedRef.current) return;
-        useNotificationStore.setState({
-          notifications: prev.notifications,
-          unreadCount: prev.unreadCount,
-        });
+        // Revert: mark unread again in current state
+        useNotificationStore.setState((state) => ({
+          notifications: state.notifications.map((n) => (n.id === id ? { ...n, read: false } : n)),
+          unreadCount: state.unreadCount + 1,
+        }));
       });
     },
     [markRead]
   );
 
   const handleMarkAllRead = useCallback(() => {
-    const prev = useNotificationStore.getState();
+    const prevUnreadIds = useNotificationStore
+      .getState()
+      .notifications.filter((n) => !n.read)
+      .map((n) => n.id);
     markAllRead();
     syncNotificationMutation({ all: true }, "PATCH").catch(() => {
       if (!mountedRef.current) return;
-      useNotificationStore.setState({
-        notifications: prev.notifications,
-        unreadCount: prev.unreadCount,
-      });
+      // Revert: restore unread status only for items that were unread before
+      useNotificationStore.setState((state) => ({
+        notifications: state.notifications.map((n) =>
+          prevUnreadIds.includes(n.id) ? { ...n, read: false } : n
+        ),
+        unreadCount: prevUnreadIds.length,
+      }));
     });
   }, [markAllRead]);
 
@@ -198,9 +218,18 @@ export function NotificationBell({ userId }: { userId?: string }) {
     clearAll();
     syncNotificationMutation({ all: true }, "DELETE").catch(() => {
       if (!mountedRef.current) return;
-      useNotificationStore.setState({
-        notifications: prev.notifications,
-        unreadCount: prev.unreadCount,
+      // Revert: restore previous notifications, merging with any new arrivals
+      useNotificationStore.setState((state) => {
+        const newArrivals = state.notifications.filter(
+          (n) => !prev.notifications.some((p) => p.id === n.id)
+        );
+        const merged = [...prev.notifications, ...newArrivals].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        return {
+          notifications: merged.slice(0, 50),
+          unreadCount: prev.unreadCount + newArrivals.filter((n) => !n.read).length,
+        };
       });
     });
   }, [clearAll]);
@@ -208,12 +237,19 @@ export function NotificationBell({ userId }: { userId?: string }) {
   const handleDismiss = useCallback(
     (id: string) => {
       const prev = useNotificationStore.getState();
+      const removed = prev.notifications.find((n) => n.id === id);
       removeNotification(id);
       syncNotificationMutation({ id }, "DELETE").catch(() => {
-        if (!mountedRef.current) return;
-        useNotificationStore.setState({
-          notifications: prev.notifications,
-          unreadCount: prev.unreadCount,
+        if (!mountedRef.current || !removed) return;
+        // Revert: re-insert the removed notification in the correct position
+        useNotificationStore.setState((state) => {
+          const merged = [...state.notifications, removed].sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+          return {
+            notifications: merged.slice(0, 50),
+            unreadCount: removed.read ? state.unreadCount : state.unreadCount + 1,
+          };
         });
       });
     },

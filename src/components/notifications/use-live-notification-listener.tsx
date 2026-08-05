@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { ToastAction, type ToastProps } from "@/components/ui/toast";
 import { useRealtime } from "@/hooks/use-realtime";
 import { toast } from "@/hooks/use-toast";
@@ -52,6 +52,13 @@ export function useLiveNotificationListener({
   const seenNotificationIds = useRef<Set<string>>(new Set());
   const seenNotificationOrder = useRef<string[]>([]);
   const enabled = useMemo(() => Boolean(userId), [userId]);
+
+  // Reset dedup state when the authenticated user changes so stale IDs from
+  // a previous session don't suppress toasts for the new user.
+  useEffect(() => {
+    seenNotificationIds.current = new Set();
+    seenNotificationOrder.current = [];
+  }, [userId]);
 
   useRealtime({
     table: "notifications",

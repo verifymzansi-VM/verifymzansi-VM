@@ -18,6 +18,8 @@ interface NotifyStaffForAdminEventInput {
   message?: string;
   href: string;
   excludeUserId?: string;
+  /** Notification severity/type. Defaults to "warning" for backward compatibility. */
+  type?: CreateNotificationInput["type"];
 }
 
 type AuthListUser = {
@@ -156,7 +158,7 @@ export async function notifyStaffForAdminEvent(
     return createNotifications(
       recipientIds.map((userId) => ({
         userId,
-        type: "warning",
+        type: input.type ?? "warning",
         title: input.title,
         message: input.message,
         href: input.href,

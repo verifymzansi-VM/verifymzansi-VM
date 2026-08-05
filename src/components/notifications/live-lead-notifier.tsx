@@ -41,43 +41,46 @@ export function LiveLeadNotifier({ userId }: LiveLeadNotifierProps) {
         return;
       }
 
+      const showFallbackNotification = () => {
+        const notice = new Notification("VerifyMzansi", {
+          body: description,
+          icon: "/icons/icon-192.png?v=10",
+          tag: notificationId ? `lead-${notificationId}` : "lead-alert",
+        });
+
+        notice.onclick = () => {
+          window.focus();
+          window.location.assign(targetHref);
+        };
+      };
+
       if ("serviceWorker" in navigator) {
-        void navigator.serviceWorker.ready
-          .then((registration) =>
-            registration.showNotification("VerifyMzansi", {
+        // Race the SW ready promise against a timeout — if no SW is registered
+        // the promise never resolves and the notification would never appear.
+        const SW_TIMEOUT_MS = 3_000;
+        const timeout = new Promise<null>((resolve) =>
+          setTimeout(() => resolve(null), SW_TIMEOUT_MS)
+        );
+
+        void Promise.race([navigator.serviceWorker.ready, timeout])
+          .then((registration) => {
+            if (!registration) {
+              showFallbackNotification();
+              return;
+            }
+            return registration.showNotification("VerifyMzansi", {
               body: description,
               icon: "/icons/icon-192.png?v=10",
               tag: notificationId ? `lead-${notificationId}` : "lead-alert",
               data: { url: targetHref },
-            })
-          )
-          .catch(() => {
-            // Fall back to Window Notification below if SW notifications fail.
-            const fallbackNotice = new Notification("VerifyMzansi", {
-              body: description,
-              icon: "/icons/icon-192.png?v=10",
-              tag: notificationId ? `lead-${notificationId}` : "lead-alert",
             });
-
-            fallbackNotice.onclick = () => {
-              window.focus();
-              window.location.assign(targetHref);
-            };
-          });
+          })
+          .catch(showFallbackNotification);
 
         return;
       }
 
-      const browserNotice = new Notification("VerifyMzansi", {
-        body: description,
-        icon: "/icons/icon-192.png?v=10",
-        tag: notificationId ? `lead-${notificationId}` : "lead-alert",
-      });
-
-      browserNotice.onclick = () => {
-        window.focus();
-        window.location.assign(targetHref);
-      };
+      showFallbackNotification();
     },
   });
 

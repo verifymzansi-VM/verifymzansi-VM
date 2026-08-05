@@ -10,6 +10,18 @@ export interface Notification {
   href?: string;
 }
 
+/** Fallback UUID generator for contexts where crypto.randomUUID is unavailable. */
+function generateId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  // RFC 4122 v4 fallback
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
 interface NotificationState {
   notifications: Notification[];
   unreadCount: number;
@@ -39,20 +51,42 @@ export const useNotificationStore = create<NotificationState>((set) => ({
 
       const notification: Notification = {
         ...n,
-        id: n.id || crypto.randomUUID(),
+        id: n.id || generateId(),
         read: false,
         createdAt: n.createdAt ?? new Date().toISOString(),
       };
-      const notifications = [notification, ...state.notifications].slice(0, 50);
+      const combined = [notification, ...state.notifications];
+      const dropped = combined.slice(50);
+      const notifications = combined.slice(0, 50);
+      // If the cap forced out any unread notifications, adjust the count so
+      // the badge doesn't drift upward until the next hydration.
+      const droppedUnread = dropped.filter((d) => !d.read).length;
       return {
         notifications,
-        unreadCount: state.unreadCount + 1,
+        unreadCount: Math.max(0, state.unreadCount + 1 - droppedUnread),
       };
     }),
 
   hydrateNotifications: (incoming, unreadCount) =>
-    set(() => {
-      const notifications = incoming.slice(0, 50);
+    set((state) => {
+      // Merge incoming rows with existing state so realtime additions that
+      // arrived while the fetch was in-flight are not lost.
+      const incomingIds = new Set(incoming.map((n) => n.id));
+      const realtimeOnly = state.notifications.filter((n) => !incomingIds.has(n.id));
+
+      // Dedupe incoming by id — realtime + polling can deliver overlapping rows.
+      const seen = new Set<string>();
+      const deduped = incoming.filter((n) => {
+        if (seen.has(n.id)) return false;
+        seen.add(n.id);
+        return true;
+      });
+
+      // Merge: incoming (server truth) first, then realtime-only items, sorted by date desc.
+      const merged = [...deduped, ...realtimeOnly].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      const notifications = merged.slice(0, 50);
       return {
         notifications,
         unreadCount: unreadCount ?? notifications.filter((x) => !x.read).length,

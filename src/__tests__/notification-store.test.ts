@@ -121,10 +121,11 @@ describe("notification-store", () => {
 
     const { notifications, unreadCount } = useNotificationStore.getState();
     expect(notifications).toHaveLength(2);
-    expect(notifications[0].id).toBe("db-uuid-1");
-    expect(notifications[0].read).toBe(true);
-    expect(notifications[1].id).toBe("db-uuid-2");
-    expect(notifications[1].read).toBe(false);
+    // Sorted by createdAt descending: db-uuid-2 (Mar 2) comes before db-uuid-1 (Mar 1)
+    expect(notifications[0].id).toBe("db-uuid-2");
+    expect(notifications[0].read).toBe(false);
+    expect(notifications[1].id).toBe("db-uuid-1");
+    expect(notifications[1].read).toBe(true);
     expect(unreadCount).toBe(1);
   });
 
@@ -252,5 +253,61 @@ describe("notification-store", () => {
     const { notifications, unreadCount } = useNotificationStore.getState();
     expect(notifications[0].read).toBe(true);
     expect(unreadCount).toBe(26);
+  });
+
+  it("should preserve realtime-only notifications during hydration merge", () => {
+    const { addNotification, hydrateNotifications } = useNotificationStore.getState();
+
+    // Simulate a realtime notification arriving before hydration completes
+    addNotification({
+      id: "realtime-1",
+      type: "success",
+      title: "Realtime arrival",
+      createdAt: "2026-03-03T08:00:00Z",
+    });
+
+    // Hydration returns older items that don't include the realtime one
+    hydrateNotifications([
+      {
+        id: "db-1",
+        type: "info",
+        title: "From DB",
+        read: true,
+        createdAt: "2026-03-01T10:00:00Z",
+      },
+    ]);
+
+    const { notifications } = useNotificationStore.getState();
+    expect(notifications).toHaveLength(2);
+    // Realtime item is newer, so it sorts first
+    expect(notifications[0].id).toBe("realtime-1");
+    expect(notifications[1].id).toBe("db-1");
+  });
+
+  it("should deduplicate when hydration includes a realtime-added id", () => {
+    const { addNotification, hydrateNotifications } = useNotificationStore.getState();
+
+    addNotification({
+      id: "shared-id",
+      type: "info",
+      title: "Realtime version",
+      createdAt: "2026-03-02T12:00:00Z",
+    });
+
+    hydrateNotifications([
+      {
+        id: "shared-id",
+        type: "info",
+        title: "DB version",
+        read: true,
+        createdAt: "2026-03-02T12:00:00Z",
+      },
+    ]);
+
+    const { notifications } = useNotificationStore.getState();
+    expect(notifications).toHaveLength(1);
+    // DB version wins (it has the authoritative read status)
+    expect(notifications[0].title).toBe("DB version");
+    expect(notifications[0].read).toBe(true);
   });
 });

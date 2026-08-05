@@ -34,6 +34,7 @@ const notificationQuerySchema = z.object({
     max: 50,
     fieldName: "limit",
   }),
+  before: z.string().datetime({ offset: true }).optional(),
 });
 
 type NotificationMutationBody = z.infer<typeof notificationMutationSchema>;
@@ -129,7 +130,7 @@ export async function GET(request: NextRequest) {
       return parsedQuery.response;
     }
 
-    const { unread: unreadOnly, limit } = parsedQuery.data;
+    const { unread: unreadOnly, limit, before } = parsedQuery.data;
 
     let query = supabase
       .from("notifications")
@@ -142,6 +143,11 @@ export async function GET(request: NextRequest) {
       query = query.eq("read", false);
     }
 
+    // Cursor pagination: fetch notifications older than the given timestamp.
+    if (before) {
+      query = query.lt("created_at", before);
+    }
+
     const { data, error } = await query;
 
     if (error) {
@@ -150,16 +156,35 @@ export async function GET(request: NextRequest) {
     }
 
     // Also get unread count
-    const { count: unreadCount } = await supabase
+    const { count: unreadCount, error: countError } = await supabase
       .from("notifications")
       .select("id", { count: "exact", head: true })
       .eq("user_id", user.id)
       .eq("read", false);
 
+    if (countError) {
+      log.error("Failed to fetch unread notification count", {
+        error: countError.message,
+        userId: user.id,
+      });
+      // Fall back to counting from the fetched page rather than returning 0,
+      // which would incorrectly clear the badge.
+      const fallbackCount = (data || []).filter((n) => !n.read).length;
+      return NextResponse.json(
+        {
+          notifications: data || [],
+          unreadCount: fallbackCount,
+        },
+        {
+          headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" },
+        }
+      );
+    }
+
     return NextResponse.json(
       {
         notifications: data || [],
-        unreadCount: unreadCount || 0,
+        unreadCount: unreadCount ?? 0,
       },
       {
         headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" },

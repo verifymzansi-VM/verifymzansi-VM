@@ -91,7 +91,7 @@ export function useRealtime({
         }
       )
       .subscribe((status, err) => {
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
           log.warn("Realtime subscription degraded", { table, status, error: err?.message });
           // Graceful degradation — don't let WebSocket failures crash the app.
           // iOS Safari throws SecurityError when CSP blocks wss:// connections;
