@@ -114,6 +114,14 @@ function getHealthLabel(status: HealthStatus) {
   return STATUS_CONFIG[status].label;
 }
 
+/** A dashboard metric row. `href: null` renders a static card (no dead-end link). */
+interface MetricItem {
+  label: string;
+  value: string | number;
+  detail: string;
+  href: string | null;
+}
+
 export function RoleCommandCenter({
   role,
   healthStatus,
@@ -142,7 +150,7 @@ export function RoleCommandCenter({
     .sort(([, a], [, b]) => b.pendingReview - a.pendingReview)[0];
   const latestReport = reports[0];
 
-  const operationsItems = [
+  const operationsItems: MetricItem[] = [
     {
       label: "KYC waiting",
       value: stats.pendingVerifications,
@@ -170,11 +178,11 @@ export function RoleCommandCenter({
         stats.supportRequests > 0
           ? `${stats.supportRequests} new contact ${stats.supportRequests === 1 ? "request" : "requests"}`
           : "No new support requests",
-      href: "/admin",
+      href: "/admin/support",
     },
   ];
 
-  const governanceItems = [
+  const governanceItems: MetricItem[] = [
     {
       label: "Escalations",
       value: breachedReportCount,
@@ -197,7 +205,7 @@ export function RoleCommandCenter({
     },
   ];
 
-  const adminItems = [
+  const adminItems: MetricItem[] = [
     {
       label: "Accounts",
       value: stats.totalAccounts,
@@ -286,17 +294,30 @@ export function RoleCommandCenter({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {focusItems.map((item) => (
-              <Link
-                key={item.label}
-                href={item.href}
-                className="rounded-lg border bg-muted/30 p-3 transition-colors hover:bg-muted/60"
-              >
-                <p className="text-xs font-medium text-muted-foreground">{item.label}</p>
-                <p className="mt-1 text-2xl font-semibold tabular-nums">{item.value}</p>
-                <p className="mt-1 min-h-8 text-xs text-muted-foreground">{item.detail}</p>
-              </Link>
-            ))}
+            {focusItems.map((item) => {
+              const cardBody = (
+                <>
+                  <p className="text-xs font-medium text-muted-foreground">{item.label}</p>
+                  <p className="mt-1 text-2xl font-semibold tabular-nums">{item.value}</p>
+                  <p className="mt-1 min-h-8 text-xs text-muted-foreground">{item.detail}</p>
+                </>
+              );
+              const cardClass =
+                "rounded-lg border bg-muted/30 p-3 transition-colors hover:bg-muted/60";
+              return item.href ? (
+                <Link key={item.label} href={item.href} className={cardClass}>
+                  {cardBody}
+                </Link>
+              ) : (
+                <div
+                  key={item.label}
+                  className={cardClass}
+                  title="No dedicated page yet — shown for visibility"
+                >
+                  {cardBody}
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -442,7 +463,7 @@ function WorkstreamPanel({
   title: string;
   description: string;
   icon: React.ElementType;
-  items: Array<{ label: string; value: string | number; detail: string; href: string }>;
+  items: MetricItem[];
   locked: boolean;
   isPrimary: boolean;
   className?: string;
@@ -473,13 +494,7 @@ function WorkstreamPanel({
   );
 }
 
-function WorkstreamRow({
-  item,
-  locked,
-}: {
-  item: { label: string; value: string | number; detail: string; href: string };
-  locked: boolean;
-}) {
+function WorkstreamRow({ item, locked }: { item: MetricItem; locked: boolean }) {
   const content = (
     <>
       <span className="min-w-0">
@@ -490,7 +505,7 @@ function WorkstreamRow({
     </>
   );
 
-  if (locked) {
+  if (locked || !item.href) {
     return (
       <div className="flex items-center justify-between gap-3 rounded-md px-2 py-2 text-sm opacity-75">
         {content}
@@ -512,7 +527,7 @@ function WorkstreamRow({
 
 interface VerificationCardProps {
   pendingVerifications: number;
-  stepCounts?: { phone: number; id_doc: number; selfie: number; location: number };
+  stepCounts?: { phone: number; id_doc: number; selfie: number };
 }
 
 export function VerificationCard({ pendingVerifications, stepCounts }: VerificationCardProps) {

@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import {
   Camera,
   ChevronLeft,
@@ -135,6 +136,7 @@ const FIELD_IDS: Record<string, string> = {
   images: "tourism-images",
   videos: "tourism-videos",
   video_thumbnail: "tourism-video-thumbnail",
+  termsAccepted: "tourism-terms-checkbox",
 };
 
 const FIELD_KEY_ALIASES: Record<string, string> = {
@@ -869,7 +871,7 @@ function CreateTourismContent() {
         "socialTwitter",
         "socialTiktok",
       ],
-      ["images", "videos"],
+      ["images", "videos", "termsAccepted"],
     ][targetStep];
     const firstKey = orderByStep?.find((key) => errors[key]) ?? Object.keys(errors)[0];
     const targetId = getFieldId(firstKey);
@@ -3496,6 +3498,19 @@ function CreateTourismContent() {
                         accept="video/*"
                         disabled={!videoAllowed}
                       />
+                      {!videoAllowed && (
+                        <p className="text-xs">
+                          <Link
+                            href="/billing"
+                            className="font-medium text-brand-green underline underline-offset-2 hover:text-brand-green/80"
+                          >
+                            Upgrade your plan
+                          </Link>{" "}
+                          <span className="text-muted-foreground">
+                            to add a video and make your listing stand out.
+                          </span>
+                        </p>
+                      )}
                     </div>
 
                     {/* Video thumbnail */}
@@ -3524,6 +3539,7 @@ function CreateTourismContent() {
 
                     <label className="flex items-start gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
                       <input
+                        id="tourism-terms-checkbox"
                         type="checkbox"
                         checked={termsAccepted}
                         onChange={(event) => {

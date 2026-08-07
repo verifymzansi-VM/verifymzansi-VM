@@ -82,7 +82,9 @@ export type AuditAction =
   // Role lifecycle actions
   | "role_assigned"
   | "role_revoked"
-  | "role_assignment_reviewed";
+  | "role_assignment_reviewed"
+  // Support inbox actions
+  | "support_submission_status_updated";
 
 interface AuditLogEntry {
   actorId: string;

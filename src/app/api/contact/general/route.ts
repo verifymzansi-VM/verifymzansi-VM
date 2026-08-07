@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
       capability: "queue:view",
       title: "New support request submitted",
       message: `${name} submitted a ${category.replace(/_/g, " ")} request.`,
-      href: "/admin",
+      href: "/admin/support",
     });
 
     log.info("Contact form submission received", {

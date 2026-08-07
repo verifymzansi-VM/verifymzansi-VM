@@ -24,6 +24,7 @@ import {
   TrendingUp,
   Scale,
   Menu,
+  Inbox,
 } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +35,7 @@ interface AdminSidebarProps {
   pendingVerifications?: number;
   openReports?: number;
   pendingModeration?: number;
+  newSupportRequests?: number;
   userRole?: string;
   evidenceDeskEnabled?: boolean;
 }
@@ -52,6 +54,7 @@ function buildModeratorSections(
   pendingVerifications: number,
   openReports: number,
   pendingModeration: number,
+  newSupportRequests: number,
   evidenceDeskEnabled: boolean
 ): NavSection[] {
   return [
@@ -96,12 +99,18 @@ function buildModeratorSections(
           icon: Flag,
           badgeCount: openReports > 0 ? openReports : undefined,
         },
+        {
+          href: "/admin/support",
+          label: "Support Inbox",
+          icon: Inbox,
+          badgeCount: newSupportRequests > 0 ? newSupportRequests : undefined,
+        },
       ],
     },
   ];
 }
 
-function buildGovernanceSections(pendingVerifications: number, openReports: number): NavSection[] {
+function buildGovernanceSections(newSupportRequests: number): NavSection[] {
   return [
     {
       label: "Governance",
@@ -114,7 +123,6 @@ function buildGovernanceSections(pendingVerifications: number, openReports: numb
           href: "/admin/governance/escalations",
           label: "Escalations",
           icon: AlertTriangle,
-          badgeCount: pendingVerifications > 0 ? pendingVerifications : undefined,
         },
         {
           href: "/admin/governance/appeals",
@@ -125,7 +133,6 @@ function buildGovernanceSections(pendingVerifications: number, openReports: numb
           href: "/admin/governance/enforcement",
           label: "Enforcement Review",
           icon: ShieldCheck,
-          badgeCount: openReports > 0 ? openReports : undefined,
         },
       ],
     },
@@ -139,7 +146,15 @@ function buildGovernanceSections(pendingVerifications: number, openReports: numb
     },
     {
       label: "Compliance",
-      items: [{ href: "/admin/dsar", label: "Data Requests", icon: FileText }],
+      items: [
+        { href: "/admin/dsar", label: "Data Requests", icon: FileText },
+        {
+          href: "/admin/support",
+          label: "Support Inbox",
+          icon: Inbox,
+          badgeCount: newSupportRequests > 0 ? newSupportRequests : undefined,
+        },
+      ],
     },
   ];
 }
@@ -148,6 +163,7 @@ function buildAdminSections(
   pendingVerifications: number,
   openReports: number,
   pendingModeration: number,
+  newSupportRequests: number,
   evidenceDeskEnabled: boolean
 ): NavSection[] {
   return [
@@ -224,6 +240,12 @@ function buildAdminSections(
           icon: Flag,
           badgeCount: openReports > 0 ? openReports : undefined,
         },
+        {
+          href: "/admin/support",
+          label: "Support Inbox",
+          icon: Inbox,
+          badgeCount: newSupportRequests > 0 ? newSupportRequests : undefined,
+        },
       ],
     },
     // Tools
@@ -241,6 +263,7 @@ export function AdminSidebar({
   pendingVerifications = 0,
   openReports = 0,
   pendingModeration = 0,
+  newSupportRequests = 0,
   userRole = "moderator",
   evidenceDeskEnabled = false,
 }: AdminSidebarProps) {
@@ -250,13 +273,14 @@ export function AdminSidebar({
   let sections: NavSection[];
   switch (userRole) {
     case "governance_controller":
-      sections = buildGovernanceSections(pendingVerifications, openReports);
+      sections = buildGovernanceSections(newSupportRequests);
       break;
     case "admin":
       sections = buildAdminSections(
         pendingVerifications,
         openReports,
         pendingModeration,
+        newSupportRequests,
         evidenceDeskEnabled
       );
       break;
@@ -265,6 +289,7 @@ export function AdminSidebar({
         pendingVerifications,
         openReports,
         pendingModeration,
+        newSupportRequests,
         evidenceDeskEnabled
       );
       break;

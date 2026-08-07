@@ -879,22 +879,22 @@ export interface VerificationStepCounts {
   phone: number;
   id_doc: number;
   selfie: number;
-  location: number;
   total: number;
 }
 
-/** Count pending verification steps broken down by step type */
+/** Count pending verification steps broken down by step type.
+ *  Location steps are excluded — they are self-service and never admin-reviewed. */
 export async function getVerificationStepCounts(): Promise<VerificationStepCounts> {
   const supabase = createAdminClient();
   const { data } = await supabase
     .from("verification_steps")
     .select("step_type")
-    .eq("status", "pending");
+    .eq("status", "pending")
+    .neq("step_type", "location");
 
-  const counts: VerificationStepCounts = { phone: 0, id_doc: 0, selfie: 0, location: 0, total: 0 };
+  const counts: VerificationStepCounts = { phone: 0, id_doc: 0, selfie: 0, total: 0 };
   for (const row of (data || []) as { step_type: string }[]) {
     const t = row.step_type;
-    if (t === "location") continue; // Location is self-service, exclude from admin counts
     if (t === "phone") counts.phone++;
     else if (t === "id_doc") counts.id_doc++;
     else if (t === "selfie") counts.selfie++;

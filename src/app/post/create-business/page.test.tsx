@@ -175,6 +175,10 @@ describe("CreateBusinessPage", () => {
     fireEvent.change(screen.getByLabelText(/URL Slug/i), {
       target: { value: slug },
     });
+    // Description is required (min 20 chars) since the create-flow unification.
+    fireEvent.change(screen.getByLabelText(/About Your Business/i), {
+      target: { value: "A proudly South African business serving our local community." },
+    });
     const catDef = BUSINESS_CATEGORIES.find((c) => c.value === category);
     if (!catDef) throw new Error(`Unknown test category: ${category}`);
     fireEvent.click(screen.getByRole("button", { name: new RegExp(catDef.label, "i") }));
@@ -693,36 +697,45 @@ describe("CreateBusinessPage", () => {
     expect(screen.getByText("Nomsa Home Studio")).toBeInTheDocument();
   });
 
-  it("blocks final submit when step-3 optional social URLs are invalid", async () => {
+  it("blocks advancing and final submit when optional social URLs are invalid", async () => {
     render(<CreateBusinessPage />);
 
     await completeStandaloneStepOne();
-    await completeLocationStep();
 
+    // "Optional extras" (social links) now lives on Step 2 (Location & Contact).
+    expect(screen.getByText(/Step 2 of 3/i)).toBeInTheDocument();
     const details = screen.getByText("Optional extras").closest("details");
     expect(details).not.toHaveAttribute("open");
+
+    // Fill required location fields so only the social URL error remains.
+    fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText(/^City$/i), { target: { value: "Johannesburg" } });
 
     fireEvent.click(screen.getByText("Optional extras"));
     fireEvent.change(screen.getByPlaceholderText("Facebook URL"), {
       target: { value: "not-a-url" },
     });
-    acceptBusinessTerms();
+
+    // Invalid social URL blocks advancing from Step 2.
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+      fireEvent.click(screen.getByRole("button", { name: "Next" }));
     });
 
     expect(screen.getAllByText("Enter a valid Facebook URL.").length).toBeGreaterThan(0);
-    expect(screen.getByText(/Please fix 1 field/i)).toBeInTheDocument();
+    const alerts = screen.getAllByRole("alert");
+    expect(alerts.some((el) => el.textContent?.includes("Please fix 1 field on Step 2"))).toBe(
+      true
+    );
+    expect(screen.getByText(/Step 2 of 3/i)).toBeInTheDocument();
     expect(global.fetch).not.toHaveBeenCalled();
-    expect(screen.getByText(/Step 3 of 3/i)).toBeInTheDocument();
   });
 
-  it("keeps optional extras collapsed by default on the review step", async () => {
+  it("keeps optional extras collapsed by default on the contact step", async () => {
     render(<CreateBusinessPage />);
 
     await completeStandaloneStepOne();
-    await completeLocationStep();
 
+    expect(screen.getByText(/Step 2 of 3/i)).toBeInTheDocument();
     const details = screen.getByText("Optional extras").closest("details");
     expect(details).not.toHaveAttribute("open");
   });

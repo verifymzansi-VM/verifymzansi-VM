@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Camera,
   ChevronLeft,
@@ -122,6 +123,7 @@ const FIELD_IDS: Record<string, string> = {
   contactMethods: "listing-contact-methods",
   images: "listing-images",
   videos: "listing-video",
+  termsAccepted: "listing-terms-checkbox",
 };
 
 const LISTING_FIELD_KEY_ALIASES: Record<string, string> = {
@@ -456,7 +458,7 @@ export default function CreateListingPage() {
     const orderByStep = [
       ["category", "title", "description"],
       ["price_zar", "province", "city", "contactMethods"],
-      ["images", "videos"],
+      ["images", "videos", "termsAccepted"],
     ][targetStep];
 
     const firstKey = orderByStep?.find((key) => errors[key]) ?? Object.keys(errors)[0];
@@ -1424,10 +1426,24 @@ export default function CreateListingPage() {
                         accept="video/*"
                         disabled={!videoAllowed}
                       />
-                      <p className="text-xs text-muted-foreground">
-                        Use one clear vertical clip for the poster-style hero. Portrait 9:16 video
-                        is the best fit.
-                      </p>
+                      {!videoAllowed ? (
+                        <p className="text-xs">
+                          <Link
+                            href="/billing"
+                            className="font-medium text-brand-green underline underline-offset-2 hover:text-brand-green/80"
+                          >
+                            Upgrade your plan
+                          </Link>{" "}
+                          <span className="text-muted-foreground">
+                            to add a video and stand out in search results.
+                          </span>
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          Use one clear vertical clip for the poster-style hero. Portrait 9:16 video
+                          is the best fit.
+                        </p>
+                      )}
                     </div>
 
                     {videoFile.length > 0 && (
@@ -1463,6 +1479,7 @@ export default function CreateListingPage() {
 
                     <label className="flex items-start gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
                       <input
+                        id="listing-terms-checkbox"
                         type="checkbox"
                         checked={termsAccepted}
                         onChange={(event) => {

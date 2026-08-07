@@ -126,6 +126,8 @@ describe("GET /api/verification/status", () => {
       status: "approved",
       reviewed_at: "2026-03-12T12:00:00.000Z",
     });
+    // risk_level is an admin-only fraud signal and must never reach the client.
+    expect(body.steps[0]).not.toHaveProperty("risk_level");
   });
 
   it("returns 429 when verification status polling is rate limited", async () => {

@@ -34,11 +34,18 @@ export async function GET(_request: NextRequest) {
       includeStepsWhenVerified: true,
     });
 
+    // risk_level is an admin-only fraud signal — never expose it to the
+    // verified user, who could probe which signals raised their score.
+    const steps = verification.steps.map((step) => {
+      const { risk_level: _riskLevel, ...rest } = step;
+      return rest;
+    });
+
     return NextResponse.json(
       {
         accountVerificationStatus: verification.accountVerificationStatus,
         overallStatus: verification.accountVerificationStatus,
-        steps: verification.steps,
+        steps,
       },
       {
         headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" },

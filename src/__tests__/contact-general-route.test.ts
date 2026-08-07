@@ -151,7 +151,7 @@ describe("POST /api/contact/general", () => {
       capability: "queue:view",
       title: "New support request submitted",
       message: "Nomsa submitted a general support request.",
-      href: "/admin",
+      href: "/admin/support",
     });
   });
 

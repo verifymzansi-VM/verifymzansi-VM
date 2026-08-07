@@ -43,6 +43,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const [
     { count: pendingVerifications },
     { count: openReports },
+    { count: newSupportRequests },
     pendingModeration,
     evidenceDeskEnabled,
   ] = await Promise.all([
@@ -51,6 +52,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       .select("*", { count: "exact", head: true })
       .eq("status", "pending"),
     admin.from("reports").select("*", { count: "exact", head: true }).eq("status", "open"),
+    admin
+      .from("contact_submissions")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "new"),
     getPendingModerationCount(),
     isFeatureEnabled("kyc_evidence_desk"),
   ]);
@@ -80,6 +85,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           pendingVerifications={pendingVerifications || 0}
           openReports={openReports || 0}
           pendingModeration={pendingModeration}
+          newSupportRequests={newSupportRequests || 0}
           userRole={role}
           evidenceDeskEnabled={evidenceDeskEnabled}
         />

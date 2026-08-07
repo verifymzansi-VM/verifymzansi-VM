@@ -109,3 +109,10 @@ export const adminDsarCompleteSchema = z.object({
   // the underlying data deletion was actually performed (manual process).
   deletionAttestation: optionalTrimmedStringSchema.pipe(z.string().max(2000).optional()),
 });
+
+export const adminSupportUpdateSchema = z.object({
+  submissionId: uuidSchema,
+  status: z.enum(["new", "in_progress", "resolved"], {
+    message: "status must be new, in_progress, or resolved",
+  }),
+});

@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import {
   Building2,
   Camera,
@@ -121,6 +122,7 @@ const FIELD_IDS: Record<string, string> = {
   gallery_photos: "business-gallery",
   cover_video: "business-cover-video",
   video_thumbnail: "business-video-thumbnail",
+  termsAccepted: "business-terms-checkbox",
 };
 
 const STEP_CONTACT_FIELDS = ["phone", "whatsapp", "email", "website"] as const;
@@ -2432,10 +2434,24 @@ function CreateBusinessContent() {
                         accept="video/*"
                         disabled={!videoAllowed}
                       />
-                      <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Film className="h-3 w-3" />A short intro video works best. Portrait 9:16 is
-                        recommended because the public profile now uses a poster-style hero.
-                      </p>
+                      {!videoAllowed ? (
+                        <p className="text-xs">
+                          <Link
+                            href="/billing"
+                            className="font-medium text-brand-green underline underline-offset-2 hover:text-brand-green/80"
+                          >
+                            Upgrade your plan
+                          </Link>{" "}
+                          <span className="text-muted-foreground">
+                            to add an intro video to your business profile.
+                          </span>
+                        </p>
+                      ) : (
+                        <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Film className="h-3 w-3" />A short intro video works best. Portrait 9:16
+                          is recommended because the public profile now uses a poster-style hero.
+                        </p>
+                      )}
                     </div>
 
                     {promoVideoFile.length > 0 && (
@@ -2479,6 +2495,7 @@ function CreateBusinessContent() {
 
                     <label className="flex items-start gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
                       <input
+                        id="business-terms-checkbox"
                         type="checkbox"
                         checked={termsAccepted}
                         onChange={(event) => {

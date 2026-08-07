@@ -278,7 +278,7 @@ export function PostFormFooter({
   const isLastStep = currentStep === totalSteps - 1;
 
   return (
-    <div className="flex items-center justify-between border-t pt-4">
+    <div className="sticky bottom-0 -mx-6 -mb-6 border-t bg-background/95 px-6 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:static sm:mx-0 sm:mb-0 sm:bg-transparent sm:px-0 sm:backdrop-blur-none flex items-center justify-between">
       <Button
         type="button"
         variant="ghost"

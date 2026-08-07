@@ -26,7 +26,10 @@ describe("generatePresignedUploadUrl (real signer)", () => {
     const parsed = new URL(url);
     const signedHeaders = (parsed.searchParams.get("X-Amz-SignedHeaders") ?? "").split(";");
     expect(signedHeaders).toContain("content-type");
-    expect(signedHeaders).toContain("content-length");
+    // Content-Length is intentionally NOT pinned: browsers forbid setting the
+    // Content-Length header manually in fetch/XHR, so a presigned URL that pins
+    // it cannot be satisfied by a browser PUT (see storage.ts).
+    expect(signedHeaders).not.toContain("content-length");
   });
 
   it("does not embed SDK default empty-body checksum params", async () => {

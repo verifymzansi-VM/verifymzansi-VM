@@ -72,7 +72,6 @@ export default async function AdminPage() {
     phone: 0,
     id_doc: 0,
     selfie: 0,
-    location: 0,
     total: 0,
   };
   const EMPTY_AREA = {
