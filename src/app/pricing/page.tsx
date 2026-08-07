@@ -1,8 +1,8 @@
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
-import { BadgeCheck, Images, Rocket, CreditCard, ShieldCheck } from "lucide-react";
-import { FREE_POST_CONFIG, getActivePlansByArea } from "@/lib/constants/pricing";
+import { CreditCard, ShieldCheck } from "lucide-react";
+import { getActivePlansByArea } from "@/lib/constants/pricing";
 import { PricingPlanGrid } from "@/components/billing/plan-grid";
 import { PlanTabs } from "@/components/billing/plan-tabs";
 import { getTrustPublicConfig } from "@/lib/trust-public-config";
@@ -17,24 +17,6 @@ export const metadata = {
 export default function PricingPage() {
   const { marketPlans, businessPlans, promotionPlans } = getActivePlansByArea();
   const trustConfig = getTrustPublicConfig();
-  const freePostCount = Number(FREE_POST_CONFIG.maxAllowed);
-  const summaryPoints = [
-    {
-      icon: BadgeCheck,
-      text: `${freePostCount} free ${
-        freePostCount === 1 ? "post" : "posts"
-      } per area every ${FREE_POST_CONFIG.durationDays} days`,
-    },
-    {
-      icon: Images,
-      text: `${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video on the free plan`,
-    },
-    {
-      icon: Rocket,
-      text: "Upgrade when you want stronger placement",
-    },
-  ] as const;
-
   const allPlans = [...marketPlans, ...businessPlans, ...promotionPlans];
   const jsonLd = {
     "@context": "https://schema.org",
@@ -69,26 +51,12 @@ export default function PricingPage() {
       <main id="main-content" className="flex-1 scroll-mt-24">
         {/* ── Hero band ─────────────────────────────────── */}
         <section className="border-b border-warm-200/70 bg-hero-mesh dark:border-warm-800/60">
-          <div className="container-page space-y-6 py-8 sm:py-10 lg:py-14">
+          <div className="container-page py-6 sm:py-8">
             <PageHeader
               title="Pricing"
               description="Start free for marketplace listings, business profiles, tourism posts, venues, and events. Upgrade when you want stronger placement."
               breadcrumbs={[{ label: "Pricing" }]}
             />
-
-            <div className="grid gap-3 md:grid-cols-3">
-              {summaryPoints.map((point) => (
-                <div
-                  key={point.text}
-                  className="flex items-center gap-3 rounded-2xl border border-white/70 bg-white/85 px-4 py-3.5 text-sm font-medium text-slate-700 shadow-[0_14px_36px_-24px_rgba(15,23,42,0.35)] backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-200"
-                >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-green/10 text-brand-green">
-                    <point.icon className="h-[18px] w-[18px]" aria-hidden="true" />
-                  </span>
-                  {point.text}
-                </div>
-              ))}
-            </div>
           </div>
         </section>
 

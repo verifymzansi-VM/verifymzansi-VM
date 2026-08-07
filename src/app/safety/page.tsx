@@ -19,13 +19,7 @@ export const metadata = {
     "Buyer and seller safety guidance for VerifyMzansi users in South Africa, including scam warnings, safe meetings, disputes, reports, and appeals.",
 };
 
-const safetyRules = [
-  "Never pay deposits before seeing goods and confirming ownership.",
-  "Meet in safe, public, well-lit places. Avoid private locations for first meetings.",
-  "Do not share OTPs, banking details, ID documents, or card information in chats.",
-  "Be careful with courier, EFT, e-wallet, fake proof-of-payment, and pressure tactics.",
-  "Keep screenshots, listing links, payment references, and courier details.",
-] as const;
+import { SAFETY_RULES as safetyRules } from "@/lib/constants/safety-rules";
 
 const responseSteps = [
   {

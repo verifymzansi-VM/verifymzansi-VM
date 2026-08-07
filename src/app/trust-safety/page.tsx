@@ -55,28 +55,13 @@ const verificationLevels = [
   },
 ] as const;
 
-const safetyRules = [
-  "Never pay deposits before seeing goods or confirming the seller.",
-  "Meet in safe public places and tell someone where you are going.",
-  "Avoid courier, EFT, e-wallet, and OTP pressure tactics.",
-  "Keep chats, payment references, listings, and profile links.",
-  "Report suspicious listings before continuing a deal.",
-] as const;
+import { SAFETY_RULES as safetyRules } from "@/lib/constants/safety-rules";
 
 const dataPractices = [
   "Identity, phone, and location data is collected for verification, fraud prevention, safety, and legal compliance.",
   "Verification files are encrypted and stored with restricted reviewer access.",
   "Trusted service providers may process data where needed to run the service.",
   "Users can request access, correction, deletion, or objection through the POPIA process.",
-] as const;
-
-const integrityMetrics = [
-  { label: "Verified users", value: "Launching" },
-  { label: "Reviewed representatives", value: "Launching" },
-  { label: "Listings removed", value: "Tracked internally" },
-  { label: "Fraud reports reviewed", value: "Tracked internally" },
-  { label: "Average response time", value: "1-2 business days" },
-  { label: "Last security review", value: "April 2026" },
 ] as const;
 
 const reportSteps = [
@@ -361,26 +346,6 @@ export default function TrustSafetyPage() {
                 </div>
               </div>
             </div>
-          </section>
-
-          <section className="space-y-3">
-            <div className="max-w-3xl space-y-1">
-              <h2 className="font-display text-xl font-semibold">Platform integrity</h2>
-              <p className="text-sm leading-6 text-muted-foreground">
-                Public integrity figures are tracked as the marketplace launches and moderation data
-                matures.
-              </p>
-            </div>
-            <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {integrityMetrics.map((metric) => (
-                <div key={metric.label} className="rounded-lg border bg-background p-4">
-                  <dt className="text-xs font-medium uppercase text-muted-foreground">
-                    {metric.label}
-                  </dt>
-                  <dd className="mt-2 text-sm font-semibold text-foreground">{metric.value}</dd>
-                </div>
-              ))}
-            </dl>
           </section>
         </div>
       </main>

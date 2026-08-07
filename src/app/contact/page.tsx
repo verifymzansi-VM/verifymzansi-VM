@@ -20,7 +20,7 @@ const contactCategories = [
   {
     value: "fraud_report",
     label: "Fraud report",
-    response: "Fraud reports are reviewed within 24-48 hours.",
+    response: "Fraud reports are reviewed within 1-2 business days.",
   },
   {
     value: "verification_appeal",

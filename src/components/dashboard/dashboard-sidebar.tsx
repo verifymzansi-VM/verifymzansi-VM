@@ -20,7 +20,7 @@ const PRIMARY_NAV: NavItem[] = [
   { href: "/dashboard/leads", icon: MessageSquare, label: "Leads" },
 ];
 
-const TERTIARY_NAV: NavItem[] = [{ href: "/dashboard/profile", icon: Settings, label: "Settings" }];
+const TERTIARY_NAV: NavItem[] = [{ href: "/dashboard/profile", icon: Settings, label: "Profile" }];
 
 export interface DashboardSidebarBadges {
   unreadLeads?: number;

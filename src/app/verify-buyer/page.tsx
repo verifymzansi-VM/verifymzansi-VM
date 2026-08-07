@@ -15,25 +15,6 @@ type VerifyResult = "valid" | "expired" | "revoked" | "not_found" | null;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const buyerTokenGuidance = [
-  {
-    title: "Where the token comes from",
-    text: "A buyer shares the token from their VerifyMzansi account. Paste the token here instead of relying on screenshots.",
-  },
-  {
-    title: "What a valid token means",
-    text: "A valid token confirms platform checks at issue time. It is not a payment guarantee.",
-  },
-  {
-    title: "Expiry and reuse",
-    text: "Ask for a fresh token if it expired, was revoked, or the deal changed.",
-  },
-  {
-    title: "Keep trading safely",
-    text: "Meet safely, inspect goods, avoid payment pressure, and keep records.",
-  },
-] as const;
-
 export default function VerifyBuyerPage() {
   const [token, setToken] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -216,15 +197,12 @@ export default function VerifyBuyerPage() {
               </CardContent>
             </Card>
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-              {buyerTokenGuidance.map((item) => (
-                <Card key={item.title}>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">{item.title}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-sm text-muted-foreground">{item.text}</CardContent>
-                </Card>
-              ))}
+            <div className="rounded-lg border bg-muted/30 p-4">
+              <p className="text-sm text-muted-foreground">
+                A buyer shares this token from their VerifyMzansi account. A valid token confirms
+                platform checks at issue time — it is not a payment guarantee. Ask for a fresh token
+                if it expired or the deal changed.
+              </p>
             </div>
           </div>
         </div>

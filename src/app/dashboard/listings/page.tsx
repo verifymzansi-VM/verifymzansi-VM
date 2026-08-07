@@ -44,7 +44,7 @@ const BUSINESS_DASHBOARD_FALLBACK_FIELDS = ["view_count", "expires_at"] as const
 const PROMOTION_DASHBOARD_FALLBACK_FIELDS = ["view_count", "urgent_until", "expires_at"] as const;
 
 export const metadata = {
-  title: "Your Content",
+  title: "My Posts",
   description:
     "Manage your marketplace content across Mzansi Market, Mzansi Business, and Tourism & Events.",
 };
@@ -535,14 +535,14 @@ export default async function ListingsPage({
           <ListingList
             listings={filteredActive}
             planTiers={planTiers}
-            emptyStateLabel="No posts yet."
+            emptyStateLabel="No posts yet. Create your first post to get started."
           />
         </TabsContent>
         <TabsContent value="pending" className="mt-4">
           <ListingList
             listings={filteredPending}
             planTiers={planTiers}
-            emptyStateLabel="No posts are waiting for review right now."
+            emptyStateLabel="Nothing waiting for review."
           />
         </TabsContent>
         <TabsContent value="rejected" className="mt-4">
@@ -552,7 +552,7 @@ export default async function ListingsPage({
           <ListingList
             listings={filteredExpired}
             planTiers={planTiers}
-            emptyStateLabel="No expired or sold posts right now."
+            emptyStateLabel="No expired or sold posts."
           />
         </TabsContent>
       </Tabs>

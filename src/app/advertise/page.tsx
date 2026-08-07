@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, BadgeCheck, ShieldCheck, Store, TreePalm } from "lucide-react";
+import { ArrowRight, BadgeCheck } from "lucide-react";
 import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
 import { PageHeader } from "@/components/layout/page-header";
@@ -29,24 +29,6 @@ export const metadata: Metadata = {
 };
 
 export default function AdvertisePage() {
-  const pillars = [
-    {
-      title: "List what you offer",
-      description: "Post products, services, places to stay, experiences, venues, or events.",
-      icon: TreePalm,
-    },
-    {
-      title: "Build customer confidence",
-      description: "Verification and trust signals help people understand who submitted the post.",
-      icon: ShieldCheck,
-    },
-    {
-      title: "Grow your visibility",
-      description: "Start free, then upgrade when you want stronger placement for your post.",
-      icon: Store,
-    },
-  ];
-
   const surfaces: AdvertiseSurface[] = VERIFY_MZANSI_CATEGORY_SEO.map((category) => {
     if (category.id === "mzansi-market") {
       return {
@@ -102,9 +84,6 @@ export default function AdvertisePage() {
                 <Button asChild size="lg" variant="outline">
                   <Link href="/pricing">View Pricing</Link>
                 </Button>
-                <Button asChild size="lg" variant="outline">
-                  <Link href="/register">Create Account</Link>
-                </Button>
               </div>
             </div>
           </div>
@@ -112,38 +91,11 @@ export default function AdvertisePage() {
 
         <TrustStrip variant="green" title="Trusted posting categories" />
 
-        <section className="container-page py-8 space-y-6 sm:py-10">
-          <div className="max-w-2xl space-y-2">
-            <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
-              Why advertise here
-            </h2>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-            {pillars.map(({ title, description, icon: Icon }) => (
-              <Card key={title} className="border-border/70 bg-card/90">
-                <CardHeader className="space-y-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-green-100 text-brand-green-700">
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <CardTitle className="text-base sm:text-lg">{title}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">{description}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </section>
-
-        <section className="container-page py-4 space-y-6 sm:py-6">
+        <section className="container-page py-6 space-y-5 sm:py-8">
           <div className="max-w-2xl space-y-2">
             <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
               Choose your posting category
             </h2>
-            <p className="text-sm text-muted-foreground sm:text-base">
-              Pick the category that best matches what you want people to discover.
-            </p>
           </div>
 
           <div className="grid gap-4 lg:grid-cols-3">

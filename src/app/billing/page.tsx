@@ -10,7 +10,7 @@ import { PlanTabs } from "@/components/billing/plan-tabs";
 import { PageHeader } from "@/components/layout/page-header";
 
 export const metadata = {
-  title: "Pricing",
+  title: "Billing & Plans",
   description:
     "View your current plan, manage billing, and upgrade your VerifyMzansi subscription.",
 };

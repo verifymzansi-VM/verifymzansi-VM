@@ -43,7 +43,8 @@ function getCopy(status: PaymentStatusView) {
       return {
         icon: <AlertCircle className="h-6 w-6 text-muted-foreground" />,
         title: "Payment not found",
-        description: "We could not resolve a matching payment for this request.",
+        description:
+          "We couldn't find this payment. It may have already been processed. Check your plans or contact support.",
       };
   }
 }

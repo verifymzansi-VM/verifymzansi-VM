@@ -254,16 +254,6 @@ export default async function HomePage() {
                           <ArrowRight className="h-5 w-5" />
                         </Link>
                       </Button>
-                      <Button
-                        asChild
-                        size="lg"
-                        variant="outline"
-                        className="h-12 w-full rounded-full border-slate-300/80 bg-white px-8 text-base text-slate-700 transition-all duration-200 hover:-translate-y-0.5 hover:bg-warm-50 dark:border-white/15 dark:bg-white/[0.04] dark:text-white dark:hover:bg-white/[0.08] sm:w-auto"
-                      >
-                        <Link href="/register" prefetch={false}>
-                          Create Account
-                        </Link>
-                      </Button>
                     </div>
 
                     <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
