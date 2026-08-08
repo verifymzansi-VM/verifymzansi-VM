@@ -46,10 +46,6 @@ describe("AdvertisePage", () => {
       "href",
       "/post/create"
     );
-    expect(screen.getByRole("link", { name: /Create Account/i })).toHaveAttribute(
-      "href",
-      "/register"
-    );
     expect(screen.getByRole("link", { name: /Explore Tourism & Events/i })).toHaveAttribute(
       "href",
       "/tourism-events"

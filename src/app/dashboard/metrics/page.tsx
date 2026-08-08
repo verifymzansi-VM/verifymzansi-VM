@@ -129,9 +129,10 @@ export default async function MetricsPage() {
           <div className="h-32 flex items-center justify-center text-muted-foreground border rounded-lg">
             <div className="text-center">
               <BarChart3 className="h-8 w-8 mx-auto mb-3 opacity-50" />
-              <p className="text-sm font-medium">Analytics aren't available yet</p>
+              <p className="text-sm font-medium">No analytics data yet</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Views and engagement trends will appear here once enough activity is collected.
+                Views and engagement trends will appear here once your posts start receiving
+                traffic.
               </p>
             </div>
           </div>

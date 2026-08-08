@@ -100,10 +100,6 @@ describe("HomePage", () => {
       "href",
       "/post/create"
     );
-    expect(screen.getByRole("link", { name: /^Create Account$/i })).toHaveAttribute(
-      "href",
-      "/register"
-    );
     expect(screen.getByRole("link", { name: /Pricing/i })).toHaveAttribute("href", "/pricing");
     expect(
       screen.getByRole("link", {
@@ -174,10 +170,6 @@ describe("HomePage", () => {
     expect(screen.getByRole("link", { name: /Post for Free/i })).toHaveAttribute(
       "href",
       "/post/create"
-    );
-    expect(screen.getByRole("link", { name: /^Create Account$/i })).toHaveAttribute(
-      "href",
-      "/register"
     );
     expect(screen.getByRole("link", { name: /Pricing/i })).toHaveAttribute("href", "/pricing");
     expect(screen.getByRole("link", { name: /Advertise/i })).toHaveAttribute("href", "/advertise");

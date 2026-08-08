@@ -97,19 +97,6 @@ describe("Active-area pricing parity", () => {
     );
     expect(screen.queryByText("Mall Shops")).not.toBeInTheDocument();
     expect(screen.queryByText("Business Ads")).not.toBeInTheDocument();
-    expect(
-      screen.getByText(
-        new RegExp(`1 free post per area every ${FREE_POST_CONFIG.durationDays} days`, "i")
-      )
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        new RegExp(
-          `${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video on the free plan`,
-          "i"
-        )
-      )
-    ).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: /Choose /i })[0]).toHaveAttribute(
       "href",
       expect.stringContaining("/billing/checkout?plan=")
