@@ -13,9 +13,8 @@
 @layer base {
   /* ── Light Theme (default) ───────────────────────────────── */
   :root {
-    /* Local font stacks keep builds deterministic when external font fetches are unavailable. */
-    --font-display: "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
-    --font-body: "Segoe UI", system-ui, sans-serif;
+    /* --font-display / --font-body are injected by next/font on <html>.
+       Fallbacks below only apply if the font variables are absent. */
     --desktop-page-scale: 1;
 
     --background: 0 0% 100%;
@@ -46,7 +45,7 @@
     --input: 37 20% 88%;
     --ring: 152 100% 26%;
 
-    --radius: 8px;
+    --radius: 10px;
 
     /* Duration scale tokens */
     --duration-fast: 100ms;

@@ -4,6 +4,22 @@ import { vi } from "vitest";
 // Mock out `server-only` so server modules can be imported in jsdom tests
 vi.mock("server-only", () => ({}));
 
+// Mock next/font/google — the font loader only runs at Next.js build time;
+// under vitest it returns undefined unless mocked.
+vi.mock("next/font/google", () => {
+  const createFont = () => () => ({
+    className: "mocked-font",
+    variable: "mocked-font-variable",
+    style: { fontFamily: "mocked-font" },
+  });
+  return new Proxy(
+    {},
+    {
+      get: () => createFont(),
+    }
+  );
+});
+
 // Polyfill IntersectionObserver for jsdom (not available in jsdom by default)
 if (typeof globalThis.IntersectionObserver === "undefined") {
   globalThis.IntersectionObserver = class IntersectionObserver {

@@ -12,6 +12,11 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
+vi.mock("next/font/google", () => ({
+  Sora: () => ({ className: "sora", variable: "--font-display", style: {} }),
+  Inter: () => ({ className: "inter", variable: "--font-body", style: {} }),
+}));
+
 vi.mock("@/components/providers/theme-provider", () => ({
   ThemeProvider: ({ children }: { children: ReactNode }) => children,
 }));

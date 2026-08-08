@@ -352,29 +352,31 @@ export function MzansiMarketGrid() {
           )}
         </p>
 
-        {/* View mode toggle */}
-        <div className="flex items-center rounded-lg border border-border p-0.5 gap-0.5">
+        {/* View mode toggle — segmented control */}
+        <div className="flex items-center rounded-full border border-border/70 bg-muted/50 p-1 gap-1 shadow-inner">
           <button
             type="button"
             onClick={() => setViewMode("grid")}
-            className={`p-1.5 rounded-md transition-colors ${
+            className={`flex h-8 w-8 items-center justify-center rounded-full transition-all duration-200 ${
               viewMode === "grid"
-                ? "bg-brand-green/10 text-brand-green"
+                ? "bg-background text-brand-green shadow-sm ring-1 ring-black/5"
                 : "text-muted-foreground hover:text-foreground"
             }`}
             aria-label="Grid view"
+            aria-pressed={viewMode === "grid"}
           >
             <LayoutGrid className="h-4 w-4" />
           </button>
           <button
             type="button"
             onClick={() => setViewMode("list")}
-            className={`p-1.5 rounded-md transition-colors ${
+            className={`flex h-8 w-8 items-center justify-center rounded-full transition-all duration-200 ${
               viewMode === "list"
-                ? "bg-brand-green/10 text-brand-green"
+                ? "bg-background text-brand-green shadow-sm ring-1 ring-black/5"
                 : "text-muted-foreground hover:text-foreground"
             }`}
             aria-label="List view"
+            aria-pressed={viewMode === "list"}
           >
             <List className="h-4 w-4" />
           </button>

@@ -71,6 +71,7 @@ function HeaderInner({
 }: HeaderProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const { theme, resolvedTheme, setTheme } = useTheme();
 
   // Use the shared auth store via useAuth() instead of a duplicate Supabase subscription
@@ -135,13 +136,27 @@ function HeaderInner({
     };
   }, [mobileOpen]);
 
+  // Scroll-aware header treatment: blur + subtle shadow once the page scrolls
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   async function handleSignOut() {
     setSigningOut(true);
     await auth.signOut();
   }
 
   return (
-    <header className="sticky top-0 z-[110] isolate w-full border-b bg-background lg:bg-background/95 lg:backdrop-blur lg:supports-[backdrop-filter]:bg-background/60">
+    <header
+      className={`sticky top-0 z-[110] isolate w-full border-b transition-all duration-300 ${
+        scrolled
+          ? "border-border/70 bg-background/85 shadow-[0_8px_30px_-18px_rgba(15,23,42,0.35)] backdrop-blur-md supports-[backdrop-filter]:bg-background/70"
+          : "border-transparent bg-background lg:bg-background/95 lg:backdrop-blur lg:supports-[backdrop-filter]:bg-background/60"
+      }`}
+    >
       {isAuthenticated ? (
         <>
           <LiveLeadNotifier userId={auth.user?.id} />

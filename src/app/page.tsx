@@ -173,15 +173,15 @@ export default async function HomePage() {
           </div>
 
           {/* ═══ Onboarding Guide Section ═══ */}
-          <section className="relative py-4 sm:py-5 lg:py-6">
+          <section className="relative py-5 sm:py-6 lg:py-8">
             <div className="container-page">
-              <div className="relative overflow-hidden rounded-[2rem] border border-slate-200/80 bg-white shadow-[0_18px_54px_-40px_rgba(15,23,42,0.35)] dark:border-white/10 dark:bg-slate-950">
+              <div className="relative overflow-hidden rounded-[2rem] border border-slate-200/80 bg-white shadow-[0_24px_64px_-44px_rgba(15,23,42,0.4)] dark:border-white/10 dark:bg-slate-950">
                 <div
                   className="pointer-events-none absolute -right-12 top-0 h-48 w-48 rounded-full bg-brand-green/10 blur-3xl"
                   aria-hidden="true"
                 />
-                <div className="relative grid gap-8 px-5 py-6 sm:px-7 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:gap-10 lg:px-9 lg:py-8">
-                  <div className="space-y-6">
+                <div className="relative grid gap-8 px-5 py-7 sm:px-7 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:gap-12 lg:px-10 lg:py-10">
+                  <div className="space-y-7">
                     <div className="inline-flex items-center gap-2 rounded-full border border-brand-green/15 bg-brand-green/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-green-800 dark:border-brand-green/20 dark:bg-brand-green/15 dark:text-brand-green-100">
                       <span className="h-2 w-2 rounded-full bg-brand-green-500" />
                       Get Started
@@ -224,9 +224,9 @@ export default async function HomePage() {
                           detail: "Marketplace, business, tourism, venues, or events.",
                         },
                       ].map((step, index) => (
-                        <li key={step.title} className="flex items-baseline gap-4 py-3">
+                        <li key={step.title} className="flex items-baseline gap-4 py-3.5">
                           <span
-                            className="font-display text-sm font-bold tabular-nums text-brand-green"
+                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-green/10 font-display text-xs font-bold tabular-nums text-brand-green dark:bg-brand-green/15"
                             aria-hidden="true"
                           >
                             {String(index + 1).padStart(2, "0")}

@@ -71,11 +71,11 @@ export function HomeShowcaseShell({
   const styles = toneStyles[tone];
 
   return (
-    <section className={cn("relative py-3 sm:py-4 lg:py-5", className)}>
+    <section className={cn("relative py-5 sm:py-6 lg:py-8", className)}>
       <div className="container-page">
         <div
           className={cn(
-            "group relative overflow-hidden rounded-[2rem] border shadow-[0_18px_54px_-40px_rgba(15,23,42,0.35)]",
+            "group relative overflow-hidden rounded-[2rem] border shadow-[0_24px_64px_-44px_rgba(15,23,42,0.4)] transition-shadow duration-500 hover:shadow-[0_32px_72px_-44px_rgba(15,23,42,0.45)]",
             styles.panelClassName
           )}
         >
@@ -91,7 +91,7 @@ export function HomeShowcaseShell({
             aria-hidden="true"
           />
 
-          <div className="relative flex flex-col gap-4 px-4 py-4 sm:px-6 sm:py-5 lg:px-7 lg:py-6">
+          <div className="relative flex flex-col gap-5 px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div className="max-w-2xl space-y-3">
                 <div
@@ -123,12 +123,12 @@ export function HomeShowcaseShell({
                 href={href}
                 prefetch={false}
                 className={cn(
-                  "inline-flex shrink-0 items-center gap-2 text-sm font-semibold transition-colors",
+                  "group/link inline-flex shrink-0 items-center gap-2 rounded-full border border-current/15 px-4 py-2 text-sm font-semibold transition-all duration-200 hover:gap-3 hover:bg-current/5",
                   styles.linkClassName
                 )}
               >
                 {ctaLabel}
-                <ArrowRight className="h-4 w-4" />
+                <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover/link:translate-x-0.5" />
               </Link>
             </div>
 

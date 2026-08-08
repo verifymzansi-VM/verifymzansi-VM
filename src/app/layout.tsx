@@ -1,6 +1,21 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
+import { Inter, Sora } from "next/font/google";
 import { CSRF_HEADER_NAME } from "@/lib/utils/csrf";
+
+const fontDisplay = Sora({
+  subsets: ["latin"],
+  variable: "--font-display",
+  display: "swap",
+  fallback: ["Segoe UI", "Trebuchet MS", "system-ui", "sans-serif"],
+});
+
+const fontBody = Inter({
+  subsets: ["latin"],
+  variable: "--font-body",
+  display: "swap",
+  fallback: ["Segoe UI", "system-ui", "sans-serif"],
+});
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { PublicRuntimeConfigBridge } from "@/components/providers/public-runtime-config";
 import { VideoPlaybackProvider } from "@/contexts/video-playback-context";
@@ -190,6 +205,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       lang="en-ZA"
       suppressHydrationWarning
       data-playwright={isPlaywrightTestMode ? "1" : undefined}
+      className={`${fontDisplay.variable} ${fontBody.variable}`}
     >
       <head>
         {/* Prevent iOS Safari from auto-detecting phone numbers, dates, emails,

@@ -18,11 +18,16 @@ export function TrustStrip({
 
   return (
     <section className="hidden sm:block border-b border-border/60">
-      <div className="container-page flex items-center gap-4 py-3.5">
-        <h2 className={`shrink-0 text-xs font-semibold uppercase tracking-[0.22em] ${titleClass}`}>
+      <div className="container-page flex items-center gap-4 py-4">
+        <h2
+          className={`shrink-0 font-display text-[11px] font-bold uppercase tracking-[0.26em] ${titleClass}`}
+        >
           {title}
         </h2>
-        <div className="h-px flex-1 bg-border/70" aria-hidden="true" />
+        <div
+          className="h-px flex-1 bg-gradient-to-r from-border/80 via-border/40 to-transparent"
+          aria-hidden="true"
+        />
       </div>
     </section>
   );

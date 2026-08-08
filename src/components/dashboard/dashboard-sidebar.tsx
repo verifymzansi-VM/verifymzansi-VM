@@ -63,12 +63,18 @@ export function DashboardSidebar({ badges = {}, onSignOut }: DashboardSidebarPro
         href={item.href}
         aria-current={isActive ? "page" : undefined}
         className={cn(
-          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+          "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
           isActive
-            ? "bg-brand-green-50 text-brand-green dark:bg-brand-green-950"
+            ? "bg-brand-green-50 text-brand-green shadow-sm dark:bg-brand-green-950"
             : "text-muted-foreground hover:text-foreground hover:bg-muted"
         )}
       >
+        {isActive && (
+          <span
+            className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-brand-green"
+            aria-hidden="true"
+          />
+        )}
         <Icon className="h-4 w-4" />
         <span className="flex-1">{item.label}</span>
         {badge && (

@@ -4,12 +4,12 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/50 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none active:scale-[0.98]",
+  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/50 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none active:scale-[0.98]",
   {
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground hover:bg-primary/95 hover:shadow-md shadow-sm active:bg-primary/80 disabled:bg-muted disabled:text-muted-foreground",
+          "bg-primary text-primary-foreground hover:bg-primary/95 hover:shadow-md hover:-translate-y-px shadow-sm active:bg-primary/80 active:translate-y-0 disabled:bg-muted disabled:text-muted-foreground",
         destructive:
           "bg-destructive text-destructive-foreground hover:bg-destructive/90 hover:shadow-md hover:shadow-destructive/20 active:bg-destructive/80",
         outline:
@@ -20,7 +20,7 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
         // Trust-scale-aware variants
         "trust-verified":
-          "bg-brand-green text-white hover:bg-brand-green-600 hover:shadow-md hover:shadow-brand-green/20 active:bg-brand-green-700 disabled:bg-brand-green-200 disabled:text-brand-green-900 disabled:opacity-100",
+          "bg-brand-green text-white hover:bg-brand-green-600 hover:shadow-md hover:shadow-brand-green/25 hover:-translate-y-px active:bg-brand-green-700 active:translate-y-0 disabled:bg-brand-green-200 disabled:text-brand-green-900 disabled:opacity-100",
         "trust-gold":
           "bg-brand-gold text-brand-gold-950 hover:bg-brand-gold-500 hover:shadow-md hover:shadow-brand-gold/30 active:bg-brand-gold-600",
       },

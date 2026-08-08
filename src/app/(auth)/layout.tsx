@@ -54,11 +54,11 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             />
           </Link>
 
-          <div className="space-y-3">
-            <h1 className="font-display text-3xl font-bold leading-tight tracking-tight text-slate-900 dark:text-white">
+          <div className="space-y-4">
+            <h1 className="font-display text-4xl font-bold leading-[1.1] tracking-tight text-slate-900 dark:text-white">
               Trade with people you can check.
             </h1>
-            <p className="text-lg text-muted-foreground">
+            <p className="text-lg leading-relaxed text-muted-foreground">
               Post and manage trusted local listings, business services, tourism, and events.
             </p>
           </div>

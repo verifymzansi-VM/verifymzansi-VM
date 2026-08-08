@@ -294,9 +294,9 @@ export default async function DashboardPage() {
       <EmailConfirmedToast />
 
       {/* ───── Compact header ───── */}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 border-b border-border/60 pb-4">
         <div className="min-w-0">
-          <h1 className="font-display text-xl font-bold tracking-tight sm:text-2xl">
+          <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
             Hi, {firstName}
           </h1>
           {/* Inline verification indicator */}
