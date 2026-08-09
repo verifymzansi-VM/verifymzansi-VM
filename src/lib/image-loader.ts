@@ -53,6 +53,44 @@ const CF_RESIZING_ENABLED = process.env.NEXT_PUBLIC_CF_IMAGE_RESIZING === "true"
 const MEDIA_HOST = "media.verifymzansi.com";
 const STAGING_MEDIA_HOST = "media-staging.verifymzansi.com";
 
+/**
+ * Pre-generated variant widths (must match VARIANT_WIDTHS in
+ * src/lib/services/image-variants.ts). Cloudflare Image Resizing is not
+ * enabled on the zone, so responsive delivery relies on variants generated
+ * at upload time. The loader maps a requested width to the nearest variant
+ * key; the serve route falls back to the original when the variant object
+ * does not exist yet (e.g. media uploaded before variants were introduced).
+ */
+const VARIANT_WIDTHS = [400, 800, 1600] as const;
+
+/** Pick the smallest variant width that is >= the requested width. */
+function nearestVariantWidth(requestedWidth: number): number {
+  for (const w of VARIANT_WIDTHS) {
+    if (w >= requestedWidth) return w;
+  }
+  return VARIANT_WIDTHS[VARIANT_WIDTHS.length - 1];
+}
+
+/**
+ * Rewrite a media proxy path to its pre-generated variant key for the
+ * requested width. `/api/media/serve/media/x.jpg` @ 640 →
+ * `/api/media/serve/media/x.w800.webp`. Returns the original path unchanged
+ * when it is already a variant key or not a resizable image.
+ */
+function toVariantProxyPath(path: string, requestedWidth: number): string {
+  // Already a variant key — don't double-rewrite.
+  if (/\.w\d+\.webp$/.test(path)) return path;
+  if (!isImageSource(path)) return path;
+  const servePrefix = "/api/media/serve/";
+  if (!path.startsWith(servePrefix)) return path;
+  const key = path.slice(servePrefix.length);
+  const dot = key.lastIndexOf(".");
+  if (dot <= 0) return path;
+  const stem = key.slice(0, dot);
+  const width = nearestVariantWidth(requestedWidth);
+  return `${servePrefix}${stem}.w${width}.webp`;
+}
+
 export default function cloudflareImageLoader({ src, width, quality }: ImageLoaderParams): string {
   const resolvedQuality = quality || 75;
 
@@ -68,9 +106,15 @@ export default function cloudflareImageLoader({ src, width, quality }: ImageLoad
   // Keep same-origin relative assets on their native paths. Production is able
   // to serve these directly, while rewriting them through `/cdn-cgi/image/`
   // currently returns 404s for both `/images/*` and `/api/media/serve/*`.
+  // Verified 2026-08-08: the verifymzansi.com zone does NOT have Cloudflare
+  // Image Resizing enabled — /cdn-cgi/image/ returns 404 for proxy paths.
+  //
+  // Instead, media proxy images are rewritten to a pre-generated variant key
+  // sized to the requested width (upload-time WebP variants). The serve route
+  // falls back to the original object when the variant does not exist yet.
   if (!src.startsWith("http://") && !src.startsWith("https://")) {
     if (src.startsWith("/api/media/serve/")) {
-      return src;
+      return toVariantProxyPath(src, width);
     }
     if (!isImageSource(src)) {
       return src;
@@ -78,13 +122,13 @@ export default function cloudflareImageLoader({ src, width, quality }: ImageLoad
     return withSizeQuery(src, width, resolvedQuality);
   }
 
-  // Absolute proxy URLs should likewise stay on the proxy path. The proxy
-  // already serves cacheable responses with the correct content type.
+  // Absolute proxy URLs: resize via pre-generated variant keys, leave videos
+  // and non-image assets on the proxy path untouched.
   if (src.includes("/api/media/serve/")) {
     try {
       const parsed = new URL(src);
       if (isImageSource(parsed.pathname)) {
-        return withSizeQuery(`${parsed.pathname}${parsed.search}`, width, resolvedQuality);
+        return toVariantProxyPath(parsed.pathname, width);
       }
     } catch {
       return src;

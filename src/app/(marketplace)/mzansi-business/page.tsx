@@ -121,7 +121,7 @@ export default async function MzansiBusinessPage() {
       <TrustStrip variant="blue" title="Latest Mzansi Businesses" />
 
       {/* ── Main Content ─────────────────────────────────── */}
-      <div className="container-page py-8 space-y-6">
+      <div className="container-page py-8 space-y-7 lg:py-10">
         {/* Compact mobile header */}
         <div className="flex items-center justify-between lg:hidden">
           <h1 className="font-display text-lg font-bold tracking-tight">Mzansi Business</h1>
@@ -136,7 +136,7 @@ export default async function MzansiBusinessPage() {
         {/* Mobile filter drawer (FAB visible < lg only) */}
         <BusinessFilterDrawer />
 
-        <div className="flex gap-6">
+        <div className="flex gap-6 lg:gap-8">
           <aside className="hidden w-72 shrink-0 lg:block">
             <div className="sticky top-24">
               <Suspense
@@ -161,7 +161,7 @@ export default async function MzansiBusinessPage() {
               breadcrumbs={[{ label: "Mzansi Business" }]}
               className="hidden lg:block"
             >
-              <Button asChild size="sm" className="h-11 gap-2">
+              <Button asChild size="sm" className="h-11 gap-2 elev-xs hover:elev-sm">
                 <Link href="/post/create-business">
                   Create Business Profile
                   <ArrowRight className="h-4 w-4" />

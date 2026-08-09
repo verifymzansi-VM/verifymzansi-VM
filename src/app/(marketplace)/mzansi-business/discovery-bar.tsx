@@ -60,8 +60,8 @@ export function BusinessDiscoveryBar() {
   ].filter(Boolean).length;
 
   return (
-    <section className="space-y-5 rounded-2xl border border-border/70 bg-background/95 p-4 shadow-sm">
-      <div className="space-y-1">
+    <section className="space-y-5 rounded-2xl border border-border/70 bg-background/95 p-5 elev-sm">
+      <div className="space-y-1.5">
         <p className="text-sm font-semibold tracking-tight">Find a business faster</p>
         <p className="text-xs leading-5 text-muted-foreground">
           Start with a search, then narrow by category, business type, and location.

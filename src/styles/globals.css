@@ -29,11 +29,11 @@
     --primary: 152 100% 26%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 37 30% 92%;
-    --secondary-foreground: 30 20% 20%;
+    --secondary: 37 26% 94%;
+    --secondary-foreground: 30 18% 22%;
 
-    --muted: 37 20% 94%;
-    --muted-foreground: 30 12% 38%;
+    --muted: 37 18% 95%;
+    --muted-foreground: 30 10% 42%;
 
     --accent: 43 100% 55%;
     --accent-foreground: 30 20% 12%;
@@ -41,17 +41,24 @@
     --destructive: 4 73% 53%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 37 20% 88%;
-    --input: 37 20% 88%;
+    --border: 37 16% 90%;
+    --input: 37 16% 88%;
     --ring: 152 100% 26%;
 
-    --radius: 10px;
+    --radius: 12px;
 
     /* Duration scale tokens */
     --duration-fast: 100ms;
     --duration-normal: 200ms;
     --duration-slow: 400ms;
     --duration-slower: 600ms;
+
+    /* Elevation scale — softer, airier shadows for a cleaner minimal feel */
+    --shadow-xs: 0 1px 2px 0 rgb(15 23 42 / 0.04);
+    --shadow-sm: 0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.05);
+    --shadow-md: 0 2px 4px -1px rgb(15 23 42 / 0.05), 0 4px 12px -2px rgb(15 23 42 / 0.07);
+    --shadow-lg: 0 4px 8px -2px rgb(15 23 42 / 0.05), 0 12px 28px -6px rgb(15 23 42 / 0.09);
+    --shadow-xl: 0 8px 16px -4px rgb(15 23 42 / 0.06), 0 20px 44px -10px rgb(15 23 42 / 0.11);
   }
 
   /* ── Dark Theme ──────────────────────────────────────────── */
@@ -68,11 +75,11 @@
     --primary: 152 100% 32%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 30 12% 18%;
+    --secondary: 30 10% 17%;
     --secondary-foreground: 37 20% 88%;
 
-    --muted: 30 10% 16%;
-    --muted-foreground: 37 14% 56%;
+    --muted: 30 8% 15%;
+    --muted-foreground: 37 12% 58%;
 
     --accent: 43 100% 48%;
     --accent-foreground: 30 20% 8%;
@@ -80,8 +87,8 @@
     --destructive: 4 73% 48%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 30 10% 20%;
-    --input: 30 10% 20%;
+    --border: 30 8% 19%;
+    --input: 30 8% 21%;
     --ring: 152 100% 32%;
   }
 
@@ -160,6 +167,24 @@
   h5,
   h6 {
     @apply font-display;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+
+  h1 {
+    letter-spacing: -0.022em;
+  }
+
+  /* Improve long-form readability */
+  p {
+    text-wrap: pretty;
+  }
+
+  /* Consistent, accessible focus ring across interactive elements */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: calc(var(--radius) - 4px);
   }
 
   /* Respect reduced motion preference */
@@ -384,6 +409,23 @@
 
   .container-page {
     @apply mx-auto w-full max-w-container page-padding;
+  }
+
+  /* Elevation utilities mapped to the token scale */
+  .elev-xs {
+    box-shadow: var(--shadow-xs);
+  }
+  .elev-sm {
+    box-shadow: var(--shadow-sm);
+  }
+  .elev-md {
+    box-shadow: var(--shadow-md);
+  }
+  .elev-lg {
+    box-shadow: var(--shadow-lg);
+  }
+  .elev-xl {
+    box-shadow: var(--shadow-xl);
   }
 
   /* Hide scrollbar but keep scroll functionality */

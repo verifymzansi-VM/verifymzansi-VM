@@ -516,7 +516,7 @@ export function PromotionDetailContent({
           </div>
         )}
         <div className="space-y-4">
-          <Card className="border-slate-200/75 bg-white/95 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-slate-950/75">
+          <Card className="border-slate-200/75 bg-white/95 elev-sm dark:border-white/10 dark:bg-slate-950/75">
             <CardContent className="space-y-4 p-5">
               <div className="space-y-1">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">

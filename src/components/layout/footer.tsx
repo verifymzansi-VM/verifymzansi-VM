@@ -65,28 +65,30 @@ export function Footer() {
   const currentYear = new Date().getFullYear();
   const runtimeConfig = getServerPublicRuntimeConfig();
   const footerLinkClassName =
-    "inline-flex min-h-6 items-center rounded-md py-1 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+    "inline-flex min-h-7 items-center rounded-md py-1 text-[13px] text-muted-foreground transition-colors duration-200 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
   return (
-    <footer className="border-t bg-warm-50 dark:bg-warm-950">
-      <div className="container-page py-4 pb-[calc(env(safe-area-inset-bottom)+8rem)] md:pb-4">
+    <footer className="border-t border-border/50 bg-warm-50/70 dark:bg-warm-950/60">
+      <div className="container-page py-10 pb-[calc(env(safe-area-inset-bottom)+8rem)] md:py-14 md:pb-14">
         {/* Mobile nav is h-16 (64px). Extra bottom spacing keeps legal links above nav across mobile browsers. */}
         <h2 className="sr-only">Footer navigation</h2>
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-4 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-8 sm:gap-10 sm:grid-cols-4 lg:grid-cols-5">
           {/* Brand */}
-          <div className="space-y-2">
+          <div className="space-y-3">
             <Link href="/" prefetch={false} className="flex items-center gap-1.5">
               <BrandLogo size="sm" />
             </Link>
-            <p className="text-xs text-muted-foreground max-w-xs">
+            <p className="text-[13px] leading-6 text-muted-foreground max-w-xs">
               Find and post trusted local listings, services, tourism, and events in South Africa.
             </p>
           </div>
 
           {footerSections.map((section) => (
-            <div key={section.title} className="space-y-2">
-              <h3 className="font-display font-semibold text-xs">{section.title}</h3>
-              <nav aria-label={section.title} className="flex flex-col gap-1.5">
+            <div key={section.title} className="space-y-3">
+              <h3 className="font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-foreground/80">
+                {section.title}
+              </h3>
+              <nav aria-label={section.title} className="flex flex-col gap-1">
                 {section.links.map((link) => (
                   <Link
                     key={link.href}
@@ -104,17 +106,17 @@ export function Footer() {
           <OfficialSocialLinks
             links={runtimeConfig.officialSocialLinks}
             className="space-y-2"
-            linkClassName="inline-flex items-center rounded-full border border-border/70 px-3 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            linkClassName="inline-flex items-center rounded-full border border-border/60 bg-background/60 px-3 py-1 text-xs text-muted-foreground transition-colors duration-200 hover:border-border hover:text-foreground"
           />
         </div>
 
-        <Separator className="my-3 sm:my-4" />
+        <Separator className="my-6 sm:my-8 opacity-60" />
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
           <p>&copy; {currentYear} VerifyMzansi. All rights reserved.</p>
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background/70 px-2.5 py-1 shadow-sm">
+          <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/80 px-3.5 py-1.5 elev-xs">
             <SouthAfricanFlagMark />
-            <span>Made in South Africa</span>
+            <span className="font-medium">Made in South Africa</span>
           </div>
         </div>
       </div>

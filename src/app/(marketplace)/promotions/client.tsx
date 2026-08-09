@@ -398,13 +398,13 @@ export function PromotionsExplorer() {
     "border-amber-300 bg-amber-50 text-amber-800 shadow-sm shadow-amber-200/70 hover:border-amber-400 hover:bg-amber-100 hover:text-amber-900 dark:border-amber-500/70 dark:bg-amber-500/15 dark:text-amber-200 dark:shadow-none dark:hover:bg-amber-500/25";
 
   return (
-    <div className="container-page py-8 space-y-6">
+    <div className="container-page py-8 space-y-7 lg:py-10">
       <PageHeader
         title="Tourism & Events"
         description="Tourism destinations, stays, experiences, and events across South Africa."
         breadcrumbs={[{ label: "Home", href: "/" }, { label: "Tourism & Events" }]}
       >
-        <Button asChild size="sm" className="h-11 gap-1">
+        <Button asChild size="sm" className="h-11 gap-1 elev-xs hover:elev-sm">
           <Link href={createHref}>
             {createLabel}
             <ArrowRight className="h-4 w-4" />
@@ -416,7 +416,7 @@ export function PromotionsExplorer() {
       <div
         role="tablist"
         aria-label="Tourism & Events sections"
-        className="flex items-center gap-1.5 rounded-[1.25rem] border border-border/70 bg-background/95 p-1.5 shadow-sm"
+        className="flex items-center gap-1.5 rounded-[1.25rem] border border-border/70 bg-background/95 p-1.5 elev-sm"
       >
         {activeTab === "tourism" ? (
           <button
@@ -474,14 +474,14 @@ export function PromotionsExplorer() {
       {/* Mobile filter drawer (FAB visible < lg only) */}
       <PromotionFilterDrawer {...filterPanelProps} />
 
-      <div className="lg:flex lg:gap-6">
+      <div className="lg:flex lg:gap-8">
         <aside className="hidden w-72 shrink-0 lg:block">
           <div className="sticky top-24 space-y-4">
             <PromotionFilterPanel {...filterPanelProps} />
           </div>
         </aside>
 
-        <div className="min-w-0 flex-1 space-y-5">
+        <div className="min-w-0 flex-1 space-y-6">
           {/* ── Results Count + CTA ── */}
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground" aria-live="polite" role="status">

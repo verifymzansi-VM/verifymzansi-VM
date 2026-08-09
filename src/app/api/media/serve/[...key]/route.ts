@@ -152,6 +152,24 @@ const MIME_MAP: Record<string, string> = {
 const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "ogg", "mov"]);
 
 /**
+ * If the requested key is a pre-generated responsive variant
+ * (`<stem>.w<width>.webp`), return the original key it was derived from.
+ * Returns null for non-variant keys. Variants are generated at upload time;
+ * media uploaded before variants existed (or whose variant upload failed)
+ * will 404 on the variant key, so the serve route falls back to the original.
+ */
+function originalKeyForVariant(key: string): string | null {
+  const match = key.match(/^(.*)\.w\d+\.webp$/);
+  if (!match) return null;
+  // We don't know the original extension from the variant key alone. Try the
+  // common raster extensions in order; the caller checks existence.
+  return match[1];
+}
+
+/** Candidate original extensions to probe when a variant key is missing. */
+const VARIANT_ORIGINAL_EXTS = ["jpg", "jpeg", "png", "webp", "avif", "gif"];
+
+/**
  * Derive a filename for the Content-Disposition header from the storage key.
  * Generated keys never contain the original filename (e.g.
  * "media/listing/<ownerId>/17200000-a1b2c3d4.jpg"), so this returns the last
@@ -311,42 +329,12 @@ async function serveViaR2Binding(
   });
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ key: string[] }> }
-) {
-  const segments = (await params).key;
-
-  if (!segments || segments.length === 0) {
-    return NextResponse.json({ error: "Missing key" }, { status: 400 });
-  }
-
-  const key = segments.join("/");
-
-  // Security: reject path traversal and null bytes
-  if (key.includes("..") || key.includes("\0") || key.includes("\\")) {
-    return NextResponse.json({ error: "Invalid key" }, { status: 400 });
-  }
-
-  // Security: only serve known public-bucket prefixes
-  const ALLOWED_PREFIXES = ["media/", "listings/"];
-  if (!ALLOWED_PREFIXES.some((p) => key.startsWith(p))) {
-    return NextResponse.json({ error: "Invalid key" }, { status: 400 });
-  }
-
-  // Rate-limit: generous threshold (public CDN-cached content)
-  const ip = getClientIp(request);
-  const rl = checkLocalRateLimit(ip, "media:serve", 300);
-  if (rl.limited) {
-    return NextResponse.json(
-      { error: "Too many requests" },
-      {
-        status: 429,
-        headers: { "Retry-After": String(rl.retryAfter ?? 60) },
-      }
-    );
-  }
-
+/**
+ * Serve a single resolved storage key. Extracted from GET so the variant
+ * fallback wrapper can retry with the original key when a pre-generated
+ * responsive variant object does not exist yet.
+ */
+async function serveMediaForKey(request: NextRequest, key: string): Promise<NextResponse> {
   // ── Conditional GET (If-None-Match) ─────────────────────────────────
   const ifNoneMatch = request.headers.get("if-none-match");
   const rangeHeader = request.headers.get("range");
@@ -526,4 +514,62 @@ export async function GET(
     });
     return NextResponse.json({ error: "Failed to serve media" }, { status: 500 });
   }
+}
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ key: string[] }> }
+) {
+  const segments = (await params).key;
+
+  if (!segments || segments.length === 0) {
+    return NextResponse.json({ error: "Missing key" }, { status: 400 });
+  }
+
+  const key = segments.join("/");
+
+  // Security: reject path traversal and null bytes
+  if (key.includes("..") || key.includes("\0") || key.includes("\\")) {
+    return NextResponse.json({ error: "Invalid key" }, { status: 400 });
+  }
+
+  // Security: only serve known public-bucket prefixes
+  const ALLOWED_PREFIXES = ["media/", "listings/"];
+  if (!ALLOWED_PREFIXES.some((p) => key.startsWith(p))) {
+    return NextResponse.json({ error: "Invalid key" }, { status: 400 });
+  }
+
+  // Rate-limit: generous threshold (public CDN-cached content)
+  const ip = getClientIp(request);
+  const rl = checkLocalRateLimit(ip, "media:serve", 300);
+  if (rl.limited) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      {
+        status: 429,
+        headers: { "Retry-After": String(rl.retryAfter ?? 60) },
+      }
+    );
+  }
+
+  const response = await serveMediaForKey(request, key);
+
+  // Variant fallback: a pre-generated responsive variant (`<stem>.w<N>.webp`)
+  // only exists for media uploaded after variants were introduced. When the
+  // variant object is missing, serve the original image instead of a 404 so
+  // older media keeps rendering. We probe the common raster extensions.
+  if (response.status === 404) {
+    const stem = originalKeyForVariant(key);
+    if (stem) {
+      for (const originalExt of VARIANT_ORIGINAL_EXTS) {
+        const originalKey = `${stem}.${originalExt}`;
+        const originalResponse = await serveMediaForKey(request, originalKey);
+        if (originalResponse.status !== 404) {
+          return originalResponse;
+        }
+      }
+    }
+  }
+
+  return response;
 }

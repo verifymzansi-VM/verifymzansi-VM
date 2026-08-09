@@ -151,10 +151,10 @@ function HeaderInner({
 
   return (
     <header
-      className={`sticky top-0 z-[110] isolate w-full border-b transition-all duration-300 ${
+      className={`sticky top-0 z-[110] isolate w-full transition-all duration-300 ${
         scrolled
-          ? "border-border/70 bg-background/85 shadow-[0_8px_30px_-18px_rgba(15,23,42,0.35)] backdrop-blur-md supports-[backdrop-filter]:bg-background/70"
-          : "border-transparent bg-background lg:bg-background/95 lg:backdrop-blur lg:supports-[backdrop-filter]:bg-background/60"
+          ? "border-b border-border/60 bg-background/80 elev-sm backdrop-blur-xl supports-[backdrop-filter]:bg-background/70"
+          : "border-b border-transparent bg-background lg:bg-background/90 lg:backdrop-blur-md lg:supports-[backdrop-filter]:bg-background/60"
       }`}
     >
       {isAuthenticated ? (
@@ -164,7 +164,7 @@ function HeaderInner({
         </>
       ) : null}
 
-      <div className="container-page grid h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+      <div className="container-page grid h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 md:h-[4.25rem] lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
         <div className="flex min-w-0 items-center gap-1.5 lg:justify-self-start">
           <Link
             href="/"
@@ -312,7 +312,7 @@ function HeaderInner({
       </div>
 
       {/* Mobile Marketplace Tabs — always visible on mobile */}
-      <div className="lg:hidden w-full border-t bg-background/95">
+      <div className="lg:hidden w-full border-t border-border/50 bg-background/90 backdrop-blur-sm">
         <div className="px-3 py-1.5">
           <MarketplaceSwitcher />
         </div>

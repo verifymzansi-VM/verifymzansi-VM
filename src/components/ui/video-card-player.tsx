@@ -160,6 +160,7 @@ function SmartFitBackdrop({
         className="absolute inset-0 scale-110 object-cover blur-2xl brightness-90 dark:brightness-110 saturate-150"
         sizes={sizes}
         priority={priority}
+        {...(priority ? {} : { loading: "lazy" as const })}
         unoptimized={useUnoptimized ? true : undefined}
       />
       <div className="absolute inset-0 bg-black/10" />
@@ -994,6 +995,7 @@ function VideoCardPlayerInner({
           )}
           sizes={sizes}
           priority={priority}
+          {...(priority ? {} : { loading: "lazy" as const })}
           onLoad={handleImageLoad}
           onError={handlePosterError}
           data-media-fit={usesSmartFit ? "smart" : "cover"}

@@ -100,7 +100,7 @@ export default async function MzansiMarketPage() {
       <TrustStrip variant="green" title="Latest on Mzansi Market" />
 
       {/* ── Main Content ─────────────────────────────────── */}
-      <div className="container-page py-8 space-y-6">
+      <div className="container-page py-8 space-y-7 lg:py-10">
         {/* Compact mobile header */}
         <div className="flex items-center justify-between lg:hidden">
           <h1 className="font-display text-lg font-bold tracking-tight">Browse Listings</h1>
@@ -116,7 +116,7 @@ export default async function MzansiMarketPage() {
         <ListingFilterDrawer />
 
         {/* Two-column layout */}
-        <div className="flex gap-6">
+        <div className="flex gap-6 lg:gap-8">
           {/* Desktop sidebar */}
           <aside className="hidden w-72 shrink-0 lg:block">
             <div className="sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pr-1 scrollbar-thin">

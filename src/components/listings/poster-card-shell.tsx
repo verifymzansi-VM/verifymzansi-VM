@@ -177,10 +177,10 @@ export function PosterCardShell({
   const cardClassName = cn(
     "relative h-full w-full flex flex-col overflow-hidden border-transparent transition-all duration-300",
     isHeroVariant
-      ? "border border-slate-200 bg-white text-slate-950 shadow-[0_24px_64px_-36px_rgba(15,23,42,0.4)] ring-1 ring-black/5 hover:-translate-y-0.5 hover:shadow-[0_30px_72px_-38px_rgba(15,23,42,0.46)] dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:ring-white/10"
+      ? "border border-slate-200 bg-white text-slate-950 elev-lg ring-1 ring-black/5 hover:-translate-y-0.5 hover:elev-xl dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:ring-white/10"
       : isShowcaseVariant
-        ? "border border-slate-200/75 bg-white/96 shadow-[0_12px_32px_-20px_rgba(15,23,42,0.25)] backdrop-blur-sm hover:-translate-y-0.5 hover:shadow-[0_18px_40px_-22px_rgba(15,23,42,0.3)] dark:border-white/10 dark:bg-slate-950/80"
-        : "bg-warm-100 shadow-[0_2px_10px_-6px_rgba(15,23,42,0.16)] hover:-translate-y-px hover:shadow-[0_6px_18px_-10px_rgba(15,23,42,0.22)] dark:border-white/10 dark:bg-slate-950 dark:text-white dark:ring-1 dark:ring-white/10",
+        ? "border border-slate-200/75 bg-white/96 elev-sm backdrop-blur-sm hover:-translate-y-0.5 hover:elev-md dark:border-white/10 dark:bg-slate-950/80"
+        : "bg-warm-100 elev-xs hover:-translate-y-px hover:elev-sm dark:border-white/10 dark:bg-slate-950 dark:text-white dark:ring-1 dark:ring-white/10",
     rootRadiusClassName,
     accentClassName
   );
@@ -201,6 +201,7 @@ export function PosterCardShell({
               alt={`${title} logo`}
               width={isHeroVariant ? 32 : 28}
               height={isHeroVariant ? 32 : 28}
+              loading="lazy"
               className="h-full w-full object-contain"
               draggable={disableNativeDrag ? false : undefined}
               onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
@@ -282,6 +283,7 @@ export function PosterCardShell({
           fill
           sizes={mediaSizes}
           priority={priority}
+          {...(priority ? {} : { loading: "lazy" as const })}
           className="object-contain"
           aria-hidden="true"
           draggable={disableNativeDrag ? false : undefined}

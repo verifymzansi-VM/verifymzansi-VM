@@ -30,11 +30,40 @@ describe("cloudflareImageLoader", () => {
     expect(result).toBe("/images/hero.jpg?w=1024&q=75");
   });
 
-  it("keeps media proxy paths unchanged when resizing is enabled", async () => {
+  it("maps media proxy images to the nearest pre-generated variant key", async () => {
     vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "true");
     const { default: loader } = await import("./image-loader");
+    // 512 requested → nearest variant >= 512 is 800
     const result = loader({ src: "/api/media/serve/media/listing/hero.jpg", width: 512 });
-    expect(result).toBe("/api/media/serve/media/listing/hero.jpg");
+    expect(result).toBe("/api/media/serve/media/listing/hero.w800.webp");
+  });
+
+  it("maps small requests to the 400w variant", async () => {
+    vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "true");
+    const { default: loader } = await import("./image-loader");
+    const result = loader({ src: "/api/media/serve/media/listing/hero.jpg", width: 320 });
+    expect(result).toBe("/api/media/serve/media/listing/hero.w400.webp");
+  });
+
+  it("caps large requests at the 1600w variant", async () => {
+    vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "true");
+    const { default: loader } = await import("./image-loader");
+    const result = loader({ src: "/api/media/serve/media/listing/hero.jpg", width: 2400 });
+    expect(result).toBe("/api/media/serve/media/listing/hero.w1600.webp");
+  });
+
+  it("does not double-rewrite an existing variant key", async () => {
+    vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "true");
+    const { default: loader } = await import("./image-loader");
+    const result = loader({ src: "/api/media/serve/media/listing/hero.w800.webp", width: 512 });
+    expect(result).toBe("/api/media/serve/media/listing/hero.w800.webp");
+  });
+
+  it("leaves media proxy videos on the original key", async () => {
+    vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "true");
+    const { default: loader } = await import("./image-loader");
+    const result = loader({ src: "/api/media/serve/media/listing/clip.mp4", width: 512 });
+    expect(result).toBe("/api/media/serve/media/listing/clip.mp4");
   });
 
   it("transforms known media host absolute URLs via /cdn-cgi/image/ when resizing enabled", async () => {

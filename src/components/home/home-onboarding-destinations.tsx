@@ -291,23 +291,23 @@ export function HomeOnboardingDestinations({
               dragMovedRef.current = false;
             }}
             className={cn(
-              "group rounded-[1.5rem] border border-slate-200/80 bg-white/88 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white hover:shadow-[0_20px_40px_-28px_rgba(15,23,42,0.4)] dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-white/15 dark:hover:bg-white/[0.05]",
+              "group rounded-[1.5rem] border border-slate-200/80 bg-white/88 p-4 elev-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white hover:elev-md dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-white/15 dark:hover:bg-white/[0.05]",
               isDragging &&
                 "cursor-grabbing border-brand-green/35 shadow-[0_24px_50px_-26px_rgba(21,128,61,0.35)] ring-1 ring-brand-green/20"
             )}
           >
             <div className="flex items-start gap-4">
               <div
-                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${item.iconBgClass} ${item.accentClass}`}
+                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ring-1 ring-black/5 transition-transform duration-200 group-hover:scale-105 dark:ring-white/10 ${item.iconBgClass} ${item.accentClass}`}
               >
                 <Icon className="h-5 w-5" />
               </div>
               <div className="min-w-0 space-y-2">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-base font-semibold text-slate-950 dark:text-white">
+                  <p className="text-base font-semibold tracking-tight text-slate-950 dark:text-white">
                     {item.title}
                   </p>
-                  <ArrowRight className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-hover:translate-x-1 dark:text-slate-500" />
+                  <ArrowRight className="h-4 w-4 shrink-0 text-slate-400 transition-all duration-200 group-hover:translate-x-1 group-hover:text-slate-600 dark:text-slate-500 dark:group-hover:text-slate-300" />
                 </div>
                 <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">
                   {item.description}

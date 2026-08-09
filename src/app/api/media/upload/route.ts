@@ -16,6 +16,7 @@ import {
   stripMetadataFromWebp,
 } from "@/lib/utils/exif-strip";
 import { scanForMalware } from "@/lib/utils/malware-scan";
+import { generateImageVariants } from "@/lib/services/image-variants";
 import { parseAndValidateFormData } from "@/lib/utils/api";
 import { z } from "zod";
 
@@ -247,15 +248,16 @@ export async function POST(request: NextRequest) {
       try {
         // Strip metadata from images to prevent GPS/PII leaks (POPIA)
         let uploadFile: File | Blob = file;
+        let strippedBytes: Uint8Array = fileBuffer;
         if (file.type === "image/jpeg") {
-          const stripped = stripExifFromJpeg(fileBuffer);
-          uploadFile = new Blob([toArrayBuffer(stripped)], { type: file.type });
+          strippedBytes = stripExifFromJpeg(fileBuffer);
+          uploadFile = new Blob([toArrayBuffer(strippedBytes)], { type: file.type });
         } else if (file.type === "image/png") {
-          const stripped = stripMetadataFromPng(fileBuffer);
-          uploadFile = new Blob([toArrayBuffer(stripped)], { type: file.type });
+          strippedBytes = stripMetadataFromPng(fileBuffer);
+          uploadFile = new Blob([toArrayBuffer(strippedBytes)], { type: file.type });
         } else if (file.type === "image/webp") {
-          const stripped = stripMetadataFromWebp(fileBuffer);
-          uploadFile = new Blob([toArrayBuffer(stripped)], { type: file.type });
+          strippedBytes = stripMetadataFromWebp(fileBuffer);
+          uploadFile = new Blob([toArrayBuffer(strippedBytes)], { type: file.type });
         } else if (file.type === "image/heic" || file.type === "image/heif") {
           // HEIC/HEIF EXIF stripping is not supported server-side.
           // Clients must convert to JPEG before upload. Reject raw HEIC to
@@ -271,6 +273,43 @@ export async function POST(request: NextRequest) {
           contentType: file.type,
         });
         uploadedUrls.push(result.url);
+
+        // Generate responsive WebP variants (best-effort). Cloudflare Image
+        // Resizing is not enabled on the zone, so we pre-generate resized
+        // variants at upload time and let the image loader map a requested
+        // width to the nearest variant key. Failures here never block the
+        // original upload — the original is already stored and served.
+        //
+        // Variants are generated from the STRIPPED bytes (not fileBuffer) so
+        // GPS/PII metadata removed for POPIA compliance is not re-introduced
+        // into the derived WebP variants.
+        if (isImage) {
+          try {
+            const variantSource = Buffer.from(toArrayBuffer(strippedBytes));
+            const variants = await generateImageVariants(variantSource, key);
+            for (const variant of variants) {
+              try {
+                await uploadToR2({
+                  bucket,
+                  key: variant.key,
+                  file: new Blob([toArrayBuffer(variant.buffer)], { type: "image/webp" }),
+                  contentType: "image/webp",
+                });
+              } catch (variantUploadErr) {
+                log.warn("Failed to upload image variant", {
+                  key: variant.key,
+                  width: variant.width,
+                  error: variantUploadErr instanceof Error ? variantUploadErr.message : "Unknown",
+                });
+              }
+            }
+          } catch (variantErr) {
+            log.warn("Image variant generation failed", {
+              key,
+              error: variantErr instanceof Error ? variantErr.message : "Unknown",
+            });
+          }
+        }
 
         // Track upload for orphan detection — blocking to ensure R2/DB consistency.
         // This route validates inline (magic bytes, malware scan, EXIF strip)

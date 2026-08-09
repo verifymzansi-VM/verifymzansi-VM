@@ -290,14 +290,14 @@ export function ListingDetailContent({
                 <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                   {variantCopy.eyebrow}
                 </p>
-                <h2 className="font-display text-2xl font-semibold tracking-tight">
+                <h2 className="font-display text-2xl font-semibold leading-tight tracking-tight">
                   {variantCopy.title}
                 </h2>
               </div>
 
               <div className="flex flex-wrap items-end justify-center gap-3 lg:justify-start">
                 {listing.price_cents != null ? (
-                  <p className="font-display text-3xl font-bold text-brand-green">
+                  <p className="font-display text-[2rem] font-bold leading-none tracking-tight text-brand-green">
                     {formatZAR(listing.price_cents)}
                   </p>
                 ) : null}
@@ -319,7 +319,7 @@ export function ListingDetailContent({
             </div>
 
             {quickFacts.length > 0 ? (
-              <Card className="border-slate-200/75 bg-white/95 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-slate-950/75">
+              <Card className="border-slate-200/75 bg-white/95 elev-sm dark:border-white/10 dark:bg-slate-950/75">
                 <CardContent className="space-y-4 p-5">
                   <div className="space-y-1">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
@@ -347,7 +347,7 @@ export function ListingDetailContent({
             ) : null}
 
             {listing.description ? (
-              <Card className="border-slate-200/75 bg-white/95 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-slate-950/75">
+              <Card className="border-slate-200/75 bg-white/95 elev-sm dark:border-white/10 dark:bg-slate-950/75">
                 <CardContent className="space-y-3 p-5">
                   <div className="space-y-1">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
@@ -363,7 +363,7 @@ export function ListingDetailContent({
             ) : null}
 
             {(listing.location_province || listing.location_city) && (
-              <Card className="border-slate-200/75 bg-white/95 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-slate-950/75">
+              <Card className="border-slate-200/75 bg-white/95 elev-sm dark:border-white/10 dark:bg-slate-950/75">
                 <CardContent className="space-y-3 p-5">
                   <div className="flex items-center gap-2">
                     <MapPin className="h-4 w-4 text-brand-green" />
@@ -385,7 +385,7 @@ export function ListingDetailContent({
           </div>
 
           {detailFacts.length > 0 ? (
-            <Card className="border-slate-200/75 bg-white/95 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-slate-950/75 lg:col-span-2">
+            <Card className="border-slate-200/75 bg-white/95 elev-sm dark:border-white/10 dark:bg-slate-950/75 lg:col-span-2">
               <CardContent className="space-y-4 p-5">
                 <div className="space-y-1">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
@@ -463,7 +463,7 @@ export function ListingDetailContent({
         </div>
 
         <div className="space-y-4">
-          <Card className="border-slate-200/75 bg-white/95 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-slate-950/75">
+          <Card className="border-slate-200/75 bg-white/95 elev-sm dark:border-white/10 dark:bg-slate-950/75">
             <CardContent className="space-y-4 p-5">
               <div className="space-y-1">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
@@ -532,7 +532,7 @@ export function ListingDetailContent({
           </Card>
 
           {listing.logo_url ? (
-            <Card className="border-slate-200/75 bg-white/95 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-slate-950/75">
+            <Card className="border-slate-200/75 bg-white/95 elev-sm dark:border-white/10 dark:bg-slate-950/75">
               <CardContent className="flex items-center gap-3 p-5">
                 <div className="h-12 w-12 overflow-hidden rounded-2xl border bg-white p-1 dark:bg-warm-900">
                   <Image
