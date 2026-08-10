@@ -189,28 +189,49 @@ describe("POST /api/content/delete", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(cleanupInsert).toHaveBeenCalledWith([
-      {
-        bucket: "public",
-        r2_key: "media/listing/user-1/photo.jpg",
-        reason: "listing_deleted",
-      },
-      {
-        bucket: "public",
-        r2_key: "media/listing/user-1/video.mp4",
-        reason: "listing_deleted",
-      },
-      {
-        bucket: "public",
-        r2_key: "media/listing/user-1/thumb.jpg",
-        reason: "listing_deleted",
-      },
-      {
-        bucket: "public",
-        r2_key: "media/listing/user-1/logo.jpg",
-        reason: "listing_deleted",
-      },
+
+    // Raster images expand to their pre-generated responsive variants
+    // (.w400/.w800/.w1600 .webp) so derived objects are cleaned up with the
+    // original instead of leaking as orphans. Videos have no variants.
+    const insertedRows = cleanupInsert.mock.calls[0]?.[0] as Array<{
+      bucket: string;
+      r2_key: string;
+      reason: string;
+    }>;
+    const insertedKeys = insertedRows.map((row) => row.r2_key);
+
+    const expectedOriginals = [
+      "media/listing/user-1/photo.jpg",
+      "media/listing/user-1/video.mp4",
+      "media/listing/user-1/thumb.jpg",
+      "media/listing/user-1/logo.jpg",
+    ];
+    for (const key of expectedOriginals) {
+      expect(insertedKeys).toContain(key);
+    }
+
+    // Each raster original must also queue its three responsive variants.
+    for (const raster of [
+      "media/listing/user-1/photo.jpg",
+      "media/listing/user-1/thumb.jpg",
+      "media/listing/user-1/logo.jpg",
+    ]) {
+      const stem = raster.replace(/\.jpg$/, "");
+      for (const width of [400, 800, 1600]) {
+        expect(insertedKeys).toContain(`${stem}.w${width}.webp`);
+      }
+    }
+
+    // The video must NOT expand to variants.
+    expect(insertedKeys.filter((k) => k.startsWith("media/listing/user-1/video"))).toEqual([
+      "media/listing/user-1/video.mp4",
     ]);
+
+    // Every queued row is a public listing deletion.
+    for (const row of insertedRows) {
+      expect(row.bucket).toBe("public");
+      expect(row.reason).toBe("listing_deleted");
+    }
   });
 
   it("releases a rejected free-post claim after delete", async () => {

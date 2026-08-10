@@ -45,11 +45,33 @@ describe("media cleanup helpers", () => {
       "listing_media_replaced"
     );
 
-    expect(queued).toEqual(["listings/old-photo.jpg", "media/listing/user-1/old-video.mp4"]);
+    // The image expands to its derived responsive variants; the video does not.
+    expect(queued).toEqual([
+      "listings/old-photo.jpg",
+      "listings/old-photo.w400.webp",
+      "listings/old-photo.w800.webp",
+      "listings/old-photo.w1600.webp",
+      "media/listing/user-1/old-video.mp4",
+    ]);
     expect(insert).toHaveBeenCalledWith([
       {
         bucket: "public",
         r2_key: "listings/old-photo.jpg",
+        reason: "listing_media_replaced",
+      },
+      {
+        bucket: "public",
+        r2_key: "listings/old-photo.w400.webp",
+        reason: "listing_media_replaced",
+      },
+      {
+        bucket: "public",
+        r2_key: "listings/old-photo.w800.webp",
+        reason: "listing_media_replaced",
+      },
+      {
+        bucket: "public",
+        r2_key: "listings/old-photo.w1600.webp",
         reason: "listing_media_replaced",
       },
       {

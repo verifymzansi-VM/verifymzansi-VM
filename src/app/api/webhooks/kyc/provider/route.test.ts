@@ -326,6 +326,41 @@ describe("POST /api/webhooks/kyc/provider", () => {
     );
   });
 
+  it("rejects a replayed webhook with a different status once the result is finalized", async () => {
+    // Regression: a provider result that already left `pending` must not be
+    // overwritten by a later webhook carrying a DIFFERENT status (replay/flip).
+    const updateMock = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    });
+    const finalizedResult = {
+      ...providerResult,
+      provider_status: "approved",
+      updated_at: new Date(Date.now() - 60_000).toISOString(), // 1 min ago — outside 2s window
+    };
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "kyc_provider_results") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: finalizedResult, error: null }),
+            }),
+          }),
+          update: updateMock,
+        };
+      }
+      return {};
+    });
+
+    const res = await POST(createMockRequest({ provider_ref: "ref-1", status: "rejected" }));
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.duplicate).toBe(true);
+    expect(data.skipped_reason).toBe("already_finalized");
+    // The finalized result must NOT be overwritten
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
   it("logs audit event on successful processing", async () => {
     mockFrom.mockImplementation((table: string) => {
       if (table === "kyc_provider_results") {

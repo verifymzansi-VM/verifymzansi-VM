@@ -2,7 +2,6 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import {
   ChevronRight,
-  ShieldCheck,
   ShoppingBag,
   Building2,
   TreePalm,
@@ -523,66 +522,7 @@ function WorkstreamRow({ item, locked }: { item: MetricItem; locked: boolean }) 
   );
 }
 
-// ── 2. Verification Dashboard Card ────────────────────────────
-
-interface VerificationCardProps {
-  pendingVerifications: number;
-  stepCounts?: { phone: number; id_doc: number; selfie: number };
-}
-
-export function VerificationCard({ pendingVerifications, stepCounts }: VerificationCardProps) {
-  return (
-    <div className="rounded-xl border-2 border-border bg-card overflow-hidden">
-      <div className="flex items-center gap-3 border-b px-4 py-3 bg-brand-green-50/50 dark:bg-brand-green-950/20">
-        <div className="rounded-lg bg-brand-green-100 dark:bg-brand-green-900/50 p-2">
-          <ShieldCheck className="h-5 w-5 text-brand-green-600 dark:text-brand-green-400" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h2 className="text-sm font-bold tracking-tight">Verification (KYC)</h2>
-          <p className="text-xs text-muted-foreground">ID &amp; selfie verification requests</p>
-        </div>
-        <Badge
-          variant={pendingVerifications > 0 ? "destructive" : "secondary"}
-          className="tabular-nums text-xs"
-        >
-          {pendingVerifications} pending
-        </Badge>
-      </div>
-
-      <div className="px-4 py-3 space-y-3">
-        {/* Step breakdown — location is self-service, only show admin-reviewed steps */}
-        {stepCounts && (
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              { label: "Phone", value: stepCounts.phone },
-              { label: "ID Doc", value: stepCounts.id_doc },
-              { label: "Selfie", value: stepCounts.selfie },
-            ].map((s) => (
-              <div key={s.label} className="text-center rounded-lg bg-muted/50 px-2 py-2">
-                <p className="text-lg font-bold tabular-nums">{s.value}</p>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                  {s.label}
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* CTA */}
-        <Link
-          href="/admin/verification"
-          className="inline-flex items-center gap-2 rounded-lg bg-brand-green-600 px-4 py-2 text-xs font-semibold text-white hover:bg-brand-green-700 transition-colors w-full justify-center"
-        >
-          <FileCheck className="h-4 w-4" />
-          Review Verification Queue
-          <ChevronRight className="h-3.5 w-3.5 ml-auto" />
-        </Link>
-      </div>
-    </div>
-  );
-}
-
-// ── 3. Area Dashboard Card (Mzansi Market / Business / Promos) ─
+// ── 2. Area Dashboard Card (Mzansi Market / Business / Promos) ─
 
 const AREA_CONFIG = {
   MZANSI_MARKET: {
@@ -712,70 +652,6 @@ export function AreaDashboardCard({ area, stats, flagCount }: AreaDashboardCardP
           Review {cfg.title}
           <ChevronRight className="h-3.5 w-3.5 ml-auto" />
         </Link>
-      </div>
-    </div>
-  );
-}
-
-// ── 4. Admin Controls (admin-only) — kept ─────────────────────
-
-interface AdminControlsProps {
-  enforcementStats: { hidden: number; suspended: number; banned: number };
-}
-
-export function AdminControls({ enforcementStats }: AdminControlsProps) {
-  return (
-    <div className="rounded-xl border-2 border-border bg-brand-blue-50/50 dark:bg-brand-blue-950/20 px-4 py-3 space-y-3">
-      <h2 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-        Admin Controls
-      </h2>
-
-      <div className="flex flex-wrap gap-2">
-        <Link
-          href="/admin/audit-log"
-          className="inline-flex items-center rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted/50 transition-colors"
-        >
-          Audit Log
-        </Link>
-        <Link
-          href="/admin/dsar"
-          className="inline-flex items-center rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted/50 transition-colors"
-        >
-          Data Requests
-        </Link>
-        <Link
-          href="/admin/feature-flags"
-          className="inline-flex items-center rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted/50 transition-colors"
-        >
-          Feature Flags
-        </Link>
-      </div>
-
-      <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs">
-        <span className="text-muted-foreground">
-          Hidden content:{" "}
-          <span
-            className={`font-semibold tabular-nums ${enforcementStats.hidden > 0 ? "text-destructive" : ""}`}
-          >
-            {enforcementStats.hidden}
-          </span>
-        </span>
-        <span className="text-muted-foreground">
-          Suspended:{" "}
-          <span
-            className={`font-semibold tabular-nums ${enforcementStats.suspended > 0 ? "text-destructive" : ""}`}
-          >
-            {enforcementStats.suspended}
-          </span>
-        </span>
-        <span className="text-muted-foreground">
-          Banned:{" "}
-          <span
-            className={`font-semibold tabular-nums ${enforcementStats.banned > 0 ? "text-destructive" : ""}`}
-          >
-            {enforcementStats.banned}
-          </span>
-        </span>
       </div>
     </div>
   );

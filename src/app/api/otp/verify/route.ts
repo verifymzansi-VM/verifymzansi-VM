@@ -241,8 +241,10 @@ async function claimOtpChallenge(
   }
 
   // Fallback: if .select() is unavailable, run the plain update and then
-  // re-read the row to confirm verified_at was actually stamped — a zero-row
-  // update (already claimed concurrently) must not report success.
+  // re-read with the SAME CAS filter (verified_at stamped by THIS request) to
+  // confirm this request — not a concurrent one — claimed the row. Re-reading by
+  // id alone would let two concurrent claims both observe verified_at set and
+  // both report success (TOCTOU).
   const { error } = await builder;
   if (error) {
     log.warn("Failed to claim OTP challenge", { challengeId, error: error.message });
@@ -253,6 +255,7 @@ async function claimOtpChallenge(
     .from("otp_challenges")
     .select("id, verified_at")
     .eq("id", challengeId)
+    .eq("verified_at", nowIso)
     .maybeSingle();
 
   if (claimReadError) {
@@ -263,7 +266,7 @@ async function claimOtpChallenge(
     return false;
   }
 
-  return Boolean(claimedRow?.verified_at);
+  return Boolean(claimedRow?.id);
 }
 
 async function markSiblingChallengesVerified(

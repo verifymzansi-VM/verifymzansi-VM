@@ -8,6 +8,7 @@ import { getOwnerColumn, readOwnerId } from "@/lib/account/compat";
 import { createNotification } from "@/lib/notifications";
 import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
 import { getApprovedPostExpiryIso } from "@/lib/posting/post-lifecycle";
+import { isValidCategoryForArea, type ModerationArea } from "@/lib/constants/categories";
 
 const log = createLogger("AdminContentDecide");
 
@@ -67,7 +68,7 @@ export async function POST(request: Request) {
       const approvedAt = new Date();
       const { data: pendingItem, error: pendingFetchError } = await admin
         .from(table)
-        .select("id, created_at, expires_at")
+        .select("id, created_at, expires_at, category")
         .eq("id", itemId)
         .eq("status", "pending_moderation")
         .maybeSingle();
@@ -78,6 +79,26 @@ export async function POST(request: Request) {
 
       if (!pendingItem) {
         return NextResponse.json({ error: "Content item not found" }, { status: 404 });
+      }
+
+      // Block approval of miscategorised content: the stored category must be a
+      // recognised category for the item's marketplace area before it can go live.
+      const itemCategory = (pendingItem as { category?: string | null }).category;
+      if (!isValidCategoryForArea(area as ModerationArea, itemCategory)) {
+        log.warn("Blocked approval of miscategorised content", {
+          itemId,
+          area,
+          category: itemCategory,
+        });
+        return NextResponse.json(
+          {
+            error:
+              "This post is not properly categorised for its area. Block it with " +
+              '"Wrong category" so the poster can resubmit under the correct category.',
+            code: "MISCATEGORISED",
+          },
+          { status: 422 }
+        );
       }
 
       updatePayload.published_at = approvedAt.toISOString();

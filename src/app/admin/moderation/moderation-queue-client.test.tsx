@@ -122,6 +122,37 @@ describe("ModerationQueueClient", () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it("blocks a miscategorised post with a pre-filled editable reason", async () => {
+    render(<ModerationQueueClient items={items} />);
+
+    // First card is the electronics listing in Mzansi Market.
+    fireEvent.click(screen.getAllByRole("button", { name: /wrong category/i })[0]);
+
+    // Reason is pre-filled and editable.
+    const reasonField = screen.getByLabelText(/rejection reason/i);
+    expect(reasonField).toHaveValue(
+      'Blocked: this post is categorised as "Electronics" but does not belong in Mzansi Market. Please resubmit it under the correct category.'
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^Reject$/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/admin/content/decide",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            itemId: "listing-1",
+            area: "MZANSI_MARKET",
+            decision: "reject",
+            reason:
+              'Blocked: this post is categorised as "Electronics" but does not belong in Mzansi Market. Please resubmit it under the correct category.',
+          }),
+        })
+      );
+    });
+  });
+
   it("submits approve and reject decisions with the exact moderation payload", async () => {
     render(<ModerationQueueClient items={items} />);
 

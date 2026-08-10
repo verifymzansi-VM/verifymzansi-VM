@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CATEGORIES, getCategory } from "./categories";
+import { CATEGORIES, getCategory, isValidCategoryForArea } from "./categories";
 import type { ListingCategory } from "@/types/enums";
 
 describe("categories", () => {
@@ -82,6 +82,40 @@ describe("categories", () => {
       expect(requiredFields).toContain("make");
       expect(requiredFields).toContain("model");
       expect(requiredFields).toContain("year");
+    });
+  });
+
+  describe("isValidCategoryForArea", () => {
+    it("accepts listing categories for Mzansi Market", () => {
+      expect(isValidCategoryForArea("MZANSI_MARKET", "vehicles")).toBe(true);
+      expect(isValidCategoryForArea("MZANSI_MARKET", "property")).toBe(true);
+    });
+
+    it("rejects non-listing categories for Mzansi Market", () => {
+      expect(isValidCategoryForArea("MZANSI_MARKET", "fashion_accessories")).toBe(false);
+      expect(isValidCategoryForArea("MZANSI_MARKET", "not_a_category")).toBe(false);
+    });
+
+    it("accepts business categories for Mzansi Business", () => {
+      expect(isValidCategoryForArea("MZANSI_BUSINESS", "fashion_accessories")).toBe(true);
+      expect(isValidCategoryForArea("MZANSI_BUSINESS", "general_other")).toBe(true);
+    });
+
+    it("rejects non-business categories for Mzansi Business", () => {
+      expect(isValidCategoryForArea("MZANSI_BUSINESS", "vehicles")).toBe(false);
+      // tourism_hospitality is routed to Tourism & Events, not Mzansi Business.
+      expect(isValidCategoryForArea("MZANSI_BUSINESS", "tourism_hospitality")).toBe(false);
+    });
+
+    it("accepts any non-empty free-text category for Tourism & Events", () => {
+      expect(isValidCategoryForArea("PROMOTIONS_EVENTS", "Weekend special")).toBe(true);
+    });
+
+    it("rejects empty or missing categories", () => {
+      expect(isValidCategoryForArea("MZANSI_MARKET", "")).toBe(false);
+      expect(isValidCategoryForArea("MZANSI_MARKET", null)).toBe(false);
+      expect(isValidCategoryForArea("MZANSI_BUSINESS", undefined)).toBe(false);
+      expect(isValidCategoryForArea("PROMOTIONS_EVENTS", "   ")).toBe(false);
     });
   });
 });

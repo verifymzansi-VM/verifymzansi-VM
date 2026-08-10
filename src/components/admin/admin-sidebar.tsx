@@ -183,11 +183,6 @@ function buildAdminSections(
         },
         { href: "/admin/intelligence/revenue", label: "Revenue & Costs", icon: TrendingUp },
         { href: "/admin/intelligence/marketplace", label: "Marketplace Health", icon: BarChart3 },
-      ],
-    },
-    {
-      label: "Planning",
-      items: [
         { href: "/admin/intelligence/trends", label: "Trend Analysis", icon: TrendingUp },
         { href: "/admin/intelligence/operations", label: "Ops Summary", icon: Clock },
       ],
@@ -209,6 +204,7 @@ function buildAdminSections(
         },
         { href: "/admin/governance/oversight", label: "Oversight Hub", icon: Eye },
         { href: "/admin/governance/roles", label: "Role Management", icon: Users },
+        { href: "/admin/audit-log", label: "Audit Log", icon: ScrollText },
         { href: "/admin/dsar", label: "Data Requests", icon: FileText },
       ],
     },
@@ -251,10 +247,7 @@ function buildAdminSections(
     // Tools
     {
       label: "Tools",
-      items: [
-        { href: "/admin/audit-log", label: "Audit Log", icon: ScrollText },
-        { href: "/admin/feature-flags", label: "Feature Flags", icon: ToggleLeft },
-      ],
+      items: [{ href: "/admin/feature-flags", label: "Feature Flags", icon: ToggleLeft }],
     },
   ];
 }

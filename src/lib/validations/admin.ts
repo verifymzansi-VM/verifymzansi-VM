@@ -25,14 +25,17 @@ export const adminContentDecideSchema = z
   .refine(
     (data) => {
       // Cross-validate: when contentType is supplied it must agree with the
-      // marketplace area (a business cannot live in MZANSI_MARKET, etc.).
+      // marketplace area. Listings only live in Mzansi Market and promotions
+      // only in Tourism & Events. Businesses normally live in Mzansi Business,
+      // but tourism businesses are surfaced under Tourism & Events, so allow
+      // that pairing too.
       if (!data.contentType) return true;
-      const areaForType: Record<string, string> = {
-        listing: "MZANSI_MARKET",
-        business: "MZANSI_BUSINESS",
-        promotion: "PROMOTIONS_EVENTS",
+      const areasForType: Record<string, string[]> = {
+        listing: ["MZANSI_MARKET"],
+        business: ["MZANSI_BUSINESS", "PROMOTIONS_EVENTS"],
+        promotion: ["PROMOTIONS_EVENTS"],
       };
-      return areaForType[data.contentType] === data.area;
+      return areasForType[data.contentType]?.includes(data.area) ?? false;
     },
     {
       message: "contentType does not match the marketplace area",

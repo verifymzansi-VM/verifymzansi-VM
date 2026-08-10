@@ -553,28 +553,41 @@ describe("OTP Routes", () => {
     it("returns 400 when the fallback claim path cannot confirm verified_at was stamped", async () => {
       const storedHash = await hashOtpForTest("123456");
 
+      // Track eq filters so the claim re-read can honour the CAS filter
+      // (verified_at = nowIso). A zero-row update means no row matches, so the
+      // re-read must return null rather than the unclaimed row.
+      const eqFilters: Array<[string, unknown]> = [];
       const mockAdminClient = {
         from: vi.fn((table: string) => {
           if (table === "otp_challenges") {
             return {
               select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockImplementation((col: string, val: unknown) => {
+                eqFilters.push([col, val]);
+                return mockAdminClient.from("otp_challenges");
+              }),
               is: vi.fn().mockReturnThis(),
               gte: vi.fn().mockReturnThis(),
               order: vi.fn().mockReturnThis(),
               limit: vi.fn().mockReturnThis(),
-              maybeSingle: vi.fn().mockResolvedValue({
-                data: {
-                  id: "challenge-1",
-                  otp_hash: storedHash,
-                  attempt_count: 0,
-                  locked_until: null,
-                  expires_at: new Date(Date.now() + 60_000).toISOString(),
-                  // Zero-row update double: the claim re-read still shows an
-                  // unclaimed row, so the fallback must not report success.
-                  verified_at: null,
-                },
-                error: null,
+              maybeSingle: vi.fn().mockImplementation(() => {
+                // If the query filters on verified_at (the CAS claim re-read),
+                // the zero-row update means no row matches → return null.
+                const filtersOnVerifiedAt = eqFilters.some(([col]) => col === "verified_at");
+                if (filtersOnVerifiedAt) {
+                  return Promise.resolve({ data: null, error: null });
+                }
+                return Promise.resolve({
+                  data: {
+                    id: "challenge-1",
+                    otp_hash: storedHash,
+                    attempt_count: 0,
+                    locked_until: null,
+                    expires_at: new Date(Date.now() + 60_000).toISOString(),
+                    verified_at: null,
+                  },
+                  error: null,
+                });
               }),
               // Claim builder without .select() — forces the fallback path.
               update: vi.fn().mockImplementation(() => {

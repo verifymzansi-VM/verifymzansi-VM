@@ -1058,6 +1058,30 @@ export function getCategory(value: ListingCategory): CategoryDefinition | undefi
   return CATEGORIES.find((c) => c.value === value);
 }
 
+/** Marketplace areas that hold categorised content. */
+export type ModerationArea = "MZANSI_MARKET" | "MZANSI_BUSINESS" | "PROMOTIONS_EVENTS";
+
+/**
+ * Returns true when `category` is a recognised category for the given area.
+ *
+ * - Mzansi Market listings must use a ListingCategory.
+ * - Mzansi Business profiles must use a BusinessCategory.
+ * - Tourism & Events promotions store a free-text `category` (inferred to a
+ *   business category), so any non-empty value is accepted; only listings and
+ *   businesses are strictly validated.
+ */
+export function isValidCategoryForArea(
+  area: ModerationArea,
+  category: string | null | undefined
+): boolean {
+  if (!category || !category.trim()) return false;
+  const value = category.trim();
+  if (area === "MZANSI_MARKET") return CATEGORIES.some((c) => c.value === value);
+  if (area === "MZANSI_BUSINESS") return BUSINESS_CATEGORIES.some((c) => c.value === value);
+  // PROMOTIONS_EVENTS: free-text category, always considered valid.
+  return true;
+}
+
 /* ── Mzansi Business Categories (unified) ────────────────── */
 export interface BusinessSubcategoryOption {
   value: string;

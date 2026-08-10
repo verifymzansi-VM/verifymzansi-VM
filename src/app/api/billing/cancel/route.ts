@@ -23,6 +23,8 @@ export async function POST(request: NextRequest) {
       request,
       log,
       rateLimitAction: "billing:cancel",
+      requireConfirmedEmailMessage:
+        "Please confirm your email address before cancelling subscriptions.",
       degradedMessage:
         "Subscription cancellation is temporarily unavailable. Please try again shortly.",
       limitedMessage: "Too many cancellation attempts. Please try again later.",

@@ -23,10 +23,15 @@ vi.mock("@/lib/services/email", () => ({
 
 import { POST } from "@/app/api/dsar/submit/route";
 
+// 64-char hex token satisfying the CSRF token format (double-submit cookie).
+const CSRF_TOKEN = "a".repeat(64);
+
 function createRequest(body: unknown) {
   const headers = new Headers({
     origin: "http://localhost:3000",
     "sec-fetch-site": "same-origin",
+    cookie: `vm_csrf=${CSRF_TOKEN}`,
+    "x-csrf-token": CSRF_TOKEN,
   });
 
   return {

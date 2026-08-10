@@ -136,6 +136,7 @@ describe("POST /api/admin/content/decide", () => {
           id: itemId,
           created_at: "2026-05-16T10:00:00.000Z",
           expires_at: "2026-05-23T10:00:00.000Z",
+          category: "Weekend special",
         };
         const notificationRow = {
           owner_id: "owner-1",
@@ -251,6 +252,7 @@ describe("POST /api/admin/content/decide", () => {
           id: itemId,
           created_at: "2026-05-16T10:00:00.000Z",
           expires_at: "2026-05-23T10:00:00.000Z",
+          category: "Weekend special",
         };
         updateSpy.mockReturnValue({
           eq: vi.fn().mockReturnValue({ eq: eqStatus }),
@@ -293,5 +295,145 @@ describe("POST /api/admin/content/decide", () => {
     );
 
     vi.useRealTimers();
+  });
+
+  it("blocks approval of a listing whose category is invalid for Mzansi Market", async () => {
+    const itemId = "c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a33";
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "listings") {
+        const pendingRow = {
+          id: itemId,
+          created_at: "2026-05-16T10:00:00.000Z",
+          expires_at: "2026-05-23T10:00:00.000Z",
+          // Not a valid ListingCategory
+          category: "not_a_real_category",
+        };
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: pendingRow, error: null }),
+              }),
+            }),
+          }),
+        };
+      }
+      return {};
+    });
+
+    const response = await POST(
+      createMockRequest({
+        itemId,
+        area: "MZANSI_MARKET",
+        decision: "approve",
+      })
+    );
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({ code: "MISCATEGORISED" })
+    );
+    expect(mockLogAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it("approves a listing whose category is valid for Mzansi Market", async () => {
+    const itemId = "c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a33";
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "listings") {
+        const eqStatus = vi.fn().mockReturnValue({
+          select: vi.fn().mockResolvedValue({ data: [{ id: itemId }], error: null }),
+        });
+        const pendingRow = {
+          id: itemId,
+          created_at: "2026-05-16T10:00:00.000Z",
+          expires_at: "2026-05-23T10:00:00.000Z",
+          category: "vehicles",
+        };
+        return {
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({ eq: eqStatus }),
+          }),
+          select: vi.fn((fields: string) => ({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: pendingRow, error: null }),
+              }),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: fields.includes("created_at")
+                  ? pendingRow
+                  : { owner_id: "owner-9", title: "Bakkie for sale" },
+                error: null,
+              }),
+            }),
+          })),
+        };
+      }
+      return {};
+    });
+
+    const response = await POST(
+      createMockRequest({
+        itemId,
+        area: "MZANSI_MARKET",
+        decision: "approve",
+      })
+    );
+
+    expect(response.status).toBe(200);
+  });
+
+  it("approves a tourism business surfaced under Tourism & Events", async () => {
+    const itemId = "d0eebc99-9c0b-4ef8-bb6d-6bb9bd380a44";
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "businesses") {
+        const eqStatus = vi.fn().mockReturnValue({
+          select: vi.fn().mockResolvedValue({ data: [{ id: itemId }], error: null }),
+        });
+        const pendingRow = {
+          id: itemId,
+          created_at: "2026-05-16T10:00:00.000Z",
+          expires_at: "2026-05-23T10:00:00.000Z",
+          category: "tourism_hospitality",
+        };
+        return {
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({ eq: eqStatus }),
+          }),
+          select: vi.fn((fields: string) => ({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: pendingRow, error: null }),
+              }),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: fields.includes("created_at")
+                  ? pendingRow
+                  : { owner_id: "owner-7", business_name: "Drakensberg Lodge" },
+                error: null,
+              }),
+            }),
+          })),
+        };
+      }
+      return {};
+    });
+
+    // The moderation queue surfaces tourism businesses with
+    // area=PROMOTIONS_EVENTS and contentType=business.
+    const response = await POST(
+      createMockRequest({
+        itemId,
+        area: "PROMOTIONS_EVENTS",
+        contentType: "business",
+        decision: "approve",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockLogAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ targetType: "business", targetId: itemId })
+    );
   });
 });

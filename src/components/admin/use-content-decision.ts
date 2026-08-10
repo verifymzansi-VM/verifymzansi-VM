@@ -25,10 +25,10 @@ export function useContentDecision<T extends { id: string }>({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  function openReview(item: T, nextDecision: ContentDecision) {
+  function openReview(item: T, nextDecision: ContentDecision, initialRejectReason = "") {
     setSelectedItem(item);
     setDecision(nextDecision);
-    setRejectReason("");
+    setRejectReason(initialRejectReason);
     setError("");
   }
 

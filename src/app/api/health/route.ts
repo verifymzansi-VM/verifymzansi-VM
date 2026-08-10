@@ -81,10 +81,21 @@ async function getLaunchHealthSnapshotWithinTimeout() {
 }
 
 function healthHeaders() {
-  return {
+  // This path is excluded from the middleware matcher, so it never passes
+  // through withSecurityHeaders — set the baseline security headers here.
+  const headers: Record<string, string> = {
     "Cache-Control": "private, no-store, no-cache, must-revalidate",
     "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    // JSON-only endpoint — a restrictive CSP is safe and prevents the response
+    // from being loaded as a document/resource in a browsing context.
+    "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
   };
+  if (process.env.NODE_ENV === "production") {
+    headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload";
+  }
+  return headers;
 }
 
 export async function GET(request: Request) {

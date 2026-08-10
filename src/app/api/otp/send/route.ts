@@ -212,6 +212,21 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Aggregate per-user cap across ALL phone numbers. The user+phone limit above
+    // can be reset by rotating target numbers; this cap stops a single account from
+    // sending unlimited OTP SMS (harassment / toll fraud).
+    const userAggregateLimit = await checkRateLimit({
+      key: user.id,
+      action: "otp:send:user",
+      degradedMode: "local",
+    });
+    if (userAggregateLimit.limited) {
+      return otpSendError("Too many OTP requests. Please wait before trying again.", 429, {
+        code: "rate_limited",
+        retryAfter: userAggregateLimit.retryAfter ?? 60,
+      });
+    }
+
     // Keep verification staging aligned with the phone that received this OTP.
     const { error: stagePendingPhoneError } = await supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)

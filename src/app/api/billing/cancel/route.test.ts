@@ -56,6 +56,10 @@ function createMockRequest(body: Record<string, unknown>) {
 }
 
 describe("POST /api/billing/cancel", () => {
+  // Billing mutations require a confirmed email — the guard rejects users
+  // without email_confirmed_at, so authenticated tests must use a confirmed user.
+  const CONFIRMED_USER = { id: "user-1", email_confirmed_at: "2026-01-01T00:00:00Z" };
+
   const mockSupabase = {
     from: vi.fn(),
     auth: { getUser: vi.fn() },
@@ -82,7 +86,7 @@ describe("POST /api/billing/cancel", () => {
   });
 
   it("returns 404 when entitlement is not found", async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: CONFIRMED_USER } });
 
     mockAdmin.from.mockImplementation((table: string) => {
       if (table === "entitlements") {
@@ -103,7 +107,7 @@ describe("POST /api/billing/cancel", () => {
   });
 
   it("returns 409 when entitlement is not active", async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: CONFIRMED_USER } });
 
     mockAdmin.from.mockImplementation((table: string) => {
       if (table === "entitlements") {
@@ -133,7 +137,7 @@ describe("POST /api/billing/cancel", () => {
   });
 
   it("cancels an active entitlement", async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: CONFIRMED_USER } });
 
     const updateChain = {
       eq: vi.fn().mockReturnValue({
@@ -178,7 +182,7 @@ describe("POST /api/billing/cancel", () => {
   });
 
   it("returns 400 when entitlementId is not a valid UUID", async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: CONFIRMED_USER } });
 
     const res = await cancelRoute(createMockRequest({ entitlementId: "not-a-uuid" }));
 
@@ -186,7 +190,7 @@ describe("POST /api/billing/cancel", () => {
   });
 
   it("returns 500 when entitlement fetch fails with a DB error", async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: CONFIRMED_USER } });
 
     mockAdmin.from.mockImplementation((table: string) => {
       if (table === "entitlements") {
@@ -212,7 +216,7 @@ describe("POST /api/billing/cancel", () => {
   });
 
   it("returns 500 when the update query fails", async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: CONFIRMED_USER } });
 
     const updateChain = {
       eq: vi.fn().mockReturnValue({
@@ -256,7 +260,7 @@ describe("POST /api/billing/cancel", () => {
   });
 
   it("returns 409 when cancellation update matches zero rows", async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: CONFIRMED_USER } });
 
     const updateChain = {
       eq: vi.fn().mockReturnValue({

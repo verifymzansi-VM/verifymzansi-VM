@@ -51,6 +51,16 @@ const MARKETPLACE_BROWSE_PREFIXES = [
   "/tourism-events",
 ];
 
+/**
+ * Segment-boundary prefix match. A bare `startsWith` would let a route like
+ * `/api/profileevil` match the protected prefix `/api/profile`. Matching on an
+ * exact segment boundary (`/api/profile` or `/api/profile/...`) closes that
+ * footgun for future route additions.
+ */
+function matchesPrefix(pathname: string, prefix: string): boolean {
+  return pathname === prefix || pathname.startsWith(prefix + "/");
+}
+
 // -- Core routing logic (testable without security headers) ------------------
 
 /**
@@ -85,7 +95,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
 
   // -- Guard: Supabase not configured ---------------------------------------
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
+    const isProtected = PROTECTED_PREFIXES.some((p) => matchesPrefix(pathname, p));
 
     if (isProtected) {
       if (isApiRoute) {
@@ -103,8 +113,8 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   // -- Early exit for public routes ------------------------------------------
 
   const needsAuth =
-    PROTECTED_PREFIXES.some((p) => pathname.startsWith(p)) ||
-    AUTH_ROUTES.some((r) => pathname === r || pathname.startsWith(r + "/"));
+    PROTECTED_PREFIXES.some((p) => matchesPrefix(pathname, p)) ||
+    AUTH_ROUTES.some((r) => matchesPrefix(pathname, r));
 
   // Rate-limit public marketplace pages to deter scraping.
   if (!needsAuth && MARKETPLACE_BROWSE_PREFIXES.some((p) => pathname.startsWith(p))) {
@@ -217,7 +227,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
       user = data.user;
     }
   } catch (error) {
-    const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
+    const isProtected = PROTECTED_PREFIXES.some((p) => matchesPrefix(pathname, p));
     if (isProtected) {
       if (isApiRoute) {
         const unavailable = NextResponse.json(
@@ -240,7 +250,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
 
   // -- Auth routes: redirect logged-in (real) users away --------------------
   const isRealUser = user && user.is_anonymous !== true;
-  if (isRealUser && AUTH_ROUTES.some((r) => pathname === r || pathname.startsWith(r + "/"))) {
+  if (isRealUser && AUTH_ROUTES.some((r) => matchesPrefix(pathname, r))) {
     return redirectWithCookies(new URL("/", request.url));
   }
 
@@ -266,7 +276,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   // -- Protected routes: require authentication -----------------------------
   const isProtectedRoute = PROTECTED_PREFIXES.filter(
     (prefix) => prefix !== "/admin" && prefix !== "/api/admin"
-  ).some((p) => pathname.startsWith(p));
+  ).some((p) => matchesPrefix(pathname, p));
   const protectedReturnUrl = `${pathname}${request.nextUrl.search}`;
 
   if (!user && isProtectedRoute) {

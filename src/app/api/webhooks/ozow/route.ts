@@ -339,6 +339,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Currency mismatch" }, { status: 400 });
     }
 
+    const eventType = payload.eventType?.toLowerCase() || "";
+    const status = payload.status?.toLowerCase() || "";
+
+    // Defense-in-depth for the money-critical completion path: a successful
+    // transaction.complete webhook MUST carry an amount. Skipping validation when
+    // the field is absent would let a malformed (but signed) payload fulfill
+    // against the stored amount without ever confirming what was actually charged.
+    if (
+      eventType === SUPPORTED_OZOW_EVENT_TYPE &&
+      isSuccessfulTransactionStatus(status) &&
+      !payload.amount
+    ) {
+      log.error("Ozow successful completion webhook missing amount", {
+        paymentId: payment.id,
+        eventType: payload.eventType,
+        status: payload.status,
+      });
+      return NextResponse.json({ error: "Missing amount" }, { status: 400 });
+    }
+
     if (payload.amount) {
       // Parse amount string as integer cents without floating-point arithmetic
       // to avoid precision errors (e.g. "1000.009" * 100 = 100000.899...)
@@ -352,9 +372,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Amount mismatch" }, { status: 400 });
       }
     }
-
-    const eventType = payload.eventType?.toLowerCase() || "";
-    const status = payload.status?.toLowerCase() || "";
     if (
       payment.status === "complete" &&
       payment.provider_payment_id === payload.providerPaymentId
@@ -483,17 +500,22 @@ export async function POST(request: NextRequest) {
       }
 
       // Re-validate amount against the recovered payment record to prevent
-      // a stale webhook from fulfilling with mismatched amounts.
-      if (payload.amount) {
-        const recoveryCents = parseAmountToCents(payload.amount);
-        if (recoveryCents === null || recoveryCents !== currentPayment.amount_cents) {
-          log.error("Ozow recovery amount mismatch", {
-            paymentId: currentPayment.id,
-            expected: toAmountString(currentPayment.amount_cents),
-            received: payload.amount,
-          });
-          return NextResponse.json({ error: "Amount mismatch" }, { status: 400 });
-        }
+      // a stale webhook from fulfilling with mismatched amounts. A successful
+      // completion must always carry an amount — never skip validation.
+      if (!payload.amount) {
+        log.error("Ozow recovery successful completion missing amount", {
+          paymentId: currentPayment.id,
+        });
+        return NextResponse.json({ error: "Missing amount" }, { status: 400 });
+      }
+      const recoveryCents = parseAmountToCents(payload.amount);
+      if (recoveryCents === null || recoveryCents !== currentPayment.amount_cents) {
+        log.error("Ozow recovery amount mismatch", {
+          paymentId: currentPayment.id,
+          expected: toAmountString(currentPayment.amount_cents),
+          received: payload.amount,
+        });
+        return NextResponse.json({ error: "Amount mismatch" }, { status: 400 });
       }
 
       if (hasFulfillmentCompletion(currentPayment)) {

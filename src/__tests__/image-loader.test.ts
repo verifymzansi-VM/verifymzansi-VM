@@ -25,14 +25,17 @@ describe("cloudflareImageLoader", () => {
     expect(result).toBe(`${PROXY}media/listing/abc.jpg?w=800&q=75`);
   });
 
-  it("passes proxy path through unchanged even when CF resizing is enabled", async () => {
+  it("rewrites proxy path to the nearest pre-generated variant when CF resizing is enabled", async () => {
     const loader = await importLoader(true);
     const result = loader({
       src: `${PROXY}media/listing/abc.jpg`,
       width: 800,
       quality: 75,
     });
-    expect(result).toBe(`${PROXY}media/listing/abc.jpg`);
+    // Proxy images are served from upload-time WebP variants sized to the
+    // requested width (the zone does not have CF Image Resizing enabled, so
+    // /cdn-cgi/image/ is not used for proxy paths).
+    expect(result).toBe(`${PROXY}media/listing/abc.w800.webp`);
   });
 
   it("continues to convert CDN domain URLs when CF resizing is enabled", async () => {

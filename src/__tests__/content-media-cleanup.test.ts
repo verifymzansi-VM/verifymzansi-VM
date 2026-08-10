@@ -112,6 +112,34 @@ function createRequest(url: string, method: string, body?: unknown): NextRequest
   } as unknown as NextRequest;
 }
 
+/**
+ * Expand an expected cleanup-row array to include the derived responsive
+ * variant rows for image keys. queuePublicMediaCleanup now queues each image's
+ * `.w400/.w800/.w1600.webp` variants alongside the original so they are
+ * deleted together; videos and non-images are unchanged. Order matches the
+ * implementation: each image key is immediately followed by its variants.
+ */
+const VARIANT_WIDTHS = [400, 800, 1600] as const;
+const IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "webp", "avif", "gif"]);
+
+function withVariants(
+  rows: Array<{ bucket: string; r2_key: string; reason: string }>
+): Array<{ bucket: string; r2_key: string; reason: string }> {
+  return rows.flatMap((row) => {
+    const ext = row.r2_key.split(".").pop()?.toLowerCase() ?? "";
+    if (!IMAGE_EXTS.has(ext) || /\.w\d+\.webp$/.test(row.r2_key)) return [row];
+    const stem = row.r2_key.slice(0, row.r2_key.lastIndexOf("."));
+    return [
+      row,
+      ...VARIANT_WIDTHS.map((w) => ({
+        bucket: row.bucket,
+        r2_key: `${stem}.w${w}.webp`,
+        reason: row.reason,
+      })),
+    ];
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   resetOwnerColumnCacheForTesting();
@@ -316,28 +344,30 @@ describe("content media cleanup queueing", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(queueInsert).toHaveBeenCalledWith([
-      {
-        bucket: "public",
-        r2_key: "listings/old-photo.jpg",
-        reason: "listing_media_replaced",
-      },
-      {
-        bucket: "public",
-        r2_key: "listings/old-video.mp4",
-        reason: "listing_media_replaced",
-      },
-      {
-        bucket: "public",
-        r2_key: "listings/old-thumb.jpg",
-        reason: "listing_media_replaced",
-      },
-      {
-        bucket: "public",
-        r2_key: "listings/old-logo.jpg",
-        reason: "listing_media_replaced",
-      },
-    ]);
+    expect(queueInsert).toHaveBeenCalledWith(
+      withVariants([
+        {
+          bucket: "public",
+          r2_key: "listings/old-photo.jpg",
+          reason: "listing_media_replaced",
+        },
+        {
+          bucket: "public",
+          r2_key: "listings/old-video.mp4",
+          reason: "listing_media_replaced",
+        },
+        {
+          bucket: "public",
+          r2_key: "listings/old-thumb.jpg",
+          reason: "listing_media_replaced",
+        },
+        {
+          bucket: "public",
+          r2_key: "listings/old-logo.jpg",
+          reason: "listing_media_replaced",
+        },
+      ])
+    );
   });
 
   it("queues removed promotion media after a successful update", async () => {
@@ -429,23 +459,25 @@ describe("content media cleanup queueing", () => {
     );
 
     expect(await res.json()).toEqual({ success: true });
-    expect(queueInsert).toHaveBeenCalledWith([
-      {
-        bucket: "public",
-        r2_key: "promotions/old-photo.jpg",
-        reason: "promotion_media_replaced",
-      },
-      {
-        bucket: "public",
-        r2_key: "promotions/old-video.mp4",
-        reason: "promotion_media_replaced",
-      },
-      {
-        bucket: "public",
-        r2_key: "promotions/old-thumb.jpg",
-        reason: "promotion_media_replaced",
-      },
-    ]);
+    expect(queueInsert).toHaveBeenCalledWith(
+      withVariants([
+        {
+          bucket: "public",
+          r2_key: "promotions/old-photo.jpg",
+          reason: "promotion_media_replaced",
+        },
+        {
+          bucket: "public",
+          r2_key: "promotions/old-video.mp4",
+          reason: "promotion_media_replaced",
+        },
+        {
+          bucket: "public",
+          r2_key: "promotions/old-thumb.jpg",
+          reason: "promotion_media_replaced",
+        },
+      ])
+    );
   });
 
   it("queues deleted business media after a successful delete", async () => {
@@ -500,33 +532,35 @@ describe("content media cleanup queueing", () => {
     );
 
     expect(await res.json()).toEqual({ success: true });
-    expect(queueInsert).toHaveBeenCalledWith([
-      {
-        bucket: "public",
-        r2_key: "business/logo.jpg",
-        reason: "business_deleted",
-      },
-      {
-        bucket: "public",
-        r2_key: "business/cover.jpg",
-        reason: "business_deleted",
-      },
-      {
-        bucket: "public",
-        r2_key: "business/cover.mp4",
-        reason: "business_deleted",
-      },
-      {
-        bucket: "public",
-        r2_key: "business/thumb.jpg",
-        reason: "business_deleted",
-      },
-      {
-        bucket: "public",
-        r2_key: "business/gallery-1.jpg",
-        reason: "business_deleted",
-      },
-    ]);
+    expect(queueInsert).toHaveBeenCalledWith(
+      withVariants([
+        {
+          bucket: "public",
+          r2_key: "business/logo.jpg",
+          reason: "business_deleted",
+        },
+        {
+          bucket: "public",
+          r2_key: "business/cover.jpg",
+          reason: "business_deleted",
+        },
+        {
+          bucket: "public",
+          r2_key: "business/cover.mp4",
+          reason: "business_deleted",
+        },
+        {
+          bucket: "public",
+          r2_key: "business/thumb.jpg",
+          reason: "business_deleted",
+        },
+        {
+          bucket: "public",
+          r2_key: "business/gallery-1.jpg",
+          reason: "business_deleted",
+        },
+      ])
+    );
   });
 
   it("queues removed business media after a successful update", async () => {
@@ -631,17 +665,19 @@ describe("content media cleanup queueing", () => {
     );
 
     expect(await res.json()).toEqual({ success: true });
-    expect(queueInsert).toHaveBeenCalledWith([
-      {
-        bucket: "public",
-        r2_key: "business/old-cover.jpg",
-        reason: "business_media_replaced",
-      },
-      {
-        bucket: "public",
-        r2_key: "business/old-gallery.jpg",
-        reason: "business_media_replaced",
-      },
-    ]);
+    expect(queueInsert).toHaveBeenCalledWith(
+      withVariants([
+        {
+          bucket: "public",
+          r2_key: "business/old-cover.jpg",
+          reason: "business_media_replaced",
+        },
+        {
+          bucket: "public",
+          r2_key: "business/old-gallery.jpg",
+          reason: "business_media_replaced",
+        },
+      ])
+    );
   });
 });

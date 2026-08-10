@@ -15,13 +15,26 @@ import {
   SheetDescription,
   SheetFooter,
 } from "@/components/ui/sheet";
-import { CheckCircle, XCircle, Package, Eye } from "lucide-react";
+import { CheckCircle, XCircle, Package, Eye, FolderX } from "lucide-react";
 import { ModerationPreviewPanel, type ModerationItem } from "./moderation-preview-panel";
 import { ContentDecisionDialog } from "@/components/admin/content-decision-dialog";
 import { useContentDecision } from "@/components/admin/use-content-decision";
 
 interface ModerationQueueClientProps {
   items: ModerationItem[];
+}
+
+function formatCategoryLabel(category?: string) {
+  if (!category) return "Uncategorised";
+  return category.replace(/_/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+
+function buildWrongCategoryReason(item: ModerationItem) {
+  const categoryLabel = formatCategoryLabel(item.category);
+  return (
+    `Blocked: this post is categorised as "${categoryLabel}" but does not belong in ` +
+    `${item.areaLabel}. Please resubmit it under the correct category.`
+  );
 }
 
 export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
@@ -59,6 +72,10 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
 
   function closePreview() {
     setPreviewItem(null);
+  }
+
+  function openWrongCategory(item: ModerationItem) {
+    openReview(item, "reject", buildWrongCategoryReason(item));
   }
 
   if (!items.length) {
@@ -187,6 +204,18 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
                   <Button
                     size="sm"
                     variant="ghost"
+                    className="h-8 min-w-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openWrongCategory(item);
+                    }}
+                  >
+                    <FolderX className="h-4 w-4 mr-1" />
+                    <span className="text-xs">Wrong category</span>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
                     className="h-8 min-w-0 text-destructive hover:bg-destructive/10"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -217,18 +246,31 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
             {previewItem && <ModerationPreviewPanel item={previewItem} />}
           </div>
 
-          <SheetFooter className="border-t px-6 py-4 flex-row gap-2 sm:justify-between">
-            <Button
-              size="sm"
-              variant="destructive"
-              className="gap-1.5"
-              onClick={() => {
-                if (previewItem) openReview(previewItem, "reject");
-              }}
-            >
-              <XCircle className="h-4 w-4" />
-              Reject
-            </Button>
+          <SheetFooter className="border-t px-6 py-4 flex-row flex-wrap gap-2 sm:justify-between">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="destructive"
+                className="gap-1.5"
+                onClick={() => {
+                  if (previewItem) openReview(previewItem, "reject");
+                }}
+              >
+                <XCircle className="h-4 w-4" />
+                Reject
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950"
+                onClick={() => {
+                  if (previewItem) openWrongCategory(previewItem);
+                }}
+              >
+                <FolderX className="h-4 w-4" />
+                Wrong category
+              </Button>
+            </div>
             <Button
               size="sm"
               className="gap-1.5 bg-brand-green hover:bg-brand-green/90 text-white"

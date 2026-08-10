@@ -255,13 +255,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // ── Idempotency: skip if this provider result was already processed with this status ──
-    // Uses a combination of checks:
-    // 1. If the status has already been set (not pending), check if this is the same final status
-    // 2. Additionally verify no update was recently made to prevent rapid duplicate processing
-    const alreadyFinalized =
-      providerResult.provider_status !== "pending" &&
-      providerResult.provider_status === payloadData.status;
+    // ── Idempotency: skip if this provider result was already processed ──
+    // A provider result that has left `pending` is terminal for webhook purposes:
+    // accepting a later webhook with a DIFFERENT status would let a replayed or
+    // forged callback flip an already-recorded decision (e.g. approved -> rejected)
+    // while the linked step is still pending. The guard is therefore status-agnostic.
+    const alreadyFinalized = providerResult.provider_status !== "pending";
     const recentlyUpdated =
       providerResult.updated_at &&
       new Date().getTime() - new Date(providerResult.updated_at).getTime() < 2000;

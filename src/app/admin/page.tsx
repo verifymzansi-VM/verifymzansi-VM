@@ -14,12 +14,7 @@ import {
 } from "@/lib/utils/admin-queries";
 import { calculateSlaState } from "@/lib/utils/sla";
 import type { ReportSeverity } from "@/types/enums";
-import {
-  RoleCommandCenter,
-  VerificationCard,
-  AreaDashboardCard,
-  AdminControls,
-} from "@/components/admin/dashboard-cards";
+import { RoleCommandCenter, AreaDashboardCard } from "@/components/admin/dashboard-cards";
 import { PageHeader } from "@/components/layout/page-header";
 
 export const metadata = {
@@ -128,7 +123,6 @@ export default async function AdminPage() {
 
   const totalAccounts = stats.totalAccounts;
   const verifiedAccounts = extended?.verifiedAccounts ?? 0;
-  const bannedAccounts = extended?.bannedAccounts ?? 0;
   const verifiedPct =
     isAdminRole && extended && totalAccounts > 0
       ? Math.round((verifiedAccounts / totalAccounts) * 100)
@@ -156,19 +150,6 @@ export default async function AdminPage() {
 
       <section className="space-y-3">
         <div>
-          <h2 className="text-sm font-semibold">Operations queues</h2>
-          <p className="text-xs text-muted-foreground">
-            Reviewable work stays grouped by what staff can act on today.
-          </p>
-        </div>
-        <VerificationCard
-          pendingVerifications={stats.pendingVerifications}
-          stepCounts={stepCounts}
-        />
-      </section>
-
-      <section className="space-y-3">
-        <div>
           <h2 className="text-sm font-semibold">Area workload</h2>
           <p className="text-xs text-muted-foreground">
             Marketplace, business, and tourism queues show content state and flag pressure together.
@@ -192,16 +173,6 @@ export default async function AdminPage() {
           />
         </div>
       </section>
-
-      {(isAdminRole || isGovernance) && extended && (
-        <AdminControls
-          enforcementStats={{
-            hidden: extended.hiddenListings,
-            suspended: stats.activeSuspensions,
-            banned: bannedAccounts,
-          }}
-        />
-      )}
     </div>
   );
 }

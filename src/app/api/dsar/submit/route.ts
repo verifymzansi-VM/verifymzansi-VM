@@ -13,6 +13,7 @@ import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/li
 import { notifyStaffForAdminEvent } from "@/lib/notifications";
 import { sanitizeUserMessage } from "@/lib/utils/sanitize-html";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 
 const log = createLogger("DSAR");
 const dsarSubmitSchema = dsarRequestSchema.extend({
@@ -30,6 +31,13 @@ export async function POST(request: NextRequest) {
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) {
       return originBlock;
+    }
+
+    // Defense-in-depth: double-submit CSRF token alongside the Origin/Fetch-Site
+    // check, matching every other authenticated mutation on the platform.
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) {
+      return csrfBlock;
     }
 
     const supabase = await createClient();

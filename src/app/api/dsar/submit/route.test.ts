@@ -56,6 +56,10 @@ vi.mock("@/lib/utils/mutation-origin", () => ({
   enforceSameOriginMutation: vi.fn().mockReturnValue(null),
 }));
 
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: vi.fn().mockReturnValue(null),
+}));
+
 vi.mock("@/lib/notifications", () => ({
   notifyStaffForAdminEvent: mockNotifyStaffForAdminEvent,
 }));
