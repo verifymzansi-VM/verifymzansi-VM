@@ -127,6 +127,38 @@ const STEP_COPY: Record<Exclude<WizardStep, "complete">, string> = {
 };
 
 const GEOLOCATION_PERMISSION_DENIED = 1;
+const COARSE_FIX_TIMEOUT_MS = 5000;
+
+type CoarseFix = { latitude: number; longitude: number; accuracy: number };
+
+/**
+ * Best-effort coarse network-based fix (enableHighAccuracy: false). Used as a
+ * cross-check against the GPS fix — mock location apps usually only hook the
+ * GPS provider, so a large gap between the two is a spoofing signature.
+ * Never throws: returns null when unavailable or too slow.
+ */
+function requestCoarseNetworkFix(): Promise<CoarseFix | null> {
+  if (!navigator.geolocation) return Promise.resolve(null);
+
+  return new Promise((resolve) => {
+    const timeoutId = window.setTimeout(() => resolve(null), COARSE_FIX_TIMEOUT_MS);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        window.clearTimeout(timeoutId);
+        resolve({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+        });
+      },
+      () => {
+        window.clearTimeout(timeoutId);
+        resolve(null);
+      },
+      { enableHighAccuracy: false, timeout: COARSE_FIX_TIMEOUT_MS, maximumAge: 60_000 }
+    );
+  });
+}
 
 function isBetterGpsFix(
   nextPosition: GeolocationPosition,
@@ -585,6 +617,7 @@ export default function VerificationPage() {
   const [selfieCaptureMethod, setSelfieCaptureMethod] = useState<"camera" | "file_upload">(
     "camera"
   );
+  const [selfieLivenessPassed, setSelfieLivenessPassed] = useState(false);
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
   const [locationTown, setLocationTown] = useState("");
@@ -604,6 +637,7 @@ export default function VerificationPage() {
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lon: number; accuracy: number } | null>(
     null
   );
+  const [coarseFix, setCoarseFix] = useState<CoarseFix | null>(null);
   const [gpsTimestamp, setGpsTimestamp] = useState<number | null>(null);
   const [gpsConfidence, setGpsConfidence] = useState<LocationConfidence | null>(null);
   const [gpsProvince, setGpsProvince] = useState<string | null>(null);
@@ -996,6 +1030,7 @@ export default function VerificationPage() {
     setGpsProvince(null);
     setGpsCoords(null);
     setGpsTimestamp(null);
+    setCoarseFix(null);
     setGpsStatus("requesting");
 
     try {
@@ -1005,12 +1040,17 @@ export default function VerificationPage() {
       setGpsTimestamp(position.timestamp);
       setGpsStatus("success");
 
+      // Best-effort coarse network fix for the dual-provider spoofing check.
+      const coarse = await requestCoarseNetworkFix();
+      setCoarseFix(coarse);
+
       try {
         const gpsBody: Record<string, unknown> = {
           latitude,
           longitude,
           accuracy,
           timestamp: position.timestamp,
+          ...(coarse ? { coarseLocation: coarse } : {}),
         };
         // Before saving, GPS is only a preview/confirmation pass. The location
         // step is persisted by Save Address & Finish.
@@ -1158,6 +1198,7 @@ export default function VerificationPage() {
         setGpsMismatch(null);
         setGpsStatus("error");
         setGpsTimestamp(null);
+        setCoarseFix(null);
         toast({
           title: "GPS verification failed",
           description: err instanceof Error ? err.message : "Please try again.",
@@ -1168,6 +1209,7 @@ export default function VerificationPage() {
       setGpsApproved(false);
       setGpsMismatch(null);
       setGpsTimestamp(null);
+      setCoarseFix(null);
       const permissionDenied = isGeolocationPermissionDenied(err);
       setGpsStatus(permissionDenied ? "denied" : "error");
       toast({
@@ -1541,6 +1583,9 @@ export default function VerificationPage() {
       fd.append("file", selfieFile);
       fd.append("docType", "selfie");
       fd.append("captureMethod", selfieCaptureMethod);
+      if (selfieCaptureMethod === "camera" && selfieLivenessPassed) {
+        fd.append("livenessPassed", "true");
+      }
       return fd;
     }, "selfie");
 
@@ -1593,6 +1638,7 @@ export default function VerificationPage() {
               longitude: gpsCoords.lon,
               accuracy: gpsCoords.accuracy,
               timestamp: gpsTimestamp,
+              ...(coarseFix ? { coarseLocation: coarseFix } : {}),
             }
           : null;
       let savedWithGps = false;
@@ -2205,13 +2251,18 @@ export default function VerificationPage() {
                       facingMode="user"
                       telemetryContext="selfie"
                       disabled={verificationSubmissionBlocked}
-                      onCapture={(file) => {
+                      requireLiveness
+                      onCapture={(file, meta) => {
                         setSelfieFile(file);
                         setSelfieCaptureMethod("camera");
+                        setSelfieLivenessPassed(meta?.livenessPassed ?? false);
                         setUploadReceipts((prev) => ({ ...prev, selfie: undefined }));
                         clearStepCompletion("selfie");
                       }}
-                      onFallback={() => setSelfieCaptureMethod("file_upload")}
+                      onFallback={() => {
+                        setSelfieCaptureMethod("file_upload");
+                        setSelfieLivenessPassed(false);
+                      }}
                     />
                     {selfieFileError && selfieFile && (
                       <p className="inline-form-error">{selfieFileError}</p>
@@ -2317,6 +2368,7 @@ export default function VerificationPage() {
                             setGpsStatus("idle");
                             setGpsCoords(null);
                             setGpsTimestamp(null);
+                            setCoarseFix(null);
                             setGpsConfidence(null);
                             setGpsProvince(null);
                             setGpsMismatch(null);
@@ -2402,6 +2454,7 @@ export default function VerificationPage() {
                                 setGpsApproved(false);
                                 setGpsCoords(null);
                                 setGpsTimestamp(null);
+                                setCoarseFix(null);
                                 setGpsConfidence(null);
                                 setGpsProvince(null);
                                 setGpsMismatch(null);

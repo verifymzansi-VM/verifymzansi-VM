@@ -10,6 +10,15 @@ export const GPS_REQUEST_TIMEOUT_MS = 15_000;
 export const GPS_MAX_AGE_MS = 60_000;
 export const GPS_REPLAY_REJECT_MS = 5 * 60_000; // 5 min — hard-reject stale/replayed readings
 
+/**
+ * Max plausible distance between a high-accuracy GPS fix and a coarse
+ * network-based fix (enableHighAccuracy: false) on the same device. Mock
+ * location apps typically only hook the GPS provider, so a large gap between
+ * the two providers is a spoofing signature. 50 km tolerates rural cell
+ * triangulation error while still catching cross-province spoofing.
+ */
+export const GPS_PROVIDER_DISCREPANCY_KM = 50;
+
 /* ── Manual Location Risk Scoring ─────────────────────────── */
 export const MANUAL_ONLY_BASELINE_RISK = 20;
 export const GPS_PROVINCE_MISMATCH_RISK = 50;

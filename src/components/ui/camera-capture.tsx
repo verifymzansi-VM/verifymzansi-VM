@@ -3,18 +3,31 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import * as Sentry from "@sentry/nextjs";
-import { Camera, Loader2, RefreshCw, VideoOff } from "lucide-react";
+import { Camera, Loader2, RefreshCw, ScanFace, VideoOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useFaceLiveness } from "./use-face-liveness";
 
 interface CameraCaptureProps {
-  onCapture: (file: File) => void;
+  onCapture: (file: File, meta?: CaptureMeta) => void;
   facingMode: "user" | "environment";
   disabled?: boolean;
   cameraStartTimeoutMs?: number;
   telemetryContext?: string;
   /** Called when camera is unavailable and user falls back to file upload */
   onFallback?: () => void;
+  /**
+   * When true, an in-browser active-liveness challenge (blink / head turn)
+   * must be completed before the "Take Photo" button is enabled. Use for the
+   * selfie step. If the face model cannot load, capture degrades gracefully
+   * to a plain photo so legitimate users are never locked out.
+   */
+  requireLiveness?: boolean;
+}
+
+export interface CaptureMeta {
+  /** True when the in-browser liveness challenge was completed. */
+  livenessPassed: boolean;
 }
 
 type CameraState = "idle" | "streaming" | "captured" | "error";
@@ -95,6 +108,7 @@ export function CameraCapture({
   cameraStartTimeoutMs = DEFAULT_CAMERA_START_TIMEOUT_MS,
   telemetryContext,
   onFallback,
+  requireLiveness = false,
 }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -105,6 +119,18 @@ export function CameraCapture({
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [capturedUrl, setCapturedUrl] = useState<string>("");
   const [isStartingCamera, setIsStartingCamera] = useState(false);
+
+  const {
+    status: livenessStatus,
+    start: startLiveness,
+    stop: stopLiveness,
+    reset: resetLiveness,
+  } = useFaceLiveness();
+
+  // Liveness only gates capture when requested AND the model actually loaded.
+  // If unsupported, we allow a plain capture (graceful degradation).
+  const livenessActive = requireLiveness && livenessStatus.supported;
+  const captureAllowed = !livenessActive || livenessStatus.livenessPassed;
 
   const reportCameraInitFailure = useCallback(
     (
@@ -261,6 +287,7 @@ export function CameraCapture({
       setState("idle");
       setErrorMessage("");
       stopStream();
+      resetLiveness();
 
       // Try with full constraints first, then progressively relax
       let stream: MediaStream | null = null;
@@ -300,6 +327,7 @@ export function CameraCapture({
       setState("streaming");
     } catch (err) {
       stopStream();
+      stopLiveness();
       const name = getCameraErrorName(err);
       const permissionLookup =
         name === "NotAllowedError"
@@ -351,6 +379,8 @@ export function CameraCapture({
     isStartingCamera,
     reportCameraInitFailure,
     stopStream,
+    stopLiveness,
+    resetLiveness,
   ]);
 
   // Cleanup stream on unmount
@@ -367,8 +397,13 @@ export function CameraCapture({
     if (state === "streaming" && videoRef.current && streamRef.current) {
       videoRef.current.srcObject = streamRef.current;
       videoRef.current.play().catch(() => {});
+
+      // Kick off the liveness challenge against the live frame.
+      if (requireLiveness) {
+        void startLiveness(videoRef.current);
+      }
     }
-  }, [state]);
+  }, [state, requireLiveness, startLiveness]);
 
   // Bring the camera frame into view as soon as streaming starts so the user
   // never has to scroll to find it (the "Open Camera" button can sit low on
@@ -412,6 +447,11 @@ export function CameraCapture({
       return;
     }
 
+    // When liveness is active, only allow capture once the challenge passed.
+    if (requireLiveness && livenessStatus.supported && !livenessStatus.livenessPassed) {
+      return;
+    }
+
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext("2d");
@@ -433,21 +473,25 @@ export function CameraCapture({
         const url = URL.createObjectURL(blob);
         setCapturedUrl(url);
         stopStream();
+        stopLiveness();
         setState("captured");
-        onCapture(file);
+        onCapture(file, {
+          livenessPassed: requireLiveness ? livenessStatus.livenessPassed : false,
+        });
       },
       "image/jpeg",
       0.92
     );
-  }, [facingMode, stopStream, onCapture]);
+  }, [facingMode, stopStream, stopLiveness, onCapture, requireLiveness, livenessStatus]);
 
   const retake = useCallback(() => {
     if (capturedUrl) {
       URL.revokeObjectURL(capturedUrl);
       setCapturedUrl("");
     }
+    resetLiveness();
     void startCamera();
-  }, [capturedUrl, startCamera]);
+  }, [capturedUrl, startCamera, resetLiveness]);
 
   const handleFileFallback = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -564,17 +608,27 @@ export function CameraCapture({
               muted
               className={`w-full ${facingMode === "user" ? "scale-x-[-1]" : ""}`}
             />
+            {livenessActive && (
+              <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-2 bg-black/55 px-3 py-2 text-center">
+                <ScanFace className="h-4 w-4 shrink-0 text-white" aria-hidden />
+                <p className="text-xs font-medium text-white" role="status" aria-live="polite">
+                  {livenessStatus.instruction}
+                </p>
+              </div>
+            )}
           </div>
           <Button
             type="button"
             ref={takePhotoButtonRef}
             onClick={takePhoto}
-            disabled={disabled}
+            disabled={disabled || !captureAllowed}
             variant="trust-verified"
             className="w-full gap-2"
           >
             <Camera className="h-4 w-4" />
-            Take Photo
+            {livenessActive && !livenessStatus.livenessPassed
+              ? "Complete Liveness Check"
+              : "Take Photo"}
           </Button>
         </>
       )}

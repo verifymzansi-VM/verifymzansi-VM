@@ -69,6 +69,11 @@ export default function PricingPage() {
             hideEmptyPromotionPlans
           />
 
+          <p className="mx-auto max-w-2xl text-center text-xs text-muted-foreground">
+            Plans run for 30 days and do not auto-renew unless checkout clearly states recurring
+            billing is enabled. No payment is taken until you approve the hosted checkout.
+          </p>
+
           <section className="mx-auto grid max-w-5xl gap-4 md:grid-cols-2">
             <div className="rounded-2xl border bg-card p-5 shadow-sm">
               <div className="flex items-center gap-2.5">

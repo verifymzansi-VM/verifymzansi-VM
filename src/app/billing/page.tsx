@@ -18,37 +18,21 @@ export const metadata = {
 export default function BillingPage() {
   const { marketPlans, businessPlans, promotionPlans } = getActivePlansByArea();
   const freePostCount = Number(FREE_POST_CONFIG.maxAllowed);
-  const summaryPoints = [
-    `${freePostCount} free ${freePostCount === 1 ? "post" : "posts"} per area`,
-    `${FREE_POST_CONFIG.maxPhotos} photos + ${FREE_POST_CONFIG.maxVideos} video on free publishing`,
-    "Paid plans add boost, featured placement, and urgent badges",
-  ] as const;
 
   return (
     <div className="flex min-h-screen flex-col">
       <Header isAuthenticated />
       <main id="main-content" className="flex-1 bg-background scroll-mt-24">
-        <div className="container-page py-4 space-y-4">
+        <div className="container-page py-6 space-y-6">
           <PageHeader
             centered
-            title="Choose your visibility plan"
-            description="Start free, then upgrade only when you want stronger placement and trust-led reach."
+            title="Choose your plan"
+            description="Start free, then upgrade only when you want stronger placement and reach."
             className="border-0 pb-0"
           />
 
-          <div className="grid max-w-5xl gap-3 mx-auto md:grid-cols-3">
-            {summaryPoints.map((point) => (
-              <div
-                key={point}
-                className="rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 text-sm text-slate-700 shadow-sm dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200"
-              >
-                {point}
-              </div>
-            ))}
-          </div>
-
           {/* Free Post Banner */}
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-3xl mx-auto w-full">
             <div className="flex flex-col items-start justify-between gap-3 rounded-xl border border-brand-green/20 bg-brand-green/5 px-4 py-3 dark:border-brand-green/25 dark:bg-brand-green/10 sm:flex-row sm:items-center">
               <div className="flex items-center gap-2">
                 <Badge className="inline-flex items-center border-0 bg-brand-green/15 px-2 py-0.5 text-brand-green-700 dark:text-brand-green-300">
@@ -81,6 +65,12 @@ export default function BillingPage() {
             promotionPlans={promotionPlans}
             PlanGrid={BillingPlanGrid}
           />
+
+          <p className="mx-auto max-w-2xl text-center text-xs text-muted-foreground">
+            Plans run for 30 days and do not auto-renew unless checkout clearly states recurring
+            billing is enabled. Cancellation stops the next renewal and does not remove the current
+            30-day entitlement. Paid visibility does not bypass moderation.
+          </p>
         </div>
       </main>
       <Footer />

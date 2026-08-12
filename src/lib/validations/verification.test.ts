@@ -169,6 +169,38 @@ describe("fileUploadSchema", () => {
   it("rejects invalid doc type", () => {
     expect(fileUploadSchema.safeParse({ docType: "other" }).success).toBe(false);
   });
+
+  it("coerces livenessPassed string 'true' to boolean true", () => {
+    const result = fileUploadSchema.safeParse({ docType: "selfie", livenessPassed: "true" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.livenessPassed).toBe(true);
+    }
+  });
+
+  it("coerces livenessPassed string 'false' to boolean false", () => {
+    const result = fileUploadSchema.safeParse({ docType: "selfie", livenessPassed: "false" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.livenessPassed).toBe(false);
+    }
+  });
+
+  it("accepts a boolean livenessPassed", () => {
+    const result = fileUploadSchema.safeParse({ docType: "selfie", livenessPassed: true });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.livenessPassed).toBe(true);
+    }
+  });
+
+  it("leaves livenessPassed undefined when omitted", () => {
+    const result = fileUploadSchema.safeParse({ docType: "selfie" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.livenessPassed).toBeUndefined();
+    }
+  });
 });
 
 // ── validateUploadedFile ────────────────────────────────────────────────────

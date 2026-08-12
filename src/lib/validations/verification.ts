@@ -120,6 +120,15 @@ export const fileUploadSchema = z
       .optional(),
     /** How the image was captured: camera (getUserMedia) or file upload. */
     captureMethod: z.enum(["camera", "file_upload"]).optional(),
+    /**
+     * True only when the in-browser active-liveness challenge was completed
+     * for a camera-captured selfie. Only meaningful with captureMethod "camera";
+     * a camera selfie without this flag is treated as unverified liveness.
+     */
+    livenessPassed: z
+      .union([z.boolean(), z.enum(["true", "false"])])
+      .transform((v) => v === true || v === "true")
+      .optional(),
   })
   .superRefine((data, ctx) => {
     if (data.docType === "id_document") {

@@ -38,6 +38,8 @@ export interface KycEngineInput {
   idNumber?: string;
   adminClient: SupabaseClient;
   captureMethod?: "camera" | "file_upload";
+  /** True only when the in-browser liveness challenge was completed (camera selfies). */
+  livenessPassed?: boolean;
   exifSignals?: ExifSignals | null;
   blurScore?: number | null;
   /** Pre-computed perceptual hash (dHash, 16-char hex) for near-duplicate detection */
@@ -79,6 +81,7 @@ export async function processKycArtifact(input: KycEngineInput): Promise<KycEngi
     idNumber,
     adminClient,
     captureMethod,
+    livenessPassed,
     exifSignals,
     blurScore,
     phash,
@@ -443,6 +446,9 @@ export async function processKycArtifact(input: KycEngineInput): Promise<KycEngi
   }
 
   // ── 6. Selfie not captured via camera signal ──────────────
+  // A file-uploaded selfie bypasses the live-camera liveness challenge, so it
+  // can never be auto-approved — force manual review regardless of score.
+  let forceManualReview = false;
   if (stepType === "selfie" && captureMethod === "file_upload") {
     log.warn("Selfie uploaded via file instead of camera", { userId });
     await writeSignal(adminClient, {
@@ -453,6 +459,24 @@ export async function processKycArtifact(input: KycEngineInput): Promise<KycEngi
       valueJson: { captureMethod },
     });
     signalScore += SEVERITY_WEIGHT.warn;
+    forceManualReview = true;
+  }
+
+  // ── 6b. Camera selfie without a verified liveness challenge ──
+  // A camera-captured selfie that did not complete the in-browser liveness
+  // challenge (e.g. model unavailable, or a crafted request) is flagged so it
+  // cannot be auto-approved either.
+  if (stepType === "selfie" && captureMethod === "camera" && livenessPassed !== true) {
+    log.warn("Camera selfie missing verified liveness challenge", { userId });
+    await writeSignal(adminClient, {
+      userId,
+      artifactId,
+      signalCode: "liveness_not_verified",
+      severity: "warn",
+      valueJson: { captureMethod, livenessPassed: livenessPassed ?? null },
+    });
+    signalScore += SEVERITY_WEIGHT.warn;
+    forceManualReview = true;
   }
 
   // ── 7. Blur detection signal ──────────────────────────────
@@ -513,6 +537,18 @@ export async function processKycArtifact(input: KycEngineInput): Promise<KycEngi
       userId,
       artifactId,
       signalScore,
+      previousAutoStatus: autoStatus,
+    });
+    autoStatus = "needs_manual_review";
+  }
+
+  // A selfie that bypassed the live-camera liveness challenge (file upload, or
+  // a camera capture without a verified challenge) must never be auto-approved.
+  if (forceManualReview && autoStatus !== "rejected") {
+    log.warn("Selfie liveness not verified — forcing manual review", {
+      userId,
+      artifactId,
+      captureMethod,
       previousAutoStatus: autoStatus,
     });
     autoStatus = "needs_manual_review";

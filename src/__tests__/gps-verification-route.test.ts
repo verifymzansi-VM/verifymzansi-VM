@@ -10,6 +10,7 @@ const {
   mockAdminFrom,
   mockCheckRateLimit,
   mockGetClientIp,
+  mockResolveIpGeolocation,
 } = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
   mockIsFeatureEnabled: vi.fn(),
@@ -20,6 +21,7 @@ const {
   mockAdminFrom: vi.fn(),
   mockCheckRateLimit: vi.fn(),
   mockGetClientIp: vi.fn(),
+  mockResolveIpGeolocation: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -56,6 +58,10 @@ vi.mock("@/lib/utils/rate-limit", () => ({
   getClientIp: mockGetClientIp,
 }));
 
+vi.mock("@/lib/services/ip-geolocation", () => ({
+  resolveIpGeolocation: mockResolveIpGeolocation,
+}));
+
 vi.mock("@/lib/constants/verification", () => ({
   GPS_ACCURACY_WARN_METERS: 100,
   GPS_ACCURACY_REJECT_METERS: 500,
@@ -63,6 +69,7 @@ vi.mock("@/lib/constants/verification", () => ({
   GPS_REPLAY_REJECT_MS: 5 * 60_000,
   GPS_PROVINCE_MISMATCH_RISK: 50,
   GPS_CITY_MISMATCH_RISK: 25,
+  GPS_PROVIDER_DISCREPANCY_KM: 50,
 }));
 
 vi.mock("@/lib/constants/sa-provinces", async () => {
@@ -198,6 +205,8 @@ describe("POST /api/verification/location/gps", () => {
     vi.clearAllMocks();
     mockCheckRateLimit.mockResolvedValue({ limited: false });
     mockGetClientIp.mockReturnValue("127.0.0.1");
+    // Default: no Cloudflare IP geo available (local dev / tests).
+    mockResolveIpGeolocation.mockResolvedValue(null);
   });
 
   it("should return 401 when not authenticated", async () => {
@@ -1616,6 +1625,389 @@ describe("POST /api/verification/location/gps", () => {
         location_province: expect.anything(),
         location_city: expect.anything(),
       })
+    );
+  });
+
+  it("flags gps_provider_discrepancy when the coarse network fix disagrees with GPS", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },
+      error: null,
+    });
+    mockIsFeatureEnabled.mockResolvedValue(true);
+    mockParseAndValidateJsonRequest.mockResolvedValue({
+      success: true,
+      data: {
+        latitude: -26.2041,
+        longitude: 28.0473,
+        accuracy: 12,
+        timestamp: Date.now(),
+        declaredProvince: "Gauteng",
+        declaredCity: "Johannesburg",
+        // Coarse network fix in Cape Town — ~1260 km from the GPS fix.
+        coarseLocation: { latitude: -33.9249, longitude: 18.4241, accuracy: 2000 },
+      },
+    });
+    mockReverseGeocode.mockResolvedValue({
+      province: "Gauteng",
+      city: "Johannesburg",
+      source: "nominatim",
+    });
+    mockComputeLocationConfidence.mockReturnValue("high");
+
+    const insertedSignals: unknown[] = [];
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: "profile-1", account_verification_status: "incomplete" },
+              }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
+        };
+      }
+      if (table === "verification_sessions") {
+        return createVerificationSessionsTable();
+      }
+      if (table === "verification_steps") {
+        return createVerificationStepsTable({
+          upsert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: { id: "step-1" }, error: null }),
+          }),
+        });
+      }
+      if (table === "kyc_risk_signals") {
+        return {
+          insert: vi.fn((rows: unknown[]) => {
+            insertedSignals.push(...rows);
+            return Promise.resolve({ error: null });
+          }),
+        };
+      }
+      if (table === "kyc_artifacts") {
+        return {
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              is: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          }),
+        };
+      }
+      return {};
+    });
+
+    const res = await POST(
+      makeRequest({
+        latitude: -26.2041,
+        longitude: 28.0473,
+        accuracy: 12,
+        timestamp: Date.now(),
+        declaredProvince: "Gauteng",
+        declaredCity: "Johannesburg",
+        coarseLocation: { latitude: -33.9249, longitude: 18.4241, accuracy: 2000 },
+      })
+    );
+
+    expect(res.status).toBe(200);
+    expect(insertedSignals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          signal_code: "gps_provider_discrepancy",
+          severity: "warn",
+          value_json: expect.objectContaining({ threshold_km: 50 }),
+        }),
+      ])
+    );
+  });
+
+  it("does not flag gps_provider_discrepancy when the coarse fix is near the GPS fix", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },
+      error: null,
+    });
+    mockIsFeatureEnabled.mockResolvedValue(true);
+    mockParseAndValidateJsonRequest.mockResolvedValue({
+      success: true,
+      data: {
+        latitude: -26.2041,
+        longitude: 28.0473,
+        accuracy: 12,
+        timestamp: Date.now(),
+        declaredProvince: "Gauteng",
+        declaredCity: "Johannesburg",
+        // Coarse fix ~5 km away — within the plausibility threshold.
+        coarseLocation: { latitude: -26.24, longitude: 28.08, accuracy: 1500 },
+      },
+    });
+    mockReverseGeocode.mockResolvedValue({
+      province: "Gauteng",
+      city: "Johannesburg",
+      source: "nominatim",
+    });
+    mockComputeLocationConfidence.mockReturnValue("high");
+
+    const insertedSignals: unknown[] = [];
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: "profile-1", account_verification_status: "incomplete" },
+              }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
+        };
+      }
+      if (table === "verification_sessions") {
+        return createVerificationSessionsTable();
+      }
+      if (table === "verification_steps") {
+        return createVerificationStepsTable({
+          upsert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: { id: "step-1" }, error: null }),
+          }),
+        });
+      }
+      if (table === "kyc_risk_signals") {
+        return {
+          insert: vi.fn((rows: unknown[]) => {
+            insertedSignals.push(...rows);
+            return Promise.resolve({ error: null });
+          }),
+        };
+      }
+      if (table === "kyc_artifacts") {
+        return {
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              is: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          }),
+        };
+      }
+      return {};
+    });
+
+    const res = await POST(
+      makeRequest({
+        latitude: -26.2041,
+        longitude: 28.0473,
+        accuracy: 12,
+        timestamp: Date.now(),
+        declaredProvince: "Gauteng",
+        declaredCity: "Johannesburg",
+        coarseLocation: { latitude: -26.24, longitude: 28.08, accuracy: 1500 },
+      })
+    );
+
+    expect(res.status).toBe(200);
+    expect(insertedSignals).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ signal_code: "gps_provider_discrepancy" })])
+    );
+  });
+
+  it("flags ip_gps_province_mismatch when the request IP resolves to a different province", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },
+      error: null,
+    });
+    mockIsFeatureEnabled.mockResolvedValue(true);
+    mockResolveIpGeolocation.mockResolvedValue({
+      country: "ZA",
+      regionCode: "WC",
+      city: "Cape Town",
+      province: "Western Cape",
+    });
+    mockParseAndValidateJsonRequest.mockResolvedValue({
+      success: true,
+      data: {
+        latitude: -26.2041,
+        longitude: 28.0473,
+        accuracy: 12,
+        timestamp: Date.now(),
+        declaredProvince: "Gauteng",
+        declaredCity: "Johannesburg",
+      },
+    });
+    mockReverseGeocode.mockResolvedValue({
+      province: "Gauteng",
+      city: "Johannesburg",
+      source: "nominatim",
+    });
+    mockComputeLocationConfidence.mockReturnValue("high");
+
+    const insertedSignals: unknown[] = [];
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: "profile-1", account_verification_status: "incomplete" },
+              }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
+        };
+      }
+      if (table === "verification_sessions") {
+        return createVerificationSessionsTable();
+      }
+      if (table === "verification_steps") {
+        return createVerificationStepsTable({
+          upsert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: { id: "step-1" }, error: null }),
+          }),
+        });
+      }
+      if (table === "kyc_risk_signals") {
+        return {
+          insert: vi.fn((rows: unknown[]) => {
+            insertedSignals.push(...rows);
+            return Promise.resolve({ error: null });
+          }),
+        };
+      }
+      if (table === "kyc_artifacts") {
+        return {
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              is: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          }),
+        };
+      }
+      return {};
+    });
+
+    const res = await POST(
+      makeRequest({
+        latitude: -26.2041,
+        longitude: 28.0473,
+        accuracy: 12,
+        timestamp: Date.now(),
+        declaredProvince: "Gauteng",
+        declaredCity: "Johannesburg",
+      })
+    );
+
+    expect(res.status).toBe(200);
+    expect(insertedSignals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          signal_code: "ip_gps_province_mismatch",
+          severity: "warn",
+          value_json: expect.objectContaining({
+            ip_province: "Western Cape",
+            gps_province: "Gauteng",
+          }),
+        }),
+        expect.objectContaining({
+          signal_code: "ip_declared_province_mismatch",
+          severity: "warn",
+        }),
+      ])
+    );
+  });
+
+  it("flags ip_country_mismatch when the request IP is outside South Africa", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },
+      error: null,
+    });
+    mockIsFeatureEnabled.mockResolvedValue(true);
+    mockResolveIpGeolocation.mockResolvedValue({
+      country: "US",
+      regionCode: null,
+      city: null,
+      province: null,
+    });
+    mockParseAndValidateJsonRequest.mockResolvedValue({
+      success: true,
+      data: {
+        latitude: -26.2041,
+        longitude: 28.0473,
+        accuracy: 12,
+        timestamp: Date.now(),
+      },
+    });
+    mockReverseGeocode.mockResolvedValue({
+      province: "Gauteng",
+      city: "Johannesburg",
+      source: "nominatim",
+    });
+    mockComputeLocationConfidence.mockReturnValue("high");
+
+    const insertedSignals: unknown[] = [];
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: "profile-1", account_verification_status: "incomplete" },
+              }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
+        };
+      }
+      if (table === "verification_sessions") {
+        return createVerificationSessionsTable();
+      }
+      if (table === "verification_steps") {
+        return createVerificationStepsTable({
+          upsert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: { id: "step-1" }, error: null }),
+          }),
+        });
+      }
+      if (table === "kyc_risk_signals") {
+        return {
+          insert: vi.fn((rows: unknown[]) => {
+            insertedSignals.push(...rows);
+            return Promise.resolve({ error: null });
+          }),
+        };
+      }
+      if (table === "kyc_artifacts") {
+        return {
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              is: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          }),
+        };
+      }
+      return {};
+    });
+
+    const res = await POST(
+      makeRequest({
+        latitude: -26.2041,
+        longitude: 28.0473,
+        accuracy: 12,
+        timestamp: Date.now(),
+      })
+    );
+
+    expect(res.status).toBe(200);
+    expect(insertedSignals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          signal_code: "ip_country_mismatch",
+          severity: "warn",
+          value_json: expect.objectContaining({ ip_country: "US" }),
+        }),
+      ])
     );
   });
 });

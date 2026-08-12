@@ -27,6 +27,8 @@ import {
   RotateCcw,
   ZoomIn,
   ZoomOut,
+  ScanFace,
+  ShieldCheck,
 } from "lucide-react";
 import { getKycEvidenceErrorMessage } from "./kyc-evidence-errors";
 import {
@@ -48,6 +50,49 @@ interface Artifact {
   purge_after: string | null;
   sha256: string | null;
 }
+
+interface RiskSignal {
+  id: string;
+  artifact_id: string | null;
+  signal_code: string;
+  severity: string;
+  value_json: Record<string, unknown>;
+  created_at: string;
+}
+
+interface ProviderResult {
+  id: string;
+  artifact_id: string;
+  provider_name: string;
+  provider_status: string;
+  face_match_score: number | null;
+  liveness_score: number | null;
+  doc_auth_score: number | null;
+}
+
+const SIGNAL_SEVERITY_CLASSES: Record<string, string> = {
+  block:
+    "border-red-300 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200",
+  warn: "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200",
+  info: "border-warm-200 bg-warm-50 text-warm-800 dark:border-warm-700 dark:bg-muted dark:text-warm-200",
+};
+
+/** Human-friendly labels for the signal codes an admin is likely to see here. */
+const SIGNAL_LABELS: Record<string, string> = {
+  selfie_not_camera_captured: "Selfie uploaded as a file (not live camera)",
+  liveness_not_verified: "Liveness challenge not completed",
+  duplicate_sha256: "Exact duplicate of another account's image",
+  near_duplicate_phash: "Near-duplicate of another account's image",
+  software_edited: "Image edited with photo software",
+  no_camera_exif: "No camera EXIF data",
+  stale_photo: "Photo is older than 24 hours",
+  blurry_image: "Image is blurry",
+  low_liveness_score: "Low liveness score",
+  low_face_match_score: "Selfie does not match ID photo",
+  id_number_reuse: "ID number already linked to another account",
+  velocity_resubmit: "Unusually many uploads in 24h",
+  rapid_step_completion: "Steps completed suspiciously fast",
+};
 
 interface DocumentViewerProps {
   isOpen: boolean;
@@ -79,6 +124,8 @@ export function KycComparisonViewer({
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
   const [artifactErrors, setArtifactErrors] = useState<Record<string, string>>({});
+  const [riskSignals, setRiskSignals] = useState<RiskSignal[]>([]);
+  const [providerResults, setProviderResults] = useState<ProviderResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retryToken, setRetryToken] = useState(0);
@@ -111,6 +158,8 @@ export function KycComparisonViewer({
       setArtifacts([]);
       setBlobUrls({});
       setArtifactErrors({});
+      setRiskSignals([]);
+      setProviderResults([]);
       setPanelZoom({ id_doc: 1, selfie: 1 });
 
       try {
@@ -138,6 +187,14 @@ export function KycComparisonViewer({
           (artifact: Artifact) => artifact.step_type === "id_doc" || artifact.step_type === "selfie"
         );
 
+        // Capture risk signals + provider results so the admin can see fraud /
+        // liveness signals (e.g. selfie_not_camera_captured, liveness_not_verified)
+        // alongside the images instead of judging the photos blind.
+        const loadedSignals: RiskSignal[] = Array.isArray(meta.riskSignals) ? meta.riskSignals : [];
+        const loadedProviderResults: ProviderResult[] = Array.isArray(meta.providerResults)
+          ? meta.providerResults
+          : [];
+
         if (loadedArtifacts.length === 0) {
           setError("No ID document or selfie uploaded yet");
           return;
@@ -158,6 +215,8 @@ export function KycComparisonViewer({
 
         if (cancelled) return;
         setArtifacts(sorted);
+        setRiskSignals(loadedSignals);
+        setProviderResults(loadedProviderResults);
 
         // Preload artifacts in parallel and reuse cached blobs when available.
         const results = await Promise.all(
@@ -321,6 +380,61 @@ export function KycComparisonViewer({
   const comparisonArtifacts = [idArtifact, selfieArtifact].filter(
     (artifact): artifact is Artifact => Boolean(artifact)
   );
+
+  // Signals attached to the selfie artifact drive the liveness verdict banner.
+  const selfieSignals = selfieArtifact
+    ? riskSignals.filter((s) => !s.artifact_id || s.artifact_id === selfieArtifact.id)
+    : [];
+  const selfieProvider = selfieArtifact
+    ? (providerResults.find((p) => p.artifact_id === selfieArtifact.id) ?? null)
+    : null;
+
+  const hasSignal = (code: string) => selfieSignals.some((s) => s.signal_code === code);
+
+  // Derive a single, easy-to-scan liveness verdict for the selfie.
+  // IMPORTANT: the default (no signals, no provider score) must be "unknown",
+  // not "ok" — selfies uploaded before the liveness feature existed have no
+  // signals at all, so defaulting to green would falsely reassure the admin.
+  type LivenessVerdict = {
+    tone: "ok" | "warn" | "bad" | "unknown";
+    label: string;
+    detail: string;
+  };
+  const livenessVerdict: LivenessVerdict | null = selfieArtifact
+    ? (() => {
+        if (hasSignal("selfie_not_camera_captured")) {
+          return {
+            tone: "bad",
+            label: "Uploaded file",
+            detail:
+              "This selfie was uploaded as a file, not captured live on camera. It cannot be trusted as proof of liveness — inspect carefully.",
+          };
+        }
+        if (hasSignal("liveness_not_verified")) {
+          return {
+            tone: "warn",
+            label: "Liveness not verified",
+            detail:
+              "The live-camera liveness challenge was not completed for this selfie. Confirm the face looks like a real, live person.",
+          };
+        }
+        if (selfieProvider && typeof selfieProvider.liveness_score === "number") {
+          return {
+            tone: "ok",
+            label: `Liveness ${selfieProvider.liveness_score}/100`,
+            detail: "Captured live on camera with the liveness challenge completed.",
+          };
+        }
+        // No negative signal, but also no positive proof of liveness (e.g. a
+        // selfie uploaded before this check existed). Stay neutral.
+        return {
+          tone: "unknown",
+          label: "Liveness unknown",
+          detail:
+            "No liveness data is on record for this selfie (it may predate the liveness check). Verify the face manually against the ID.",
+        };
+      })()
+    : null;
 
   const getStepLabel = (type: string) => {
     const labels: Record<string, string> = {
@@ -553,11 +667,80 @@ export function KycComparisonViewer({
           )}
 
           {!loading && !error && comparisonArtifacts.length > 0 && (
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className={!selfieArtifact ? "lg:col-span-2" : undefined}>
-                {renderArtifactPanel(idArtifact)}
+            <div className="space-y-4">
+              {/* Liveness verdict banner — the single most important signal for
+                  deciding whether the selfie is a real, live person. */}
+              {livenessVerdict && (
+                <div
+                  className={`flex items-start gap-3 rounded-md border p-3 text-sm ${
+                    livenessVerdict.tone === "bad"
+                      ? "border-red-300 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+                      : livenessVerdict.tone === "warn"
+                        ? "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+                        : livenessVerdict.tone === "ok"
+                          ? "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                          : "border-warm-300 bg-warm-50 text-warm-900 dark:border-warm-700 dark:bg-muted dark:text-warm-200"
+                  }`}
+                >
+                  {livenessVerdict.tone === "ok" ? (
+                    <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+                  ) : (
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  )}
+                  <div>
+                    <p className="font-medium">Selfie: {livenessVerdict.label}</p>
+                    <p className="mt-0.5 text-xs opacity-90">{livenessVerdict.detail}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Face-match score when a provider returned one. */}
+              {selfieProvider && typeof selfieProvider.face_match_score === "number" && (
+                <div className="flex items-center gap-2 rounded-md border border-warm-200 bg-warm-50 p-3 text-sm dark:border-warm-700 dark:bg-muted">
+                  <ScanFace className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <p>
+                    Face match (selfie vs ID):{" "}
+                    <span className="font-semibold">{selfieProvider.face_match_score}/100</span>
+                  </p>
+                </div>
+              )}
+
+              {/* Detailed fraud / risk signals for the two images on screen. */}
+              {(() => {
+                const visibleIds = new Set(comparisonArtifacts.map((a) => a.id));
+                const relevant = riskSignals.filter(
+                  (s) => !s.artifact_id || visibleIds.has(s.artifact_id)
+                );
+                if (relevant.length === 0) return null;
+                return (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                      Fraud &amp; risk signals
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {relevant.map((s) => (
+                        <span
+                          key={s.id}
+                          title={s.signal_code}
+                          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs ${
+                            SIGNAL_SEVERITY_CLASSES[s.severity] ?? SIGNAL_SEVERITY_CLASSES.info
+                          }`}
+                        >
+                          <AlertTriangle className="h-3 w-3" />
+                          {SIGNAL_LABELS[s.signal_code] ?? s.signal_code.replace(/_/g, " ")}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className={!selfieArtifact ? "lg:col-span-2" : undefined}>
+                  {renderArtifactPanel(idArtifact)}
+                </div>
+                {selfieArtifact ? <div>{renderArtifactPanel(selfieArtifact)}</div> : null}
               </div>
-              {selfieArtifact ? <div>{renderArtifactPanel(selfieArtifact)}</div> : null}
             </div>
           )}
         </div>

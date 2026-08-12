@@ -16,6 +16,7 @@ import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { rateLimitExceededResponse } from "@/lib/utils/rate-limit-responses";
 import { optionalTrimmedStringSchema } from "@/lib/validations/shared";
 import { citiesMatch, normalizeProvinceName, resolveCityName } from "@/lib/constants/sa-provinces";
+import { resolveIpGeolocation } from "@/lib/services/ip-geolocation";
 
 const log = createLogger("GpsVerification");
 // Tolerated client clock skew for GPS reading timestamps (60s).
@@ -27,6 +28,7 @@ import {
   GPS_REPLAY_REJECT_MS,
   GPS_PROVINCE_MISMATCH_RISK,
   GPS_CITY_MISMATCH_RISK,
+  GPS_PROVIDER_DISCREPANCY_KM,
 } from "@/lib/constants/verification";
 import { buildVerificationStep } from "@/lib/services/verification-state";
 import {
@@ -34,6 +36,12 @@ import {
   persistLocationVerificationLifecycle,
 } from "../_lib/location-verification-lifecycle";
 import { enforceConfirmedVerificationRequest } from "../../_lib/verification-request-prelude";
+
+const coarseLocationSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  accuracy: z.number().positive().finite(),
+});
 
 const gpsLocationSchema = z.object({
   latitude: z.number().min(-35).max(-22),
@@ -46,7 +54,25 @@ const gpsLocationSchema = z.object({
     (value) => (typeof value === "string" ? value.trim() || undefined : value),
     z.string().max(120).optional()
   ),
+  /**
+   * Optional coarse network-based fix (enableHighAccuracy: false) captured
+   * alongside the GPS fix. Mock location apps usually only hook the GPS
+   * provider, so a large GPS-vs-network gap is a spoofing signature.
+   */
+  coarseLocation: coarseLocationSchema.optional(),
 });
+
+/** Great-circle distance in kilometres (haversine). */
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -96,6 +122,7 @@ export async function POST(request: NextRequest) {
       declaredProvince,
       declaredCity,
       declaredTown,
+      coarseLocation,
     } = bodyResult.data;
     const previewOnly = request.nextUrl.searchParams.get("preview") === "1";
     const isConfirmationMode = !!declaredProvince;
@@ -261,6 +288,76 @@ export async function POST(request: NextRequest) {
           threshold: GPS_ACCURACY_WARN_METERS,
         },
       });
+    }
+
+    // ── Dual-provider discrepancy check ──────────────────────
+    // Mock location apps typically only hook the GPS provider. When the
+    // network-based (coarse) fix disagrees with the GPS fix by more than the
+    // plausibility threshold, flag it as a spoofing signature.
+    if (coarseLocation) {
+      const discrepancyKm = haversineKm(
+        latitude,
+        longitude,
+        coarseLocation.latitude,
+        coarseLocation.longitude
+      );
+      if (discrepancyKm > GPS_PROVIDER_DISCREPANCY_KM) {
+        signals.push({
+          signal_code: "gps_provider_discrepancy",
+          severity: "warn",
+          value_json: {
+            discrepancy_km: Math.round(discrepancyKm * 10) / 10,
+            threshold_km: GPS_PROVIDER_DISCREPANCY_KM,
+            coarse_accuracy_meters: coarseLocation.accuracy,
+          },
+        });
+      }
+    }
+
+    // ── IP geolocation cross-signal ──────────────────────────
+    // The client cannot fake its request IP without a VPN/proxy, so the
+    // Cloudflare-derived province is an independent cross-check against the
+    // client-supplied GPS fix. Warn-only: cellular carrier NAT egress can
+    // legitimately resolve to a neighbouring province.
+    const ipGeo = await resolveIpGeolocation();
+    if (ipGeo) {
+      if (ipGeo.country && ipGeo.country !== "ZA") {
+        signals.push({
+          signal_code: "ip_country_mismatch",
+          severity: "warn",
+          value_json: { ip_country: ipGeo.country },
+        });
+      } else if (ipGeo.province) {
+        const ipProvince = normalizeProvinceName(ipGeo.province);
+        const gpsProvinceNorm = normalizeProvinceName(resolvedProvince);
+        if (ipProvince && gpsProvinceNorm && ipProvince !== gpsProvinceNorm) {
+          signals.push({
+            signal_code: "ip_gps_province_mismatch",
+            severity: "warn",
+            value_json: {
+              ip_province: ipProvince,
+              gps_province: gpsProvinceNorm,
+              ip_city: ipGeo.city,
+            },
+          });
+        }
+        if (
+          isConfirmationMode &&
+          ipProvince &&
+          normalizedDeclaredProvince &&
+          ipProvince !== normalizedDeclaredProvince
+        ) {
+          signals.push({
+            signal_code: "ip_declared_province_mismatch",
+            severity: "warn",
+            value_json: {
+              ip_province: ipProvince,
+              declared_province: normalizedDeclaredProvince,
+              ip_city: ipGeo.city,
+            },
+          });
+        }
+      }
     }
 
     // Stale GPS reading — warn when the reading is older than the preferred freshness window.

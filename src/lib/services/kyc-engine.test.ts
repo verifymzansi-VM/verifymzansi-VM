@@ -352,6 +352,86 @@ describe("KYC Engine - processKycArtifact", () => {
     expect(result.idNumberHmac).toBeUndefined();
   });
 
+  it("forces manual review for a file-uploaded selfie even when provider approves", async () => {
+    mockSubmitIdentity.mockResolvedValueOnce({
+      status: "approved",
+      providerReference: "ref-ok",
+      scores: {
+        faceMatchScore: 95,
+        livenessScore: 90,
+        docAuthScore: 85,
+        ocrPayload: {},
+        rawResponse: {},
+      },
+    });
+
+    const result = await processKycArtifact(
+      createInput({ stepType: "selfie", captureMethod: "file_upload" })
+    );
+
+    expect(result.autoStatus).toBe("needs_manual_review");
+  });
+
+  it("forces manual review for a camera selfie without a verified liveness challenge", async () => {
+    mockSubmitIdentity.mockResolvedValueOnce({
+      status: "approved",
+      providerReference: "ref-ok",
+      scores: {
+        faceMatchScore: 95,
+        livenessScore: 90,
+        docAuthScore: 85,
+        ocrPayload: {},
+        rawResponse: {},
+      },
+    });
+
+    const result = await processKycArtifact(
+      createInput({ stepType: "selfie", captureMethod: "camera", livenessPassed: false })
+    );
+
+    expect(result.autoStatus).toBe("needs_manual_review");
+  });
+
+  it("allows auto-approval for a camera selfie with a verified liveness challenge", async () => {
+    mockSubmitIdentity.mockResolvedValueOnce({
+      status: "approved",
+      providerReference: "ref-ok",
+      scores: {
+        faceMatchScore: 95,
+        livenessScore: 90,
+        docAuthScore: 85,
+        ocrPayload: {},
+        rawResponse: {},
+      },
+    });
+
+    const result = await processKycArtifact(
+      createInput({ stepType: "selfie", captureMethod: "camera", livenessPassed: true })
+    );
+
+    expect(result.autoStatus).toBe("approved");
+  });
+
+  it("does not force manual review for non-selfie steps without liveness", async () => {
+    mockSubmitIdentity.mockResolvedValueOnce({
+      status: "approved",
+      providerReference: "ref-ok",
+      scores: {
+        faceMatchScore: 95,
+        livenessScore: 90,
+        docAuthScore: 85,
+        ocrPayload: {},
+        rawResponse: {},
+      },
+    });
+
+    const result = await processKycArtifact(
+      createInput({ stepType: "id_doc", captureMethod: "file_upload" })
+    );
+
+    expect(result.autoStatus).toBe("approved");
+  });
+
   it("caps risk score at 100", async () => {
     // Trigger duplicate + HMAC reuse + velocity = 40 + 40 + 15 = 95
     // RPC: velocity exceeded

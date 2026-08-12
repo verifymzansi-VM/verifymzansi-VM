@@ -45,6 +45,11 @@ export function buildCsp(
     "https://static.cloudflareinsights.com",
     "https://unpkg.com",
     "https://*.r2.cloudflarestorage.com",
+    // MediaPipe face-liveness model + WASM runtime (client-side KYC selfie
+    // liveness challenge). Loaded via fetch/WASM, so they belong in
+    // connect-src, not script-src.
+    "https://cdn.jsdelivr.net",
+    "https://storage.googleapis.com",
   ];
 
   if (options?.allowDevWebSocket) {

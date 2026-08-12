@@ -21,6 +21,38 @@ vi.mock("@sentry/nextjs", () => ({
 
 import { CameraCapture } from "./camera-capture";
 
+const livenessMocks = vi.hoisted(() => ({
+  start: vi.fn(),
+  stop: vi.fn(),
+  reset: vi.fn(),
+  status: {
+    phase: "challenge",
+    challenge: "blink",
+    instruction: "Now blink your eyes.",
+    faceOk: true,
+    faceCount: 1,
+    livenessPassed: false,
+    supported: true,
+  } as {
+    phase: string;
+    challenge: string | null;
+    instruction: string;
+    faceOk: boolean;
+    faceCount: number;
+    livenessPassed: boolean;
+    supported: boolean;
+  },
+}));
+
+vi.mock("./use-face-liveness", () => ({
+  useFaceLiveness: () => ({
+    status: livenessMocks.status,
+    start: livenessMocks.start,
+    stop: livenessMocks.stop,
+    reset: livenessMocks.reset,
+  }),
+}));
+
 const mockGetUserMedia = vi.fn();
 const mockStop = vi.fn();
 const _mockToBlob = vi.fn();
@@ -29,6 +61,15 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockGetUserMedia.mockReset();
   mockStop.mockReset();
+
+  // Reset liveness mock to a deterministic default (challenge in progress).
+  livenessMocks.status.phase = "challenge";
+  livenessMocks.status.challenge = "blink";
+  livenessMocks.status.instruction = "Now blink your eyes.";
+  livenessMocks.status.faceOk = true;
+  livenessMocks.status.faceCount = 1;
+  livenessMocks.status.livenessPassed = false;
+  livenessMocks.status.supported = true;
 
   Object.defineProperty(global.navigator, "mediaDevices", {
     configurable: true,
@@ -168,6 +209,69 @@ describe("CameraCapture", () => {
           video: expect.objectContaining({ facingMode: "user" }),
         })
       );
+    });
+  });
+
+  it("keeps Take Photo disabled until the liveness challenge passes", async () => {
+    const stream = createMockStream();
+    mockGetUserMedia.mockResolvedValueOnce(stream);
+    livenessMocks.status.livenessPassed = false;
+    livenessMocks.status.supported = true;
+
+    render(<CameraCapture onCapture={vi.fn()} facingMode="user" requireLiveness />);
+    await clickOpenCamera();
+
+    await waitFor(() => {
+      expect(screen.getByText(/now blink your eyes/i)).toBeInTheDocument();
+    });
+
+    const btn = screen.getByRole("button", { name: /complete liveness check/i });
+    expect(btn).toBeDisabled();
+  });
+
+  it("enables Take Photo once the liveness challenge has passed", async () => {
+    const stream = createMockStream();
+    mockGetUserMedia.mockResolvedValueOnce(stream);
+    livenessMocks.status.livenessPassed = true;
+    livenessMocks.status.supported = true;
+    livenessMocks.status.instruction = "Liveness confirmed — you can take the photo.";
+
+    render(<CameraCapture onCapture={vi.fn()} facingMode="user" requireLiveness />);
+    await clickOpenCamera();
+
+    await waitFor(() => {
+      const btn = screen.getByRole("button", { name: /take photo/i });
+      expect(btn).toBeEnabled();
+    });
+  });
+
+  it("allows plain capture when liveness is not required", async () => {
+    const stream = createMockStream();
+    mockGetUserMedia.mockResolvedValueOnce(stream);
+    livenessMocks.status.livenessPassed = false;
+    livenessMocks.status.supported = true;
+
+    render(<CameraCapture onCapture={vi.fn()} facingMode="environment" />);
+    await clickOpenCamera();
+
+    await waitFor(() => {
+      const btn = screen.getByRole("button", { name: /take photo/i });
+      expect(btn).toBeEnabled();
+    });
+  });
+
+  it("allows capture when the liveness model is unsupported (graceful degradation)", async () => {
+    const stream = createMockStream();
+    mockGetUserMedia.mockResolvedValueOnce(stream);
+    livenessMocks.status.livenessPassed = false;
+    livenessMocks.status.supported = false;
+
+    render(<CameraCapture onCapture={vi.fn()} facingMode="user" requireLiveness />);
+    await clickOpenCamera();
+
+    await waitFor(() => {
+      const btn = screen.getByRole("button", { name: /take photo/i });
+      expect(btn).toBeEnabled();
     });
   });
 

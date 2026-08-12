@@ -226,7 +226,7 @@ export async function POST(request: NextRequest) {
       return metaParsed.response;
     }
 
-    const { docType, idNumber, captureMethod } = metaParsed.data;
+    const { docType, idNumber, captureMethod, livenessPassed } = metaParsed.data;
     const firstName = metaParsed.data.firstName?.trim() || undefined;
     const lastName = metaParsed.data.lastName?.trim() || undefined;
 
@@ -566,6 +566,7 @@ export async function POST(request: NextRequest) {
         idNumber,
         adminClient: admin,
         captureMethod: captureMethod ?? undefined,
+        livenessPassed: livenessPassed === true,
         exifSignals,
         blurScore,
         phash,

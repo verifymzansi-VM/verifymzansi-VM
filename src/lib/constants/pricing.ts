@@ -100,7 +100,7 @@ export const PLANS: PlanDefinition[] = [
       maxPhotos: 10,
       maxPostsPerMonth: 45, // 3x growth (15 * 3)
       videoAllowed: true,
-      maxVideos: 27, // 3x growth (9 * 3)
+      maxVideos: 27, // matches listings cap; DB CHECK constraint allows up to 27
       boostAllowed: true,
       featuredAllowed: true,
       urgentAllowed: true,
