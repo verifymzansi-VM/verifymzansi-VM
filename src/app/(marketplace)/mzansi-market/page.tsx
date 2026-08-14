@@ -103,7 +103,9 @@ export default async function MzansiMarketPage() {
       <div className="container-page py-8 space-y-7 lg:py-10">
         {/* Compact mobile header */}
         <div className="flex items-center justify-between lg:hidden">
-          <h1 className="font-display text-lg font-bold tracking-tight">Browse Listings</h1>
+          <h1 className="font-display text-lg font-bold tracking-tight">
+            {categorySeo.searchName}
+          </h1>
           <Button asChild size="sm" className="h-11 gap-1">
             <Link href="/post/create-listing">
               Create a listing
@@ -127,7 +129,7 @@ export default async function MzansiMarketPage() {
           {/* Main content area */}
           <div className="flex-1 min-w-0 space-y-5">
             <PageHeader
-              title="Browse Listings"
+              title={categorySeo.searchName}
               description={categorySeo.description}
               breadcrumbs={[{ label: "Mzansi Market" }]}
               className="hidden lg:block"

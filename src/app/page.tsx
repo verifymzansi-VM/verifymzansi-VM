@@ -151,6 +151,34 @@ export default async function HomePage() {
           <HeroBannerWithData />
         </Suspense>
 
+        {/*
+         * Keep the three public areas together in a plain, server-rendered navigation block.
+         * This gives visitors and search crawlers the same clear, stable view of the site's
+         * primary sections, independent of the interactive marketplace switcher.
+         */}
+        <nav
+          aria-label="VerifyMzansi primary categories"
+          className="border-y border-border/60 bg-background"
+        >
+          <div className="container-page grid divide-y divide-border/60 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+            {VERIFY_MZANSI_CATEGORY_SEO.map((category) => (
+              <Link
+                key={category.id}
+                href={category.href}
+                prefetch={false}
+                className="group px-4 py-4 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-5"
+              >
+                <span className="block text-sm font-semibold text-foreground group-hover:text-brand-green">
+                  {category.name}
+                </span>
+                <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                  {category.searchSummary}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </nav>
+
         <div className="relative overflow-hidden bg-[radial-gradient(circle_at_top,rgba(247,250,252,0.95),rgba(255,255,255,1)_35%,rgba(244,246,248,1)_100%)] dark:bg-[radial-gradient(circle_at_top,rgba(10,14,20,0.98),rgba(6,9,13,1)_38%,rgba(3,5,8,1)_100%)]">
           <div
             className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-black/[0.04] to-transparent dark:from-white/[0.02]"

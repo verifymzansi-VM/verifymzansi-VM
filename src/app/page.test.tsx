@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import HomePage, { metadata } from "./page";
 
@@ -96,25 +96,24 @@ describe("HomePage", () => {
     const ui = await HomePage();
     render(ui);
 
+    const primaryCategories = screen.getByRole("navigation", {
+      name: "VerifyMzansi primary categories",
+    });
+
     expect(screen.getByRole("link", { name: /Post for Free/i })).toHaveAttribute(
       "href",
       "/post/create"
     );
     expect(screen.getByRole("link", { name: /Pricing/i })).toHaveAttribute("href", "/pricing");
+    expect(within(primaryCategories).getByRole("link", { name: /Mzansi Market/i })).toHaveAttribute(
+      "href",
+      "/mzansi-market"
+    );
     expect(
-      screen.getByRole("link", {
-        name: /Mzansi Market Buy, sell, and browse local classified ads in South Africa/i,
-      })
-    ).toHaveAttribute("href", "/mzansi-market");
-    expect(
-      screen.getByRole("link", {
-        name: /Mzansi Business Find South African businesses, shops, trades, and professional services/i,
-      })
+      within(primaryCategories).getByRole("link", { name: /Mzansi Business/i })
     ).toHaveAttribute("href", "/mzansi-business");
     expect(
-      screen.getByRole("link", {
-        name: /Tourism & Events/i,
-      })
+      within(primaryCategories).getByRole("link", { name: /Tourism & Events/i })
     ).toHaveAttribute("href", "/tourism-events");
   });
 

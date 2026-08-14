@@ -6,8 +6,9 @@ const { mockCreateClient } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
 }));
 
-const { carouselSpy, trustStripSpy } = vi.hoisted(() => ({
+const { carouselSpy, pageHeaderSpy, trustStripSpy } = vi.hoisted(() => ({
   carouselSpy: vi.fn(),
+  pageHeaderSpy: vi.fn(),
   trustStripSpy: vi.fn(),
 }));
 
@@ -41,7 +42,10 @@ vi.mock("./url-filter-sync", () => ({
 }));
 
 vi.mock("@/components/layout", () => ({
-  PageHeader: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  PageHeader: ({ children, ...props }: { children?: React.ReactNode; title?: string }) => {
+    pageHeaderSpy(props);
+    return <div>{children}</div>;
+  },
 }));
 
 vi.mock("@/components/listings/listing-filter-sidebar", () => ({
@@ -116,5 +120,11 @@ describe("MzansiMarketPage", () => {
         title: "Latest on Mzansi Market",
       })
     );
+  });
+
+  it("uses Mzansi Market as the primary page heading", async () => {
+    render(await MzansiMarketPage());
+
+    expect(pageHeaderSpy).toHaveBeenCalledWith(expect.objectContaining({ title: "Mzansi Market" }));
   });
 });
