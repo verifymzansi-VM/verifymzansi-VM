@@ -35,11 +35,13 @@
     "@storybook/nextjs",
     "canvas",
     "k6",
-    "lint-staged"
+    "lint-staged",
+    "supabase"
   ],
   "ignoreBinaries": [
     "lint-staged",
-    "storybook"
+    "storybook",
+    "supabase"
   ],
   "ignoreIssues": {
     "src/lib/account/compat.ts": ["duplicates"],

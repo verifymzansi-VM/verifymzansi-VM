@@ -145,6 +145,28 @@ pnpm supabase:migration:list
 pnpm supabase:db:push
 ```
 
+### Free-plan backups
+
+Free Supabase projects do not include automated database backups. Before every
+remote migration, use the safe command below; it exports public-table data and
+copies the schema migrations to the ignored `tmp/supabase-backups/` directory.
+
+```bash
+pnpm supabase:db:push:safe
+```
+
+For a routine manual backup without applying a migration:
+
+```bash
+pnpm supabase:db:backup
+```
+
+The backup covers public-table data and the checked-in database migrations. It
+deliberately does not include Auth users, Supabase Storage objects, Cloudflare
+R2 files, or database roles; keep the private R2 KYC bucket private and use its
+own recovery process. Copy production backups to an access-controlled location
+outside the workspace.
+
 To check live Supabase Security Advisor findings from workspace env:
 
 ```bash

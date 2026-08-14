@@ -775,17 +775,6 @@ export interface operations {
         "application/json": {
           latitude: number;
           longitude: number;
-          accuracy: number;
-          timestamp: number;
-          declaredProvince?: string;
-          declaredCity?: string;
-          declaredTown?: string;
-          /** Coarse network-based fix for the dual-provider spoofing check. */
-          coarseLocation?: {
-            latitude: number;
-            longitude: number;
-            accuracy: number;
-          };
         };
       };
     };
