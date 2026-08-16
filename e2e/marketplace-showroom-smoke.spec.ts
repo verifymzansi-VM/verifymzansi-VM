@@ -60,6 +60,15 @@ test.describe("Marketplace showroom smoke", () => {
 
       await expect(showroomCard).toBeVisible();
 
+      const [cardBox, viewportHeight] = await Promise.all([
+        showroomCard.boundingBox(),
+        page.evaluate(() => window.innerHeight),
+      ]);
+
+      expect(cardBox).not.toBeNull();
+      expect(cardBox!.y).toBeGreaterThanOrEqual(0);
+      expect(cardBox!.y + cardBox!.height).toBeLessThanOrEqual(viewportHeight);
+
       expect(
         consoleErrors.filter((message) =>
           /hydration|runtime|typeerror|referenceerror|server rendered html didn't match/i.test(

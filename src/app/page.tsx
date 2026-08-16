@@ -158,7 +158,7 @@ export default async function HomePage() {
          */}
         <nav
           aria-label="VerifyMzansi primary categories"
-          className="border-y border-border/60 bg-background"
+          className="hidden border-y border-border/60 bg-background md:block"
         >
           <div className="container-page grid divide-y divide-border/60 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
             {VERIFY_MZANSI_CATEGORY_SEO.map((category) => (
