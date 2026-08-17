@@ -161,7 +161,7 @@
     "eslint-config-next": "16.2.11",
     "husky": "^9.1.7",
     "jimp": "0.22.10",
-    "jscpd": "^4.0.5",
+    "jscpd": "^5.0.15",
     "jsdom": "^28.1.0",
     "knip": "^6.6.1",
     "lint-staged": "^16.4.0",
