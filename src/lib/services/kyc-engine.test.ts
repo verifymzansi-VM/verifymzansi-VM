@@ -392,7 +392,7 @@ describe("KYC Engine - processKycArtifact", () => {
     expect(result.autoStatus).toBe("needs_manual_review");
   });
 
-  it("allows auto-approval for a camera selfie with a verified liveness challenge", async () => {
+  it("requires manual review for a camera selfie even when browser liveness is claimed", async () => {
     mockSubmitIdentity.mockResolvedValueOnce({
       status: "approved",
       providerReference: "ref-ok",
@@ -409,7 +409,7 @@ describe("KYC Engine - processKycArtifact", () => {
       createInput({ stepType: "selfie", captureMethod: "camera", livenessPassed: true })
     );
 
-    expect(result.autoStatus).toBe("approved");
+    expect(result.autoStatus).toBe("needs_manual_review");
   });
 
   it("does not force manual review for non-selfie steps without liveness", async () => {

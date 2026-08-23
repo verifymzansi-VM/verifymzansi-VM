@@ -272,6 +272,7 @@ describe("CameraCapture", () => {
     await waitFor(() => {
       const btn = screen.getByRole("button", { name: /take photo/i });
       expect(btn).toBeEnabled();
+      expect(screen.getByText(/will require a manual review/i)).toBeInTheDocument();
     });
   });
 

@@ -445,10 +445,25 @@ export async function processKycArtifact(input: KycEngineInput): Promise<KycEngi
     // info = 0 pts, no score change — useful for admin review context
   }
 
-  // ── 6. Selfie not captured via camera signal ──────────────
-  // A file-uploaded selfie bypasses the live-camera liveness challenge, so it
-  // can never be auto-approved — force manual review regardless of score.
+  // ── 6. Selfie capture/liveness signals ────────────────────
+  // Capture metadata originates in the browser. It is useful review context,
+  // but it is not an attestation: a caller can fabricate multipart fields.
+  // Never let it decide an identity outcome without a human reviewer.
   let forceManualReview = false;
+  if (stepType === "selfie") {
+    forceManualReview = true;
+
+    if (captureMethod === "camera" && livenessPassed === true) {
+      await writeSignal(adminClient, {
+        userId,
+        artifactId,
+        signalCode: "browser_liveness_claimed",
+        severity: "info",
+        valueJson: { captureMethod, livenessPassed: true },
+      });
+    }
+  }
+
   if (stepType === "selfie" && captureMethod === "file_upload") {
     log.warn("Selfie uploaded via file instead of camera", { userId });
     await writeSignal(adminClient, {
@@ -459,7 +474,6 @@ export async function processKycArtifact(input: KycEngineInput): Promise<KycEngi
       valueJson: { captureMethod },
     });
     signalScore += SEVERITY_WEIGHT.warn;
-    forceManualReview = true;
   }
 
   // ── 6b. Camera selfie without a verified liveness challenge ──
@@ -476,7 +490,6 @@ export async function processKycArtifact(input: KycEngineInput): Promise<KycEngi
       valueJson: { captureMethod, livenessPassed: livenessPassed ?? null },
     });
     signalScore += SEVERITY_WEIGHT.warn;
-    forceManualReview = true;
   }
 
   // ── 7. Blur detection signal ──────────────────────────────
@@ -542,10 +555,11 @@ export async function processKycArtifact(input: KycEngineInput): Promise<KycEngi
     autoStatus = "needs_manual_review";
   }
 
-  // A selfie that bypassed the live-camera liveness challenge (file upload, or
-  // a camera capture without a verified challenge) must never be auto-approved.
-  if (forceManualReview && autoStatus !== "rejected") {
-    log.warn("Selfie liveness not verified — forcing manual review", {
+  // Every selfie requires a human decision. Browser-side liveness is only a
+  // convenience signal, not a server-verifiable proof of a live capture; this
+  // also prevents a forged `livenessPassed=true` field from auto-approving KYC.
+  if (forceManualReview) {
+    log.warn("Selfie requires manual review", {
       userId,
       artifactId,
       captureMethod,

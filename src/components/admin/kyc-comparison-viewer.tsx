@@ -79,6 +79,7 @@ const SIGNAL_SEVERITY_CLASSES: Record<string, string> = {
 
 /** Human-friendly labels for the signal codes an admin is likely to see here. */
 const SIGNAL_LABELS: Record<string, string> = {
+  browser_liveness_claimed: "Browser liveness challenge completed (not an attestation)",
   selfie_not_camera_captured: "Selfie uploaded as a file (not live camera)",
   liveness_not_verified: "Liveness challenge not completed",
   duplicate_sha256: "Exact duplicate of another account's image",
@@ -418,11 +419,28 @@ export function KycComparisonViewer({
               "The live-camera liveness challenge was not completed for this selfie. Confirm the face looks like a real, live person.",
           };
         }
+        if (hasSignal("low_liveness_score")) {
+          return {
+            tone: "bad",
+            label: "Low liveness score",
+            detail:
+              "The identity provider reported weak liveness. Do not approve based on the selfie alone; compare it closely with the ID document.",
+          };
+        }
+        if (hasSignal("browser_liveness_claimed")) {
+          return {
+            tone: "warn",
+            label: "Browser liveness check completed",
+            detail:
+              "The browser reports that the user completed the challenge. This is review context, not a server-verified proof, so a human decision is required.",
+          };
+        }
         if (selfieProvider && typeof selfieProvider.liveness_score === "number") {
           return {
             tone: "ok",
             label: `Liveness ${selfieProvider.liveness_score}/100`,
-            detail: "Captured live on camera with the liveness challenge completed.",
+            detail:
+              "Provider liveness score. Compare the selfie with the ID document before deciding.",
           };
         }
         // No negative signal, but also no positive proof of liveness (e.g. a

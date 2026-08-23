@@ -617,6 +617,15 @@ export function CameraCapture({
               </div>
             )}
           </div>
+          {requireLiveness && !livenessStatus.supported && (
+            <p
+              className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
+              role="status"
+            >
+              The automated liveness check is unavailable on this device. You can still take your
+              selfie, but it will require a manual review.
+            </p>
+          )}
           <Button
             type="button"
             ref={takePhotoButtonRef}

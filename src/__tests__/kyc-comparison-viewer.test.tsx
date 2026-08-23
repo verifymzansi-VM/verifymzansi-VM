@@ -338,6 +338,55 @@ describe("KycComparisonViewer", () => {
     });
   });
 
+  it("labels a completed browser liveness challenge as review context, not proof", async () => {
+    mockTwoImageArtifacts({
+      riskSignals: [
+        {
+          id: "sig-browser-liveness",
+          artifact_id: "selfie-1",
+          signal_code: "browser_liveness_claimed",
+          severity: "info",
+          value_json: { captureMethod: "camera", livenessPassed: true },
+          created_at: "2026-03-27T09:06:00Z",
+        },
+      ],
+      providerResults: [],
+    });
+
+    render(
+      <KycComparisonViewer isOpen userId="user-1" displayName="Test User" onClose={vi.fn()} />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Browser liveness check completed/i)).toBeDefined();
+      expect(screen.getByText(/not a server-verified proof/i)).toBeDefined();
+    });
+  });
+
+  it("surfaces a low provider liveness score as a blocking review warning", async () => {
+    mockTwoImageArtifacts({
+      riskSignals: [
+        {
+          id: "sig-low-liveness",
+          artifact_id: "selfie-1",
+          signal_code: "low_liveness_score",
+          severity: "warn",
+          value_json: { livenessScore: 20, threshold: 60 },
+          created_at: "2026-03-27T09:06:00Z",
+        },
+      ],
+      providerResults: [],
+    });
+
+    render(
+      <KycComparisonViewer isOpen userId="user-1" displayName="Test User" onClose={vi.fn()} />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/^Low liveness score$/i)).toBeDefined();
+    });
+  });
+
   it("renders risk signal chips with human-friendly labels", async () => {
     mockTwoImageArtifacts({
       riskSignals: [
