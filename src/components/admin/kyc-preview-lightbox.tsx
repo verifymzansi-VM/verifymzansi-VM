@@ -28,6 +28,7 @@ import {
   FileText,
   AlertTriangle,
   ExternalLink,
+  RefreshCw,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -38,6 +39,7 @@ import {
   setCachedKycArtifactBlob,
 } from "@/lib/utils/kyc-artifact-blob-cache";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { getKycZoomWidthClass, KYC_REVIEW_REASON_CODES } from "./kyc-review-constants";
 
 /* ------------------------------------------------------------------ */
@@ -88,6 +90,12 @@ const STEP_LABELS: Record<string, string> = {
   selfie: "Selfie Verification",
   location: "Location Proof",
 };
+
+// A KYC document is normally small and decrypted by the server before the
+// response begins. Never leave a reviewer on an indefinite loader if storage
+// or the network stops responding.
+export const EVIDENCE_FETCH_TIMEOUT_MS = 15_000;
+const EVIDENCE_FETCH_RETRIES = 1;
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -168,12 +176,17 @@ export function KycPreviewLightbox({
         }
 
         const fetchEvidenceById = async (targetArtifactId: string) => {
-          const res = await fetch(`/api/admin/verification/evidence`, {
-            method: "POST",
-            headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-            body: JSON.stringify({ artifactId: targetArtifactId }),
-            signal: controller.signal,
-          });
+          const res = await fetchWithRetry(
+            "/api/admin/verification/evidence",
+            {
+              method: "POST",
+              headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+              body: JSON.stringify({ artifactId: targetArtifactId }),
+              signal: controller.signal,
+            },
+            EVIDENCE_FETCH_RETRIES,
+            EVIDENCE_FETCH_TIMEOUT_MS
+          );
 
           if (res.ok) {
             const blob = await res.blob();
@@ -195,12 +208,17 @@ export function KycPreviewLightbox({
         let evidenceResult = await fetchEvidenceById(artifact.id);
 
         if (!evidenceResult.ok && evidenceResult.code === "not_found") {
-          const retryMetaRes = await fetch(`/api/admin/verification/evidence/metadata`, {
-            method: "POST",
-            headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-            body: JSON.stringify({ userId: step.user_id }),
-            signal: controller.signal,
-          });
+          const retryMetaRes = await fetchWithRetry(
+            "/api/admin/verification/evidence/metadata",
+            {
+              method: "POST",
+              headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+              body: JSON.stringify({ userId: step.user_id }),
+              signal: controller.signal,
+            },
+            EVIDENCE_FETCH_RETRIES,
+            EVIDENCE_FETCH_TIMEOUT_MS
+          );
 
           if (retryMetaRes.ok) {
             const retryMeta = await retryMetaRes.json();
@@ -240,7 +258,13 @@ export function KycPreviewLightbox({
         }
       } catch (err) {
         if (!cancelled && !controller.signal.aborted) {
-          setError(err instanceof Error ? err.message : "Failed to load document");
+          setError(
+            err instanceof DOMException && err.name === "AbortError"
+              ? "The document took too long to load. Please try again."
+              : err instanceof Error
+                ? err.message
+                : "Failed to load document"
+          );
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -284,6 +308,15 @@ export function KycPreviewLightbox({
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
   }, []);
+
+  const retryDocumentLoad = useCallback(() => {
+    if (blobUrl) {
+      URL.revokeObjectURL(blobUrl);
+      setBlobUrl(null);
+    }
+    setError(null);
+    setVisibilityReloadToken((token) => token + 1);
+  }, [blobUrl]);
 
   const handleZoomChange = useCallback((targetZoom: number) => {
     const boundedZoom = Math.min(3, Math.max(0.5, targetZoom));
@@ -451,6 +484,15 @@ export function KycPreviewLightbox({
             <div className="flex flex-col items-center justify-center py-6">
               <AlertTriangle className="h-8 w-8 text-destructive/60" />
               <p className="mt-2 text-sm text-destructive">{error}</p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3 gap-1"
+                onClick={retryDocumentLoad}
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Try again
+              </Button>
             </div>
           )}
 

@@ -98,7 +98,8 @@ Object.defineProperty(OriginalURL, "revokeObjectURL", {
   writable: true,
 });
 
-const { KycPreviewLightbox } = await import("@/components/admin/kyc-preview-lightbox");
+const { KycPreviewLightbox, EVIDENCE_FETCH_TIMEOUT_MS } =
+  await import("@/components/admin/kyc-preview-lightbox");
 
 // ── Test data ────────────────────────────────────────────────
 
@@ -341,6 +342,41 @@ describe("KycPreviewLightbox", () => {
     await waitFor(() => {
       expect(screen.getByText(/server error retrieving evidence/i)).toBeDefined();
     });
+  });
+
+  it("stops an indefinitely pending evidence request and lets the reviewer retry", async () => {
+    vi.useFakeTimers();
+    mockFetch.mockImplementation(
+      (_input: RequestInfo | URL, init?: RequestInit) =>
+        new Promise((_, reject) => {
+          init?.signal?.addEventListener(
+            "abort",
+            () => reject(new DOMException("The operation was aborted", "AbortError")),
+            { once: true }
+          );
+        })
+    );
+
+    try {
+      await renderOpenLightbox();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(EVIDENCE_FETCH_TIMEOUT_MS * 2 + 601);
+      });
+
+      expect(screen.getByText(/document took too long to load/i)).toBeDefined();
+      const retryButton = screen.getByRole("button", { name: /try again/i });
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+
+      await act(async () => {
+        fireEvent.click(retryButton);
+        await Promise.resolve();
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("reloads the document automatically after the tab becomes visible", async () => {
