@@ -71,6 +71,7 @@ docs/*
 !LAUNCH-CHECKLIST.md
 !LAUNCH-HARDENING-PLAN.md
 !docs/ARCHITECTURE.md
+!docs/POSTING-GUIDE.md
 !.github/**/*.md
 !docs/RUNBOOK.md
 !docs/playbooks/

@@ -179,7 +179,6 @@ function HeaderInner({
               imageClassName="drop-shadow-[0_10px_20px_rgba(15,23,42,0.08)] transition-transform duration-200 group-hover:scale-105"
             />
           </Link>
-          {renderThemeToggle("relative h-9 w-9 shrink-0 lg:hidden")}
         </div>
 
         {/* Marketplace Switcher — hidden on mobile, shown lg+ */}
@@ -298,17 +297,21 @@ function HeaderInner({
           )}
         </div>
 
-        {/* Mobile Hamburger */}
-        <button
-          type="button"
-          className="relative z-[120] justify-self-end rounded-md p-2 lg:hidden touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          onClick={() => setMobileOpen((prev) => !prev)}
-          aria-label={mobileOpen ? "Close menu" : "Open menu"}
-          aria-controls="mobile-nav-menu"
-          data-testid="mobile-menu-toggle"
-        >
-          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
+        {/* Mobile actions stay visible when the menu is closed. */}
+        <div className="flex shrink-0 items-center gap-1 justify-self-end lg:hidden">
+          {renderThemeToggle("relative h-9 w-9 shrink-0")}
+          {isAuthenticated && <NotificationBell userId={auth.user?.id} />}
+          <button
+            type="button"
+            className="relative z-[120] rounded-md p-2 touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            onClick={() => setMobileOpen((prev) => !prev)}
+            aria-label={mobileOpen ? "Close menu" : "Open menu"}
+            aria-controls="mobile-nav-menu"
+            data-testid="mobile-menu-toggle"
+          >
+            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile Marketplace Tabs — always visible on mobile */}
@@ -344,7 +347,6 @@ function HeaderInner({
                     </span>
                     {email && <span className="text-xs text-muted-foreground">{email}</span>}
                   </div>
-                  <NotificationBell userId={auth.user?.id} />
                 </div>
                 <Link
                   href="/dashboard"

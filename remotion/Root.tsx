@@ -5,10 +5,19 @@ import {
   VerifyMzansiLaunchReveal,
   VerifyMzansiPublicPromo,
 } from "./compositions/VerifyMzansiAdvert";
+import { VerifyMzansiPostingGuide } from "./compositions/PostingGuide";
 
 export const RemotionRoot = () => {
   return (
     <>
+      <Composition
+        id="VerifyMzansiPostingGuide"
+        component={VerifyMzansiPostingGuide}
+        durationInFrames={1680}
+        fps={30}
+        width={1080}
+        height={1920}
+      />
       <Composition
         id="VerifyMzansiAdvert"
         component={VerifyMzansiAdvert}
