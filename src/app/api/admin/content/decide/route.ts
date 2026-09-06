@@ -1,3 +1,4 @@
+import { trialErrorMessage } from "@/lib/billing/trial-errors";
 import { NextResponse } from "next/server";
 import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -125,6 +126,8 @@ export async function POST(request: Request) {
       .select("id");
 
     if (updateError) {
+      const trialMessage = trialErrorMessage(updateError.message);
+      if (trialMessage) return NextResponse.json({ error: trialMessage }, { status: 409 });
       return NextResponse.json({ error: "Failed to update content status" }, { status: 500 });
     }
 

@@ -1,151 +1,79 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import type { MarketplaceArea } from "@/types/enums";
-
+export type IntroTrialOffer = {
+  eligible: boolean;
+  sevenDayAvailable: boolean;
+  thirtyDayAvailable: boolean;
+  remaining: number;
+  launchEnabled: boolean;
+};
 export type FreePostUsage = {
   used: number;
   remaining: number;
   available: boolean;
+  offer?: IntroTrialOffer;
 };
-
 export type ClaimFreePostSlotArgs = {
   userId: string;
   area: MarketplaceArea;
   contentId: string;
-  maxAllowed?: number;
+  durationDays?: 7 | 30;
 };
-
 export type ReleaseFreePostSlotArgs = {
   userId: string;
   area: MarketplaceArea;
   contentId: string;
   reason: string;
 };
-
-function toUsage(used: number, maxAllowed: number): FreePostUsage {
-  const normalizedUsed = Math.max(0, used);
-  const remaining = Math.max(0, maxAllowed - normalizedUsed);
-
-  return {
-    used: normalizedUsed,
-    remaining,
-    available: remaining > 0,
-  };
-}
-
 export async function getActiveFreePostUsage(
   client: SupabaseClient,
-  userId: string,
-  area: MarketplaceArea,
-  maxAllowed = Number(FREE_POST_CONFIG.maxAllowed)
+  _userId: string,
+  area: MarketplaceArea
 ): Promise<FreePostUsage> {
-  const { count, error } = await client
-    .from("free_posts_used")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("area", area)
-    .is("released_at", null);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return toUsage(count ?? 0, maxAllowed);
+  // Eligibility is bound to auth.uid(), never to a browser-supplied user ID.
+  const { data, error } = await client.rpc("intro_trial_offer", { p_area: area });
+  if (error || !data) throw new Error("Unable to check introductory offer");
+  const offer = data as IntroTrialOffer;
+  const available = offer.eligible && (offer.sevenDayAvailable || offer.thirtyDayAvailable);
+  return { used: offer.eligible ? 0 : 1, remaining: available ? 1 : 0, available, offer };
 }
-
 export async function claimFreePostSlot(
   admin: SupabaseClient,
-  {
-    userId,
-    area,
-    contentId,
-    maxAllowed = Number(FREE_POST_CONFIG.maxAllowed),
-  }: ClaimFreePostSlotArgs
+  { userId, area, contentId, durationDays = 7 }: ClaimFreePostSlotArgs
 ): Promise<boolean> {
-  if (typeof admin.rpc === "function") {
-    const { data, error } = await admin.rpc("claim_free_post_slot", {
-      p_user_id: userId,
-      p_area: area,
-      p_content_id: contentId,
-      p_max_allowed: maxAllowed,
-    });
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    return data === true;
-  }
-
-  const { error } = await admin.from("free_posts_used").insert({
-    user_id: userId,
-    area,
-    content_id: contentId,
+  const { data, error } = await admin.rpc("reserve_intro_trial", {
+    p_user_id: userId,
+    p_area: area,
+    p_content_id: contentId,
+    p_duration_days: durationDays,
   });
-
-  if (error) {
-    if (error.code === "23505") {
-      return false;
-    }
-    throw new Error(error.message);
-  }
-
-  return true;
+  if (error) throw new Error(error.message);
+  return data === true;
 }
-
 export async function releaseFreePostSlot(
   admin: SupabaseClient,
   { userId, area, contentId, reason }: ReleaseFreePostSlotArgs
 ): Promise<boolean> {
-  const freePostsTable = admin.from("free_posts_used");
-
-  if (typeof freePostsTable.update === "function") {
-    const { data, error } = await freePostsTable
-      .update({
-        released_at: new Date().toISOString(),
-        release_reason: reason,
-      })
-      .eq("user_id", userId)
-      .eq("area", area)
-      .eq("content_id", contentId)
-      .is("released_at", null)
-      .select("id")
-      .maybeSingle();
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    return !!data;
-  }
-
-  if (typeof freePostsTable.delete === "function") {
-    const { error } = await freePostsTable
-      .delete()
-      .eq("user_id", userId)
-      .eq("area", area)
-      .eq("content_id", contentId);
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    return true;
-  }
-
-  throw new Error("free_posts_used release is not supported by this Supabase client");
+  const { data, error } = await admin.rpc("release_intro_trial", {
+    p_user_id: userId,
+    p_area: area,
+    p_content_id: contentId,
+    p_reason: reason,
+  });
+  if (error) throw new Error(error.message);
+  return data === true;
 }
-
-export async function releaseRejectedDeletedFreePost(
+export function releaseRejectedDeletedFreePost(
   admin: SupabaseClient,
   userId: string,
   area: MarketplaceArea,
   contentId: string
 ): Promise<boolean> {
-  return releaseFreePostSlot(admin, {
-    userId,
-    area,
-    contentId,
-    reason: "rejected_deleted",
-  });
+  return releaseFreePostSlot(admin, { userId, area, contentId, reason: "rejected_deleted" });
+}
+export function trialAvailabilityMessage(offer: IntroTrialOffer): string {
+  if (!offer.launchEnabled) return "The 30-day launch offer is currently paused.";
+  if (offer.remaining === 0) return "30-day free spaces are currently fully allocated.";
+  if (offer.remaining <= 10) return `Only ${offer.remaining} free 30-day spaces remaining.`;
+  return "Limited 30-day free spaces available.";
 }

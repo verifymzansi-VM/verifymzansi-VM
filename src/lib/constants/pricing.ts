@@ -247,8 +247,8 @@ export const TRIAL_CONFIG = {
 
 /* ── Free Post Config ────────────────────────────────────── */
 /**
- * Free posts per marketplace area.
- * Each account gets one free post in each area.
+ * One introductory post across all marketplace areas.
+ * Each verified identity chooses seven days or a limited 30-day launch trial.
  * Free posts expire after the configured duration.
  */
 export const FREE_POST_CONFIG = {
@@ -256,7 +256,7 @@ export const FREE_POST_CONFIG = {
   maxPhotos: 10,
   maxVideos: 1,
   videoAllowed: true,
-  maxAllowed: 1, // 1 post per area
+  maxAllowed: 1, // one introductory post across all areas
 } as const;
 
 export const PAID_POST_CONFIG = {

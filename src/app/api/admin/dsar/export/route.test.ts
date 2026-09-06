@@ -136,6 +136,7 @@ describe("GET /api/admin/dsar/export", () => {
         error: null,
       },
       verification_steps: { data: [], error: null },
+      intro_trial_claims: { data: [{ id: "trial-1", duration_days: 30 }], error: null },
       kyc_artifacts: { data: [], error: null },
       listings: { data: [{ id: "listing-1", title: "Honda Jazz" }], error: null },
       businesses: { data: [], error: null },

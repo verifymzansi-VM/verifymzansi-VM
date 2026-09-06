@@ -231,6 +231,7 @@ export default function CreateListingPage() {
   const [videoFile, setVideoFile] = useState<File[]>([]);
   const [videoCoverFile, setVideoCoverFile] = useState<File[]>([]);
   const [focalPoint, setFocalPoint] = useState<CropPosition>({ x: 0.5, y: 0.5 });
+  const [trialDays, setTrialDays] = useState<7 | 30>(7);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submissionInFlightRef = useRef(false);
@@ -777,6 +778,8 @@ export default function CreateListingPage() {
           focal_x: focalPoint.x,
           focal_y: focalPoint.y,
           termsAccepted,
+
+          trialDays,
         }),
       });
 
@@ -983,7 +986,7 @@ export default function CreateListingPage() {
 
       <main className="flex-1">
         <div className="container-page py-6">
-          <PlanGate area="MZANSI_MARKET">
+          <PlanGate area="MZANSI_MARKET" onTrialSelected={setTrialDays}>
             <form noValidate onSubmit={handleSubmit}>
               <PostFormScaffold
                 title="Create a Mzansi Market Listing"

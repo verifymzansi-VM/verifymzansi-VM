@@ -1,3 +1,4 @@
+import { getTrialAddonBlock } from "@/lib/billing/trial-addon-access";
 import { NextResponse, type NextRequest } from "next/server";
 import type { ZodType } from "zod";
 
@@ -202,6 +203,9 @@ export function createAddonCheckoutRouteCore<
       }
 
       const entityId = config.getEntityId(parsedParams.data);
+      const trialBlock = await getTrialAddonBlock(admin, entityId);
+      if (trialBlock)
+        return NextResponse.json({ error: trialBlock.error }, { status: trialBlock.status });
       const { data: pendingPmt, error: pendingError } = await admin
         .from("payments")
         .select("id")

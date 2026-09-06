@@ -1,3 +1,6 @@
+vi.mock("@/lib/billing/trial-addon-access", () => ({
+  getTrialAddonBlock: vi.fn().mockResolvedValue(null),
+}));
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { NextRequest } from "next/server";
 

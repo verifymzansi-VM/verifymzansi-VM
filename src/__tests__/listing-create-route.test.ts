@@ -1100,13 +1100,20 @@ describe("POST /api/listings", () => {
     const res = await POST(createRequest(VALID_BODY));
 
     expect(res.status).toBe(500);
-    expect(claimRpc).toHaveBeenCalledWith("claim_free_post_slot", {
+    expect(claimRpc).toHaveBeenCalledWith("reserve_intro_trial", {
       p_user_id: USER_ID,
       p_area: "MZANSI_MARKET",
       p_content_id: generatedListingId,
-      p_max_allowed: 1,
+      p_duration_days: 7,
     });
-    expect(releaseMaybeSingle).toHaveBeenCalled();
+    expect(claimRpc).toHaveBeenCalledWith(
+      "release_intro_trial",
+      expect.objectContaining({
+        p_user_id: USER_ID,
+        p_content_id: generatedListingId,
+        p_reason: "create_failed",
+      })
+    );
     randomUuidSpy.mockRestore();
   });
 

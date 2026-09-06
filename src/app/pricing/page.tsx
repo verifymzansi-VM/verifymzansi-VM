@@ -1,3 +1,4 @@
+import { TrialPolicy } from "@/components/billing/trial-policy";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
@@ -61,6 +62,7 @@ export default function PricingPage() {
         </section>
 
         <div className="container-page space-y-8 py-8 sm:py-10">
+          <TrialPolicy />
           <PlanTabs
             marketPlans={marketPlans}
             businessPlans={businessPlans}

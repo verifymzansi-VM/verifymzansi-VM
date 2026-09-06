@@ -285,6 +285,7 @@ function CreateBusinessContent() {
   const [promoVideoFile, setPromoVideoFile] = useState<File[]>([]);
   const [videoThumbnailFile, setVideoThumbnailFile] = useState<File[]>([]);
   const [focalPoint, setFocalPoint] = useState<CropPosition>({ x: 0.5, y: 0.5 });
+  const [trialDays, setTrialDays] = useState<7 | 30>(7);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [yearEstablished, setYearEstablished] = useState("");
   const [cipcRegistration, setCipcRegistration] = useState("");
@@ -974,6 +975,8 @@ function CreateBusinessContent() {
         load_shedding_ready: loadSheddingReady || undefined,
         number_of_employees: numberOfEmployees || undefined,
         termsAccepted,
+
+        trialDays,
       };
       const res = await fetch("/api/businesses", {
         method: "POST",
@@ -1243,7 +1246,7 @@ function CreateBusinessContent() {
       <Header isAuthenticated />
       <main className="flex-1">
         <div className="container-page py-6">
-          <PlanGate area="MZANSI_BUSINESS">
+          <PlanGate area="MZANSI_BUSINESS" onTrialSelected={setTrialDays}>
             <form noValidate onSubmit={handleSubmit}>
               <PostFormScaffold
                 title="Create a Mzansi Business Profile"

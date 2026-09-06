@@ -16,6 +16,8 @@ type MaybeUser = Pick<User, "app_metadata" | "is_anonymous"> | null | undefined;
    ────────────────────────────────────────────────────────── */
 
 export type Capability =
+  | "posting:bypass_limits"
+  | "trials:manage"
   // Moderator operations
   | "queue:view"
   | "queue:claim"
@@ -46,6 +48,7 @@ export type Capability =
 const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
   /* 3rd — Moderator: queue & case operations */
   moderator: new Set<Capability>([
+    "posting:bypass_limits",
     "queue:view",
     "queue:claim",
     "case:view",
@@ -55,6 +58,8 @@ const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
   ]),
   /* 2nd — Governance Controller: decisions, oversight, appeals, enforcement */
   governance_controller: new Set<Capability>([
+    "trials:manage",
+    "posting:bypass_limits",
     "queue:view",
     "case:view",
     "case:add_note",
@@ -71,6 +76,8 @@ const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
   ]),
   /* 1st — Admin: super-role — ALL platform capabilities */
   admin: new Set<Capability>([
+    "trials:manage",
+    "posting:bypass_limits",
     // Moderator operations
     "queue:view",
     "queue:claim",

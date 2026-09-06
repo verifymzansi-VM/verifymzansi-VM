@@ -1,3 +1,4 @@
+import { IntroductoryTrialCard } from "@/components/dashboard/introductory-trial-card";
 import { createClient } from "@/lib/supabase/server";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
@@ -365,6 +366,7 @@ export default async function DashboardPage() {
         )}
 
         {/* Right: Quick links (stacks below on mobile) */}
+        <IntroductoryTrialCard />
         <QuickLinks planLabel={planLabel} />
       </div>
     </div>

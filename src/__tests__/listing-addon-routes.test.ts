@@ -1,3 +1,6 @@
+vi.mock("@/lib/billing/trial-addon-access", () => ({
+  getTrialAddonBlock: vi.fn().mockResolvedValue(null),
+}));
 /**
  * Unit tests for the listing addon checkout routes:
  *   POST /api/listings/[id]/featured

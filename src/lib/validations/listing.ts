@@ -55,6 +55,10 @@ const listingBase = z.object({
   media_height: z.number().int().positive().optional(),
   focal_x: z.number().min(0).max(1).optional(),
   focal_y: z.number().min(0).max(1).optional(),
+  trialDays: z
+    .union([z.literal(7), z.literal(30)])
+    .optional()
+    .default(7),
   termsAccepted: z.boolean().optional().default(false),
 });
 

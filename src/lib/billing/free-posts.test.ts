@@ -1,160 +1,84 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  claimFreePostSlot,
   getActiveFreePostUsage,
+  claimFreePostSlot,
   releaseFreePostSlot,
-  releaseRejectedDeletedFreePost,
-} from "@/lib/billing/free-posts";
-
-describe("free-post helpers", () => {
-  it("returns used and remaining active free-post counts", async () => {
-    const client = {
-      from: vi.fn(() => ({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              is: vi.fn().mockResolvedValue({ count: 1, error: null }),
-            }),
-          }),
-        }),
-      })),
+  trialAvailabilityMessage,
+} from "./free-posts";
+describe("introductory trial client", () => {
+  it("binds eligibility to the authenticated RPC, not a supplied user or category", async () => {
+    const offer = {
+      eligible: true,
+      sevenDayAvailable: true,
+      thirtyDayAvailable: true,
+      remaining: 50,
+      launchEnabled: true,
     };
-
-    await expect(
-      getActiveFreePostUsage(client as never, "user-1", "MZANSI_MARKET", 2)
-    ).resolves.toEqual({
-      used: 1,
-      remaining: 1,
-      available: true,
-    });
+    const rpc = vi.fn().mockResolvedValue({ data: offer, error: null });
+    expect(await getActiveFreePostUsage({ rpc } as never, "ignored-user", "MZANSI_MARKET")).toEqual(
+      { used: 0, remaining: 1, available: true, offer }
+    );
+    expect(rpc).toHaveBeenCalledWith("intro_trial_offer", { p_area: "MZANSI_MARKET" });
   });
-
-  it("uses rpc claim when available", async () => {
-    const admin = {
-      rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
-    };
-
+  it("fails closed on database failure", async () => {
     await expect(
-      claimFreePostSlot(admin as never, {
-        userId: "user-1",
+      getActiveFreePostUsage(
+        { rpc: vi.fn().mockResolvedValue({ error: { message: "offline" } }) } as never,
+        "u",
+        "MZANSI_MARKET"
+      )
+    ).rejects.toThrow();
+  });
+  it.each([7, 30] as const)("reserves the selected %i days atomically", async (days) => {
+    const rpc = vi.fn().mockResolvedValue({ data: true, error: null });
+    expect(
+      await claimFreePostSlot({ rpc } as never, {
+        userId: "u",
         area: "MZANSI_MARKET",
-        contentId: "listing-1",
+        contentId: "c",
+        durationDays: days,
       })
-    ).resolves.toBe(true);
-    expect(admin.rpc).toHaveBeenCalledWith("claim_free_post_slot", {
-      p_user_id: "user-1",
+    ).toBe(true);
+    expect(rpc).toHaveBeenCalledWith("reserve_intro_trial", {
+      p_user_id: "u",
       p_area: "MZANSI_MARKET",
-      p_content_id: "listing-1",
-      p_max_allowed: 1,
+      p_content_id: "c",
+      p_duration_days: days,
     });
   });
-
-  it("queries usage by user and area so each category remains separate", async () => {
-    const calls: Array<{ column: string; value: unknown }> = [];
-    const client = {
-      from: vi.fn(() => ({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn((column: string, value: unknown) => {
-            calls.push({ column, value });
-            return {
-              eq: vi.fn((nestedColumn: string, nestedValue: unknown) => {
-                calls.push({ column: nestedColumn, value: nestedValue });
-                return {
-                  is: vi.fn().mockResolvedValue({ count: 1, error: null }),
-                };
-              }),
-            };
-          }),
-        }),
-      })),
-    };
-
+  it("never falls back to an unprotected insert", async () => {
     await expect(
-      getActiveFreePostUsage(client as never, "user-1", "MZANSI_BUSINESS")
-    ).resolves.toEqual({
-      used: 1,
-      remaining: 0,
-      available: false,
+      claimFreePostSlot({ from: vi.fn() } as never, {
+        userId: "u",
+        area: "MZANSI_MARKET",
+        contentId: "c",
+      })
+    ).rejects.toThrow();
+  });
+  it("releases through the service RPC without deleting history", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: true, error: null });
+    await releaseFreePostSlot({ rpc } as never, {
+      userId: "u",
+      area: "MZANSI_MARKET",
+      contentId: "c",
+      reason: "create_failed",
     });
-
-    expect(calls).toEqual([
-      { column: "user_id", value: "user-1" },
-      { column: "area", value: "MZANSI_BUSINESS" },
-    ]);
+    expect(rpc).toHaveBeenCalledWith(
+      "release_intro_trial",
+      expect.objectContaining({ p_reason: "create_failed" })
+    );
   });
-
-  it("falls back to insert and returns false on duplicate exhaustion", async () => {
-    const insert = vi
-      .fn()
-      .mockResolvedValue({ error: { code: "23505", message: "duplicate key value" } });
-    const admin = {
-      from: vi.fn(() => ({
-        insert,
-      })),
+  it("uses truthful scarcity thresholds", () => {
+    const offer = {
+      eligible: true,
+      sevenDayAvailable: true,
+      thirtyDayAvailable: true,
+      remaining: 50,
+      launchEnabled: true,
     };
-
-    await expect(
-      claimFreePostSlot(admin as never, {
-        userId: "user-1",
-        area: "MZANSI_MARKET",
-        contentId: "listing-1",
-      })
-    ).resolves.toBe(false);
-  });
-
-  it("releases claims by update when ledger columns are available", async () => {
-    const maybeSingle = vi.fn().mockResolvedValue({ data: { id: "claim-1" }, error: null });
-    const admin = {
-      from: vi.fn(() => ({
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                is: vi.fn().mockReturnValue({
-                  select: vi.fn().mockReturnValue({
-                    maybeSingle,
-                  }),
-                }),
-              }),
-            }),
-          }),
-        }),
-      })),
-    };
-
-    await expect(
-      releaseFreePostSlot(admin as never, {
-        userId: "user-1",
-        area: "MZANSI_MARKET",
-        contentId: "listing-1",
-        reason: "create_failed",
-      })
-    ).resolves.toBe(true);
-    expect(maybeSingle).toHaveBeenCalled();
-  });
-
-  it("releases rejected deleted content with the expected reason", async () => {
-    const maybeSingle = vi.fn().mockResolvedValue({ data: { id: "claim-1" }, error: null });
-    const admin = {
-      from: vi.fn(() => ({
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                is: vi.fn().mockReturnValue({
-                  select: vi.fn().mockReturnValue({
-                    maybeSingle,
-                  }),
-                }),
-              }),
-            }),
-          }),
-        }),
-      })),
-    };
-
-    await expect(
-      releaseRejectedDeletedFreePost(admin as never, "user-1", "MZANSI_MARKET", "listing-1")
-    ).resolves.toBe(true);
+    expect(trialAvailabilityMessage(offer)).toBe("Limited 30-day free spaces available.");
+    expect(trialAvailabilityMessage({ ...offer, remaining: 7 })).toContain("Only 7");
+    expect(trialAvailabilityMessage({ ...offer, remaining: 0 })).toContain("fully allocated");
+    expect(trialAvailabilityMessage({ ...offer, launchEnabled: false })).toContain("paused");
   });
 });

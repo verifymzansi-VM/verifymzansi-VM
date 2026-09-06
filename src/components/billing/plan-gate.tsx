@@ -1,4 +1,5 @@
 "use client";
+import { hasCapability } from "@/lib/auth/roles";
 
 import { useState, useEffect, type ReactNode } from "react";
 import Link from "next/link";
@@ -40,17 +41,22 @@ import {
 } from "@/lib/constants/pricing";
 import { getEntitlements } from "@/lib/services/entitlements";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
-import { getActiveFreePostUsage } from "@/lib/billing/free-posts";
+import {
+  getActiveFreePostUsage,
+  trialAvailabilityMessage,
+  type IntroTrialOffer,
+} from "@/lib/billing/free-posts";
 
 const FREE_POST_COUNT = Number(FREE_POST_CONFIG.maxAllowed);
-const FREE_POST_LABEL = FREE_POST_COUNT === 1 ? "post" : "posts";
 
 interface PlanGateProps {
+  onTrialSelected?: (days: 7 | 30) => void;
   area: MarketplaceArea;
   children: ReactNode;
 }
 
 interface PlanInfo {
+  offer?: IntroTrialOffer;
   tier: PlanTier | "free";
   isTrial: boolean;
   trialDaysLeft: number;
@@ -145,7 +151,7 @@ async function countCurrentAreaItems(
       query = query.eq("area", target.area);
     }
 
-    const { count } = await query.neq("status", "rejected");
+    const { count } = await query.not("status", "in", "(rejected,expired)");
     total += count ?? 0;
   }
 
@@ -313,7 +319,7 @@ function CheckoutRecoveryNotice({
 /* ─────────────────────────────────────────────────────────────
    PlanGate — main component
    ───────────────────────────────────────────────────────────── */
-export function PlanGate({ area, children }: PlanGateProps) {
+export function PlanGate({ area, children, onTrialSelected }: PlanGateProps) {
   const pathname = usePathname();
   const [loading, setLoading] = useState(true);
   const [planInfo, setPlanInfo] = useState<PlanInfo | null>(null);
@@ -388,9 +394,12 @@ export function PlanGate({ area, children }: PlanGateProps) {
           .maybeSingle();
 
         const tier = (entitlement?.tier as PlanTier) || null;
-        const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
+        const postingLimitBypassEnabled =
+          isPostingLimitBypassEnabled() || hasCapability(user, "posting:bypass_limits");
 
-        const freePostUsage = await getActiveFreePostUsage(supabase, user.id, area);
+        const freePostUsage = postingLimitBypassEnabled
+          ? { used: 0, remaining: 1, available: true, offer: undefined }
+          : await getActiveFreePostUsage(supabase, user.id, area);
         // In testing mode, keep the free-post flow open and remove the posting count cap.
         const freePostAvailable =
           !entitlement && (postingLimitBypassEnabled || freePostUsage.available);
@@ -435,6 +444,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
           isTrial,
           trialDaysLeft,
           freePostAvailable,
+          offer: freePostUsage.offer,
           freePostsUsed: freePostUsage.used,
           freePostsRemaining: freePostUsage.remaining,
           postingLimitBypassEnabled,
@@ -643,8 +653,8 @@ export function PlanGate({ area, children }: PlanGateProps) {
             <h2 className="font-display text-base font-bold">Choose Your Plan to Start Posting</h2>
           </div>
           <p className="text-white/80 text-xs max-w-xl">
-            You&apos;ve used all {FREE_POST_COUNT} free {FREE_POST_LABEL} for {AREA_LABELS[area]}.
-            Select a plan below to continue posting.
+            Your introductory offer is unavailable or awaiting review. Check your dashboard or
+            choose a paid plan. Select a plan below to continue posting.
           </p>
         </div>
 
@@ -720,6 +730,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
   if (planInfo.isTrial || planInfo.tier === "free") {
     return (
       <PlanPickerWithTrial
+        onTrialSelected={onTrialSelected}
         area={area}
         planInfo={planInfo}
         areaPlans={areaPlans}
@@ -777,6 +788,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
    PlanPickerWithTrial — shows plan cards + Continue with Trial
    ───────────────────────────────────────────────────────────── */
 function PlanPickerWithTrial({
+  onTrialSelected,
   area,
   planInfo,
   areaPlans,
@@ -788,6 +800,7 @@ function PlanPickerWithTrial({
   onCancelPendingPayment,
   children,
 }: {
+  onTrialSelected?: (days: 7 | 30) => void;
   area: MarketplaceArea;
   planInfo: PlanInfo;
   areaPlans: PlanDefinition[];
@@ -800,6 +813,12 @@ function PlanPickerWithTrial({
   children: ReactNode;
 }) {
   const [showForm, setShowForm] = useState(false);
+  const [trialDays, setTrialDays] = useState<7 | 30>(7);
+  const selectTrial = (days: 7 | 30) => {
+    setTrialDays(days);
+    onTrialSelected?.(days);
+    setShowForm(true);
+  };
   const usageText =
     planInfo.maxAllowed === -1
       ? "Unlimited posts"
@@ -816,8 +835,8 @@ function PlanPickerWithTrial({
             <Sparkles className="h-3.5 w-3.5 text-amber-500" />
             <span className="text-amber-600 dark:text-amber-400 font-medium">
               {planInfo.postingLimitBypassEnabled
-                ? `Testing Mode — Unlimited posts • ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`
-                : `Free Post — ${FREE_POST_CONFIG.durationDays} days • ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`}
+                ? `Staff / testing access — Unlimited posts • ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`
+                : `Introductory trial — ${trialDays} days • ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`}
             </span>
           </div>
 
@@ -866,24 +885,23 @@ function PlanPickerWithTrial({
                 </Badge>
                 <p className="text-xs text-amber-200">
                   {planInfo.postingLimitBypassEnabled
-                    ? `Posting limits removed for testing — ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`
-                    : `${planInfo.freePostsRemaining}/${FREE_POST_COUNT} free ${FREE_POST_LABEL} left — ${FREE_POST_CONFIG.durationDays} days visibility`}
+                    ? `Posting limits bypassed — ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`
+                    : "One introductory post across all three areas"}
                 </p>
               </div>
               <p className="text-white/70 text-xs">
                 {planInfo.postingLimitBypassEnabled
                   ? `Each post still uses free-tier media limits: ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video.`
-                  : `Post up to ${FREE_POST_COUNT} free ${FREE_POST_LABEL}. ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video • ${FREE_POST_CONFIG.durationDays} days • Per area`}
+                  : "Choose 7 or 30 days once. Standard placement; no boosts, featured placement or urgent badges. Your trial starts on approval. 30-day availability is checked again then."}
               </p>
             </div>
             <Button
               className="gap-2 bg-amber-500 hover:bg-amber-600 text-white shadow-sm border-0 whitespace-nowrap"
-              onClick={() => setShowForm(true)}
+              disabled={!planInfo.postingLimitBypassEnabled && !planInfo.offer?.sevenDayAvailable}
+              onClick={() => selectTrial(7)}
             >
               <ArrowRight className="h-4 w-4" />
-              {planInfo.postingLimitBypassEnabled
-                ? "Start Posting"
-                : `Use Your Free ${FREE_POST_LABEL}`}
+              {planInfo.postingLimitBypassEnabled ? "Start Posting" : "Choose 7 Days Free"}
             </Button>
           </div>
         </div>
@@ -899,6 +917,21 @@ function PlanPickerWithTrial({
         </div>
       )}
 
+      {planInfo.offer && planInfo.isTrial && !planInfo.postingLimitBypassEnabled && (
+        <div className="rounded-lg border p-4 space-y-2">
+          <p className="font-semibold">30-Day Free Launch Trial</p>
+          <p className="text-sm text-muted-foreground">
+            {trialAvailabilityMessage(planInfo.offer)}
+          </p>
+          <Button disabled={!planInfo.offer.thirtyDayAvailable} onClick={() => selectTrial(30)}>
+            Choose 30 Days Free
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            One post, one introductory choice. No automatic charge or free renewal. If capacity
+            fills before approval, your post stays pending; you can choose seven days instead.
+          </p>
+        </div>
+      )}
       {/* ── Section 2: Monthly Plans ─── */}
       <div className="space-y-2">
         <h3 className="font-display text-sm font-bold flex items-center gap-2">

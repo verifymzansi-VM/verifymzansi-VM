@@ -175,6 +175,7 @@ export async function GET(request: NextRequest) {
     let contactEvents: Record<string, unknown>[] = [];
     let payments: Record<string, unknown>[] = [];
     let userAuditLogs: Record<string, unknown>[] = [];
+    let introductoryTrials: Record<string, unknown>[] = [];
 
     const { data: caseAuditLogs } = await caseAuditQuery;
 
@@ -267,6 +268,16 @@ export async function GET(request: NextRequest) {
           .limit(250),
       ]);
 
+      const trialRows = await admin
+        .from("intro_trial_claims")
+        .select(
+          "id,area,content_id,duration_days,created_at,activated_at,expires_at,released_at,release_reason,converted_at"
+        )
+        .eq("user_id", matchedUserId)
+        .order("created_at", { ascending: true })
+        .limit(500);
+      if (trialRows.error) throw new Error("Unable to export introductory trial records");
+      introductoryTrials = trialRows.data ?? [];
       accountProfile = (profileResult.data as Record<string, unknown> | null) || null;
       verificationSteps = (verificationStepsResult.data as Record<string, unknown>[] | null) || [];
       kycArtifacts = (kycArtifactsResult.data as Record<string, unknown>[] | null) || [];
@@ -322,6 +333,7 @@ export async function GET(request: NextRequest) {
         contactEvents,
         payments,
         userAuditLogs,
+        introductoryTrials,
       },
     };
 

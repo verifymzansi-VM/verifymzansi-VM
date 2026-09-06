@@ -297,6 +297,7 @@ describe("POST /api/promotions", () => {
   it("blocks a free promotion once the free-post limit is exhausted", async () => {
     mockAuth({ id: USER_ID });
     mockCreateAdminClient.mockReturnValue({
+      rpc: vi.fn().mockResolvedValue({ data: false, error: null }),
       from: vi.fn((table: string) => {
         if (table === "account_profiles") {
           return {
@@ -562,16 +563,16 @@ describe("POST /api/promotions", () => {
     const res = await POST(req);
 
     expect(res.status).toBe(500);
-    expect(claimRpc).toHaveBeenCalledWith("claim_free_post_slot", {
+    expect(claimRpc).toHaveBeenCalledWith("reserve_intro_trial", {
       p_user_id: USER_ID,
       p_area: "PROMOTIONS_EVENTS",
       p_content_id: generatedPromotionId,
-      p_max_allowed: 1,
+      p_duration_days: 7,
     });
-    expect(releaseUserEq).toHaveBeenCalledWith("user_id", USER_ID);
-    expect(releaseAreaEq).toHaveBeenCalledWith("area", "PROMOTIONS_EVENTS");
-    expect(releaseContentEq).toHaveBeenCalledWith("content_id", generatedPromotionId);
-    expect(releaseMaybeSingle).toHaveBeenCalled();
+    expect(claimRpc).toHaveBeenCalledWith(
+      "release_intro_trial",
+      expect.objectContaining({ p_user_id: USER_ID, p_reason: "create_failed" })
+    );
     randomUuidSpy.mockRestore();
   });
 

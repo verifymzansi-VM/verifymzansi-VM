@@ -63,9 +63,9 @@ export default async function HomePage() {
     href: category.href,
     ...categoryStyles[category.id],
   }));
-  const freePostCount = Number(FREE_POST_CONFIG.maxAllowed);
+
   const freePostHighlights = [
-    `${freePostCount} free ${freePostCount === 1 ? "post" : "posts"} per area`,
+    "One free introductory post: 7 or limited 30 days",
     `${FREE_POST_CONFIG.maxPhotos} photos + ${FREE_POST_CONFIG.maxVideos} video`,
     "Trust-first publishing",
   ] as const;

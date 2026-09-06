@@ -1,3 +1,6 @@
+vi.mock("@/lib/billing/trial-addon-access", () => ({
+  getTrialAddonBlock: vi.fn().mockResolvedValue(null),
+}));
 /**
  * Regression tests for the "Feature listing checkout broken" incident.
  *

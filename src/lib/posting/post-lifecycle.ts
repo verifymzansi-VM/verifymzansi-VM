@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { FREE_POST_CONFIG, PAID_POST_CONFIG } from "@/lib/constants/pricing";
 import type { MarketplaceArea } from "@/types/enums";
 
-const POST_TERMS_VERSION = "post-terms-2026-05-15";
+const POST_TERMS_VERSION = "post-terms-2026-09-06";
 
 type ConsentSupabase = Pick<SupabaseClient, "from">;
 
@@ -81,10 +81,12 @@ export async function recordPostTermsAcceptance(
     userId,
     area,
     contentId,
+    trialDays = 7,
   }: {
     userId: string;
     area: MarketplaceArea;
     contentId: string;
+    trialDays?: 7 | 30;
   }
 ): Promise<void> {
   const consentTable = client.from("consent_records") as unknown as {
@@ -106,7 +108,8 @@ export async function recordPostTermsAcceptance(
     metadata: {
       area,
       content_id: contentId,
-      free_post_duration_days: FREE_POST_CONFIG.durationDays,
+      introductory_trial_duration_days: trialDays,
+      introductory_trial_scope: "one_per_verified_identity",
     },
   });
 

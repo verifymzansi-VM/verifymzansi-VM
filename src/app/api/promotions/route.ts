@@ -1,3 +1,4 @@
+import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -294,7 +295,9 @@ export async function POST(request: NextRequest) {
       return planResult.response;
     }
     const { hasPaidPlan, tier, entitlements: ent } = planResult;
-    const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
+    const postingLimitBypassEnabled =
+      isPostingLimitBypassEnabled() ||
+      (await verifyCapabilityFromDb(user, "posting:bypass_limits"));
 
     const body = await parseJsonRequest(request);
     if (body === null) {
@@ -392,6 +395,7 @@ export async function POST(request: NextRequest) {
     if (!hasPaidPlan && !postingLimitBypassEnabled) {
       try {
         freePostClaimed = await claimFreePostSlot(getAdmin(), {
+          durationDays: data.trialDays,
           userId: user.id,
           area: AREA,
           contentId: freePostContentId,
@@ -409,7 +413,7 @@ export async function POST(request: NextRequest) {
           {
             error: "Free post limit reached",
             reason:
-              "You have already used your free post for Tourism & Events. Subscribe to a plan to post more.",
+              "Your introductory offer is used, pending review, paused, or requires verification. Check your dashboard or choose a paid plan.",
             upgradeUrl: "/billing",
           },
           { status: 403 }
@@ -449,7 +453,7 @@ export async function POST(request: NextRequest) {
       logo_url: data.logo_url || null,
       event_details: data.event_details ?? null,
       status: "pending_moderation",
-      expires_at: getPostExpiryIso({ hasPaidPlan }),
+      expires_at: getPostExpiryIso({ hasPaidPlan: hasPaidPlan || postingLimitBypassEnabled }),
     };
 
     let promotion: { id: string } | null = null;
@@ -530,6 +534,7 @@ export async function POST(request: NextRequest) {
 
     try {
       await recordPostTermsAcceptance(getAdmin(), {
+        trialDays: data.trialDays,
         userId: user.id,
         area: AREA,
         contentId: promotion.id,

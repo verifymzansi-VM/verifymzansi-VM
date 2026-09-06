@@ -45,7 +45,7 @@
     "secret-scan": "tsx scripts/secret-scan.ts",
     "secret-scan:strict": "tsx scripts/secret-scan.ts --strict",
     "test": "pnpm test:blocking",
-    "test:blocking": "tsx scripts/run-vitest.ts blocking",
+    "test:blocking": "tsx scripts/run-vitest.ts blocking && pnpm test:trials",
     "stability:check": "pnpm lint --max-warnings=0 && pnpm typecheck && pnpm test:smoke && pnpm test:blocking && pnpm build && pnpm audit --prod",
     "test:all": "pnpm test:blocking && pnpm test:coverage:core && pnpm exec playwright test",
     "test:deep": "pnpm test:coverage:core && pnpm exec playwright test",
@@ -98,7 +98,8 @@
     "prepare": "husky",
     "generate:api-types": "pnpm exec openapi-typescript docs/openapi.json -o src/lib/api/v1.d.ts && pnpm exec prettier --write src/lib/api/v1.d.ts",
     "quality:openapi-drift": "tsx scripts/check-openapi-drift.ts",
-    "quality:lighthouse": "lhci autorun --config=.lighthouserc.json"
+    "quality:lighthouse": "lhci autorun --config=.lighthouserc.json",
+    "test:trials": "node scripts/test-intro-trials.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1018.0",
@@ -142,6 +143,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.2",
+    "@electric-sql/pglite": "^0.5.8",
     "@lhci/cli": "^0.15.1",
     "@next/env": "16.2.11",
     "@opennextjs/cloudflare": "^1.19.1",
@@ -191,7 +193,9 @@
     ],
     "overrides": {
       "tailwindcss": "3.4.19",
-      "fast-uri": "3.1.5",
+      "fast-uri": "3.1.6",
+      "esbuild@>=0.27.3 <0.28.1": "0.28.1",
+      "postcss-selector-parser@>=6.1.0 <6.1.3": "6.1.3",
       "fast-xml-builder": "1.2.0",
       "fast-xml-parser": ">=5.7.0",
       "postcss": "8.5.23",
@@ -209,7 +213,9 @@
   "overrides": {
     "tailwindcss": "3.4.19",
     "@aws-sdk/xml-builder": "^3.972.5",
-    "fast-uri": "3.1.5",
+    "fast-uri": "3.1.6",
+    "esbuild@>=0.27.3 <0.28.1": "0.28.1",
+    "postcss-selector-parser@>=6.1.0 <6.1.3": "6.1.3",
     "fast-xml-builder": "1.2.0",
     "fast-xml-parser": ">=5.7.0",
     "postcss": "$postcss",

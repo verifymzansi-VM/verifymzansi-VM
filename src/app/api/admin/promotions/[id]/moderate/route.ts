@@ -1,3 +1,4 @@
+import { trialErrorMessage } from "@/lib/billing/trial-errors";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -140,6 +141,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .in("status", ["pending_moderation", "live", "hidden", "rejected"]);
 
     if (updateError) {
+      const trialMessage = trialErrorMessage(updateError.message);
+      if (trialMessage) return NextResponse.json({ error: trialMessage }, { status: 409 });
       log.error("Failed to moderate promotion", { error: updateError.message });
       return NextResponse.json(
         { error: "Failed to moderate Tourism & Events post" },

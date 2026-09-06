@@ -1,8 +1,9 @@
+import { TrialPolicy } from "@/components/billing/trial-policy";
 import { Gift, ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
-import { FREE_POST_CONFIG, getActivePlansByArea } from "@/lib/constants/pricing";
+import { getActivePlansByArea } from "@/lib/constants/pricing";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { BillingPlanGrid } from "@/components/billing/plan-grid";
@@ -17,7 +18,6 @@ export const metadata = {
 
 export default function BillingPage() {
   const { marketPlans, businessPlans, promotionPlans } = getActivePlansByArea();
-  const freePostCount = Number(FREE_POST_CONFIG.maxAllowed);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -27,7 +27,7 @@ export default function BillingPage() {
           <PageHeader
             centered
             title="Choose your plan"
-            description="Start free, then upgrade only when you want stronger placement and reach."
+            description="Choose an introductory trial, then a paid plan to keep posting after it ends."
             className="border-0 pb-0"
           />
 
@@ -39,11 +39,7 @@ export default function BillingPage() {
                   <Gift className="mr-1.5 h-3.5 w-3.5 shrink-0" /> Free
                 </Badge>
                 <span className="text-xs font-medium leading-tight text-foreground/90">
-                  {freePostCount} free {freePostCount === 1 ? "post" : "posts"} per area —{" "}
-                  <span className="opacity-80">
-                    {FREE_POST_CONFIG.maxPhotos} photos, {FREE_POST_CONFIG.maxVideos} video,{" "}
-                    {FREE_POST_CONFIG.durationDays} days
-                  </span>
+                  One introductory choice: 7 days or limited 30 days.
                 </span>
               </div>
               <Button
@@ -59,6 +55,7 @@ export default function BillingPage() {
             </div>
           </div>
 
+          <TrialPolicy />
           <PlanTabs
             marketPlans={marketPlans}
             businessPlans={businessPlans}

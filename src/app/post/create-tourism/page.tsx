@@ -428,6 +428,7 @@ function CreateTourismContent() {
   const [videoFiles, setVideoFiles] = useState<File[]>([]);
   const [videoThumbnailFile, setVideoThumbnailFile] = useState<File[]>([]);
   const [focalPoint, setFocalPoint] = useState<CropPosition>({ x: 0.5, y: 0.5 });
+  const [trialDays, setTrialDays] = useState<7 | 30>(7);
   const [termsAccepted, setTermsAccepted] = useState(false);
 
   /* ── Derived ─────────────────────────────────────────────── */
@@ -1184,6 +1185,8 @@ function CreateTourismContent() {
             suburb: locationTown || "",
           },
           termsAccepted,
+
+          trialDays,
         };
 
         const res = await fetch("/api/businesses", {
@@ -1312,6 +1315,8 @@ function CreateTourismContent() {
           business_id: businessId || undefined,
           event_details: Object.keys(eventDetails).length > 0 ? eventDetails : undefined,
           termsAccepted,
+
+          trialDays,
         };
 
         const res = await fetch("/api/promotions", {
@@ -1735,7 +1740,7 @@ function CreateTourismContent() {
       <Header isAuthenticated />
       <main className="flex-1">
         <div className="container-page py-6">
-          <PlanGate area="PROMOTIONS_EVENTS">
+          <PlanGate area="PROMOTIONS_EVENTS" onTrialSelected={setTrialDays}>
             <form noValidate onSubmit={handleSubmit}>
               <PostFormScaffold
                 title={

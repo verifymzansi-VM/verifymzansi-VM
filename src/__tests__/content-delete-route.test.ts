@@ -172,6 +172,7 @@ describe("POST /api/content/delete", () => {
       },
     });
     mockCreateAdminClient.mockReturnValue({
+      rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
       from: vi.fn((table: string) => {
         if (table === "r2_cleanup_queue") {
           return { insert: cleanupInsert };
@@ -265,6 +266,7 @@ describe("POST /api/content/delete", () => {
       },
     });
     mockCreateAdminClient.mockReturnValue({
+      rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
       from: vi.fn((table: string) => {
         if (table === "free_posts_used") {
           return {
@@ -296,7 +298,10 @@ describe("POST /api/content/delete", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(releaseMaybeSingle).toHaveBeenCalled();
+    expect(mockCreateAdminClient().rpc).toHaveBeenCalledWith(
+      "release_intro_trial",
+      expect.objectContaining({ p_user_id: "user-1", p_reason: "rejected_deleted" })
+    );
   });
 
   it("does not release a free-post claim for non-rejected deletes", async () => {
@@ -390,6 +395,7 @@ describe("POST /api/content/delete", () => {
       },
     });
     mockCreateAdminClient.mockReturnValue({
+      rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
       from: vi.fn((table: string) => {
         if (table === "businesses") {
           return from(table);
@@ -425,6 +431,9 @@ describe("POST /api/content/delete", () => {
 
     expect(res.status).toBe(200);
     expect(deleteEq).toHaveBeenCalledWith("id", "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11");
-    expect(releaseMaybeSingle).toHaveBeenCalled();
+    expect(mockCreateAdminClient().rpc).toHaveBeenCalledWith(
+      "release_intro_trial",
+      expect.objectContaining({ p_user_id: "user-1", p_reason: "rejected_deleted" })
+    );
   });
 });

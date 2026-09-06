@@ -81,12 +81,12 @@ export default function TermsPage() {
       ],
     },
     {
-      title: "7. Free Posts & Visibility Periods",
+      title: "7. Introductory Trials & Visibility",
       content: [
-        "Free posts are promotional trial access and do not create an ongoing entitlement.",
+        "Eligible verified members may activate one introductory post across all three posting areas: seven days, or a limited 30-Day Free Launch Trial. Previous free-post usage counts. Activation permanently consumes the introductory benefit for the verified identity; deleting content or an account does not reset it.",
         "A free post remains visible only for the free-post visibility period shown in the posting flow. After that period expires, VerifyMzansi may automatically mark the post as expired and remove it from public browsing, search, detail pages, and promotional surfaces.",
-        "Expired free posts may remain visible to the account holder in dashboard or administrative records unless deleted under platform retention, safety, legal, or support processes.",
-        "Paid plans, add-ons, and moderation decisions do not waive these free-post terms unless the checkout or plan page expressly says otherwise.",
+        "Expired posts and their media remain saved in the owner dashboard for paid renewal, subject to account deletion, legal retention and safety processes. Expiry alone does not delete them.",
+        "Trial duration starts at successful approval. Each posting area defaults to 50 simultaneously active 30-day customer trials; campaign settings and availability may change. Pending posts do not reserve active slots. If the pool is full at approval, the post stays pending and the owner may choose the enabled seven-day offer instead. An unactivated rejected post does not consume the benefit. Activated trials include standard placement only, with no boost, featured placement, urgent badge, automatic charge or repeated free renewal. Events end at the earlier of event end and trial expiry.",
       ],
     },
     {

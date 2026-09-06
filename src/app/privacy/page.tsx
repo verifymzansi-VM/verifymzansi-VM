@@ -14,6 +14,14 @@ export default function PrivacyPolicyPage() {
   const trustConfig = getTrustPublicConfig();
   const dataHandlingRows = [
     {
+      dataType: "Introductory-offer identity token",
+      purpose: "Prevent repeated trial claims across accounts",
+      recipients: "Restricted platform fraud-prevention workflows; never public",
+      retention:
+        "A keyed identity token and redemption date are retained after account deletion to enforce the one-time offer",
+      deletion: "Request a review through the data-rights workflow",
+    },
+    {
       dataType: "ID number",
       purpose: "Identity verification, duplicate-account checks, fraud prevention",
       recipients: "Internal reviewers and KYC/infrastructure providers where required",

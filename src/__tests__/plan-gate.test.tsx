@@ -12,11 +12,13 @@ vi.mock("next/navigation", () => ({
 // Mock Supabase client
 const mockGetUser = vi.fn();
 const mockFrom = vi.fn();
+const mockTrialRpc = vi.fn();
 
 vi.mock("@/lib/supabase/client", () => ({
   createClient: vi.fn(() => ({
     auth: { getUser: mockGetUser },
     from: mockFrom,
+    rpc: mockTrialRpc,
   })),
 }));
 
@@ -102,6 +104,7 @@ vi.mock("@/types/enums", async (importOriginal) => {
 });
 
 vi.mock("@/lib/account/compat", () => ({
+  normalizeUserRole: (role: string | null) => role,
   getOwnerColumn: vi.fn().mockResolvedValue("owner_id"),
   OWNER_COMPAT_TABLES: ["listings", "businesses", "promotions", "leads", "contact_events"],
 }));
@@ -120,7 +123,7 @@ function createCountQuery(count: number, eqCalls?: Array<{ column: string; value
       eqCalls?.push({ column, value });
       return query;
     }),
-    neq: vi.fn().mockResolvedValue({ count, error: null }),
+    not: vi.fn().mockResolvedValue({ count, error: null }),
   };
 
   return {
@@ -131,6 +134,16 @@ function createCountQuery(count: number, eqCalls?: Array<{ column: string; value
 describe("PlanGate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockTrialRpc.mockResolvedValue({
+      data: {
+        eligible: false,
+        sevenDayAvailable: false,
+        thirtyDayAvailable: false,
+        remaining: 50,
+        launchEnabled: true,
+      },
+      error: null,
+    });
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -468,6 +481,17 @@ describe("PlanGate", () => {
   });
 
   it("shows the free-post trial state when one free post remains", async () => {
+    const selectedTrial = vi.fn();
+    mockTrialRpc.mockResolvedValue({
+      data: {
+        eligible: true,
+        sevenDayAvailable: true,
+        thirtyDayAvailable: true,
+        remaining: 50,
+        launchEnabled: true,
+      },
+      error: null,
+    });
     mockFrom.mockImplementation((table: string) => {
       if (table === "account_profiles") {
         return {
@@ -522,19 +546,36 @@ describe("PlanGate", () => {
     });
 
     render(
-      <PlanGate area={"MZANSI_MARKET" as never}>
+      <PlanGate area={"MZANSI_MARKET" as never} onTrialSelected={selectedTrial}>
         <div>Protected Content</div>
       </PlanGate>
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/1\/1 free post left/i)).toBeTruthy();
+      expect(screen.getByText(/One introductory post across all three areas/i)).toBeTruthy();
     });
-    expect(screen.getByRole("button", { name: /use your free post/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Choose 7 Days Free/i })).toBeTruthy();
     expect(screen.queryByText(/used your free post/i)).toBeNull();
+    // Selecting the launch offer opens the form without reserving or consuming
+    // an entitlement. The posting API receives the duration through the callback.
+    fireEvent.click(screen.getByRole("button", { name: /Choose 30 Days Free/i }));
+    expect(screen.getByText("Protected Content")).toBeTruthy();
+    expect(screen.getByText(/Introductory trial — 30 days/i)).toBeTruthy();
+    expect(selectedTrial).toHaveBeenCalledWith(30);
+    expect(mockTrialRpc.mock.calls.every(([name]) => name === "intro_trial_offer")).toBe(true);
   });
 
   it("keeps tourism business rows from consuming the Mzansi Business gate", async () => {
+    mockTrialRpc.mockResolvedValue({
+      data: {
+        eligible: true,
+        sevenDayAvailable: true,
+        thirtyDayAvailable: true,
+        remaining: 50,
+        launchEnabled: true,
+      },
+      error: null,
+    });
     const businessCountEqCalls: Array<{ column: string; value: unknown }> = [];
 
     mockFrom.mockImplementation((table: string) => {
@@ -597,7 +638,7 @@ describe("PlanGate", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/1\/1 free post left/i)).toBeTruthy();
+      expect(screen.getByText(/One introductory post across all three areas/i)).toBeTruthy();
     });
 
     expect(businessCountEqCalls).toEqual(

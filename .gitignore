@@ -72,6 +72,7 @@ docs/*
 !LAUNCH-HARDENING-PLAN.md
 !docs/ARCHITECTURE.md
 !docs/POSTING-GUIDE.md
+!docs/introductory-trial-strategy.md
 !.github/**/*.md
 !docs/RUNBOOK.md
 !docs/playbooks/

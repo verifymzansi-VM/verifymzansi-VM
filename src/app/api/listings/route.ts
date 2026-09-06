@@ -1,3 +1,4 @@
+import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -567,7 +568,9 @@ export async function POST(request: NextRequest) {
 
     const hasPaidPlan = !!activeEntitlement;
     const tier = (activeEntitlement?.tier as string) || null;
-    const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
+    const postingLimitBypassEnabled =
+      isPostingLimitBypassEnabled() ||
+      (await verifyCapabilityFromDb(user, "posting:bypass_limits"));
 
     // ── Enforce photo/video limits based on plan ─────────────
     // Validate before claiming a free-post slot so validation failures never
@@ -626,6 +629,7 @@ export async function POST(request: NextRequest) {
     if (!hasPaidPlan && !postingLimitBypassEnabled) {
       try {
         freePostClaimed = await claimFreePostSlot(getAdmin(), {
+          durationDays: data.trialDays,
           userId: user.id,
           area: AREA,
           contentId: freePostContentId,
@@ -643,7 +647,7 @@ export async function POST(request: NextRequest) {
           {
             error: "Free post limit reached",
             reason:
-              "You have already used your free post for Mzansi Market. Subscribe to a plan to post more.",
+              "Your introductory offer is used, pending review, paused, or requires verification. Check your dashboard or choose a paid plan.",
             upgradeUrl: "/billing",
           },
           { status: 403 }
@@ -690,7 +694,7 @@ export async function POST(request: NextRequest) {
       media_height: data.media_height ?? null,
       focal_x: data.focal_x ?? 0.5,
       focal_y: data.focal_y ?? 0.5,
-      expires_at: getPostExpiryIso({ hasPaidPlan }),
+      expires_at: getPostExpiryIso({ hasPaidPlan: hasPaidPlan || postingLimitBypassEnabled }),
     };
 
     // ── Insert listing (atomic limit check + insert) ─────────
@@ -805,6 +809,7 @@ export async function POST(request: NextRequest) {
 
     try {
       await recordPostTermsAcceptance(getAdmin(), {
+        trialDays: data.trialDays,
         userId: user.id,
         area: AREA,
         contentId: newListing.id,

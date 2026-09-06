@@ -1,3 +1,4 @@
+import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -227,7 +228,9 @@ export async function POST(request: NextRequest) {
       return planResult.response;
     }
     const { hasPaidPlan, tier, entitlements: ent } = planResult;
-    const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
+    const postingLimitBypassEnabled =
+      isPostingLimitBypassEnabled() ||
+      (await verifyCapabilityFromDb(user, "posting:bypass_limits"));
 
     // The paid-plan post limit is enforced atomically inside
     // insert_business_with_limit: the per-user advisory lock is held across
@@ -283,6 +286,7 @@ export async function POST(request: NextRequest) {
     if (!hasPaidPlan && !postingLimitBypassEnabled) {
       try {
         freePostClaimed = await claimFreePostSlot(getAdmin(), {
+          durationDays: data.trialDays,
           userId: user.id,
           area: effectiveArea,
           contentId: freePostContentId,
@@ -301,8 +305,8 @@ export async function POST(request: NextRequest) {
             error: "Free post limit reached",
             reason:
               effectiveArea === "PROMOTIONS_EVENTS"
-                ? "You have already used your free post for Tourism & Events. Subscribe to a plan to post more."
-                : "You have already used your free post for Mzansi Business. Subscribe to a plan to post more.",
+                ? "Your introductory offer is used, pending review, paused, or requires verification. Check your dashboard or choose a paid plan."
+                : "Your introductory offer is used, pending review, paused, or requires verification. Check your dashboard or choose a paid plan.",
             upgradeUrl: "/billing",
           },
           { status: 403 }
@@ -315,7 +319,7 @@ export async function POST(request: NextRequest) {
       area: effectiveArea,
       ...buildBusinessMutationPayload(data),
       status: "pending_moderation" as const,
-      expires_at: getPostExpiryIso({ hasPaidPlan }),
+      expires_at: getPostExpiryIso({ hasPaidPlan: hasPaidPlan || postingLimitBypassEnabled }),
     };
 
     // Ownership is enforced inside insert_business_with_limit (forced to the
@@ -384,6 +388,7 @@ export async function POST(request: NextRequest) {
 
     try {
       await recordPostTermsAcceptance(getAdmin(), {
+        trialDays: data.trialDays,
         userId: user.id,
         area: effectiveArea,
         contentId: business.id,

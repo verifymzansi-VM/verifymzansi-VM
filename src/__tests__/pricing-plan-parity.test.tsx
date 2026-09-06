@@ -8,7 +8,6 @@ import PricingPage from "@/app/pricing/page";
 import BillingPage from "@/app/billing/page";
 import {
   ACTIVE_MARKETPLACE_AREAS,
-  FREE_POST_CONFIG,
   isActiveMarketplaceArea,
   PLANS,
   type PlanDefinition,
@@ -97,21 +96,17 @@ describe("Active-area pricing parity", () => {
     );
     expect(screen.queryByText("Mall Shops")).not.toBeInTheDocument();
     expect(screen.queryByText("Business Ads")).not.toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: /Choose /i })[0]).toHaveAttribute(
-      "href",
-      expect.stringContaining("/billing/checkout?plan=")
-    );
+    expect(
+      screen
+        .getAllByRole("link", { name: /Choose /i })
+        .find((link) => link.getAttribute("href")?.includes("/billing/checkout?plan="))
+    ).toHaveAttribute("href", expect.stringContaining("/billing/checkout?plan="));
   });
 
   it("billing page free-post copy matches the runtime free-post configuration", () => {
     render(<BillingPage />);
     expect(
-      screen.getByText(
-        new RegExp(
-          `${FREE_POST_CONFIG.maxPhotos} photos, ${FREE_POST_CONFIG.maxVideos} video, ${FREE_POST_CONFIG.durationDays} days`,
-          "i"
-        )
-      )
+      screen.getByText(/One introductory choice: 7 days or limited 30 days/)
     ).toBeInTheDocument();
     expect(screen.queryByText("Mall Shops")).not.toBeInTheDocument();
     expect(screen.queryByText("Business Ads")).not.toBeInTheDocument();

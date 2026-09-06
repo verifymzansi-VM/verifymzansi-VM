@@ -187,6 +187,7 @@ describe("POST /api/businesses", () => {
 
   it("blocks a free post once the free-post limit is exhausted", async () => {
     mockCreateAdminClient.mockReturnValue({
+      rpc: vi.fn().mockResolvedValue({ data: false, error: null }),
       from: vi.fn((table: string) => {
         if (table === "account_profiles") {
           return {
@@ -701,7 +702,10 @@ describe("POST /api/businesses", () => {
       error: "Business slug already in use",
       details: { slug: "This URL slug is already taken." },
     });
-    expect(freePostCleanup).toHaveBeenCalled();
+    expect(mockCreateAdminClient().rpc).toHaveBeenCalledWith(
+      "release_intro_trial",
+      expect.objectContaining({ p_user_id: USER_ID, p_reason: "create_failed" })
+    );
   });
 
   it("releases the claimed free-post slot by content id when business insert fails", async () => {
@@ -790,16 +794,16 @@ describe("POST /api/businesses", () => {
     const res = await POST(createRequest(VALID_BODY));
 
     expect(res.status).toBe(500);
-    expect(claimRpc).toHaveBeenCalledWith("claim_free_post_slot", {
+    expect(claimRpc).toHaveBeenCalledWith("reserve_intro_trial", {
       p_user_id: USER_ID,
       p_area: "MZANSI_BUSINESS",
       p_content_id: generatedBusinessId,
-      p_max_allowed: 1,
+      p_duration_days: 7,
     });
-    expect(releaseUserEq).toHaveBeenCalledWith("user_id", USER_ID);
-    expect(releaseAreaEq).toHaveBeenCalledWith("area", "MZANSI_BUSINESS");
-    expect(releaseContentEq).toHaveBeenCalledWith("content_id", generatedBusinessId);
-    expect(releaseMaybeSingle).toHaveBeenCalled();
+    expect(claimRpc).toHaveBeenCalledWith(
+      "release_intro_trial",
+      expect.objectContaining({ p_user_id: USER_ID, p_reason: "create_failed" })
+    );
     randomUuidSpy.mockRestore();
   });
 
@@ -1365,10 +1369,10 @@ describe("POST /api/businesses", () => {
 
     expect(res.status).toBe(403);
     expect(body).toMatchObject({ error: "Free post limit reached" });
-    expect(body.reason).toContain("Tourism & Events");
+    expect(body.reason).toContain("introductory offer");
     expect(body.reason).not.toContain("Mzansi Business");
     expect(claimRpc).toHaveBeenCalledWith(
-      "claim_free_post_slot",
+      "reserve_intro_trial",
       expect.objectContaining({ p_area: "PROMOTIONS_EVENTS" })
     );
   });

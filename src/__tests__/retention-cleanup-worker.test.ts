@@ -201,7 +201,7 @@ describe("retention cleanup worker", () => {
     ).toBe(true);
   });
 
-  it("deletes expired posts and their public R2 media after the two-day grace period", async () => {
+  it("retains expired posts and media for paid renewal", async () => {
     const privateDelete = vi.fn().mockResolvedValue(undefined);
     const publicDelete = vi.fn().mockResolvedValue(undefined);
 
@@ -339,21 +339,7 @@ describe("retention cleanup worker", () => {
 
     await worker.scheduled?.({ cron: "0 3 * * *", scheduledTime: Date.now() }, env, ctx);
 
-    expect(publicDelete).toHaveBeenCalledWith([
-      "listings/old-photo.jpg",
-      "media/listing/user-1/native-photo.jpg",
-      "media/listing/user-1/video.mp4",
-      "media/listing/user-1/thumb.jpg",
-    ]);
-    expect(publicDelete).toHaveBeenCalledWith([
-      "business/logo.jpg",
-      "business/gallery.jpg",
-      "business/mall.jpg",
-    ]);
-    expect(publicDelete).toHaveBeenCalledWith([
-      "promotions/cdn-photo.jpg",
-      "promotions/legacy-photo.jpg",
-    ]);
+    expect(publicDelete).not.toHaveBeenCalled();
 
     const tableDeletes = fetchMock.mock.calls.filter(
       ([url, init]) =>
@@ -362,7 +348,7 @@ describe("retention cleanup worker", () => {
           String(url).includes("/rest/v1/businesses?id=in.") ||
           String(url).includes("/rest/v1/promotions?id=in."))
     );
-    expect(tableDeletes).toHaveLength(3);
+    expect(tableDeletes).toHaveLength(0);
 
     const expiredContentFetches = fetchMock.mock.calls.filter(
       ([url, init]) =>
@@ -371,7 +357,7 @@ describe("retention cleanup worker", () => {
           String(url).includes("/rest/v1/businesses?select=id,logo_url") ||
           String(url).includes("/rest/v1/promotions?select=id,photos"))
     );
-    expect(expiredContentFetches).toHaveLength(3);
+    expect(expiredContentFetches).toHaveLength(0);
     expect(expiredContentFetches.every(([url]) => String(url).includes("status=eq.expired"))).toBe(
       true
     );
@@ -398,7 +384,7 @@ describe("retention cleanup worker", () => {
     );
     expect(JSON.parse(String(auditCall?.[1]?.body))).toMatchObject({
       metadata: {
-        deleted_expired_content: { listings: 1, businesses: 1, promotions: 1 },
+        deleted_expired_content: { listings: 0, businesses: 0, promotions: 0 },
       },
     });
   });
