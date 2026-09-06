@@ -368,6 +368,53 @@
       --showroom-reserved-height: 272px;
     }
   }
+
+  /* Keep the text readable on shorter phones; contain-fit media stays uncropped. */
+  @media (max-height: 600px) {
+    .showroom-card-frame {
+      width: min(72vw, 416px);
+    }
+
+    .showroom-card-frame [data-card-media] {
+      height: max(80px, calc(100svh - var(--showroom-reserved-height, 380px)));
+      aspect-ratio: auto;
+      flex: none;
+    }
+  }
+
+  /* Landscape phones have room beside the media, rather than below it. */
+  @media (min-width: 640px) and (max-height: 500px) {
+    .showroom-viewport {
+      --showroom-landscape-height: calc(100svh - 272px - env(safe-area-inset-bottom, 0px));
+      padding-block: 16px;
+    }
+
+    .showroom-card-frame {
+      width: min(80vw, calc(var(--showroom-landscape-height) * 9 / 16 + 240px));
+    }
+
+    .showroom-card-frame [data-card-variant="hero"] {
+      display: grid;
+      grid-template-columns: calc(var(--showroom-landscape-height) * 9 / 16) minmax(0, 1fr);
+      height: var(--showroom-landscape-height);
+    }
+
+    .showroom-card-frame [data-card-media] {
+      height: 100%;
+      border-radius: 0;
+    }
+
+    .showroom-card-frame [data-card-metadata] {
+      height: 100%;
+      align-items: center;
+    }
+  }
+
+  @media (min-width: 768px) and (max-height: 500px) {
+    .showroom-viewport {
+      --showroom-landscape-height: calc(100svh - 208px);
+    }
+  }
 }
 
 @keyframes progress-fill {

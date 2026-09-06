@@ -312,6 +312,7 @@ export function PosterCardShell({
     <Card className={cardClassName} trustLevel={trustLevel} data-card-variant={cardVariant}>
       {/* ── 9:16 card thumbnail ───────────────────────────────── */}
       <div
+        data-card-media
         className={cn(
           "relative w-full overflow-hidden bg-slate-900",
           mediaRadiusClassName,

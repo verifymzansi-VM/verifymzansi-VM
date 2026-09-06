@@ -181,13 +181,13 @@ function ShowroomProgressDots({
   fillActive,
   isPaused,
 }: ShowroomProgressDotsProps) {
-  if (count <= 1) return null;
+  if (count <= 1) return <div className="h-[52px]" aria-hidden="true" />;
   const { start, end } = getVisibleDotRange(count, activeIndex);
   const indexes = Array.from({ length: end - start + 1 }, (_, i) => start + i);
 
   return (
     <div
-      className="relative z-20 flex items-center justify-center gap-1 pb-1 pt-3 sm:pt-4"
+      className="relative z-20 flex h-[52px] items-center justify-center gap-1 pb-1 pt-3"
       aria-label="Showroom slide position"
       data-testid="showroom-progress"
     >
@@ -945,6 +945,7 @@ export function ShowroomCardCarousel({
             </div>
           </div>
         </div>
+        <div className="h-[52px]" aria-hidden="true" />
       </SectionShell>
     );
   }

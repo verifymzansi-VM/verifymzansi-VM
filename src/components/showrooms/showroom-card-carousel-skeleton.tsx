@@ -47,11 +47,14 @@ export function ShowroomCardCarouselSkeleton() {
 
 function CardSkeleton() {
   return (
-    <div className="overflow-hidden rounded-[28px] border border-black/5 bg-white shadow-[0_28px_90px_-56px_rgba(15,23,42,0.4)] dark:border-white/10 dark:bg-slate-950">
+    <div
+      data-card-variant="hero"
+      className="overflow-hidden rounded-[28px] border border-black/5 bg-white shadow-[0_28px_90px_-56px_rgba(15,23,42,0.4)] dark:border-white/10 dark:bg-slate-950"
+    >
       {/* 9:16 thumbnail placeholder */}
-      <Skeleton className="aspect-[9/16] w-full rounded-none" />
+      <Skeleton data-card-media className="aspect-[9/16] w-full rounded-none" />
       {/* Metadata row */}
-      <div className="flex h-[104px] gap-3 px-3.5 py-3">
+      <div data-card-metadata className="flex h-[104px] gap-3 px-3.5 py-3">
         <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
         <div className="flex-1 space-y-1.5 pt-0.5">
           <Skeleton className="h-3 w-3/4 rounded" />
