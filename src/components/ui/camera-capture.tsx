@@ -19,10 +19,13 @@ interface CameraCaptureProps {
   /**
    * When true, an in-browser active-liveness challenge (blink / head turn)
    * must be completed before the "Take Photo" button is enabled. Use for the
-   * selfie step. If the face model cannot load, capture degrades gracefully
-   * to a plain photo so legitimate users are never locked out.
+   * selfie step. If the model cannot load, the user can explicitly choose a
+   * plain photo for manual review; it is never labelled as a passed check.
    */
   requireLiveness?: boolean;
+  documentGuide?: boolean;
+  /** Clear the previous submission when a new capture starts. */
+  onReset?: () => void;
 }
 
 export interface CaptureMeta {
@@ -109,6 +112,8 @@ export function CameraCapture({
   telemetryContext,
   onFallback,
   requireLiveness = false,
+  documentGuide = false,
+  onReset,
 }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -119,18 +124,23 @@ export function CameraCapture({
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [capturedUrl, setCapturedUrl] = useState<string>("");
   const [isStartingCamera, setIsStartingCamera] = useState(false);
+  const [documentFormat, setDocumentFormat] = useState<"card" | "book">("card");
+  const [manualCapture, setManualCapture] = useState(false);
 
   const {
     status: livenessStatus,
     start: startLiveness,
     stop: stopLiveness,
     reset: resetLiveness,
+    canCapture: canCaptureLiveFrame,
   } = useFaceLiveness();
 
-  // Liveness only gates capture when requested AND the model actually loaded.
-  // If unsupported, we allow a plain capture (graceful degradation).
+  // A failed model load requires an explicit manual-review choice.
   const livenessActive = requireLiveness && livenessStatus.supported;
-  const captureAllowed = !livenessActive || livenessStatus.livenessPassed;
+  const captureAllowed =
+    !requireLiveness ||
+    livenessStatus.livenessPassed ||
+    (!livenessStatus.supported && manualCapture);
 
   const reportCameraInitFailure = useCallback(
     (
@@ -286,13 +296,21 @@ export function CameraCapture({
       setIsStartingCamera(true);
       setState("idle");
       setErrorMessage("");
+      setManualCapture(false);
+      onReset?.();
       stopStream();
       resetLiveness();
 
       // Try with full constraints first, then progressively relax
       let stream: MediaStream | null = null;
       const constraintSets: MediaStreamConstraints[] = [
-        { video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } } },
+        {
+          video: {
+            facingMode,
+            width: { ideal: requireLiveness ? 720 : 1280 },
+            height: { ideal: requireLiveness ? 960 : 720 },
+          },
+        },
         { video: { facingMode } },
         { video: true },
       ];
@@ -374,6 +392,7 @@ export function CameraCapture({
     }
   }, [
     facingMode,
+    requireLiveness,
     getPermissionState,
     getUserMediaWithTimeout,
     isStartingCamera,
@@ -381,6 +400,7 @@ export function CameraCapture({
     stopStream,
     stopLiveness,
     resetLiveness,
+    onReset,
   ]);
 
   // Cleanup stream on unmount
@@ -448,7 +468,7 @@ export function CameraCapture({
     }
 
     // When liveness is active, only allow capture once the challenge passed.
-    if (requireLiveness && livenessStatus.supported && !livenessStatus.livenessPassed) {
+    if (!captureAllowed || (livenessActive && !canCaptureLiveFrame())) {
       return;
     }
 
@@ -457,11 +477,7 @@ export function CameraCapture({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Mirror for front camera
-    if (facingMode === "user") {
-      ctx.translate(canvas.width, 0);
-      ctx.scale(-1, 1);
-    }
+    // Mirror only the preview. Save original camera pixels for ID comparison.
     ctx.drawImage(video, 0, 0);
 
     canvas.toBlob(
@@ -482,7 +498,16 @@ export function CameraCapture({
       "image/jpeg",
       0.92
     );
-  }, [facingMode, stopStream, stopLiveness, onCapture, requireLiveness, livenessStatus]);
+  }, [
+    stopStream,
+    stopLiveness,
+    onCapture,
+    requireLiveness,
+    livenessStatus,
+    captureAllowed,
+    livenessActive,
+    canCaptureLiveFrame,
+  ]);
 
   const retake = useCallback(() => {
     if (capturedUrl) {
@@ -542,6 +567,12 @@ export function CameraCapture({
           {isStartingCamera ? "Trying..." : "Try Again"}
         </Button>
         <div className="space-y-2">
+          {requireLiveness && (
+            <p className="text-xs text-muted-foreground">
+              Uploading a file does not complete the live face check. A moderator may ask you to try
+              again on another device.
+            </p>
+          )}
           <Input
             type="file"
             accept="image/jpeg,image/png,image/webp"
@@ -578,6 +609,36 @@ export function CameraCapture({
 
   return (
     <div className="space-y-3">
+      {documentGuide && (
+        <fieldset className="space-y-2" disabled={disabled}>
+          <legend className="mb-2 text-sm font-medium">South African ID format</legend>
+          <div className="grid grid-cols-2 gap-2">
+            {(["card", "book"] as const).map((format) => (
+              <Button
+                key={format}
+                type="button"
+                variant={documentFormat === format ? "default" : "outline"}
+                aria-pressed={documentFormat === format}
+                onClick={() => setDocumentFormat(format)}
+              >
+                {format === "card" ? "Smart ID card" : "Green ID book"}
+              </Button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {documentFormat === "card"
+              ? "Use the front of your Smart ID card, with your photo and details visible."
+              : "Open your green ID book to the page with your photo and personal details."}{" "}
+            Fit all four corners inside the guide. Avoid glare and keep every detail readable.
+          </p>
+        </fieldset>
+      )}
+      {requireLiveness && state === "idle" && (
+        <p className="text-sm text-muted-foreground">
+          Use good light, remove sunglasses and keep your whole face visible. Follow two short
+          movements, then look straight at the camera. Your selfie will be reviewed with your ID.
+        </p>
+      )}
       {state === "idle" && (
         <Button
           type="button"
@@ -599,7 +660,7 @@ export function CameraCapture({
         <>
           <div
             ref={streamContainerRef}
-            className="relative scroll-mt-24 overflow-hidden rounded-md border"
+            className="relative scroll-mt-24 overflow-hidden rounded-xl border bg-black"
           >
             <video
               ref={videoRef}
@@ -608,23 +669,97 @@ export function CameraCapture({
               muted
               className={`w-full ${facingMode === "user" ? "scale-x-[-1]" : ""}`}
             />
+            {documentGuide && (
+              <div className="pointer-events-none absolute inset-0 p-6" aria-hidden="true">
+                <svg
+                  className="h-full w-full overflow-visible"
+                  viewBox={documentFormat === "card" ? "0 0 856 540" : "0 0 540 750"}
+                  preserveAspectRatio="xMidYMid meet"
+                >
+                  <rect
+                    x="2"
+                    y="2"
+                    width={documentFormat === "card" ? 852 : 536}
+                    height={documentFormat === "card" ? 536 : 746}
+                    rx="20"
+                    fill="none"
+                    stroke="white"
+                    strokeWidth="2"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </svg>
+                <span className="absolute left-3 top-2 rounded bg-black/80 px-2 py-0.5 text-[10px] font-medium text-white">
+                  {documentFormat === "card" ? "SMART ID · FRONT" : "ID BOOK · PHOTO PAGE"}
+                </span>
+              </div>
+            )}
+            {requireLiveness && (
+              <div
+                className="pointer-events-none absolute inset-0 flex items-center justify-center pb-8"
+                aria-hidden="true"
+              >
+                <svg
+                  className="h-[75%] w-[80%]"
+                  viewBox="0 0 300 400"
+                  preserveAspectRatio="xMidYMid meet"
+                >
+                  <ellipse
+                    cx="150"
+                    cy="200"
+                    rx="147"
+                    ry="197"
+                    fill="none"
+                    stroke={livenessStatus.livenessPassed ? "#34d399" : "white"}
+                    strokeWidth="2"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </svg>
+              </div>
+            )}
             {livenessActive && (
               <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-2 bg-black/55 px-3 py-2 text-center">
                 <ScanFace className="h-4 w-4 shrink-0 text-white" aria-hidden />
                 <p className="text-xs font-medium text-white" role="status" aria-live="polite">
+                  {livenessStatus.phase === "challenge" &&
+                    `Step ${Math.min((livenessStatus.completedSteps ?? 0) + 1, 2)} of 2 · `}
                   {livenessStatus.instruction}
                 </p>
               </div>
             )}
           </div>
           {requireLiveness && !livenessStatus.supported && (
-            <p
+            <div
               className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
               role="status"
             >
-              The automated liveness check is unavailable on this device. You can still take your
-              selfie, but it will require a manual review.
-            </p>
+              <p>
+                The live face check could not run. Retry first, or take a photo for manual review. A
+                photo alone cannot confirm liveness.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={disabled}
+                  onClick={() => {
+                    setManualCapture(false);
+                    if (videoRef.current) void startLiveness(videoRef.current);
+                  }}
+                >
+                  Retry face check
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={disabled || manualCapture}
+                  onClick={() => setManualCapture(true)}
+                >
+                  Use manual review
+                </Button>
+              </div>
+            </div>
           )}
           <Button
             type="button"
@@ -635,9 +770,11 @@ export function CameraCapture({
             className="w-full gap-2"
           >
             <Camera className="h-4 w-4" />
-            {livenessActive && !livenessStatus.livenessPassed
+            {requireLiveness && !captureAllowed
               ? "Complete Liveness Check"
-              : "Take Photo"}
+              : manualCapture
+                ? "Take Photo for Manual Review"
+                : "Take Photo"}
           </Button>
         </>
       )}

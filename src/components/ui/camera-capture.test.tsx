@@ -25,6 +25,7 @@ const livenessMocks = vi.hoisted(() => ({
   start: vi.fn(),
   stop: vi.fn(),
   reset: vi.fn(),
+  canCapture: vi.fn(() => true),
   status: {
     phase: "challenge",
     challenge: "blink",
@@ -50,6 +51,7 @@ vi.mock("./use-face-liveness", () => ({
     start: livenessMocks.start,
     stop: livenessMocks.stop,
     reset: livenessMocks.reset,
+    canCapture: livenessMocks.canCapture,
   }),
 }));
 
@@ -260,7 +262,7 @@ describe("CameraCapture", () => {
     });
   });
 
-  it("allows capture when the liveness model is unsupported (graceful degradation)", async () => {
+  it("requires an explicit manual-review choice when the face check is unavailable", async () => {
     const stream = createMockStream();
     mockGetUserMedia.mockResolvedValueOnce(stream);
     livenessMocks.status.livenessPassed = false;
@@ -269,11 +271,10 @@ describe("CameraCapture", () => {
     render(<CameraCapture onCapture={vi.fn()} facingMode="user" requireLiveness />);
     await clickOpenCamera();
 
-    await waitFor(() => {
-      const btn = screen.getByRole("button", { name: /take photo/i });
-      expect(btn).toBeEnabled();
-      expect(screen.getByText(/will require a manual review/i)).toBeInTheDocument();
-    });
+    expect(await screen.findByRole("button", { name: /complete liveness check/i })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /use manual review/i }));
+    expect(screen.getByRole("button", { name: /take photo for manual review/i })).toBeEnabled();
+    expect(screen.getByText(/a photo alone cannot confirm liveness/i)).toBeInTheDocument();
   });
 
   it("shows error message when camera access is denied", async () => {

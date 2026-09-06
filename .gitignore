@@ -73,6 +73,7 @@ docs/*
 !docs/ARCHITECTURE.md
 !docs/POSTING-GUIDE.md
 !docs/introductory-trial-strategy.md
+!docs/verification-capture-review.md
 !.github/**/*.md
 !docs/RUNBOOK.md
 !docs/playbooks/

@@ -289,6 +289,47 @@ describe("KycComparisonViewer", () => {
     });
   });
 
+  it("requires all review checks before approving a specific document", async () => {
+    mockTwoImageArtifacts({ riskSignals: [], providerResults: [] });
+    const review = vi.fn();
+    render(
+      <KycComparisonViewer
+        isOpen
+        userId="review-checks"
+        displayName="Sample"
+        onClose={vi.fn()}
+        onReviewStep={review}
+        reviewableSteps={["id_doc", "selfie"]}
+      />
+    );
+    const approve = await screen.findByRole("button", { name: "Approve selfie" });
+    expect(approve).toBeDisabled();
+    for (const checkbox of screen.getAllByRole("checkbox")) fireEvent.click(checkbox);
+    expect(approve).toBeEnabled();
+    fireEvent.click(approve);
+    expect(review).toHaveBeenCalledWith("selfie", "approved");
+  });
+
+  it("groups repeated unavailable checks without hiding their severity", async () => {
+    mockTwoImageArtifacts({
+      riskSignals: [
+        { id: "v1", artifact_id: "id-1", signal_code: "velocity_check_error", severity: "block" },
+        {
+          id: "v2",
+          artifact_id: "selfie-1",
+          signal_code: "velocity_check_error",
+          severity: "block",
+        },
+      ],
+    });
+    render(
+      <KycComparisonViewer isOpen userId="risk-grouping" displayName="Sample" onClose={vi.fn()} />
+    );
+    const signals = await screen.findAllByText(/Upload frequency check unavailable/);
+    expect(signals).toHaveLength(1);
+    expect(signals[0].className).toContain("border-red");
+  });
+
   it("warns when the selfie was uploaded as a file instead of live capture", async () => {
     mockTwoImageArtifacts({
       riskSignals: [

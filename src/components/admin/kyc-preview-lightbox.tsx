@@ -41,6 +41,7 @@ import {
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { getKycZoomWidthClass, KYC_REVIEW_REASON_CODES } from "./kyc-review-constants";
+import { OVERRIDE_REASON_CODES } from "@/lib/constants/verification";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -67,6 +68,7 @@ interface VerificationStep {
   created_at: string;
   account_display_name?: string | null;
   account_verification_status?: string | null;
+  risk_level?: string | null;
 }
 
 interface KycPreviewLightboxProps {
@@ -136,12 +138,14 @@ export function KycPreviewLightbox({
   );
   const [reasonCode, setReasonCode] = useState("");
   const [reasonNote, setReasonNote] = useState("");
+  const [overrideReasonCode, setOverrideReasonCode] = useState("");
   const [decisionError, setDecisionError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const displayName = step.account_display_name || step.user_id.slice(0, 8) + "...";
 
   const isImage = artifact.content_type.startsWith("image/");
   const isPdf = artifact.content_type === "application/pdf";
+  const isHighRisk = step.risk_level === "high" || step.risk_level === "critical";
 
   // Fetch decrypted blob when lightbox opens
   useEffect(() => {
@@ -158,7 +162,11 @@ export function KycPreviewLightbox({
       setDecision(null);
       setReasonCode("");
       setReasonNote("");
+      setOverrideReasonCode("");
       setDecisionError("");
+      // Start after setting loading: a cache hit completes synchronously.
+      // Starting outside this microtask lets loading=true overwrite its completion.
+      void loadBlob();
     });
 
     async function loadBlob() {
@@ -271,8 +279,6 @@ export function KycPreviewLightbox({
       }
     }
 
-    void loadBlob();
-
     return () => {
       cancelled = true;
       controller.abort();
@@ -369,6 +375,11 @@ export function KycPreviewLightbox({
       return;
     }
 
+    if (decision === "approved" && isHighRisk && !overrideReasonCode) {
+      setDecisionError("Override reason code is required when approving high-risk steps.");
+      return;
+    }
+
     setSubmitting(true);
     setDecisionError("");
 
@@ -381,6 +392,7 @@ export function KycPreviewLightbox({
           decision,
           reasonCode: decision !== "approved" ? reasonCode : undefined,
           reasonNote: reasonNote || undefined,
+          overrideReasonCode: decision === "approved" ? overrideReasonCode || undefined : undefined,
         }),
       });
 
@@ -402,10 +414,10 @@ export function KycPreviewLightbox({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-sm:max-w-[calc(100vw-1rem)] max-h-[90vh] flex flex-col">
-        <DialogHeader>
-          <div className="flex items-center justify-between">
-            <div>
+      <DialogContent className="max-w-4xl max-sm:max-w-[calc(100vw-1rem)] max-h-[90dvh] overflow-y-auto flex flex-col">
+        <DialogHeader className="shrink-0">
+          <div className="flex flex-col gap-3 pr-8 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
               <DialogTitle className="flex items-center gap-2">
                 {isImage ? (
                   <ImageIcon className="h-5 w-5 text-brand-blue" />
@@ -414,7 +426,7 @@ export function KycPreviewLightbox({
                 )}
                 Document Preview
               </DialogTitle>
-              <DialogDescription className="flex items-center gap-2 mt-1">
+              <DialogDescription className="flex flex-wrap items-center gap-2 mt-1 text-left">
                 <span className="font-medium">{displayName}</span>
                 <Badge variant="outline" className="text-[10px]">
                   {STEP_LABELS[step.step_type] || step.step_type}
@@ -424,7 +436,7 @@ export function KycPreviewLightbox({
                 </span>
               </DialogDescription>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex shrink-0 items-center gap-1">
               <Button
                 variant="ghost"
                 size="sm"
@@ -467,7 +479,7 @@ export function KycPreviewLightbox({
 
         {/* Document viewer area */}
         <div
-          className="flex-1 min-h-0 overflow-auto rounded-md border border-warm-200/70 dark:border-warm-700/70 bg-warm-50 dark:bg-warm-900 evidence-protected"
+          className="shrink-0 max-h-[50dvh] overflow-auto rounded-md border border-warm-200/70 dark:border-warm-700/70 bg-warm-50 dark:bg-warm-900 evidence-protected"
           onContextMenu={handleContextMenu}
           role="presentation"
         >
@@ -500,7 +512,7 @@ export function KycPreviewLightbox({
             <div className="relative">
               {isImage && (
                 <div
-                  className={`min-h-[60vh] overflow-auto p-4 ${
+                  className={`min-h-[30dvh] overflow-auto p-4 ${
                     zoom > 1 ? "cursor-grab active:cursor-grabbing" : ""
                   }`}
                   ref={imageViewportRef}
@@ -509,7 +521,7 @@ export function KycPreviewLightbox({
                   onMouseUp={handleImageMouseUp}
                   onMouseLeave={handleImageMouseUp}
                 >
-                  <div className="flex h-full min-h-[60vh] items-center justify-center">
+                  <div className="flex h-full min-h-[30dvh] items-center justify-center">
                     <div className={`shrink-0 ${getKycZoomWidthClass(zoom)}`}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
@@ -614,7 +626,7 @@ export function KycPreviewLightbox({
             </Button>
           </DialogFooter>
         ) : (
-          <div className="space-y-3 border-t pt-3">
+          <div className="shrink-0 space-y-3 border-t pt-3">
             <div className="flex items-center gap-2">
               <Badge
                 variant={decision === "approved" ? "default" : "destructive"}
@@ -633,10 +645,39 @@ export function KycPreviewLightbox({
             </div>
 
             {decision === "approved" ? (
-              <p className="text-sm text-muted-foreground">
-                This will mark the step as approved. If all 4 steps are approved, the account will
-                be verified.
-              </p>
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  This will mark the step as approved. If all verification steps are approved, the
+                  account will be verified.
+                </p>
+                {isHighRisk && (
+                  <div className="space-y-2">
+                    <p className="text-sm text-amber-700 dark:text-amber-300">
+                      This step has {step.risk_level} risk. An override reason is required to
+                      approve.
+                    </p>
+                    <Label htmlFor="lb-override-reason-code" className="text-sm font-medium">
+                      Override Reason <span className="text-destructive">*</span>
+                    </Label>
+                    <select
+                      id="lb-override-reason-code"
+                      value={overrideReasonCode}
+                      onChange={(e) => {
+                        setOverrideReasonCode(e.target.value);
+                        setDecisionError("");
+                      }}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-base sm:text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Select override reason…</option>
+                      {OVERRIDE_REASON_CODES.map((code) => (
+                        <option key={code} value={code}>
+                          {code.replace(/_/g, " ")}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
             ) : (
               <div className="space-y-3">
                 <div>
@@ -685,6 +726,7 @@ export function KycPreviewLightbox({
                   setDecision(null);
                   setReasonCode("");
                   setReasonNote("");
+                  setOverrideReasonCode("");
                   setDecisionError("");
                 }}
                 disabled={submitting}

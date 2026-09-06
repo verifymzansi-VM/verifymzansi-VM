@@ -2155,6 +2155,12 @@ export default function VerificationPage() {
                     <CameraCapture
                       facingMode="environment"
                       telemetryContext="id_doc"
+                      documentGuide
+                      onReset={() => {
+                        setIdFile(null);
+                        setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
+                        clearStepCompletion("id_doc");
+                      }}
                       disabled={verificationSubmissionBlocked}
                       onCapture={(file) => {
                         setIdFile(file);
@@ -2252,6 +2258,12 @@ export default function VerificationPage() {
                       telemetryContext="selfie"
                       disabled={verificationSubmissionBlocked}
                       requireLiveness
+                      onReset={() => {
+                        setSelfieFile(null);
+                        setSelfieLivenessPassed(false);
+                        setUploadReceipts((prev) => ({ ...prev, selfie: undefined }));
+                        clearStepCompletion("selfie");
+                      }}
                       onCapture={(file, meta) => {
                         setSelfieFile(file);
                         setSelfieCaptureMethod("camera");

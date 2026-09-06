@@ -239,13 +239,13 @@ describe("KycQueueTable", () => {
     expect(screen.getAllByText("Selfie Verification").length).toBeGreaterThan(0);
   });
 
-  it("opens approve dialog on approve click", async () => {
+  it("opens comparison before allowing an identity approval", async () => {
     render(React.createElement(KycQueueTable, { groups: groupedItems }));
-    const approveButtons = screen.getAllByTitle("Approve");
+    const approveButtons = screen.getAllByTitle("Review evidence");
     fireEvent.click(approveButtons[0]);
     await waitFor(() => {
-      expect(screen.getByTestId("dialog")).toBeInTheDocument();
-      expect(screen.getByText(/approve verification/i)).toBeInTheDocument();
+      expect(screen.getByTestId("comparison-viewer")).toBeInTheDocument();
+      expect(screen.queryByText(/approve verification/i)).not.toBeInTheDocument();
     });
   });
 

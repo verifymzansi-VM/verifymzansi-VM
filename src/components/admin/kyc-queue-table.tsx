@@ -389,12 +389,21 @@ export function KycQueueTable({
                                 size="sm"
                                 variant="ghost"
                                 className="h-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
-                                onClick={() => openReview(step, "approved")}
+                                onClick={() =>
+                                  canViewStep
+                                    ? handleComparisonClick(
+                                        group.user_id,
+                                        group.account_display_name || group.user_id
+                                      )
+                                    : openReview(step, "approved")
+                                }
                                 disabled={loading}
-                                title="Approve"
+                                title={canViewStep ? "Review evidence" : "Approve"}
                               >
                                 <CheckCircle className="h-4 w-4 mr-1" />
-                                <span className="hidden sm:inline text-xs">Approve</span>
+                                <span className="text-xs">
+                                  {canViewStep ? "Review" : "Approve"}
+                                </span>
                               </Button>
                               <Button
                                 size="sm"
@@ -442,6 +451,21 @@ export function KycQueueTable({
             setComparisonUserId(null);
           }}
           disableActions={false}
+          reviewableSteps={
+            groups
+              .find((group) => group.user_id === comparisonUserId)
+              ?.steps.map((step) => step.step_type) ?? []
+          }
+          onReviewStep={(stepType, nextDecision) => {
+            const group = groups.find((item) => item.user_id === comparisonUserId);
+            const target = group?.steps.find((item) => item.step_type === stepType);
+            if (!target) return;
+            setComparisonViewerOpen(false);
+            openReview(
+              { ...target, account_display_name: group?.account_display_name },
+              nextDecision
+            );
+          }}
         />
       )}
 
@@ -512,6 +536,43 @@ export function KycQueueTable({
             </div>
           ) : (
             <div className="space-y-4">
+              {decision === "needs_resubmission" && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Common retake requests</p>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      {
+                        label: "Glare or blur",
+                        code: "blurry_image",
+                        note: "Please retake your photo in even light without glare. Keep the camera steady and make sure the details are sharp.",
+                      },
+                      {
+                        label: "Missing ID corners",
+                        code: "incomplete_info",
+                        note: "Please fit all four corners of your South African ID inside the camera guide, with the photo and personal details readable.",
+                      },
+                      {
+                        label: "Incomplete live check",
+                        code: "other",
+                        note: "Please open the selfie camera and complete both live face movements. If the check cannot run, try another supported browser or device, or contact support.",
+                      },
+                    ].map((preset) => (
+                      <Button
+                        key={preset.label}
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setReasonCode(preset.code);
+                          setReasonNote(preset.note);
+                        }}
+                      >
+                        {preset.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div>
                 <Label htmlFor="reason-code" className="text-sm font-medium">
                   Reason Code <span className="text-destructive">*</span>

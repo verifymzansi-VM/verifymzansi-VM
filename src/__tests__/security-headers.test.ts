@@ -70,6 +70,16 @@ describe("shouldUseStrictNonceCsp", () => {
 });
 
 describe("buildCsp", () => {
+  it.each([null, "production-nonce"])(
+    "allows the pinned face runtime JS bootstrap with nonce %s",
+    (nonce) => {
+      const csp = buildCsp(nonce);
+      const scripts = csp.split("; ").find((value) => value.startsWith("script-src "))!;
+      expect(scripts).toContain("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm/");
+      expect(scripts.split(" ")).not.toContain("https://cdn.jsdelivr.net");
+      expect(scripts).not.toContain("'unsafe-eval'");
+    }
+  );
   it("includes default-src, base-uri, frame-ancestors, and object-src", () => {
     const csp = buildCsp(null);
     expect(csp).toContain("default-src 'self'");

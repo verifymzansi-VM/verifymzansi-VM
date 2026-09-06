@@ -23,9 +23,9 @@ CREATE TABLE businesses(LIKE listings INCLUDING ALL);
 CREATE TABLE promotions(id uuid PRIMARY KEY,owner_id uuid,status text,expires_at timestamptz,status_reason text,end_date timestamptz,boost_until timestamptz,featured_until timestamptz,urgent_until timestamptz);
 SET test.role='service_role';`);
 for (const f of [
-  "20260906000000_introductory_trials.sql",
-  "20260906000100_trial_management_and_renewal.sql",
-  "20260906000200_paid_capacity_for_retained_posts.sql",
+  "20260906041522_introductory_trials.sql",
+  "20260906041543_trial_management_and_renewal.sql",
+  "20260906041600_paid_capacity_for_retained_posts.sql",
 ])
   await db.exec(fs.readFileSync("supabase/migrations/" + f, "utf8"));
 const scalar = async (sql, args) => (await db.query(sql, args)).rows[0];

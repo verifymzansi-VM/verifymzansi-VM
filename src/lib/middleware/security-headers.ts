@@ -46,8 +46,7 @@ export function buildCsp(
     "https://unpkg.com",
     "https://*.r2.cloudflarestorage.com",
     // MediaPipe face-liveness model + WASM runtime (client-side KYC selfie
-    // liveness challenge). Loaded via fetch/WASM, so they belong in
-    // connect-src, not script-src.
+    // liveness challenge). Its JS bootstrap also needs the pinned script path.
     "https://cdn.jsdelivr.net",
     "https://storage.googleapis.com",
   ];
@@ -63,9 +62,11 @@ export function buildCsp(
   // scripts are blocked because URL allowlists are ignored. Using nonce +
   // explicit URL allowlists gives strong XSS protection while remaining
   // compatible with Cloudflare's infrastructure.
-  const scriptSrc = nonce
-    ? `script-src 'self' 'nonce-${nonce}' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com https://unpkg.com`
-    : "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com https://unpkg.com";
+  const scriptSrc =
+    (nonce
+      ? `script-src 'self' 'nonce-${nonce}' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com https://unpkg.com`
+      : "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com https://unpkg.com") +
+    " https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm/";
   const styleSrc = nonce ? `style-src 'self' 'nonce-${nonce}'` : "style-src 'self' 'unsafe-inline'";
   const directives = [
     "default-src 'self'",

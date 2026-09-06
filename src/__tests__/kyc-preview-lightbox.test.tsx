@@ -4,7 +4,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
 import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
-import { clearCachedKycArtifactBlobs } from "@/lib/utils/kyc-artifact-blob-cache";
+import {
+  clearCachedKycArtifactBlobs,
+  setCachedKycArtifactBlob,
+} from "@/lib/utils/kyc-artifact-blob-cache";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -200,6 +203,57 @@ describe("KycPreviewLightbox", () => {
     expect(screen.getByText("Test Account")).toBeDefined();
     expect(screen.getByText("ID Document")).toBeDefined();
   });
+
+  it("displays a cached selfie without leaving the loading spinner visible", async () => {
+    setCachedKycArtifactBlob(MOCK_ARTIFACT.id, new Blob(["img"], { type: "image/jpeg" }));
+
+    await renderOpenLightbox({
+      step: { ...MOCK_STEP, step_type: "selfie" },
+      artifact: { ...MOCK_ARTIFACT, step_type: "selfie" },
+    });
+
+    expect(screen.queryByText(/decrypting and loading/i)).toBeNull();
+    expect(screen.getByAltText("Evidence: selfie")).toBeDefined();
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it.each(["high", "critical"])(
+    "requires and submits an override for a %s risk selfie",
+    async (riskLevel) => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          blob: () => Promise.resolve(new Blob(["img"], { type: "image/jpeg" })),
+        })
+        .mockResolvedValueOnce({ ok: true });
+      const onDecisionComplete = vi.fn();
+      await renderOpenLightbox({
+        step: { ...MOCK_STEP, step_type: "selfie", risk_level: riskLevel },
+        onDecisionComplete,
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+      fireEvent.click(screen.getByRole("button", { name: "Confirm Approve" }));
+      expect(screen.getByText(/override reason code is required/i)).toBeDefined();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      fireEvent.change(screen.getByLabelText(/override reason/i), {
+        target: { value: "supporting_evidence" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Confirm Approve" }));
+      await waitFor(() => expect(onDecisionComplete).toHaveBeenCalledOnce());
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        "/api/admin/verification/decide",
+        expect.objectContaining({
+          body: JSON.stringify({
+            stepId: "step-1",
+            decision: "approved",
+            overrideReasonCode: "supporting_evidence",
+          }),
+        })
+      );
+    }
+  );
 
   it("displays Approve, Reject, and Resubmit buttons", async () => {
     mockFetch.mockResolvedValueOnce({
@@ -402,6 +456,8 @@ describe("KycPreviewLightbox", () => {
     await waitFor(() => {
       expect(mockCreateObjectURL).toHaveBeenCalledTimes(2);
     });
+    expect(screen.queryByText(/decrypting and loading/i)).toBeNull();
+    expect(screen.getByAltText("Evidence: id_doc")).toBeDefined();
   });
 
   it("shows purge warning when purge_after is set", async () => {

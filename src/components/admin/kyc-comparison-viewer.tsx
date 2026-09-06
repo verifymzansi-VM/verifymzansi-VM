@@ -37,6 +37,7 @@ import {
 } from "@/lib/utils/kyc-artifact-blob-cache";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { getKycZoomWidthClass } from "./kyc-review-constants";
+import { LIVENESS_THRESHOLD } from "@/lib/constants/verification";
 
 interface Artifact {
   id: string;
@@ -93,6 +94,8 @@ const SIGNAL_LABELS: Record<string, string> = {
   id_number_reuse: "ID number already linked to another account",
   velocity_resubmit: "Unusually many uploads in 24h",
   rapid_step_completion: "Steps completed suspiciously fast",
+  velocity_check_error: "Upload frequency check unavailable — investigate before approving",
+  manual_only_location: "Location requires manual review",
 };
 
 interface DocumentViewerProps {
@@ -105,6 +108,11 @@ interface DocumentViewerProps {
   onResubmit?: () => void;
   disableActions?: boolean;
   isLoading?: boolean;
+  onReviewStep?: (
+    stepType: "id_doc" | "selfie",
+    decision: "approved" | "rejected" | "needs_resubmission"
+  ) => void;
+  reviewableSteps?: string[];
 }
 
 /**
@@ -121,7 +129,11 @@ export function KycComparisonViewer({
   onResubmit,
   disableActions = false,
   isLoading = false,
+  onReviewStep,
+  reviewableSteps = [],
 }: DocumentViewerProps) {
+  const [viewMode, setViewMode] = useState("compare");
+  const [reviewChecks, setReviewChecks] = useState<string[]>([]);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
   const [artifactErrors, setArtifactErrors] = useState<Record<string, string>>({});
@@ -162,6 +174,8 @@ export function KycComparisonViewer({
       setRiskSignals([]);
       setProviderResults([]);
       setPanelZoom({ id_doc: 1, selfie: 1 });
+      setReviewChecks([]);
+      setViewMode("compare");
 
       try {
         const metaRes = await fetch(`/api/admin/verification/evidence/metadata`, {
@@ -416,10 +430,14 @@ export function KycComparisonViewer({
             tone: "warn",
             label: "Liveness not verified",
             detail:
-              "The live-camera liveness challenge was not completed for this selfie. Confirm the face looks like a real, live person.",
+              "The live-camera challenge was not completed. A still photo cannot establish liveness. Request a new live capture if the evidence is insufficient.",
           };
         }
-        if (hasSignal("low_liveness_score")) {
+        if (
+          hasSignal("low_liveness_score") ||
+          (typeof selfieProvider?.liveness_score === "number" &&
+            selfieProvider.liveness_score < LIVENESS_THRESHOLD)
+        ) {
           return {
             tone: "bad",
             label: "Low liveness score",
@@ -533,17 +551,17 @@ export function KycComparisonViewer({
     const canZoom = artifact.content_type?.startsWith("image");
 
     return (
-      <Card className="h-full">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-4">
-            <div>
+      <Card className="h-full min-w-0 overflow-hidden">
+        <CardHeader className="p-3 pb-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
               <CardTitle className="text-base">{getStepLabel(artifact.step_type)}</CardTitle>
               <p className="mt-1 text-xs text-muted-foreground">
                 Uploaded {new Date(artifact.created_at).toLocaleString()}
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="shrink-0">
+            <div className="flex flex-wrap items-center gap-1">
+              <Badge variant="secondary" className="hidden shrink-0 sm:inline-flex">
                 {(artifact.file_size_bytes / 1024).toFixed(1)} KB
               </Badge>
               <Button
@@ -584,7 +602,7 @@ export function KycComparisonViewer({
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-2 pt-0 sm:p-3">
           {artifactError ? (
             <div className="flex min-h-[24rem] flex-col items-center justify-center gap-3 rounded-lg border border-red-200 bg-red-50 p-6 text-center">
               <AlertTriangle className="h-8 w-8 text-red-600" />
@@ -592,7 +610,7 @@ export function KycComparisonViewer({
             </div>
           ) : blobUrl ? (
             <div
-              className={`min-h-[24rem] overflow-auto rounded-lg bg-gray-100 ${
+              className={`h-[36dvh] sm:h-[48dvh] overflow-auto rounded-lg bg-muted ${
                 zoomLevel > 1 ? "cursor-grab active:cursor-grabbing" : ""
               }`}
               ref={(node) => {
@@ -604,7 +622,7 @@ export function KycComparisonViewer({
               onMouseLeave={handlePanelMouseUp}
             >
               {artifact.content_type?.startsWith("image") ? (
-                <div className="flex min-h-[24rem] items-center justify-center p-4">
+                <div className="flex min-h-full items-center justify-center p-1">
                   <div className={`relative shrink-0 ${getKycZoomWidthClass(zoomLevel)}`}>
                     <Image
                       src={blobUrl}
@@ -613,7 +631,7 @@ export function KycComparisonViewer({
                       height={900}
                       unoptimized
                       draggable={false}
-                      className="h-auto w-full max-w-none object-contain select-none pointer-events-none"
+                      className={`h-auto w-full max-w-none object-contain select-none pointer-events-none ${zoomLevel <= 1 ? "max-h-[35dvh] sm:max-h-[47dvh]" : ""}`}
                     />
                   </div>
                 </div>
@@ -632,14 +650,50 @@ export function KycComparisonViewer({
             </div>
           )}
         </CardContent>
+        {onReviewStep && reviewableSteps.includes(artifact.step_type) && (
+          <div className="flex flex-wrap gap-2 border-t p-3">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isLoading || disableActions}
+              onClick={() =>
+                onReviewStep(artifact.step_type as "id_doc" | "selfie", "needs_resubmission")
+              }
+            >
+              Request retake
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={isLoading || disableActions}
+              onClick={() => onReviewStep(artifact.step_type as "id_doc" | "selfie", "rejected")}
+            >
+              Reject
+            </Button>
+            <Button
+              size="sm"
+              disabled={
+                isLoading ||
+                disableActions ||
+                reviewChecks.length < 3 ||
+                !idArtifact ||
+                !selfieArtifact ||
+                comparisonArtifacts.some((a) => !blobUrls[a.id] || artifactErrors[a.id])
+              }
+              onClick={() => onReviewStep(artifact.step_type as "id_doc" | "selfie", "approved")}
+            >
+              Approve {artifact.step_type === "selfie" ? "selfie" : "ID"}
+            </Button>
+          </div>
+        )}
       </Card>
     );
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-sm:max-w-[calc(100vw-1rem)] max-h-[90vh] overflow-y-auto sm:overflow-hidden flex flex-col">
-        <DialogHeader className="border-b">
+      <DialogContent className="max-w-6xl h-[94dvh] max-h-[94dvh] overflow-hidden flex flex-col gap-0 p-0 sm:p-0">
+        <DialogHeader className="shrink-0 border-b p-4 pr-14 text-left">
           <div className="flex items-center justify-between w-full gap-4">
             <div className="flex-1 min-w-0">
               <DialogTitle className="text-lg font-semibold">
@@ -649,14 +703,11 @@ export function KycComparisonViewer({
                 Compare the selfie against the ID document to verify the same person.
               </DialogDescription>
             </div>
-            <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 shrink-0">
-              <X className="h-4 w-4" />
-            </Button>
           </div>
         </DialogHeader>
 
         {/* Main content area */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-5">
           {loading && (
             <div className="flex items-center justify-center h-64">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -723,11 +774,45 @@ export function KycComparisonViewer({
                 </div>
               )}
 
+              <div className="flex gap-2" aria-label="Comparison layout">
+                {[
+                  ["compare", "Side by side"],
+                  ["id_doc", "ID only"],
+                  ["selfie", "Selfie only"],
+                ].map(([value, label]) => (
+                  <Button
+                    key={value}
+                    size="sm"
+                    variant={viewMode === value ? "default" : "outline"}
+                    aria-pressed={viewMode === value}
+                    onClick={() => setViewMode(value)}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+              <div
+                className={`grid gap-2 sm:gap-4 ${viewMode === "compare" ? "grid-cols-2" : "grid-cols-1"}`}
+              >
+                <div className={`min-w-0 ${viewMode === "selfie" ? "hidden" : ""}`}>
+                  {renderArtifactPanel(idArtifact)}
+                </div>
+                <div className={`min-w-0 ${viewMode === "id_doc" ? "hidden" : ""}`}>
+                  {renderArtifactPanel(selfieArtifact)}
+                </div>
+              </div>
               {/* Detailed fraud / risk signals for the two images on screen. */}
               {(() => {
                 const visibleIds = new Set(comparisonArtifacts.map((a) => a.id));
-                const relevant = riskSignals.filter(
+                const relevantSignals = riskSignals.filter(
                   (s) => !s.artifact_id || visibleIds.has(s.artifact_id)
+                );
+                const relevant = relevantSignals.filter(
+                  (s, index, all) =>
+                    all.findIndex(
+                      (other) =>
+                        other.signal_code === s.signal_code && other.severity === s.severity
+                    ) === index
                 );
                 if (relevant.length === 0) return null;
                 return (
@@ -740,11 +825,11 @@ export function KycComparisonViewer({
                         <span
                           key={s.id}
                           title={s.signal_code}
-                          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs ${
+                          className={`inline-flex max-w-full items-center gap-1 rounded-lg border px-2.5 py-1 text-xs ${
                             SIGNAL_SEVERITY_CLASSES[s.severity] ?? SIGNAL_SEVERITY_CLASSES.info
                           }`}
                         >
-                          <AlertTriangle className="h-3 w-3" />
+                          <AlertTriangle className="h-3 w-3 shrink-0" />
                           {SIGNAL_LABELS[s.signal_code] ?? s.signal_code.replace(/_/g, " ")}
                         </span>
                       ))}
@@ -753,19 +838,44 @@ export function KycComparisonViewer({
                 );
               })()}
 
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className={!selfieArtifact ? "lg:col-span-2" : undefined}>
-                  {renderArtifactPanel(idArtifact)}
-                </div>
-                {selfieArtifact ? <div>{renderArtifactPanel(selfieArtifact)}</div> : null}
-              </div>
+              {(onApprove || onReviewStep) && (
+                <fieldset className="space-y-3 rounded-lg border p-4">
+                  <legend className="px-1 text-sm font-semibold">Review before approving</legend>
+                  {[
+                    "ID photo and personal details are clear and the document is South African.",
+                    "The selfie and ID portrait appear to show the same person.",
+                    "I reviewed the liveness status and risk signals; the evidence is sufficient.",
+                  ].map((label) => (
+                    <label key={label} className="flex items-start gap-3 text-sm">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 h-4 w-4 shrink-0"
+                        checked={reviewChecks.includes(label)}
+                        onChange={(e) =>
+                          setReviewChecks((prev) =>
+                            e.target.checked
+                              ? [...prev, label]
+                              : prev.filter((item) => item !== label)
+                          )
+                        }
+                      />
+                      {label}
+                    </label>
+                  ))}
+                  <p className="text-xs text-muted-foreground">
+                    Request a retake for glare, missing corners, unclear faces or an incomplete live
+                    check. Escalate unavailable security checks; they are not evidence of fraud by
+                    themselves.
+                  </p>
+                </fieldset>
+              )}
             </div>
           )}
         </div>
 
         {/* Action buttons footer */}
         {!loading && !error && comparisonArtifacts.length > 0 && (
-          <div className="border-t bg-muted/30 p-4 flex items-center justify-end gap-2">
+          <div className="shrink-0 border-t bg-background p-3 flex flex-wrap items-center justify-end gap-2">
             <Button variant="outline" onClick={onClose} disabled={isLoading || disableActions}>
               Cancel
             </Button>
@@ -786,7 +896,18 @@ export function KycComparisonViewer({
               </Button>
             )}
             {onApprove && (
-              <Button variant="default" onClick={onApprove} disabled={isLoading || disableActions}>
+              <Button
+                variant="default"
+                onClick={onApprove}
+                disabled={
+                  isLoading ||
+                  disableActions ||
+                  reviewChecks.length < 3 ||
+                  !idArtifact ||
+                  !selfieArtifact ||
+                  comparisonArtifacts.some((a) => !blobUrls[a.id] || artifactErrors[a.id])
+                }
+              >
                 {isLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 Approve
               </Button>

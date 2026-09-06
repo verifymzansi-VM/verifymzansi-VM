@@ -111,8 +111,13 @@ test.describe("Verification wizard (authenticated)", () => {
       timeout: 30_000,
     });
 
+    // A fake camera cannot complete human movements. Exercise the explicit
+    // unsupported-device path without depending on an external model download.
+    await page.route("https://cdn.jsdelivr.net/**", (route) => route.abort());
     await page.getByRole("button", { name: /open camera/i }).click();
     await expect(page.locator("video")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole("button", { name: /complete liveness check/i })).toBeDisabled();
+    await page.getByRole("button", { name: /use manual review/i }).click();
     await page.getByRole("button", { name: /take photo/i }).click();
     await expect(page.getByRole("button", { name: /retake/i })).toBeVisible();
     await shot(page, "step3-selfie-captured");
