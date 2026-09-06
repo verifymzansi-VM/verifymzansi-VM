@@ -92,8 +92,7 @@ const TYPE_FALLBACK_MEDIA: Record<CarouselItem["type"], string> = {
 };
 
 const CARD_W = "showroom-card-frame";
-const SECTION_SPACING =
-  "pt-0 pb-8 sm:pt-0 sm:pb-10 md:pt-4 md:pb-12 lg:min-h-[clamp(31rem,64vh,42rem)] lg:py-10";
+const SECTION_SPACING = "showroom-viewport";
 const SECTION_SURFACE =
   "bg-[linear-gradient(180deg,#faf8f3_0%,#f3eee4_52%,#ece5d6_100%)] dark:bg-[linear-gradient(180deg,#0c0f14_0%,#0a0d12_52%,#080a0f_100%)]";
 const MAX_VISIBLE_DOTS = 7;
@@ -863,7 +862,7 @@ export function ShowroomCardCarousel({
       [-3]: "hidden lg:block translate-x-[calc(-50%-106%)] translate-y-4 scale-[0.55] opacity-100 saturate-[0.86] blur-[0.35px] z-0 pointer-events-none",
       [-2]: "hidden md:block translate-x-[calc(-50%-72%)] translate-y-2 scale-[0.72] opacity-100 saturate-[0.92] blur-[0.2px] z-10 pointer-events-none",
       [-1]: "translate-x-[calc(-50%-23%)] md:translate-x-[calc(-50%-39%)] lg:-translate-y-2 scale-[0.91] lg:scale-[0.86] opacity-100 saturate-[0.98] z-20",
-      0: "translate-x-[-50%] lg:-translate-y-3 scale-100 lg:scale-[1.025] opacity-100 z-40 shadow-[0_50px_130px_-54px_rgba(15,23,42,0.8)]",
+      0: "translate-x-[-50%] scale-100 opacity-100 z-40 shadow-[0_50px_130px_-54px_rgba(15,23,42,0.8)]",
       1: "translate-x-[calc(-50%+23%)] md:translate-x-[calc(-50%+39%)] lg:-translate-y-2 scale-[0.91] lg:scale-[0.86] opacity-100 saturate-[0.98] z-20",
       2: "hidden md:block translate-x-[calc(-50%+72%)] translate-y-2 scale-[0.72] opacity-100 saturate-[0.92] blur-[0.2px] z-10 pointer-events-none",
       3: "hidden lg:block translate-x-[calc(-50%+106%)] translate-y-4 scale-[0.55] opacity-100 saturate-[0.86] blur-[0.35px] z-0 pointer-events-none",
@@ -892,8 +891,8 @@ export function ShowroomCardCarousel({
     const isMobileViewport =
       typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
     const xStops = [0, isMobileViewport ? 23 : 39, 72, 106];
-    const yStops = [-12, -8, 8, 16];
-    const scaleStops = [1.045, 0.875, 0.72, 0.55];
+    const yStops = [0, 0, 8, 16];
+    const scaleStops = [1, 0.86, 0.72, 0.55];
     const opacityStops = [1, 1, 1, 1];
     const blurStops = [0, 0, 0.55, 1.05];
     const saturationStops = [1.02, 0.95, 0.86, 0.76];
@@ -931,7 +930,7 @@ export function ShowroomCardCarousel({
         background={background}
       >
         <div className="container-page flex items-center justify-center lg:h-full">
-          <div className="flex w-full max-w-5xl flex-col items-center gap-6 py-6 sm:gap-8 lg:flex-row lg:justify-center lg:gap-14">
+          <div className="flex w-full max-w-5xl flex-col items-center gap-6 sm:gap-8 lg:flex-row lg:justify-center lg:gap-14">
             {/* Area-branded artwork card */}
             <div className={cn(CARD_W, "shrink-0")}>
               <PosterCardShell
@@ -981,7 +980,7 @@ export function ShowroomCardCarousel({
       <div
         ref={coverflowRef}
         className={cn(
-          "relative mx-auto max-w-[1680px] overflow-x-clip overflow-y-visible select-none touch-pan-y pb-2 [perspective:1200px] sm:pb-3 md:pb-4 lg:flex lg:min-h-[clamp(28rem,60vh,39rem)] lg:items-center lg:pb-1",
+          "relative mx-auto max-w-[1680px] overflow-x-clip overflow-y-visible select-none touch-pan-y [perspective:1200px]",
           isDragging ? "cursor-grabbing" : "cursor-grab"
         )}
         onPointerDown={handlePointerDown}
@@ -997,7 +996,7 @@ export function ShowroomCardCarousel({
         aria-label="Carousel slides"
       >
         {/* Height-establishing invisible card */}
-        <div className={cn("invisible mx-auto lg:-translate-y-1", CARD_W)} aria-hidden="true">
+        <div className={cn("invisible mx-auto", CARD_W)} aria-hidden="true">
           <PosterCardShell
             href="#"
             title="Carousel sizing card"

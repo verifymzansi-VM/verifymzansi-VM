@@ -342,46 +342,30 @@
    ══════════════════════════════════════════════════════════════ */
 
 @layer components {
+  .showroom-viewport {
+    /* Header, mobile navigation, section padding, controls, and metadata. */
+    --showroom-reserved-height: calc(380px + env(safe-area-inset-bottom, 0px));
+    padding-block: 24px;
+  }
+
   .showroom-card-frame {
-    width: min(72vw, 292px);
+    width: min(72vw, 416px, calc((100svh - var(--showroom-reserved-height, 380px)) * 9 / 16));
   }
 
-  @media (max-height: 700px) {
-    .showroom-card-frame {
-      width: min(60vw, 292px);
-    }
-  }
-
-  @media (min-width: 640px) {
-    .showroom-card-frame {
-      width: min(58vw, 360px);
-    }
+  .showroom-card-frame [data-card-metadata] {
+    height: 104px;
+    flex: none;
   }
 
   @media (min-width: 768px) {
-    .showroom-card-frame {
-      width: clamp(220px, 26vw, 264px);
+    .showroom-viewport {
+      --showroom-reserved-height: 316px;
     }
   }
 
   @media (min-width: 1024px) {
-    .showroom-card-frame {
-      /* Reserve the marketplace header, carousel padding, and slide controls so
-       * the portrait card remains completely visible in the first viewport. */
-      width: min(320px, calc((100dvh - 176px) / 2.08));
-      max-width: none;
-    }
-  }
-
-  @media (min-width: 1280px) {
-    .showroom-card-frame {
-      width: min(380px, calc((100dvh - 176px) / 2.08));
-    }
-  }
-
-  @media (min-width: 1536px) {
-    .showroom-card-frame {
-      width: min(416px, calc((100dvh - 176px) / 2.08));
+    .showroom-viewport {
+      --showroom-reserved-height: 272px;
     }
   }
 }

@@ -122,6 +122,64 @@ describe("AutoScrollRail", () => {
     expect(scrollToSpy).toHaveBeenCalledWith({ left: 240, behavior: "smooth" });
   });
 
+  it("keeps focused cards still until keyboard focus leaves the rail", () => {
+    render(
+      <AutoScrollRail ariaLabel="Focus rail" intervalMs={1000}>
+        <a href="/first">First</a>
+        <a href="/second">Second</a>
+      </AutoScrollRail>
+    );
+    const rail = screen.getByLabelText("Focus rail") as HTMLDivElement;
+    mockRailLayout(rail, 0);
+    fireEvent.focus(screen.getByText("First"));
+    act(() => vi.advanceTimersByTime(10000));
+    expect(rail.scrollTo).not.toHaveBeenCalled();
+    fireEvent.blur(screen.getByText("First"), { relatedTarget: screen.getByText("Second") });
+    fireEvent.focus(screen.getByText("Second"));
+    act(() => vi.advanceTimersByTime(1000));
+    expect(rail.scrollTo).not.toHaveBeenCalled();
+    fireEvent.blur(screen.getByText("Second"), { relatedTarget: null });
+    act(() => vi.advanceTimersByTime(1000));
+    expect(rail.scrollTo).toHaveBeenCalled();
+  });
+
+  it("pauses while hovered and resumes when the pointer leaves", () => {
+    render(
+      <AutoScrollRail ariaLabel="Hover rail" intervalMs={1000}>
+        <div>First</div>
+        <div>Second</div>
+      </AutoScrollRail>
+    );
+    const rail = screen.getByLabelText("Hover rail") as HTMLDivElement;
+    mockRailLayout(rail, 0);
+    fireEvent.mouseEnter(rail);
+    act(() => vi.advanceTimersByTime(10000));
+    expect(rail.scrollTo).not.toHaveBeenCalled();
+    fireEvent.mouseLeave(rail);
+    act(() => vi.advanceTimersByTime(1000));
+    expect(rail.scrollTo).toHaveBeenCalled();
+  });
+
+  it("stops autoplay in a hidden tab", () => {
+    render(
+      <AutoScrollRail ariaLabel="Visibility rail" intervalMs={1000}>
+        <div>First</div>
+        <div>Second</div>
+      </AutoScrollRail>
+    );
+    const rail = screen.getByLabelText("Visibility rail") as HTMLDivElement;
+    mockRailLayout(rail, 0);
+    const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+    fireEvent(document, new Event("visibilitychange"));
+    act(() => vi.advanceTimersByTime(10000));
+    expect(rail.scrollTo).not.toHaveBeenCalled();
+    hidden.mockReturnValue(false);
+    fireEvent(document, new Event("visibilitychange"));
+    act(() => vi.advanceTimersByTime(1000));
+    expect(rail.scrollTo).toHaveBeenCalled();
+    hidden.mockRestore();
+  });
+
   it("wraps back to the start when the rail reaches the end", () => {
     render(
       <AutoScrollRail ariaLabel="Wrap rail" intervalMs={1000}>

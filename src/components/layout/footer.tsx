@@ -38,24 +38,19 @@ const footerSections = [
 function SouthAfricanFlagMark() {
   return (
     <svg
-      className="h-4 w-6 shrink-0 rounded-[3px] shadow-[0_0_0_1px_rgba(15,23,42,0.18),0_1px_2px_rgba(15,23,42,0.16)]"
+      className="h-5 w-[30px] shrink-0 overflow-hidden rounded-[2px] ring-1 ring-black/10 dark:ring-white/20"
       viewBox="0 0 300 200"
       role="img"
       aria-label="South African flag"
       focusable="false"
     >
-      <defs>
-        <clipPath id="south-african-flag-clip">
-          <rect width="300" height="200" rx="10" />
-        </clipPath>
-      </defs>
-      <g clipPath="url(#south-african-flag-clip)">
+      <g>
         <path fill="#e03c31" d="M0 0h300v100H0z" />
         <path fill="#001489" d="M0 100h300v100H0z" />
-        <path fill="#fff" d="M0 0h50l110 73.333H300v53.334H160L50 200H0l150-100L0 0Z" />
-        <path fill="#007a4d" d="M0 20h38l108 72h154v16H146L38 180H0l120-80L0 20Z" />
-        <path fill="#ffb81c" d="M0 0l150 100L0 200V0Z" />
-        <path fill="#000" d="M0 20l120 80L0 180V20Z" />
+        <path d="M0 0 150 100H300M150 100 0 200" fill="none" stroke="#fff" strokeWidth="66.667" />
+        <path d="M0 0 150 100H300M150 100 0 200" fill="none" stroke="#007a4d" strokeWidth="40" />
+        <path fill="#ffb81c" d="M0 24 114 100 0 176Z" />
+        <path fill="#000" d="M0 40 90 100 0 160Z" />
       </g>
     </svg>
   );

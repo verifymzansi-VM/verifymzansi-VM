@@ -86,6 +86,9 @@ describe("HomePage", () => {
         name: "Find and post trusted listings across South Africa.",
       })
     ).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.queryByRole("search")).not.toBeInTheDocument();
+    expect(screen.getByRole("main").firstElementChild).toBe(heroBanner);
     expect(screen.getByText("Get Started")).toBeInTheDocument();
     expect(screen.getByText("Create your profile")).toBeInTheDocument();
     expect(screen.getByText("Complete verification")).toBeInTheDocument();

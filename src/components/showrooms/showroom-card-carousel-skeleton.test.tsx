@@ -8,12 +8,7 @@ describe("ShowroomCardCarouselSkeleton", () => {
     const section = container.querySelector("section");
 
     expect(section).not.toBeNull();
-    expect(section?.className).toContain("pt-0");
-    expect(section?.className).toContain("sm:pt-0");
-    expect(section?.className).toContain("pb-8");
-    expect(section?.className).toContain("sm:pb-10");
-    expect(section?.className).toContain("lg:min-h-[clamp(31rem,64vh,42rem)]");
-    expect(section?.className).toContain("lg:py-10");
+    expect(section?.className).toContain("showroom-viewport");
     expect(screen.getAllByLabelText("Loading").length).toBeGreaterThan(0);
   });
 

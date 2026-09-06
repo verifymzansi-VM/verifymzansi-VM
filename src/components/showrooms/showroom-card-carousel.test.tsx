@@ -148,16 +148,11 @@ describe("ShowroomCardCarousel", () => {
     expect(section || screen.getByLabelText("Showroom carousel")).toBeTruthy();
   });
 
-  it("fills the desktop viewport while removing mobile top spacing", () => {
+  it("uses shared viewport-aware spacing", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
     const section = screen.getByLabelText("Showroom carousel");
 
-    expect(section.className).toContain("pt-0");
-    expect(section.className).toContain("sm:pt-0");
-    expect(section.className).toContain("pb-8");
-    expect(section.className).toContain("sm:pb-10");
-    expect(section.className).toContain("lg:min-h-[clamp(31rem,64vh,42rem)]");
-    expect(section.className).toContain("lg:py-10");
+    expect(section.className).toContain("showroom-viewport");
   });
 
   it("uses larger mobile showroom card width while preserving desktop card sizing", () => {
@@ -210,7 +205,7 @@ describe("ShowroomCardCarousel", () => {
       node.className.includes("showroom-card-frame")
     );
     expect(section).toBeInTheDocument();
-    expect(section.className).toContain("lg:min-h-[clamp(31rem,64vh,42rem)]");
+    expect(section.className).toContain("showroom-viewport");
     expect(emptyStateCard).toBeDefined();
     // Title renders in the branded message panel and on the artwork card.
     expect(screen.getAllByText("No Items").length).toBeGreaterThanOrEqual(1);

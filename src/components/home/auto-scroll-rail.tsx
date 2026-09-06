@@ -105,6 +105,9 @@ export function AutoScrollRail({
   const pausedRef = useRef(false);
   const [isVisible, setIsVisible] = useState(false);
   const [paused, setPaused] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [focusWithin, setFocusWithin] = useState(false);
+  const [pageVisible, setPageVisible] = useState(true);
   const [canHover, setCanHover] = useState(false);
   const generatedLabel = useId();
   const railLabel = ariaLabel || `horizontal-rail-${generatedLabel}`;
@@ -119,6 +122,13 @@ export function AutoScrollRail({
   const settleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollRafRef = useRef<number | null>(null);
   const dragResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const updateVisibility = () => setPageVisible(!document.hidden);
+    updateVisibility();
+    document.addEventListener("visibilitychange", updateVisibility);
+    return () => document.removeEventListener("visibilitychange", updateVisibility);
+  }, []);
 
   const pauseAndResume = useCallback(() => {
     pausedRef.current = true;
@@ -244,7 +254,17 @@ export function AutoScrollRail({
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    if (items.length <= 1 || reducedMotion || paused || !isVisible || !canHover) return;
+    if (
+      items.length <= 1 ||
+      reducedMotion ||
+      paused ||
+      hovered ||
+      focusWithin ||
+      !pageVisible ||
+      !isVisible ||
+      !canHover
+    )
+      return;
 
     const id = window.setInterval(() => {
       if (pausedRef.current) return;
@@ -267,7 +287,17 @@ export function AutoScrollRail({
     }, intervalMs);
 
     return () => window.clearInterval(id);
-  }, [canHover, intervalMs, isVisible, items.length, paused, reducedMotion]);
+  }, [
+    canHover,
+    intervalMs,
+    isVisible,
+    items.length,
+    paused,
+    hovered,
+    focusWithin,
+    pageVisible,
+    reducedMotion,
+  ]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -473,6 +503,14 @@ export function AutoScrollRail({
             className
           )}
           tabIndex={0}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+          onFocusCapture={() => setFocusWithin(true)}
+          onBlurCapture={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+              setFocusWithin(false);
+            }
+          }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}

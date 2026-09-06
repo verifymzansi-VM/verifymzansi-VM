@@ -186,7 +186,7 @@ export function PosterCardShell({
   );
   const metadataClassName = cn("flex flex-1", contentPaddingClassName, contentClassName);
   const metadataBody = (
-    <div className={metadataClassName}>
+    <div className={metadataClassName} data-card-metadata>
       {/* Channel avatar / logo */}
       <div className="mt-0.5 shrink-0">
         {normalizedLogoUrl ? (

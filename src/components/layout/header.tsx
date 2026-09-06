@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Menu,
   X,
@@ -27,9 +28,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { BrandLogo } from "../shared/brand-logo";
 import { TrustBadge } from "@/components/trust/trust-badge";
-import { NotificationBell } from "@/components/notification-bell";
-import { LiveLeadNotifier } from "@/components/notifications/live-lead-notifier";
-import { LeadNotificationPermissionPrompt } from "@/components/notifications/lead-notification-permission-prompt";
 import { MarketplaceSwitcher } from "./marketplace-switcher";
 import { useAuth } from "@/hooks/use-auth";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
@@ -37,6 +35,21 @@ import type { TrustLevel } from "@/types/enums";
 
 const LOGIN_HREF = "/login?authFresh=20260515";
 const REGISTER_HREF = "/register?authFresh=20260515";
+
+const NotificationBell = dynamic(
+  () => import("@/components/notification-bell").then((mod) => mod.NotificationBell),
+  {
+    loading: () => <span className="inline-block h-9 w-9" aria-hidden="true" />,
+  }
+);
+const LiveLeadNotifier = dynamic(() =>
+  import("@/components/notifications/live-lead-notifier").then((mod) => mod.LiveLeadNotifier)
+);
+const LeadNotificationPermissionPrompt = dynamic(() =>
+  import("@/components/notifications/lead-notification-permission-prompt").then(
+    (mod) => mod.LeadNotificationPermissionPrompt
+  )
+);
 
 interface HeaderProps {
   /** Pass `true` to skip the session check (e.g. dashboard layout already knows). */
@@ -70,6 +83,7 @@ function HeaderInner({
   trustLevel: trustLevelProp = 0,
 }: HeaderProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const mobileToggleRef = useRef<HTMLButtonElement>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const { theme, resolvedTheme, setTheme } = useTheme();
@@ -114,7 +128,10 @@ function HeaderInner({
   // Close mobile menu on Escape key
   const handleEscape = useCallback(
     (e: KeyboardEvent) => {
-      if (e.key === "Escape" && mobileOpen) setMobileOpen(false);
+      if (e.key === "Escape" && mobileOpen) {
+        setMobileOpen(false);
+        mobileToggleRef.current?.focus();
+      }
     },
     [mobileOpen]
   );
@@ -124,17 +141,16 @@ function HeaderInner({
     return () => document.removeEventListener("keydown", handleEscape);
   }, [handleEscape]);
 
-  // Lock body scroll when mobile menu is open
+  // This is an inline disclosure, so the page remains scrollable while it is open.
+  // Reset it at the desktop breakpoint instead of keeping a hidden menu open.
   useEffect(() => {
-    if (mobileOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => {
-      document.body.style.overflow = "";
+    const desktop = window.matchMedia("(min-width: 1024px)");
+    const closeOnDesktop = () => {
+      if (desktop.matches) setMobileOpen(false);
     };
-  }, [mobileOpen]);
+    desktop.addEventListener("change", closeOnDesktop);
+    return () => desktop.removeEventListener("change", closeOnDesktop);
+  }, []);
 
   // Scroll-aware header treatment: blur + subtle shadow once the page scrolls
   useEffect(() => {
@@ -170,7 +186,7 @@ function HeaderInner({
             href="/"
             prefetch={false}
             aria-label="VerifyMzansi — Home"
-            className="group flex min-w-0 items-center gap-2 sm:gap-3"
+            className="group flex min-w-0 items-center gap-2 rounded-lg dark:bg-white sm:gap-3"
           >
             <BrandLogo
               size="md"
@@ -302,11 +318,13 @@ function HeaderInner({
           {renderThemeToggle("relative h-9 w-9 shrink-0")}
           {isAuthenticated && <NotificationBell userId={auth.user?.id} />}
           <button
+            ref={mobileToggleRef}
             type="button"
-            className="relative z-[120] rounded-md p-2 touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="relative z-[120] flex h-11 w-11 items-center justify-center rounded-md p-2 touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             onClick={() => setMobileOpen((prev) => !prev)}
             aria-label={mobileOpen ? "Close menu" : "Open menu"}
             aria-controls="mobile-nav-menu"
+            aria-expanded={mobileOpen}
             data-testid="mobile-menu-toggle"
           >
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
