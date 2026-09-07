@@ -114,17 +114,17 @@ export async function verifySupabaseSchema(
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  const checks: SchemaTableCheck[] = [];
-
-  for (const table of tables) {
-    const { error } = await supabase.from(table).select("id, created_at").limit(1);
-    checks.push({
-      table,
-      ok: !error,
-      errorCode: error?.code ?? null,
-      errorMessage: error?.message ?? null,
-    });
-  }
+  const checks = await Promise.all(
+    tables.map(async (table): Promise<SchemaTableCheck> => {
+      const { error } = await supabase.from(table).select("id, created_at").limit(1);
+      return {
+        table,
+        ok: !error,
+        errorCode: error?.code ?? null,
+        errorMessage: error?.message ?? null,
+      };
+    })
+  );
 
   const missingTables = checks
     .filter((item) => item.errorCode === "PGRST205")
@@ -138,17 +138,18 @@ export async function verifySupabaseSchema(
       message: item.errorMessage ?? "Unknown error",
     }));
 
-  const legacyTableChecks: LegacyTableCheck[] = [];
-  for (const table of legacyTables) {
-    const { error } = await supabase.from(table).select("id, created_at").limit(1);
-    const absent = error?.code === "PGRST205";
-    legacyTableChecks.push({
-      table,
-      absent,
-      errorCode: error?.code ?? null,
-      errorMessage: error?.message ?? null,
-    });
-  }
+  const legacyTableChecks = await Promise.all(
+    legacyTables.map(async (table): Promise<LegacyTableCheck> => {
+      const { error } = await supabase.from(table).select("id, created_at").limit(1);
+      const absent = error?.code === "PGRST205";
+      return {
+        table,
+        absent,
+        errorCode: error?.code ?? null,
+        errorMessage: error?.message ?? null,
+      };
+    })
+  );
 
   const unexpectedLegacyTables = legacyTableChecks
     .filter((item) => !item.absent && item.errorCode === null)
@@ -162,36 +163,49 @@ export async function verifySupabaseSchema(
       message: item.errorMessage ?? "Unknown error",
     }));
 
-  let accountProfileColumnCheck: AccountProfileColumnCheck | null = null;
-  if (requireAccountProfileColumns && tables.includes(ACCOUNT_PROFILE_TABLE_NAME)) {
-    const columnSelect = REQUIRED_ACCOUNT_PROFILE_COLUMNS.join(", ");
-    const { error } = await supabase.from(ACCOUNT_PROFILE_TABLE_NAME).select(columnSelect).limit(1);
-    accountProfileColumnCheck = {
-      table: ACCOUNT_PROFILE_TABLE_NAME,
-      columns: REQUIRED_ACCOUNT_PROFILE_COLUMNS,
-      ok: !error,
-      errorCode: error?.code ?? null,
-      errorMessage: error?.message ?? null,
-    };
-  }
+  const accountProfileColumnCheckPromise =
+    requireAccountProfileColumns && tables.includes(ACCOUNT_PROFILE_TABLE_NAME)
+      ? (async (): Promise<AccountProfileColumnCheck> => {
+          const columnSelect = REQUIRED_ACCOUNT_PROFILE_COLUMNS.join(", ");
+          const { error } = await supabase
+            .from(ACCOUNT_PROFILE_TABLE_NAME)
+            .select(columnSelect)
+            .limit(1);
+          return {
+            table: ACCOUNT_PROFILE_TABLE_NAME,
+            columns: REQUIRED_ACCOUNT_PROFILE_COLUMNS,
+            ok: !error,
+            errorCode: error?.code ?? null,
+            errorMessage: error?.message ?? null,
+          };
+        })()
+      : Promise.resolve(null);
 
-  const ownerColumnChecks: OwnerColumnCheck[] = [];
-  for (const table of OWNER_COMPAT_TABLES) {
-    const ownerResult = await supabase.from(table).select("id, owner_id").limit(1);
-    const sellerResult = await supabase.from(table).select("id, seller_id").limit(1);
+  const ownerColumnChecksPromise = Promise.all(
+    OWNER_COMPAT_TABLES.map(async (table): Promise<OwnerColumnCheck> => {
+      const [ownerResult, sellerResult] = await Promise.all([
+        supabase.from(table).select("id, owner_id").limit(1),
+        supabase.from(table).select("id, seller_id").limit(1),
+      ]);
 
-    const ownerWorks = !ownerResult.error;
-    const sellerWorks = !sellerResult.error;
-    const mode = ownerWorks ? "owner_id" : sellerWorks ? "seller_id" : null;
+      const ownerWorks = !ownerResult.error;
+      const sellerWorks = !sellerResult.error;
+      const mode = ownerWorks ? "owner_id" : sellerWorks ? "seller_id" : null;
 
-    ownerColumnChecks.push({
-      table,
-      ok: mode !== null,
-      mode,
-      ownerIdError: ownerResult.error?.message ?? null,
-      sellerIdError: sellerResult.error?.message ?? null,
-    });
-  }
+      return {
+        table,
+        ok: mode !== null,
+        mode,
+        ownerIdError: ownerResult.error?.message ?? null,
+        sellerIdError: sellerResult.error?.message ?? null,
+      };
+    })
+  );
+
+  const [accountProfileColumnCheck, ownerColumnChecks] = await Promise.all([
+    accountProfileColumnCheckPromise,
+    ownerColumnChecksPromise,
+  ]);
 
   const missingOwnerColumns = ownerColumnChecks
     .filter((item) => !item.ok)
