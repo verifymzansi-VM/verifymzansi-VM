@@ -147,12 +147,14 @@ async function uploadVideoDirectToR2(file: File, area: UploadArea): Promise<stri
         signal: timeout.signal,
       });
     } catch (error) {
-      await verifyDirectUpload(uploadDescriptor).catch((cleanupError) => {
+      const verified = await verifyDirectUpload(uploadDescriptor).catch((cleanupError) => {
         log.warn("Direct video upload cleanup failed after PUT error", {
           uploadError: error instanceof Error ? error.message : String(error),
           cleanupError: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
         });
+        return false;
       });
+      if (verified) return publicUrl;
       throw error;
     } finally {
       timeout.cancel();
@@ -162,12 +164,14 @@ async function uploadVideoDirectToR2(file: File, area: UploadArea): Promise<stri
       log.warn("Direct video upload failed; falling back to validated upload endpoint", {
         status: uploadResponse.status,
       });
-      await verifyDirectUpload(uploadDescriptor).catch((error) => {
+      const verified = await verifyDirectUpload(uploadDescriptor).catch((error) => {
         log.warn("Direct video upload cleanup failed before fallback", {
           status: uploadResponse.status,
           error: error instanceof Error ? error.message : String(error),
         });
+        return false;
       });
+      if (verified) return publicUrl;
       return null;
     }
 

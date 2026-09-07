@@ -74,6 +74,7 @@ docs/*
 !docs/POSTING-GUIDE.md
 !docs/introductory-trial-strategy.md
 !docs/verification-capture-review.md
+!docs/video-upload-r2-design.md
 !.github/**/*.md
 !docs/RUNBOOK.md
 !docs/playbooks/

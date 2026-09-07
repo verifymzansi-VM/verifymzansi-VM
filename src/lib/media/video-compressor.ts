@@ -20,7 +20,7 @@ export interface CompressionOptions {
   audioBitrate?: string;
   /** FFmpeg encoding preset (default: "fast") */
   preset?: string;
-  /** Keyframe interval in frames (default: 48 = 2s at 24fps) */
+  /** Keyframe interval in frames (default: 60 = 2s at 30fps) */
   keyframeInterval?: number;
   /** Skip compression if file is smaller than this in bytes (default: 2 MB) */
   skipBelowBytes?: number;
@@ -46,7 +46,7 @@ const DEFAULT_OPTIONS: Required<Omit<CompressionOptions, "onProgress" | "signal"
   videoBitrate: "1.5M",
   audioBitrate: "128k",
   preset: "fast",
-  keyframeInterval: 48,
+  keyframeInterval: 60,
   skipBelowBytes: 2 * 1024 * 1024, // 2 MB
 };
 
@@ -130,7 +130,9 @@ function shouldSkipCompression(
 
   // Orientation-agnostic: cap the long edge at max(maxWidth, maxHeight)
   const maxDim = Math.max(opts.maxWidth, opts.maxHeight);
-  const isWithinResolution = dims.width <= maxDim && dims.height <= maxDim;
+  const isWithinResolution =
+    Math.max(dims.width, dims.height) <= maxDim &&
+    Math.min(dims.width, dims.height) <= Math.min(opts.maxWidth, opts.maxHeight);
   const bitrate = estimateBitrate(file.size, dims.duration);
   // 2 Mbps target threshold — if already below, compression won't help much
   const isLowBitrate = bitrate < 2_000_000;
@@ -176,12 +178,24 @@ export async function compressVideo(
     throw new DOMException("Compression aborted", "AbortError");
   }
 
+  let dispose: (() => void) | undefined;
   try {
     // ── Lazy-load FFmpeg WASM ─────────────────────────────
     const { FFmpeg } = await import("@ffmpeg/ffmpeg");
     const { fetchFile } = await import("@ffmpeg/util");
 
     const ffmpeg = new FFmpeg();
+    const terminate = () => {
+      try {
+        ffmpeg.terminate();
+      } catch {
+        // Cleanup must not hide the conversion error.
+      }
+    };
+    dispose = () => {
+      options.signal?.removeEventListener("abort", terminate);
+      terminate();
+    };
 
     // Wire up progress
     if (options.onProgress) {
@@ -193,17 +207,8 @@ export async function compressVideo(
 
     // Wire up abort
     if (options.signal) {
-      options.signal.addEventListener(
-        "abort",
-        () => {
-          try {
-            ffmpeg.terminate();
-          } catch {
-            // Already terminated
-          }
-        },
-        { once: true }
-      );
+      options.signal.addEventListener("abort", terminate, { once: true });
+      if (options.signal.aborted) throw new DOMException("Compression aborted", "AbortError");
     }
 
     // Load single-threaded FFmpeg core explicitly. The default loader first
@@ -214,7 +219,6 @@ export async function compressVideo(
     });
 
     if (options.signal?.aborted) {
-      ffmpeg.terminate();
       throw new DOMException("Compression aborted", "AbortError");
     }
 
@@ -225,23 +229,34 @@ export async function compressVideo(
     await ffmpeg.writeFile(inputName, await fetchFile(file));
 
     // ── Build FFmpeg command ─────────────────────────────
-    // Scale filter: cap the long edge at max(maxWidth, maxHeight) to handle
-    // both landscape AND portrait videos correctly. force_original_aspect_ratio
+    // Cap both long and short edges, including portrait and square videos.
+    // force_original_aspect_ratio
     // shrinks the output to fit within the bounding box. min() prevents upscaling.
     const maxDim = Math.max(opts.maxWidth, opts.maxHeight);
-    const scaleFilter = `scale='min(${maxDim},iw)':'min(${maxDim},ih)':force_original_aspect_ratio=decrease`,
+    const minDim = Math.min(opts.maxWidth, opts.maxHeight);
+    const scaleFilter = `scale='min(iw,if(gte(iw,ih),${maxDim},${minDim}))':'min(ih,if(gte(iw,ih),${minDim},${maxDim}))':force_original_aspect_ratio=decrease`,
       // Ensure dimensions are divisible by 2 (H.264 requirement)
       padFilter = `pad=ceil(iw/2)*2:ceil(ih/2)*2`;
 
     const args = [
       "-i",
       inputName,
+      "-map",
+      "0:v:0",
+      "-map",
+      "0:a:0?",
+      "-map_metadata",
+      "-1",
       "-vf",
       `${scaleFilter},${padFilter}`,
       "-c:v",
       "libx264",
       "-profile:v",
       "baseline",
+      "-pix_fmt",
+      "yuv420p",
+      "-r",
+      "30",
       "-level",
       "3.1",
       "-preset",
@@ -260,10 +275,10 @@ export async function compressVideo(
       outputName,
     ];
 
-    await ffmpeg.exec(args);
+    const exitCode = await ffmpeg.exec(args);
+    if (exitCode !== 0) throw new Error(`Video encoder exited with code ${exitCode}`);
 
     if (options.signal?.aborted) {
-      ffmpeg.terminate();
       throw new DOMException("Compression aborted", "AbortError");
     }
 
@@ -278,11 +293,10 @@ export async function compressVideo(
       // Best-effort cleanup
     }
 
-    ffmpeg.terminate();
-
     const blobPart: BlobPart = typeof data === "string" ? data : new Uint8Array(data);
     const compressedBlob = new Blob([blobPart], { type: "video/mp4" });
     const compressedSize = compressedBlob.size;
+    if (!compressedSize) throw new Error("Video encoder produced an empty file");
 
     // If compression made an already web-compatible file larger, keep original.
     // Incompatible inputs such as MOV still need the MP4 output for R2 validation.
@@ -310,6 +324,7 @@ export async function compressVideo(
       skipped: false,
     };
   } catch (err) {
+    if (options.signal?.aborted) throw new DOMException("Compression aborted", "AbortError");
     // Re-throw abort errors
     if (err instanceof DOMException && err.name === "AbortError") {
       throw err;
@@ -325,6 +340,8 @@ export async function compressVideo(
       skipped: true,
       skipReason: `Compression failed: ${err instanceof Error ? err.message : "Unknown error"}`,
     };
+  } finally {
+    dispose?.();
   }
 }
 

@@ -8,6 +8,13 @@ vi.mock("@/lib/media/video-compressor", () => ({
 }));
 
 describe("compressVideoForUpload", () => {
+  it("rejects any unsupported output container", async () => {
+    const file = new File(["video"], "clip.avi", { type: "video/x-msvideo" });
+    compressVideo.mockResolvedValueOnce({ file });
+    await expect(
+      compressVideoForUpload(file, { requireCompatibleOutput: true })
+    ).rejects.toBeInstanceOf(VideoTranscodeError);
+  });
   it("returns the compressed file from compressor result", async () => {
     const original = new File(["original"], "clip.mp4", { type: "video/mp4" });
     const compressed = new File(["compressed"], "clip-compressed.mp4", { type: "video/mp4" });

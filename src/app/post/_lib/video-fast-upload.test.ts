@@ -42,6 +42,25 @@ const { prewarmVideoForFastUpload, uploadVideoWithFastPath } =
 describe("uploadVideoWithFastPath", () => {
   const putFetch = vi.fn();
 
+  it("reuses a verified upload when the PUT response was lost", async () => {
+    const file = new File(["video"], "clip.mp4", { type: "video/mp4" });
+    const uploadViaServer = vi.fn();
+    mockFetchWithRetry.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        uploadUrl: "https://upload.example.com/signed",
+        key: "media/clip.mp4",
+        publicUrl: "https://media.example.com/clip.mp4",
+      }),
+    });
+    putFetch.mockRejectedValueOnce(new TypeError("Network response lost"));
+    mockFetchWithRetry.mockResolvedValueOnce({ ok: true });
+    expect(await uploadVideoWithFastPath({ file, area: "listing", uploadViaServer })).toBe(
+      "https://media.example.com/clip.mp4"
+    );
+    expect(uploadViaServer).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal("fetch", putFetch);

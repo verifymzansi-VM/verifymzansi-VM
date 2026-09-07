@@ -3,7 +3,8 @@
  *
  * Lazy-loads the FFmpeg WASM compressor so non-upload pages pay zero cost.
  * Returns the (possibly compressed) File ready for presigned-URL PUT.
- * On failure the original file is returned — upload still succeeds uncompressed.
+ * Compatible container types can fall back to the original on compression failure.
+ * Required conversion failures block upload; container type is not codec validation.
  */
 export class VideoTranscodeError extends Error {
   constructor(
@@ -67,7 +68,7 @@ export async function compressVideoForUpload(
     timeout.cancel();
   }
 
-  if (options?.requireCompatibleOutput && result.file.type === "video/quicktime") {
+  if (options?.requireCompatibleOutput && !WEB_UPLOAD_VIDEO_TYPES.has(result.file.type)) {
     throw new VideoTranscodeError();
   }
   return result.file;

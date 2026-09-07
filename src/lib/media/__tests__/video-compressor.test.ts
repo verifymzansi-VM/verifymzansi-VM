@@ -14,7 +14,7 @@ const {
   mockOn,
   mockFetchFile,
 } = vi.hoisted(() => ({
-  mockExec: vi.fn().mockResolvedValue(undefined),
+  mockExec: vi.fn().mockResolvedValue(0),
   mockWriteFile: vi.fn().mockResolvedValue(undefined),
   mockReadFile: vi.fn().mockResolvedValue(new Uint8Array(500_000)),
   mockDeleteFile: vi.fn().mockResolvedValue(undefined),
@@ -73,7 +73,7 @@ beforeEach(() => {
   // Restore default mock implementations after clearAllMocks
   mockReadFile.mockResolvedValue(new Uint8Array(500_000));
   mockLoad.mockResolvedValue(undefined);
-  mockExec.mockResolvedValue(undefined);
+  mockExec.mockResolvedValue(0);
   mockWriteFile.mockResolvedValue(undefined);
 
   vi.stubGlobal(
@@ -117,6 +117,34 @@ function fakeFile(sizeBytes: number, name = "test.mp4", type = "video/mp4"): Fil
 // ---------------------------------------------------------------------------
 
 describe("compressVideo", () => {
+  it("releases the encoder when encoding fails", async () => {
+    mockExec.mockResolvedValueOnce(1);
+    const file = fakeFile(3_000_000, "clip.mov", "video/quicktime");
+    const result = await compressVideo(file);
+    expect(result.file).toBe(file);
+    expect(result.skipReason).toContain("exited with code 1");
+    expect(mockReadFile).not.toHaveBeenCalled();
+    expect(mockTerminate).toHaveBeenCalled();
+  });
+
+  it("rejects empty encoder output and releases the worker", async () => {
+    mockReadFile.mockResolvedValueOnce(new Uint8Array(0));
+    const result = await compressVideo(fakeFile(3_000_000, "clip.mov", "video/quicktime"));
+    expect(result.skipped).toBe(true);
+    expect(result.skipReason).toContain("empty file");
+    expect(mockTerminate).toHaveBeenCalled();
+  });
+
+  it("compresses square video exceeding the short-edge limit", async () => {
+    mockVideoMeta = { width: 1080, height: 1080, duration: 30 };
+    await compressVideo(fakeFile(3_000_000));
+    expect(mockExec).toHaveBeenCalled();
+    const args = mockExec.mock.calls[0][0] as string[];
+    expect(args[args.indexOf("-vf") + 1]).toContain("720");
+    expect(args[args.indexOf("-pix_fmt") + 1]).toBe("yuv420p");
+    expect(args[args.indexOf("-r") + 1]).toBe("30");
+  });
+
   it("skips compression for files below the size threshold", async () => {
     const small = fakeFile(1 * 1024 * 1024); // 1 MB — below default 2 MB threshold
     const result = await compressVideo(small);
