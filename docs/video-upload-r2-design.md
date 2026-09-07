@@ -1,5 +1,45 @@
 # Video submission and delivery design
 
+## Follow-up: production loader failure
+
+The later 7 September screenshots show the same conversion error in the field
+and form summary. Investigation found that Next's production webpack bundle
+creates a classic FFmpeg worker, while the app supplied the ESM core. Its
+`importScripts` call cannot evaluate ESM; webpack compiled the dynamic-import
+fallback to an empty module context. The live worker asset also contains this
+broken fallback. The shared converter now selects the UMD core required by the
+classic worker.
+
+`node scripts/test-video-worker.mjs --legacy-esm` reproduced
+`Cannot find module` with the emitted production worker.
+`node scripts/test-video-worker.mjs` loaded the corrected core, generated a real
+MOV fixture and converted it to MP4 in Chromium. Run this test after
+`pnpm build`; it needs network access to the pinned core and a Playwright
+Chromium installation. This proves loader/encoder operation, not compatibility
+with every iPhone HEVC/HDR input. The source phone clip still needs real-device
+validation. Deployment status must be checked separately.
+
+Release follow-up: all 15 required steps of
+`pnpm safety:release -- --skip-optional` passed (3,724 unit tests; 31 browser
+smoke tests passed, 3 skipped). The optional launch-flow bundle was not run. The
+isolated Cloudflare bundle also built and passed the production-worker
+conversion test. However, deployment failed at
+`workers/scripts/verifymzansi/assets-upload-session` with Cloudflare
+authentication error 10000. GitHub deployment run 34085123980 had the same
+error. The active version remained `83644a39-6c16-4aea-848d-65059f156d95`
+afterward. The fix is **not live**. Correct the deployment token's account scope
+and Workers Scripts Write permission before retrying; the rejected endpoint
+requires that permission according to the
+[Cloudflare API reference](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/assets/subresources/upload/methods/create/).
+The prepared Linux build is at `/home/senzo/verifymzansi-video-fix-NxRbye`;
+local resume scripts and build-path record are under
+`tmp/deploy-video-release.*` and `tmp/video-release-path.txt`. Release evidence:
+`tmp/safety-gate/latest-release.md`, `latest-release.json`, and
+`latest-release-blockers.txt` (predeployment checks, not deployment success).
+Recheck source/build consistency before resuming if code changes. Update
+credentials through their configured secret storage, never by pasting them into
+chat.
+
 Verification for the accompanying shared fixes: `pnpm safety:review` passed all
 12 steps on 7 September 2026, including 423 test files / 3,724 tests and 21
 trial database checks. Focused conversion, upload, creation and existing editing

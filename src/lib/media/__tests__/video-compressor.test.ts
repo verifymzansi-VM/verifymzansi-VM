@@ -210,15 +210,15 @@ describe("compressVideo", () => {
     expect(mockExec).toHaveBeenCalled();
   });
 
-  it("loads the browser-compatible FFmpeg ESM core explicitly", async () => {
+  it("loads the UMD core required by the production webpack classic worker", async () => {
     mockVideoMeta = { width: 1920, height: 1080, duration: 30 };
     const file = fakeFile(10 * 1024 * 1024);
 
     await compressVideo(file);
 
     expect(mockLoad).toHaveBeenCalledWith({
-      coreURL: "https://unpkg.com/@ffmpeg/core@0.12.9/dist/esm/ffmpeg-core.js",
-      wasmURL: "https://unpkg.com/@ffmpeg/core@0.12.9/dist/esm/ffmpeg-core.wasm",
+      coreURL: "https://unpkg.com/@ffmpeg/core@0.12.9/dist/umd/ffmpeg-core.js",
+      wasmURL: "https://unpkg.com/@ffmpeg/core@0.12.9/dist/umd/ffmpeg-core.wasm",
     });
   });
 

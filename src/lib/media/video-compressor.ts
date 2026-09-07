@@ -51,7 +51,7 @@ const DEFAULT_OPTIONS: Required<Omit<CompressionOptions, "onProgress" | "signal"
 };
 
 const WEB_UPLOAD_VIDEO_TYPES = new Set(["video/mp4", "video/webm"]);
-const FFMPEG_CORE_BASE_URL = "https://unpkg.com/@ffmpeg/core@0.12.9/dist/esm";
+const FFMPEG_CORE_BASE_URL = "https://unpkg.com/@ffmpeg/core@0.12.9/dist/umd";
 
 /**
  * Read video dimensions using a temporary <video> element.
@@ -211,8 +211,10 @@ export async function compressVideo(
       if (options.signal.aborted) throw new DOMException("Compression aborted", "AbortError");
     }
 
-    // Load single-threaded FFmpeg core explicitly. The default loader first
-    // tries the UMD build, which cannot be imported from FFmpeg's module worker.
+    // Next's production webpack build emits a classic worker. It must load
+    // the UMD core through importScripts. An ESM core throws there, and the
+    // package's dynamic-import fallback is compiled to an empty webpack
+    // context (MODULE_NOT_FOUND), so selecting ESM breaks every conversion.
     await ffmpeg.load({
       coreURL: `${FFMPEG_CORE_BASE_URL}/ffmpeg-core.js`,
       wasmURL: `${FFMPEG_CORE_BASE_URL}/ffmpeg-core.wasm`,
