@@ -6,9 +6,10 @@
  * Compatible container types can fall back to the original on compression failure.
  * Required conversion failures block upload; container type is not codec validation.
  */
+import { hasCompatibleMp4Tracks } from "@/lib/media/mp4-compatibility";
 export class VideoTranscodeError extends Error {
   constructor(
-    message = "This MOV video could not be converted to MP4. Export it as MP4 and try again."
+    message = "This video could not be converted to a compatible MP4. Export it as H.264 MP4 and try again."
   ) {
     super(message);
     this.name = "VideoTranscodeError";
@@ -17,6 +18,10 @@ export class VideoTranscodeError extends Error {
 
 const WEB_UPLOAD_VIDEO_TYPES = new Set(["video/mp4", "video/webm"]);
 const DEFAULT_COMPRESSION_TIMEOUT_MS = 60_000;
+// MOV conversion is mandatory, unlike optional MP4/WebM compression. Phone
+// encodes can take several minutes, especially on a cold WASM download.
+const REQUIRED_CONVERSION_TIMEOUT_MS = 10 * 60_000;
+let preparationQueue: Promise<void> = Promise.resolve();
 
 function createTimeoutSignal(ms: number): {
   signal: AbortSignal;
@@ -44,19 +49,42 @@ function createTimeoutSignal(ms: number): {
   };
 }
 
-export async function compressVideoForUpload(
+export function compressVideoForUpload(
+  file: File,
+  options?: { requireCompatibleOutput?: boolean; timeoutMs?: number }
+): Promise<File> {
+  // A WASM instance holds both the input and output in memory. Multiple phone
+  // videos must not compete for CPU/memory, or consume their timeout in a queue.
+  const prepared = preparationQueue.then(() => prepareVideo(file, options));
+  preparationQueue = prepared.then(
+    () => undefined,
+    () => undefined
+  );
+  return prepared;
+}
+
+async function prepareVideo(
   file: File,
   options?: { requireCompatibleOutput?: boolean; timeoutMs?: number }
 ): Promise<File> {
   const { compressVideo } = await import("@/lib/media/video-compressor");
-  const timeout = createTimeoutSignal(options?.timeoutMs ?? DEFAULT_COMPRESSION_TIMEOUT_MS);
+  const needsConversion =
+    !WEB_UPLOAD_VIDEO_TYPES.has(file.type) ||
+    (file.type === "video/mp4" && !(await hasCompatibleMp4Tracks(file)));
+  const timeout = createTimeoutSignal(
+    options?.timeoutMs ??
+      (needsConversion ? REQUIRED_CONVERSION_TIMEOUT_MS : DEFAULT_COMPRESSION_TIMEOUT_MS)
+  );
   let result: Awaited<ReturnType<typeof compressVideo>>;
 
   try {
-    result = await Promise.race([compressVideo(file, { signal: timeout.signal }), timeout.promise]);
+    result = await Promise.race([
+      compressVideo(file, { signal: timeout.signal, forceTranscode: needsConversion }),
+      timeout.promise,
+    ]);
   } catch (error) {
     if (timeout.timedOut()) {
-      if (WEB_UPLOAD_VIDEO_TYPES.has(file.type)) {
+      if (!needsConversion) {
         return file;
       }
       throw new VideoTranscodeError(
@@ -68,6 +96,7 @@ export async function compressVideoForUpload(
     timeout.cancel();
   }
 
+  if (needsConversion && (result.skipped || result.file === file)) throw new VideoTranscodeError();
   if (options?.requireCompatibleOutput && !WEB_UPLOAD_VIDEO_TYPES.has(result.file.type)) {
     throw new VideoTranscodeError();
   }

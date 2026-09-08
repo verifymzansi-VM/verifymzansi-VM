@@ -36,10 +36,16 @@ for (const viewport of sizes) {
         )
         .first();
       await expect(card).toBeVisible();
-      const box = await card.evaluate((el) => {
-        const { x, y, width, height } = el.getBoundingClientRect();
-        return { x, y, width, height };
-      });
+      let box = { x: 0, y: 0, width: 0, height: 0 };
+      await expect
+        .poll(async () => {
+          box = await card.evaluate((el) => {
+            const { x, y, width, height } = el.getBoundingClientRect();
+            return { x, y, width, height };
+          });
+          return box.width;
+        })
+        .toBeGreaterThan(0);
       expect(box.width).toBeGreaterThan(0);
       expect(box.height).toBeGreaterThan(0);
       const header = (await page.locator("header").count())
@@ -51,8 +57,16 @@ for (const viewport of sizes) {
       expect(box!.y + box!.height).toBeLessThanOrEqual(bottom);
       expect(box!.x).toBeGreaterThanOrEqual(0);
       expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
+      if (viewport.height > 500 || viewport.width < 640) {
+        expect(box.width).toBeCloseTo(Math.min(viewport.width * 0.86, 480), 0);
+      }
+      const showroomBox = (await showroom.boundingBox())!;
+      expect(box.y).toBeGreaterThanOrEqual(showroomBox.y);
+      expect(box.y + box.height).toBeLessThanOrEqual(showroomBox.y + showroomBox.height);
       const metadata = card.locator("[data-card-metadata]");
       expect(await metadata.evaluate((el) => el.scrollHeight <= el.clientHeight)).toBe(true);
+      const metadataBox = (await metadata.boundingBox())!;
+      expect(metadataBox.y + metadataBox.height).toBeLessThanOrEqual(box.y + box.height);
       if (route === "/dev/showroom-drag") {
         const sizingCard = showroom.locator(".showroom-card-frame.invisible");
         const sizingHeight = await sizingCard.evaluate((el) => el.getBoundingClientRect().height);

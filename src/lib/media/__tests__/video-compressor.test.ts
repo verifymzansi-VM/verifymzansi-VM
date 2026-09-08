@@ -117,6 +117,13 @@ function fakeFile(sizeBytes: number, name = "test.mp4", type = "video/mp4"): Fil
 // ---------------------------------------------------------------------------
 
 describe("compressVideo", () => {
+  it("transcodes small MP4 inputs when their codec requires conversion and retains larger output", async () => {
+    const file = fakeFile(10, "phone.mp4", "video/mp4");
+    const result = await compressVideo(file, { forceTranscode: true });
+    expect(mockExec).toHaveBeenCalled();
+    expect(result.skipped).toBe(false);
+    expect(result.file).not.toBe(file);
+  });
   it("releases the encoder when encoding fails", async () => {
     mockExec.mockResolvedValueOnce(1);
     const file = fakeFile(3_000_000, "clip.mov", "video/quicktime");
@@ -322,6 +329,9 @@ describe("compressVideo", () => {
     expect(vfIndex).toBeGreaterThan(-1);
     const filterStr = args[vfIndex + 1];
     expect(filterStr).toContain("scale=");
+    // Drop excess frames before scaling high-frame-rate phone footage.
+    expect(filterStr.startsWith("fps=30,scale=")).toBe(true);
+    expect(args[args.indexOf("-preset") + 1]).toBe("ultrafast");
     expect(filterStr).toContain("1280"); // max dimension
     expect(filterStr).toContain("pad=");
   });

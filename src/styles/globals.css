@@ -349,7 +349,14 @@
   }
 
   .showroom-card-frame {
-    width: min(72vw, 416px, calc((100svh - var(--showroom-reserved-height, 380px)) * 9 / 16));
+    width: min(86vw, 480px);
+  }
+
+  /* Grow the card without pushing its details below the showroom or navigation.
+     Contain-fit images and videos remain fully visible inside the shorter frame. */
+  .showroom-card-frame [data-card-media] {
+    max-height: max(80px, calc(100svh - var(--showroom-reserved-height, 380px)));
+    flex: none;
   }
 
   .showroom-card-frame [data-card-metadata] {
@@ -369,19 +376,6 @@
     }
   }
 
-  /* Keep the text readable on shorter phones; contain-fit media stays uncropped. */
-  @media (max-height: 600px) {
-    .showroom-card-frame {
-      width: min(72vw, 416px);
-    }
-
-    .showroom-card-frame [data-card-media] {
-      height: max(80px, calc(100svh - var(--showroom-reserved-height, 380px)));
-      aspect-ratio: auto;
-      flex: none;
-    }
-  }
-
   /* Landscape phones have room beside the media, rather than below it. */
   @media (min-width: 640px) and (max-height: 500px) {
     .showroom-viewport {
@@ -396,16 +390,21 @@
     .showroom-card-frame [data-card-variant="hero"] {
       display: grid;
       grid-template-columns: calc(var(--showroom-landscape-height) * 9 / 16) minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr);
       height: var(--showroom-landscape-height);
     }
 
     .showroom-card-frame [data-card-media] {
       height: 100%;
+      max-height: none;
+      aspect-ratio: auto;
       border-radius: 0;
     }
 
     .showroom-card-frame [data-card-metadata] {
       height: 100%;
+      min-height: 0;
+      padding-block: 8px;
       align-items: center;
     }
   }

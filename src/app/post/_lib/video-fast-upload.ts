@@ -1,4 +1,5 @@
-import { compressVideoForUpload } from "@/lib/media/compress-before-upload";
+import { compressVideoForUpload, VideoTranscodeError } from "@/lib/media/compress-before-upload";
+import { MAX_VIDEO_UPLOAD_BYTES, videoUploadTimeoutMs } from "@/lib/media/upload-policy";
 import { normalizeSelectedFile } from "@/lib/utils/media-upload";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
@@ -22,24 +23,24 @@ type DirectUploadDescriptor = {
 };
 
 const preparedVideoUploads = new WeakMap<File, Promise<File>>();
-const VIDEO_PREPARE_TIMEOUT_MS = 60_000;
-// Minimum floor for the direct-to-R2 PUT. The effective timeout scales with
-// file size (see directUploadTimeoutMs) so large videos on slow mobile links
-// are not aborted prematurely and forced onto the slower server-proxy fallback.
-const DIRECT_UPLOAD_MIN_TIMEOUT_MS = 120_000;
-// Assumed worst-case uplink for sizing the PUT timeout (~0.5 Mbps ≈ 62.5 KB/s).
-const DIRECT_UPLOAD_MIN_BYTES_PER_SEC = 62_500;
-const DIRECT_UPLOAD_MAX_TIMEOUT_MS = 10 * 60_000; // 10 min hard cap
+const uploadedVideos = new WeakMap<
+  File,
+  Map<UploadArea, { promise: Promise<string>; expires: number }>
+>();
+let activeUploads = 0;
+const waitingUploads: Array<() => void> = [];
 
-/**
- * Scale the direct-upload timeout with file size so large videos on slow
- * connections are not aborted mid-PUT. Floor of 2 min, cap of 10 min.
- */
-function directUploadTimeoutMs(sizeBytes: number): number {
-  const sizeBased = Math.ceil((sizeBytes / DIRECT_UPLOAD_MIN_BYTES_PER_SEC) * 1000);
-  return Math.min(DIRECT_UPLOAD_MAX_TIMEOUT_MS, Math.max(DIRECT_UPLOAD_MIN_TIMEOUT_MS, sizeBased));
+async function withUploadSlot<T>(upload: () => Promise<T>): Promise<T> {
+  if (activeUploads >= 2) await new Promise<void>((resolve) => waitingUploads.push(resolve));
+  else activeUploads++;
+  try {
+    return await upload();
+  } finally {
+    const next = waitingUploads.shift();
+    if (next) next();
+    else activeUploads--;
+  }
 }
-
 function createTimeoutSignal(ms: number): { signal: AbortSignal; cancel: () => void } {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
@@ -53,6 +54,9 @@ function createTimeoutSignal(ms: number): { signal: AbortSignal; cancel: () => v
 }
 
 async function prepareVideoForUpload(file: File): Promise<File> {
+  if (!file.size || file.size > MAX_VIDEO_UPLOAD_BYTES) {
+    throw new VideoTranscodeError("Select a non-empty video up to 50 MB.");
+  }
   const existing = preparedVideoUploads.get(file);
   if (existing) {
     return existing;
@@ -60,9 +64,15 @@ async function prepareVideoForUpload(file: File): Promise<File> {
 
   const prepared = compressVideoForUpload(file, {
     requireCompatibleOutput: true,
-    timeoutMs: VIDEO_PREPARE_TIMEOUT_MS,
   })
-    .then((preparedFile) => normalizeSelectedFile(preparedFile))
+    .then((preparedFile) => {
+      if (!preparedFile.size || preparedFile.size > MAX_VIDEO_UPLOAD_BYTES) {
+        throw new VideoTranscodeError(
+          "The converted video exceeds the 50 MB upload limit. Try a shorter clip."
+        );
+      }
+      return normalizeSelectedFile(preparedFile);
+    })
     .catch((error) => {
       preparedVideoUploads.delete(file);
       throw error;
@@ -135,7 +145,7 @@ async function uploadVideoDirectToR2(file: File, area: UploadArea): Promise<stri
       area,
     };
 
-    const timeout = createTimeoutSignal(directUploadTimeoutMs(file.size));
+    const timeout = createTimeoutSignal(videoUploadTimeoutMs(file.size));
     let uploadResponse: Response;
     try {
       uploadResponse = await fetch(uploadUrl, {
@@ -201,11 +211,30 @@ export async function uploadVideoWithFastPath({
   area: UploadArea;
   uploadViaServer: (file: File) => Promise<string>;
 }): Promise<string> {
-  const uploadFile = await prepareVideoForUpload(file);
-  const directUrl = await uploadVideoDirectToR2(uploadFile, area);
-  if (directUrl) {
-    return directUrl;
+  let uploads = uploadedVideos.get(file);
+  if (!uploads) {
+    uploads = new Map();
+    uploadedVideos.set(file, uploads);
   }
+  const existing = uploads.get(area);
+  if (existing && existing.expires > Date.now()) return existing.promise;
 
-  return uploadViaServer(uploadFile);
+  // Retain successful work during a form retry; failed attempts remain retryable.
+  // File identity and upload area prevent unrelated selections sharing results.
+  const entry = { promise: Promise.resolve(""), expires: Infinity };
+  entry.promise = (async () => {
+    const uploadFile = await prepareVideoForUpload(file);
+    const url = await withUploadSlot(async () => {
+      const directUrl = await uploadVideoDirectToR2(uploadFile, area);
+      return directUrl || (await uploadViaServer(uploadFile));
+    });
+    if (!url) throw new Error("Video upload returned no URL. Please retry.");
+    entry.expires = Date.now() + 30 * 60_000;
+    return url;
+  })().catch((error) => {
+    if (uploads.get(area) === entry) uploads.delete(area);
+    throw error;
+  });
+  uploads.set(area, entry);
+  return entry.promise;
 }

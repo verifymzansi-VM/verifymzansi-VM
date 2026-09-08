@@ -10,6 +10,8 @@
  */
 
 export interface CompressionOptions {
+  /** Require a new H.264/AAC output even for small or low-bitrate MP4 inputs. */
+  forceTranscode?: boolean;
   /** Maximum width in pixels (default: 1280) */
   maxWidth?: number;
   /** Maximum height in pixels (default: 720) */
@@ -18,7 +20,7 @@ export interface CompressionOptions {
   videoBitrate?: string;
   /** Audio bitrate string for FFmpeg, e.g. "128k" (default: "128k") */
   audioBitrate?: string;
-  /** FFmpeg encoding preset (default: "fast") */
+  /** FFmpeg encoding preset (default: "ultrafast") */
   preset?: string;
   /** Keyframe interval in frames (default: 60 = 2s at 30fps) */
   keyframeInterval?: number;
@@ -41,11 +43,13 @@ export interface CompressionResult {
 }
 
 const DEFAULT_OPTIONS: Required<Omit<CompressionOptions, "onProgress" | "signal">> = {
+  forceTranscode: false,
   maxWidth: 1280,
   maxHeight: 720,
   videoBitrate: "1.5M",
   audioBitrate: "128k",
-  preset: "fast",
+  // Submission runs on the user's phone; prioritize encoding speed.
+  preset: "ultrafast",
   keyframeInterval: 60,
   skipBelowBytes: 2 * 1024 * 1024, // 2 MB
 };
@@ -118,7 +122,7 @@ function shouldSkipCompression(
   dims: { width: number; height: number; duration: number } | null,
   opts: Required<Omit<CompressionOptions, "onProgress" | "signal">>
 ): string | null {
-  if (!WEB_UPLOAD_VIDEO_TYPES.has(file.type)) {
+  if (opts.forceTranscode || !WEB_UPLOAD_VIDEO_TYPES.has(file.type)) {
     return null;
   }
 
@@ -250,7 +254,7 @@ export async function compressVideo(
       "-map_metadata",
       "-1",
       "-vf",
-      `${scaleFilter},${padFilter}`,
+      `fps=30,${scaleFilter},${padFilter}`,
       "-c:v",
       "libx264",
       "-profile:v",
@@ -302,7 +306,11 @@ export async function compressVideo(
 
     // If compression made an already web-compatible file larger, keep original.
     // Incompatible inputs such as MOV still need the MP4 output for R2 validation.
-    if (compressedSize >= originalSize && WEB_UPLOAD_VIDEO_TYPES.has(file.type)) {
+    if (
+      !opts.forceTranscode &&
+      compressedSize >= originalSize &&
+      WEB_UPLOAD_VIDEO_TYPES.has(file.type)
+    ) {
       return {
         file,
         originalSize,

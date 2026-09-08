@@ -42,6 +42,47 @@ const { prewarmVideoForFastUpload, uploadVideoWithFastPath } =
 describe("uploadVideoWithFastPath", () => {
   const putFetch = vi.fn();
 
+  it.each(["listing", "business_cover", "promotion"] as const)(
+    "reuses successful and in-flight uploads in %s",
+    async (area) => {
+      const file = new File(["video"], "clip.mp4", { type: "video/mp4" });
+      mockFetchWithRetry.mockResolvedValue({ ok: false, status: 410 });
+      const uploadViaServer = vi.fn().mockResolvedValue("https://media.example.com/saved.mp4");
+      const options = { file, area, uploadViaServer };
+      await Promise.all([uploadVideoWithFastPath(options), uploadVideoWithFastPath(options)]);
+      expect(await uploadVideoWithFastPath(options)).toBe("https://media.example.com/saved.mp4");
+      expect(uploadViaServer).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it("retries failed uploads without reusing another area's upload", async () => {
+    const file = new File(["video"], "clip.mp4", { type: "video/mp4" });
+    mockFetchWithRetry.mockResolvedValue({ ok: false, status: 410 });
+    const uploadViaServer = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValue("https://media.example.com/saved.mp4");
+    await expect(
+      uploadVideoWithFastPath({ file, area: "listing", uploadViaServer })
+    ).rejects.toThrow("offline");
+    await uploadVideoWithFastPath({ file, area: "listing", uploadViaServer });
+    await uploadVideoWithFastPath({ file, area: "promotion", uploadViaServer });
+    expect(uploadViaServer).toHaveBeenCalledTimes(3);
+  });
+
+  it("rejects oversized converted output before requesting an upload", async () => {
+    const file = new File(["video"], "clip.mov", { type: "video/quicktime" });
+    const output = new File(["mp4"], "clip.mp4", { type: "video/mp4" });
+    Object.defineProperty(output, "size", { value: 50 * 1024 * 1024 + 1 });
+    mockCompressVideoForUpload.mockResolvedValueOnce(output);
+    const uploadViaServer = vi.fn();
+    await expect(
+      uploadVideoWithFastPath({ file, area: "promotion", uploadViaServer })
+    ).rejects.toThrow("50 MB");
+    expect(mockFetchWithRetry).not.toHaveBeenCalled();
+    expect(uploadViaServer).not.toHaveBeenCalled();
+  });
+
   it("reuses a verified upload when the PUT response was lost", async () => {
     const file = new File(["video"], "clip.mp4", { type: "video/mp4" });
     const uploadViaServer = vi.fn();
@@ -95,7 +136,6 @@ describe("uploadVideoWithFastPath", () => {
     expect(url).toBe("https://media.example.com/clip.mp4");
     expect(mockCompressVideoForUpload).toHaveBeenCalledWith(file, {
       requireCompatibleOutput: true,
-      timeoutMs: 60000,
     });
     expect(uploadViaServer).not.toHaveBeenCalled();
     expect(mockFetchWithRetry).toHaveBeenCalledWith(
@@ -145,7 +185,6 @@ describe("uploadVideoWithFastPath", () => {
     expect(url).toBe("https://media.example.com/server.mp4");
     expect(mockCompressVideoForUpload).toHaveBeenCalledWith(file, {
       requireCompatibleOutput: true,
-      timeoutMs: 60000,
     });
     expect(putFetch).not.toHaveBeenCalled();
     expect(uploadViaServer).toHaveBeenCalledWith(file);
@@ -171,7 +210,6 @@ describe("uploadVideoWithFastPath", () => {
     expect(url).toBe("https://media.example.com/converted.mp4");
     expect(mockCompressVideoForUpload).toHaveBeenCalledWith(original, {
       requireCompatibleOutput: true,
-      timeoutMs: 60000,
     });
     expect(uploadViaServer).toHaveBeenCalledWith(converted);
   });
