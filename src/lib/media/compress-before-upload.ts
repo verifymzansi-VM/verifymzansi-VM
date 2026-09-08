@@ -3,8 +3,9 @@
  *
  * Lazy-loads the FFmpeg WASM compressor so non-upload pages pay zero cost.
  * Returns the (possibly compressed) File ready for presigned-URL PUT.
- * Compatible container types can fall back to the original on compression failure.
- * Required conversion failures block upload; container type is not codec validation.
+ * MP4 originals need recognized H.264/AAC sample descriptions to allow fallback;
+ * WebM originals retain the existing fallback policy. Required conversions block
+ * upload on failure. Track inspection is not a full decode/integrity check.
  */
 import { hasCompatibleMp4Tracks } from "@/lib/media/mp4-compatibility";
 export class VideoTranscodeError extends Error {

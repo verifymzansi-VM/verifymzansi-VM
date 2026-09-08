@@ -42,6 +42,42 @@ const { prewarmVideoForFastUpload, uploadVideoWithFastPath } =
 describe("uploadVideoWithFastPath", () => {
   const putFetch = vi.fn();
 
+  it("limits video transfers to two and releases slots after failure", async () => {
+    mockFetchWithRetry.mockResolvedValue({ ok: false, status: 410 });
+    const releases: Array<() => void> = [];
+    let active = 0;
+    let peak = 0;
+    const uploadViaServer = vi.fn(async () => {
+      active++;
+      peak = Math.max(peak, active);
+      const index = releases.length;
+      await new Promise<void>((resolve) => releases.push(resolve));
+      active--;
+      if (index === 0) throw new Error("offline");
+      return "https://media.example.com/video.mp4";
+    });
+    const results = Promise.allSettled(
+      [1, 2, 3].map((i) =>
+        uploadVideoWithFastPath({
+          file: new File(["video"], `${i}.mp4`, { type: "video/mp4" }),
+          area: "promotion",
+          uploadViaServer,
+        })
+      )
+    );
+    await vi.waitFor(() => expect(releases).toHaveLength(2));
+    releases[0]();
+    await vi.waitFor(() => expect(releases).toHaveLength(3));
+    releases[1]();
+    releases[2]();
+    expect((await results).map((result) => result.status)).toEqual([
+      "rejected",
+      "fulfilled",
+      "fulfilled",
+    ]);
+    expect(peak).toBe(2);
+  });
+
   it.each(["listing", "business_cover", "promotion"] as const)(
     "reuses successful and in-flight uploads in %s",
     async (area) => {
