@@ -344,18 +344,23 @@
 @layer components {
   .showroom-viewport {
     /* Header, mobile navigation, section padding, controls, and metadata. */
-    --showroom-reserved-height: calc(380px + env(safe-area-inset-bottom, 0px));
-    padding-block: 24px;
+    --showroom-reserved-height: calc(354px + env(safe-area-inset-bottom, 0px));
+    --showroom-card-width: 272px;
+    padding-block: 16px;
   }
 
   .showroom-card-frame {
-    width: min(86vw, 480px);
+    /* Match the homepage market cards, scaling both dimensions to fit short screens. */
+    width: min(
+      calc(100vw - 32px),
+      var(--showroom-card-width),
+      calc(max(80px, 100svh - var(--showroom-reserved-height)) * 9 / 16 + 2px)
+    );
   }
 
-  /* Grow the card without pushing its details below the showroom or navigation.
-     Contain-fit images and videos remain fully visible inside the shorter frame. */
+  /* Preserve the portrait frame: capping height alone adds bars beside the video. */
   .showroom-card-frame [data-card-media] {
-    max-height: max(80px, calc(100svh - var(--showroom-reserved-height, 380px)));
+    aspect-ratio: 9 / 16;
     flex: none;
   }
 
@@ -366,13 +371,35 @@
 
   @media (min-width: 768px) {
     .showroom-viewport {
-      --showroom-reserved-height: 316px;
+      --showroom-card-width: 296px;
+      --showroom-reserved-height: 290px;
     }
   }
 
   @media (min-width: 1024px) {
     .showroom-viewport {
-      --showroom-reserved-height: 272px;
+      --showroom-card-width: 480px;
+      /* Use the space recovered from the desktop padding, details, and dots. */
+      --showroom-reserved-height: 212px;
+      padding-block: 8px;
+    }
+
+    .showroom-card-frame [data-card-metadata] {
+      height: 92px;
+      padding-block: 8px;
+    }
+
+    .showroom-viewport .showroom-progress-track {
+      height: 32px;
+      padding-block: 0;
+    }
+  }
+
+  /* Short desktop windows still need room for the full title, description, and location. */
+  @media (min-width: 1024px) and (max-height: 650px) {
+    .showroom-card-frame [data-card-metadata] {
+      height: 104px;
+      padding-block: 10px;
     }
   }
 
@@ -389,7 +416,7 @@
 
     .showroom-card-frame [data-card-variant="hero"] {
       display: grid;
-      grid-template-columns: calc(var(--showroom-landscape-height) * 9 / 16) minmax(0, 1fr);
+      grid-template-columns: calc((var(--showroom-landscape-height) - 2px) * 9 / 16) minmax(0, 1fr);
       grid-template-rows: minmax(0, 1fr);
       height: var(--showroom-landscape-height);
     }

@@ -36,7 +36,7 @@ export function ShowroomCardCarouselSkeleton() {
       </div>
 
       {/* Dot indicators skeleton */}
-      <div className="relative z-20 flex h-[52px] items-center justify-center gap-1">
+      <div className="showroom-progress-track relative z-20 flex h-[52px] items-center justify-center gap-1">
         {Array.from({ length: 5 }).map((_, i) => (
           <Skeleton key={i} className={cn("rounded-full", i === 2 ? "h-1.5 w-6" : "h-1.5 w-1.5")} />
         ))}

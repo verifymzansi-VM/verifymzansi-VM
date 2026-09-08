@@ -10,6 +10,7 @@ const sizes = [
   { width: 1366, height: 600 },
   { width: 1366, height: 768 },
   { width: 1440, height: 900 },
+  { width: 1920, height: 1080 },
 ];
 
 for (const viewport of sizes) {
@@ -36,6 +37,12 @@ for (const viewport of sizes) {
         )
         .first();
       await expect(card).toBeVisible();
+      if (route === "/dev/showroom-drag" && viewport.width >= 1024) {
+        // The fixture has an introductory heading above its showroom.
+        await expect(async () => {
+          await showroom.scrollIntoViewIfNeeded();
+        }).toPass();
+      }
       let box = { x: 0, y: 0, width: 0, height: 0 };
       await expect
         .poll(async () => {
@@ -57,8 +64,11 @@ for (const viewport of sizes) {
       expect(box!.y + box!.height).toBeLessThanOrEqual(bottom);
       expect(box!.x).toBeGreaterThanOrEqual(0);
       expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
-      if (viewport.height > 500 || viewport.width < 640) {
-        expect(box.width).toBeCloseTo(Math.min(viewport.width * 0.86, 480), 0);
+      const mediaBox = (await card.locator("[data-card-media]").boundingBox())!;
+      // The portrait video must fill its frame without the widened side bars.
+      expect(Math.abs(mediaBox.width - (mediaBox.height * 9) / 16)).toBeLessThan(1);
+      if (viewport.width === 390 && viewport.height === 844) {
+        expect(box.width).toBeCloseTo(272, 0);
       }
       const showroomBox = (await showroom.boundingBox())!;
       expect(box.y).toBeGreaterThanOrEqual(showroomBox.y);
