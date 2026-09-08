@@ -51,6 +51,43 @@ describe("VideoPlaybackContext", () => {
     vi.useRealTimers();
   });
 
+  it("does not reclaim a manually paused video from a stale play event", async () => {
+    const { result } = renderHook(() => useVideoPlaybackManager(), { wrapper });
+    const manager = result.current;
+    const a = makeVideo("a");
+    manager.register(a);
+    manager.requestPriority(a);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    a.pause();
+    manager.releasePriority(a);
+    manager.updateVisibility(a, 0);
+    vi.advanceTimersByTime(100);
+    expect(a.paused).toBe(true);
+    expect(a.play).toHaveBeenCalledTimes(1);
+    manager.requestPriority(a);
+    expect(a.paused).toBe(false);
+  });
+
+  it("releases manual playback priority when a video leaves the viewport", async () => {
+    const { result } = renderHook(() => useVideoPlaybackManager(), { wrapper });
+    const manager = result.current;
+    const a = makeVideo("a");
+    const b = makeVideo("b");
+    manager.register(a);
+    manager.register(b);
+    manager.requestPriority(a);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    manager.updateVisibility(a, 0);
+    manager.updateVisibility(b, 0.8);
+    vi.advanceTimersByTime(100);
+    expect(a.paused).toBe(true);
+    expect(b.paused).toBe(false);
+  });
+
   it("picks the most visible video after debounce", async () => {
     const { result } = renderHook(() => useVideoPlaybackManager(), { wrapper });
     const manager = result.current;

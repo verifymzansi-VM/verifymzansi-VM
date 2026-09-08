@@ -191,13 +191,13 @@ function MuteButton({
   if (!showMuteControl) return null;
 
   return (
-    <div className="absolute right-1 top-1 z-[14] sm:right-2.5 sm:top-2.5">
-      {/* Outer padding keeps 44px tap target on mobile while the visible circle is compact */}
+    <div className="absolute right-2 top-2 z-[14] sm:right-2.5 sm:top-2.5">
+      {/* Keep the full touch target inside the media frame. */}
       <button
         type="button"
         data-carousel-control="true"
         onPointerDown={(e) => {
-          e.preventDefault(); // Prevents selection and mobile zoom delays
+          e.stopPropagation();
         }}
         onClick={(e) => {
           e.preventDefault();
@@ -207,19 +207,15 @@ function MuteButton({
         className={cn(
           "flex items-center justify-center rounded-full text-white shadow-lg backdrop-blur-md transition-colors select-none touch-manipulation",
           controlVariant === "hero"
-            ? "border border-white/25 bg-black/48 ring-1 ring-white/10 hover:bg-black/58 h-9 w-9 p-0 sm:min-h-[46px] sm:min-w-[46px]"
-            : "border border-white/10 bg-black/55 hover:bg-black/70 h-7 w-7 p-2 -m-2 sm:h-auto sm:w-auto sm:min-h-[44px] sm:min-w-[44px] sm:p-0 sm:m-0"
+            ? "border border-white/25 bg-black/48 ring-1 ring-white/10 hover:bg-black/58 h-11 w-11 p-0 sm:min-h-[46px] sm:min-w-[46px]"
+            : "border border-white/10 bg-black/55 hover:bg-black/70 h-11 w-11 p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
         )}
         aria-label={isMuted ? "Unmute" : "Mute"}
       >
         {isMuted ? (
-          <VolumeX
-            className={cn(controlVariant === "hero" ? "h-4 w-4" : "h-3 w-3 sm:h-4 sm:w-4")}
-          />
+          <VolumeX className={cn(controlVariant === "hero" ? "h-4 w-4" : "h-4 w-4")} />
         ) : (
-          <Volume2
-            className={cn(controlVariant === "hero" ? "h-4 w-4" : "h-3 w-3 sm:h-4 sm:w-4")}
-          />
+          <Volume2 className={cn(controlVariant === "hero" ? "h-4 w-4" : "h-4 w-4")} />
         )}
       </button>
     </div>
@@ -585,7 +581,7 @@ function VideoCardPlayerInner({
     isVideo &&
     muteControlVisibility !== "hidden" &&
     !hasError &&
-    !reducedMotion &&
+    (!reducedMotion || hasActivatedPlayback) &&
     (muteControlVisibility === "always" || mode === "interactive");
   const showPlaybackToggle = isVideo && mode === "ambient" && showPlaybackControl && !hasError;
   const canDisplayVideo = !reducedMotion || hasActivatedPlayback;
@@ -719,30 +715,12 @@ function VideoCardPlayerInner({
       const el = videoRef.current;
       if (!el) return;
 
-      if (isPlaybackPaused) {
-        if (!el.src && normalizedSrc) {
-          el.src = normalizedSrc;
-        }
-        // Optimistic play attempt — works when data is already cached.
-        // For deferred videos the browser hasn't loaded any data yet, so
-        // we also attach a one-shot canplay listener to retry once the
-        // browser has buffered enough to begin playback.
-        el.play().catch(() => {
-          if (el.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) {
-            el.addEventListener(
-              "canplay",
-              () => {
-                el.play().catch(() => {
-                  /* autoplay policy */
-                });
-              },
-              { once: true }
-            );
-          }
-        });
+      if (el.paused) {
+        if (!el.src && normalizedSrc) el.src = normalizedSrc;
         setIsPlaybackPaused(false);
         setHasActivatedPlayback(true);
-        onPlaybackStateChange?.(true);
+        // Let media events report success; a rejected play must remain retryable.
+        el.play().catch(() => setIsPlaybackPaused(true));
         return;
       }
 
@@ -750,7 +728,7 @@ function VideoCardPlayerInner({
       setIsPlaybackPaused(true);
       onPlaybackStateChange?.(false);
     },
-    [isPlaybackPaused, normalizedSrc, onPlaybackStateChange, videoRef]
+    [normalizedSrc, onPlaybackStateChange, videoRef]
   );
 
   const handleError = useCallback(() => {
@@ -938,30 +916,30 @@ function VideoCardPlayerInner({
             <button
               type="button"
               data-carousel-control="true"
-              className="absolute bottom-3 left-1/2 z-[12] inline-flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/20 bg-black/52 px-3 py-2 text-xs font-medium text-white shadow-lg backdrop-blur-md transition-colors hover:bg-black/62 sm:bottom-4"
+              className="absolute bottom-3 left-1/2 z-[12] inline-flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/20 bg-black/52 min-h-11 px-3 py-2 text-xs font-medium text-white shadow-lg backdrop-blur-md transition-colors hover:bg-black/62 sm:bottom-4"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                const nextAction = isPlaybackPaused ? "play" : "pause";
+                const nextAction = !isPlaying ? "play" : "pause";
                 togglePlayback(e);
                 setTapIndicator({ key: Date.now(), action: nextAction });
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
-                  const nextAction = isPlaybackPaused ? "play" : "pause";
+                  const nextAction = !isPlaying ? "play" : "pause";
                   togglePlayback(e);
                   setTapIndicator({ key: Date.now(), action: nextAction });
                 }
               }}
-              aria-label={isPlaybackPaused ? "Play video" : "Pause video"}
+              aria-label={!isPlaying ? "Play video" : "Pause video"}
             >
-              {isPlaybackPaused ? (
+              {!isPlaying ? (
                 <Play className="h-3.5 w-3.5 fill-white" />
               ) : (
                 <Pause className="h-3.5 w-3.5 fill-white" />
               )}
-              <span>{isPlaybackPaused ? "Play" : "Pause"}</span>
+              <span>{!isPlaying ? "Play" : "Pause"}</span>
             </button>
             {tapIndicator ? (
               <FeedTapIndicator key={tapIndicator.key} action={tapIndicator.action} />
@@ -1064,7 +1042,7 @@ function VideoCardPlayerInner({
         </div>
       )}
 
-      {!hasError && !reducedMotion ? (
+      {!hasError ? (
         <div
           role="button"
           tabIndex={0}
@@ -1076,11 +1054,12 @@ function VideoCardPlayerInner({
               handleVideoClick(e as unknown as React.MouseEvent);
             }
           }}
-          aria-label={isPlaying ? "Pause video" : "Play video"}
+          aria-label={isPlaying ? "Pause video preview" : "Play video"}
+          data-carousel-control="true"
         />
       ) : null}
 
-      {!hasError && !reducedMotion && !isPlaying ? (
+      {!hasError && !isPlaying ? (
         <div className="pointer-events-none absolute inset-0 z-[5] flex items-center justify-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/55 text-white shadow-lg backdrop-blur-md">
             <Play className="h-6 w-6 fill-white pl-0.5" />
@@ -1495,7 +1474,7 @@ function FeedVideoPlayer({
   const showMuteControl =
     muteControlVisibility !== "hidden" &&
     !hasError &&
-    !reducedMotion &&
+    (!reducedMotion || isPlaying) &&
     muteControlVisibility === "always";
   const hasUsablePoster = Boolean(normalizedPoster && !posterError);
   const videoHasPreviewFrame = hasVideoFrame || videoReady;
@@ -1671,7 +1650,7 @@ function FeedVideoPlayer({
 
       {/* Transparent tap overlay — intercepts taps to toggle playback,
           prevents parent <Link> from navigating */}
-      {!hasError && !reducedMotion ? (
+      {!hasError ? (
         <div
           role="button"
           tabIndex={0}
@@ -1683,12 +1662,13 @@ function FeedVideoPlayer({
               handleTap(e as unknown as React.MouseEvent);
             }
           }}
-          aria-label={isPlaying ? "Pause video" : "Play video"}
+          aria-label={isPlaying ? "Pause video preview" : "Play video"}
+          data-carousel-control="true"
         />
       ) : null}
 
       {/* Centered play button overlay — shown when video is paused/not playing (YouTube mobile style) */}
-      {!hasError && !reducedMotion && !isPlaying ? (
+      {!hasError && !isPlaying ? (
         <div
           className="pointer-events-none absolute inset-0 z-[11] flex items-center justify-center"
           aria-hidden="true"
@@ -1699,25 +1679,17 @@ function FeedVideoPlayer({
         </div>
       ) : null}
 
-      {/* Reduced motion: show play button, tap to start */}
-      {reducedMotion && !hasError ? (
-        <div
-          role="button"
-          tabIndex={0}
-          className="absolute inset-0 z-[10] flex cursor-pointer items-center justify-center"
+      {!hasError && isPlaying ? (
+        <button
+          type="button"
+          data-carousel-control="true"
+          className="absolute bottom-3 left-3 z-[13] inline-flex min-h-11 items-center gap-2 rounded-full bg-black/60 px-3 text-xs font-medium text-white backdrop-blur-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
           onClick={handleTap}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              handleTap(e as unknown as React.MouseEvent);
-            }
-          }}
-          aria-label="Play video"
+          aria-label="Pause video"
         >
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/50 text-white shadow-lg backdrop-blur-sm">
-            <Play className="h-5 w-5 fill-white" />
-          </div>
-        </div>
+          <Pause className="h-4 w-4" aria-hidden="true" />
+          Pause
+        </button>
       ) : null}
 
       {/* Tap indicator — YouTube-style fade-out circle */}

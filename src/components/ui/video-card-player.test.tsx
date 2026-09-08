@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 
 const {
   useVideoVisibilityMock,
@@ -81,8 +81,25 @@ describe("VideoCardPlayer", () => {
       toggleMute: vi.fn(),
       setMuted: vi.fn(),
     });
-    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
-    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+    const playing = new WeakSet<HTMLMediaElement>();
+    vi.spyOn(HTMLMediaElement.prototype, "paused", "get").mockImplementation(function (
+      this: HTMLMediaElement
+    ) {
+      return !playing.has(this);
+    });
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(function (
+      this: HTMLMediaElement
+    ) {
+      playing.add(this);
+      this.dispatchEvent(new Event("play"));
+      return Promise.resolve();
+    });
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(function (
+      this: HTMLMediaElement
+    ) {
+      playing.delete(this);
+      this.dispatchEvent(new Event("pause"));
+    });
   });
 
   it("renders ambient video previews muted with a persistent mute control", () => {
@@ -183,6 +200,10 @@ describe("VideoCardPlayer", () => {
       />
     );
 
+    expect(screen.getByRole("button", { name: /play video/i })).toBeTruthy();
+    act(() => {
+      void document.querySelector("video")!.play();
+    });
     expect(screen.getByRole("button", { name: /pause video/i })).toBeTruthy();
   });
 
@@ -216,6 +237,9 @@ describe("VideoCardPlayer", () => {
       />
     );
 
+    act(() => {
+      void document.querySelector("video")!.play();
+    });
     fireEvent.click(screen.getByRole("button", { name: /pause video/i }));
     expect(onPlaybackStateChange).toHaveBeenCalledWith(false);
     expect(screen.getByRole("button", { name: /play video/i })).toBeTruthy();
@@ -456,5 +480,28 @@ describe("VideoCardPlayer", () => {
     fireEvent.error(document.querySelector("video") as HTMLVideoElement);
 
     expect(screen.getByTestId("media-fallback")).toHaveTextContent("Fallback media");
+  });
+});
+
+describe("mobile playback controls", () => {
+  it("offers pause and mute after manual playback with reduced motion", () => {
+    const togglePlayback = vi.fn();
+    useHoverCapabilityMock.mockReturnValue(false);
+    useVideoFeedMock.mockReturnValue({
+      videoRef: { current: null },
+      isPlaying: true,
+      togglePlayback,
+      reducedMotion: true,
+    });
+    render(
+      <VideoCardPlayer
+        src="https://example.com/clip.mp4"
+        mode="ambient"
+        muteControlVisibility="always"
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Pause video" }));
+    expect(togglePlayback).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: "Unmute" })).toBeTruthy();
   });
 });

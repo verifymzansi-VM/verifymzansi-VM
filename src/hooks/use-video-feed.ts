@@ -66,7 +66,7 @@ export function useVideoFeed(videoSrc?: string, isPlaybackEligible = true) {
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) {
+        if (entry.isIntersecting && entry.intersectionRatio >= 0.25) {
           // Lazily assign src the first time the element is visible
           if (!el.src) {
             el.src = videoSrc;
@@ -84,6 +84,7 @@ export function useVideoFeed(videoSrc?: string, isPlaybackEligible = true) {
           }
         } else {
           el.pause();
+          manager.releasePriority(el);
           manager.updateVisibility(el, 0);
 
           // Reset user-pause when scrolled > 75% out of view so auto-play
@@ -108,6 +109,7 @@ export function useVideoFeed(videoSrc?: string, isPlaybackEligible = true) {
     const el = videoRef.current;
     if (!el || isPlaybackEligible) return;
     el.pause();
+    manager.releasePriority(el);
     manager.updateVisibility(el, 0);
   }, [isPlaybackEligible, manager]);
 

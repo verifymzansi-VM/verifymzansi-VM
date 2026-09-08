@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useRef } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from "react";
 
 /**
  * Global video playback manager — ensures only **one** video plays at a time,
@@ -63,7 +63,7 @@ export function VideoPlaybackProvider({ children }: { children: React.ReactNode 
 
   const arbitrate = useCallback(() => {
     // If exclusive lock is held, do not arbitrate — videos stay paused
-    if (exclusiveRef.current) return;
+    if (exclusiveRef.current || document.hidden) return;
 
     const videos = videosRef.current;
     const priority = priorityRef.current;
@@ -116,7 +116,7 @@ export function VideoPlaybackProvider({ children }: { children: React.ReactNode 
           target.addEventListener(
             "canplay",
             () => {
-              if (activeRef.current === target) {
+              if (activeRef.current === target && !exclusiveRef.current && !document.hidden) {
                 target.play().catch(() => {
                   /* autoplay policy */
                 });
@@ -154,7 +154,8 @@ export function VideoPlaybackProvider({ children }: { children: React.ReactNode 
     // which can trigger state mutations during render and crash the app.
     const onPlay = () => {
       queueMicrotask(() => {
-        if (exclusiveRef.current) {
+        if (!videosRef.current.has(el) || el.paused) return;
+        if (exclusiveRef.current || document.hidden) {
           // Exclusive lock held — nothing should play
           el.pause();
           return;
@@ -185,6 +186,7 @@ export function VideoPlaybackProvider({ children }: { children: React.ReactNode 
   const unregister = useCallback(
     (el: HTMLVideoElement) => {
       videosRef.current.delete(el);
+      if (playInitiatedRef.current === el) playInitiatedRef.current = null;
       const onPlay = playListenersRef.current.get(el);
       if (onPlay) {
         el.removeEventListener("play", onPlay);
@@ -205,6 +207,10 @@ export function VideoPlaybackProvider({ children }: { children: React.ReactNode 
     (el: HTMLVideoElement, ratio: number) => {
       if (!videosRef.current.has(el)) return;
       videosRef.current.set(el, ratio);
+      if (ratio === 0) {
+        if (priorityRef.current === el) priorityRef.current = null;
+        if (playInitiatedRef.current === el) playInitiatedRef.current = null;
+      }
       scheduleArbitration();
     },
     [scheduleArbitration]
@@ -212,6 +218,8 @@ export function VideoPlaybackProvider({ children }: { children: React.ReactNode 
 
   const requestPriority = useCallback(
     (el: HTMLVideoElement) => {
+      playInitiatedRef.current = null;
+      if (activeRef.current === el && el.paused) activeRef.current = null;
       priorityRef.current = el;
       // Arbitrate immediately for responsive hover feedback
       arbitrate();
@@ -252,6 +260,24 @@ export function VideoPlaybackProvider({ children }: { children: React.ReactNode 
     },
     [scheduleArbitration]
   );
+
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        if (timerRef.current) clearTimeout(timerRef.current);
+        activeRef.current = null;
+        playInitiatedRef.current = null;
+        for (const el of videosRef.current.keys()) el.pause();
+      } else {
+        scheduleArbitration();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [scheduleArbitration]);
 
   const manager = useMemo<VideoPlaybackManager>(
     () => ({
