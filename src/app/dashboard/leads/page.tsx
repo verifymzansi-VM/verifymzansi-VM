@@ -29,15 +29,14 @@ export default async function LeadsPage() {
       .select(
         `
       id,
+      target_id,
       target_type,
       message,
       status,
       buyer_name,
       buyer_email,
-      created_at,
-      listings:target_id (
-        title
-      )
+      buyer_phone,
+      created_at
     `
       )
       .order("created_at", { ascending: false })
@@ -46,7 +45,23 @@ export default async function LeadsPage() {
     user.id
   );
 
-  const { data: leads } = await leadsQuery;
+  const { data: leads, error } = await leadsQuery;
+  if (error) throw new Error("Unable to load enquiries. Please try again.");
+  const rows = (leads ?? []) as unknown as LeadRow[];
+  const titles = new Map<string, { title: string }>();
+  await Promise.all(
+    ["listing", "promotion"].map(async (type) => {
+      const ids = [
+        ...new Set(rows.filter((row) => row.target_type === type).map((row) => row.target_id)),
+      ];
+      if (!ids.length) return;
+      const { data } = await supabase
+        .from(type === "promotion" ? "promotions" : "listings")
+        .select("id, title")
+        .in("id", ids);
+      for (const item of data ?? []) titles.set(`${type}:${item.id}`, { title: item.title });
+    })
+  );
 
   return (
     <div className="space-y-6">
@@ -57,7 +72,10 @@ export default async function LeadsPage() {
       />
 
       <LeadsFeed
-        initialLeads={(leads as unknown as LeadRow[]) ?? []}
+        initialLeads={rows.map((row) => ({
+          ...row,
+          listings: titles.get(`${row.target_type}:${row.target_id}`) ?? null,
+        }))}
         ownerColumn={leadsOwnerColumn}
         ownerId={user.id}
       />

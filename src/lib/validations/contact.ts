@@ -1,18 +1,23 @@
 import { z } from "zod";
+import { saPhoneSchema } from "./shared";
 
 /** Zod schema for contacting a listing or promotion owner. */
 export const contactAccountHolderSchema = z
   .object({
     listingId: z.string().uuid("Invalid listing").optional(),
     promotionId: z.string().uuid("Invalid promotion").optional(),
+    buyerName: z.string().trim().min(2).max(80).optional(),
+    buyerEmail: z.string().trim().email().max(254).optional(),
+    buyerPhone: saPhoneSchema.optional(),
     message: z
       .string()
+      .trim()
       .min(10, "Message must be at least 10 characters")
       .max(1000, "Message cannot exceed 1000 characters"),
     contactMethod: z.enum(["call", "whatsapp", "form", "in_app"]).default("form"),
     turnstileToken: z.string().min(1, "Complete the CAPTCHA"),
   })
-  .refine((value) => value.listingId || value.promotionId, {
+  .refine((value) => Boolean(value.listingId) !== Boolean(value.promotionId), {
     message: "A valid listing or promotion is required",
     path: ["listingId"],
   })
@@ -20,6 +25,9 @@ export const contactAccountHolderSchema = z
     targetId: value.promotionId ?? value.listingId!,
     targetType: (value.promotionId ? "promotion" : "listing") as "listing" | "promotion",
     message: value.message,
+    buyerName: value.buyerName,
+    buyerEmail: value.buyerEmail,
+    buyerPhone: value.buyerPhone,
     contactMethod: value.contactMethod,
     turnstileToken: value.turnstileToken,
   }));

@@ -66,7 +66,7 @@ vi.mock("@/lib/utils/csrf", () => ({
 import { POST } from "./route";
 
 function createMockRequest(body: Record<string, unknown>) {
-  const json = JSON.stringify(body);
+  const json = JSON.stringify({ buyerEmail: "buyer@example.com", ...body });
   return {
     text: async () => json,
     headers: new Headers(),
@@ -185,10 +185,23 @@ describe("POST /api/contact", () => {
       "owner@example.com",
       "there",
       "Interested buyer",
-      "not-provided@verifymzansi.com",
+      "buyer@example.com",
       "Hi there, I want to buy this today.",
       "Vintage Couch"
     );
+  });
+
+  it("rejects anonymous enquiries without a reply address before writing", async () => {
+    const response = await POST(
+      createMockRequest({
+        listingId: "22222222-2222-4222-8222-222222222222",
+        message: "Is this still available?",
+        turnstileToken: "token",
+        buyerEmail: undefined,
+      })
+    );
+    expect(response.status).toBe(400);
+    expect(mockFrom).not.toHaveBeenCalled();
   });
 
   it("records the canonical member verification flag on contact events", async () => {
@@ -360,7 +373,7 @@ describe("POST /api/contact", () => {
       "owner@example.com",
       "there",
       "Interested buyer",
-      "not-provided@verifymzansi.com",
+      "buyer@example.com",
       "Hi, I want details about this promo.",
       "Launch Week Promo"
     );

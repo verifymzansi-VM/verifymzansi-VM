@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { contactPhone, whatsappLink } from "@/lib/utils/contact-links";
 import Image from "next/image";
 import {
   Building2,
@@ -240,7 +241,6 @@ export function PromotionDetailContent({
   const activeMedia = mediaItems[activeMediaIndex] ?? null;
   const [isDescExpanded, setIsDescExpanded] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  const [showStickyContact, setShowStickyContact] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxStart, setLightboxStart] = useState(0);
   const wasPlayingRef = useRef(false);
@@ -305,9 +305,11 @@ export function PromotionDetailContent({
   const canCall =
     showContactActions &&
     contactMethods.includes("call") &&
-    Boolean(advertiserProfile?.masked_phone_public);
+    Boolean(contactPhone(advertiserProfile?.phone));
   const canWhatsapp =
-    showContactActions && contactMethods.includes("whatsapp") && Boolean(advertiserProfile?.phone);
+    showContactActions &&
+    contactMethods.includes("whatsapp") &&
+    Boolean(contactPhone(advertiserProfile?.phone));
   const showStickyBar = layoutMode === "public" && (canCall || canWhatsapp);
   const eventState = getEventState(promotion.start_date, promotion.end_date);
   const categoryLabel = getPromotionCategoryDisplayLabel(
@@ -643,9 +645,7 @@ export function PromotionDetailContent({
                   promotionId={promotion.id}
                   contactMethods={contactMethods}
                   advertiserPhone={
-                    contactMethods.includes("call")
-                      ? (advertiserProfile?.masked_phone_public ?? null)
-                      : null
+                    contactMethods.includes("call") ? (advertiserProfile?.phone ?? null) : null
                   }
                   advertiserWhatsapp={
                     contactMethods.includes("whatsapp") ? (advertiserProfile?.phone ?? null) : null
@@ -1042,9 +1042,7 @@ export function PromotionDetailContent({
                 promotionId={promotion.id}
                 contactMethods={contactMethods}
                 advertiserPhone={
-                  contactMethods.includes("call")
-                    ? (advertiserProfile?.masked_phone_public ?? null)
-                    : null
+                  contactMethods.includes("call") ? (advertiserProfile?.phone ?? null) : null
                 }
                 advertiserWhatsapp={
                   contactMethods.includes("whatsapp") ? (advertiserProfile?.phone ?? null) : null
@@ -1113,23 +1111,23 @@ export function PromotionDetailContent({
         <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-4 py-3 backdrop-blur-md lg:hidden">
           <div className="mx-auto flex max-w-lg gap-3">
             {canCall && (
-              <Button
-                type="button"
-                className="flex-1 gap-2"
-                size="lg"
-                onClick={() => setShowStickyContact(true)}
-              >
-                <Phone className="h-4 w-4" />
-                {showStickyContact && advertiserProfile?.masked_phone_public
-                  ? advertiserProfile.masked_phone_public
-                  : "Show Contact"}
+              <Button type="button" className="flex-1 gap-2" size="lg" asChild>
+                <a href={`tel:${contactPhone(advertiserProfile?.phone)}`}>
+                  <Phone className="h-4 w-4" /> Call advertiser
+                </a>
               </Button>
             )}
 
-            {canWhatsapp && (showStickyContact || !canCall) && advertiserProfile?.phone && (
+            {canWhatsapp && advertiserProfile?.phone && (
               <Button variant="outline" className="flex-1 gap-2" size="lg" asChild>
                 <a
-                  href={`https://wa.me/${advertiserProfile.phone.replace(/\D/g, "")}`}
+                  href={
+                    whatsappLink(
+                      advertiserProfile.phone,
+                      promotion.title,
+                      `/tourism-events/${promotion.id}`
+                    )!
+                  }
                   target="_blank"
                   rel="noopener noreferrer nofollow ugc"
                 >

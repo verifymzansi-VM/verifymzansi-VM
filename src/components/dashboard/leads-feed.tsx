@@ -9,6 +9,7 @@ import { formatRelativeTime } from "@/lib/utils/format";
 import { useRealtime } from "@/hooks/use-realtime";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { createClient } from "@/lib/supabase/client";
+import { whatsappLink } from "@/lib/utils/contact-links";
 
 export interface LeadRow {
   id: string;
@@ -18,6 +19,7 @@ export interface LeadRow {
   status: string;
   buyer_name: string | null;
   buyer_email: string | null;
+  buyer_phone?: string | null;
   created_at: string;
   listings: { title: string } | null;
 }
@@ -38,6 +40,7 @@ function humanStatus(status: string): string {
 
 export function LeadsFeed({ initialLeads, ownerColumn, ownerId }: LeadsFeedProps) {
   const [leads, setLeads] = useState<LeadRow[]>(initialLeads);
+  const [statusError, setStatusError] = useState("");
   const supabase = useMemo(() => createClient(), []);
 
   async function hydrateLeadTitle(leadId: string, targetId: string, targetType: string) {
@@ -78,6 +81,7 @@ export function LeadsFeed({ initialLeads, ownerColumn, ownerId }: LeadsFeedProps
           status: nextRow.status || "new",
           buyer_name: nextRow.buyer_name || null,
           buyer_email: nextRow.buyer_email || null,
+          buyer_phone: nextRow.buyer_phone || null,
           created_at: nextRow.created_at || new Date().toISOString(),
           listings: null,
         };
@@ -128,13 +132,17 @@ export function LeadsFeed({ initialLeads, ownerColumn, ownerId }: LeadsFeedProps
       prev.map((lead) => (lead.id === leadId ? { ...lead, status: nextStatus } : lead))
     );
 
-    const response = await fetch("/api/leads", {
-      method: "PATCH",
-      headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ id: leadId, status: nextStatus }),
-    });
+    setStatusError("");
+    try {
+      const response = await fetch("/api/leads", {
+        method: "PATCH",
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ id: leadId, status: nextStatus }),
+      });
 
-    if (!response.ok) {
+      if (!response.ok) throw new Error("Unable to update enquiry");
+    } catch {
+      setStatusError("Could not update this enquiry. Please try again.");
       setLeads((prev) =>
         prev.map((lead) => (lead.id === leadId ? { ...lead, status: previousLead.status } : lead))
       );
@@ -155,6 +163,11 @@ export function LeadsFeed({ initialLeads, ownerColumn, ownerId }: LeadsFeedProps
 
   return (
     <div className="space-y-3">
+      {statusError && (
+        <p role="alert" className="text-sm text-destructive">
+          {statusError}
+        </p>
+      )}
       {leads.map((lead) => (
         <Card key={lead.id}>
           <CardContent className="py-4 space-y-2">
@@ -172,9 +185,43 @@ export function LeadsFeed({ initialLeads, ownerColumn, ownerId }: LeadsFeedProps
               </span>
             </div>
             {lead.message && (
-              <p className="text-sm text-muted-foreground line-clamp-3">{lead.message}</p>
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words">
+                {lead.message}
+              </p>
             )}
             <div className="flex flex-wrap gap-2">
+              {lead.buyer_name && <p className="w-full text-sm">From: {lead.buyer_name}</p>}
+              {lead.buyer_email && (
+                <Button asChild variant="outline" size="sm">
+                  <a
+                    href={`mailto:${encodeURIComponent(lead.buyer_email)}?subject=${encodeURIComponent(`Re: ${lead.listings?.title || "Your enquiry"}`)}`}
+                  >
+                    Reply by email
+                  </a>
+                </Button>
+              )}
+              {whatsappLink(
+                lead.buyer_phone,
+                lead.listings?.title || "your enquiry",
+                `/${lead.target_type === "promotion" ? "tourism-events" : "listing"}/${lead.target_id}`
+              ) && (
+                <Button asChild variant="outline" size="sm">
+                  <a
+                    href={
+                      whatsappLink(
+                        lead.buyer_phone,
+                        lead.listings?.title || "your enquiry",
+                        `/${lead.target_type === "promotion" ? "tourism-events" : "listing"}/${lead.target_id}`,
+                        "Hi, thanks for your enquiry about"
+                      )!
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Reply on WhatsApp
+                  </a>
+                </Button>
+              )}
               {lead.status === "new" && (
                 <Button
                   type="button"

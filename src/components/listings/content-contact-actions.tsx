@@ -4,6 +4,8 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { Phone, Share2, Flag, Loader2, CheckCircle, Check, type LucideIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { contactPhone, whatsappLink } from "@/lib/utils/contact-links";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
@@ -58,8 +60,37 @@ export function ContentContactActions({
   config,
   messageIcon: MessageIcon,
 }: ContentContactActionsProps) {
-  const [showContact, setShowContact] = useState(false);
+  const phoneNumber = contactPhone(phone);
+  const whatsappUrl = whatsappLink(whatsapp, config.shareTitle, config.sharePath);
+  const [buyerName, setBuyerName] = useState("");
+  const [buyerEmail, setBuyerEmail] = useState("");
+  const [buyerPhone, setBuyerPhone] = useState("");
+  const [captchaAttempt, setCaptchaAttempt] = useState(0);
   const [messageOpen, setMessageOpen] = useState(false);
+  useEffect(() => {
+    if (!messageOpen) return;
+    let cancelled = false;
+    void (async () => {
+      const { createClient } = await import("@/lib/supabase/client");
+      const client = createClient();
+      const {
+        data: { user },
+      } = await client.auth.getUser();
+      if (!user || cancelled) return;
+      setBuyerEmail((current) => current || user.email || "");
+      const { data } = await client
+        .from("account_profiles")
+        .select("display_name")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (!cancelled && data?.display_name) setBuyerName((current) => current || data.display_name);
+    })().catch(() => {
+      // The form remains usable when profile details cannot be loaded.
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [messageOpen]);
   const [reportOpen, setReportOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -94,8 +125,16 @@ export function ContentContactActions({
 
   async function handleSendMessage() {
     setMessageError("");
-    if (message.trim().length < 5) {
-      setMessageError("Message must be at least 5 characters.");
+    if (message.trim().length < 10) {
+      setMessageError("Message must be at least 10 characters.");
+      return;
+    }
+    if (buyerName.trim().length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(buyerEmail.trim())) {
+      setMessageError("Enter your name and a valid reply email.");
+      return;
+    }
+    if (buyerPhone.trim() && !contactPhone(buyerPhone)) {
+      setMessageError("Enter a valid South African WhatsApp mobile number.");
       return;
     }
     if (!messageTurnstile) {
@@ -111,6 +150,9 @@ export function ContentContactActions({
         body: JSON.stringify({
           [config.contactPayloadKey]: config.targetId,
           message: message.trim(),
+          buyerName: buyerName.trim(),
+          buyerEmail: buyerEmail.trim(),
+          buyerPhone: buyerPhone.trim() || undefined,
           contactMethod: "form",
           turnstileToken: messageTurnstile,
         }),
@@ -127,6 +169,8 @@ export function ContentContactActions({
       setMessageError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setMessageSending(false);
+      setMessageTurnstile("");
+      setCaptchaAttempt((value) => value + 1);
     }
   }
 
@@ -193,24 +237,31 @@ export function ContentContactActions({
   return (
     <>
       <div className="space-y-2">
-        {showPhoneButton && (
-          <Button className="w-full gap-2" size="lg" onClick={() => setShowContact(true)}>
-            <Phone className="h-4 w-4" />
-            {showContact && phone ? phone : "Show Contact"}
+        {whatsappUrl && (
+          <Button className="w-full gap-2" size="lg" asChild>
+            <a href={whatsappUrl} target="_blank" rel="noopener noreferrer nofollow ugc">
+              <MessageIcon className="h-4 w-4" />
+              Chat on WhatsApp
+            </a>
           </Button>
         )}
 
-        {showContact && whatsapp && (
+        {showPhoneButton && phoneNumber && (
           <Button variant="outline" className="w-full gap-2" size="lg" asChild>
-            <a
-              href={`https://wa.me/${whatsapp.replace(/\D/g, "")}`}
-              target="_blank"
-              rel="noopener noreferrer nofollow ugc"
-            >
-              <MessageIcon className="h-4 w-4" />
-              WhatsApp
+            <a href={`tel:${phoneNumber}`}>
+              <Phone className="h-4 w-4" /> Call {phoneNumber}
             </a>
           </Button>
+        )}
+        {whatsappUrl && (
+          <p className="text-xs text-muted-foreground">
+            Opens WhatsApp with this post attached. Press send there to start the conversation.
+          </p>
+        )}
+        {!whatsappUrl && !phoneNumber && (
+          <p className="text-sm text-muted-foreground">
+            Direct phone contact is not available for this post.
+          </p>
         )}
 
         {showMessageButton && (
@@ -225,7 +276,7 @@ export function ContentContactActions({
             }}
           >
             <MessageIcon className="h-4 w-4" />
-            Send Message
+            Send an enquiry
           </Button>
         )}
       </div>
@@ -265,7 +316,7 @@ export function ContentContactActions({
           {messageSent ? (
             <div className="flex flex-col items-center gap-3 py-6">
               <CheckCircle className="h-10 w-10 text-brand-green" />
-              <p className="font-medium">Message sent!</p>
+              <p className="font-medium">Enquiry saved!</p>
               <p className="text-sm text-muted-foreground">{config.messageSuccessCopy}</p>
               <DialogClose asChild>
                 <Button variant="outline" size="sm" className="h-11 px-4 sm:h-10">
@@ -275,6 +326,38 @@ export function ContentContactActions({
             </div>
           ) : (
             <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="buyer-name">Your name</Label>
+                <Input
+                  id="buyer-name"
+                  autoComplete="name"
+                  maxLength={80}
+                  value={buyerName}
+                  onChange={(e) => setBuyerName(e.target.value)}
+                />
+                <Label htmlFor="buyer-email">Reply email</Label>
+                <Input
+                  id="buyer-email"
+                  type="email"
+                  autoComplete="email"
+                  maxLength={254}
+                  value={buyerEmail}
+                  onChange={(e) => setBuyerEmail(e.target.value)}
+                />
+                <Label htmlFor="buyer-phone">WhatsApp number (optional)</Label>
+                <Input
+                  id="buyer-phone"
+                  type="tel"
+                  autoComplete="tel"
+                  placeholder="082 123 4567"
+                  maxLength={20}
+                  value={buyerPhone}
+                  onChange={(e) => setBuyerPhone(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  These details are shared with the recipient so they can reply.
+                </p>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="contact-message">Your message</Label>
                 <Textarea
@@ -288,9 +371,22 @@ export function ContentContactActions({
                 <p className="text-xs text-muted-foreground text-right">{message.length}/1000</p>
               </div>
 
-              <TurnstileWidget onSuccess={handleMessageTurnstile} size="compact" />
+              <TurnstileWidget
+                key={captchaAttempt}
+                onSuccess={handleMessageTurnstile}
+                onExpire={() => setMessageTurnstile("")}
+                onError={(error) => {
+                  setMessageTurnstile("");
+                  setMessageError(error);
+                }}
+                size="compact"
+              />
 
-              {messageError && <p className="text-sm text-destructive">{messageError}</p>}
+              {messageError && (
+                <p role="alert" className="text-sm text-destructive">
+                  {messageError}
+                </p>
+              )}
 
               <DialogFooter>
                 <DialogClose asChild>

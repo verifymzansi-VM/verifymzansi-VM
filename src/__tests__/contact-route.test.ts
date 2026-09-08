@@ -158,7 +158,7 @@ describe("POST /api/contact", () => {
       if (table === "listings") {
         return {
           select: vi.fn((fields: string) => {
-            if (fields === "owner_id, title, status") {
+            if (fields === "id, owner_id, title, status, contact_methods, expires_at, created_at") {
               return {
                 eq: vi.fn().mockReturnValue({
                   maybeSingle: vi.fn().mockResolvedValue({
@@ -208,6 +208,7 @@ describe("POST /api/contact", () => {
       createRequest({
         listingId: VALID_LISTING_ID,
         message: "I want to know more",
+        buyerEmail: "buyer@example.com",
         contactMethod: "form",
         turnstileToken: "tok-valid",
       })
@@ -243,7 +244,9 @@ describe("POST /api/contact", () => {
               };
             }
 
-            if (fields === "seller_id, title, status") {
+            if (
+              fields === "id, seller_id, title, status, contact_methods, expires_at, created_at"
+            ) {
               return {
                 eq: vi.fn().mockReturnValue({
                   maybeSingle: vi.fn().mockResolvedValue({

@@ -8,6 +8,8 @@ import { ContentContactActions } from "@/components/listings/content-contact-act
 
 interface ListingContactActionsProps {
   listingId: string;
+  listingTitle?: string;
+  contactMethods?: string[] | null;
   /** Owner's phone from contact_methods if available */
   ownerPhone?: string | null;
   /** Owner's whatsapp from contact_methods if available */
@@ -20,6 +22,8 @@ interface ListingContactActionsProps {
 
 export function ListingContactActions({
   listingId,
+  listingTitle,
+  contactMethods,
   ownerPhone,
   ownerWhatsapp,
   sellerPhone,
@@ -32,12 +36,15 @@ export function ListingContactActions({
       phone={contactPhone}
       whatsapp={contactWhatsapp}
       showPhoneButton={true}
-      showMessageButton={true}
+      showMessageButton={
+        contactMethods == null ||
+        contactMethods.some((method) => ["form", "in_app"].includes(method))
+      }
       messageIcon={MessageSquare}
       config={{
         targetId: listingId,
         sharePath: `/listing/${listingId}`,
-        shareTitle: "Check out this listing on VerifyMzansi",
+        shareTitle: listingTitle || "this listing on VerifyMzansi",
         contactPayloadKey: "listingId",
         contactErrorFallback: "Failed to send message",
         reportTargetType: "listing",
@@ -54,11 +61,11 @@ export function ListingContactActions({
           { value: "other", label: "Other" },
         ],
         messageTitle: "Send a Message",
-        messageDescription:
-          "Your message will be sent to the member. They will see your email if you are logged in.",
+        messageDescription: "Your enquiry is saved in the seller’s inbox with your reply details.",
         messagePlaceholder: "Hi, I'm interested in this listing...",
         messageSubmitLabel: "Send",
-        messageSuccessCopy: "The member has been notified.",
+        messageSuccessCopy:
+          "Your enquiry is in the seller’s inbox. They can reply using the contact details you provided.",
       }}
     />
   );

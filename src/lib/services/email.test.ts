@@ -25,6 +25,19 @@ import {
 } from "./email";
 
 describe("email service", () => {
+  it("routes enquiry replies to the buyer rather than support", async () => {
+    await sendContactFormNotification(
+      "seller@example.com",
+      "Seller",
+      "Buyer",
+      "buyer@example.com",
+      "Is this still available?",
+      "Garden cottage"
+    );
+    expect(mockSend).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "seller@example.com", replyTo: "buyer@example.com" })
+    );
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubEnv("NODE_ENV", "test");

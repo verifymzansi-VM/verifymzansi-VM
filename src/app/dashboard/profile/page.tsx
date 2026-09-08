@@ -761,7 +761,9 @@ export default function ProfilePage() {
                     </p>
                   ) : (
                     <p className="text-xs text-muted-foreground">
-                      SA mobile: 0XX XXX XXXX or +27XX XXX XXXX
+                      SA mobile: 0XX XXX XXXX or +27XX XXX XXXX. Save and verify this number before
+                      using it for listing calls or WhatsApp. Enable WhatsApp on each listing only
+                      if this number has an active WhatsApp account.
                     </p>
                   )}
                 </div>

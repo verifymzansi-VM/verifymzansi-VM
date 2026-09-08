@@ -22,7 +22,7 @@ export function PromotionContactActions({
       phone={advertiserPhone}
       whatsapp={contactMethods.includes("whatsapp") ? advertiserWhatsapp : null}
       showPhoneButton={contactMethods.includes("call")}
-      showMessageButton={contactMethods.includes("form")}
+      showMessageButton={contactMethods.includes("form") || contactMethods.includes("in_app")}
       messageIcon={MessageCircle}
       config={{
         targetId: promotionId,
@@ -44,10 +44,10 @@ export function PromotionContactActions({
         ],
         messageTitle: "Send a Message",
         messageDescription:
-          "Your message will be sent to the advertiser. They will see your email if you are logged in.",
+          "Your enquiry is saved in the advertiser’s inbox with your reply details.",
         messagePlaceholder: "Hi, I'm interested in this event...",
         messageSubmitLabel: "Send message",
-        messageSuccessCopy: "The advertiser has been notified.",
+        messageSuccessCopy: "Your enquiry is in the advertiser’s inbox with your reply details.",
       }}
     />
   );

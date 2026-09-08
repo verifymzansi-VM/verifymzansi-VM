@@ -27,6 +27,7 @@ const FROM_EMAIL = "VerifyMzansi <noreply@verifymzansi.com>";
 const REPLY_TO = process.env.VERIFYMZANSI_SUPPORT_EMAIL?.trim() || SUPPORT_CONTACT_EMAIL;
 
 interface SendEmailParams {
+  replyTo?: string;
   to: string;
   subject: string;
   html: string;
@@ -73,7 +74,7 @@ async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
         subject: params.subject,
         html: params.html,
         text: params.text,
-        replyTo: REPLY_TO,
+        replyTo: params.replyTo || REPLY_TO,
       });
       const result = await Promise.race([
         sendPromise,
@@ -485,7 +486,7 @@ export async function sendContactFormNotification(
 
   const text = `Hi ${ownerName},\n\nYou have a new inquiry about: ${listingTitle}\n\nFrom: ${buyerName}\nEmail: ${buyerEmail}\n\nMessage:\n${message}\n\nReply to this email to respond.\n\nView all leads: ${appUrl}/dashboard/leads`;
 
-  return sendEmail({ to: email, subject, html, text });
+  return sendEmail({ to: email, subject, html, text, replyTo: buyerEmail });
 }
 
 export async function sendAccountEnforcementEmail(params: {

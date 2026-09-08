@@ -16,6 +16,8 @@ import { sanitizeUserMessage } from "@/lib/utils/sanitize-html";
 import { sendContactFormNotification } from "@/lib/services/email";
 import { logAuditEvent } from "@/lib/services/audit";
 import { enforcePublicMutationPrelude } from "@/lib/utils/public-mutation-route";
+import { normalizeSaPhone } from "@/lib/utils/phone";
+import { isVisibleByExpiry } from "@/lib/posting/visibility";
 
 const log = createLogger("ContactRoute");
 
@@ -25,6 +27,9 @@ type ContactTargetRow = {
   title?: string | null;
   owner_id?: string | null;
   seller_id?: string | null;
+  contact_methods?: string[] | null;
+  expires_at?: string | null;
+  created_at?: string | null;
 };
 
 function isContactTargetRow(record: unknown): record is ContactTargetRow {
@@ -59,6 +64,13 @@ export async function POST(request: NextRequest) {
     if (!prelude.success) return prelude.response;
 
     const { user } = prelude;
+    const buyerEmail = parsedBody.data.buyerEmail || user?.email;
+    if (!buyerEmail) {
+      return NextResponse.json(
+        { error: "Provide a reply email so the recipient can respond." },
+        { status: 400 }
+      );
+    }
 
     // Use admin client for lookups and inserts to bypass RLS on service-only tables
     const admin = createAdminClient();
@@ -71,7 +83,12 @@ export async function POST(request: NextRequest) {
     const ownerColumn = await getOwnerColumn(admin, targetTable);
     const { data: targetRecord, error: targetError } = await admin
       .from(targetTable)
-      .select(withOwnerColumn("owner_id, title, status", ownerColumn))
+      .select(
+        withOwnerColumn(
+          "id, owner_id, title, status, contact_methods, expires_at, created_at",
+          ownerColumn
+        )
+      )
       .eq("id", parsedBody.data.targetId)
       .maybeSingle();
 
@@ -89,8 +106,37 @@ export async function POST(request: NextRequest) {
 
     const normalizedTargetRecord = normalizeOwnerRecord(targetRecord);
 
-    if (normalizedTargetRecord.status !== "live") {
+    if (
+      normalizedTargetRecord.status !== "live" ||
+      !isVisibleByExpiry(
+        normalizedTargetRecord.expires_at,
+        new Date(),
+        normalizedTargetRecord.created_at
+      )
+    ) {
       return NextResponse.json({ error: `${notFoundLabel} not found` }, { status: 404 });
+    }
+    const sanitizedMessage = sanitizeUserMessage(parsedBody.data.message);
+    if (sanitizedMessage.length < 10 || sanitizedMessage.length > 1000) {
+      return NextResponse.json(
+        { error: "Message must contain 10–1000 characters after formatting is removed." },
+        { status: 400 }
+      );
+    }
+
+    if (
+      normalizedTargetRecord.contact_methods &&
+      !normalizedTargetRecord.contact_methods.some(
+        (method) => method === "form" || method === "in_app"
+      )
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "This recipient has not enabled enquiries. Please use the contact options on the post.",
+        },
+        { status: 403 }
+      );
     }
 
     const targetOwnerId = readOwnerId(normalizedTargetRecord);
@@ -139,14 +185,15 @@ export async function POST(request: NextRequest) {
     // Create leads row for buyer message content
     if (parsedBody.data.message) {
       // Sanitize message: escape HTML entities + strip tags to prevent stored XSS
-      const sanitizedMessage = sanitizeUserMessage(parsedBody.data.message);
       const { error: leadsError } = await admin.from("leads").insert({
         target_id: parsedBody.data.targetId,
         target_type: parsedBody.data.targetType,
         owner_id: targetOwnerId,
-        buyer_name: null,
-        buyer_email: user?.email || null,
-        buyer_phone: null,
+        buyer_name: parsedBody.data.buyerName || null,
+        buyer_email: buyerEmail,
+        buyer_phone: parsedBody.data.buyerPhone
+          ? normalizeSaPhone(parsedBody.data.buyerPhone)
+          : null,
         message: sanitizedMessage,
         status: "new",
       });
@@ -173,7 +220,7 @@ export async function POST(request: NextRequest) {
       // Non-fatal — contact was already created successfully
     }
 
-    // Send non-blocking owner email alert for new leads.
+    // Await the email attempt so the server runtime cannot discard it after responding.
     try {
       const authAdmin = (
         admin as unknown as {
@@ -194,12 +241,11 @@ export async function POST(request: NextRequest) {
       if (ownerEmail) {
         const ownerName =
           (accountProfile as { display_name?: string | null } | null)?.display_name || "there";
-        const buyerName = user ? "Verified member" : "Interested buyer";
-        const buyerEmail = user?.email || "not-provided@verifymzansi.com";
+        const buyerName = parsedBody.data.buyerName || "Interested buyer";
         const inquiryMessage = parsedBody.data.message || "A buyer has requested contact details.";
         const listingTitle = normalizedTargetRecord.title || `your ${parsedBody.data.targetType}`;
 
-        void (async () => {
+        await (async () => {
           const result = await sendContactFormNotification(
             ownerEmail,
             ownerName,

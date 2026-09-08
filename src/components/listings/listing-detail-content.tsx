@@ -3,7 +3,8 @@
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Calendar, Eye, MapPin, Phone, Sparkles } from "lucide-react";
+import { Calendar, Eye, MapPin, Phone, MessageCircle } from "lucide-react";
+import { contactPhone, whatsappLink } from "@/lib/utils/contact-links";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -203,14 +204,15 @@ export function ListingDetailContent({
   });
   const variantCopy = getVariantCopy(listing.category);
   const sellerInitial = seller?.display_name?.charAt(0)?.toUpperCase() || "S";
-  const [showStickyContact, setShowStickyContact] = useState(false);
+  const sellerPhone = contactPhone(seller?.phone);
+  const sellerWhatsappUrl = whatsappLink(seller?.phone, listing.title, `/listing/${listing.id}`);
   const canCall =
     showContactActions &&
-    Boolean(seller?.masked_phone_public) &&
+    Boolean(sellerPhone) &&
     Boolean(listing.contact_methods?.includes("call"));
   const canWhatsapp =
     showContactActions &&
-    Boolean(seller?.phone) &&
+    Boolean(sellerWhatsappUrl) &&
     Boolean(listing.contact_methods?.includes("whatsapp"));
   const showStickyBar = layoutMode === "public" && (canCall || canWhatsapp);
   const facts = useMemo(() => buildListingFacts(listing), [listing]);
@@ -503,10 +505,10 @@ export function ListingDetailContent({
               {showContactActions ? (
                 <ListingContactActions
                   listingId={listing.id}
+                  listingTitle={listing.title}
+                  contactMethods={listing.contact_methods}
                   sellerPhone={
-                    listing.contact_methods?.includes("call")
-                      ? (seller?.masked_phone_public ?? null)
-                      : null
+                    listing.contact_methods?.includes("call") ? (seller?.phone ?? null) : null
                   }
                   sellerWhatsapp={
                     listing.contact_methods?.includes("whatsapp") ? (seller?.phone ?? null) : null
@@ -559,16 +561,10 @@ export function ListingDetailContent({
         <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-4 py-3 backdrop-blur-md lg:hidden">
           <div className="mx-auto flex max-w-lg gap-3">
             {canCall ? (
-              <Button
-                type="button"
-                className="flex-1 gap-2"
-                size="lg"
-                onClick={() => setShowStickyContact(true)}
-              >
-                <Phone className="h-4 w-4" />
-                {showStickyContact && seller?.masked_phone_public
-                  ? seller.masked_phone_public
-                  : "Show Contact"}
+              <Button type="button" className="flex-1 gap-2" size="lg" asChild>
+                <a href={`tel:${sellerPhone}`}>
+                  <Phone className="h-4 w-4" /> Call seller
+                </a>
               </Button>
             ) : null}
 
@@ -579,12 +575,8 @@ export function ListingDetailContent({
                 variant="outline"
                 className="flex-1 gap-2 border-green-500/30"
               >
-                <a
-                  href={`https://wa.me/${seller.phone.replace(/\D/g, "")}`}
-                  target="_blank"
-                  rel="noopener noreferrer nofollow ugc"
-                >
-                  <Sparkles className="h-4 w-4 text-green-600" />
+                <a href={sellerWhatsappUrl!} target="_blank" rel="noopener noreferrer nofollow ugc">
+                  <MessageCircle className="h-4 w-4 text-green-600" />
                   WhatsApp
                 </a>
               </Button>
