@@ -629,6 +629,44 @@ describe("CreateBusinessPage", () => {
     });
   });
 
+  it("marks photos complete while video is pending and ignores repeated submit events", async () => {
+    let finishVideo!: (response: ReturnType<typeof jsonResponse>) => void;
+    const videoResponse = new Promise<ReturnType<typeof jsonResponse>>((resolve) => {
+      finishVideo = resolve;
+    });
+    const calls = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (input === "/api/media/upload") {
+        const file = (init?.body as FormData).get("files") as File;
+        if (file.type.startsWith("video/")) return videoResponse;
+        return jsonResponse({ urls: ["https://media.verifymzansi.com/photo.png"] });
+      }
+      if (input === "/api/businesses") return jsonResponse({ success: true });
+      return jsonResponse({});
+    });
+    global.fetch = calls as unknown as typeof fetch;
+    render(<CreateBusinessPage />);
+    await completeStandaloneStepOne();
+    await completeLocationStep();
+    fireEvent.click(screen.getByRole("button", { name: "Cover photo (optional)" }));
+    fireEvent.click(screen.getByRole("button", { name: /Video \(optional\)/i }));
+    acceptBusinessTerms();
+    const form = screen.getByRole("button", { name: /Submit for review/i }).closest("form")!;
+    await act(async () => {
+      fireEvent.submit(form);
+      fireEvent.submit(form);
+    });
+    expect(await screen.findByText("Photos uploaded")).toBeInTheDocument();
+    expect(screen.getByText("Preparing and verifying video...")).toBeInTheDocument();
+    expect(calls.mock.calls.filter(([input]) => input === "/api/businesses")).toHaveLength(0);
+    await act(async () => {
+      finishVideo(jsonResponse({ urls: ["https://media.verifymzansi.com/video.mp4"] }));
+    });
+    await waitFor(() =>
+      expect(calls.mock.calls.filter(([input]) => input === "/api/businesses")).toHaveLength(1)
+    );
+    expect(calls.mock.calls.filter(([input]) => input === "/api/media/upload")).toHaveLength(2);
+  });
+
   it("uploads promo video through the validated server upload path", async () => {
     (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
       async (input: RequestInfo | URL) => {

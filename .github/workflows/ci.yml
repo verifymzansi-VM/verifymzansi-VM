@@ -83,6 +83,8 @@ jobs:
         env:
           STRICT_COVERAGE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}
         run: pnpm run test:coverage
+      - name: Isolated payment transaction checks
+        run: pnpm run test:payments:db
       - name: Preflight (non-blocking in CI)
         run: pnpm run preflight || echo "::warning::Preflight checks failed (expected in CI without production secrets)"
       - run: pnpm run test:contract
@@ -144,30 +146,32 @@ jobs:
         id: check-db-secrets
         run: |
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
-            echo "::warning::DB/RLS tests require Supabase secrets. Configure NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and NEXT_PUBLIC_SUPABASE_ANON_KEY as repository secrets."
+            echo "::warning::DB/RLS tests require dedicated nonproduction DB_TEST_SUPABASE_URL, DB_TEST_SUPABASE_SERVICE_ROLE_KEY, and DB_TEST_SUPABASE_ANON_KEY secrets."
+            if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ]; then
+              echo "::error::Automatic deployment requires verified nonproduction DB/RLS checks."
+              exit 1
+            fi
             echo "skip=true" >> "$GITHUB_OUTPUT"
           elif [[ ! "$SUPABASE_URL" =~ ^https?:// ]]; then
-            echo "::warning::Skipping DB/RLS tests because NEXT_PUBLIC_SUPABASE_URL is not a valid http(s) URL."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::error::DB_TEST_SUPABASE_URL must be a valid http(s) URL."
+            exit 1
           fi
         env:
-          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_URL: ${{ secrets.DB_TEST_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.DB_TEST_SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_ANON_KEY: ${{ secrets.DB_TEST_SUPABASE_ANON_KEY }}
       - name: DB contract + RLS checks
         if: steps.check-db-secrets.outputs.skip != 'true'
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          STRICT_DB_TESTS: "true"
-        run: |
-          pnpm run db:verify-schema
-          pnpm run test:db
+          DB_TEST_SUPABASE_URL: ${{ secrets.DB_TEST_SUPABASE_URL }}
+          DB_TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.DB_TEST_SUPABASE_SERVICE_ROLE_KEY }}
+          DB_TEST_SUPABASE_ANON_KEY: ${{ secrets.DB_TEST_SUPABASE_ANON_KEY }}
+          DB_TEST_ALLOW_REMOTE: "true"
+        run: pnpm run test:db
 
   e2e-smoke:
     runs-on: ubuntu-latest
-    continue-on-error: true
     needs: [unit-api-contract, build-route-verify]
     strategy:
       fail-fast: false

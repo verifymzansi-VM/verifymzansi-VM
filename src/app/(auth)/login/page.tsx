@@ -302,6 +302,7 @@ export default function LoginPage() {
       });
     } finally {
       setResendingEmail(false);
+      resetTurnstileChallenge();
     }
   }
 

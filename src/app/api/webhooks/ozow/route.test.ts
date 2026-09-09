@@ -4,10 +4,20 @@ import { Webhook } from "svix";
 
 const mockCreateAdminClient = vi.fn();
 const mockFulfillPayment = vi.fn();
-const mockRollbackPayment = vi.fn();
 const mockSendPaymentReceiptEmail = vi.fn();
 const mockSendPaymentFailedEmail = vi.fn();
 const mockGetUserById = vi.fn();
+const mockScheduleBackgroundTask = vi.fn();
+const mockCheckRateLimit = vi.fn();
+
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkRateLimit: (...args: unknown[]) => mockCheckRateLimit(...args),
+  getClientIp: () => "127.0.0.1",
+}));
+
+vi.mock("@/lib/utils/background-task", () => ({
+  scheduleBackgroundTask: (...args: unknown[]) => mockScheduleBackgroundTask(...args),
+}));
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => mockCreateAdminClient(),
@@ -15,7 +25,6 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("@/lib/payments/fulfillment", () => ({
   fulfillPayment: (...args: unknown[]) => mockFulfillPayment(...args),
-  rollbackPaymentProcessing: (...args: unknown[]) => mockRollbackPayment(...args),
 }));
 
 vi.mock("@/lib/utils/logger", () => ({
@@ -74,6 +83,8 @@ function createSignedRequest(body: Record<string, unknown>, signature?: string) 
 describe("POST /api/webhooks/ozow", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockFulfillPayment.mockReset().mockResolvedValue({ outcome: "completed" });
+    mockCheckRateLimit.mockReset().mockResolvedValue({ limited: false });
     process.env.OZOW_WEBHOOK_SECRET = webhookSecret;
     (process.env as Record<string, string | undefined>).NODE_ENV = "development";
     mockGetUserById.mockResolvedValue({
@@ -200,6 +211,7 @@ describe("POST /api/webhooks/ozow", () => {
                 provider: "ozow",
                 provider_payment_id: "ozow-tx-1",
                 provider_reference: "payment-1",
+                created_at: "2026-03-26T10:00:00.000Z",
                 provider_data: {},
                 amount_cents: 2500,
                 user_id: "user-1",
@@ -216,219 +228,6 @@ describe("POST /api/webhooks/ozow", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ success: true, duplicate: true });
     expect(mockFulfillPayment).not.toHaveBeenCalled();
-  });
-
-  it("returns duplicate when a concurrent webhook completes payment after claim", async () => {
-    const body = {
-      eventType: "transaction.complete",
-      data: {
-        merchantReference: "payment-1",
-        id: "ozow-tx-1",
-        status: "successful",
-        amount: { value: 25, currency: "ZAR" },
-      },
-    };
-
-    const paymentRecord = {
-      id: "payment-1",
-      area: "PROMOTIONS_EVENTS",
-      status: "pending",
-      provider: "ozow",
-      provider_payment_id: null,
-      provider_reference: "payment-1",
-      provider_data: {
-        type: "featured_promotion",
-        promotion_id: "00000000-0000-0000-0000-000000000001",
-        feature_days: 7,
-      },
-      amount_cents: 2500,
-      user_id: "user-1",
-    };
-
-    const maybeSingle = vi
-      .fn()
-      .mockResolvedValueOnce({ data: paymentRecord })
-      .mockResolvedValueOnce({
-        data: {
-          ...paymentRecord,
-          status: "complete",
-          provider_payment_id: "ozow-tx-1",
-          provider_data: {
-            ...paymentRecord.provider_data,
-            fulfillment_completed_at: "2026-03-17T10:00:05.000Z",
-          },
-        },
-      });
-
-    const paymentsSelect = {
-      eq: vi.fn().mockReturnValue({
-        maybeSingle,
-      }),
-    };
-
-    const claimSelect = vi.fn().mockResolvedValue({ data: [{ id: "payment-1" }] });
-    const claimUpdateChain = {
-      eq: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          in: vi.fn().mockReturnValue({
-            select: claimSelect,
-          }),
-        }),
-      }),
-    };
-
-    const paymentsFrom = {
-      select: vi.fn().mockReturnValue(paymentsSelect),
-      update: vi.fn().mockReturnValueOnce(claimUpdateChain),
-    };
-
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "payments") {
-          return paymentsFrom;
-        }
-        throw new Error(`Unexpected table ${table}`);
-      }),
-      auth: { admin: { getUserById: mockGetUserById } },
-    });
-
-    const response = await POST(createSignedRequest(body));
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({ success: true, duplicate: true });
-    expect(mockFulfillPayment).not.toHaveBeenCalled();
-  });
-
-  it("passes promotion payment area and metadata into fulfillment after a verified completion webhook", async () => {
-    const body = {
-      eventType: "transaction.complete",
-      data: {
-        merchantReference: "payment-1",
-        id: "ozow-tx-1",
-        status: "successful",
-        amount: { value: 25, currency: "ZAR" },
-      },
-    };
-
-    const paymentRecord = {
-      id: "payment-1",
-      area: "PROMOTIONS_EVENTS",
-      status: "pending",
-      provider: "ozow",
-      provider_payment_id: null,
-      provider_reference: "payment-1",
-      provider_data: {
-        type: "featured_promotion",
-        promotion_id: "00000000-0000-0000-0000-000000000001",
-        feature_days: 7,
-      },
-      amount_cents: 2500,
-      user_id: "user-1",
-    };
-
-    const maybeSingle = vi
-      .fn()
-      .mockResolvedValueOnce({ data: paymentRecord })
-      .mockResolvedValueOnce({ data: { ...paymentRecord, status: "processing" } })
-      .mockResolvedValueOnce({
-        data: {
-          ...paymentRecord,
-          status: "processing",
-          provider_payment_id: "ozow-tx-1",
-          provider_data: {
-            ...paymentRecord.provider_data,
-            processing_started_at: "2026-03-17T10:00:00.000Z",
-          },
-        },
-      })
-      .mockResolvedValueOnce({
-        data: {
-          ...paymentRecord,
-          status: "processing",
-          provider_payment_id: "ozow-tx-1",
-          provider_data: {
-            ...paymentRecord.provider_data,
-            processing_started_at: "2026-03-17T10:00:00.000Z",
-            fulfillment_completed_at: "2026-03-17T10:00:05.000Z",
-          },
-        },
-      });
-    const paymentsSelect = {
-      eq: vi.fn().mockReturnValue({
-        maybeSingle,
-      }),
-    };
-    const claimSelect = vi.fn().mockResolvedValue({ data: [{ id: "payment-1" }] });
-    const claimUpdateChain = {
-      eq: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          in: vi.fn().mockReturnValue({
-            select: claimSelect,
-          }),
-        }),
-      }),
-    };
-    const markerUpdateChain = {
-      eq: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ error: null }),
-        }),
-      }),
-    };
-    const completeUpdateChain = {
-      eq: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ error: null }),
-        }),
-      }),
-    };
-    const paymentsFrom = {
-      select: vi.fn().mockReturnValue(paymentsSelect),
-      update: vi
-        .fn()
-        .mockReturnValueOnce(claimUpdateChain)
-        .mockReturnValueOnce(markerUpdateChain)
-        .mockReturnValueOnce(completeUpdateChain),
-    };
-
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "payments") {
-          return paymentsFrom;
-        }
-        throw new Error(`Unexpected table ${table}`);
-      }),
-      auth: { admin: { getUserById: mockGetUserById } },
-    });
-    mockFulfillPayment.mockResolvedValue(undefined);
-
-    const response = await POST(createSignedRequest(body));
-    const data = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(data.success).toBe(true);
-    expect(mockFulfillPayment).toHaveBeenCalledTimes(1);
-    expect(mockSendPaymentReceiptEmail).toHaveBeenCalledWith(
-      "payer@example.com",
-      "Payer One",
-      25,
-      "Tourism & Events",
-      undefined,
-      { kind: "addon", addonName: "Featured Promotion", durationDays: 7 }
-    );
-    expect(mockFulfillPayment).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        id: "payment-1",
-        area: "PROMOTIONS_EVENTS",
-        provider_payment_id: "ozow-tx-1",
-        provider_data: expect.objectContaining({
-          type: "featured_promotion",
-          promotion_id: "00000000-0000-0000-0000-000000000001",
-          feature_days: 7,
-        }),
-      })
-    );
   });
 
   it("rejects currency mismatches before fulfillment", async () => {
@@ -454,6 +253,7 @@ describe("POST /api/webhooks/ozow", () => {
                 provider: "ozow",
                 provider_payment_id: null,
                 provider_reference: "payment-1",
+                created_at: "2026-03-26T10:00:00.000Z",
                 provider_data: {},
                 amount_cents: 2500,
                 user_id: "user-1",
@@ -494,6 +294,7 @@ describe("POST /api/webhooks/ozow", () => {
                 provider: "ozow",
                 provider_payment_id: null,
                 provider_reference: "payment-1",
+                created_at: "2026-03-26T10:00:00.000Z",
                 provider_data: {},
                 amount_cents: 2500,
                 user_id: "user-1",
@@ -541,6 +342,7 @@ describe("POST /api/webhooks/ozow", () => {
                     provider: "ozow",
                     provider_payment_id: null,
                     provider_reference: "payment-1",
+                    created_at: "2026-03-26T10:00:00.000Z",
                     provider_data: {},
                     amount_cents: 2500,
                     user_id: "user-1",
@@ -561,7 +363,7 @@ describe("POST /api/webhooks/ozow", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ success: true });
-    expect(updateInStatus).toHaveBeenCalledWith("status", ["pending", "processing"]);
+    expect(updateInStatus).toHaveBeenCalledWith("status", ["pending"]);
     expect(mockFulfillPayment).not.toHaveBeenCalled();
     expect(mockSendPaymentFailedEmail).toHaveBeenCalledWith(
       "payer@example.com",
@@ -598,6 +400,7 @@ describe("POST /api/webhooks/ozow", () => {
                     provider: "ozow",
                     provider_payment_id: null,
                     provider_reference: "payment-1",
+                    created_at: "2026-03-26T10:00:00.000Z",
                     provider_data: {},
                     amount_cents: 2500,
                     user_id: "user-1",
@@ -621,177 +424,6 @@ describe("POST /api/webhooks/ozow", () => {
     expect(paymentsUpdate).not.toHaveBeenCalled();
     expect(mockFulfillPayment).not.toHaveBeenCalled();
     expect(mockSendPaymentFailedEmail).not.toHaveBeenCalled();
-  });
-
-  it("rolls back processing when fulfillment fails after claim", async () => {
-    const body = {
-      eventType: "transaction.complete",
-      data: {
-        merchantReference: "payment-1",
-        id: "ozow-tx-1",
-        status: "successful",
-        amount: { value: 25, currency: "ZAR" },
-      },
-    };
-
-    const paymentRecord = {
-      id: "payment-1",
-      area: "PROMOTIONS_EVENTS",
-      status: "pending",
-      provider: "ozow",
-      provider_payment_id: null,
-      provider_reference: "payment-1",
-      provider_data: {
-        type: "featured_promotion",
-        promotion_id: "00000000-0000-0000-0000-000000000001",
-        feature_days: 7,
-      },
-      amount_cents: 2500,
-      user_id: "user-1",
-    };
-
-    const maybeSingle = vi
-      .fn()
-      .mockResolvedValueOnce({ data: paymentRecord })
-      .mockResolvedValueOnce({
-        data: {
-          ...paymentRecord,
-          status: "processing",
-          provider_payment_id: "ozow-tx-1",
-          provider_data: {
-            ...(paymentRecord.provider_data ?? {}),
-            processing_started_at: "2026-03-17T10:00:00.000Z",
-          },
-        },
-      });
-    const paymentsSelect = {
-      eq: vi.fn().mockReturnValue({ maybeSingle }),
-    };
-    const claimSelect = vi.fn().mockResolvedValue({ data: [{ id: "payment-1" }] });
-    const claimUpdateChain = {
-      eq: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          in: vi.fn().mockReturnValue({
-            select: claimSelect,
-          }),
-        }),
-      }),
-    };
-
-    const rollbackUpdateChain = {
-      eq: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ error: null }),
-        }),
-      }),
-    };
-
-    const paymentsFrom = {
-      select: vi.fn().mockReturnValue(paymentsSelect),
-      update: vi
-        .fn()
-        .mockReturnValueOnce(claimUpdateChain)
-        .mockReturnValueOnce(rollbackUpdateChain),
-    };
-
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "payments") {
-          return paymentsFrom;
-        }
-        throw new Error(`Unexpected table ${table}`);
-      }),
-      auth: { admin: { getUserById: mockGetUserById } },
-    });
-    mockFulfillPayment.mockRejectedValue(new Error("fulfillment blew up"));
-    mockRollbackPayment.mockResolvedValue(undefined);
-
-    const response = await POST(createSignedRequest(body));
-
-    expect(response.status).toBe(500);
-    await expect(response.json()).resolves.toEqual({ error: "Payment fulfillment failed" });
-    expect(mockRollbackPayment).toHaveBeenCalledWith(expect.anything(), "payment-1");
-  });
-
-  it("finalizes a previously-fulfilled processing payment without rerunning fulfillment", async () => {
-    const body = {
-      eventType: "transaction.complete",
-      data: {
-        merchantReference: "payment-1",
-        id: "ozow-tx-1",
-        status: "successful",
-        amount: { value: 25, currency: "ZAR" },
-      },
-    };
-
-    const processingPayment = {
-      id: "payment-1",
-      area: "PROMOTIONS_EVENTS",
-      status: "processing",
-      provider: "ozow",
-      provider_payment_id: "ozow-tx-1",
-      provider_reference: "payment-1",
-      provider_data: {
-        type: "featured_promotion",
-        promotion_id: "00000000-0000-0000-0000-000000000001",
-        feature_days: 7,
-        processing_started_at: "2026-03-17T10:00:00.000Z",
-        fulfillment_completed_at: "2026-03-17T10:00:05.000Z",
-      },
-      amount_cents: 2500,
-      user_id: "user-1",
-    };
-
-    const maybeSingle = vi
-      .fn()
-      .mockResolvedValueOnce({ data: processingPayment })
-      .mockResolvedValueOnce({ data: processingPayment });
-    const paymentsSelect = {
-      eq: vi.fn().mockReturnValue({
-        maybeSingle,
-      }),
-    };
-    const claimSelect = vi.fn().mockResolvedValue({ data: [] });
-    const claimUpdateChain = {
-      eq: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          in: vi.fn().mockReturnValue({
-            select: claimSelect,
-          }),
-        }),
-      }),
-    };
-    const completeUpdateChain = {
-      eq: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ error: null }),
-        }),
-      }),
-    };
-    const paymentsFrom = {
-      select: vi.fn().mockReturnValue(paymentsSelect),
-      update: vi
-        .fn()
-        .mockReturnValueOnce(claimUpdateChain)
-        .mockReturnValueOnce(completeUpdateChain),
-    };
-
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "payments") {
-          return paymentsFrom;
-        }
-        throw new Error(`Unexpected table ${table}`);
-      }),
-    });
-
-    const response = await POST(createSignedRequest(body));
-    const data = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(data.success).toBe(true);
-    expect(data.recovered).toBe(true);
-    expect(mockFulfillPayment).not.toHaveBeenCalled();
   });
 
   it("ignores error-status payloads that are missing an eventType instead of fulfilling", async () => {
@@ -820,6 +452,7 @@ describe("POST /api/webhooks/ozow", () => {
                     provider: "ozow",
                     provider_payment_id: null,
                     provider_reference: "payment-1",
+                    created_at: "2026-03-26T10:00:00.000Z",
                     provider_data: {},
                     amount_cents: 2500,
                     user_id: "user-1",
@@ -871,6 +504,7 @@ describe("POST /api/webhooks/ozow", () => {
                     provider: "ozow",
                     provider_payment_id: null,
                     provider_reference: "payment-1",
+                    created_at: "2026-03-26T10:00:00.000Z",
                     provider_data: {},
                     amount_cents: 2500,
                     user_id: "user-1",
@@ -933,7 +567,143 @@ describe("POST /api/webhooks/ozow", () => {
     expect(mockFulfillPayment).not.toHaveBeenCalled();
   });
 
-  it("treats a fresh in-flight processing payment as a duplicate instead of fulfilling twice", async () => {
+  it("keeps successful fulfillment intact when a failure callback read pending before the atomic commit", async () => {
+    const payment: Record<string, unknown> = {
+      id: "payment-1",
+      area: "PROMOTIONS_EVENTS",
+      status: "pending",
+      provider: "ozow",
+      provider_payment_id: null,
+      provider_reference: "payment-1",
+      created_at: "2026-03-26T10:00:00.000Z",
+      amount_cents: 2500,
+      user_id: "user-1",
+      provider_data: { type: "featured_promotion", promotion_id: "promotion-1", feature_days: 7 },
+    };
+    let releaseFailureRead!: () => void;
+    const failureReadGate = new Promise<void>((resolve) => {
+      releaseFailureRead = resolve;
+    });
+    let capturedFailureRead!: () => void;
+    const failureReadCaptured = new Promise<void>((resolve) => {
+      capturedFailureRead = resolve;
+    });
+    let releaseFulfillment!: () => void;
+    const fulfillmentGate = new Promise<void>((resolve) => {
+      releaseFulfillment = resolve;
+    });
+    let enteredFulfillment!: () => void;
+    const fulfillmentEntered = new Promise<void>((resolve) => {
+      enteredFulfillment = resolve;
+    });
+    let firstRead = true;
+    const updateRows: Record<string, unknown>[] = [];
+    const client = {
+      auth: { admin: { getUserById: mockGetUserById } },
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => {
+              const snapshot = { ...payment };
+              if (firstRead) {
+                firstRead = false;
+                capturedFailureRead();
+                await failureReadGate;
+              }
+              return { data: snapshot, error: null };
+            },
+          }),
+        }),
+        update: (patch: Record<string, unknown>) => {
+          const filters: Array<(row: Record<string, unknown>) => boolean> = [];
+          const chain = {
+            eq(column: string, value: unknown) {
+              filters.push((row) => row[column] === value);
+              return chain;
+            },
+            in(column: string, values: unknown[]) {
+              filters.push((row) => values.includes(row[column]));
+              return chain;
+            },
+            async select() {
+              if (!filters.every((filter) => filter(payment))) return { data: [], error: null };
+              Object.assign(payment, patch);
+              updateRows.push(patch);
+              return { data: [{ id: payment.id }], error: null };
+            },
+          };
+          return chain;
+        },
+      }),
+    };
+    mockCreateAdminClient.mockReturnValue(client);
+    mockFulfillPayment.mockImplementation(async () => {
+      enteredFulfillment();
+      await fulfillmentGate;
+      payment.status = "complete";
+      payment.provider_payment_id = "ozow-tx-1";
+      return { outcome: "completed" };
+    });
+    const body = (status: string) => ({
+      eventType: "transaction.complete",
+      data: {
+        merchantReference: "payment-1",
+        id: "ozow-tx-1",
+        status,
+        amount: { value: 25, currency: "ZAR" },
+      },
+    });
+    const failureRequest = POST(createSignedRequest(body("error")));
+    await failureReadCaptured;
+    const successRequest = POST(createSignedRequest(body("successful")));
+    await fulfillmentEntered;
+    releaseFulfillment();
+    const successResponse = await successRequest;
+    releaseFailureRead();
+    const failedResponse = await failureRequest;
+    expect(failedResponse.status).toBe(200);
+    expect(payment.status).toBe("complete");
+    expect(mockSendPaymentFailedEmail).not.toHaveBeenCalled();
+    expect(successResponse.status).toBe(200);
+    expect(payment.status).toBe("complete");
+    expect(updateRows.some((row) => row.status === "failed")).toBe(false);
+    expect(mockFulfillPayment).toHaveBeenCalledTimes(1);
+    expect(mockScheduleBackgroundTask).toHaveBeenCalledWith(
+      expect.any(Promise),
+      "payment status email"
+    );
+  });
+  function atomicFixture(
+    status = "pending",
+    providerData: Record<string, unknown> = {
+      type: "featured_promotion",
+      promotion_id: "promotion-1",
+      feature_days: 7,
+    }
+  ) {
+    const payment = {
+      id: "payment-1",
+      user_id: "user-1",
+      area: "PROMOTIONS_EVENTS",
+      provider: "ozow",
+      status,
+      provider_payment_id: null,
+      provider_reference: "payment-1",
+      amount_cents: 2500,
+      created_at: "2026-03-26T10:00:00.000Z",
+      provider_data: providerData,
+    };
+    const update = vi.fn();
+    const client = {
+      auth: { admin: { getUserById: mockGetUserById } },
+      from: () => ({
+        select: () => ({
+          eq: () => ({ maybeSingle: async () => ({ data: payment, error: null }) }),
+        }),
+        update,
+      }),
+    };
+    mockCreateAdminClient.mockReturnValue(client);
     const body = {
       eventType: "transaction.complete",
       data: {
@@ -943,163 +713,115 @@ describe("POST /api/webhooks/ozow", () => {
         amount: { value: 25, currency: "ZAR" },
       },
     };
+    return { payment, client, body, update };
+  }
 
-    const processingPayment = {
-      id: "payment-1",
-      area: "PROMOTIONS_EVENTS",
-      status: "processing",
-      provider: "ozow",
-      provider_payment_id: "ozow-tx-1",
-      provider_reference: "payment-1",
-      provider_data: {
-        type: "featured_promotion",
-        promotion_id: "00000000-0000-0000-0000-000000000001",
-        feature_days: 7,
-        processing_started_at: new Date().toISOString(),
-      },
-      amount_cents: 2500,
-      user_id: "user-1",
-    };
-
-    const maybeSingle = vi
-      .fn()
-      .mockResolvedValueOnce({ data: processingPayment })
-      .mockResolvedValueOnce({ data: processingPayment });
-    const paymentsSelect = {
-      eq: vi.fn().mockReturnValue({
-        maybeSingle,
-      }),
-    };
-    // Claim is refused because the payment is already "processing".
-    const claimSelect = vi.fn().mockResolvedValue({ data: [] });
-    const claimUpdateChain = {
-      eq: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          in: vi.fn().mockReturnValue({
-            select: claimSelect,
-          }),
-        }),
-      }),
-    };
-    const paymentsFrom = {
-      select: vi.fn().mockReturnValue(paymentsSelect),
-      update: vi.fn().mockReturnValueOnce(claimUpdateChain),
-    };
-
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "payments") {
-          return paymentsFrom;
-        }
-        throw new Error(`Unexpected table ${table}`);
-      }),
-      auth: { admin: { getUserById: mockGetUserById } },
-    });
-
-    const response = await POST(createSignedRequest(body));
-    const data = await response.json();
-
+  it("passes the original payment status, creation date and metadata to the atomic operation", async () => {
+    const fixture = atomicFixture();
+    const response = await POST(createSignedRequest(fixture.body));
     expect(response.status).toBe(200);
-    expect(data).toEqual({ success: true, duplicate: true });
+    expect(mockFulfillPayment).toHaveBeenCalledWith(
+      fixture.client,
+      { ...fixture.payment, provider_payment_id: "ozow-tx-1" },
+      expect.any(Object)
+    );
+    expect(fixture.update).not.toHaveBeenCalled();
+    expect(mockScheduleBackgroundTask).toHaveBeenCalledWith(
+      expect.any(Promise),
+      "payment status email"
+    );
+  });
+
+  it.each(["duplicate", "ignored"])(
+    "acknowledges a concurrent %s result without sending another receipt",
+    async (outcome) => {
+      const fixture = atomicFixture();
+      mockFulfillPayment.mockResolvedValue({ outcome });
+      const response = await POST(createSignedRequest(fixture.body));
+      expect(await response.json()).toEqual({ success: true, [outcome]: true });
+      expect(mockSendPaymentReceiptEmail).not.toHaveBeenCalled();
+      expect(fixture.update).not.toHaveBeenCalled();
+    }
+  );
+
+  it("returns a retryable error on a transaction failure without a separate rollback write", async () => {
+    const fixture = atomicFixture();
+    mockFulfillPayment.mockRejectedValue(new Error("invoice unavailable"));
+    const response = await POST(createSignedRequest(fixture.body));
+    expect(response.status).toBe(500);
+    expect(response.headers.get("Retry-After")).toBe("30");
+    expect(fixture.update).not.toHaveBeenCalled();
+    expect(mockSendPaymentReceiptEmail).not.toHaveBeenCalled();
+  });
+
+  it("acknowledges legacy marked recovery after the database confirms it", async () => {
+    const fixture = atomicFixture("processing", {
+      fulfillment_completed_at: "2026-03-26T10:01:00Z",
+    });
+    mockFulfillPayment.mockResolvedValue({ outcome: "recovered" });
+    const response = await POST(createSignedRequest(fixture.body));
+    expect(await response.json()).toEqual({ success: true, recovered: true });
+    expect(fixture.update).not.toHaveBeenCalled();
+  });
+
+  it.each(["2020-01-01T00:00:00Z", new Date().toISOString()])(
+    "does not infer legacy recovery safety from processing age %s",
+    async (startedAt) => {
+      const fixture = atomicFixture("processing", { processing_started_at: startedAt });
+      mockFulfillPayment.mockRejectedValue(new Error("Legacy payment requires reconciliation"));
+      const response = await POST(createSignedRequest(fixture.body));
+      expect(response.status).toBe(500);
+      expect(fixture.update).not.toHaveBeenCalled();
+      expect(mockSendPaymentReceiptEmail).not.toHaveBeenCalled();
+    }
+  );
+
+  it("requires the successful provider transaction ID", async () => {
+    const fixture = atomicFixture();
+    const { id: _id, ...data } = fixture.body.data;
+    const response = await POST(createSignedRequest({ ...fixture.body, data }));
+    expect(response.status).toBe(400);
     expect(mockFulfillPayment).not.toHaveBeenCalled();
   });
 
-  it("recovers a stale processing payment by fulfilling it again", async () => {
-    const body = {
-      eventType: "transaction.complete",
-      data: {
-        merchantReference: "payment-1",
-        id: "ozow-tx-1",
-        status: "successful",
-        amount: { value: 25, currency: "ZAR" },
-      },
-    };
+  it("honors the rate limiter before reading or fulfilling a payment", async () => {
+    const fixture = atomicFixture();
+    mockCheckRateLimit.mockResolvedValue({ limited: true, retryAfter: 60 });
+    const response = await POST(createSignedRequest(fixture.body));
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Retry-After")).toBe("60");
+    expect(mockCreateAdminClient).not.toHaveBeenCalled();
+    expect(mockFulfillPayment).not.toHaveBeenCalled();
+  });
 
-    const staleProcessingPayment = {
-      id: "payment-1",
-      area: "PROMOTIONS_EVENTS",
-      status: "processing",
-      provider: "ozow",
-      provider_payment_id: "ozow-tx-1",
-      provider_reference: "payment-1",
-      provider_data: {
-        type: "featured_promotion",
-        promotion_id: "00000000-0000-0000-0000-000000000001",
-        feature_days: 7,
-        processing_started_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-      },
-      amount_cents: 2500,
-      user_id: "user-1",
-    };
+  it("rejects a successful callback with no amount", async () => {
+    const fixture = atomicFixture();
+    const { amount: _amount, ...data } = fixture.body.data;
+    const response = await POST(createSignedRequest({ ...fixture.body, data }));
+    expect(response.status).toBe(400);
+    expect(mockFulfillPayment).not.toHaveBeenCalled();
+  });
 
-    const fulfilledPayment = {
-      ...staleProcessingPayment,
-      provider_data: {
-        ...staleProcessingPayment.provider_data,
-        fulfillment_completed_at: new Date().toISOString(),
-        fulfillment_state: "completed",
-      },
-    };
+  it("rejects a substituted provider payment ID", async () => {
+    const fixture = atomicFixture();
+    Object.assign(fixture.payment, { provider_payment_id: "different" });
+    const response = await POST(createSignedRequest(fixture.body));
+    expect(response.status).toBe(400);
+    expect(mockFulfillPayment).not.toHaveBeenCalled();
+  });
 
-    const maybeSingle = vi
-      .fn()
-      .mockResolvedValueOnce({ data: staleProcessingPayment })
-      .mockResolvedValueOnce({ data: staleProcessingPayment })
-      .mockResolvedValueOnce({ data: fulfilledPayment });
-    const paymentsSelect = {
-      eq: vi.fn().mockReturnValue({
-        maybeSingle,
-      }),
-    };
-    const claimSelect = vi.fn().mockResolvedValue({ data: [] });
-    const claimUpdateChain = {
-      eq: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          in: vi.fn().mockReturnValue({
-            select: claimSelect,
-          }),
-        }),
-      }),
-    };
-    const markerUpdateChain = {
-      eq: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ error: null }),
-        }),
-      }),
-    };
-    const completeUpdateChain = {
-      eq: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ error: null }),
-        }),
-      }),
-    };
-    const paymentsFrom = {
-      select: vi.fn().mockReturnValue(paymentsSelect),
-      update: vi
-        .fn()
-        .mockReturnValueOnce(claimUpdateChain)
-        .mockReturnValueOnce(markerUpdateChain)
-        .mockReturnValueOnce(completeUpdateChain),
-    };
-
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "payments") {
-          return paymentsFrom;
-        }
-        throw new Error(`Unexpected table ${table}`);
-      }),
-      auth: { admin: { getUserById: mockGetUserById } },
-    });
-    mockFulfillPayment.mockResolvedValue(undefined);
-
-    const response = await POST(createSignedRequest(body));
-    const data = await response.json();
-
+  it("anchors receipt expiry to the same creation date used by the transaction", async () => {
+    const fixture = atomicFixture("pending", { type: "subscription" });
+    const response = await POST(createSignedRequest(fixture.body));
     expect(response.status).toBe(200);
-    expect(data).toMatchObject({ success: true, recovered: true });
-    expect(mockFulfillPayment).toHaveBeenCalledTimes(1);
+    await Promise.resolve();
+    expect(mockSendPaymentReceiptEmail).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(String),
+      25,
+      expect.any(String),
+      undefined,
+      { kind: "subscription", expiresAt: "2026-04-25T10:00:00.000Z" }
+    );
   });
 });

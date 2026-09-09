@@ -334,6 +334,66 @@ describe("CreateListingPage", () => {
     expect(mockPush).toHaveBeenCalledWith("/dashboard/listings");
   });
 
+  it("blocks saving when the server rejects a selected photo", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/media/upload") {
+          const callIndex = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.length;
+          return {
+            ok: true,
+            json: async () =>
+              callIndex === 1
+                ? { urls: ["https://media.verifymzansi.com/listings/logo.jpg"] }
+                : { urls: [], errors: ["The selected photo was rejected"] },
+          };
+        }
+
+        if (input === "/api/listings") {
+          return {
+            ok: true,
+            json: async () => ({ id: "listing-1" }),
+          };
+        }
+
+        throw new Error(`Unexpected fetch call: ${String(input)}`);
+      }
+    );
+
+    render(<CreateListingPage />);
+
+    fireEvent.click(screen.getByText("Select Electronics"));
+    fireEvent.change(screen.getByLabelText("Title *"), { target: { value: "Used iPhone 15" } });
+    fireEvent.change(screen.getByLabelText("Description *"), {
+      target: { value: "A clean listing description with enough detail to continue." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText(/(Asking Price|Monthly Rent) \(ZAR\) \*/), {
+      target: { value: "1500" },
+    });
+    fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Listing logo (optional)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Photos (max 5)" }));
+    acceptListingTerms();
+
+    expect(listingCardSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        logoUrl: "blob:logo-preview",
+      })
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
+
+    expect(await screen.findAllByText("The selected photo was rejected")).not.toHaveLength(0);
+    const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.some((call) => call[0] === "/api/listings")).toBe(false);
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Submit for review" })).toBeEnabled();
+  });
+
   it("maps API 422 photo-limit errors to listing media field errors", async () => {
     (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
       async (input: RequestInfo | URL) => {

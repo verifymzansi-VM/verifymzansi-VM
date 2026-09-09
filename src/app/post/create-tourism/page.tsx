@@ -1,5 +1,7 @@
 "use client";
 
+import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
+
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -315,6 +317,7 @@ function CreateTourismContent() {
   /* ── Step & error state ──────────────────────────────────── */
   const [step, setStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submissionInFlightRef = useRef(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
   const [uploadStatuses, setUploadStatuses] = useState<Record<string, UploadSlotStatus>>({
     logo: "idle",
@@ -1036,6 +1039,7 @@ function CreateTourismContent() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (submissionInFlightRef.current) return;
     const stepErrors = [0, 1, 2, 3].map((index) => validateStep(index));
     const firstInvalidStep = stepErrors.findIndex((e) => Object.keys(e).length > 0);
     if (firstInvalidStep !== -1) {
@@ -1050,6 +1054,7 @@ function CreateTourismContent() {
     }
 
     clearErrors();
+    submissionInFlightRef.current = true;
     setIsSubmitting(true);
     setSubmitProgress("Checking upload service...");
     setUploadStatuses({
@@ -1077,42 +1082,43 @@ function CreateTourismContent() {
         ? readMediaDimensions(primaryMediaFile)
         : Promise.resolve(null);
 
-      const [imageUrls, videoUrls, uploadedVideoThumbnailUrl, uploadedLogoUrl] = await Promise.all([
-        uploadRequiredPromotionMedia({
-          files: photoFiles,
-          area: uploadArea,
-          field: "images",
-        }).then((urls) => {
-          if (photoFiles.length > 0) {
-            setUploadStatuses((current) => ({ ...current, photos: "done" }));
-          }
-          return urls;
-        }),
-        uploadPromotionVideoFiles({
-          files: videoFiles,
-          area: uploadArea,
-        }).then((urls) => {
-          if (videoFiles.length > 0) {
-            setUploadStatuses((current) => ({ ...current, videos: "done" }));
-          }
-          return urls;
-        }),
-        uploadRequiredPromotionMedia({
-          files: videoThumbnailFile,
-          area: uploadArea,
-          field: "video_thumbnail",
-        }).then((urls) => urls[0]),
-        uploadRequiredPromotionMedia({
-          files: logoFiles,
-          area: listingType === "tourism_business" ? "business_logo" : "promotion",
-          field: "logo_url",
-        }).then((urls) => {
-          if (logoFiles.length > 0) {
-            setUploadStatuses((current) => ({ ...current, logo: "done" }));
-          }
-          return urls[0];
-        }),
-      ]);
+      const [imageUrls, videoUrls, uploadedVideoThumbnailUrl, uploadedLogoUrl] =
+        await settleMediaUploads([
+          uploadRequiredPromotionMedia({
+            files: photoFiles,
+            area: uploadArea,
+            field: "images",
+          }).then((urls) => {
+            if (photoFiles.length > 0) {
+              setUploadStatuses((current) => ({ ...current, photos: "done" }));
+            }
+            return urls;
+          }),
+          uploadPromotionVideoFiles({
+            files: videoFiles,
+            area: uploadArea,
+          }).then((urls) => {
+            if (videoFiles.length > 0) {
+              setUploadStatuses((current) => ({ ...current, videos: "done" }));
+            }
+            return urls;
+          }),
+          uploadRequiredPromotionMedia({
+            files: videoThumbnailFile,
+            area: uploadArea,
+            field: "video_thumbnail",
+          }).then((urls) => urls[0]),
+          uploadRequiredPromotionMedia({
+            files: logoFiles,
+            area: listingType === "tourism_business" ? "business_logo" : "promotion",
+            field: "logo_url",
+          }).then((urls) => {
+            if (logoFiles.length > 0) {
+              setUploadStatuses((current) => ({ ...current, logo: "done" }));
+            }
+            return urls[0];
+          }),
+        ]);
 
       const mediaDimensions = await mediaDimensionsPromise;
 
@@ -1414,6 +1420,7 @@ function CreateTourismContent() {
 
       setFormError(normalizeCreatePostRuntimeError(error, "Something went wrong."));
     } finally {
+      submissionInFlightRef.current = false;
       setIsSubmitting(false);
       setSubmitProgress(null);
       setUploadStatuses({ logo: "idle", photos: "idle", videos: "idle", saving: "idle" });

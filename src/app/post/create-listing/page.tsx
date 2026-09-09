@@ -1,5 +1,7 @@
 "use client";
 
+import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -50,13 +52,13 @@ import {
 } from "@/app/post/_lib/create-post-errors";
 import {
   getListingMediaUploadErrorState,
+  uploadListingImages,
   uploadListingVideoFiles,
 } from "@/app/post/_lib/listing-media-upload";
 import { prewarmVideosForFastUpload } from "@/app/post/_lib/video-fast-upload";
 import { coerceListingAttributes, validateListingAttributes } from "@/lib/forms/listing-form";
 import { CATEGORIES } from "@/lib/constants/categories";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
-import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { checkUploadServiceReachable } from "@/lib/utils/upload-preflight";
 import type { ListingDraftData } from "@/lib/post-drafts/storage";
 import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
@@ -121,6 +123,8 @@ const FIELD_IDS: Record<string, string> = {
   province: "province",
   city: "city",
   contactMethods: "listing-contact-methods",
+  logo_url: "listing-logo-input",
+  videoThumbnail: "listing-video-cover-input",
   images: "listing-images",
   videos: "listing-video",
   termsAccepted: "listing-terms-checkbox",
@@ -141,6 +145,8 @@ const LISTING_FIELD_LABELS: Record<string, string> = {
   province: "Province",
   city: "City",
   contactMethods: "Contact methods",
+  logo_url: "Listing logo",
+  videoThumbnail: "Video cover image",
   images: "Photos",
   videos: "Videos",
   termsAccepted: "Posting terms",
@@ -167,6 +173,8 @@ function getStepForFieldKey(key: string): number {
   const normalizedKey = LISTING_FIELD_KEY_ALIASES[key] ?? key;
 
   if (
+    normalizedKey === "logo_url" ||
+    normalizedKey === "videoThumbnail" ||
     normalizedKey === "images" ||
     normalizedKey === "videos" ||
     normalizedKey === "termsAccepted"
@@ -646,106 +654,28 @@ export default function CreateListingPage() {
         ? coerceListingAttributes(category, categoryAttributes)
         : {};
 
-      const readUploadError = async (response: Response, fallback: string): Promise<string> => {
-        try {
-          const payload = (await response.json()) as { error?: unknown; message?: unknown };
-          const payloadError =
-            typeof payload.error === "string"
-              ? payload.error
-              : typeof payload.message === "string"
-                ? payload.message
-                : null;
-          if (payloadError) {
-            return payloadError;
+      const [logoUrls, photoUrls, videoUrls, videoThumbnailUrl] = await settleMediaUploads([
+        uploadListingImages({ files: logoFile, area: "listing_logo", field: "logo_url" }).then(
+          (urls) => {
+            if (logoFile.length) setUploadStatuses((current) => ({ ...current, logo: "done" }));
+            return urls;
           }
-        } catch {
-          // Ignore JSON parse failures and use fallback below.
-        }
-        return `${fallback} (HTTP ${response.status})`;
-      };
-
-      // Upload logo, photos, video, and video cover in parallel.
-      const [logoUrls, photoUrls, videoUrls, videoThumbnailUrl] = await Promise.all([
-        // Logo via server proxy
-        logoFile.length > 0
-          ? (async () => {
-              const uploadData = new FormData();
-              uploadData.append("area", "listing_logo");
-              uploadData.append("files", logoFile[0]);
-              const uploadRes = await fetchWithRetry("/api/media/upload", {
-                method: "POST",
-                headers: withCsrfHeaders(),
-                body: uploadData,
-              });
-              if (!uploadRes.ok) {
-                throw new Error(await readUploadError(uploadRes, "Failed to upload listing logo"));
-              }
-              const uploadJson = await uploadRes.json();
-              setUploadStatuses((current) => ({ ...current, logo: "done" }));
-              return (uploadJson.urls || []) as string[];
-            })()
-          : Promise.resolve([] as string[]),
-
-        // Photos via server proxy (small files)
-        photoFiles.length > 0
-          ? (async () => {
-              const uploadData = new FormData();
-              uploadData.append("area", "listing");
-              photoFiles.forEach((file) => uploadData.append("files", file));
-              const uploadRes = await fetchWithRetry("/api/media/upload", {
-                method: "POST",
-                headers: withCsrfHeaders(),
-                body: uploadData,
-              });
-              if (!uploadRes.ok) {
-                throw new Error(await readUploadError(uploadRes, "Failed to upload photos"));
-              }
-              const uploadJson = await uploadRes.json();
-              const urls = (uploadJson.urls || []) as string[];
-              const fileErrors = (uploadJson.errors || []) as string[];
-              if (urls.length === 0 && fileErrors.length > 0) {
-                throw new Error("Failed to upload photos");
-              }
-              if (fileErrors.length > 0) {
-                toast({
-                  title: `${urls.length} of ${photoFiles.length} photos uploaded. Some files were rejected.`,
-                  variant: "destructive",
-                });
-              }
-              setUploadStatuses((current) => ({ ...current, photos: "done" }));
-              return urls;
-            })()
-          : Promise.resolve([] as string[]),
-
-        // Video via shared fast path with validated server fallback.
-        videoFile.length > 0
-          ? (async () => {
-              setSubmitProgress("Uploading media...");
-              const urls = await uploadListingVideoFiles({
-                files: videoFile,
-                area: "listing_video",
-              });
-              setUploadStatuses((current) => ({ ...current, video: "done" }));
-              return urls;
-            })()
-          : Promise.resolve([] as string[]),
-
-        // Video cover image via server proxy
-        videoCoverFile.length > 0
-          ? (async () => {
-              const uploadData = new FormData();
-              uploadData.append("area", "listing");
-              uploadData.append("files", videoCoverFile[0]);
-              const uploadRes = await fetchWithRetry("/api/media/upload", {
-                method: "POST",
-                headers: withCsrfHeaders(),
-                body: uploadData,
-              });
-              if (!uploadRes.ok) return null;
-              const uploadJson = await uploadRes.json();
-              return (uploadJson.urls?.[0] || null) as string | null;
-            })()
-          : Promise.resolve(null as string | null),
+        ),
+        uploadListingImages({ files: photoFiles, area: "listing", field: "images" }).then(
+          (urls) => {
+            if (photoFiles.length) setUploadStatuses((current) => ({ ...current, photos: "done" }));
+            return urls;
+          }
+        ),
+        uploadListingVideoFiles({ files: videoFile, area: "listing_video" }).then((urls) => {
+          if (videoFile.length) setUploadStatuses((current) => ({ ...current, video: "done" }));
+          return urls;
+        }),
+        uploadListingImages({
+          files: videoCoverFile,
+          area: "listing",
+          field: "videoThumbnail",
+        }).then((urls) => urls[0] ?? null),
       ]);
 
       setSubmitProgress("Saving listing...");
@@ -1324,7 +1254,11 @@ export default function CreateListingPage() {
                         description="Optional brand mark shown on listing cards when available."
                         maxFiles={1}
                         files={logoFile}
-                        onChange={setLogoFile}
+                        error={fieldErrors.logo_url}
+                        onChange={(files) => {
+                          setLogoFile(files);
+                          clearErrors("logo_url");
+                        }}
                         accept="image/*"
                         recommendedAspect="Recommended: square image, at least 96 x 96."
                       />
@@ -1455,9 +1389,13 @@ export default function CreateListingPage() {
                           file={videoFile[0]}
                           onFrameSelect={(frame) => {
                             setVideoCoverFile(frame ? [frame] : []);
+                            clearErrors("videoThumbnail");
                           }}
                         />
-                        <details className="group">
+                        <details
+                          className="group"
+                          open={fieldErrors.videoThumbnail ? true : undefined}
+                        >
                           <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
                             Or upload a custom cover image…
                           </summary>
@@ -1468,7 +1406,11 @@ export default function CreateListingPage() {
                               description="Optional poster image shown before the video plays."
                               maxFiles={1}
                               files={videoCoverFile}
-                              onChange={setVideoCoverFile}
+                              error={fieldErrors.videoThumbnail}
+                              onChange={(files) => {
+                                setVideoCoverFile(files);
+                                clearErrors("videoThumbnail");
+                              }}
                               accept="image/*"
                             />
                             <p className="mt-2 text-xs text-muted-foreground">

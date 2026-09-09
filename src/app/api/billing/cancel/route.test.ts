@@ -140,13 +140,8 @@ describe("POST /api/billing/cancel", () => {
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: CONFIRMED_USER } });
 
     const updateChain = {
-      eq: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            select: vi.fn().mockResolvedValue({ data: [{ id: "ent-1" }], error: null }),
-          }),
-        }),
-      }),
+      eq: vi.fn().mockReturnThis(),
+      select: vi.fn().mockResolvedValue({ data: [{ id: "ent-1" }], error: null }),
     };
 
     mockAdmin.from.mockImplementation((table: string) => {
@@ -162,6 +157,7 @@ describe("POST /api/billing/cancel", () => {
               tier: "growth",
               status: "active",
               expires_at: "2026-04-25T00:00:00.000Z",
+              started_at: "2026-03-26T00:00:00.000Z",
             },
             error: null,
           }),
@@ -219,13 +215,8 @@ describe("POST /api/billing/cancel", () => {
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: CONFIRMED_USER } });
 
     const updateChain = {
-      eq: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            select: vi.fn().mockResolvedValue({ data: null, error: { message: "update failed" } }),
-          }),
-        }),
-      }),
+      eq: vi.fn().mockReturnThis(),
+      select: vi.fn().mockResolvedValue({ data: null, error: { message: "update failed" } }),
     };
 
     mockAdmin.from.mockImplementation((table: string) => {
@@ -241,6 +232,7 @@ describe("POST /api/billing/cancel", () => {
               tier: "growth",
               status: "active",
               expires_at: "2026-04-25T00:00:00.000Z",
+              started_at: "2026-03-26T00:00:00.000Z",
             },
             error: null,
           }),
@@ -263,13 +255,8 @@ describe("POST /api/billing/cancel", () => {
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: CONFIRMED_USER } });
 
     const updateChain = {
-      eq: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            select: vi.fn().mockResolvedValue({ data: [], error: null }),
-          }),
-        }),
-      }),
+      eq: vi.fn().mockReturnThis(),
+      select: vi.fn().mockResolvedValue({ data: [], error: null }),
     };
 
     mockAdmin.from.mockImplementation((table: string) => {
@@ -285,6 +272,7 @@ describe("POST /api/billing/cancel", () => {
               tier: "growth",
               status: "active",
               expires_at: "2026-04-25T00:00:00.000Z",
+              started_at: "2026-03-26T00:00:00.000Z",
             },
             error: null,
           }),
@@ -301,5 +289,50 @@ describe("POST /api/billing/cancel", () => {
     expect(res.status).toBe(409);
     const data = await res.json();
     expect(data.error).toContain("Subscription status changed");
+  });
+  it("does not cancel a newly purchased replacement with the same entitlement ID", async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: CONFIRMED_USER } });
+    const current: Record<string, unknown> = {
+      id: "ent-1",
+      user_id: "user-1",
+      area: "MZANSI_MARKET",
+      type: "subscription",
+      tier: "growth",
+      status: "active",
+      started_at: "2026-03-26T00:00:00Z",
+      expires_at: "2026-04-25T00:00:00Z",
+    };
+    mockAdmin.from.mockReturnValue({
+      select: () => ({
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: async () => {
+          const snapshot = { ...current };
+          // A successful payment replaces this entitlement after cancellation reads it.
+          Object.assign(current, { tier: "pro", started_at: "2026-03-27T00:00:00Z" });
+          return { data: snapshot, error: null };
+        },
+      }),
+      update: (patch: Record<string, unknown>) => {
+        const filters: Array<[string, unknown]> = [];
+        const chain = {
+          eq: (key: string, value: unknown) => {
+            filters.push([key, value]);
+            return chain;
+          },
+          select: async () => {
+            if (!filters.every(([key, value]) => current[key] === value))
+              return { data: [], error: null };
+            Object.assign(current, patch);
+            return { data: [{ id: current.id }], error: null };
+          },
+        };
+        return chain;
+      },
+    });
+    const response = await cancelRoute(
+      createMockRequest({ entitlementId: "550e8400-e29b-41d4-a716-446655440000" })
+    );
+    expect(response.status).toBe(409);
+    expect(current).toMatchObject({ status: "active", tier: "pro" });
   });
 });

@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 
@@ -64,6 +64,12 @@ const artifact = {
 describe("EvidenceViewer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    document.cookie = `vm_csrf=${"e".repeat(64)}; path=/`;
+  });
+
+  afterEach(() => {
+    document.cookie = "vm_csrf=; Max-Age=0; path=/";
+    document.querySelector('meta[name="csrf-token"]')?.remove();
   });
 
   it("should render artifact metadata", async () => {

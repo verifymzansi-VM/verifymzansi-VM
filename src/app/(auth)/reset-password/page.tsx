@@ -146,7 +146,6 @@ export default function ResetPasswordPage() {
           shown={showPassword}
           onToggleShown={() => setShowPassword(!showPassword)}
           describedBy="password-requirements"
-          toggleTabIndex={-1}
         />
         <PasswordRequirements id="password-requirements" requirements={requirements} />
 
@@ -159,7 +158,6 @@ export default function ResetPasswordPage() {
           shown={showConfirmPassword}
           onToggleShown={() => setShowConfirmPassword(!showConfirmPassword)}
           toggleLabel={{ show: "Show confirm password", hide: "Hide confirm password" }}
-          toggleTabIndex={-1}
         />
 
         <Button type="submit" className="w-full" variant="trust-verified" disabled={isSubmitting}>

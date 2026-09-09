@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
 
     const { data: entitlement, error: entitlementError } = await admin
       .from("entitlements")
-      .select("id, user_id, area, tier, status, expires_at")
+      .select("id, user_id, area, tier, status, expires_at, started_at")
       .eq("id", entitlementId)
       .eq("user_id", user.id)
       .eq("type", "subscription")
@@ -78,6 +78,9 @@ export async function POST(request: NextRequest) {
       .eq("id", entitlement.id)
       .eq("user_id", user.id)
       .eq("status", "active")
+      // Plan replacement reuses the unique entitlement ID. Only cancel the
+      // purchase observed above; a new start date requires a fresh user action.
+      .eq("started_at", entitlement.started_at)
       .select("id");
 
     if (cancelError) {

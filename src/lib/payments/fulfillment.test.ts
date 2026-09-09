@@ -1,702 +1,200 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fulfillPayment } from "./fulfillment";
-import { resetOwnerColumnCacheForTesting } from "@/lib/account/compat";
-import { logAuditEvent } from "@/lib/services/audit";
+import type { PaymentRecordShape } from "./types";
 import { getStablePlanId } from "@/lib/constants/plan-ids";
+import {
+  BOOST_DURATION_DAYS,
+  FEATURED_DURATION_DAYS,
+  URGENT_DURATION_DAYS,
+} from "@/lib/constants/pricing";
 
-vi.mock("@/lib/services/audit", () => ({
-  logAuditEvent: vi.fn().mockResolvedValue(undefined),
-}));
+const plan = {
+  id: "db-plan",
+  area: "MZANSI_MARKET",
+  tier: "growth",
+  name: "Growth",
+  price_cents: 25000,
+  active: true,
+};
+const payment: PaymentRecordShape = {
+  id: "payment-1",
+  user_id: "user-1",
+  area: "MZANSI_MARKET",
+  amount_cents: 25000,
+  status: "pending",
+  provider: "ozow",
+  provider_payment_id: "ozow-1",
+  provider_data: {
+    type: "subscription",
+    plan_id: plan.id,
+    plan_tier: "growth",
+    area: "MZANSI_MARKET",
+  },
+  created_at: "2026-09-09T10:00:00Z",
+};
 
-function createMockAdminClient(options?: {
-  existingInvoice?: boolean;
-  previousEntitlementStatus?: "active" | "cancelled" | null;
-  planRows?: Array<Record<string, unknown>>;
-  accountStatus?: "active" | "restricted";
-  addonUpdateRows?: Array<Record<string, unknown>>;
-  invoiceInsertError?: { message: string; code?: string } | null;
-}) {
-  const invoiceInsert = vi.fn().mockResolvedValue({ error: options?.invoiceInsertError ?? null });
-  const entitlementsUpsert = vi.fn().mockResolvedValue({ error: null });
-  const entitlementsUpdate = vi.fn().mockReturnValue({
-    eq: vi.fn().mockReturnValue({
-      eq: vi.fn().mockResolvedValue({ error: null }),
-    }),
-  });
-
+function client(rows: Array<Record<string, unknown>> = [plan]) {
+  const rpc = vi.fn().mockResolvedValue({ data: { outcome: "completed" }, error: null });
   const from = vi.fn((table: string) => {
-    if (table === "plans") {
-      const rows = options?.planRows ?? [
-        {
-          id: "plan-1",
-          tier: "growth",
-          area: "MZANSI_MARKET",
-          price_cents: 25000,
-          active: true,
-        },
-      ];
-      return {
-        select: vi.fn().mockReturnValue({
-          eq(column: string, value: unknown) {
-            const filters: Array<[string, unknown]> = [[column, value]];
-            const chain = {
-              eq(nextColumn: string, nextValue: unknown) {
-                filters.push([nextColumn, nextValue]);
-                return chain;
-              },
-              maybeSingle: vi.fn().mockImplementation(async () => ({
-                data:
-                  rows.find((row) => filters.every(([key, expected]) => row[key] === expected)) ??
-                  null,
-              })),
-            };
-            return chain;
-          },
-        }),
-      };
-    }
-
-    if (table === "entitlements") {
-      return {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({
-          data:
-            options?.previousEntitlementStatus === undefined ||
-            options?.previousEntitlementStatus === null
-              ? null
-              : {
-                  id: "ent-prev-1",
-                  status: options.previousEntitlementStatus,
-                },
-        }),
-        upsert: entitlementsUpsert,
-        update: entitlementsUpdate,
-      };
-    }
-
-    if (table === "invoices") {
-      return {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi
-          .fn()
-          .mockResolvedValue({ data: options?.existingInvoice ? { id: "inv-1" } : null }),
-        insert: invoiceInsert,
-      };
-    }
-
-    if (table === "listings" || table === "businesses" || table === "promotions") {
-      const updateFilter = {
-        eq: vi.fn().mockReturnThis(),
-        select: vi.fn().mockResolvedValue({
-          data: options?.addonUpdateRows ?? [{ id: `${table}-1` }],
-          error: null,
-        }),
-      };
-      return {
-        select: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue({ error: null }),
-        update: vi.fn().mockReturnValue(updateFilter),
-      };
-    }
-
-    if (table === "storefronts") {
-      const updateFilter = {
-        eq: vi.fn().mockReturnThis(),
-        select: vi.fn().mockResolvedValue({
-          data: options?.addonUpdateRows ?? [{ id: "storefront-1" }],
-          error: null,
-        }),
-      };
-      return {
-        select: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue({ error: null }),
-        }),
-        update: vi.fn().mockReturnValue(updateFilter),
-      };
-    }
-
-    if (table === "account_profiles") {
-      return {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({
-          data: { account_status: options?.accountStatus ?? "active" },
-        }),
-      };
-    }
-
+    expect(table).toBe("plans"); // No separate benefit/status writes are permitted.
     return {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+      select: () => ({
+        eq: (column: string, value: unknown) => {
+          const filters: Array<[string, unknown]> = [[column, value]];
+          const chain = {
+            eq: (key: string, expected: unknown) => {
+              filters.push([key, expected]);
+              return chain;
+            },
+            maybeSingle: async () => ({
+              data:
+                rows.find((row) => filters.every(([key, expected]) => row[key] === expected)) ??
+                null,
+              error: null,
+            }),
+          };
+          return chain;
+        },
+      }),
     };
   });
-
-  return {
-    client: { from },
-    spies: {
-      from,
-      invoiceInsert,
-      entitlementsUpsert,
-      entitlementsUpdate,
-    },
-  };
+  return { from, rpc };
 }
 
-describe("fulfillPayment invoice creation", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    resetOwnerColumnCacheForTesting();
+describe("atomic payment fulfillment adapter (effects are tested in test-payment-fulfillment.mjs)", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("validates the canonical plan and sends one RPC with the exact metadata snapshot", async () => {
+    const admin = client();
+    expect(await fulfillPayment(admin, payment, { event: "successful" })).toEqual({
+      outcome: "completed",
+    });
+    expect(admin.rpc).toHaveBeenCalledExactlyOnceWith("fulfill_ozow_payment", {
+      p_payment_id: payment.id,
+      p_provider_payment_id: "ozow-1",
+      p_expected_amount: 25000,
+      p_expected_metadata: payment.provider_data,
+      p_plan_id: plan.id,
+      p_addon_days: null,
+      p_webhook: { event: "successful" },
+    });
   });
 
-  it("creates an invoice for subscription payments when none exists", async () => {
-    const mock = createMockAdminClient({ existingInvoice: false });
-
-    await fulfillPayment(mock.client as never, {
-      id: "pay-12345678",
-      user_id: "user-1",
-      area: "MZANSI_MARKET",
-      amount_cents: 25000,
-      status: "processing",
-      provider: "ozow",
-      provider_payment_id: "ozow-123",
-      provider_reference: "pay-12345678",
+  it("resolves a stable frontend plan token to the canonical database ID", async () => {
+    const admin = client();
+    await fulfillPayment(admin, {
+      ...payment,
       provider_data: {
-        type: "subscription",
-        plan_id: "plan-1",
-        plan_tier: "growth",
-        area: "MZANSI_MARKET",
-      },
-      created_at: "2026-03-26T10:00:00.000Z",
-    });
-
-    expect(mock.spies.entitlementsUpsert).toHaveBeenCalledOnce();
-    expect(mock.spies.invoiceInsert).toHaveBeenCalledOnce();
-    expect(mock.spies.invoiceInsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        payment_id: "pay-12345678",
-        user_id: "user-1",
-        amount_cents: 21739,
-        vat_cents: 3261,
-        total_cents: 25000,
-      })
-    );
-  });
-
-  it("does not create a duplicate invoice when one already exists", async () => {
-    const mock = createMockAdminClient({ existingInvoice: true });
-
-    await fulfillPayment(mock.client as never, {
-      id: "pay-87654321",
-      user_id: "user-1",
-      area: "MZANSI_MARKET",
-      amount_cents: 25000,
-      status: "processing",
-      provider: "ozow",
-      provider_payment_id: "ozow-321",
-      provider_reference: "pay-87654321",
-      provider_data: {
-        type: "subscription",
-        plan_id: "plan-1",
-        plan_tier: "growth",
-        area: "MZANSI_MARKET",
-      },
-      created_at: "2026-03-26T10:00:00.000Z",
-    });
-
-    expect(mock.spies.entitlementsUpsert).toHaveBeenCalledOnce();
-    expect(mock.spies.invoiceInsert).not.toHaveBeenCalled();
-  });
-
-  it("treats a 23505 unique conflict on invoice insert as already-created", async () => {
-    const mock = createMockAdminClient({
-      existingInvoice: false,
-      invoiceInsertError: {
-        message: "duplicate key value violates unique constraint",
-        code: "23505",
-      },
-    });
-
-    await fulfillPayment(mock.client as never, {
-      id: "pay-23505",
-      user_id: "user-1",
-      area: "MZANSI_MARKET",
-      amount_cents: 25000,
-      status: "processing",
-      provider: "ozow",
-      provider_payment_id: "ozow-23505",
-      provider_reference: "pay-23505",
-      provider_data: {
-        type: "subscription",
-        plan_id: "plan-1",
-        plan_tier: "growth",
-        area: "MZANSI_MARKET",
-      },
-      created_at: "2026-03-26T10:00:00.000Z",
-    });
-
-    expect(mock.spies.entitlementsUpsert).toHaveBeenCalledOnce();
-    expect(mock.spies.invoiceInsert).toHaveBeenCalledOnce();
-  });
-
-  it("throws when invoice creation fails for a non-conflict reason", async () => {
-    const mock = createMockAdminClient({
-      existingInvoice: false,
-      invoiceInsertError: { message: "relation invoices does not exist", code: "42P01" },
-    });
-
-    await expect(
-      fulfillPayment(mock.client as never, {
-        id: "pay-invoice-error",
-        user_id: "user-1",
-        area: "MZANSI_MARKET",
-        amount_cents: 25000,
-        status: "processing",
-        provider: "ozow",
-        provider_payment_id: "ozow-invoice-error",
-        provider_reference: "pay-invoice-error",
-        provider_data: {
-          type: "subscription",
-          plan_id: "plan-1",
-          plan_tier: "growth",
-          area: "MZANSI_MARKET",
-        },
-        created_at: "2026-03-26T10:00:00.000Z",
-      })
-    ).rejects.toThrow("Invoice creation failed");
-  });
-
-  it("cancels previous active entitlement for plan-change payments", async () => {
-    const mock = createMockAdminClient({
-      existingInvoice: false,
-      previousEntitlementStatus: "active",
-      planRows: [
-        {
-          id: "plan-2",
-          tier: "growth",
-          area: "MZANSI_MARKET",
-          price_cents: 25000,
-          active: true,
-        },
-      ],
-    });
-
-    await fulfillPayment(mock.client as never, {
-      id: "pay-plan-change",
-      user_id: "user-1",
-      area: "MZANSI_MARKET",
-      amount_cents: 25000,
-      status: "processing",
-      provider: "ozow",
-      provider_payment_id: "ozow-plan-change",
-      provider_reference: "pay-plan-change",
-      provider_data: {
-        type: "subscription",
-        plan_id: "plan-2",
-        plan_tier: "growth",
-        area: "MZANSI_MARKET",
-        is_plan_change: true,
-        previous_entitlement_id: "ent-prev-1",
-      },
-      created_at: "2026-03-26T10:00:00.000Z",
-    });
-
-    expect(mock.spies.entitlementsUpsert).toHaveBeenCalledOnce();
-    expect(mock.spies.entitlementsUpdate).toHaveBeenCalledOnce();
-  });
-
-  it("falls back from stable frontend plan tokens to the canonical database row", async () => {
-    const mock = createMockAdminClient({
-      planRows: [
-        {
-          id: "db-plan-growth",
-          area: "MZANSI_MARKET",
-          tier: "growth",
-          name: "Mzansi Market Growth",
-          price_cents: 25000,
-          active: true,
-        },
-      ],
-    });
-
-    await fulfillPayment(mock.client as never, {
-      id: "pay-stable-token",
-      user_id: "user-1",
-      area: "MZANSI_MARKET",
-      amount_cents: 25000,
-      status: "processing",
-      provider: "ozow",
-      provider_payment_id: "ozow-stable-token",
-      provider_reference: "pay-stable-token",
-      provider_data: {
-        type: "subscription",
+        ...payment.provider_data,
         plan_id: getStablePlanId("MZANSI_MARKET", "growth"),
-        plan_tier: "growth",
-        area: "MZANSI_MARKET",
       },
-      created_at: "2026-03-26T10:00:00.000Z",
     });
-
-    expect(mock.spies.entitlementsUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        area: "MZANSI_MARKET",
-        tier: "growth",
-      }),
-      { onConflict: "user_id,area,type" }
-    );
+    expect(admin.rpc.mock.calls[0][1].p_plan_id).toBe(plan.id);
   });
 
-  it("fulfils the Mzansi Market Basic package", async () => {
-    const mock = createMockAdminClient({
-      planRows: [
-        {
-          id: "basic-plan",
-          area: "MZANSI_MARKET",
-          tier: "basic",
-          name: "Mzansi Market Basic",
-          price_cents: 3000,
-          active: true,
-        },
-      ],
-    });
-
-    await fulfillPayment(mock.client as never, {
-      id: "pay-basic",
-      user_id: "user-1",
-      area: "MZANSI_MARKET",
+  it("accepts the canonical Basic package", async () => {
+    const admin = client([{ ...plan, tier: "basic", price_cents: 3000 }]);
+    await fulfillPayment(admin, {
+      ...payment,
       amount_cents: 3000,
-      status: "processing",
-      provider: "ozow",
-      provider_payment_id: "ozow-basic",
-      provider_reference: "pay-basic",
-      provider_data: {
-        type: "subscription",
-        plan_id: "basic-plan",
-        plan_tier: "basic",
-        area: "MZANSI_MARKET",
-      },
-      created_at: "2026-03-26T10:00:00.000Z",
+      provider_data: { ...payment.provider_data, plan_tier: "basic" },
     });
-
-    expect(mock.spies.entitlementsUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        area: "MZANSI_MARKET",
-        tier: "basic",
-        status: "active",
-      }),
-      { onConflict: "user_id,area,type" }
-    );
+    expect(admin.rpc).toHaveBeenCalledOnce();
   });
 
-  it("keeps restricted accounts in pending_verification after payment", async () => {
-    const mock = createMockAdminClient({ accountStatus: "restricted" });
-
-    await fulfillPayment(mock.client as never, {
-      id: "pay-restricted",
-      user_id: "user-1",
-      area: "MZANSI_MARKET",
-      amount_cents: 25000,
-      status: "processing",
-      provider: "ozow",
-      provider_payment_id: "ozow-restricted",
-      provider_reference: "pay-restricted",
-      provider_data: {
-        type: "subscription",
-        plan_id: "plan-1",
-        plan_tier: "growth",
-        area: "MZANSI_MARKET",
-      },
-      created_at: "2026-03-26T10:00:00.000Z",
-    });
-
-    expect(mock.spies.entitlementsUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: "pending_verification",
-      }),
-      { onConflict: "user_id,area,type" }
+  it.each([
+    [{ ...payment, amount_cents: 1 }, [plan], /amount/],
+    [{ ...payment, area: "MZANSI_BUSINESS" }, [plan], /area/],
+    [{ ...payment, provider_data: { ...payment.provider_data, plan_tier: "pro" } }, [plan], /tier/],
+    [payment, [{ ...plan, active: false }], /not found or inactive/],
+    [payment, [{ ...plan, price_cents: 1 }], /catalog/],
+    [{ ...payment, provider_data: { type: "subscription" } }, [plan], /no plan ID/],
+    [{ ...payment, provider_data: null }, [plan], /no parseable metadata/],
+    [{ ...payment, user_id: null }, [plan], /no user_id/],
+    [{ ...payment, provider_data: { type: "unknown" } }, [plan], /Unsupported/],
+  ])("rejects invalid fulfillment input before any mutation %#", async (input, rows, error) => {
+    const admin = client(rows as Array<Record<string, unknown>>);
+    await expect(fulfillPayment(admin, input as PaymentRecordShape)).rejects.toThrow(
+      error as RegExp
     );
+    expect(admin.rpc).not.toHaveBeenCalled();
   });
 
-  it("rejects subscription fulfillment when the paid amount does not match the plan", async () => {
-    const mock = createMockAdminClient();
+  it.each(["completed", "duplicate", "recovered", "ignored"] as const)(
+    "returns the database %s outcome",
+    async (outcome) => {
+      const admin = client();
+      admin.rpc.mockResolvedValue({ data: { outcome }, error: null });
+      expect(await fulfillPayment(admin, payment)).toEqual({ outcome });
+    }
+  );
 
+  it.each([null, {}, { outcome: "unexpected" }])(
+    "rejects an invalid/missing RPC response %#",
+    async (data) => {
+      const admin = client();
+      admin.rpc.mockResolvedValue({ data, error: null });
+      await expect(fulfillPayment(admin, payment)).rejects.toThrow(/invalid result/);
+      expect(admin.rpc).toHaveBeenCalledOnce();
+    }
+  );
+
+  it("never falls back to non-atomic writes if the migration is missing or the transaction fails", async () => {
+    const admin = client();
+    admin.rpc.mockResolvedValue({ data: null, error: { message: "function not found" } });
+    await expect(fulfillPayment(admin, payment)).rejects.toThrow(/function not found/);
+    expect(admin.rpc).toHaveBeenCalledOnce();
+    expect(admin.from.mock.calls.every(([table]) => table === "plans")).toBe(true);
+  });
+
+  it.each(["processing", "complete", "refunded"] as const)(
+    "leaves %s reconciliation to the locked database row without a new plan lookup",
+    async (status) => {
+      const admin = client([]);
+      await fulfillPayment(admin, { ...payment, status });
+      expect(admin.from).not.toHaveBeenCalled();
+      expect(admin.rpc.mock.calls[0][1].p_plan_id).toBeNull();
+    }
+  );
+
+  it.each([
+    ["boost", BOOST_DURATION_DAYS],
+    ["boost_business", BOOST_DURATION_DAYS],
+    ["boost_storefront", BOOST_DURATION_DAYS],
+    ["boost_promotion", BOOST_DURATION_DAYS],
+    ["featured", FEATURED_DURATION_DAYS],
+    ["featured_business", FEATURED_DURATION_DAYS],
+    ["featured_promotion", FEATURED_DURATION_DAYS],
+    ["urgent", URGENT_DURATION_DAYS],
+    ["urgent_business", URGENT_DURATION_DAYS],
+    ["urgent_promotion", URGENT_DURATION_DAYS],
+  ])("preserves the default %s duration and nested metadata", async (type, days) => {
+    const admin = client();
+    const metadata = { type, listing_id: "target" };
+    await fulfillPayment(admin, { ...payment, provider_data: { metadata } });
+    expect(admin.from).not.toHaveBeenCalled();
+    expect(admin.rpc.mock.calls[0][1]).toMatchObject({
+      p_addon_days: days,
+      p_expected_metadata: metadata,
+      p_plan_id: null,
+    });
+  });
+
+  it.each([
+    ["boost", "boost_days"],
+    ["featured", "feature_days"],
+    ["urgent", "urgent_days"],
+  ])("preserves a purchased custom %s duration", async (type, key) => {
+    const admin = client();
+    await fulfillPayment(admin, { ...payment, provider_data: { type, [key]: 3 } });
+    expect(admin.rpc.mock.calls[0][1].p_addon_days).toBe(3);
+  });
+
+  it("rejects a non-finite addon duration", async () => {
+    const admin = client();
     await expect(
-      fulfillPayment(mock.client as never, {
-        id: "pay-amount-mismatch",
-        user_id: "user-1",
-        area: "MZANSI_MARKET",
-        amount_cents: 100,
-        status: "processing",
-        provider: "ozow",
-        provider_payment_id: "ozow-amount-mismatch",
-        provider_reference: "pay-amount-mismatch",
-        provider_data: {
-          type: "subscription",
-          plan_id: "plan-1",
-          plan_tier: "growth",
-          area: "MZANSI_MARKET",
-        },
-        created_at: "2026-03-26T10:00:00.000Z",
-      })
-    ).rejects.toThrow("Payment amount mismatch");
-  });
-
-  it("rejects subscription fulfillment when metadata tier is tampered", async () => {
-    const mock = createMockAdminClient();
-
-    await expect(
-      fulfillPayment(mock.client as never, {
-        id: "pay-tier-mismatch",
-        user_id: "user-1",
-        area: "MZANSI_MARKET",
-        amount_cents: 25000,
-        status: "processing",
-        provider: "ozow",
-        provider_payment_id: "ozow-tier-mismatch",
-        provider_reference: "pay-tier-mismatch",
-        provider_data: {
-          type: "subscription",
-          plan_id: "plan-1",
-          plan_tier: "pro",
-          area: "MZANSI_MARKET",
-        },
-        created_at: "2026-03-26T10:00:00.000Z",
-      })
-    ).rejects.toThrow("metadata tier");
-  });
-
-  it("rejects inactive plans during subscription fulfillment", async () => {
-    const mock = createMockAdminClient({
-      planRows: [
-        {
-          id: "inactive-plan",
-          area: "MZANSI_MARKET",
-          tier: "growth",
-          name: "Inactive Growth",
-          price_cents: 25000,
-          active: false,
-        },
-      ],
-    });
-
-    await expect(
-      fulfillPayment(mock.client as never, {
-        id: "pay-inactive-plan",
-        user_id: "user-1",
-        area: "MZANSI_MARKET",
-        amount_cents: 25000,
-        status: "processing",
-        provider: "ozow",
-        provider_payment_id: "ozow-inactive-plan",
-        provider_reference: "pay-inactive-plan",
-        provider_data: {
-          type: "subscription",
-          plan_id: "inactive-plan",
-          plan_tier: "growth",
-          area: "MZANSI_MARKET",
-        },
-        created_at: "2026-03-26T10:00:00.000Z",
-      })
-    ).rejects.toThrow("not found or inactive");
-  });
-
-  it("supports nested provider metadata for listing boosts", async () => {
-    const mock = createMockAdminClient();
-
-    await fulfillPayment(mock.client as never, {
-      id: "pay-boost-1",
-      user_id: "user-1",
-      area: "MZANSI_MARKET",
-      amount_cents: 9900,
-      status: "processing",
-      provider: "ozow",
-      provider_payment_id: "ozow-boost-1",
-      provider_reference: "pay-boost-1",
-      provider_data: {
-        metadata: {
-          type: "boost",
-          listing_id: "listing-1",
-          boost_days: 10,
-        },
-      },
-      created_at: "2026-03-26T10:00:00.000Z",
-    });
-
-    expect(mock.spies.from).toHaveBeenCalledWith("listings");
-    expect(vi.mocked(logAuditEvent)).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "listing_boosted",
-        targetType: "listing",
-        targetId: "listing-1",
-      })
-    );
-  });
-
-  it("rejects payments without parseable metadata", async () => {
-    const mock = createMockAdminClient();
-
-    await expect(
-      fulfillPayment(mock.client as never, {
-        id: "pay-no-meta",
-        user_id: "user-1",
-        area: "MZANSI_MARKET",
-        amount_cents: 9900,
-        status: "processing",
-        provider: "ozow",
-        provider_payment_id: "ozow-no-meta",
-        provider_reference: "pay-no-meta",
-        provider_data: null,
-        created_at: "2026-03-26T10:00:00.000Z",
-      })
-    ).rejects.toThrow("Payment pay-no-meta has no parseable metadata");
-  });
-
-  it("rejects payments without a user id", async () => {
-    const mock = createMockAdminClient();
-
-    await expect(
-      fulfillPayment(mock.client as never, {
-        id: "pay-no-user",
-        user_id: null,
-        area: "MZANSI_MARKET",
-        amount_cents: 9900,
-        status: "processing",
-        provider: "ozow",
-        provider_payment_id: "ozow-no-user",
-        provider_reference: "pay-no-user",
-        provider_data: {
-          type: "subscription",
-          plan_id: "plan-1",
-          plan_tier: "growth",
-          area: "MZANSI_MARKET",
-        },
-        created_at: "2026-03-26T10:00:00.000Z",
-      })
-    ).rejects.toThrow("Payment pay-no-user has no user_id");
-  });
-
-  it("fulfils featured_business by setting featured_until on the business", async () => {
-    const mock = createMockAdminClient();
-
-    await fulfillPayment(mock.client as never, {
-      id: "pay-feat-biz",
-      user_id: "user-1",
-      area: "MZANSI_BUSINESS",
-      amount_cents: 2500,
-      status: "processing",
-      provider: "ozow",
-      provider_payment_id: "ozow-feat-biz",
-      provider_reference: "pay-feat-biz",
-      provider_data: {
-        metadata: {
-          type: "featured_business",
-          business_id: "biz-1",
-          feature_days: 7,
-        },
-      },
-      created_at: "2026-03-26T10:00:00.000Z",
-    });
-
-    expect(mock.spies.from).toHaveBeenCalledWith("businesses");
-    expect(vi.mocked(logAuditEvent)).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "business_featured",
-        targetType: "business",
-        targetId: "biz-1",
-      })
-    );
-  });
-
-  it("fulfils urgent_business by setting urgent_until on the business", async () => {
-    const mock = createMockAdminClient();
-
-    await fulfillPayment(mock.client as never, {
-      id: "pay-urg-biz",
-      user_id: "user-1",
-      area: "MZANSI_BUSINESS",
-      amount_cents: 1000,
-      status: "processing",
-      provider: "ozow",
-      provider_payment_id: "ozow-urg-biz",
-      provider_reference: "pay-urg-biz",
-      provider_data: {
-        metadata: {
-          type: "urgent_business",
-          business_id: "biz-2",
-          urgent_days: 7,
-        },
-      },
-      created_at: "2026-03-26T10:00:00.000Z",
-    });
-
-    expect(mock.spies.from).toHaveBeenCalledWith("businesses");
-    expect(vi.mocked(logAuditEvent)).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "business_urgent",
-        targetType: "business",
-        targetId: "biz-2",
-      })
-    );
-  });
-
-  it("fulfils urgent_promotion by setting urgent_until on the promotion", async () => {
-    const mock = createMockAdminClient();
-
-    await fulfillPayment(mock.client as never, {
-      id: "pay-urg-promo",
-      user_id: "user-1",
-      area: "PROMOTIONS_EVENTS",
-      amount_cents: 1000,
-      status: "processing",
-      provider: "ozow",
-      provider_payment_id: "ozow-urg-promo",
-      provider_reference: "pay-urg-promo",
-      provider_data: {
-        metadata: {
-          type: "urgent_promotion",
-          promotion_id: "promo-1",
-          urgent_days: 7,
-        },
-      },
-      created_at: "2026-03-26T10:00:00.000Z",
-    });
-
-    expect(mock.spies.from).toHaveBeenCalledWith("promotions");
-    expect(vi.mocked(logAuditEvent)).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "promotion_urgent",
-        targetType: "promotion",
-        targetId: "promo-1",
-      })
-    );
-  });
-
-  it("rejects add-on fulfillment when the target update matches zero rows", async () => {
-    const mock = createMockAdminClient({ addonUpdateRows: [] });
-
-    await expect(
-      fulfillPayment(mock.client as never, {
-        id: "pay-missing-listing",
-        user_id: "user-1",
-        area: "MZANSI_MARKET",
-        amount_cents: 9900,
-        status: "processing",
-        provider: "ozow",
-        provider_payment_id: "ozow-missing-listing",
-        provider_reference: "pay-missing-listing",
-        provider_data: {
-          metadata: {
-            type: "boost",
-            listing_id: "missing-listing",
-          },
-        },
-        created_at: "2026-03-26T10:00:00.000Z",
-      })
-    ).rejects.toThrow("Boost update matched no listing");
-    expect(vi.mocked(logAuditEvent)).not.toHaveBeenCalledWith(
-      expect.objectContaining({ action: "listing_boosted" })
-    );
+      fulfillPayment(admin, { ...payment, provider_data: { type: "boost", boost_days: Infinity } })
+    ).rejects.toThrow(/Invalid addon duration/);
+    expect(admin.rpc).not.toHaveBeenCalled();
   });
 });

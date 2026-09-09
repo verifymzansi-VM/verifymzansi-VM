@@ -22,7 +22,6 @@ export function UploadProgressPanel({ slots, visible }: UploadProgressPanelProps
 
   const activeSlots = slots.filter((s) => s.status !== "skipped");
   if (activeSlots.length === 0) return null;
-  const currentIndex = activeSlots.findIndex((slot) => slot.status === "uploading");
   const completedCount = activeSlots.filter((slot) => slot.status === "done").length;
 
   return (
@@ -59,9 +58,9 @@ export function UploadProgressPanel({ slots, visible }: UploadProgressPanelProps
                 <span className="sr-only">{`Step ${index + 1}: `}</span>
                 {label}
               </p>
-              {isActive && currentIndex >= 0 && (
+              {isActive && (
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  Step {currentIndex + 1} of {activeSlots.length}
+                  Step {index + 1} of {activeSlots.length}
                 </p>
               )}
             </div>

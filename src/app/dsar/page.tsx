@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Send, Loader2, CheckCircle2, Shield, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
 import { PRIVACY_CONTACT_EMAIL } from "@/lib/contact-email";
 import { saIdSchema } from "@/lib/validations/shared";
+import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 
 type RequestType = "access" | "correction" | "deletion" | "objection";
 type DsarFailurePayload = {
@@ -41,9 +43,11 @@ export default function DsarPage() {
   const [submittedReference, setSubmittedReference] = useState("");
   const [submittedRequestId, setSubmittedRequestId] = useState("");
   const [turnstileToken, setTurnstileToken] = useState("");
+  const [captchaAttempt, setCaptchaAttempt] = useState(0);
   const [turnstileUnavailable, setTurnstileUnavailable] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
+  const router = useRouter();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -73,9 +77,12 @@ export default function DsarPage() {
 
     setIsSubmitting(true);
     try {
+      if (!(await ensureCsrfTokenReady())) {
+        throw new Error("Security check failed. Please refresh the page and try again.");
+      }
       const res = await fetch("/api/dsar/submit", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           type: requestType,
           name,
@@ -96,6 +103,8 @@ export default function DsarPage() {
       setSubmittedRequestId(data.requestId || "");
       setIsSubmitted(true);
     } catch (err) {
+      setTurnstileToken("");
+      setCaptchaAttempt((attempt) => attempt + 1);
       toast({
         title: "Failed to submit request",
         description:
@@ -164,7 +173,7 @@ export default function DsarPage() {
                     variant="outline"
                     size="sm"
                     className="mt-2 h-11 gap-2"
-                    onClick={() => (window.location.href = "/dashboard")}
+                    onClick={() => router.push("/dashboard")}
                   >
                     <ArrowLeft className="h-4 w-4" /> Back to Dashboard
                   </Button>
@@ -309,7 +318,12 @@ export default function DsarPage() {
 
                     {/* Turnstile CAPTCHA */}
                     <TurnstileWidget
-                      onSuccess={(token) => setTurnstileToken(token)}
+                      key={captchaAttempt}
+                      retryToken={captchaAttempt}
+                      onSuccess={(token) => {
+                        setTurnstileToken(token);
+                        setTurnstileUnavailable(false);
+                      }}
                       onError={() => setTurnstileToken("")}
                       onExpire={() => setTurnstileToken("")}
                       onUnavailable={() => setTurnstileUnavailable(true)}

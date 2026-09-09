@@ -23,11 +23,40 @@ it.each(["listing", "business_cover", "promotion"] as const)(
     expect(timeout).toBeLessThanOrEqual(15 * 60_000);
   }
 );
-it("keeps the normal request timeout for images", async () => {
+it("allows slow image uploads enough time to transfer", async () => {
   await uploadMediaViaServer({
     files: [new File(["image"], "photo.jpg", { type: "image/jpeg" })],
     area: "listing",
     fallbackMessage: "failed",
   });
-  expect(fetchRetry.mock.calls[0][3]).toBeUndefined();
+  expect(fetchRetry.mock.calls[0][3]).toBeGreaterThanOrEqual(120_000);
+});
+
+it("budgets the timeout for the complete photo batch", async () => {
+  const files = Array.from({ length: 5 }, (_, i) => {
+    const file = new File(["photo"], `photo-${i}.jpg`, { type: "image/jpeg" });
+    Object.defineProperty(file, "size", { value: 5 * 1024 * 1024 });
+    return file;
+  });
+  fetchRetry.mockResolvedValue({
+    ok: true,
+    json: async () => ({ urls: files.map((f) => `https://media.example.com/${f.name}`) }),
+  });
+  await uploadMediaViaServer({ files, area: "listing", fallbackMessage: "failed" });
+  expect(fetchRetry.mock.calls[0][3]).toBeGreaterThan(((25 * 1024 * 1024) / 62_500) * 1000);
+});
+
+it.each([
+  { urls: ["https://media.example.com/photo.jpg"], errors: ["second photo rejected"] },
+  { urls: ["https://media.example.com/photo.jpg"] },
+  { urls: [] },
+])("rejects partial or empty upload responses: %j", async (payload) => {
+  fetchRetry.mockResolvedValue({ ok: true, json: async () => payload });
+  await expect(
+    uploadMediaViaServer({
+      files: [new File(["a"], "a.jpg"), new File(["b"], "b.jpg")],
+      area: "listing",
+      fallbackMessage: "Some images failed",
+    })
+  ).rejects.toThrow("Some images failed");
 });

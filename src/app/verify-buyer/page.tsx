@@ -10,6 +10,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 import { useToast } from "@/hooks/use-toast";
+import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 
 type VerifyResult = "valid" | "expired" | "revoked" | "not_found" | null;
 
@@ -51,9 +52,12 @@ export default function VerifyBuyerPage() {
     setBuyerInfo(null);
 
     try {
+      if (!(await ensureCsrfTokenReady())) {
+        throw new Error("Security check failed");
+      }
       const res = await fetch("/api/verify-buyer", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ token: trimmedToken }),
       });
       const payload = await res.json().catch(() => ({}));

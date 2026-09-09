@@ -117,7 +117,10 @@ describe("payment cleanup worker", () => {
     const paymentPatchCalls = fetchMock.mock.calls.filter(([url]) =>
       String(url).includes("/rest/v1/payments?id=eq.")
     );
-    expect(paymentPatchCalls).toHaveLength(3);
+    expect(paymentPatchCalls).toHaveLength(2);
+    expect(paymentPatchCalls.some(([url]) => String(url).includes("processing-failed"))).toBe(
+      false
+    );
 
     const patchBodies = paymentPatchCalls.map(([, init]) => JSON.parse(String(init?.body)));
     expect(patchBodies).toEqual(
@@ -134,12 +137,6 @@ describe("payment cleanup worker", () => {
             cleanup_reconciliation_state: "recovered_complete",
           }),
         }),
-        expect.objectContaining({
-          status: "failed",
-          provider_data: expect.objectContaining({
-            cleanup_reconciliation_state: "stale_processing_failed",
-          }),
-        }),
       ])
     );
 
@@ -152,7 +149,8 @@ describe("payment cleanup worker", () => {
       metadata: {
         expired_pending: 1,
         recovered_complete: 1,
-        failed_stale_processing: 1,
+        failed_stale_processing: 0,
+        reconciliation_required: 1,
         expiry_notifications: 1,
       },
     });

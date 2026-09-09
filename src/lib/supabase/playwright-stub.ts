@@ -1,6 +1,7 @@
 import "server-only";
 
 import crypto from "node:crypto";
+import { fulfillPlaywrightPayment } from "./playwright-payment-fulfillment";
 import type { AuthChangeEvent, Session, SupabaseClient } from "@supabase/supabase-js";
 import {
   createPlaywrightSession,
@@ -694,6 +695,7 @@ export function createPlaywrightStubSupabaseClient(
       return new PlaywrightQueryBuilder(table);
     },
     async rpc(fn: string, params?: Record<string, unknown>) {
+      if (fn === "fulfill_ozow_payment") return fulfillPlaywrightPayment(params);
       if (fn === "claim_free_post_slot") {
         const userId = String(params?.p_user_id ?? "");
         const area = String(params?.p_area ?? "");

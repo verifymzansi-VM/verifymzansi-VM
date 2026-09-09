@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Eye, FileText, ImageIcon, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 
 interface Artifact {
   id: string;
@@ -25,9 +26,12 @@ function formatBytes(bytes: number): string {
 }
 
 async function fetchEvidenceBlob(artifactId: string): Promise<Blob> {
+  if (!(await ensureCsrfTokenReady())) {
+    throw new Error("Security check failed. Please refresh the page and try again.");
+  }
   const res = await fetch("/api/admin/verification/evidence", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: withCsrfHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ artifactId }),
   });
   if (!res.ok) {

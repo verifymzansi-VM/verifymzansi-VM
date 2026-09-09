@@ -16,14 +16,14 @@ describe("normalizeCreatePostRuntimeError", () => {
     );
   });
 
-  it("maps browser abort errors during video upload to the recovery message", () => {
+  it("does not blame video when any upload times out", () => {
     expect(
       normalizeCreatePostRuntimeError(
         new DOMException("The operation was aborted", "AbortError"),
         "Fallback message"
       )
     ).toBe(
-      "Video upload could not be completed. Check your connection and try again. You can remove the video and submit again."
+      "The upload timed out. Check your connection and try again. Your selected files are still in the form."
     );
   });
 

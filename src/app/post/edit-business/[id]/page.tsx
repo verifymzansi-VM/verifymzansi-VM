@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
+
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -99,6 +101,7 @@ export default function EditBusinessPage() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submissionInFlightRef = useRef(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
   const [uploadStatuses, setUploadStatuses] = useState<Record<string, UploadSlotStatus>>({
     logo: "idle",
@@ -380,6 +383,8 @@ export default function EditBusinessPage() {
   }
 
   async function handleSubmit() {
+    if (submissionInFlightRef.current) return;
+    submissionInFlightRef.current = true;
     setIsSubmitting(true);
     setSubmitProgress("Uploading media...");
     setUploadStatuses({
@@ -426,8 +431,8 @@ export default function EditBusinessPage() {
       }
 
       // Upload all new media in parallel
-      const [logoUrls, coverUrls, galleryUrls, mallPhotoUrls, videoUrl, thumbUrls] =
-        await Promise.all([
+      const [logoUrls, [coverUrls, galleryUrls, mallPhotoUrls], videoUrl, thumbUrls] =
+        await settleMediaUploads([
           uploadRequiredBusinessMedia({
             files: newLogoFile,
             area: "business_logo",
@@ -436,25 +441,32 @@ export default function EditBusinessPage() {
             if (newLogoFile.length > 0) setUploadStatuses((c) => ({ ...c, logo: "done" }));
             return urls;
           }),
-          uploadRequiredBusinessMedia({
-            files: newCoverFile,
-            area: "business_cover",
-            field: "cover_photo",
+          settleMediaUploads([
+            uploadRequiredBusinessMedia({
+              files: newCoverFile,
+              area: "business_cover",
+              field: "cover_photo",
+            }),
+            removeGallery
+              ? Promise.resolve([])
+              : uploadRequiredBusinessMedia({
+                  files: newGalleryFiles,
+                  area: "business_gallery",
+                  field: "gallery_photos",
+                }),
+            removeMallPhotos
+              ? Promise.resolve([])
+              : uploadRequiredBusinessMedia({
+                  files: newMallPhotoFiles,
+                  area: "business_gallery",
+                  field: "gallery_photos",
+                }),
+          ]).then((urls) => {
+            if (newCoverFile.length || newGalleryFiles.length || newMallPhotoFiles.length) {
+              setUploadStatuses((c) => ({ ...c, photos: "done" }));
+            }
+            return urls;
           }),
-          removeGallery
-            ? Promise.resolve([])
-            : uploadRequiredBusinessMedia({
-                files: newGalleryFiles,
-                area: "business_gallery",
-                field: "gallery_photos",
-              }),
-          removeMallPhotos
-            ? Promise.resolve([])
-            : uploadRequiredBusinessMedia({
-                files: newMallPhotoFiles,
-                area: "business_gallery",
-                field: "gallery_photos",
-              }),
           removeVideo
             ? Promise.resolve(null)
             : newPromoVideoFile.length > 0
@@ -472,10 +484,6 @@ export default function EditBusinessPage() {
             field: "video_thumbnail",
           }),
         ]);
-
-      if (newCoverFile.length > 0 || newGalleryFiles.length > 0 || newMallPhotoFiles.length > 0) {
-        setUploadStatuses((c) => ({ ...c, photos: "done" }));
-      }
 
       let finalLogoUrl = existingLogo;
       if (logoUrls[0]) finalLogoUrl = logoUrls[0];
@@ -646,6 +654,7 @@ export default function EditBusinessPage() {
 
       setError(normalizeCreatePostRuntimeError(error, "Something went wrong. Please try again."));
     } finally {
+      submissionInFlightRef.current = false;
       setIsSubmitting(false);
       setSubmitProgress(null);
       setUploadStatuses({ logo: "idle", photos: "idle", video: "idle", saving: "idle" });

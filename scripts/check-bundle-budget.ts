@@ -133,13 +133,17 @@ function main(): void {
   console.warn(`Bundle budget (warn/fail): ${warnBudgetKb}KB / ${failBudgetKb}KB`);
 
   let routeBundles = collectRouteBundles().sort((a, b) => b.sizeBytes - a.sizeBytes);
+  let metricLabel = "manifest-listed JS";
   if (routeBundles.length === 0 && existsSync(appChunksDir)) {
+    metricLabel = "App Router entry JS (shared/layout dependencies excluded)";
     routeBundles = collectAppRouteBundles(walkFiles(appChunksDir), appChunksDir, getFileSize).sort(
       (a, b) => b.sizeBytes - a.sizeBytes
     );
 
     if (routeBundles.length > 0) {
-      console.warn("Using Next App Router page chunk budget fallback.");
+      console.warn(
+        "Using Next App Router entry chunk budget fallback. This is not a total first-load JS measurement."
+      );
     }
   }
 
@@ -191,7 +195,7 @@ function main(): void {
 
   for (const bundle of overWarn) {
     console.warn(
-      `::warning::Route ${bundle.route} first-load JS ${formatKb(bundle.sizeBytes)} exceeds warn budget (${warnBudgetKb}KB).`
+      `::warning::Entry ${bundle.route} ${metricLabel} ${formatKb(bundle.sizeBytes)} exceeds warn budget (${warnBudgetKb}KB).`
     );
   }
 

@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
-import { fulfillPayment, rollbackPaymentProcessing } from "@/lib/payments/fulfillment";
+import { scheduleBackgroundTask } from "@/lib/utils/background-task";
+import { fulfillPayment, type FulfillmentResult } from "@/lib/payments/fulfillment";
 import {
   fromOzowMerchantReference,
   normalizeOzowWebhook,
@@ -15,13 +16,9 @@ import {
 } from "@/lib/constants/pricing";
 import { getPaymentMetadata } from "@/lib/payments/types";
 import {
-  finalizeCompletedPayment,
   getPaymentById,
   getPaymentByProviderReference,
-  hasFulfillmentCompletion,
   markPaymentFailed,
-  persistFulfillmentCompletion,
-  claimPaymentProcessing,
   type PaymentRow,
   type PaymentStoreClient,
 } from "@/lib/payments/store";
@@ -36,14 +33,12 @@ import { getAuthAdminUserSummary } from "@/lib/supabase/auth-admin-user";
 const log = createLogger("OzowWebhook");
 const SUPPORTED_OZOW_EVENT_TYPE = "transaction.complete";
 const SUBSCRIPTION_DURATION_DAYS = 30;
-/** Window in which a fresh "processing" claim is treated as in-flight, not stale. */
-const IN_FLIGHT_DUPLICATE_WINDOW_MS = 60_000;
 
 /**
  * Route ownership:
- * - Authenticity/idempotency: Ozow signature verification and payment-store claim helpers.
+ * - Authenticity/idempotency: Ozow signature verification and the atomic payment RPC.
  * - Validation: normalized Ozow payload, merchant reference, amount, currency, and provider IDs.
- * - Fulfillment: payments/fulfillment owns entitlement creation and rollback recovery.
+ * - Fulfillment: payments/fulfillment owns atomic entitlement/invoice writes and payment completion.
  * - Audit/notifications: this route owns receipt/failure email and payment audit side effects.
  */
 
@@ -110,7 +105,8 @@ function buildReceiptDetails(payment: PaymentRow): PaymentReceiptDetails {
     return {
       kind: "subscription",
       expiresAt: new Date(
-        Date.now() + SUBSCRIPTION_DURATION_DAYS * 24 * 60 * 60 * 1000
+        (payment.created_at ? Date.parse(payment.created_at) : Date.now()) +
+          SUBSCRIPTION_DURATION_DAYS * 24 * 60 * 60 * 1000
       ).toISOString(),
     };
   }
@@ -227,14 +223,6 @@ function isFailedTransactionStatus(status: string | null): boolean {
 
 function isSuccessfulTransactionStatus(status: string | null): boolean {
   return status?.toLowerCase() === "successful";
-}
-
-/** Milliseconds timestamp of the current processing claim, or null if unknown. */
-function getProcessingStartedAtMs(payment: PaymentRow): number | null {
-  const startedAt = payment.provider_data?.processing_started_at;
-  if (typeof startedAt !== "string") return null;
-  const ms = Date.parse(startedAt);
-  return Number.isFinite(ms) ? ms : null;
 }
 
 /**
@@ -398,11 +386,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: true, duplicate: true });
       }
 
-      // A terminal "complete" payment must never be downgraded by a late or
+      // A claimed or terminal payment must never be downgraded by a late or
       // contradictory error webhook. The entitlements are already live; the
       // payment record must stay consistent with them.
-      if (payment.status === "complete") {
-        log.error("Ignoring failure webhook for an already-completed payment", {
+      if (payment.status === "complete" || payment.status === "processing") {
+        log.error("Ignoring failure webhook for a claimed or completed payment", {
           paymentId: payment.id,
           providerPaymentId: payload.providerPaymentId,
         });
@@ -414,7 +402,11 @@ export async function POST(request: NextRequest) {
         // Either a DB error, or a concurrent webhook transitioned the payment
         // (e.g. completed it) between our read and the CAS-guarded update.
         const currentPayment = await getPaymentById(supabase, payment.id);
-        if (currentPayment?.status === "complete" || currentPayment?.status === "failed") {
+        if (
+          currentPayment?.status === "complete" ||
+          currentPayment?.status === "failed" ||
+          currentPayment?.status === "processing"
+        ) {
           log.info("Failure webhook superseded by concurrent payment transition", {
             paymentId: payment.id,
             currentStatus: currentPayment.status,
@@ -429,20 +421,23 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      sendPaymentStatusEmail({
-        admin: supabase,
-        payment,
-        status: "failed",
-        logContext: {
-          paymentId: payment.id,
-          providerPaymentId: payload.providerPaymentId,
-        },
-      }).catch((emailErr) => {
-        log.warn("Failed to queue payment failed email", {
-          paymentId: payment.id,
-          error: emailErr instanceof Error ? emailErr.message : "Unknown error",
-        });
-      });
+      scheduleBackgroundTask(
+        sendPaymentStatusEmail({
+          admin: supabase,
+          payment,
+          status: "failed",
+          logContext: {
+            paymentId: payment.id,
+            providerPaymentId: payload.providerPaymentId,
+          },
+        }).catch((emailErr) => {
+          log.warn("Failed to queue payment failed email", {
+            paymentId: payment.id,
+            error: emailErr instanceof Error ? emailErr.message : "Unknown error",
+          });
+        }),
+        "payment status email"
+      );
 
       return NextResponse.json({ success: true });
     }
@@ -454,268 +449,58 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, ignored: true });
     }
 
-    const claimed = await claimPaymentProcessing(supabase, payment, payload);
-
-    // Double-fulfillment guard: after claiming, re-read the payment to verify
-    // we truly own the processing state. This closes the TOCTOU window where
-    // two concurrent webhooks could both pass claimPaymentProcessing().
-    if (claimed) {
-      const claimedPayment = await getPaymentById(supabase, payment.id);
-      if (
-        !claimedPayment ||
-        claimedPayment.status !== "processing" ||
-        hasFulfillmentCompletion(claimedPayment)
-      ) {
-        log.info("Payment was already fulfilled by a concurrent request", {
-          paymentId: payment.id,
-        });
-        return NextResponse.json({ success: true, duplicate: true });
-      }
+    if (!payload.providerPaymentId) {
+      return NextResponse.json({ error: "Missing payment ID" }, { status: 400 });
     }
 
-    if (!claimed) {
-      log.info("Webhook claim failed — entering recovery path", {
-        paymentId: payment.id,
-        originalStatus: payment.status,
-      });
-      const currentPayment = await getPaymentById(supabase, payment.id);
-
-      if (!currentPayment) {
-        log.error("RECOVERY: Payment disappeared after claim failure", { paymentId: payment.id });
-        return NextResponse.json({ error: "Payment not found" }, { status: 404 });
-      }
-
-      if (
-        currentPayment.status === "complete" &&
-        currentPayment.provider_payment_id === payload.providerPaymentId
-      ) {
-        log.info("RECOVERY: Payment already complete — duplicate webhook", {
-          paymentId: payment.id,
-        });
-        return NextResponse.json({ success: true, duplicate: true });
-      }
-
-      if (currentPayment.status !== "processing") {
-        return NextResponse.json({ success: true, duplicate: true });
-      }
-
-      // Re-validate amount against the recovered payment record to prevent
-      // a stale webhook from fulfilling with mismatched amounts. A successful
-      // completion must always carry an amount — never skip validation.
-      if (!payload.amount) {
-        log.error("Ozow recovery successful completion missing amount", {
-          paymentId: currentPayment.id,
-        });
-        return NextResponse.json({ error: "Missing amount" }, { status: 400 });
-      }
-      const recoveryCents = parseAmountToCents(payload.amount);
-      if (recoveryCents === null || recoveryCents !== currentPayment.amount_cents) {
-        log.error("Ozow recovery amount mismatch", {
-          paymentId: currentPayment.id,
-          expected: toAmountString(currentPayment.amount_cents),
-          received: payload.amount,
-        });
-        return NextResponse.json({ error: "Amount mismatch" }, { status: 400 });
-      }
-
-      if (hasFulfillmentCompletion(currentPayment)) {
-        const finalized = await finalizeCompletedPayment(supabase, currentPayment, payload);
-        if (!finalized) {
-          return NextResponse.json(
-            { error: "Payment finalization failed" },
-            { status: 500, headers: { "Retry-After": "30" } }
-          );
-        }
-
-        await auditPaymentCompleted(currentPayment);
-
-        sendPaymentStatusEmail({
-          admin: supabase,
-          payment: currentPayment,
-          status: "success",
-          logContext: {
-            paymentId: currentPayment.id,
-            providerPaymentId: payload.providerPaymentId,
-          },
-        }).catch((emailErr) => {
-          log.warn("Failed to queue payment receipt email", {
-            paymentId: currentPayment.id,
-            error: emailErr instanceof Error ? emailErr.message : "Unknown error",
-          });
-        });
-
-        return NextResponse.json({ success: true, recovered: true });
-      }
-
-      // In-flight duplicate guard: the claim owner is still mid-fulfillPayment
-      // (fresh processing_started_at, no fulfillment marker yet). Treat this
-      // delivery as a duplicate instead of fulfilling a second time; rows with
-      // a stale or missing timestamp fall through to the recovery fulfillment.
-      const processingStartedAtMs = getProcessingStartedAtMs(currentPayment);
-      if (
-        processingStartedAtMs !== null &&
-        Date.now() - processingStartedAtMs < IN_FLIGHT_DUPLICATE_WINDOW_MS
-      ) {
-        log.info("RECOVERY: Payment is being fulfilled by a concurrent webhook — duplicate", {
-          paymentId: currentPayment.id,
-        });
-        return NextResponse.json({ success: true, duplicate: true });
-      }
-
-      try {
-        await fulfillPayment(supabase as never, {
-          id: currentPayment.id,
-          user_id: currentPayment.user_id,
-          area: currentPayment.area,
-          amount_cents: currentPayment.amount_cents,
-          status: "processing",
-          provider: "ozow",
-          provider_payment_id: payload.providerPaymentId || currentPayment.provider_payment_id,
-          provider_reference: currentPayment.provider_reference || currentPayment.id,
-          provider_data: currentPayment.provider_data,
-        });
-      } catch (error) {
-        log.error("Ozow recovery fulfillment failed", {
-          paymentId: currentPayment.id,
-          error: error instanceof Error ? error.message : "Unknown error",
-        });
-        return NextResponse.json(
-          { error: "Payment fulfillment failed" },
-          { status: 500, headers: { "Retry-After": "30" } }
-        );
-      }
-
-      const marked = await persistFulfillmentCompletion(supabase, currentPayment, payload);
-      if (!marked) {
-        log.error(
-          "CRITICAL: Recovery fulfillment completed but completion marker failed — manual review required",
-          {
-            paymentId: currentPayment.id,
-            userId: currentPayment.user_id,
-            area: currentPayment.area,
-            entitlementsMayBeActive: true,
-          }
-        );
-      }
-
-      const reloadedPayment = await getPaymentById(supabase, currentPayment.id);
-      if (!reloadedPayment) {
-        return NextResponse.json(
-          { error: "Payment finalization failed" },
-          { status: 500, headers: { "Retry-After": "30" } }
-        );
-      }
-
-      const finalized = await finalizeCompletedPayment(supabase, reloadedPayment, payload);
-      if (!finalized) {
-        return NextResponse.json(
-          { error: "Payment finalization failed" },
-          { status: 500, headers: { "Retry-After": "30" } }
-        );
-      }
-
-      await auditPaymentCompleted(reloadedPayment);
-
-      sendPaymentStatusEmail({
-        admin: supabase,
-        payment: reloadedPayment,
-        status: "success",
-        logContext: {
-          paymentId: reloadedPayment.id,
-          providerPaymentId: payload.providerPaymentId,
-        },
-      }).catch((emailErr) => {
-        log.warn("Failed to queue payment receipt email", {
-          paymentId: reloadedPayment.id,
-          error: emailErr instanceof Error ? emailErr.message : "Unknown error",
-        });
-      });
-
-      return NextResponse.json({ success: true, recovered: true });
-    }
-
+    let result: FulfillmentResult;
     try {
-      await fulfillPayment(supabase as never, {
-        id: payment.id,
-        user_id: payment.user_id,
-        area: payment.area,
-        amount_cents: payment.amount_cents,
-        status: "processing",
-        provider: "ozow",
-        provider_payment_id: payload.providerPaymentId || payment.provider_payment_id,
-        provider_reference: payment.provider_reference || payment.id,
-        provider_data: (payment.provider_data as Record<string, unknown> | null) || null,
-      });
+      result = await fulfillPayment(
+        supabase as never,
+        { ...payment, provider_payment_id: payload.providerPaymentId },
+        payload.rawPayload
+      );
     } catch (error) {
-      log.error("Ozow fulfillment failed", {
+      // The RPC either committed everything or rolled everything back. A lost
+      // response is also safe to retry: the locked payment is already complete.
+      log.error("Ozow atomic fulfillment failed", {
         paymentId: payment.id,
         error: error instanceof Error ? error.message : "Unknown error",
       });
-      await rollbackPaymentProcessing(supabase as never, payment.id);
       return NextResponse.json(
         { error: "Payment fulfillment failed" },
         { status: 500, headers: { "Retry-After": "30" } }
       );
     }
 
-    const processingPayment = await getPaymentById(supabase, payment.id);
-    if (!processingPayment) {
-      return NextResponse.json(
-        { error: "Payment finalization failed" },
-        { status: 500, headers: { "Retry-After": "30" } }
-      );
+    if (result.outcome === "duplicate" || result.outcome === "ignored") {
+      return NextResponse.json({ success: true, [result.outcome]: true });
     }
 
-    const marked = await persistFulfillmentCompletion(supabase, processingPayment, payload);
-    if (!marked) {
-      // Fulfillment already succeeded (entitlements created) but the completion
-      // marker could not be persisted. Log a critical alert for manual reconciliation
-      // and return success so Ozow does not retry — the user has their features.
-      log.error(
-        "CRITICAL: Fulfillment completed but completion marker failed — manual review required",
-        {
+    const completedPayment = { ...payment, provider_payment_id: payload.providerPaymentId };
+    await auditPaymentCompleted(completedPayment);
+    scheduleBackgroundTask(
+      sendPaymentStatusEmail({
+        admin: supabase,
+        payment: completedPayment,
+        status: "success",
+        logContext: {
           paymentId: payment.id,
-          userId: payment.user_id,
-          area: payment.area,
-          entitlementsMayBeActive: true,
-        }
-      );
-    }
+          providerPaymentId: payload.providerPaymentId,
+        },
+      }).catch((emailErr) => {
+        log.warn("Failed to queue payment receipt email", {
+          paymentId: payment.id,
+          error: emailErr instanceof Error ? emailErr.message : "Unknown error",
+        });
+      }),
+      "payment status email"
+    );
 
-    const finalPayment = await getPaymentById(supabase, payment.id);
-    if (!finalPayment) {
-      return NextResponse.json(
-        { error: "Payment finalization failed" },
-        { status: 500, headers: { "Retry-After": "30" } }
-      );
-    }
-
-    const finalized = await finalizeCompletedPayment(supabase, finalPayment, payload);
-    if (!finalized) {
-      return NextResponse.json(
-        { error: "Payment finalization failed" },
-        { status: 500, headers: { "Retry-After": "30" } }
-      );
-    }
-
-    await auditPaymentCompleted(finalPayment);
-
-    sendPaymentStatusEmail({
-      admin: supabase,
-      payment: finalPayment,
-      status: "success",
-      logContext: {
-        paymentId: finalPayment.id,
-        providerPaymentId: payload.providerPaymentId,
-      },
-    }).catch((emailErr) => {
-      log.warn("Failed to queue payment receipt email", {
-        paymentId: finalPayment.id,
-        error: emailErr instanceof Error ? emailErr.message : "Unknown error",
-      });
+    return NextResponse.json({
+      success: true,
+      ...(result.outcome === "recovered" ? { recovered: true } : {}),
     });
-
-    return NextResponse.json({ success: true });
   } catch (error) {
     log.error("Ozow webhook processing failed", {
       error: error instanceof Error ? error.message : "Unknown error",

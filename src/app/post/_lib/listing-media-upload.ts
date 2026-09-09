@@ -1,8 +1,12 @@
+import { settleMediaUploads } from "./settle-media-uploads";
 import { VideoTranscodeError } from "@/lib/media/compress-before-upload";
 import { createLogger } from "@/lib/utils/logger";
 import { uploadVideoWithFastPath } from "@/app/post/_lib/video-fast-upload";
 import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-errors";
-import { uploadMediaFileViaServer } from "@/app/post/_lib/server-media-upload";
+import {
+  uploadMediaFileViaServer,
+  uploadMediaViaServer,
+} from "@/app/post/_lib/server-media-upload";
 import type { UploadArea } from "@/types/enums";
 
 const log = createLogger("ListingMediaUpload");
@@ -12,11 +16,38 @@ const FORM_MESSAGE =
   "Selected listing media could not be uploaded. Retry the highlighted files and try again.";
 
 class ListingMediaUploadError extends Error {
-  readonly field = "videos";
-
-  constructor(message?: string) {
+  constructor(
+    message?: string,
+    readonly field = "videos"
+  ) {
     super(message ?? VIDEO_FIELD_MESSAGE);
     this.name = "ListingMediaUploadError";
+  }
+}
+
+export async function uploadListingImages({
+  files,
+  area,
+  field,
+}: {
+  files: File[];
+  area: UploadArea;
+  field: "images" | "logo_url" | "videoThumbnail";
+}): Promise<string[]> {
+  if (!files.length) return [];
+  try {
+    return await uploadMediaViaServer({
+      files,
+      area,
+      fallbackMessage:
+        "One or more selected images could not be uploaded. Retry the selected files.",
+      preferPayloadError: true,
+    });
+  } catch (error) {
+    throw new ListingMediaUploadError(
+      normalizeCreatePostRuntimeError(error, "Image upload failed. Please retry."),
+      field
+    );
   }
 }
 
@@ -69,7 +100,7 @@ export async function uploadListingVideoFiles({
   if (files.length === 0) return [];
 
   try {
-    return await Promise.all(
+    return await settleMediaUploads(
       files.map((file) =>
         uploadVideoWithFastPath({
           file,

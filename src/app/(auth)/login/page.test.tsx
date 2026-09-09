@@ -1,9 +1,15 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type * as TurnstileClient from "@/lib/turnstile-client";
 import LoginPage from "./page";
 
 const pushMock = vi.fn();
 const toastMock = vi.fn();
+
+vi.mock("@/lib/turnstile-client", async (importOriginal) => ({
+  ...(await importOriginal<typeof TurnstileClient>()),
+  getTurnstileClientState: () => ({ mode: "configured", siteKey: "test-site-key" }),
+}));
 
 vi.mock("next/link", () => ({
   default: ({
@@ -36,12 +42,21 @@ vi.mock("@/components/ui/google-oauth-button", () => ({
 vi.mock("@/components/ui/turnstile-widget", async () => {
   const { useEffect } = await import("react");
   return {
-    TurnstileWidget: ({ onSuccess }: { onSuccess?: (token: string) => void }) => {
-      useEffect(() => {
-        onSuccess?.("test-turnstile-token");
-      }, [onSuccess]);
-      return <div data-testid="turnstile-widget" />;
-    },
+    TurnstileWidget: Object.assign(
+      ({
+        onSuccess,
+        retryToken = 0,
+      }: {
+        onSuccess?: (token: string) => void;
+        retryToken?: number;
+      }) => {
+        useEffect(() => {
+          onSuccess?.(`test-turnstile-token-${retryToken}`);
+        }, [onSuccess, retryToken]);
+        return <div data-testid="turnstile-widget" />;
+      },
+      { retry: vi.fn() }
+    ),
   };
 });
 
@@ -93,6 +108,37 @@ describe("LoginPage", () => {
       expect(screen.getByLabelText("Email")).toBeEnabled();
       expect(screen.getByLabelText("Password")).toBeEnabled();
     });
+  });
+
+  it("refreshes the single-use CAPTCHA after confirmation resend before login", async () => {
+    window.history.pushState({}, "", "/login?registered=true");
+    document.cookie = `vm_csrf=${"c".repeat(64)}; path=/`;
+    const consumed = new Set<string>();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body)) as { turnstileToken: string };
+        const fresh = !consumed.has(body.turnstileToken);
+        consumed.add(body.turnstileToken);
+        return new Response(
+          JSON.stringify(fresh ? { success: true } : { error: "CAPTCHA already consumed" }),
+          { status: fresh ? 200 : 400 }
+        );
+      })
+    );
+    render(<LoginPage />);
+    await waitFor(() => expect(screen.getByLabelText("Email")).toBeEnabled());
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "nomsa@example.com" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "StrongPass123!" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Resend confirmation$/i }));
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Confirmation email sent" })
+      )
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^Sign in$/i }));
+    await waitFor(() => expect(pushMock).toHaveBeenCalled());
+    expect(consumed.size).toBe(2);
   });
 
   it("shows the resend-confirmation prompt when the API returns email_not_confirmed", async () => {

@@ -212,7 +212,7 @@ const worker: ExportedHandler<Env> = {
 
     let expiredPending = 0;
     let recoveredComplete = 0;
-    let failedStaleProcessing = 0;
+    let reconciliationRequired = 0;
     let expiryNotifications = 0;
 
     for (const payment of payments) {
@@ -268,20 +268,17 @@ const worker: ExportedHandler<Env> = {
         continue;
       }
 
-      const updated = await patchPayment(env, payment.id, "processing", {
-        status: "failed",
-        provider_data: mergeProviderData(payment, {
-          cleanup_reconciled_at: new Date().toISOString(),
-          cleanup_reconciliation_state: "stale_processing_failed",
-          cleanup_reconciliation_reason: "processing_timeout",
-        }),
+      // Time elapsed does not prove the old handler stopped or that none of its
+      // writes committed. Keep the in-flight checkout guard until reconciled.
+      // The atomic handler never persists processing without completion.
+      reconciliationRequired += 1;
+      console.error("Legacy payment requires reconciliation; status preserved", {
+        paymentId: payment.id,
+        processingStartedAt,
       });
-      if (updated) {
-        failedStaleProcessing += 1;
-      }
     }
 
-    if (expiredPending === 0 && recoveredComplete === 0 && failedStaleProcessing === 0) {
+    if (expiredPending === 0 && recoveredComplete === 0 && reconciliationRequired === 0) {
       return;
     }
 
@@ -298,7 +295,8 @@ const worker: ExportedHandler<Env> = {
         target: "batch",
         expired_pending: expiredPending,
         recovered_complete: recoveredComplete,
-        failed_stale_processing: failedStaleProcessing,
+        failed_stale_processing: 0,
+        reconciliation_required: reconciliationRequired,
         expiry_notifications: expiryNotifications,
         processing_stale_minutes: staleMinutes,
         run_at: new Date().toISOString(),

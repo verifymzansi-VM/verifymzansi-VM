@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
+
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Loader2, X, Phone, MessageCircle, Mail, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,7 +26,7 @@ import {
   usePlanVideoAllowed,
 } from "@/components/billing/plan-gate";
 import { LocationSelector } from "@/components/ui/location-selector";
-import type { ListingCategory, ListingCondition, UploadArea } from "@/types/enums";
+import type { ListingCategory, ListingCondition } from "@/types/enums";
 import { mapListingCategory } from "@/lib/utils/enum-compat";
 import { normalizeMediaUrl, normalizeMediaUrls } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
@@ -35,6 +37,7 @@ import {
 } from "@/app/post/_lib/create-post-errors";
 import {
   getListingMediaUploadErrorState,
+  uploadListingImages,
   uploadListingVideoFiles,
 } from "@/app/post/_lib/listing-media-upload";
 import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
@@ -42,7 +45,6 @@ import { ListingCard } from "@/components/listings/listing-card";
 import { ListingDetailContent } from "@/components/listings/listing-detail-content";
 import { createLogger } from "@/lib/utils/logger";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
-import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
 
 const log = createLogger("EditListingPage");
@@ -68,6 +70,7 @@ export default function EditListingPage() {
   const [contactMethods, setContactMethods] = useState<string[]>(["call"]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submissionInFlightRef = useRef(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
   const [uploadStatuses, setUploadStatuses] = useState<Record<string, UploadSlotStatus>>({
     logo: "idle",
@@ -110,24 +113,6 @@ export default function EditListingPage() {
     () => (newVideoCoverFile.length > 0 ? URL.createObjectURL(newVideoCoverFile[0]) : null),
     [newVideoCoverFile]
   );
-
-  const readUploadError = async (response: Response, fallback: string): Promise<string> => {
-    try {
-      const payload = (await response.json()) as { error?: unknown; message?: unknown };
-      const payloadError =
-        typeof payload.error === "string"
-          ? payload.error
-          : typeof payload.message === "string"
-            ? payload.message
-            : null;
-      if (payloadError) {
-        return payloadError;
-      }
-    } catch {
-      // Ignore JSON parse failures and use fallback below.
-    }
-    return `${fallback} (HTTP ${response.status})`;
-  };
 
   useEffect(() => {
     let cancelled = false;
@@ -355,21 +340,6 @@ export default function EditListingPage() {
   const previewVideoThumbnail = previewVideoCoverUrl ?? existingVideoThumbnail;
   const previewLogo = previewLogoUrl ?? existingLogo;
 
-  async function uploadMedia(files: File[], area: UploadArea): Promise<string[]> {
-    if (files.length === 0) return [];
-    const uploadData = new FormData();
-    uploadData.append("area", area);
-    files.forEach((f) => uploadData.append("files", f));
-    const uploadRes = await fetchWithRetry("/api/media/upload", {
-      method: "POST",
-      headers: withCsrfHeaders(),
-      body: uploadData,
-    });
-    if (!uploadRes.ok) throw new Error(await readUploadError(uploadRes, "Upload failed"));
-    const uploadJson = await uploadRes.json();
-    return uploadJson.urls || [];
-  }
-
   function validateForm() {
     const errors: Record<string, string> = {};
 
@@ -417,6 +387,7 @@ export default function EditListingPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (submissionInFlightRef.current) return;
     const errors = validateForm();
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
@@ -425,6 +396,7 @@ export default function EditListingPage() {
     }
 
     clearErrors();
+    submissionInFlightRef.current = true;
     setIsSubmitting(true);
     setSubmitProgress("Uploading media...");
     setUploadStatuses({
@@ -446,15 +418,19 @@ export default function EditListingPage() {
         : {};
 
       // Upload photos, video, and video cover in parallel
-      const [newLogoUrls, newPhotoUrls, newVideoUrl, newCoverUrls] = await Promise.all([
-        uploadMedia(newLogoFile, "listing_logo").then((urls) => {
-          if (newLogoFile.length > 0) setUploadStatuses((c) => ({ ...c, logo: "done" }));
-          return urls;
-        }),
-        uploadMedia(newPhotoFiles, "listing").then((urls) => {
-          if (newPhotoFiles.length > 0) setUploadStatuses((c) => ({ ...c, photos: "done" }));
-          return urls;
-        }),
+      const [newLogoUrls, newPhotoUrls, newVideoUrl, newCoverUrls] = await settleMediaUploads([
+        uploadListingImages({ files: newLogoFile, area: "listing_logo", field: "logo_url" }).then(
+          (urls) => {
+            if (newLogoFile.length > 0) setUploadStatuses((c) => ({ ...c, logo: "done" }));
+            return urls;
+          }
+        ),
+        uploadListingImages({ files: newPhotoFiles, area: "listing", field: "images" }).then(
+          (urls) => {
+            if (newPhotoFiles.length > 0) setUploadStatuses((c) => ({ ...c, photos: "done" }));
+            return urls;
+          }
+        ),
         newVideoFile.length > 0
           ? (async () => {
               setSubmitProgress("Uploading media...");
@@ -470,7 +446,7 @@ export default function EditListingPage() {
               return publicUrl;
             })()
           : Promise.resolve(null as string | null),
-        uploadMedia(newVideoCoverFile, "listing"),
+        uploadListingImages({ files: newVideoCoverFile, area: "listing", field: "videoThumbnail" }),
       ]);
 
       // Resolve video thumbnail: new upload > existing > null
@@ -558,6 +534,7 @@ export default function EditListingPage() {
       }
       setFormError(normalizeCreatePostRuntimeError(error, "Something went wrong."));
     } finally {
+      submissionInFlightRef.current = false;
       setIsSubmitting(false);
       setSubmitProgress(null);
       setUploadStatuses({ logo: "idle", photos: "idle", video: "idle", saving: "idle" });
@@ -803,7 +780,11 @@ export default function EditListingPage() {
                     label="Replace listing logo (optional)"
                     maxFiles={1}
                     files={newLogoFile}
-                    onChange={setNewLogoFile}
+                    error={fieldErrors.logo_url}
+                    onChange={(files) => {
+                      setNewLogoFile(files);
+                      clearErrors("logo_url");
+                    }}
                     accept="image/*"
                   />
 
@@ -922,7 +903,11 @@ export default function EditListingPage() {
                       label="Video Cover Image (1 max) — Shown before video plays"
                       maxFiles={1}
                       files={newVideoCoverFile}
-                      onChange={setNewVideoCoverFile}
+                      error={fieldErrors.videoThumbnail}
+                      onChange={(files) => {
+                        setNewVideoCoverFile(files);
+                        clearErrors("videoThumbnail");
+                      }}
                       accept="image/*"
                     />
                   )}

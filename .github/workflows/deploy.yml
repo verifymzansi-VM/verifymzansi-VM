@@ -25,8 +25,13 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # Skip if triggered by CI workflow that failed
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    # Automatic deployment must come from successful CI on this repository's main push.
+    if: >-
+      ${{ github.event_name != 'workflow_run' ||
+          (github.event.workflow_run.conclusion == 'success' &&
+           github.event.workflow_run.event == 'push' &&
+           github.event.workflow_run.head_branch == 'main' &&
+           github.event.workflow_run.head_repository.full_name == github.repository) }}
     env:
       NODE_ENV: production
       WRANGLER_SEND_ERROR_REPORTS: "false"
@@ -59,6 +64,8 @@ jobs:
       TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v5
         with:

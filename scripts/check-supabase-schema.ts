@@ -2,8 +2,6 @@
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 
-loadEnvConfig(process.cwd());
-
 export const REQUIRED_TABLES = [
   "listings",
   "promotions",
@@ -347,6 +345,7 @@ export function printSchemaVerificationResult(result: SchemaVerificationResult):
 }
 
 async function runCli(): Promise<void> {
+  loadEnvConfig(process.cwd());
   const result = await verifySupabaseSchema();
   printSchemaVerificationResult(result);
 

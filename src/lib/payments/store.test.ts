@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
 import {
-  claimPaymentProcessing,
   getPaymentById,
   getPaymentByProviderReference,
   markPaymentFailed,
@@ -18,6 +17,7 @@ const basePayment: PaymentRow = {
   provider_data: null,
   amount_cents: 5000,
   user_id: "user-1",
+  created_at: "2026-03-26T10:00:00.000Z",
 };
 
 function createMockClient(updateResult: {
@@ -53,14 +53,14 @@ describe("markPaymentFailed", () => {
     expect(mock.from).toHaveBeenCalledWith("payments");
     expect(mock.eqOuter).toHaveBeenCalledWith("id", "pay-1");
     expect(mock.eqInner).toHaveBeenCalledWith("provider", "ozow");
-    expect(mock.inMock).toHaveBeenCalledWith("status", ["pending", "processing"]);
+    expect(mock.inMock).toHaveBeenCalledWith("status", ["pending"]);
     expect(mock.selectMock).toHaveBeenCalledWith("id");
   });
 
   it("returns false when the CAS guard blocks the transition (no rows updated)", async () => {
     // Simulates a payment that reached a terminal state (e.g. complete)
     // between the webhook's read and the update — zero rows match the
-    // status IN ('pending','processing') filter.
+    // status IN ('pending') filter.
     const mock = createMockClient({ data: [], error: null });
     const result = await markPaymentFailed(
       { from: mock.from } as unknown as PaymentStoreClient,
@@ -68,7 +68,7 @@ describe("markPaymentFailed", () => {
       { event: "failed" }
     );
     expect(result).toBe(false);
-    expect(mock.inMock).toHaveBeenCalledWith("status", ["pending", "processing"]);
+    expect(mock.inMock).toHaveBeenCalledWith("status", ["pending"]);
   });
 
   it("returns false when the DB update errors", async () => {
@@ -137,6 +137,7 @@ describe("getPaymentById", () => {
       "pay-1"
     );
     expect(result).toEqual(basePayment);
+    expect(mock.select).toHaveBeenCalledWith(expect.stringContaining("created_at"));
     expect(mock.eq).toHaveBeenCalledWith("id", "pay-1");
   });
 
@@ -168,6 +169,7 @@ describe("getPaymentByProviderReference", () => {
       "ref-1"
     );
     expect(result).toBeNull();
+    expect(mock.select).toHaveBeenCalledWith(expect.stringContaining("created_at"));
     expect(mock.eq).toHaveBeenCalledWith("provider_reference", "ref-1");
   });
 
@@ -179,31 +181,5 @@ describe("getPaymentByProviderReference", () => {
     await expect(
       getPaymentByProviderReference({ from: mock.from } as unknown as PaymentStoreClient, "ref-1")
     ).rejects.toThrow("timeout exceeded");
-  });
-});
-
-describe("claimPaymentProcessing", () => {
-  it("claims only from re-usable source statuses so terminal payments cannot be resurrected", async () => {
-    const mock = createMockClient({ data: [{ id: "pay-1" }], error: null });
-    const result = await claimPaymentProcessing(
-      { from: mock.from } as unknown as PaymentStoreClient,
-      basePayment,
-      { providerPaymentId: "ozow-pid-1", eventType: "transaction.complete" }
-    );
-    expect(result).toBe(true);
-    expect(mock.eqOuter).toHaveBeenCalledWith("id", "pay-1");
-    expect(mock.eqInner).toHaveBeenCalledWith("provider", "ozow");
-    expect(mock.inMock).toHaveBeenCalledWith("status", ["pending", "failed", "expired"]);
-  });
-
-  it("returns false when the CAS guard matches no rows (e.g. complete, processing, refunded)", async () => {
-    const mock = createMockClient({ data: [], error: null });
-    const result = await claimPaymentProcessing(
-      { from: mock.from } as unknown as PaymentStoreClient,
-      { ...basePayment, status: "refunded" },
-      { providerPaymentId: "ozow-pid-1", eventType: "transaction.complete" }
-    );
-    expect(result).toBe(false);
-    expect(mock.inMock).toHaveBeenCalledWith("status", ["pending", "failed", "expired"]);
   });
 });

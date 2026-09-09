@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
+
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { Megaphone, ArrowLeft, Loader2, X, Building2, Plus } from "lucide-react";
@@ -52,6 +54,7 @@ export default function EditPromotionPage() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submissionInFlightRef = useRef(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
   const [uploadStatuses, setUploadStatuses] = useState<Record<string, UploadSlotStatus>>({
     logo: "idle",
@@ -238,6 +241,8 @@ export default function EditPromotionPage() {
   }
 
   async function handleSubmit() {
+    if (submissionInFlightRef.current) return;
+    submissionInFlightRef.current = true;
     setIsSubmitting(true);
     setSubmitProgress("Uploading media...");
     setUploadStatuses({
@@ -328,7 +333,7 @@ export default function EditPromotionPage() {
       };
 
       // Upload new photos and videos in parallel
-      const [newImageUrls, newVideoUrls] = await Promise.all([
+      const [newImageUrls, newVideoUrls] = await settleMediaUploads([
         // Photos via server proxy
         newPhotoFiles.length > 0
           ? (async () => {
@@ -473,6 +478,7 @@ export default function EditPromotionPage() {
       }
       setError(normalizeCreatePostRuntimeError(error, "Something went wrong. Please try again."));
     } finally {
+      submissionInFlightRef.current = false;
       setIsSubmitting(false);
       setSubmitProgress(null);
       setUploadStatuses({ logo: "idle", photos: "idle", videos: "idle", saving: "idle" });

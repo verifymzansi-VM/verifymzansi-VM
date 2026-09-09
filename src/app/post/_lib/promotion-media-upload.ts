@@ -1,3 +1,4 @@
+import { settleMediaUploads } from "./settle-media-uploads";
 import { createLogger } from "@/lib/utils/logger";
 import { VideoTranscodeError } from "@/lib/media/compress-before-upload";
 import { uploadVideoWithFastPath } from "@/app/post/_lib/video-fast-upload";
@@ -126,7 +127,7 @@ export async function uploadPromotionVideoFiles({
   if (files.length === 0) return [];
 
   try {
-    return await Promise.all(
+    return await settleMediaUploads(
       files.map((file) =>
         uploadVideoWithFastPath({
           file,

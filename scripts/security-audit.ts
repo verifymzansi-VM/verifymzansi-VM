@@ -30,8 +30,9 @@ function spawnCommand(
 async function main(): Promise<void> {
   process.stdout.write("Running dependency vulnerability audit...\n");
 
-  const auditArgs = ["audit", "--json", "--omit=dev", "--audit-level=high", "--no-package-lock"];
-  const result = spawnCommand("npm", auditArgs, {
+  // Audit the resolved pnpm lockfile used by frozen installs and deployment.
+  const auditArgs = ["audit", "--json", "--prod", "--audit-level=high"];
+  const result = spawnCommand("pnpm", auditArgs, {
     encoding: "utf8",
     stdio: "pipe",
     maxBuffer: 20 * 1024 * 1024,

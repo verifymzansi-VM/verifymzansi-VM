@@ -1,6 +1,8 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
+
+import { Suspense, useEffect, useMemo, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -294,6 +296,7 @@ function CreateBusinessContent() {
   const [loadSheddingReady, setLoadSheddingReady] = useState(false);
   const [numberOfEmployees, setNumberOfEmployees] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submissionInFlightRef = useRef(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
   const [uploadStatuses, setUploadStatuses] = useState<Record<string, UploadSlotStatus>>({
     logo: "idle",
@@ -792,6 +795,7 @@ function CreateBusinessContent() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (submissionInFlightRef.current) return;
     const stepErrors = [0, 1, 2].map((index) => validateStep(index));
     const firstInvalidStep = stepErrors.findIndex((errors) => Object.keys(errors).length > 0);
     if (firstInvalidStep !== -1) {
@@ -805,6 +809,7 @@ function CreateBusinessContent() {
       return;
     }
     clearErrors();
+    submissionInFlightRef.current = true;
     setIsSubmitting(true);
     setSubmitProgress("Checking upload service...");
     setUploadStatuses({
@@ -833,41 +838,48 @@ function CreateBusinessContent() {
         ? readMediaDimensions(primaryMediaFile)
         : Promise.resolve(null);
 
-      const [logoUrls, coverUrls, galleryUrls, mallPhotoUrls, videoUrl] = await Promise.all([
-        uploadRequiredBusinessMedia({
-          files: logoFile,
-          area: "business_logo",
-          field: "logo_url",
-        }).then((urls) => {
-          if (logoFile.length > 0) setUploadStatuses((c) => ({ ...c, logo: "done" }));
-          return urls;
-        }),
-        uploadRequiredBusinessMedia({
-          files: coverFile,
-          area: "business_cover",
-          field: "cover_photo",
-        }),
-        uploadRequiredBusinessMedia({
-          files: galleryFiles,
-          area: "business_gallery",
-          field: "gallery_photos",
-        }),
-        uploadRequiredBusinessMedia({
-          files: mallPhotoFiles,
-          area: "business_gallery",
-          field: "gallery_photos",
-        }),
-        promoVideoFile.length > 0
-          ? uploadRequiredBusinessVideo({
-              file: promoVideoFile[0],
+      const [logoUrls, [coverUrls, galleryUrls, mallPhotoUrls], videoUrl] =
+        await settleMediaUploads([
+          uploadRequiredBusinessMedia({
+            files: logoFile,
+            area: "business_logo",
+            field: "logo_url",
+          }).then((urls) => {
+            if (logoFile.length > 0) setUploadStatuses((c) => ({ ...c, logo: "done" }));
+            return urls;
+          }),
+          settleMediaUploads([
+            uploadRequiredBusinessMedia({
+              files: coverFile,
               area: "business_cover",
-            }).then((url) => {
-              setUploadStatuses((c) => ({ ...c, video: "done" }));
-              return url;
-            })
-          : Promise.resolve(null),
-      ]);
-      setUploadStatuses((c) => ({ ...c, photos: "done" }));
+              field: "cover_photo",
+            }),
+            uploadRequiredBusinessMedia({
+              files: galleryFiles,
+              area: "business_gallery",
+              field: "gallery_photos",
+            }),
+            uploadRequiredBusinessMedia({
+              files: mallPhotoFiles,
+              area: "business_gallery",
+              field: "gallery_photos",
+            }),
+          ]).then((urls) => {
+            if (coverFile.length || galleryFiles.length || mallPhotoFiles.length) {
+              setUploadStatuses((c) => ({ ...c, photos: "done" }));
+            }
+            return urls;
+          }),
+          promoVideoFile.length > 0
+            ? uploadRequiredBusinessVideo({
+                file: promoVideoFile[0],
+                area: "business_cover",
+              }).then((url) => {
+                setUploadStatuses((c) => ({ ...c, video: "done" }));
+                return url;
+              })
+            : Promise.resolve(null),
+        ]);
       const finalCoverPhoto = coverUrls[0] || null;
       const finalCoverVideo = videoUrl;
       let finalVideoThumbnail: string | null = null;
@@ -1081,6 +1093,7 @@ function CreateBusinessContent() {
 
       setFormError(normalizeCreatePostRuntimeError(error, "Something went wrong."));
     } finally {
+      submissionInFlightRef.current = false;
       setIsSubmitting(false);
       setSubmitProgress(null);
       setUploadStatuses({ logo: "idle", photos: "idle", video: "idle", saving: "idle" });

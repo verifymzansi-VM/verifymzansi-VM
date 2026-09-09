@@ -11,6 +11,10 @@ import type { MarketplaceArea } from "@/types/enums";
 
 const log = createLogger("PaymentCheckout");
 
+type CheckoutUpdateFilter = PromiseLike<{ error?: { message?: string } | null }> & {
+  eq: (column: string, value: string) => CheckoutUpdateFilter;
+};
+
 export interface PaymentCheckoutInput {
   admin: {
     from: (table: string) => {
@@ -22,14 +26,7 @@ export interface PaymentCheckoutInput {
           }>;
         };
       };
-      update: (value: Record<string, unknown>) => {
-        eq: (
-          column: string,
-          value: string
-        ) => {
-          eq: (column: string, value: string) => Promise<{ error?: { message?: string } | null }>;
-        };
-      };
+      update: (value: Record<string, unknown>) => CheckoutUpdateFilter;
     };
   };
   userId: string;
@@ -142,7 +139,8 @@ export async function createHostedCheckout(
         },
       })
       .eq("id", paymentId)
-      .eq("provider", "ozow");
+      .eq("provider", "ozow")
+      .eq("status", "pending");
 
     if (updateError) {
       log.error("Failed to update payment with provider details", {
@@ -160,7 +158,8 @@ export async function createHostedCheckout(
           },
         })
         .eq("id", paymentId)
-        .eq("provider", "ozow");
+        .eq("provider", "ozow")
+        .eq("status", "pending");
       paymentMarkedFailed = true;
       throw new Error(`Failed to update payment with provider details: ${updateError.message}`);
     }
@@ -185,7 +184,8 @@ export async function createHostedCheckout(
           },
         })
         .eq("id", paymentId)
-        .eq("provider", "ozow");
+        .eq("provider", "ozow")
+        .eq("status", "pending");
     }
 
     throw error;

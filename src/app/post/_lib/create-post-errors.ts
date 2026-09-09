@@ -40,10 +40,16 @@ export function normalizeCreatePostRuntimeError(error: unknown, fallbackMessage:
   }
 
   if (
-    /failed to get video upload url|failed to upload video|network error during upload|upload was aborted|operation was aborted/i.test(
-      message
-    )
+    (error &&
+      typeof error === "object" &&
+      "name" in error &&
+      (error.name === "AbortError" || error.name === "TimeoutError")) ||
+    /upload was aborted|operation was aborted/i.test(message)
   ) {
+    return "The upload timed out. Check your connection and try again. Your selected files are still in the form.";
+  }
+
+  if (/failed to get video upload url|failed to upload video/i.test(message)) {
     return "Video upload could not be completed. Check your connection and try again. You can remove the video and submit again.";
   }
 

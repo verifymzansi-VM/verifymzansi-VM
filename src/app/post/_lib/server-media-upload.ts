@@ -1,6 +1,6 @@
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
-import { videoUploadTimeoutMs } from "@/lib/media/upload-policy";
+import { mediaUploadTimeoutMs } from "@/lib/media/upload-policy";
 import {
   appendTraceId,
   getPayloadError,
@@ -38,10 +38,7 @@ export async function uploadMediaViaServer({
       body: uploadData,
     },
     undefined,
-    timeoutMs ??
-      (files.some((file) => file.type.startsWith("video/"))
-        ? videoUploadTimeoutMs(files.reduce((total, file) => total + file.size, 0))
-        : undefined)
+    timeoutMs ?? mediaUploadTimeoutMs(files.reduce((total, file) => total + file.size, 0))
   );
 
   const payload = await parseUploadJson(response);

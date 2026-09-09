@@ -1,24 +1,13 @@
 /* eslint-disable no-console */
-import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 import { verifySupabaseSchema } from "./check-supabase-schema";
-
-loadEnvConfig(process.cwd());
-
-const strictMode = process.env.STRICT_DB_TESTS === "true" || process.env.CI === "true";
+import { resolveDbTestTarget } from "./db-test-target";
 const REQUIRED_FEATURE_FLAG_KEYS = [
   "kyc_v2_flow",
   "kyc_gps_location",
   "kyc_evidence_desk",
 ] as const;
-
-function skipOrFail(message: string): never | void {
-  if (strictMode) {
-    throw new Error(message);
-  }
-  console.warn(`DB tests skipped: ${message}`);
-}
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
@@ -28,15 +17,6 @@ function assert(condition: unknown, message: string): asserts condition {
 
 function mask(value: string): string {
   return `${value.slice(0, 10)}...`;
-}
-
-function isValidHttpUrl(value: string): boolean {
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
-  } catch {
-    return false;
-  }
 }
 
 async function verifyFeatureFlagRls(
@@ -139,18 +119,7 @@ async function verifyRoleHelpers(url: string, serviceRoleKey: string): Promise<v
 }
 
 async function main(): Promise<void> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!url || !serviceRoleKey || !anonKey) {
-    return skipOrFail(
-      "NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY are required"
-    );
-  }
-  if (!isValidHttpUrl(url)) {
-    return skipOrFail("NEXT_PUBLIC_SUPABASE_URL must be a valid http(s) URL");
-  }
+  const { url, serviceRoleKey, anonKey } = resolveDbTestTarget(process.env);
 
   console.log("Running DB and RLS checks...");
   console.log(`Target project: ${mask(url)}`);

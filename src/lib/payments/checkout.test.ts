@@ -46,11 +46,12 @@ function createMockAdminClient(options?: {
     }),
     update: vi.fn((value: Record<string, unknown>) => {
       updatePayloads.push(value);
-      return {
-        eq: vi.fn(() => ({
-          eq: vi.fn().mockResolvedValue(updateResults.shift() ?? { error: null }),
-        })),
+      const chain = {
+        eq: vi.fn().mockReturnThis(),
+        then: (resolve: (result: { error?: { message?: string } | null }) => unknown) =>
+          Promise.resolve(updateResults.shift() ?? { error: null }).then(resolve),
       };
+      return chain;
     }),
   }));
 
@@ -291,4 +292,87 @@ describe("createHostedCheckout", () => {
 
     expect(vi.mocked(createOzowHostedPayment)).not.toHaveBeenCalled();
   });
+  it.each(["provider response", "provider error", "details write error"])(
+    "preserves committed status and metadata when a late %s arrives",
+    async (mode) => {
+      let row: Record<string, unknown> = {};
+      const complete = () =>
+        Object.assign(row, {
+          status: "complete",
+          provider_payment_id: "ozow-paid",
+          provider_data: {
+            fulfillment_protocol: "atomic_v1",
+            fulfillment_completed_at: "2026-09-09T10:00:00Z",
+          },
+        });
+      vi.mocked(createOzowHostedPayment).mockImplementation(async () => {
+        if (mode !== "details write error") complete();
+        if (mode === "provider error") throw new Error("provider timeout");
+        return {
+          providerPaymentId: "ozow-paid",
+          providerReference: "ref",
+          redirectUrl: "https://pay.ozow.test/checkout/1",
+          expireAt: "2026-09-10T10:00:00Z",
+          correlationId: "corr",
+          idempotencyKey: "key",
+          rawResponse: {},
+        };
+      });
+      let updateCount = 0;
+      const client = {
+        from: () => ({
+          insert: (value: Record<string, unknown>) => {
+            row = { ...value };
+            return {
+              select: () => ({ single: async () => ({ data: { id: row.id }, error: null }) }),
+            };
+          },
+          update: (patch: Record<string, unknown>) => {
+            const filters: Array<[string, unknown]> = [];
+            const chain = {
+              eq: (key: string, value: unknown) => {
+                filters.push([key, value]);
+                return chain;
+              },
+              then: (resolve: (r: { error: { message: string } | null }) => unknown) => {
+                updateCount++;
+                if (mode === "details write error" && updateCount === 1) {
+                  complete();
+                  return Promise.resolve({ error: { message: "write failed" } }).then(resolve);
+                }
+                if (filters.every(([key, value]) => row[key] === value)) Object.assign(row, patch);
+                return Promise.resolve({ error: null }).then(resolve);
+              },
+            };
+            return chain;
+          },
+        }),
+      };
+      const checkout = createHostedCheckout({
+        admin: client as never,
+        userId: "user-1",
+        area: "MZANSI_MARKET",
+        amountCents: 25000,
+        itemName: "Growth",
+        returnUrl: "https://example.test/success",
+        cancelUrl: "https://example.test/cancel",
+        providerData: { type: "subscription", plan_id: "plan-1" },
+      });
+      if (mode === "provider response") await expect(checkout).resolves.toHaveProperty("paymentId");
+      else
+        await expect(checkout).rejects.toThrow(
+          mode === "provider error" ? "provider timeout" : "write failed"
+        );
+      expect(row).toMatchObject({
+        status: "complete",
+        provider_payment_id: "ozow-paid",
+        provider_data: {
+          fulfillment_protocol: "atomic_v1",
+          fulfillment_completed_at: "2026-09-09T10:00:00Z",
+        },
+      });
+      expect(row.provider_data).not.toHaveProperty("last_error");
+      expect(row.provider_data).not.toHaveProperty("checkout_url");
+    }
+  );
 });
