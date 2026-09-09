@@ -48,7 +48,7 @@ export default async function AdminModerationPage() {
       admin
         .from("promotions")
         .select(
-          "id, title, status, created_at, category, owner_id, description, photos, videos, video_thumbnail, logo_url, price_cents, price_negotiable, location_province, location_city, contact_methods, promotion_type"
+          "id, title, status, created_at, category, category_key, owner_id, description, photos, videos, video_thumbnail, logo_url, price_cents, price_negotiable, location_province, location_city, contact_methods, promotion_type"
         )
         .eq("status", "pending_moderation")
         .order("created_at", { ascending: true })
@@ -152,6 +152,10 @@ export default async function AdminModerationPage() {
     }),
     ...(pendingPromotions || []).map((p) => ({
       ...p,
+      // `category_key` is the canonical taxonomy value. Keep the legacy
+      // free-text category for display when present, but do not hide a
+      // correctly categorized promotion whose legacy value is null.
+      category: p.category?.trim() ? p.category : p.category_key,
       area: "PROMOTIONS_EVENTS" as const,
       areaLabel: "Tourism & Events",
       itemType: "Promotion",

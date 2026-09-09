@@ -136,7 +136,8 @@ describe("POST /api/admin/content/decide", () => {
           id: itemId,
           created_at: "2026-05-16T10:00:00.000Z",
           expires_at: "2026-05-23T10:00:00.000Z",
-          category: "Weekend special",
+          category: null,
+          category_key: "events_entertainment",
         };
         const notificationRow = {
           owner_id: "owner-1",

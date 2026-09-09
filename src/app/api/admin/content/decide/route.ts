@@ -67,9 +67,13 @@ export async function POST(request: Request) {
 
     if (decision === "approve" && supportsPostVisibilityDates) {
       const approvedAt = new Date();
+      const pendingSelect =
+        table === "promotions"
+          ? "id, created_at, expires_at, category, category_key"
+          : "id, created_at, expires_at, category";
       const { data: pendingItem, error: pendingFetchError } = await admin
         .from(table)
-        .select("id, created_at, expires_at, category")
+        .select(pendingSelect)
         .eq("id", itemId)
         .eq("status", "pending_moderation")
         .maybeSingle();
@@ -84,7 +88,13 @@ export async function POST(request: Request) {
 
       // Block approval of miscategorised content: the stored category must be a
       // recognised category for the item's marketplace area before it can go live.
-      const itemCategory = (pendingItem as { category?: string | null }).category;
+      const item = pendingItem as {
+        category?: string | null;
+        category_key?: string | null;
+      };
+      // Promotions use category_key as their canonical taxonomy value while
+      // category remains optional legacy/free-text data.
+      const itemCategory = item.category?.trim() ? item.category : item.category_key;
       if (!isValidCategoryForArea(area as ModerationArea, itemCategory)) {
         log.warn("Blocked approval of miscategorised content", {
           itemId,
