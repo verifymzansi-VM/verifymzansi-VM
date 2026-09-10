@@ -44,7 +44,7 @@ BEGIN
     PERFORM cron.schedule(
       'cleanup-old-notifications',
       '0 3 * * *',  -- daily at 3am
-      $cleanup$DELETE FROM notifications WHERE created_at < now() - interval '90 days'$cleanup$
+      $$DELETE FROM notifications WHERE created_at < now() - interval '90 days'$$
     );
   END IF;
 END $$;
