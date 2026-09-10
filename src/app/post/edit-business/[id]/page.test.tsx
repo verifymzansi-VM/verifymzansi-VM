@@ -219,7 +219,7 @@ describe("EditBusinessPage", () => {
     });
   });
 
-  it("returns to the dashboard when a live business edit is already pending review", async () => {
+  it("keeps unsaved changes on the form when an earlier business edit is pending", async () => {
     (global.fetch as unknown as ReturnType<typeof vi.fn>).mockReset();
     (global.fetch as unknown as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({
@@ -270,16 +270,10 @@ describe("EditBusinessPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
 
     await waitFor(() => {
-      expect(mockToast).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: "Edit already submitted for review",
-          variant: "success",
-        })
-      );
+      expect(screen.getByText(/Your latest changes were not submitted/)).toBeInTheDocument();
     });
-    expect(mockPush).toHaveBeenCalledWith(
-      "/dashboard/listings?area=MZANSI_BUSINESS&updated=business"
-    );
+    expect(mockToast).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it("collapses legacy online delivery details into simple delivery availability on save", async () => {

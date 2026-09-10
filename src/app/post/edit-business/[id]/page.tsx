@@ -627,11 +627,9 @@ export default function EditBusinessPage() {
         if (data?.code === "edit_limit_reached") {
           setError("This business profile has already used its two approved edit chances.");
         } else if (data?.code === "pending_edit_exists") {
-          toast({
-            title: "Edit already submitted for review",
-            variant: "success",
-          });
-          router.push("/dashboard/listings?area=MZANSI_BUSINESS&updated=business");
+          setError(
+            "Your latest changes were not submitted. An earlier edit is still awaiting admin review. Please wait for that review before submitting again."
+          );
         } else {
           setError(data.error || "Failed to update business");
         }

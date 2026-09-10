@@ -35,6 +35,7 @@ describe("AdminRealtimeRefresh", () => {
       "reports",
       "dsar_cases",
       "contact_submissions",
+      "notifications",
     ]);
 
     const reportsRealtime = realtimeOptions.find((option) => option.table === "reports");
@@ -49,6 +50,16 @@ describe("AdminRealtimeRefresh", () => {
     expect(mockRefresh).not.toHaveBeenCalled();
 
     vi.advanceTimersByTime(1);
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes when staff receive a pending edit notification", () => {
+    render(<AdminRealtimeRefresh />);
+    const subscription = realtimeOptions.find((option) => option.table === "notifications");
+    expect(subscription?.event).toBe("INSERT");
+    const onEvent = subscription?.onEvent as (payload: Record<string, unknown>) => void;
+    onEvent({ eventType: "INSERT", new: { href: "/admin/moderation" } });
+    vi.advanceTimersByTime(400);
     expect(mockRefresh).toHaveBeenCalledTimes(1);
   });
 

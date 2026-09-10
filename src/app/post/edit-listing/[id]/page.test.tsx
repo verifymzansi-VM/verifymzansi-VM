@@ -220,7 +220,7 @@ describe("EditListingPage", () => {
     expect(screen.getByText("No listing logo uploaded.")).toBeInTheDocument();
   });
 
-  it("returns to the dashboard when a live edit is already pending review", async () => {
+  it("keeps unsaved changes on the form when an earlier edit is pending", async () => {
     (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       ok: false,
       status: 409,
@@ -236,14 +236,10 @@ describe("EditListingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
 
     await waitFor(() => {
-      expect(mockToast).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: "Edit already submitted for review",
-          variant: "success",
-        })
-      );
+      expect(screen.getByText(/Your latest changes were not submitted/)).toBeInTheDocument();
     });
-    expect(mockPush).toHaveBeenCalledWith("/dashboard/listings");
+    expect(mockToast).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it("uploads and uses a replacement listing logo", async () => {

@@ -102,6 +102,9 @@ function createDashboardSummaryTableMock(
       filters.push({ op: "or", expression });
       return builder;
     },
+    limit() {
+      return builder;
+    },
     then(
       resolve: (value: { count: number | null; data: DashboardSummaryMockRow[] | null }) => void
     ) {
@@ -140,7 +143,7 @@ describe("admin-queries", () => {
       expect(stats.totalListings).toBe(5);
       expect(stats.openReports).toBe(5);
       expect(typeof stats.pendingVerifications).toBe("number");
-      expect(stats.pendingModeration).toBe(20);
+      expect(stats.pendingModeration).toBe(35);
     });
 
     it("defaults counts to 0 when null", async () => {
@@ -173,11 +176,30 @@ describe("admin-queries", () => {
 
       const stats = await getAdminDashboardStats();
 
-      expect(stats.pendingModeration).toBe(12);
+      expect(stats.pendingModeration).toBe(15);
     });
   });
 
   describe("getPendingModerationCount", () => {
+    it("counts pending live edits in the total and their respective area cards", async () => {
+      mockFrom.mockImplementation((table: string) =>
+        createDashboardSummaryTableMock(table, {
+          content_edit_requests: [
+            { area: "MZANSI_MARKET", status: "pending" },
+            { area: "MZANSI_BUSINESS", status: "pending" },
+            { area: "PROMOTIONS_EVENTS", status: "pending" },
+            { area: "PROMOTIONS_EVENTS", status: "pending" },
+            { area: "MZANSI_MARKET", status: "approved" },
+            { area: "MZANSI_BUSINESS", status: "rejected" },
+          ],
+        })
+      );
+      await expect(getPendingModerationCount()).resolves.toBe(4);
+      const counts = await getAreaCardCounts();
+      expect(counts.MZANSI_MARKET.pendingContent).toBe(1);
+      expect(counts.MZANSI_BUSINESS.pendingContent).toBe(1);
+      expect(counts.PROMOTIONS_EVENTS.pendingContent).toBe(2);
+    });
     it("returns the combined moderation backlog across all public content areas", async () => {
       mockFrom.mockImplementation((table: string) => {
         if (table === "listings") {

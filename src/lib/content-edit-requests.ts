@@ -1,3 +1,4 @@
+import { notifyStaffForAdminEvent } from "@/lib/notifications";
 import { NextResponse } from "next/server";
 import type { ContentEditTargetType } from "@/types/database";
 import type { MarketplaceArea } from "@/types/enums";
@@ -120,7 +121,20 @@ export async function createContentEditRequest({
     throw new Error(error.message);
   }
 
-  return { response: null, requestId: data?.id ?? null };
+  if (!data?.id) {
+    throw new Error("Edit request was not saved");
+  }
+
+  // Await delivery so the server runtime cannot end before staff are notified.
+  await notifyStaffForAdminEvent({
+    capability: "queue:view",
+    title: "Post edit submitted for review",
+    message: "A live post has changes waiting for approval in the moderation queue.",
+    href: "/admin/moderation",
+    excludeUserId: ownerId,
+  });
+
+  return { response: null, requestId: data.id };
 }
 
 export function contentEditSubmittedResponse(

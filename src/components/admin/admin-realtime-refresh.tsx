@@ -157,5 +157,16 @@ export function AdminRealtimeRefresh() {
     },
   });
 
+  // Staff notifications also cover edits, whose live source rows do not change.
+  useRealtime({
+    table: "notifications",
+    event: "INSERT",
+    onEvent: (payload) => {
+      if ((payload as RealtimePayload).new?.href === "/admin/moderation") {
+        scheduleRefresh();
+      }
+    },
+  });
+
   return null;
 }

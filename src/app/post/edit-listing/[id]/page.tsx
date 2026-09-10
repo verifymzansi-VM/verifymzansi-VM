@@ -501,11 +501,9 @@ export default function EditListingPage() {
             return;
           }
           if (data?.code === "pending_edit_exists") {
-            toast({
-              title: "Edit already submitted for review",
-              variant: "success",
-            });
-            router.push("/dashboard/listings");
+            setFormError(
+              "Your latest changes were not submitted. An earlier edit is still awaiting admin review. Please wait for that review before submitting again."
+            );
             return;
           }
           setFormError(

@@ -81,6 +81,9 @@ async function getPendingModerationCountsByArea() {
     { count: pendingBusinesses },
     { count: pendingTourismBusinesses },
     { count: pendingPromotions },
+    { count: marketEdits },
+    { count: businessEdits },
+    { count: tourismEdits },
   ] = await Promise.all([
     supabase
       .from("listings")
@@ -101,13 +104,20 @@ async function getPendingModerationCountsByArea() {
       .from("promotions")
       .select("*", { count: "exact", head: true })
       .eq("status", "pending_moderation"),
+    ...(["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"] as const).map((area) =>
+      supabase
+        .from("content_edit_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pending")
+        .eq("area", area)
+    ),
   ]);
 
   return {
-    pendingListings: pendingListings || 0,
-    pendingBusinesses: pendingBusinesses || 0,
+    pendingListings: (pendingListings || 0) + (marketEdits || 0),
+    pendingBusinesses: (pendingBusinesses || 0) + (businessEdits || 0),
     pendingTourismBusinesses: pendingTourismBusinesses || 0,
-    pendingPromotions: pendingPromotions || 0,
+    pendingPromotions: (pendingPromotions || 0) + (tourismEdits || 0),
   };
 }
 

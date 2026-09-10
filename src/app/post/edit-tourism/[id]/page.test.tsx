@@ -255,7 +255,7 @@ describe("EditPromotionPage", () => {
     expect(payload.videos).toEqual(["https://example.com/promo-video.mp4"]);
   });
 
-  it("returns to the dashboard when a live promotion edit is already pending review", async () => {
+  it("keeps unsaved changes on the form when an earlier promotion edit is pending", async () => {
     global.fetch = vi
       .fn()
       .mockResolvedValueOnce({
@@ -282,16 +282,10 @@ describe("EditPromotionPage", () => {
     fireEvent.click(saveButton);
 
     await waitFor(() => {
-      expect(mockToast).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: "Edit already submitted for review",
-          variant: "success",
-        })
-      );
+      expect(screen.getByText(/Your latest changes were not submitted/)).toBeInTheDocument();
     });
-    expect(mockPush).toHaveBeenCalledWith(
-      "/dashboard/listings?area=PROMOTIONS_EVENTS&updated=promotion"
-    );
+    expect(mockToast).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it("shows a photo-or-video validation message when no media exists", async () => {
