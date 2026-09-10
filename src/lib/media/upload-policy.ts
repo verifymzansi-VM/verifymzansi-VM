@@ -4,5 +4,3 @@ export const MAX_VIDEO_UPLOAD_BYTES = 50 * 1024 * 1024;
 export function mediaUploadTimeoutMs(bytes: number): number {
   return Math.min(15 * 60_000, Math.max(120_000, Math.ceil((bytes / 62_500) * 1000) + 30_000));
 }
-
-export const videoUploadTimeoutMs = mediaUploadTimeoutMs;

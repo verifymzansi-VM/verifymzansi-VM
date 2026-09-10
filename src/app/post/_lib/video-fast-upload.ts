@@ -1,5 +1,5 @@
 import { compressVideoForUpload, VideoTranscodeError } from "@/lib/media/compress-before-upload";
-import { MAX_VIDEO_UPLOAD_BYTES, videoUploadTimeoutMs } from "@/lib/media/upload-policy";
+import { MAX_VIDEO_UPLOAD_BYTES, mediaUploadTimeoutMs } from "@/lib/media/upload-policy";
 import { normalizeSelectedFile } from "@/lib/utils/media-upload";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
@@ -145,7 +145,7 @@ async function uploadVideoDirectToR2(file: File, area: UploadArea): Promise<stri
       area,
     };
 
-    const timeout = createTimeoutSignal(videoUploadTimeoutMs(file.size));
+    const timeout = createTimeoutSignal(mediaUploadTimeoutMs(file.size));
     let uploadResponse: Response;
     try {
       uploadResponse = await fetch(uploadUrl, {
