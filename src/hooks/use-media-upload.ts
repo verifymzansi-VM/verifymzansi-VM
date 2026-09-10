@@ -4,7 +4,7 @@ import { useState, useCallback, useRef } from "react";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { generateBlurHash } from "@/lib/utils/blurhash";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
-import { mediaUploadTimeoutMs } from "@/lib/media/upload-policy";
+import { videoUploadTimeoutMs } from "@/lib/media/upload-policy";
 import type { CompressionResult } from "@/lib/media/video-compressor";
 
 interface UploadState {
@@ -494,7 +494,7 @@ export function useMediaUpload(options: UploadOptions = {}) {
               body: videoForm,
             },
             undefined,
-            mediaUploadTimeoutMs(uploadFile.size)
+            videoUploadTimeoutMs(uploadFile.size)
           );
 
           if (!uploadResponse.ok) {
