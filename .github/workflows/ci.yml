@@ -142,33 +142,18 @@ jobs:
           node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
-      - name: Verify DB secrets are configured
-        id: check-db-secrets
-        run: |
-          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
-            echo "::warning::DB/RLS tests require dedicated nonproduction DB_TEST_SUPABASE_URL, DB_TEST_SUPABASE_SERVICE_ROLE_KEY, and DB_TEST_SUPABASE_ANON_KEY secrets."
-            if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ]; then
-              echo "::error::Automatic deployment requires verified nonproduction DB/RLS checks."
-              exit 1
-            fi
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          elif [[ ! "$SUPABASE_URL" =~ ^https?:// ]]; then
-            echo "::error::DB_TEST_SUPABASE_URL must be a valid http(s) URL."
-            exit 1
-          fi
-        env:
-          SUPABASE_URL: ${{ secrets.DB_TEST_SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.DB_TEST_SUPABASE_SERVICE_ROLE_KEY }}
-          SUPABASE_ANON_KEY: ${{ secrets.DB_TEST_SUPABASE_ANON_KEY }}
+      - name: Start isolated Supabase database
+        run: pnpm exec supabase start --exclude studio,postgres-meta,imgproxy,edge-runtime,logflare,vector,supavisor,realtime,mailpit
       - name: DB contract + RLS checks
-        if: steps.check-db-secrets.outputs.skip != 'true'
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          DB_TEST_SUPABASE_URL: ${{ secrets.DB_TEST_SUPABASE_URL }}
-          DB_TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.DB_TEST_SUPABASE_SERVICE_ROLE_KEY }}
-          DB_TEST_SUPABASE_ANON_KEY: ${{ secrets.DB_TEST_SUPABASE_ANON_KEY }}
-          DB_TEST_ALLOW_REMOTE: "true"
-        run: pnpm run test:db
+        run: |
+          status=$(pnpm exec supabase status -o json)
+          export DB_TEST_SUPABASE_URL=$(jq -er '.API_URL' <<< "$status")
+          export DB_TEST_SUPABASE_SERVICE_ROLE_KEY=$(jq -er '.SERVICE_ROLE_KEY' <<< "$status")
+          export DB_TEST_SUPABASE_ANON_KEY=$(jq -er '.ANON_KEY' <<< "$status")
+          pnpm run test:db
+      - name: Stop isolated Supabase database
+        if: always()
+        run: pnpm exec supabase stop --no-backup
 
   e2e-smoke:
     runs-on: ubuntu-latest

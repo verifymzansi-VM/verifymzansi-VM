@@ -215,6 +215,11 @@ FOR EACH ROW
 EXECUTE FUNCTION public.sync_owner_id_with_seller_id();
 ALTER TABLE public.businesses
   ADD COLUMN IF NOT EXISTS owner_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
+-- Fresh installs already use owner_id after the businesses unification. Keep
+-- the transitional alias available until the following hard-rename migration.
+ALTER TABLE public.businesses
+  ADD COLUMN IF NOT EXISTS seller_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
+UPDATE public.businesses SET seller_id = owner_id WHERE seller_id IS NULL;
 UPDATE public.businesses SET owner_id = seller_id WHERE owner_id IS NULL;
 CREATE INDEX IF NOT EXISTS idx_businesses_owner ON public.businesses(owner_id);
 DROP TRIGGER IF EXISTS sync_businesses_owner_fields ON public.businesses;

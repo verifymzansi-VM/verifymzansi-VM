@@ -23,7 +23,7 @@ SELECT
   sp.user_id,
   sp.user_id AS owner_id,
   sp.display_name,
-  sp.bio,
+  sp.account_verification_status,
   sp.seller_verification_status,
   sp.phone,
   sp.masked_phone_public,
@@ -38,7 +38,8 @@ SELECT
   sp.legal_hold,
   sp.profile_completeness_score,
   sp.created_at,
-  sp.updated_at
+  sp.updated_at,
+  sp.bio
 FROM public.seller_profiles sp;
 COMMENT ON VIEW public.account_profiles IS
   'Compatibility view exposing seller_profiles through neutral account/member terminology.';

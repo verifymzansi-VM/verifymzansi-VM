@@ -161,6 +161,10 @@ ALTER POLICY "Owner reads own leads" ON public.leads
 ALTER POLICY "Owner updates lead status" ON public.leads
   USING ((select auth.uid()) = owner_id);
 DROP POLICY IF EXISTS leads_select_owner ON public.leads;
+ALTER POLICY storefront_posts_owner ON public.storefront_posts
+  USING (auth.uid() = owner_id) WITH CHECK (auth.uid() = owner_id);
+ALTER POLICY business_posts_owner ON public.business_posts
+  USING (auth.uid() = owner_id) WITH CHECK (auth.uid() = owner_id);
 DROP TRIGGER IF EXISTS sync_listings_owner_fields ON public.listings;
 DROP TRIGGER IF EXISTS sync_storefronts_owner_fields ON public.storefronts;
 DROP TRIGGER IF EXISTS sync_storefront_posts_owner_fields ON public.storefront_posts;

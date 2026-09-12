@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { uploadMediaViaServer } from "./server-media-upload";
-import { MAX_VIDEO_UPLOAD_BYTES, videoUploadTimeoutMs } from "@/lib/media/upload-policy";
+import { MAX_VIDEO_UPLOAD_BYTES, mediaUploadTimeoutMs } from "@/lib/media/upload-policy";
 const fetchRetry = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/utils/fetch-retry", () => ({ fetchWithRetry: fetchRetry }));
 vi.mock("@/lib/utils/csrf", () => ({ withCsrfHeaders: () => ({}) }));
@@ -18,7 +18,7 @@ it.each(["listing", "business_cover", "promotion"] as const)(
     Object.defineProperty(file, "size", { value: MAX_VIDEO_UPLOAD_BYTES });
     await uploadMediaViaServer({ files: [file], area, fallbackMessage: "failed" });
     const timeout = fetchRetry.mock.calls[0][3];
-    expect(timeout).toBe(videoUploadTimeoutMs(MAX_VIDEO_UPLOAD_BYTES));
+    expect(timeout).toBe(mediaUploadTimeoutMs(MAX_VIDEO_UPLOAD_BYTES));
     expect(timeout).toBeGreaterThan((MAX_VIDEO_UPLOAD_BYTES / 62_500) * 1000);
     expect(timeout).toBeLessThanOrEqual(15 * 60_000);
   }
