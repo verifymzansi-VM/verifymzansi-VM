@@ -628,8 +628,63 @@ describe("admin-queries", () => {
   });
 
   describe("getPendingContent", () => {
+    it.each([
+      ["MZANSI_MARKET", "listing"],
+      ["MZANSI_BUSINESS", "business"],
+      ["PROMOTIONS_EVENTS", "promotion"],
+      ["PROMOTIONS_EVENTS", "business"],
+    ] as const)(
+      "includes pending %s %s edits even when no new posts await review",
+      async (area, targetType) => {
+        const edits = createChainableMock({
+          data: [
+            {
+              id: "edit-1",
+              target_id: "post-1",
+              target_type: targetType,
+              owner_id: "owner",
+              area,
+              status: "pending",
+              created_at: "2026-09-12T12:00:00Z",
+              proposed_data: { title: "Changed title" },
+              current_snapshot: { title: "Live title" },
+            },
+          ],
+          error: null,
+        });
+        mockFrom.mockImplementation((table: string) =>
+          table === "content_edit_requests" ? edits : createChainableMock({ data: [] })
+        );
+        const result = await getPendingContent(area);
+        expect(result).toHaveLength(1);
+        expect(result[0]).toMatchObject({
+          id: "edit-1",
+          targetId: "post-1",
+          isEditRequest: true,
+          contentType: targetType,
+          title: "Changed title",
+          change_summary: [{ field: "title", before: "Live title", after: "Changed title" }],
+        });
+      }
+    );
+
+    it("does not silently present a failed edit query as an empty queue", async () => {
+      mockFrom.mockImplementation((table: string) =>
+        createChainableMock(
+          table === "content_edit_requests"
+            ? { error: { message: "unavailable" }, data: null }
+            : { data: [] }
+        )
+      );
+      await expect(getPendingContent("MZANSI_BUSINESS")).rejects.toThrow(
+        "Failed to load pending post edits"
+      );
+    });
+
     it("fetches pending moderation content for area", async () => {
-      mockFrom.mockReturnValue(createChainableMock({ data: [{ id: "l1" }] }));
+      mockFrom.mockImplementation((table: string) =>
+        createChainableMock({ data: table === "listings" ? [{ id: "l1" }] : [] })
+      );
 
       const result = await getPendingContent("MZANSI_MARKET");
       expect(result).toHaveLength(1);

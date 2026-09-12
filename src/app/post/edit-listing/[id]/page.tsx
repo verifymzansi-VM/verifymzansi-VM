@@ -81,7 +81,6 @@ export default function EditListingPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [existingStatus, setExistingStatus] = useState<string | null>(null);
   const [existingLogo, setExistingLogo] = useState<string | null>(null);
   const [existingPhotos, setExistingPhotos] = useState<string[]>([]);
   const [existingVideos, setExistingVideos] = useState<string[]>([]);
@@ -182,7 +181,6 @@ export default function EditListingPage() {
         setTitle(data.title || "");
         setDescription(data.description || "");
         setPrice(data.price_cents ? (data.price_cents / 100).toString() : "");
-        setExistingStatus((data.status as string | null) ?? null);
         setCategory((data.category as ListingCategory) || "");
         setCondition(
           ((data.condition as ListingCondition | null) ??
@@ -493,8 +491,8 @@ export default function EditListingPage() {
         }),
       });
 
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
         if (res.status === 409) {
           if (data?.code === "edit_limit_reached") {
             setFormError("This listing has already used its two approved edit chances.");
@@ -518,7 +516,7 @@ export default function EditListingPage() {
       }
 
       toast({
-        title: existingStatus === "live" ? "Edit submitted for review" : "Listing updated!",
+        title: data?.pendingReview === true ? "Edit submitted for review" : "Listing updated!",
         variant: "success",
       });
       setUploadStatuses((c) => ({ ...c, saving: "done" }));

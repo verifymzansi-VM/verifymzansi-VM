@@ -2,7 +2,7 @@
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KycQueueTable } from "./kyc-queue-table";
-import { ContentQueueTable } from "./content-queue-table";
+import { ContentQueueTable, type ContentItem } from "./content-queue-table";
 import { FlaggingQueueTable } from "./flagging-queue-table";
 import { AreaOverviewStats } from "./area-overview-stats";
 import { ActivityFeed } from "./activity-feed";
@@ -17,18 +17,7 @@ interface AreaAdminTabsProps {
   area: MarketplaceArea;
   areaLabel: string;
   pendingVerifications: PendingVerificationGroup[];
-  pendingContent: Array<{
-    id: string;
-    title?: string;
-    name?: string;
-    business_name?: string;
-    store_number?: string;
-    mall_name?: string;
-    status: string;
-    created_at: string;
-    category?: string;
-    owner_id?: string;
-  }>;
+  pendingContent: ContentItem[];
   reports: Array<{
     id: string;
     target_id: string;

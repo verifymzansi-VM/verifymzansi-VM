@@ -68,6 +68,12 @@ export async function AreaAdminPage({ area, areaLabel, description }: AreaAdminP
         <Badge variant="outline">{area}</Badge>
       </PageHeader>
 
+      {settled[1].status === "rejected" && (
+        <p role="alert" className="text-sm text-destructive">
+          The content review queue could not be loaded. Refresh to try again.
+        </p>
+      )}
+
       <AreaAdminTabs
         area={area}
         areaLabel={areaLabel}

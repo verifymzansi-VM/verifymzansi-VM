@@ -1,3 +1,4 @@
+import { toContentEditModerationItem } from "@/lib/content-edit-moderation";
 /**
  * Admin query helpers — shared data-fetching for admin pages.
  * Uses server-side Supabase client (anon key + user session for RLS).
@@ -702,7 +703,7 @@ export async function getAreaReports(area: MarketplaceArea) {
 }
 
 /** Get content pending moderation for an area */
-export async function getPendingContent(area: MarketplaceArea) {
+async function getPendingNewContent(area: MarketplaceArea) {
   const supabase = createAdminClient();
 
   if (area === "MZANSI_MARKET") {
@@ -784,6 +785,26 @@ export async function getPendingContent(area: MarketplaceArea) {
 }
 
 // ── Dashboard-specific richer queries ────────────────────────
+
+/** Live posts stay live while their proposed edits wait in a separate table. */
+export async function getPendingContent(area: MarketplaceArea) {
+  const [content, edits] = await Promise.all([
+    getPendingNewContent(area),
+    createAdminClient()
+      .from("content_edit_requests")
+      .select(
+        "id, target_type, target_id, owner_id, area, status, proposed_data, current_snapshot, created_at"
+      )
+      .eq("area", area)
+      .eq("status", "pending")
+      .order("created_at", { ascending: true })
+      .limit(50),
+  ]);
+  if (edits.error) throw new Error("Failed to load pending post edits");
+  return [...content, ...(edits.data ?? []).map(toContentEditModerationItem)].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+}
 
 export interface DashboardKycItem {
   id: string;

@@ -63,6 +63,18 @@ describe("AdminRealtimeRefresh", () => {
     expect(mockRefresh).toHaveBeenCalledTimes(1);
   });
 
+  it("refreshes without a notification and cleans up its fallback", () => {
+    const { unmount } = render(<AdminRealtimeRefresh />);
+    vi.advanceTimersByTime(30_000);
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+    window.dispatchEvent(new Event("focus"));
+    expect(mockRefresh).toHaveBeenCalledTimes(2);
+    unmount();
+    vi.advanceTimersByTime(30_000);
+    window.dispatchEvent(new Event("focus"));
+    expect(mockRefresh).toHaveBeenCalledTimes(2);
+  });
+
   it("ignores queue events that do not enter a tracked admin status", () => {
     render(<AdminRealtimeRefresh />);
 

@@ -68,12 +68,22 @@ export function AdminRealtimeRefresh() {
   };
 
   useEffect(() => {
+    // Recover from missed notifications or a disconnected realtime channel.
+    const refreshVisibleQueue = () => {
+      if (document.visibilityState === "visible") {
+        startTransition(() => router.refresh());
+      }
+    };
+    const interval = setInterval(refreshVisibleQueue, 30_000);
+    window.addEventListener("focus", refreshVisibleQueue);
     return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", refreshVisibleQueue);
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
     };
-  }, []);
+  }, [router]);
 
   useRealtime({
     table: "verification_steps",

@@ -126,143 +126,156 @@ describe("POST /api/admin/content-edits/decide", () => {
     mockQueuePublicMediaCleanup.mockResolvedValue(undefined);
   });
 
-  it("approves a pending edit, applies proposed data, increments the edit count, and notifies the owner", async () => {
-    const targetUpdate = vi.fn().mockReturnValue({
-      eq: vi.fn().mockReturnValue({
+  it.each(["admin", "moderator"])(
+    "allows %s to approve an edit, apply it, and notify its owner",
+    async (role) => {
+      mockGetStaffActorRole.mockReturnValue(role);
+      const targetUpdate = vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
-            select: vi.fn().mockResolvedValue({ data: [{ id: targetId }], error: null }),
-          }),
-        }),
-      }),
-    });
-
-    mockFrom.mockImplementation((table: string) => {
-      if (table === "content_edit_requests") {
-        return {
-          select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                maybeSingle: vi.fn().mockResolvedValue({ data: makeEditRequest(), error: null }),
-              }),
+              select: vi.fn().mockResolvedValue({ data: [{ id: targetId }], error: null }),
             }),
           }),
-          update: vi.fn((payload: { status?: string }) => {
-            // Claim chain: update → eq(id) → eq(status) → select("*") → maybeSingle
-            if (payload.status === "processing") {
+        }),
+      });
+
+      mockFrom.mockImplementation((table: string) => {
+        if (table === "content_edit_requests") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({ data: makeEditRequest(), error: null }),
+                }),
+              }),
+            }),
+            update: vi.fn((payload: { status?: string }) => {
+              // Claim chain: update → eq(id) → eq(status) → select("*") → maybeSingle
+              if (payload.status === "processing") {
+                return {
+                  eq: vi.fn().mockReturnValue({
+                    eq: vi.fn().mockReturnValue({
+                      select: vi.fn().mockReturnValue({
+                        maybeSingle: vi
+                          .fn()
+                          .mockResolvedValue({ data: makeEditRequest(), error: null }),
+                      }),
+                    }),
+                  }),
+                };
+              }
+              // Mark-approved chain: update → eq(id) → eq(status) → eq(reviewed_by) → select("id")
               return {
                 eq: vi.fn().mockReturnValue({
                   eq: vi.fn().mockReturnValue({
-                    select: vi.fn().mockReturnValue({
-                      maybeSingle: vi
-                        .fn()
-                        .mockResolvedValue({ data: makeEditRequest(), error: null }),
+                    eq: vi.fn().mockReturnValue({
+                      select: vi.fn().mockResolvedValue({ data: [{ id: requestId }], error: null }),
                     }),
                   }),
                 }),
               };
-            }
-            // Mark-approved chain: update → eq(id) → eq(status) → eq(reviewed_by) → select("id")
-            return {
+            }),
+          };
+        }
+
+        if (table === "listings") {
+          return {
+            select: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  eq: vi.fn().mockReturnValue({
-                    select: vi.fn().mockResolvedValue({ data: [{ id: requestId }], error: null }),
-                  }),
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: {
+                    id: targetId,
+                    owner_id: "owner-1",
+                    status: "live",
+                    approved_edit_count: 1,
+                  },
+                  error: null,
                 }),
               }),
-            };
-          }),
-        };
-      }
-
-      if (table === "listings") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({
-                data: { id: targetId, owner_id: "owner-1", status: "live", approved_edit_count: 1 },
-                error: null,
-              }),
             }),
-          }),
-          update: targetUpdate,
-        };
-      }
+            update: targetUpdate,
+          };
+        }
 
-      throw new Error(`Unexpected table ${table}`);
-    });
+        throw new Error(`Unexpected table ${table}`);
+      });
 
-    const response = await POST(createMockRequest({ requestId, decision: "approve" }));
+      const response = await POST(createMockRequest({ requestId, decision: "approve" }));
 
-    expect(response.status).toBe(200);
-    expect(targetUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: "Updated iPhone",
-        status: "live",
-        approved_edit_count: 2,
-      })
-    );
-    expect(mockQueuePublicMediaCleanup).toHaveBeenCalledWith(
-      expect.anything(),
-      ["old.jpg"],
-      "content_edit_approved"
-    );
-    expect(mockCreateNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: "owner-1",
-        title: "Listing edit approved",
-      })
-    );
-  });
+      expect(response.status).toBe(200);
+      expect(targetUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Updated iPhone",
+          status: "live",
+          approved_edit_count: 2,
+        })
+      );
+      expect(mockQueuePublicMediaCleanup).toHaveBeenCalledWith(
+        expect.anything(),
+        ["old.jpg"],
+        "content_edit_approved"
+      );
+      expect(mockCreateNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: "owner-1",
+          title: "Listing edit approved",
+        })
+      );
+    }
+  );
 
-  it("rejects a pending edit without consuming an approved edit chance", async () => {
-    const requestUpdate = vi.fn().mockReturnValue({
-      eq: vi.fn().mockReturnValue({
+  it.each(["admin", "moderator"])(
+    "allows %s to reject an edit without changing the live post",
+    async (role) => {
+      mockGetStaffActorRole.mockReturnValue(role);
+      const requestUpdate = vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
-          select: vi.fn().mockResolvedValue({ data: [{ id: requestId }], error: null }),
+          eq: vi.fn().mockReturnValue({
+            select: vi.fn().mockResolvedValue({ data: [{ id: requestId }], error: null }),
+          }),
         }),
-      }),
-    });
+      });
 
-    mockFrom.mockImplementation((table: string) => {
-      if (table === "content_edit_requests") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
+      mockFrom.mockImplementation((table: string) => {
+        if (table === "content_edit_requests") {
+          return {
+            select: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                maybeSingle: vi.fn().mockResolvedValue({ data: makeEditRequest(), error: null }),
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({ data: makeEditRequest(), error: null }),
+                }),
               }),
             }),
-          }),
-          update: requestUpdate,
-        };
-      }
+            update: requestUpdate,
+          };
+        }
 
-      throw new Error(`Unexpected table ${table}`);
-    });
+        throw new Error(`Unexpected table ${table}`);
+      });
 
-    const response = await POST(
-      createMockRequest({ requestId, decision: "reject", reason: "Photo is misleading" })
-    );
+      const response = await POST(
+        createMockRequest({ requestId, decision: "reject", reason: "Photo is misleading" })
+      );
 
-    expect(response.status).toBe(200);
-    expect(requestUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: "rejected",
-        reason: "Photo is misleading",
-      })
-    );
-    expect(mockQueuePublicMediaCleanup).toHaveBeenCalledWith(
-      expect.anything(),
-      ["new.jpg"],
-      "content_edit_rejected"
-    );
-    expect(mockCreateNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: "owner-1",
-        title: "Listing edit rejected",
-      })
-    );
-  });
+      expect(response.status).toBe(200);
+      expect(requestUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: "rejected",
+          reason: "Photo is misleading",
+        })
+      );
+      expect(mockQueuePublicMediaCleanup).toHaveBeenCalledWith(
+        expect.anything(),
+        ["new.jpg"],
+        "content_edit_rejected"
+      );
+      expect(mockCreateNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: "owner-1",
+          title: "Listing edit rejected",
+        })
+      );
+    }
+  );
 });

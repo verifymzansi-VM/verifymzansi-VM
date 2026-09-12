@@ -111,7 +111,6 @@ export default function EditBusinessPage() {
   });
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [existingStatus, setExistingStatus] = useState<string | null>(null);
 
   // Business Type
   const [businessType, setBusinessType] = useState<BusinessType>("standalone_shop");
@@ -218,7 +217,6 @@ export default function EditBusinessPage() {
         const data = await res.json();
         const b = data.business;
 
-        setExistingStatus(b.status || null);
         setListingArea(b.area === "PROMOTIONS_EVENTS" ? "PROMOTIONS_EVENTS" : "MZANSI_BUSINESS");
         setBusinessType(b.business_type || "standalone_shop");
         setBusinessName(b.business_name || "");
@@ -637,11 +635,13 @@ export default function EditBusinessPage() {
       }
 
       toast({
-        title: existingStatus === "live" ? "Edit submitted for review" : "Business updated!",
+        title: data?.pendingReview === true ? "Edit submitted for review" : "Business updated!",
         variant: "success",
       });
       setUploadStatuses((c) => ({ ...c, saving: "done" }));
-      router.push("/dashboard/listings?area=MZANSI_BUSINESS&updated=business");
+      router.push(
+        `/dashboard/listings?area=MZANSI_BUSINESS&updated=business${data?.pendingReview === true ? "&review=pending" : ""}`
+      );
     } catch (error: unknown) {
       const uploadFailure = getBusinessMediaUploadErrorState(error);
       if (uploadFailure) {

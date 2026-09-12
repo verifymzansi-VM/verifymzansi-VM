@@ -466,7 +466,9 @@ export default function EditPromotionPage() {
         variant: "success",
       });
       setUploadStatuses((c) => ({ ...c, saving: "done" }));
-      router.push("/dashboard/listings?area=PROMOTIONS_EVENTS&updated=promotion");
+      router.push(
+        `/dashboard/listings?area=PROMOTIONS_EVENTS&updated=promotion${data?.pendingReview === true ? "&review=pending" : ""}`
+      );
     } catch (error: unknown) {
       const uploadFailure = getPromotionMediaUploadErrorState(error);
       if (uploadFailure) {

@@ -224,9 +224,9 @@ function applyDashboardExpiryStatus(item: DashboardItem, now = new Date()): Dash
 export default async function ListingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ area?: string; created?: string; updated?: string }>;
+  searchParams: Promise<{ area?: string; created?: string; updated?: string; review?: string }>;
 }) {
-  const { area: areaParam, created, updated } = await searchParams;
+  const { area: areaParam, created, updated, review } = await searchParams;
   const areaFilter =
     areaParam && ["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"].includes(areaParam)
       ? (areaParam as MarketplaceArea)
@@ -241,7 +241,10 @@ export default async function ListingsPage({
   const successAlert = updated
     ? {
         title: `${dashboardPostLabel(updated)} updated`,
-        description: "Your changes were saved and resubmitted for review.",
+        description:
+          review === "pending"
+            ? "Your edit is awaiting staff review. The current approved post stays live until approval."
+            : "Your changes were saved. Rejected posts must be resubmitted using the Resubmit button.",
       }
     : created
       ? {

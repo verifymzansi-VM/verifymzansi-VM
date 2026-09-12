@@ -6,7 +6,7 @@ import { ModerationQueueClient } from "./moderation-queue-client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isStaff } from "@/lib/auth/roles";
 import { createLogger } from "@/lib/utils/logger";
-import { getContentEditChanges } from "@/lib/content-edit-diff";
+import { toContentEditModerationItem } from "@/lib/content-edit-moderation";
 
 const log = createLogger("AdminModerationPage");
 
@@ -84,50 +84,7 @@ export default async function AdminModerationPage() {
     });
   }
 
-  const editItems = pendingEditRequests.map((request) => {
-    const proposed = (request.proposed_data ?? {}) as Record<string, unknown>;
-    const currentSnapshot = (request.current_snapshot ?? {}) as Record<string, unknown>;
-    const targetType = request.target_type as string;
-    const title =
-      typeof proposed.title === "string"
-        ? proposed.title
-        : typeof proposed.business_name === "string"
-          ? proposed.business_name
-          : typeof currentSnapshot.title === "string"
-            ? currentSnapshot.title
-            : typeof currentSnapshot.business_name === "string"
-              ? currentSnapshot.business_name
-              : `Edit ${String(request.id).slice(0, 8)}`;
-    const area = request.area as "MZANSI_MARKET" | "MZANSI_BUSINESS" | "PROMOTIONS_EVENTS";
-    const areaLabel =
-      area === "MZANSI_MARKET"
-        ? "Mzansi Market"
-        : area === "MZANSI_BUSINESS"
-          ? "Mzansi Business"
-          : "Tourism & Events";
-    const itemType =
-      targetType === "business"
-        ? "Business edit"
-        : targetType === "promotion"
-          ? "Promotion edit"
-          : "Listing edit";
-
-    return {
-      ...proposed,
-      id: request.id,
-      targetId: request.target_id,
-      title,
-      status: request.status,
-      created_at: request.created_at,
-      owner_id: request.owner_id,
-      area,
-      areaLabel,
-      itemType,
-      isEditRequest: true,
-      current_snapshot: currentSnapshot,
-      change_summary: getContentEditChanges(currentSnapshot, proposed),
-    };
-  });
+  const editItems = pendingEditRequests.map(toContentEditModerationItem);
 
   const allItems = [
     ...(pendingListings || []).map((l) => ({

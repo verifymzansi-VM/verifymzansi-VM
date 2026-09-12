@@ -168,7 +168,7 @@ describe("EditBusinessPage", () => {
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ success: true }),
+        json: async () => ({ success: true, pendingReview: true }),
       }) as unknown as typeof fetch;
   });
 
@@ -179,6 +179,23 @@ describe("EditBusinessPage", () => {
       json: async () => body,
     };
   }
+
+  it("does not claim a saved update was submitted without server confirmation", async () => {
+    render(<EditBusinessPage />);
+    await waitFor(() => expect(screen.getByDisplayValue("Nomsa Home Studio")).toBeInTheDocument());
+    vi.mocked(global.fetch)
+      .mockReset()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) } as Response);
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Business updated!" })
+      )
+    );
+    expect(mockToast).not.toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Edit submitted for review" })
+    );
+  });
 
   it("hydrates the saved type-specific details and sends business_details on save", async () => {
     render(<EditBusinessPage />);
@@ -208,7 +225,7 @@ describe("EditBusinessPage", () => {
       expect.objectContaining({ title: "Edit submitted for review", variant: "success" })
     );
     expect(mockPush).toHaveBeenCalledWith(
-      "/dashboard/listings?area=MZANSI_BUSINESS&updated=business"
+      "/dashboard/listings?area=MZANSI_BUSINESS&updated=business&review=pending"
     );
     expect(payload.map_directions).toBe("https://maps.example.com/home-studio");
     expect(payload.business_details).toMatchObject({
@@ -321,7 +338,7 @@ describe("EditBusinessPage", () => {
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ success: true }),
+        json: async () => ({ success: true, pendingReview: true }),
       });
 
     render(<EditBusinessPage />);

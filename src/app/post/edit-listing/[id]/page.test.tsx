@@ -147,10 +147,25 @@ describe("EditListingPage", () => {
 
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ success: true }),
+      json: async () => ({ success: true, pendingReview: true }),
     }) as unknown as typeof fetch;
     global.URL.createObjectURL = vi.fn(() => "blob:new-logo-preview");
     global.URL.revokeObjectURL = vi.fn();
+  });
+
+  it("does not claim a saved update was submitted without server confirmation", async () => {
+    render(<EditListingPage />);
+    await waitFor(() => expect(screen.getByDisplayValue("Used iPhone 15")).toBeInTheDocument());
+    vi.mocked(global.fetch)
+      .mockReset()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) } as Response);
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Listing updated!" }))
+    );
+    expect(mockToast).not.toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Edit submitted for review" })
+    );
   });
 
   it("hydrates saved listing details and sends normalized payload on save", async () => {
@@ -257,7 +272,7 @@ describe("EditListingPage", () => {
         if (input === "/api/listings/listing-1") {
           return {
             ok: true,
-            json: async () => ({ success: true }),
+            json: async () => ({ success: true, pendingReview: true }),
           };
         }
 

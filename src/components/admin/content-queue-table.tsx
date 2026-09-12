@@ -17,9 +17,14 @@ import {
 import { CheckCircle, XCircle, Package, Eye, Search, MapPin, User } from "lucide-react";
 import { ContentDecisionDialog } from "@/components/admin/content-decision-dialog";
 import { useContentDecision } from "@/components/admin/use-content-decision";
+import type { ContentEditChange } from "@/lib/content-edit-diff";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 
-interface ContentItem {
+export interface ContentItem {
+  isEditRequest?: boolean;
+  targetId?: string;
+  current_snapshot?: Record<string, unknown>;
+  change_summary?: ContentEditChange[];
   id: string;
   title?: string;
   name?: string;
@@ -67,6 +72,8 @@ export function ContentQueueTable({ items, area, onDecisionComplete }: ContentQu
   } = useContentDecision<ContentItem>({
     getArea: (item) => item.area || area,
     getContentType: (item) => item.contentType,
+    getEndpoint: (item) =>
+      item.isEditRequest ? "/api/admin/content-edits/decide" : "/api/admin/content/decide",
     onDecisionComplete: () => {
       setPreviewItem(null);
       onDecisionComplete?.();
@@ -192,6 +199,12 @@ export function ContentQueueTable({ items, area, onDecisionComplete }: ContentQu
                       </span>
                     )}
                   </div>
+                  {item.isEditRequest && (
+                    <p className="mt-2 text-xs text-amber-700">
+                      Edit awaiting review:{" "}
+                      {item.change_summary?.map((change) => change.label).join(", ")}
+                    </p>
+                  )}
                   {item.description && (
                     <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
                       {item.description}
@@ -259,6 +272,21 @@ export function ContentQueueTable({ items, area, onDecisionComplete }: ContentQu
                 {previewItem.category && <Badge variant="secondary">{previewItem.category}</Badge>}
               </div>
 
+              {previewItem.isEditRequest && (
+                <section className="space-y-3 rounded-md border p-3">
+                  <h3 className="font-semibold">Proposed changes</h3>
+                  <p className="text-xs text-muted-foreground">
+                    The current approved post stays live until this edit is approved.
+                  </p>
+                  {previewItem.change_summary?.map((change) => (
+                    <div key={change.field} className="space-y-1 break-words">
+                      <p className="font-medium">{change.label}</p>
+                      <p className="whitespace-pre-wrap">Current: {change.before}</p>
+                      <p className="whitespace-pre-wrap">Proposed: {change.after}</p>
+                    </div>
+                  ))}
+                </section>
+              )}
               <div className="rounded-md border p-3">
                 <p className="text-xs font-medium uppercase text-muted-foreground">Submitted</p>
                 <p>{formatRelativeTime(previewItem.created_at)}</p>
