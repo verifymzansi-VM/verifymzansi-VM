@@ -75,9 +75,18 @@ export async function POST(request: NextRequest) {
     // Use admin client for lookups and inserts to bypass RLS on service-only tables
     const admin = createAdminClient();
 
-    const targetTable = parsedBody.data.targetType === "promotion" ? "promotions" : "listings";
+    const targetTable =
+      parsedBody.data.targetType === "business"
+        ? "businesses"
+        : parsedBody.data.targetType === "promotion"
+          ? "promotions"
+          : "listings";
     const notFoundLabel =
-      parsedBody.data.targetType === "promotion" ? "Tourism & Events post" : "Listing";
+      parsedBody.data.targetType === "business"
+        ? "Business profile"
+        : parsedBody.data.targetType === "promotion"
+          ? "Tourism & Events post"
+          : "Listing";
 
     // Get the content owner (use admin client so unauthenticated users can still contact)
     const ownerColumn = await getOwnerColumn(admin, targetTable);
@@ -85,7 +94,9 @@ export async function POST(request: NextRequest) {
       .from(targetTable)
       .select(
         withOwnerColumn(
-          "id, owner_id, title, status, contact_methods, expires_at, created_at",
+          parsedBody.data.targetType === "business"
+            ? "id, owner_id, title:business_name, status, expires_at, created_at"
+            : "id, owner_id, title, status, contact_methods, expires_at, created_at",
           ownerColumn
         )
       )

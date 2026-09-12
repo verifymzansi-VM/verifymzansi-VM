@@ -30,6 +30,14 @@ describe("contactAccountHolderSchema", () => {
     );
   });
 
+  it("accepts a business enquiry but rejects ambiguous targets", () => {
+    const businessId = valid.listingId;
+    const result = contactAccountHolderSchema.parse({ ...valid, listingId: undefined, businessId });
+    expect(result.targetType).toBe("business");
+    expect(result.targetId).toBe(businessId);
+    expect(contactAccountHolderSchema.safeParse({ ...valid, businessId }).success).toBe(false);
+  });
+
   it("rejects message too short", () => {
     expect(contactAccountHolderSchema.safeParse({ ...valid, message: "Hi" }).success).toBe(false);
   });

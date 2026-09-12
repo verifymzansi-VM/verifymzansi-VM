@@ -633,8 +633,8 @@ export function PromotionDetailContent({
                     {advertiserProfile?.display_name?.charAt(0)?.toUpperCase() || "A"}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">
-                      {advertiserProfile?.display_name || "Advertiser"}
+                    <p className="break-words text-sm font-medium">
+                      {advertiserProfile?.display_name || "Account name unavailable"}
                     </p>
                     <TrustBadge level={trustLevel} size="sm" />
                   </div>
@@ -982,7 +982,7 @@ export function PromotionDetailContent({
                   )}
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{linkedBusiness.business_name}</p>
+                  <p className="break-words text-sm font-medium">{linkedBusiness.business_name}</p>
                   <p className="text-xs text-brand-blue">View Business</p>
                 </div>
               </Link>
@@ -1029,7 +1029,7 @@ export function PromotionDetailContent({
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium">
-                  {advertiserProfile?.display_name || "Advertiser"}
+                  {advertiserProfile?.display_name || "Account name unavailable"}
                 </p>
                 <TrustBadge level={trustLevel} size="sm" />
               </div>
@@ -1079,7 +1079,7 @@ export function PromotionDetailContent({
                   )}
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{linkedBusiness.business_name}</p>
+                  <p className="break-words text-sm font-medium">{linkedBusiness.business_name}</p>
                   <p className="text-xs text-brand-blue">View Business</p>
                 </div>
               </Link>

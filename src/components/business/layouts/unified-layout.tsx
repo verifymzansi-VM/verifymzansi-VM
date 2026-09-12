@@ -11,9 +11,10 @@ import {
   MapPin,
   Maximize2,
   Play,
-  ShieldCheck,
+  MessageSquare,
   Store,
 } from "lucide-react";
+import { ContentContactActions } from "@/components/listings/content-contact-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -29,21 +30,20 @@ import {
   type TrustLevel,
 } from "@/types/enums";
 import {
+  TourismDetailsCard,
   type BusinessDetailRecord,
   type BusinessOwnerRecord,
   type BusinessPromotionRecord,
 } from "@/components/business/business-detail-content";
 import { StickyContactBar } from "@/components/business/shared/sticky-contact-bar";
-import {
-  ManagedByCard,
-  OperatingHoursCard,
-  ShareReportRow,
-} from "@/components/business/shared/business-sidebar-cards";
+import { ManagedByCard } from "@/components/business/shared/business-sidebar-cards";
 import { BusinessDetailsAccordion } from "@/components/business/shared/business-details-accordion";
 import { MediaLightbox } from "@/components/ui/media-lightbox";
 import { ProfileVideoPlayer } from "@/components/ui/profile-video-player";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { safeExternalHref } from "@/lib/utils/sanitize-html";
+import type { TourismCategoryDetails } from "@/types/tourism-details";
+import { getCategoryDetailFields } from "@/lib/forms/business-category-details";
 import type { BusinessProfileFamily } from "@/lib/presentation/profile-variants";
 import { useHorizontalSwipeNavigation } from "@/hooks/use-horizontal-swipe-navigation";
 import { useTrackContentView } from "@/hooks/use-track-content-view";
@@ -108,7 +108,7 @@ function getTourismQuickFacts(business: BusinessDetailRecord): QuickFact[] {
     facts.push({ label: "Group Size", value: `${details.max_group_size} guests` });
   }
 
-  return facts.slice(0, 6);
+  return facts;
 }
 
 /* ── Self-reported business profile extras (category_details.business_profile) ── */
@@ -564,7 +564,7 @@ export function UnifiedLayout({
     includeLanguages: family !== "tourism",
   });
   const tourismDetails = (business.category_details ?? {}) as Record<string, unknown>;
-  const amenityHighlights = normalizeList(tourismDetails.amenities).slice(0, 8);
+  const amenityHighlights = normalizeList(tourismDetails.amenities);
   const bookingUrl =
     family === "tourism" && typeof tourismDetails.booking_url === "string"
       ? tourismDetails.booking_url
@@ -599,7 +599,7 @@ export function UnifiedLayout({
         ) : null}
       </div>
 
-      {(business.location_city || business.location_province) && (
+      {(business.location_city || business.location_province || business.location_town) && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <MapPin className="h-4 w-4 text-brand-blue" />
           <span>
@@ -609,6 +609,10 @@ export function UnifiedLayout({
           </span>
         </div>
       )}
+
+      {business.location_address ? (
+        <p className="text-sm text-muted-foreground">{business.location_address}</p>
+      ) : null}
 
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Eye className="h-4 w-4 text-brand-blue" />
@@ -713,7 +717,7 @@ export function UnifiedLayout({
                 Meal Options
               </p>
               <p className="mt-1 text-sm font-medium">
-                {normalizeList(tourismDetails.meal_options).slice(0, 3).join(", ")}
+                {normalizeList(tourismDetails.meal_options).join(", ")}
               </p>
             </div>
           ) : null}
@@ -723,7 +727,7 @@ export function UnifiedLayout({
                 Activities
               </p>
               <p className="mt-1 text-sm font-medium">
-                {normalizeList(tourismDetails.activity_types).slice(0, 3).join(", ")}
+                {normalizeList(tourismDetails.activity_types).join(", ")}
               </p>
             </div>
           ) : null}
@@ -820,6 +824,24 @@ export function UnifiedLayout({
       </div>
     );
 
+  const hasSpotlight =
+    family !== "tourism" ||
+    [
+      "amenities",
+      "languages_spoken",
+      "cancellation_policy",
+      "meal_options",
+      "activity_types",
+      "tgcsa_grading",
+      "minimum_stay_nights",
+      "child_policy",
+      "seasonal_pricing",
+      "nearby_attractions",
+    ].some((key) => {
+      const value = tourismDetails[key];
+      return Array.isArray(value) ? value.length > 0 : typeof value === "number" || Boolean(value);
+    });
+
   const infoColumn = (
     <div className="space-y-5">
       <SectionCard
@@ -831,32 +853,69 @@ export function UnifiedLayout({
               : "Browse The Brand"
         }
         title={
-          family === "tourism"
-            ? "Booking, location, and what to expect"
-            : family === "professional"
-              ? "Trust signals and service clarity"
-              : "A more visual profile for discovery"
+          family === "tourism" ? "Booking, location, and what to expect" : "About this business"
         }
         body={introBody}
       />
 
-      <SectionCard
-        eyebrow={
-          family === "tourism"
-            ? "Guest Highlights"
-            : family === "professional"
-              ? "Working Details"
-              : "Profile Focus"
-        }
-        title={
-          family === "tourism"
-            ? "Stay details, amenities, and experience cues"
-            : family === "professional"
-              ? "Operational details customers need first"
-              : "Media, range, and offer rhythm"
-        }
-        body={spotlightBody}
-      />
+      {hasSpotlight ? (
+        <SectionCard
+          eyebrow={
+            family === "tourism"
+              ? "Guest Highlights"
+              : family === "professional"
+                ? "Working Details"
+                : "Profile Focus"
+          }
+          title={
+            family === "tourism"
+              ? "Stay details and amenities"
+              : family === "professional"
+                ? "Operational details customers need first"
+                : "Products and offers"
+          }
+          body={spotlightBody}
+        />
+      ) : null}
+
+      {family === "tourism" ? (
+        <TourismDetailsCard details={tourismDetails as TourismCategoryDetails} />
+      ) : null}
+      {getCategoryDetailFields(businessCategory).some((field) => {
+        const value = business.category_details?.[field.name];
+        return value != null && value !== "" && (!Array.isArray(value) || value.length > 0);
+      }) ? (
+        <SectionCard
+          eyebrow="Details"
+          title="Additional information"
+          body={
+            <dl className="grid gap-4 sm:grid-cols-2">
+              {getCategoryDetailFields(businessCategory).map((field) => {
+                const value = business.category_details?.[field.name];
+                if (value == null || value === "" || (Array.isArray(value) && !value.length))
+                  return null;
+                const format = (item: unknown) =>
+                  field.options?.find((option) => option.value === item)?.label ??
+                  String(item).replace(/_/g, " ");
+                return (
+                  <div key={field.name}>
+                    <dt className="text-sm text-muted-foreground">{field.label}</dt>
+                    <dd className="whitespace-pre-wrap break-words text-sm font-medium">
+                      {typeof value === "boolean"
+                        ? value
+                          ? "Yes"
+                          : "No"
+                        : Array.isArray(value)
+                          ? value.map(format).join(", ")
+                          : format(value)}
+                    </dd>
+                  </div>
+                );
+              })}
+            </dl>
+          }
+        />
+      ) : null}
 
       <BusinessDetailsAccordion
         business={business}
@@ -926,10 +985,6 @@ export function UnifiedLayout({
 
         <div className={isReviewLayout ? "space-y-4 2xl:col-span-2" : "space-y-4"}>
           <ManagedByCard ownerProfile={ownerProfile} trustLevel={trustLevel} />
-          {business.operating_hours ? (
-            <OperatingHoursCard operatingHours={business.operating_hours} />
-          ) : null}
-
           <Card className="border-slate-200/75 bg-white/95 elev-sm dark:border-white/10 dark:bg-slate-950/75">
             <CardContent className="space-y-4 p-5">
               <div className="space-y-1">
@@ -942,13 +997,25 @@ export function UnifiedLayout({
               </div>
 
               <div className="space-y-2 text-sm">
-                {business.phone ? (
+                {Object.entries(business.social_links ?? {})
+                  .filter(([, url]) => Boolean(url))
+                  .map(([platform, url]) => (
+                    <a
+                      key={platform}
+                      href={safeExternalHref(url)}
+                      target="_blank"
+                      rel="noopener noreferrer nofollow ugc"
+                      className="block rounded-xl border px-3 py-2 capitalize"
+                    >
+                      {platform}
+                    </a>
+                  ))}
+                {business.email ? (
                   <a
-                    href={`tel:${business.phone}`}
-                    className="flex items-center gap-2 rounded-xl border px-3 py-2"
+                    href={`mailto:${business.email}`}
+                    className="block break-all rounded-xl border px-3 py-2"
                   >
-                    <ShieldCheck className="h-4 w-4 text-brand-green" />
-                    <span className="font-medium">{business.phone}</span>
+                    {business.email}
                   </a>
                 ) : null}
                 {business.website ? (
@@ -976,7 +1043,7 @@ export function UnifiedLayout({
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {business.services_offered?.slice(0, 4).map((service) => (
+                {business.services_offered?.map((service) => (
                   <Badge key={service} variant="outline">
                     {service}
                   </Badge>
@@ -985,7 +1052,47 @@ export function UnifiedLayout({
             </CardContent>
           </Card>
 
-          <ShareReportRow business={business} showPublicActions={showPublicActions} />
+          {showPublicActions ? (
+            <Card>
+              <CardContent className="space-y-3 p-5">
+                <h3 className="font-display text-lg font-semibold">Message the account holder</h3>
+                <p className="text-sm text-muted-foreground">
+                  Send an enquiry through VerifyMzansi. It arrives in the poster’s inbox with your
+                  reply details.
+                </p>
+                <ContentContactActions
+                  phone={business.phone}
+                  whatsapp={business.whatsapp}
+                  showPhoneButton={true}
+                  showMessageButton={true}
+                  messageIcon={MessageSquare}
+                  config={{
+                    targetId: business.id,
+                    sharePath: `${family === "tourism" ? "/tourism-events" : "/mzansi-business"}/${business.id}`,
+                    shareTitle: business.business_name,
+                    contactPayloadKey: "businessId",
+                    contactErrorFallback: "Failed to send enquiry",
+                    reportTargetType: "business",
+                    reportTitle: "Report profile",
+                    reportPlaceholder: "Describe the issue with this profile...",
+                    reportSuccessCopy: "Thank you. Our team will review this profile.",
+                    reportOptions: [
+                      { value: "misleading", label: "Inaccurate information" },
+                      { value: "scam", label: "Scam or fraud" },
+                      { value: "other", label: "Other" },
+                    ],
+                    messageTitle: `Enquire about ${business.business_name}`,
+                    messageDescription:
+                      "Your enquiry goes to the account holder’s inbox with your reply details.",
+                    messagePlaceholder: "Hi, I would like to know more...",
+                    messageSubmitLabel: "Send enquiry",
+                    messageSuccessCopy:
+                      "Your enquiry is in the account holder’s inbox. They can reply using the contact details you provided.",
+                  }}
+                />
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
       </div>
 

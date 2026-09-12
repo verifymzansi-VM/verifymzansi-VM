@@ -191,6 +191,96 @@ describe("POST /api/contact", () => {
     );
   });
 
+  it("delivers a business profile enquiry to its account holder", async () => {
+    const ownerId = "11111111-1111-4111-8111-111111111111";
+    const listingId = "22222222-2222-4222-8222-222222222222";
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "businesses") {
+        return {
+          select: vi.fn().mockImplementation((fields: string) => {
+            if (
+              fields.includes("owner_id") &&
+              fields.includes("title") &&
+              fields.includes("status")
+            ) {
+              return {
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: {
+                      id: listingId,
+                      owner_id: ownerId,
+                      title: "Vintage Couch",
+                      status: "live",
+                    },
+                    error: null,
+                  }),
+                }),
+              };
+            }
+
+            return {};
+          }),
+        };
+      }
+
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  account_verification_status: "verified",
+                },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+
+      if (table === "contact_events" || table === "leads") {
+        return {
+          insert: vi.fn().mockResolvedValue({ error: null }),
+        };
+      }
+
+      return {};
+    });
+
+    const response = await POST(
+      createMockRequest({
+        businessId: listingId,
+        message: "Hi there, I want to buy this today.",
+        contactMethod: "form",
+        turnstileToken: "token",
+      })
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(mockCheckRateLimit).toHaveBeenCalledWith({
+      key: "203.0.113.10",
+      action: "contact:send",
+    });
+    expect(mockCreateNotification).toHaveBeenCalledWith({
+      userId: ownerId,
+      type: "info",
+      title: "New lead received!",
+      message: 'Someone is interested in "Vintage Couch".',
+      href: "/dashboard/leads",
+    });
+    expect(mockSendContactFormNotification).toHaveBeenCalledWith(
+      "owner@example.com",
+      "there",
+      "Interested buyer",
+      "buyer@example.com",
+      "Hi there, I want to buy this today.",
+      "Vintage Couch"
+    );
+  });
+
   it("rejects anonymous enquiries without a reply address before writing", async () => {
     const response = await POST(
       createMockRequest({

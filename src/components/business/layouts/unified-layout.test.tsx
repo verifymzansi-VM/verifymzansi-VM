@@ -64,10 +64,6 @@ vi.mock("@/components/business/shared/business-sidebar-cards", () => ({
   ShareReportRow: () => <div>Share Report</div>,
 }));
 
-vi.mock("@/components/business/shared/business-details-accordion", () => ({
-  BusinessDetailsAccordion: () => <div>Details Accordion</div>,
-}));
-
 vi.mock("@/components/business/shared/sticky-contact-bar", () => ({
   StickyContactBar: () => <div>Sticky Contact</div>,
 }));
@@ -120,6 +116,43 @@ const business: BusinessDetailRecord = {
 };
 
 describe("UnifiedLayout", () => {
+  it.each(["showroom", "tourism"] as const)(
+    "shows details and contact methods without expanding %s profiles",
+    (family) => {
+      render(
+        <UnifiedLayout
+          family={family}
+          business={{
+            ...business,
+            location_address: "12 Main Road",
+            email: "hello@example.com",
+            whatsapp: "0821234567",
+            operating_hours: { Mon_Fri: "08:00 - 17:00" },
+            delivery_options: ["courier"],
+          }}
+          trustLevel={null}
+          ownerProfile={{ display_name: "Aphiwe" }}
+          promotions={[]}
+          showPromotions={false}
+          showPublicActions
+          galleryPhotos={[]}
+          deliveryAvailable
+        />
+      );
+      expect(screen.getByText("12 Main Road")).toBeVisible();
+      expect(screen.getByText("08:00 - 17:00")).toBeVisible();
+      expect(screen.getByText("cash")).toBeVisible();
+      expect(screen.getByText(/Delivery options: courier/)).toBeVisible();
+      expect(screen.getByRole("link", { name: "hello@example.com" })).toHaveAttribute(
+        "href",
+        "mailto:hello@example.com"
+      );
+      expect(screen.getByRole("link", { name: "WhatsApp 0821234567" })).toBeVisible();
+      expect(screen.getByRole("button", { name: "Send an enquiry" })).toBeVisible();
+      expect(screen.queryByRole("button", { name: "Payment & Delivery" })).not.toBeInTheDocument();
+    }
+  );
+
   it("does not render the profile identity overlay on the video slide", () => {
     render(
       <UnifiedLayout

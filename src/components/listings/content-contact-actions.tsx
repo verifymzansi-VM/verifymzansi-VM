@@ -29,9 +29,9 @@ type ContactActionConfig = {
   targetId: string;
   sharePath: string;
   shareTitle: string;
-  contactPayloadKey: "listingId" | "promotionId";
+  contactPayloadKey: "listingId" | "promotionId" | "businessId";
   contactErrorFallback: string;
-  reportTargetType: "listing" | "promotion";
+  reportTargetType: "listing" | "promotion" | "business";
   reportTitle: string;
   reportPlaceholder: string;
   reportSuccessCopy: string;
@@ -241,7 +241,7 @@ export function ContentContactActions({
           <Button className="w-full gap-2" size="lg" asChild>
             <a href={whatsappUrl} target="_blank" rel="noopener noreferrer nofollow ugc">
               <MessageIcon className="h-4 w-4" />
-              Chat on WhatsApp
+              WhatsApp {whatsapp}
             </a>
           </Button>
         )}

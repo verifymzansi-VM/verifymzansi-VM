@@ -44,11 +44,9 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
 
   const promotionOwnerId = readOwnerId(promotion);
   const { data: advertiserProfile } = promotionOwnerId
-    ? await supabase
+    ? await (engagementAdmin ?? supabase)
         .from(ACCOUNT_PROFILE_TABLE)
-        .select(
-          "display_name, account_verification_status, phone, masked_phone_public, location_province, location_city, strikes"
-        )
+        .select("display_name, account_verification_status, phone")
         .eq("user_id", promotionOwnerId)
         .maybeSingle()
     : { data: null };
@@ -123,7 +121,19 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
             ...promotion,
             view_count: promotionViewCount,
           }}
-          advertiserProfile={advertiserProfile}
+          advertiserProfile={
+            advertiserProfile
+              ? {
+                  ...advertiserProfile,
+                  phone: promotion.contact_methods?.some((method: string) =>
+                    ["call", "whatsapp"].includes(method)
+                  )
+                    ? advertiserProfile.phone
+                    : null,
+                  masked_phone_public: null,
+                }
+              : null
+          }
           linkedBusiness={linkedBusiness}
         />
       </div>

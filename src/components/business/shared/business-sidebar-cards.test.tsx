@@ -47,7 +47,7 @@ describe("ManagedByCard", () => {
 
   it("shows fallback text when no owner profile", () => {
     render(<ManagedByCard ownerProfile={null} trustLevel={null} />);
-    expect(screen.getByText("Reviewed Representative")).toBeInTheDocument();
+    expect(screen.getByText("Account name unavailable")).toBeInTheDocument();
   });
 
   it("renders trust badge when trust level is set", () => {
@@ -55,14 +55,12 @@ describe("ManagedByCard", () => {
     expect(screen.getByTestId("trust-badge")).toBeInTheDocument();
   });
 
-  it("shows source and ownership precision labels", () => {
+  it("does not show hard-coded ownership claims or warnings", () => {
     render(<ManagedByCard ownerProfile={{ display_name: "Owner" }} trustLevel={3} />);
-
-    expect(screen.getByText("Owner-claimed")).toBeInTheDocument();
-    expect(screen.getByText("Official representative reviewed")).toBeInTheDocument();
-    expect(screen.getByText("Information supplied by")).toBeInTheDocument();
-    expect(screen.getByText("Last reviewed date")).toBeInTheDocument();
-    expect(screen.getByText(/Official business ownership is not confirmed/i)).toBeInTheDocument();
+    expect(screen.queryByText("Owner-claimed")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Official business ownership is not confirmed/i)
+    ).not.toBeInTheDocument();
   });
 });
 

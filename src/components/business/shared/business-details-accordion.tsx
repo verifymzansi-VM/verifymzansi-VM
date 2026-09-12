@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, Clock, CreditCard, Info, Wrench } from "lucide-react";
+import { Clock, CreditCard, Info, Wrench } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   BusinessDetailsCard,
@@ -25,44 +24,25 @@ interface BusinessDetailsAccordionProps {
 
 /* ── Accordion Item ────────────────────────────────────── */
 
-function AccordionSection({
+function DetailSection({
   title,
   icon,
   children,
-  defaultOpen = false,
 }: {
   title: string;
   icon: React.ReactNode;
   children: React.ReactNode;
-  defaultOpen?: boolean;
 }) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
-
   return (
-    <div className="border-b border-border last:border-b-0">
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex w-full items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-muted/50"
-      >
+    <section className="border-b border-border last:border-b-0">
+      <h3 className="flex items-center gap-2 px-4 py-3 text-sm font-semibold">
         {icon}
-        <span className="flex-1 text-sm font-semibold">{title}</span>
-        <ChevronDown
-          className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${
-            isOpen ? "rotate-180" : ""
-          }`}
-        />
-      </button>
-      {isOpen && (
-        <div className="animate-in fade-in slide-in-from-top-1 duration-200 px-4 pb-4">
-          {children}
-        </div>
-      )}
-    </div>
+        {title}
+      </h3>
+      <div className="px-4 pb-4">{children}</div>
+    </section>
   );
 }
-
-/* ── Operating Hours (inline, no Card wrapper) ─────────── */
 
 function OperatingHoursInline({ hours }: { hours: Record<string, string> }) {
   return (
@@ -148,7 +128,10 @@ export function BusinessDetailsAccordion({
     serviceAreas
   );
   const hasServices = servicesOffered.length > 0;
-  const hasPaymentOrDelivery = (paymentMethods && paymentMethods.length > 0) || deliveryAvailable;
+  const hasPaymentOrDelivery =
+    (paymentMethods && paymentMethods.length > 0) ||
+    deliveryAvailable ||
+    Boolean(business.delivery_options?.length);
   const hasHours = operatingHours && Object.keys(operatingHours).length > 0;
 
   if (!hasDetails && !hasServices && !hasPaymentOrDelivery && !hasHours) {
@@ -158,7 +141,7 @@ export function BusinessDetailsAccordion({
   return (
     <div className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm">
       {hasDetails && (
-        <AccordionSection
+        <DetailSection
           title="Business Details"
           icon={<Info className="h-4 w-4 text-muted-foreground" />}
         >
@@ -171,11 +154,11 @@ export function BusinessDetailsAccordion({
               serviceAreas={serviceAreas}
             />
           </div>
-        </AccordionSection>
+        </DetailSection>
       )}
 
       {hasServices && (
-        <AccordionSection
+        <DetailSection
           title={servicesHeading ?? "Services Offered"}
           icon={<Wrench className="h-4 w-4 text-muted-foreground" />}
         >
@@ -186,28 +169,34 @@ export function BusinessDetailsAccordion({
               </Badge>
             ))}
           </div>
-        </AccordionSection>
+        </DetailSection>
       )}
 
       {hasPaymentOrDelivery && (
-        <AccordionSection
+        <DetailSection
           title="Payment & Delivery"
           icon={<CreditCard className="h-4 w-4 text-muted-foreground" />}
         >
+          {business.delivery_options?.length ? (
+            <p className="mb-3 text-sm">
+              Delivery options:{" "}
+              {business.delivery_options.map((option) => option.replace(/_/g, " ")).join(", ")}
+            </p>
+          ) : null}
           <PaymentDeliveryInline
             paymentMethods={paymentMethods}
             deliveryAvailable={deliveryAvailable}
           />
-        </AccordionSection>
+        </DetailSection>
       )}
 
       {hasHours && (
-        <AccordionSection
+        <DetailSection
           title="Operating Hours"
           icon={<Clock className="h-4 w-4 text-muted-foreground" />}
         >
           <OperatingHoursInline hours={operatingHours!} />
-        </AccordionSection>
+        </DetailSection>
       )}
     </div>
   );

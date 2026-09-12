@@ -5,6 +5,7 @@ import { saPhoneSchema } from "./shared";
 export const contactAccountHolderSchema = z
   .object({
     listingId: z.string().uuid("Invalid listing").optional(),
+    businessId: z.string().uuid("Invalid business").optional(),
     promotionId: z.string().uuid("Invalid promotion").optional(),
     buyerName: z.string().trim().min(2).max(80).optional(),
     buyerEmail: z.string().trim().email().max(254).optional(),
@@ -17,13 +18,19 @@ export const contactAccountHolderSchema = z
     contactMethod: z.enum(["call", "whatsapp", "form", "in_app"]).default("form"),
     turnstileToken: z.string().min(1, "Complete the CAPTCHA"),
   })
-  .refine((value) => Boolean(value.listingId) !== Boolean(value.promotionId), {
-    message: "A valid listing or promotion is required",
-    path: ["listingId"],
-  })
+  .refine(
+    (value) => [value.listingId, value.promotionId, value.businessId].filter(Boolean).length === 1,
+    {
+      message: "Exactly one listing, promotion or business is required",
+      path: ["listingId"],
+    }
+  )
   .transform((value) => ({
-    targetId: value.promotionId ?? value.listingId!,
-    targetType: (value.promotionId ? "promotion" : "listing") as "listing" | "promotion",
+    targetId: value.businessId ?? value.promotionId ?? value.listingId!,
+    targetType: (value.businessId ? "business" : value.promotionId ? "promotion" : "listing") as
+      | "listing"
+      | "promotion"
+      | "business",
     message: value.message,
     buyerName: value.buyerName,
     buyerEmail: value.buyerEmail,

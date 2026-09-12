@@ -562,7 +562,7 @@ function lookupLabel(
   return list.find((i) => i.value === value)?.label ?? value.replace(/_/g, " ");
 }
 
-function TourismDetailsCard({ details }: { details: TourismCategoryDetails }) {
+export function TourismDetailsCard({ details }: { details: TourismCategoryDetails }) {
   const hasContent =
     details.star_rating ||
     details.number_of_rooms ||

@@ -59,7 +59,6 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const isAuthenticated = Boolean(user);
 
   // Fetch listing
   const { data: rawListing } = await applyVisibleExpiryFilter(
@@ -73,20 +72,26 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
   // Fetch listing owner profile (maybeSingle — the account may have been deleted)
   const listingOwnerId = readOwnerId(listing);
   const { data: seller } = listingOwnerId
-    ? await supabase
+    ? await (engagementAdmin ?? supabase)
         .from(ACCOUNT_PROFILE_TABLE)
-        .select(
-          "id, display_name, location_province, location_city, account_verification_status, phone, masked_phone_public"
-        )
+        .select("id, display_name, account_verification_status, phone")
         .eq("user_id", listingOwnerId)
         .maybeSingle()
     : { data: null };
 
-  // Strip seller phone data for anonymous visitors to prevent PII scraping
+  // Publish phone only when the poster explicitly selected a phone contact method.
+  const publishesPhone = listing.contact_methods?.some((method: string) =>
+    ["call", "whatsapp"].includes(method)
+  );
   const safeSeller = seller
-    ? isAuthenticated
-      ? seller
-      : { ...seller, phone: null, masked_phone_public: null }
+    ? {
+        ...seller,
+        phone: publishesPhone ? seller.phone : null,
+        masked_phone_public: null,
+        // Use the location selected for this post, never a private account location.
+        location_city: listing.location_city,
+        location_province: listing.location_province,
+      }
     : null;
 
   // Fetch similar listings (same category, excluding current)
@@ -197,7 +202,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
                 : false,
             }))}
             similarSellers={similarSellers}
-            showContactActions={isAuthenticated}
+            showContactActions={true}
           />
         </div>
       </main>

@@ -23,7 +23,7 @@ describe("seller contact actions", () => {
         contactMethods={["whatsapp"]}
       />
     );
-    const link = screen.getByRole("link", { name: "Chat on WhatsApp" });
+    const link = screen.getByRole("link", { name: "WhatsApp 082 123 4567" });
     expect(link.getAttribute("href")).toContain("https://wa.me/27821234567?");
     expect(decodeURIComponent(link.getAttribute("href")!)).toContain("Garden cottage");
     expect(screen.queryByRole("button", { name: "Send an enquiry" })).toBeNull();

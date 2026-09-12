@@ -364,7 +364,10 @@ export function ListingDetailContent({
               </Card>
             ) : null}
 
-            {(listing.location_province || listing.location_city) && (
+            {(listing.location_province ||
+              listing.location_city ||
+              listing.location_suburb ||
+              listing.location_address) && (
               <Card className="border-slate-200/75 bg-white/95 elev-sm dark:border-white/10 dark:bg-slate-950/75">
                 <CardContent className="space-y-3 p-5">
                   <div className="flex items-center gap-2">
@@ -479,7 +482,9 @@ export function ListingDetailContent({
                   {sellerInitial}
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate font-medium">{seller?.display_name || "Seller"}</p>
+                  <p className="break-words font-medium">
+                    {seller?.display_name || "Account name unavailable"}
+                  </p>
                   {trustLevel ? (
                     <div className="space-y-1">
                       <TrustBadge level={trustLevel} size="sm" />
@@ -491,7 +496,7 @@ export function ListingDetailContent({
                 </div>
               </div>
 
-              {seller?.location_city ? (
+              {seller?.location_city || seller?.location_province ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <MapPin className="h-4 w-4" />
                   <span>
