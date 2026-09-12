@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
-import { verifySupabaseSchema } from "./check-supabase-schema";
+import { printSchemaVerificationResult, verifySupabaseSchema } from "./check-supabase-schema";
 import { resolveDbTestTarget } from "./db-test-target";
 const REQUIRED_FEATURE_FLAG_KEYS = [
   "kyc_v2_flow",
@@ -125,6 +125,9 @@ async function main(): Promise<void> {
   console.log(`Target project: ${mask(url)}`);
 
   const schema = await verifySupabaseSchema({ url, serviceRoleKey });
+  if (!schema.ok) {
+    printSchemaVerificationResult(schema);
+  }
   if (schema.unexpectedLegacyTables.length > 0) {
     throw new Error(
       `Legacy tables still queryable: ${schema.unexpectedLegacyTables.join(", ")}. Rename contract is incomplete.`
