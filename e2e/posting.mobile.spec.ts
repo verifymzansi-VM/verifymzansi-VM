@@ -84,6 +84,7 @@ async function completeMobileListingCreate(page: Page) {
   await page.getByLabel(/^City/i).selectOption("Johannesburg");
   await page.getByRole("button", { name: "Next" }).click();
   await uploaderFor(page, /^Photos \(max/i).setInputFiles(IMAGE_FIXTURE);
+  await page.getByRole("checkbox", { name: /I accept the VerifyMzansi posting terms/i }).check();
   await completeSubmission(page, /\/dashboard\/listings/, "My Listings");
 }
 

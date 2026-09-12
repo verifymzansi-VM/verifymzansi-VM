@@ -187,7 +187,7 @@ test.describe("Mobile UX smoke", () => {
 
     await openAuthenticatedBilling(page);
 
-    await expect(page.getByRole("heading", { name: /choose your visibility plan/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /^choose your plan$/i })).toBeVisible();
 
     const tabs = [
       page.getByRole("tab", { name: /market/i }),

@@ -83,16 +83,15 @@ async function completeListingCreate(page: Page) {
   await page.getByLabel(/Town \/ Suburb/i).fill("Sandton");
   await page.getByRole("button", { name: "Next" }).click();
   await uploaderFor(page, /^Photos \(max/i).setInputFiles(IMAGE_FIXTURE);
+  await page.getByRole("checkbox", { name: /I accept the VerifyMzansi posting terms/i }).check();
 
   const responsePromise = page.waitForResponse(
-    (response) =>
-      response.url().includes("/api/listings") &&
-      response.request().method() === "POST" &&
-      [200, 201].includes(response.status())
+    (response) => response.url().includes("/api/listings") && response.request().method() === "POST"
   );
 
   await page.getByRole("button", { name: /Submit for review/i }).click();
-  await responsePromise;
+  const response = await responsePromise;
+  expect(response.ok(), await response.text()).toBe(true);
   await expect(page).toHaveURL(/\/dashboard\/listings/);
 
   const editLink = page.getByRole("link", { name: /edit/i }).filter({ hasText: /edit/i }).first();

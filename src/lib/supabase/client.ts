@@ -245,6 +245,25 @@ function createBrowserPlaywrightStubClient(): SupabaseClient {
       },
     },
     from: (table: string) => createQuery(table),
+    rpc: async (name: string, params?: Record<string, unknown>) => {
+      if (
+        name === "intro_trial_offer" &&
+        PLANS.some((plan) => plan.area === params?.p_area && isActiveMarketplaceArea(plan.area))
+      ) {
+        const eligible = readUser() !== null;
+        return {
+          data: {
+            eligible,
+            sevenDayAvailable: eligible,
+            thirtyDayAvailable: false,
+            remaining: 0,
+            launchEnabled: false,
+          },
+          error: null,
+        };
+      }
+      return { data: null, error: { message: `Unsupported Playwright RPC: ${name}` } };
+    },
     channel: () => ({ on: () => ({ subscribe: () => ({}) }) }),
     removeChannel: () => {},
   } as unknown as SupabaseClient;

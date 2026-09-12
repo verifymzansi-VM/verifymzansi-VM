@@ -5,7 +5,7 @@ const routes = [
   {
     name: "mzansi-market",
     path: "/mzansi-market",
-    heading: /browse listings/i,
+    heading: /^mzansi market$/i,
   },
   {
     name: "mzansi-business",
