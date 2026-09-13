@@ -86,7 +86,7 @@ export async function HomeMzansiMarketShowcase() {
           const isBoosted = l.boost_until ? new Date(l.boost_until) > new Date() : false;
           const poster = l.video_thumbnail || l.photos?.[0] || undefined;
           return (
-            <div key={l.id} className="h-full w-full sm:w-[296px] lg:w-[260px]">
+            <div key={l.id} className="h-full w-full sm:w-[280px] lg:w-[240px]">
               <MarketPreviewCard
                 href={`/listing/${l.id}`}
                 imageUrl={displayUrl}
