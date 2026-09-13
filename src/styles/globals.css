@@ -220,6 +220,48 @@
    ══════════════════════════════════════════════════════════════ */
 
 @layer components {
+  /* Compact feed controls; showroom cards never opt into this treatment. */
+  [data-card-immersive] button:is([aria-label="Mute"], [aria-label="Unmute"]) {
+    width: 32px;
+    height: 32px;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  [data-card-immersive] .h-14.w-14 {
+    width: 40px;
+    height: 40px;
+  }
+
+  [data-card-immersive] .h-14.w-14 svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  [data-card-immersive] button[aria-label="Play video"] {
+    left: 50%;
+    top: 50%;
+    bottom: auto;
+    transform: translate(-50%, -50%);
+    width: 40px;
+    height: 40px;
+    min-height: 0;
+    padding: 0;
+    font-size: 0;
+    gap: 0;
+    justify-content: center;
+  }
+
+  [data-card-immersive] button[aria-label^="Pause video"] {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  [data-card-immersive] button[aria-label^="Pause video"]:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
   /* ── Trust Card Borders ──────────────────────────────────── */
   .trust-card-0 {
     @apply border-warm-200;
@@ -322,10 +364,6 @@
     @apply text-[13px] font-medium leading-snug text-red-700 dark:text-red-300;
   }
 
-  .animate-progress-fill {
-    animation: progress-fill var(--progress-fill-duration, 8000ms) linear forwards;
-  }
-
   /* ── Marketplace area accent chips ───────────────────────── */
   .area-mzansi-market {
     @apply bg-brand-green-100 text-brand-green-800 border-brand-green-300;
@@ -344,8 +382,8 @@
 @layer components {
   .showroom-viewport {
     /* Header, mobile navigation, section padding, controls, and metadata. */
-    --showroom-reserved-height: calc(354px + env(safe-area-inset-bottom, 0px));
-    --showroom-card-width: 272px;
+    --showroom-reserved-height: calc(262px + env(safe-area-inset-bottom, 0px));
+    --showroom-card-width: 300px;
     padding-block: 16px;
   }
 
@@ -365,40 +403,36 @@
   }
 
   .showroom-card-frame [data-card-metadata] {
-    height: 104px;
+    /* Two compact rows (title + location/price) plus the logo and padding. */
+    height: 64px;
     flex: none;
   }
 
   @media (min-width: 768px) {
     .showroom-viewport {
-      --showroom-card-width: 296px;
-      --showroom-reserved-height: 290px;
+      --showroom-card-width: 340px;
+      --showroom-reserved-height: 198px;
     }
   }
 
   @media (min-width: 1024px) {
     .showroom-viewport {
-      --showroom-card-width: 480px;
-      /* Use the space recovered from the desktop padding, details, and dots. */
-      --showroom-reserved-height: 212px;
+      --showroom-card-width: 520px;
+      /* Use the space recovered from the desktop padding, details, and controls. */
+      --showroom-reserved-height: 180px;
       padding-block: 8px;
     }
 
     .showroom-card-frame [data-card-metadata] {
-      height: 92px;
+      height: 64px;
       padding-block: 8px;
-    }
-
-    .showroom-viewport .showroom-progress-track {
-      height: 32px;
-      padding-block: 0;
     }
   }
 
-  /* Short desktop windows still need room for the full title, description, and location. */
+  /* Short desktop windows still need room for a wrapped title and location. */
   @media (min-width: 1024px) and (max-height: 650px) {
     .showroom-card-frame [data-card-metadata] {
-      height: 104px;
+      height: 72px;
       padding-block: 10px;
     }
   }
@@ -440,16 +474,6 @@
     .showroom-viewport {
       --showroom-landscape-height: calc(100svh - 208px);
     }
-  }
-}
-
-@keyframes progress-fill {
-  from {
-    width: 0%;
-  }
-
-  to {
-    width: 100%;
   }
 }
 

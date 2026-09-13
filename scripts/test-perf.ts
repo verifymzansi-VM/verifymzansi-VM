@@ -1,5 +1,6 @@
 /* eslint-disable no-console */
 import { loadEnvConfig } from "@next/env";
+import { resolvePerformanceTestTarget } from "./performance-test-target";
 
 loadEnvConfig(process.cwd());
 
@@ -20,11 +21,7 @@ type PerfResult = {
   avgMs: number;
 };
 
-const baseUrl =
-  process.env.PERF_BASE_URL ||
-  process.env.SMOKE_BASE_URL ||
-  process.env.NEXT_PUBLIC_APP_URL ||
-  "http://localhost:3000";
+const baseUrl = resolvePerformanceTestTarget(process.env, "perf");
 
 const requestCount = Number(process.env.PERF_REQUESTS ?? "60");
 const concurrency = Number(process.env.PERF_CONCURRENCY ?? "6");

@@ -1,12 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { POST as uploadMedia } from "@/app/api/media/upload/route";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { type NextRequest } from "next/server";
 import { uploadToR2 } from "@/lib/services/storage";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
+}));
+
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: vi.fn(),
 }));
 
 vi.mock("@/lib/services/storage", () => ({
@@ -88,10 +93,15 @@ describe("Media Upload Routes", () => {
     from: vi.fn(),
     auth: { getUser: vi.fn() },
   };
+  const adminInsert = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(createClient).mockResolvedValue(mockSupabase as never);
+    adminInsert.mockResolvedValue({ error: null });
+    vi.mocked(createAdminClient).mockReturnValue({
+      from: vi.fn().mockReturnValue({ insert: adminInsert }),
+    } as never);
     vi.mocked(checkRateLimit).mockResolvedValue({ limited: false });
   });
 
@@ -302,11 +312,10 @@ describe("Media Upload Routes", () => {
     });
 
     it("strips WebP EXIF chunks and records the post-strip size", async () => {
-      const insert = vi.fn().mockResolvedValue({ error: null });
       mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
       mockSupabase.from.mockImplementation((table: string) => {
         if (table === "media_uploads") {
-          return { insert };
+          return { insert: vi.fn().mockResolvedValue({ error: null }) };
         }
 
         return {
@@ -336,7 +345,7 @@ describe("Media Upload Routes", () => {
       expect(strippedSize).toBeLessThan(webpBytes.byteLength);
 
       // Tracking row must record the post-strip size, not the client size
-      expect(insert).toHaveBeenCalledWith(
+      expect(adminInsert).toHaveBeenCalledWith(
         expect.objectContaining({
           content_type: "image/webp",
           file_size: strippedSize,

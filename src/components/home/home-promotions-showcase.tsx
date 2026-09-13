@@ -177,11 +177,16 @@ export async function HomePromotionsShowcase() {
       tone="teal"
       icon={<TreePalm className="h-3.5 w-3.5" />}
     >
-      <AutoScrollRail ariaLabel="Tourism and events" showEdgeFades={false} flushEdges>
+      <AutoScrollRail
+        ariaLabel="Tourism and events"
+        showEdgeFades={false}
+        flushEdges
+        itemClassName="w-[calc((100%-12px)/2)] sm:w-auto"
+      >
         {items.map((item) => (
           <div
             key={item.kind === "tourism" ? `t-${item.data.id}` : `e-${item.data.id}`}
-            className="h-full w-[272px] sm:w-[296px] lg:w-[260px]"
+            className="h-full w-full sm:w-[296px] lg:w-[260px]"
           >
             {item.kind === "tourism" ? (
               <BusinessPreviewCard
@@ -219,6 +224,7 @@ export async function HomePromotionsShowcase() {
               />
             ) : (
               <PromotionCard
+                immersive
                 id={item.data.id}
                 title={item.data.title}
                 price={item.data.price_cents}

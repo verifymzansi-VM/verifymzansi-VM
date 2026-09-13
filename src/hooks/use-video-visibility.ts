@@ -36,7 +36,7 @@ export function useVideoVisibility(videoSrc?: string, shouldAutoplay = true) {
       ([entry]) => {
         if (entry.isIntersecting) {
           // Lazily assign src the first time the element is visible
-          if (!el.src) {
+          if (el.getAttribute("src") !== videoSrc) {
             el.src = videoSrc;
           }
 

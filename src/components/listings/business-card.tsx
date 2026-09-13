@@ -120,6 +120,7 @@ export function BusinessCard({
 
   return (
     <PosterCardShell
+      immersive
       href={href}
       title={businessName}
       description={cardDescription}

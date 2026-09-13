@@ -49,6 +49,7 @@ export function BusinessPreviewCard({
 
   return (
     <PosterCardShell
+      immersive
       href={href}
       title={title}
       mediaUrl={imageUrl}

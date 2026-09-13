@@ -85,7 +85,7 @@ export function HomeShowcaseShell({
             aria-hidden="true"
           />
 
-          <div className="relative flex flex-col gap-6 px-5 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-9">
+          <div className="relative flex flex-col gap-6 px-2 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-9">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div className="max-w-2xl space-y-3.5">
                 <div

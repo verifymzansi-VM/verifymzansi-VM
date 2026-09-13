@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { PosterCardShell } from "./poster-card-shell";
 
@@ -58,6 +58,44 @@ vi.mock("@/components/ui/video-duration-badge", () => ({
 }));
 
 describe("PosterCardShell", () => {
+  it("fills homepage cards with media and fades details only during playback", () => {
+    const { container } = render(
+      <PosterCardShell
+        href="/listing/mobile"
+        title="Mobile video"
+        mediaUrl="/clip.mp4"
+        eyebrow="R 123 000"
+        cardVariant="showcase"
+        immersive
+      />
+    );
+    const player = screen.getByTestId("video-player");
+    const overlay = container.querySelector("[data-card-overlay]");
+    expect(container.querySelector("[data-card-metadata]")).toBeNull();
+    expect(player).toHaveAttribute("data-fit", "cover");
+    expect(screen.getByRole("link", { name: "Open Mobile video" })).toHaveAttribute(
+      "href",
+      "/listing/mobile"
+    );
+    expect(overlay).toHaveClass("opacity-100");
+    fireEvent.playing(player);
+    expect(overlay).toHaveClass("opacity-0");
+    fireEvent.pause(player);
+    expect(overlay).toHaveClass("opacity-100");
+    fireEvent.playing(player);
+    fireEvent.ended(player);
+    expect(overlay).toHaveClass("opacity-100");
+  });
+
+  it("keeps feed video controls outside navigation links", () => {
+    render(<PosterCardShell href="/listing/feed" title="Feed video" mediaUrl="/clip.mp4" />);
+    expect(screen.getByTestId("video-player").closest("a")).toBeNull();
+    expect(screen.getByRole("link", { name: /Feed video/ })).toHaveAttribute(
+      "href",
+      "/listing/feed"
+    );
+  });
+
   it("keeps hero playback controls outside of the full-card link overlay", () => {
     const { container } = render(
       <PosterCardShell
@@ -145,6 +183,23 @@ describe("PosterCardShell", () => {
     expect(heroCard?.className).toContain("bg-white");
     expect(heroCard?.className).not.toContain("bg-white/95");
     expect(heroCard?.className).not.toContain("backdrop-blur");
+  });
+
+  it("keeps non-showroom showcase cards free of a metadata surface", () => {
+    const { container } = render(
+      <PosterCardShell
+        href="/listing/showcase"
+        title="Showcase listing"
+        mediaUrl="https://example.com/poster.jpg"
+        cardVariant="showcase"
+      />
+    );
+
+    const showcaseCard = container.querySelector('[data-card-variant="showcase"]');
+    expect(showcaseCard?.className).toContain("bg-transparent");
+    expect(showcaseCard?.className).not.toContain("bg-white/96");
+    expect(showcaseCard?.className).not.toContain("backdrop-blur");
+    expect(showcaseCard?.querySelector("[data-card-media]")?.className).toContain("rounded-xl");
   });
 
   it("renders poster cards without a like button overlay", () => {

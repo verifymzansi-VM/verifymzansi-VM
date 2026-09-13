@@ -3,11 +3,13 @@ import type { NextRequest } from "next/server";
 
 const {
   mockCreateClient,
+  mockCreateAdminClient,
   mockGenerateStorageKey,
   mockGeneratePresignedUploadUrl,
   mockCheckRateLimit,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
+  mockCreateAdminClient: vi.fn(),
   mockGenerateStorageKey: vi.fn(),
   mockGeneratePresignedUploadUrl: vi.fn(),
   mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
@@ -15,6 +17,10 @@ const {
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: mockCreateClient,
+}));
+
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: mockCreateAdminClient,
 }));
 
 vi.mock("@/lib/services/storage", () => ({
@@ -275,6 +281,7 @@ describe("POST /api/media/upload-url", () => {
   it("returns a signed upload URL for valid requests", async () => {
     process.env.R2_PUBLIC_URL = "https://media.verifymzansi.com";
     const insert = vi.fn().mockResolvedValue({ error: null });
+    mockCreateAdminClient.mockReturnValue({ from: vi.fn().mockReturnValue({ insert }) });
 
     mockCreateClient.mockResolvedValue({
       auth: {
@@ -282,7 +289,7 @@ describe("POST /api/media/upload-url", () => {
       },
       from: vi.fn((table: string) => {
         if (table === "media_uploads") {
-          return { insert };
+          throw new Error("Tracking writes require the admin client");
         }
         return {
           select: vi.fn().mockReturnThis(),
@@ -337,6 +344,7 @@ describe("POST /api/media/upload-url", () => {
   it("accepts every configured upload area for video direct uploads", async () => {
     process.env.R2_PUBLIC_URL = "https://media.verifymzansi.com";
     const insert = vi.fn().mockResolvedValue({ error: null });
+    mockCreateAdminClient.mockReturnValue({ from: vi.fn().mockReturnValue({ insert }) });
 
     mockCreateClient.mockResolvedValue({
       auth: {
@@ -344,7 +352,7 @@ describe("POST /api/media/upload-url", () => {
       },
       from: vi.fn((table: string) => {
         if (table === "media_uploads") {
-          return { insert };
+          throw new Error("Tracking writes require the admin client");
         }
         return {
           select: vi.fn().mockReturnThis(),

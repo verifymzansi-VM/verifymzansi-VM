@@ -698,15 +698,6 @@ function VideoCardPlayerInner({
     [videoRef]
   );
 
-  const handleVideoKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" || e.key === " ") {
-        handleVideoClick(e);
-      }
-    },
-    [handleVideoClick]
-  );
-
   const togglePlayback = useCallback(
     (event: React.SyntheticEvent) => {
       event.preventDefault();
@@ -969,7 +960,7 @@ function VideoCardPlayerInner({
             foregroundMediaClassName,
             "focal-position-object",
             focalPositionClassName,
-            videoReady && !hasError && isPlaying ? "opacity-0" : "opacity-100"
+            videoReady && !hasError ? "opacity-0" : "opacity-100"
           )}
           sizes={sizes}
           priority={priority}
@@ -998,7 +989,7 @@ function VideoCardPlayerInner({
           foregroundMediaClassName,
           "focal-position-object",
           focalPositionClassName,
-          hasError || (hasUsablePoster ? !videoReady || !isPlaying : !videoHasPreviewFrame)
+          hasError || (hasUsablePoster ? !videoReady : !videoHasPreviewFrame)
             ? "opacity-0"
             : "opacity-100"
         )}
@@ -1027,26 +1018,11 @@ function VideoCardPlayerInner({
 
       <MuteButton videoRef={videoRef} showMuteControl={showMuteControl} />
 
-      {reducedMotion && !hasError && (
-        <div
-          role="button"
-          tabIndex={0}
-          className="absolute inset-0 z-10 flex cursor-pointer items-center justify-center"
-          onClick={handleVideoClick}
-          onKeyDown={handleVideoKeyDown}
-          aria-label="Play video"
-        >
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/50 text-white shadow-lg backdrop-blur-sm transition-transform hover:scale-110">
-            <Play className="h-5 w-5 fill-white" />
-          </div>
-        </div>
-      )}
-
       {!hasError ? (
         <div
           role="button"
           tabIndex={0}
-          className="absolute inset-0 z-10 cursor-pointer"
+          className="absolute inset-0 z-10 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
           onClick={handleVideoClick}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
@@ -1118,7 +1094,8 @@ function HoverVideoPlayer({
   const posterNeedsUnoptimized =
     normalizedPoster?.startsWith("blob:") || normalizedPoster?.startsWith("data:");
 
-  const { videoRef, containerRef, reducedMotion, isHovering } = useVideoHover(normalizedSrc);
+  const { videoRef, containerRef, reducedMotion, isHovering, isPlaying, togglePlayback } =
+    useVideoHover(normalizedSrc);
   const [videoReady, setVideoReady] = useState(false);
   const [hasVideoFrame, setHasVideoFrame] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -1153,7 +1130,7 @@ function HoverVideoPlayer({
   const showMuteControl =
     muteControlVisibility !== "hidden" &&
     !hasError &&
-    !reducedMotion &&
+    (!reducedMotion || isPlaying) &&
     muteControlVisibility === "always";
   const hasUsablePoster = Boolean(normalizedPoster && !posterError);
   const videoHasPreviewFrame = hasVideoFrame || videoReady;
@@ -1302,7 +1279,7 @@ function HoverVideoPlayer({
             foregroundMediaClassName,
             "focal-position-object",
             focalPositionClassName,
-            isHovering && videoReady && !hasError && !reducedMotion ? "opacity-0" : "opacity-100"
+            (isHovering || isPlaying) && videoReady && !hasError ? "opacity-0" : "opacity-100"
           )}
           sizes={sizes}
           priority={priority}
@@ -1331,7 +1308,7 @@ function HoverVideoPlayer({
           "focal-position-object",
           focalPositionClassName,
           hasError ||
-            (hasUsablePoster ? reducedMotion || !videoReady || !isHovering : !videoHasPreviewFrame)
+            (hasUsablePoster ? !videoReady || (!isHovering && !isPlaying) : !videoHasPreviewFrame)
             ? "opacity-0"
             : "opacity-100"
         )}
@@ -1341,6 +1318,27 @@ function HoverVideoPlayer({
       />
 
       <MuteButton videoRef={videoRef} showMuteControl={showMuteControl} />
+
+      {!hasError ? (
+        <button
+          type="button"
+          data-carousel-control="true"
+          aria-label={isPlaying ? "Pause video preview" : "Play video"}
+          className="absolute bottom-3 left-3 z-[13] inline-flex min-h-11 items-center gap-2 rounded-full bg-black/60 px-3 text-xs font-medium text-white backdrop-blur-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            togglePlayback();
+          }}
+        >
+          {isPlaying ? (
+            <Pause className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <Play className="h-4 w-4" aria-hidden="true" />
+          )}
+          {isPlaying ? "Pause" : "Play"}
+        </button>
+      ) : null}
 
       {/* YouTube-style red progress bar during hover playback */}
       {isHovering && videoReady && !hasError && !reducedMotion ? (
@@ -1479,8 +1477,8 @@ function FeedVideoPlayer({
   const hasUsablePoster = Boolean(normalizedPoster && !posterError);
   const videoHasPreviewFrame = hasVideoFrame || videoReady;
 
-  // Show poster when video is not actively playing (includes user pause AND manager arbitration)
-  const showPoster = !isPlaying || !videoReady || hasError;
+  // A pause should preserve the frame the viewer was watching.
+  const showPoster = !videoReady || hasError;
 
   useEffect(() => {
     const el = videoRef.current;
@@ -1599,7 +1597,7 @@ function FeedVideoPlayer({
     >
       {usesSmartFit ? <SmartFitStaticBackdrop /> : null}
 
-      {/* Poster / thumbnail — shown when paused-by-user or video not ready */}
+      {/* Keep the decoded frame visible when paused; the poster is for loading. */}
       {hasUsablePoster ? (
         <Image
           src={normalizedPoster!}
@@ -1654,7 +1652,7 @@ function FeedVideoPlayer({
         <div
           role="button"
           tabIndex={0}
-          className="absolute inset-0 z-[10] cursor-pointer"
+          className="absolute inset-0 z-[10] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
           onClick={handleTap}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {

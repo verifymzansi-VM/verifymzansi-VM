@@ -78,9 +78,14 @@ export async function HomeBusinessShowcase() {
       ctaLabel="View Representative Profiles"
       tone="blue"
     >
-      <AutoScrollRail ariaLabel="Mzansi Business" showEdgeFades={false} flushEdges>
+      <AutoScrollRail
+        ariaLabel="Mzansi Business"
+        showEdgeFades={false}
+        flushEdges
+        itemClassName="w-[calc((100%-12px)/2)] sm:w-auto"
+      >
         {items.map((b) => (
-          <div key={b.id} className="h-full w-[272px] sm:w-[296px] lg:w-[260px]">
+          <div key={b.id} className="h-full w-full sm:w-[296px] lg:w-[260px]">
             <BusinessPreviewCard
               href={`/mzansi-business/${b.id}`}
               imageUrl={b.cover_video || b.video_thumbnail || b.cover_photo}

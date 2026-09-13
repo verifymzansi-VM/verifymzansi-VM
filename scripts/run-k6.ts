@@ -3,6 +3,7 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { loadEnvConfig } from "@next/env";
+import { assertNoK6TargetOverride, resolvePerformanceTestTarget } from "./performance-test-target";
 
 type Args = {
   baseUrl: string;
@@ -35,13 +36,7 @@ function takeOptionValue(argv: string[], index: number, flag: string): string {
 }
 
 function resolveBaseUrl(): string {
-  return (
-    process.env.K6_BASE_URL ||
-    process.env.PERF_BASE_URL ||
-    process.env.STAGING_APP_URL ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    "http://localhost:3000"
-  );
+  return process.env.K6_BASE_URL || process.env.PERF_BASE_URL || "http://localhost:3000";
 }
 
 function normalizeScenarioList(value: string | null): string | null {
@@ -128,6 +123,8 @@ async function main(): Promise<void> {
   loadEnvConfig(process.cwd());
 
   const args = parseArgs(process.argv.slice(2));
+  args.baseUrl = resolvePerformanceTestTarget(process.env, "k6", args.baseUrl);
+  assertNoK6TargetOverride(args.passthroughArgs);
   const scriptPath = path.join("scripts", "load-test.js");
   const k6Args = ["run", "--env", `BASE_URL=${args.baseUrl}`];
 

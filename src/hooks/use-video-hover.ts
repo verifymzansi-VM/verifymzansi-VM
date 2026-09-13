@@ -24,7 +24,34 @@ export function useVideoHover(videoSrc?: string) {
   const dataSaver = useDataSaver();
   const autoplayBlocked = reducedMotion || dataSaver;
   const [isHovering, setIsHovering] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
   const manager = useVideoPlaybackManager();
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+    el.addEventListener("play", onPlay);
+    el.addEventListener("pause", onPause);
+    return () => {
+      el.removeEventListener("play", onPlay);
+      el.removeEventListener("pause", onPause);
+    };
+  }, []);
+
+  const togglePlayback = useCallback(() => {
+    const el = videoRef.current;
+    if (!el || !videoSrc) return;
+    if (el.paused) {
+      if (el.getAttribute("src") !== videoSrc) el.src = videoSrc;
+      manager.requestPriority(el);
+    } else {
+      el.pause();
+      manager.releasePriority(el);
+      manager.updateVisibility(el, 0);
+    }
+  }, [manager, videoSrc]);
 
   // Register with manager + lazy-load video src when scrolled into view
   useEffect(() => {
@@ -35,8 +62,8 @@ export function useVideoHover(videoSrc?: string) {
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) {
-          if (!el.src) {
+        if (entry.isIntersecting && entry.intersectionRatio >= 0.15) {
+          if (el.getAttribute("src") !== videoSrc) {
             el.src = videoSrc;
           }
         } else {
@@ -87,5 +114,12 @@ export function useVideoHover(videoSrc?: string) {
     };
   }, [onMouseEnter, onMouseLeave]);
 
-  return { videoRef, containerRef, reducedMotion: autoplayBlocked, isHovering };
+  return {
+    videoRef,
+    containerRef,
+    reducedMotion: autoplayBlocked,
+    isHovering,
+    isPlaying,
+    togglePlayback,
+  };
 }

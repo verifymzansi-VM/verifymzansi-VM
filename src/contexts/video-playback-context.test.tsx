@@ -43,6 +43,21 @@ function wrapper({ children }: { children: React.ReactNode }) {
 /* ------------------------------------------------------------------ */
 
 describe("VideoPlaybackContext", () => {
+  it("pauses an unregistered video before another card starts", () => {
+    const { result } = renderHook(() => useVideoPlaybackManager(), { wrapper });
+    const a = makeVideo("removed");
+    const b = makeVideo("remaining");
+    result.current.register(a);
+    result.current.register(b);
+    result.current.requestPriority(a);
+    expect(a.paused).toBe(false);
+    result.current.unregister(a);
+    expect(a.paused).toBe(true);
+    result.current.requestPriority(b);
+    expect(b.paused).toBe(false);
+    expect(a.paused).toBe(true);
+  });
+
   beforeEach(() => {
     vi.useFakeTimers();
   });

@@ -84,7 +84,12 @@ export default async function AdminDSARPage() {
                     </p>
                   </div>
                   {(req.status === "submitted" || req.status === "in_progress") && (
-                    <DsarActionButtons requestId={req.id} status={req.status} />
+                    <DsarActionButtons
+                      requestId={req.id}
+                      status={req.status}
+                      requestType={req.type}
+                      identityVerified={req.identity_verified}
+                    />
                   )}
                   <Button asChild variant="outline" size="sm" className="gap-2">
                     <a href={`/api/admin/dsar/export?requestId=${req.id}`}>

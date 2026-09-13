@@ -45,10 +45,22 @@ vi.mock("./dsar-action-buttons", () => ({
   DsarActionButtons: ({
     requestId,
     status,
+    requestType,
+    identityVerified,
   }: {
     requestId: string;
     status: "submitted" | "in_progress";
-  }) => <div data-testid={`dsar-actions-${requestId}-${status}`}>Actions</div>,
+    requestType: string;
+    identityVerified: boolean;
+  }) => (
+    <div
+      data-testid={`dsar-actions-${requestId}-${status}`}
+      data-request-type={requestType}
+      data-identity-verified={String(identityVerified)}
+    >
+      Actions
+    </div>
+  ),
 }));
 
 describe("AdminDSARPage", () => {
@@ -59,7 +71,7 @@ describe("AdminDSARPage", () => {
     });
   });
 
-  it("only renders action buttons for submitted requests", async () => {
+  it("passes case type and identity state to actions for submitted and in-progress requests", async () => {
     mockAdminFrom.mockReturnValue({
       select: vi.fn().mockReturnValue({
         order: vi.fn().mockReturnValue({
@@ -71,6 +83,7 @@ describe("AdminDSARPage", () => {
                 description: "Submitted request",
                 status: "submitted",
                 type: "access",
+                identity_verified: false,
                 created_at: "2026-03-10T10:00:00.000Z",
               },
               {
@@ -78,7 +91,8 @@ describe("AdminDSARPage", () => {
                 requester_email: "progress@example.com",
                 description: "Already in progress",
                 status: "in_progress",
-                type: "delete",
+                type: "deletion",
+                identity_verified: true,
                 created_at: "2026-03-10T09:00:00.000Z",
               },
             ],
@@ -95,6 +109,18 @@ describe("AdminDSARPage", () => {
     expect(screen.getByText("p***s@example.com")).toBeInTheDocument();
     expect(screen.getByTestId("dsar-actions-req-submitted-submitted")).toBeInTheDocument();
     expect(screen.getByTestId("dsar-actions-req-progress-in_progress")).toBeInTheDocument();
+    expect(screen.getByTestId("dsar-actions-req-submitted-submitted")).toHaveAttribute(
+      "data-identity-verified",
+      "false"
+    );
+    expect(screen.getByTestId("dsar-actions-req-progress-in_progress")).toHaveAttribute(
+      "data-identity-verified",
+      "true"
+    );
+    expect(screen.getByTestId("dsar-actions-req-progress-in_progress")).toHaveAttribute(
+      "data-request-type",
+      "deletion"
+    );
     expect(screen.getAllByRole("link", { name: /export json/i })).toHaveLength(2);
   });
 

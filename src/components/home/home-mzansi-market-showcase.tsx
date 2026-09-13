@@ -75,13 +75,18 @@ export async function HomeMzansiMarketShowcase() {
       ctaLabel="View All Listings"
       tone="green"
     >
-      <AutoScrollRail ariaLabel="Latest on Mzansi Market" showEdgeFades={false} flushEdges>
+      <AutoScrollRail
+        ariaLabel="Latest on Mzansi Market"
+        showEdgeFades={false}
+        flushEdges
+        itemClassName="w-[calc((100%-12px)/2)] sm:w-auto"
+      >
         {items.map((l) => {
           const displayUrl = l.videos?.[0] || l.video_thumbnail || l.photos?.[0];
           const isBoosted = l.boost_until ? new Date(l.boost_until) > new Date() : false;
           const poster = l.video_thumbnail || l.photos?.[0] || undefined;
           return (
-            <div key={l.id} className="h-full w-[272px] sm:w-[296px] lg:w-[260px]">
+            <div key={l.id} className="h-full w-full sm:w-[296px] lg:w-[260px]">
               <MarketPreviewCard
                 href={`/listing/${l.id}`}
                 imageUrl={displayUrl}

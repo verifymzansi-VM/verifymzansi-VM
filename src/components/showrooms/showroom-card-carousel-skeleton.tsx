@@ -1,5 +1,4 @@
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
 
 /**
  * Loading skeleton for ShowroomCardCarousel – rendered while hero data streams in via Suspense.
@@ -34,13 +33,6 @@ export function ShowroomCardCarouselSkeleton() {
           <CardSkeleton />
         </div>
       </div>
-
-      {/* Dot indicators skeleton */}
-      <div className="showroom-progress-track relative z-20 flex h-[52px] items-center justify-center gap-1">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Skeleton key={i} className={cn("rounded-full", i === 2 ? "h-1.5 w-6" : "h-1.5 w-1.5")} />
-        ))}
-      </div>
     </section>
   );
 }
@@ -54,7 +46,7 @@ function CardSkeleton() {
       {/* 9:16 thumbnail placeholder */}
       <Skeleton data-card-media className="aspect-[9/16] w-full rounded-none" />
       {/* Metadata row */}
-      <div data-card-metadata className="flex h-[104px] gap-3 px-3.5 py-3">
+      <div data-card-metadata className="flex h-16 gap-3 px-3.5 py-3">
         <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
         <div className="flex-1 space-y-1.5 pt-0.5">
           <Skeleton className="h-3 w-3/4 rounded" />

@@ -37,6 +37,7 @@ interface PromotionCardProps {
   mediaWidth?: number | null;
   mediaHeight?: number | null;
   disableNativeDrag?: boolean;
+  immersive?: boolean;
 }
 
 /* ── Urgency helper ─────────────────────────────────────────────── */
@@ -153,6 +154,7 @@ export const PromotionCard = memo(function PromotionCard({
   mediaWidth,
   mediaHeight,
   disableNativeDrag = false,
+  immersive = true,
 }: PromotionCardProps) {
   const { isActive, isRailDragging } = useAutoScrollRailItemState();
   const typePresentation = getStoredPromotionTypePresentation(promotionType);
@@ -194,6 +196,7 @@ export const PromotionCard = memo(function PromotionCard({
       mediaWidth={mediaWidth}
       mediaHeight={mediaHeight}
       disableNativeDrag={disableNativeDrag}
+      immersive={immersive}
       feedPlaybackActive={isActive && !isRailDragging}
       fallback={
         <div className="flex h-full w-full items-center justify-center text-white/35">

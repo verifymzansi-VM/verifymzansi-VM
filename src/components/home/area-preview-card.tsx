@@ -66,10 +66,10 @@ export function AreaPreviewCard({
   return (
     <Link
       href={href}
-      className={`group block w-full rounded-xl overflow-hidden border border-warm-200 dark:border-warm-700 bg-white dark:bg-warm-900 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 ${accentBorder[accentColor]}`}
+      className={`group block w-full rounded-xl overflow-hidden border border-transparent bg-transparent shadow-none transition-all duration-300 hover:-translate-y-1 hover:border-transparent hover:bg-transparent hover:shadow-none ${accentBorder[accentColor]}`}
     >
       {/* Thumbnail */}
-      <div className="relative aspect-[4/3] overflow-hidden bg-warm-100 dark:bg-warm-800">
+      <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-warm-100 dark:bg-warm-800">
         {normalizedImageUrl ? (
           isVideo ? (
             <VideoCardPlayer
@@ -133,7 +133,7 @@ export function AreaPreviewCard({
       </div>
 
       {/* Info bar */}
-      <div className="px-3 py-2.5 space-y-1">
+      <div className="space-y-1 px-3 py-2.5">
         <p className="flex items-center gap-1 text-xs text-muted-foreground">
           <MapPin className="h-3 w-3 flex-shrink-0" />
           {city}, {provinceCode}

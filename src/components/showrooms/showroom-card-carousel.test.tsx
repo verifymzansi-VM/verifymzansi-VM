@@ -176,24 +176,19 @@ describe("ShowroomCardCarousel", () => {
     expect(cards.length).toBeGreaterThanOrEqual(mockItems.length);
   });
 
-  it("renders visible progress dots that expose and control slide position", () => {
+  it("omits descriptions from listing, business, and promotion showroom cards", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
 
-    const dots = screen.getAllByRole("button", { name: /go to slide/i });
-    expect(dots).toHaveLength(3);
-    expect(dots[0]).toHaveAttribute("aria-current", "true");
-    expect(dots[1]).not.toHaveAttribute("aria-current");
+    expect(screen.queryByText("A test listing")).not.toBeInTheDocument();
+    expect(screen.queryByText("A test business")).not.toBeInTheDocument();
+    expect(screen.queryByText("A test event")).not.toBeInTheDocument();
+  });
 
-    // Dots sit below the card stage, not overlaid on top of cards.
-    const progress = screen.getByTestId("showroom-progress");
-    expect(progress.className).not.toContain("absolute");
+  it("does not render progress dots below the cards", () => {
+    render(<ShowroomCardCarousel items={mockItems} />);
 
-    fireEvent.click(dots[2]);
-    expect(screen.getByText("Slide 3 of 3")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Go to slide 3 of 3" })).toHaveAttribute(
-      "aria-current",
-      "true"
-    );
+    expect(screen.queryByTestId("showroom-progress")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /go to slide/i })).not.toBeInTheDocument();
   });
 
   it("renders empty state when no items provided", () => {

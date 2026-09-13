@@ -203,7 +203,7 @@ export async function POST(request: NextRequest) {
     }
     const publicUrl = `${r2PublicUrl}/${key}`;
 
-    const { error: trackError } = await supabase.from("media_uploads").insert({
+    const { error: trackError } = await getAdmin().from("media_uploads").insert({
       user_id: user.id,
       r2_key: key,
       bucket,

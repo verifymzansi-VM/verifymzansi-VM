@@ -47,6 +47,7 @@ export function MarketPreviewCard({
 
   return (
     <PosterCardShell
+      immersive
       href={href}
       title={title}
       mediaUrl={imageUrl}

@@ -68,7 +68,7 @@ export function useVideoFeed(videoSrc?: string, isPlaybackEligible = true) {
       ([entry]) => {
         if (entry.isIntersecting && entry.intersectionRatio >= 0.25) {
           // Lazily assign src the first time the element is visible
-          if (!el.src) {
+          if (el.getAttribute("src") !== videoSrc) {
             el.src = videoSrc;
           }
 
@@ -116,11 +116,11 @@ export function useVideoFeed(videoSrc?: string, isPlaybackEligible = true) {
   // Tap-to-toggle playback
   const togglePlayback = useCallback(() => {
     const el = videoRef.current;
-    if (!el) return;
+    if (!el || !videoSrc || !isPlaybackEligible) return;
 
     if (el.paused) {
       // Resume / start playback — claim exclusive priority
-      if (!el.src && videoSrc) {
+      if (el.getAttribute("src") !== videoSrc) {
         el.src = videoSrc;
       }
       isPausedByUserRef.current = false;
@@ -134,7 +134,7 @@ export function useVideoFeed(videoSrc?: string, isPlaybackEligible = true) {
       manager.releasePriority(el);
       manager.updateVisibility(el, 0);
     }
-  }, [videoSrc, manager]);
+  }, [videoSrc, manager, isPlaybackEligible]);
 
   return { videoRef, isPlaying, isPausedByUser, togglePlayback, reducedMotion: autoplayBlocked };
 }

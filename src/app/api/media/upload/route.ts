@@ -315,7 +315,7 @@ export async function POST(request: NextRequest) {
         // This route validates inline (magic bytes, malware scan, EXIF strip)
         // before storage, so the row is marked validated at insert time.
         // file_size records the post-strip size so the row matches the stored object.
-        const { error: trackErr } = await supabase.from("media_uploads").insert({
+        const { error: trackErr } = await getAdmin().from("media_uploads").insert({
           user_id: user.id,
           r2_key: key,
           bucket,

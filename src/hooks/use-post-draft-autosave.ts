@@ -21,17 +21,24 @@ async function saveToServer<T>(flow: DraftFlow, step: number, data: T): Promise<
     await fetch("/api/drafts", {
       method: "PUT",
       headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ flow, step, data }),
+      body: JSON.stringify({ flow: serverFlow(flow), step, data }),
     });
   } catch {
     // Server save is best-effort; localStorage is the primary store.
   }
 }
 
-async function loadFromServer<T>(flow: DraftFlow): Promise<DraftEnvelope<T> | null> {
+// Tourism replaced the promotion wizard; retain its persisted database key.
+function serverFlow(flow: DraftFlow): DraftFlow {
+  return flow === "tourism" ? "promotion" : flow;
+}
+
+async function loadFromServer<T>(flow: DraftFlow): Promise<DraftEnvelope<T> | null | undefined> {
   try {
-    const res = await fetch(`/api/drafts?flow=${encodeURIComponent(flow)}`);
-    if (!res.ok) return null;
+    const res = await fetch(`/api/drafts?flow=${encodeURIComponent(serverFlow(flow))}`, {
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!res.ok) return undefined;
     const { draft } = await res.json();
     if (!draft) return null;
     return {
@@ -41,13 +48,13 @@ async function loadFromServer<T>(flow: DraftFlow): Promise<DraftEnvelope<T> | nu
       data: draft.data as T,
     };
   } catch {
-    return null;
+    return undefined;
   }
 }
 
 async function deleteFromServer(flow: DraftFlow): Promise<void> {
   try {
-    await fetch(`/api/drafts?flow=${encodeURIComponent(flow)}`, {
+    await fetch(`/api/drafts?flow=${encodeURIComponent(serverFlow(flow))}`, {
       method: "DELETE",
       headers: withCsrfHeaders(),
     });
@@ -71,22 +78,28 @@ export function usePostDraftAutosave<T>(
   enabled: boolean = true
 ) {
   const hydrated = useHydrated();
-  const restoredRef = useRef(false);
+  const restoreRef = useRef<{
+    key: string;
+    promise: Promise<DraftEnvelope<T> | null>;
+    ready: boolean;
+    canSync: boolean;
+  } | null>(null);
 
   /* ---------- save (debounced 800ms to localStorage, 5s to server) ---------- */
 
   const save = useDebouncedCallback((step: number, data: T) => {
-    if (!userId || !enabled) return;
+    if (!userId || !enabled || !restoreRef.current?.ready) return;
     saveDraft<T>(flow, userId, step, data);
   }, 800);
 
   const serverSync = useDebouncedCallback((step: number, data: T) => {
-    if (!userId || !enabled) return;
+    if (!userId || !enabled || !restoreRef.current?.canSync) return;
     void saveToServer<T>(flow, step, data);
   }, 5_000);
 
   const saveAll = useCallback(
     (step: number, data: T) => {
+      if (!restoreRef.current?.ready) return;
       save(step, data);
       serverSync(step, data);
     },
@@ -95,23 +108,30 @@ export function usePostDraftAutosave<T>(
 
   /* ---------- restore (once, after hydration) ---------- */
 
-  const restore = useCallback((): DraftEnvelope<T> | null => {
-    if (!hydrated || !userId) return null;
-    if (restoredRef.current) return null; // only restore once per mount
-    restoredRef.current = true;
-
+  const restore = useCallback((): Promise<DraftEnvelope<T> | null> => {
+    if (!hydrated || !userId || !enabled) return Promise.resolve(null);
+    const key = `${flow}:${userId}`;
+    if (restoreRef.current?.key === key) return restoreRef.current.promise;
     const local = loadDraft<T>(flow, userId);
-
-    // Kick off async server load — if the server draft is newer, overwrite local.
-    void loadFromServer<T>(flow).then((server) => {
-      if (!server) return;
-      if (local && local.savedAt >= server.savedAt) return;
-      // Server draft is newer — persist to localStorage for next read.
-      saveDraft<T>(flow, userId!, server.step, server.data);
+    const entry = {
+      key,
+      ready: false,
+      canSync: false,
+      promise: Promise.resolve<DraftEnvelope<T> | null>(null),
+    };
+    restoreRef.current = entry;
+    entry.promise = loadFromServer<T>(flow).then((server) => {
+      if (restoreRef.current !== entry) return null;
+      entry.ready = true;
+      // If loading failed, retain local editing without overwriting an unknown
+      // server draft. A subsequent mount can retry synchronization.
+      entry.canSync = server !== undefined;
+      if (!server || (local && local.savedAt >= server.savedAt)) return local;
+      saveDraft<T>(flow, userId, server.step, server.data);
+      return server;
     });
-
-    return local;
-  }, [hydrated, userId, flow]);
+    return entry.promise;
+  }, [hydrated, userId, flow, enabled]);
 
   /* ---------- discard ---------- */
 
@@ -119,6 +139,7 @@ export function usePostDraftAutosave<T>(
     if (!userId) return;
     save.cancel();
     serverSync.cancel();
+    restoreRef.current = null;
     clearDraft(flow, userId);
     void deleteFromServer(flow);
   }, [userId, flow, save, serverSync]);
@@ -129,7 +150,7 @@ export function usePostDraftAutosave<T>(
       save.cancel();
       serverSync.cancel();
     },
-    [save, serverSync]
+    [save, serverSync, userId, flow]
   );
 
   return { save: saveAll, restore, discard } as const;

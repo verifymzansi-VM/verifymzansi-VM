@@ -142,6 +142,7 @@ export function VideoPlaybackProvider({ children }: { children: React.ReactNode 
   }, [arbitrate]);
 
   const register = useCallback((el: HTMLVideoElement) => {
+    if (videosRef.current.has(el)) return;
     videosRef.current.set(el, 0);
 
     // Enforce singleton: when any registered video starts playing
@@ -192,6 +193,7 @@ export function VideoPlaybackProvider({ children }: { children: React.ReactNode 
         el.removeEventListener("play", onPlay);
         playListenersRef.current.delete(el);
       }
+      el.pause();
       if (activeRef.current === el) {
         activeRef.current = null;
       }

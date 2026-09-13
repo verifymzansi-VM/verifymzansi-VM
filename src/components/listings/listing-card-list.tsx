@@ -89,11 +89,11 @@ export const ListingCardList = memo(function ListingCardList({
         className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
         <Card
-          className="overflow-hidden rounded-xl border-white/10 bg-warm-100 transition-all duration-300 hover:-translate-y-0.5 hover:border-brand-green/45 hover:shadow-xl"
+          className="overflow-visible rounded-xl border-transparent bg-transparent shadow-none transition-all duration-300 hover:-translate-y-0.5 hover:border-transparent hover:bg-transparent hover:shadow-none"
           trustLevel={ownerTrustLevel}
         >
           <div className="flex min-h-[140px]">
-            <div className="relative w-36 shrink-0 overflow-hidden bg-slate-900 sm:w-40">
+            <div className="relative w-36 shrink-0 overflow-hidden rounded-xl bg-slate-900 sm:w-40">
               {normalizedImageUrl ? (
                 isVideo ? (
                   <VideoCardPlayer

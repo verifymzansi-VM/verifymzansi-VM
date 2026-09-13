@@ -13,13 +13,15 @@ import { VideoDurationBadge } from "@/components/ui/video-duration-badge";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
 import type { TrustLevel } from "@/types/enums";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 const CARD_FRAME = { aspectRatio: 9 / 16, aspectClassName: "aspect-[9/16]" } as const;
 type PosterCardVariant = "default" | "showcase" | "hero";
 type MediaControlVariant = "default" | "hero";
 
 interface PosterCardShellProps {
+  /** Homepage media-only card with fading details over the image. */
+  immersive?: boolean;
   href: string;
   title: string;
   mediaUrl?: string | null;
@@ -86,6 +88,7 @@ interface PosterCardShellProps {
 }
 
 export function PosterCardShell({
+  immersive = false,
   href,
   title,
   mediaUrl,
@@ -126,6 +129,7 @@ export function PosterCardShell({
   feedPlaybackActive = true,
   deferVideoLoadUntilPlay = false,
 }: PosterCardShellProps) {
+  const [mediaPlaying, setMediaPlaying] = useState(false);
   const normalizedMediaUrl = mediaUrl ? normalizeMediaUrl(mediaUrl) : undefined;
   const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
   const normalizedLogoUrl = logoUrl ? normalizeMediaUrl(logoUrl) : undefined;
@@ -134,12 +138,21 @@ export function PosterCardShell({
     : undefined;
   const hasVideo = isVideo ?? isVideoUrl(mediaUrl);
   const frame = CARD_FRAME;
-  const effectiveFitStrategy = fitStrategy;
+  const hasIndependentControls = hasVideo || showPlaybackControl;
+  const effectiveFitStrategy = immersive ? "cover" : fitStrategy;
   const isHeroVariant = cardVariant === "hero";
   const isShowcaseVariant = cardVariant === "showcase";
   const disableNativeDrag = disableNativeDragProp || isHeroVariant;
-  const rootRadiusClassName = isHeroVariant ? "rounded-[28px]" : "rounded-xl";
-  const mediaRadiusClassName = isHeroVariant ? "rounded-t-[28px]" : "rounded-t-xl";
+  const rootRadiusClassName = immersive
+    ? "rounded-[20px]"
+    : isHeroVariant
+      ? "rounded-[28px]"
+      : "rounded-xl";
+  const mediaRadiusClassName = isHeroVariant
+    ? "rounded-t-[28px]"
+    : isShowcaseVariant
+      ? "rounded-xl"
+      : "rounded-t-xl";
   const contentPaddingClassName = isHeroVariant
     ? "gap-3 px-3.5 py-3"
     : isShowcaseVariant
@@ -165,7 +178,7 @@ export function PosterCardShell({
     ? "text-[11.5px] sm:text-[12.5px]"
     : "text-[11px] sm:text-xs";
   const wrapperClassName = cn(
-    "group relative block h-full w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+    "group/poster group relative block h-full w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
     rootRadiusClassName,
     className
   );
@@ -176,10 +189,10 @@ export function PosterCardShell({
   };
   const cardClassName = cn(
     "relative h-full w-full flex flex-col overflow-hidden border-transparent transition-all duration-300",
-    isHeroVariant
+    isHeroVariant && !immersive
       ? "border border-slate-200 bg-white text-slate-950 elev-lg ring-1 ring-black/5 hover:-translate-y-0.5 hover:elev-xl dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:ring-white/10"
-      : isShowcaseVariant
-        ? "border border-slate-200/75 bg-white/96 elev-sm backdrop-blur-sm hover:-translate-y-0.5 hover:elev-md dark:border-white/10 dark:bg-slate-950/80"
+      : isShowcaseVariant || immersive
+        ? "border-transparent bg-transparent shadow-none hover:-translate-y-0.5 hover:border-transparent hover:bg-transparent hover:shadow-none dark:bg-transparent"
         : "bg-warm-100 elev-xs hover:-translate-y-px hover:elev-sm dark:border-white/10 dark:bg-slate-950 dark:text-white dark:ring-1 dark:ring-white/10",
     rootRadiusClassName,
     accentClassName
@@ -309,14 +322,23 @@ export function PosterCardShell({
     ));
 
   const cardInner = (
-    <Card className={cardClassName} trustLevel={trustLevel} data-card-variant={cardVariant}>
+    <Card
+      className={cardClassName}
+      trustLevel={trustLevel}
+      data-card-variant={cardVariant}
+      data-card-immersive={immersive || undefined}
+      onPlayingCapture={immersive ? () => setMediaPlaying(true) : undefined}
+      onPauseCapture={immersive ? () => setMediaPlaying(false) : undefined}
+      onEndedCapture={immersive ? () => setMediaPlaying(false) : undefined}
+      onErrorCapture={immersive ? () => setMediaPlaying(false) : undefined}
+    >
       {/* ── 9:16 card thumbnail ───────────────────────────────── */}
       <div
         data-card-media
         className={cn(
           "relative w-full overflow-hidden bg-slate-900",
           mediaRadiusClassName,
-          frame.aspectClassName
+          immersive ? "aspect-[9/16] rounded-[20px]" : frame.aspectClassName
         )}
       >
         {normalizedMediaUrl ? (
@@ -325,7 +347,7 @@ export function PosterCardShell({
             isVideo={hasVideo}
             posterUrl={normalizedPosterUrl}
             alt={mediaAlt || title}
-            sizes={mediaSizes}
+            sizes={immersive ? "(max-width: 640px) 50vw, 296px" : mediaSizes}
             mode={videoMode ?? "hover"}
             fitStrategy={effectiveFitStrategy}
             containerAspectRatio={frame.aspectRatio}
@@ -352,7 +374,7 @@ export function PosterCardShell({
         )}
 
         {/* Status badge — top-left corner of thumbnail */}
-        {statusLabel ? (
+        {statusLabel && !immersive ? (
           <div className="absolute left-2 top-2 z-[6]">
             <span
               className={cn(
@@ -366,11 +388,38 @@ export function PosterCardShell({
         ) : null}
 
         {/* Duration badge — bottom-right of thumbnail (YouTube-style) */}
-        {hasVideo ? <VideoDurationBadge seconds={videoDuration} /> : null}
+        {hasVideo && !immersive ? <VideoDurationBadge seconds={videoDuration} /> : null}
+        {immersive ? (
+          <div
+            data-card-overlay
+            className={cn(
+              "pointer-events-none absolute inset-x-0 bottom-0 z-[5] flex items-end gap-2 bg-gradient-to-t from-black/75 via-black/30 to-transparent px-2.5 pb-3 pt-10 text-white transition-opacity duration-300 motion-reduce:transition-none",
+              mediaPlaying ? "opacity-0" : "opacity-100",
+              !hasVideo && "group-hover/poster:opacity-0 group-active/poster:opacity-0"
+            )}
+          >
+            <div className="min-w-0 flex-1 drop-shadow-md">
+              {eyebrow ? <p className="mb-1 text-xs font-bold sm:text-sm">{eyebrow}</p> : null}
+              <h3 className="line-clamp-2 text-[11px] font-semibold leading-tight sm:text-sm">
+                {title}
+              </h3>
+            </div>
+            {normalizedLogoUrl ? (
+              <Image
+                src={normalizedLogoUrl}
+                alt={`${title} logo`}
+                width={36}
+                height={36}
+                className="h-8 w-8 shrink-0 rounded-full object-contain drop-shadow-md sm:h-10 sm:w-10"
+                draggable={false}
+              />
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {/* ── YouTube-style metadata row beneath thumbnail ────────── */}
-      {showPlaybackControl && !makeEntireCardClickable ? (
+      {immersive ? null : hasIndependentControls && !makeEntireCardClickable ? (
         <Link
           href={href}
           prefetch={false}
@@ -388,7 +437,7 @@ export function PosterCardShell({
         metadataBody
       )}
 
-      {showPlaybackControl && makeEntireCardClickable ? (
+      {hasIndependentControls && (makeEntireCardClickable || immersive) ? (
         <Link
           href={href}
           prefetch={false}
@@ -407,7 +456,7 @@ export function PosterCardShell({
     </Card>
   );
 
-  if (showPlaybackControl) {
+  if (hasIndependentControls) {
     return <div className={wrapperClassName}>{cardInner}</div>;
   }
 

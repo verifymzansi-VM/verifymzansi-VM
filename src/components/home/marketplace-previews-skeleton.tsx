@@ -13,15 +13,11 @@ export function MarketplacePreviewsSkeleton() {
           </div>
 
           {/* Card grid skeleton */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             {Array.from({ length: 3 }).map((_, cardIdx) => (
               <div key={cardIdx} className="space-y-2">
                 {/* Thumbnail */}
-                <div className="aspect-[9/16] rounded-lg bg-warm-200 dark:bg-warm-700 animate-pulse" />
-                {/* Title */}
-                <div className="h-4 w-3/4 rounded bg-warm-200 dark:bg-warm-700 animate-pulse" />
-                {/* Location */}
-                <div className="h-3 w-1/2 rounded bg-warm-200 dark:bg-warm-700 animate-pulse" />
+                <div className="aspect-[9/16] rounded-[20px] bg-warm-200 dark:bg-warm-700 animate-pulse" />
               </div>
             ))}
           </div>

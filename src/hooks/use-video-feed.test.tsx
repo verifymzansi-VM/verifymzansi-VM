@@ -7,8 +7,14 @@ import { useVideoFeed } from "./use-video-feed";
 vi.mock("./use-reduced-motion", () => ({ useReducedMotion: () => false }));
 vi.mock("./use-data-saver", () => ({ useDataSaver: () => false }));
 let observe: IntersectionObserverCallback;
-function Probe() {
-  const { videoRef, isPlaying, togglePlayback } = useVideoFeed("https://example.com/clip.mp4");
+function Probe({
+  src = "https://example.com/clip.mp4",
+  eligible = true,
+}: {
+  src?: string;
+  eligible?: boolean;
+}) {
+  const { videoRef, isPlaying, togglePlayback } = useVideoFeed(src, eligible);
   return (
     <>
       <video ref={videoRef} />
@@ -27,6 +33,33 @@ function visibility(ratio: number) {
 }
 
 describe("mobile feed playback", () => {
+  it("loads the replacement source when a card is reused", () => {
+    const { rerender } = render(
+      <VideoPlaybackProvider>
+        <Probe />
+      </VideoPlaybackProvider>
+    );
+    visibility(0.75);
+    rerender(
+      <VideoPlaybackProvider>
+        <Probe src="https://example.com/new.mp4" />
+      </VideoPlaybackProvider>
+    );
+    visibility(0.75);
+    expect(document.querySelector("video")!.src).toBe("https://example.com/new.mp4");
+  });
+
+  it("does not let an inactive carousel card claim playback on tap", () => {
+    render(
+      <VideoPlaybackProvider>
+        <Probe eligible={false} />
+      </VideoPlaybackProvider>
+    );
+    visibility(0.75);
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    expect(document.querySelector("video")!.paused).toBe(true);
+  });
+
   beforeEach(() => {
     vi.useFakeTimers();
     vi.stubGlobal(

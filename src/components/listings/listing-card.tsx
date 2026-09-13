@@ -66,6 +66,7 @@ export const ListingCard = memo(function ListingCard({
 
   return (
     <PosterCardShell
+      immersive
       href={`/listing/${id}`}
       title={title}
       mediaUrl={imageUrl}

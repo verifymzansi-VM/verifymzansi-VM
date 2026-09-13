@@ -73,7 +73,7 @@ export const options = {
   scenarios,
   thresholds: {
     http_req_duration: ["p(95)<2000", "p(99)<5000"], // 95th < 2s, 99th < 5s
-    errors: ["rate<0.05"],                            // < 5% error rate
+    errors: ["rate<0.05"], // < 5% error rate
     homepage_latency: ["p(95)<1500"],
     api_latency: ["p(95)<500"],
   },
@@ -83,20 +83,24 @@ export default function () {
   // ── Homepage ────────────────────────────────────────────
   const homeRes = http.get(`${BASE}/`);
   homepageLatency.add(homeRes.timings.duration);
-  check(homeRes, {
-    "homepage 200": (r) => r.status === 200,
-    "homepage < 3s": (r) => r.timings.duration < 3000,
-  }) || errorRate.add(1);
+  errorRate.add(
+    !check(homeRes, {
+      "homepage 200": (r) => r.status === 200,
+      "homepage < 3s": (r) => r.timings.duration < 3000,
+    })
+  );
 
   sleep(1);
 
   // ── Health endpoint ─────────────────────────────────────
   const healthRes = http.get(`${BASE}/api/health`);
   apiLatency.add(healthRes.timings.duration);
-  check(healthRes, {
-    "health 200": (r) => r.status === 200,
-    "health < 500ms": (r) => r.timings.duration < 500,
-  }) || errorRate.add(1);
+  errorRate.add(
+    !check(healthRes, {
+      "health 200": (r) => r.status === 200,
+      "health < 500ms": (r) => r.timings.duration < 500,
+    })
+  );
 
   sleep(0.5);
 
@@ -104,26 +108,32 @@ export default function () {
   const marketPages = ["/mzansi-market", "/business-ads", "/mall-shops"];
   const page = marketPages[Math.floor(Math.random() * marketPages.length)];
   const marketRes = http.get(`${BASE}${page}`);
-  check(marketRes, {
-    "marketplace 2xx": (r) => r.status >= 200 && r.status < 400,
-    "marketplace < 3s": (r) => r.timings.duration < 3000,
-  }) || errorRate.add(1);
+  errorRate.add(
+    !check(marketRes, {
+      "marketplace 2xx": (r) => r.status >= 200 && r.status < 400,
+      "marketplace < 3s": (r) => r.timings.duration < 3000,
+    })
+  );
 
   sleep(1);
 
   // ── Pricing page ──────────────────────────────────────
   const pricingRes = http.get(`${BASE}/pricing`);
-  check(pricingRes, {
-    "pricing 200": (r) => r.status === 200,
-  }) || errorRate.add(1);
+  errorRate.add(
+    !check(pricingRes, {
+      "pricing 200": (r) => r.status === 200,
+    })
+  );
 
   sleep(0.5);
 
   // ── Login page (renders, no submission) ──────────────
   const loginRes = http.get(`${BASE}/login`);
-  check(loginRes, {
-    "login 200": (r) => r.status === 200,
-  }) || errorRate.add(1);
+  errorRate.add(
+    !check(loginRes, {
+      "login 200": (r) => r.status === 200,
+    })
+  );
 
   sleep(1);
 }
