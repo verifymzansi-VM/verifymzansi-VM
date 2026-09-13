@@ -19,15 +19,22 @@ export async function POST(request: NextRequest) {
 
     const { targetId, targetType, viewerKey, userId, playbackId } = prepared.data;
     const admin = createAdminClient();
-    const { data, error } = await admin.rpc("record_content_view", {
-      p_target_id: targetId,
-      p_target_type: targetType,
-      // Playback IDs count repeat plays while keeping delivery of the same event idempotent.
-      // Ordinary page views retain their existing unique-view behavior.
-      p_viewer_key: playbackId ? `playback:${playbackId}` : viewerKey,
-      p_viewer_user_id: userId,
-      p_viewer_ip_hash: null,
-    });
+    const { data, error } = playbackId
+      ? await admin.rpc("record_content_playback", {
+          p_target_id: targetId,
+          p_target_type: targetType,
+          // Keep the device identity stable across login/logout and across tabs.
+          p_viewer_key: `device:${prepared.data.nextViewerId}`,
+          p_playback_id: playbackId,
+          p_viewer_user_id: userId,
+        })
+      : await admin.rpc("record_content_view", {
+          p_target_id: targetId,
+          p_target_type: targetType,
+          p_viewer_key: viewerKey,
+          p_viewer_user_id: userId,
+          p_viewer_ip_hash: null,
+        });
 
     if (error) {
       log.error("Failed to record content view", {

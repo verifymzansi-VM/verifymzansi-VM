@@ -43,6 +43,21 @@ function wrapper({ children }: { children: React.ReactNode }) {
 /* ------------------------------------------------------------------ */
 
 describe("VideoPlaybackContext", () => {
+  it("does not let a delayed canplay retry undo a pause before arbitration", async () => {
+    const { result } = renderHook(() => useVideoPlaybackManager(), { wrapper });
+    const video = makeVideo("delayed");
+    video.play = vi.fn().mockRejectedValue(new DOMException("Loading", "AbortError"));
+    result.current.register(video);
+    result.current.requestPriority(video);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    video.pause();
+    result.current.releasePriority(video);
+    result.current.updateVisibility(video, 0);
+    video.dispatchEvent(new Event("canplay"));
+    expect(video.play).toHaveBeenCalledTimes(1);
+  });
   it("pauses an unregistered video before another card starts", () => {
     const { result } = renderHook(() => useVideoPlaybackManager(), { wrapper });
     const a = makeVideo("removed");

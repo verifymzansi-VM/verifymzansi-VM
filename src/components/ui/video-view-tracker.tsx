@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
+import { readVideoSession, writeVideoSession } from "@/lib/video-view-session";
 import type { ContentTargetType } from "@/lib/engagement";
 
 /** Public content links also identify cards shared by the showroom and feeds. */
@@ -35,66 +36,99 @@ export function VideoViewTracker({
   const target = targetFromHref(href);
   const id = targetId ?? target?.targetId;
   const type = targetType ?? target?.targetType;
-  const container = useRef<HTMLSpanElement>(null);
-  const active = useRef(new WeakMap<HTMLVideoElement, string>());
+  const samples = useRef(new WeakMap<HTMLVideoElement, { time: number; wall: number }>());
 
-  const record = useCallback(
-    (video: HTMLVideoElement) => {
-      if (!enabled || !id || !type || document.visibilityState === "hidden") return;
-      const source = `${id}:${type}:${video.currentSrc || video.src}`;
-      if (active.current.get(video) === source) return;
-      active.current.set(video, source);
-      void fetch("/api/engagement/view", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetId: id, targetType: type, playbackId: crypto.randomUUID() }),
-        keepalive: true,
+  const sample = (video: HTMLVideoElement, accumulate: boolean) => {
+    if (!enabled || !id || !type) return;
+    const now = Date.now();
+    const previous = samples.current.get(video);
+    samples.current.set(video, { time: video.currentTime, wall: now });
+    if (document.visibilityState === "hidden" || video.seeking) return;
+    const key = `vmz:video-session:${type}:${id}`;
+    const session = readVideoSession(key, now);
+    const elapsed = previous ? (now - previous.wall) / 1000 : 0;
+    const progress = previous ? (video.currentTime - previous.time) / (video.playbackRate || 1) : 0;
+    // Only credit advancing playback, bounded by real foreground time. Seeking,
+    // buffering, and a missing stream of timeupdate events do not earn watch time.
+    if (
+      accumulate &&
+      previous &&
+      elapsed > 0 &&
+      elapsed <= 5 &&
+      progress > 0 &&
+      progress <= elapsed + 0.5
+    ) {
+      session.watched += Math.min(elapsed, progress);
+    }
+    session.lastActivity = now;
+    const threshold =
+      Number.isFinite(video.duration) && video.duration > 0
+        ? Math.min(30, video.duration * 0.9)
+        : 30;
+    const qualifies =
+      !session.submitted && session.watched >= threshold && now >= session.retryAfter;
+    if (qualifies) session.submitted = true;
+    writeVideoSession(key, session);
+    if (!qualifies) return;
+
+    void fetch("/api/engagement/view", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targetId: id, targetType: type, playbackId: session.playbackId }),
+      keepalive: true,
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("View request failed");
+        const payload = await response.json();
+        if (payload?.recorded) {
+          onRecorded?.();
+          window.dispatchEvent(
+            new CustomEvent("vmz:content-view-recorded", {
+              detail: { targetId: id, targetType: type },
+            })
+          );
+        }
       })
-        .then(async (response) => {
-          if (!response.ok) return;
-          const payload = await response.json();
-          if (payload?.recorded) {
-            onRecorded?.();
-            window.dispatchEvent(
-              new CustomEvent("vmz:content-view-recorded", {
-                detail: { targetId: id, targetType: type },
-              })
-            );
-          }
-        })
-        .catch(() => {
-          // View tracking must never interrupt playback.
-        });
-    },
-    [enabled, id, type, onRecorded]
-  );
+      .catch(() => {
+        // Retry the SAME event after a transient failure, never a fresh view ID.
+        const current = readVideoSession(key, Date.now());
+        if (current.playbackId === session.playbackId) {
+          current.submitted = false;
+          current.retryAfter = Date.now() + 10000;
+          writeVideoSession(key, current);
+        }
+      });
+  };
 
   useEffect(() => {
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        active.current = new WeakMap();
-      } else {
-        container.current?.querySelectorAll("video").forEach((video) => {
-          if (!video.paused && !video.ended && video.readyState >= 3) record(video);
-        });
-      }
+    const resetSamples = () => {
+      samples.current = new WeakMap();
     };
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
-  }, [record]);
+    document.addEventListener("visibilitychange", resetSamples);
+    return () => document.removeEventListener("visibilitychange", resetSamples);
+  }, []);
 
   return (
     <span
-      ref={container}
       className="contents"
       onPlayingCapture={(event) => {
-        if (event.target instanceof HTMLVideoElement) record(event.target);
+        if (event.target instanceof HTMLVideoElement) sample(event.target, false);
+      }}
+      onTimeUpdateCapture={(event) => {
+        if (event.target instanceof HTMLVideoElement && !event.target.paused)
+          sample(event.target, true);
+      }}
+      onSeekingCapture={(event) => {
+        if (event.target instanceof HTMLVideoElement) samples.current.delete(event.target);
+      }}
+      onWaitingCapture={(event) => {
+        if (event.target instanceof HTMLVideoElement) samples.current.delete(event.target);
       }}
       onPauseCapture={(event) => {
-        if (event.target instanceof HTMLVideoElement) active.current.delete(event.target);
+        if (event.target instanceof HTMLVideoElement) samples.current.delete(event.target);
       }}
       onEndedCapture={(event) => {
-        if (event.target instanceof HTMLVideoElement) active.current.delete(event.target);
+        if (event.target instanceof HTMLVideoElement) samples.current.delete(event.target);
       }}
     >
       {children}

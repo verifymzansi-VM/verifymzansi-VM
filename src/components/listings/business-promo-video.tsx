@@ -62,8 +62,6 @@ export function BusinessPromoVideo({
     if (!el) return;
     // Claim singleton priority so any other playing video pauses first.
     manager.requestPriority(el);
-    el.play();
-    setIsPlaying(true);
   }
 
   return (

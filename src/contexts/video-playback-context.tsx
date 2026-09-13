@@ -116,7 +116,13 @@ export function VideoPlaybackProvider({ children }: { children: React.ReactNode 
           target.addEventListener(
             "canplay",
             () => {
-              if (activeRef.current === target && !exclusiveRef.current && !document.hidden) {
+              if (
+                activeRef.current === target &&
+                videosRef.current.has(target) &&
+                (priorityRef.current === target || (videosRef.current.get(target) ?? 0) >= 0.25) &&
+                !exclusiveRef.current &&
+                !document.hidden
+              ) {
                 target.play().catch(() => {
                   /* autoplay policy */
                 });

@@ -5,7 +5,7 @@ import { useVideoMuteStore } from "@/stores/video-mute-store";
  * Hook that bridges the global mute store with a `<video>` element.
  *
  * - Reads `isMuted` / `toggleMute` from the zustand persist store.
- * - Syncs `videoRef.current.muted` imperatively via useEffect so the HTML
+ * - Syncs `videoRef.current.muted` through a synchronous store subscription so the HTML
  *   `muted` attribute can stay hardcoded (required for autoplay policy).
  *
  * Usage:
@@ -22,10 +22,15 @@ export function useGlobalMute(videoRef: React.RefObject<HTMLVideoElement | null>
 
   useEffect(() => {
     const el = videoRef.current;
-    if (el) {
-      el.muted = isMuted;
-    }
-  }, [isMuted, videoRef]);
+    if (!el) return;
+    el.muted = useVideoMuteStore.getState().isMuted;
+    // Run inside the mute button's user gesture, including for other mounted
+    // cards. Deferring unmute to a React effect can pause playback in Safari.
+    // Audio changes must never call play/pause or claim playback priority.
+    return useVideoMuteStore.subscribe((state, previous) => {
+      if (state.isMuted !== previous.isMuted) el.muted = state.isMuted;
+    });
+  }, [videoRef]);
 
   return { isMuted, toggleMute, setMuted } as const;
 }

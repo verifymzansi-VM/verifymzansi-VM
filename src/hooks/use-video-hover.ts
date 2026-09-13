@@ -91,10 +91,12 @@ export function useVideoHover(videoSrc?: string) {
     setIsHovering(true);
     const el = videoRef.current;
     if (!el || autoplayBlocked || manualPlaybackRef.current) return;
-    if (el.src) {
-      manager.requestPriority(el);
-    }
-  }, [autoplayBlocked, manager]);
+    if (!videoSrc) return;
+    // A pointer can enter before IntersectionObserver delivers its first entry.
+    // Load here too so the first hover always starts the preview.
+    if (el.getAttribute("src") !== videoSrc) el.src = videoSrc;
+    manager.requestPriority(el);
+  }, [autoplayBlocked, manager, videoSrc]);
 
   const onMouseLeave = useCallback(() => {
     setIsHovering(false);

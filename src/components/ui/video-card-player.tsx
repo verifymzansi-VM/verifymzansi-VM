@@ -191,7 +191,7 @@ function MuteButton({
   if (!showMuteControl) return null;
 
   return (
-    <div className="absolute right-2 top-2 z-[14] sm:right-2.5 sm:top-2.5">
+    <div className="absolute right-0.5 top-0.5 z-[14] sm:right-2 sm:top-2">
       {/* Keep the full touch target inside the media frame. */}
       <button
         type="button"
@@ -205,17 +205,17 @@ function MuteButton({
           toggleMute();
         }}
         className={cn(
-          "flex items-center justify-center rounded-full text-white shadow-lg backdrop-blur-md transition-colors select-none touch-manipulation",
+          "relative flex items-center justify-center rounded-full text-white transition-colors select-none touch-manipulation before:absolute before:inset-1.5 before:rounded-full before:border before:border-white/20 before:bg-black/60 before:shadow-lg before:backdrop-blur-md sm:before:inset-0",
           controlVariant === "hero"
-            ? "border border-white/25 bg-black/48 ring-1 ring-white/10 hover:bg-black/58 h-11 w-11 p-0 sm:min-h-[46px] sm:min-w-[46px]"
-            : "border border-white/10 bg-black/55 hover:bg-black/70 h-11 w-11 p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            ? "h-11 w-11 p-0 sm:min-h-[46px] sm:min-w-[46px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            : "h-11 w-11 p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
         )}
         aria-label={isMuted ? "Unmute" : "Mute"}
       >
         {isMuted ? (
-          <VolumeX className={cn(controlVariant === "hero" ? "h-4 w-4" : "h-4 w-4")} />
+          <VolumeX className="relative h-3.5 w-3.5 sm:h-4 sm:w-4" />
         ) : (
-          <Volume2 className={cn(controlVariant === "hero" ? "h-4 w-4" : "h-4 w-4")} />
+          <Volume2 className="relative h-3.5 w-3.5 sm:h-4 sm:w-4" />
         )}
       </button>
     </div>
@@ -543,7 +543,11 @@ function VideoCardPlayerInner({
   const managedVideoSrc =
     isVideo && deferVideoLoadUntilPlay && !hasActivatedPlayback ? undefined : normalizedSrc;
   const shouldAutoplay = !isPlaybackPaused;
-  const { videoRef, reducedMotion } = useVideoVisibility(managedVideoSrc, shouldAutoplay);
+  const { videoRef, reducedMotion } = useVideoVisibility(
+    managedVideoSrc,
+    shouldAutoplay,
+    hasActivatedPlayback
+  );
   const [videoReady, setVideoReady] = useState(false);
   const [hasVideoFrame, setHasVideoFrame] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -708,16 +712,11 @@ function VideoCardPlayerInner({
 
       if (el.paused) {
         if (!el.src && normalizedSrc) {
-          const playAfterLoad = () => {
-            el.play().catch(() => setIsPlaybackPaused(true));
-          };
           el.src = normalizedSrc;
-          el.addEventListener("canplay", playAfterLoad, { once: true });
-          el.load();
-          el.play().catch(() => setIsPlaybackPaused(true));
-        } else {
-          el.play().catch(() => setIsPlaybackPaused(true));
         }
+        // play() already waits for buffering. A separate canplay listener could
+        // restart the video after the user pauses or another card takes over.
+        el.play().catch(() => setIsPlaybackPaused(true));
         setIsPlaybackPaused(false);
         setHasActivatedPlayback(true);
         return;
@@ -1138,7 +1137,7 @@ function HoverVideoPlayer({
   const showMuteControl =
     muteControlVisibility !== "hidden" &&
     !hasError &&
-    (!reducedMotion || isPlaying) &&
+    (!reducedMotion || isPlaying || videoReady) &&
     muteControlVisibility === "always";
   const hasUsablePoster = Boolean(normalizedPoster && !posterError);
   const videoHasPreviewFrame = hasVideoFrame || videoReady;
@@ -1326,11 +1325,11 @@ function HoverVideoPlayer({
 
       <MuteButton videoRef={videoRef} showMuteControl={showMuteControl} />
 
-      {!hasError ? (
+      {!hasError && reducedMotion && !isPlaying ? (
         <button
           type="button"
           data-carousel-control="true"
-          aria-label={isPlaying ? "Pause video preview" : "Play video"}
+          aria-label="Play video"
           className="absolute bottom-3 left-3 z-[13] inline-flex min-h-11 items-center gap-2 rounded-full bg-black/60 px-3 text-xs font-medium text-white backdrop-blur-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
           onClick={(event) => {
             event.preventDefault();
@@ -1338,12 +1337,8 @@ function HoverVideoPlayer({
             togglePlayback();
           }}
         >
-          {isPlaying ? (
-            <Pause className="h-4 w-4" aria-hidden="true" />
-          ) : (
-            <Play className="h-4 w-4" aria-hidden="true" />
-          )}
-          {isPlaying ? "Pause" : "Play"}
+          <Play className="h-4 w-4" aria-hidden="true" />
+          Play
         </button>
       ) : null}
 
@@ -1479,7 +1474,7 @@ function FeedVideoPlayer({
   const showMuteControl =
     muteControlVisibility !== "hidden" &&
     !hasError &&
-    (!reducedMotion || isPlaying) &&
+    (!reducedMotion || isPlaying || videoReady) &&
     muteControlVisibility === "always";
   const hasUsablePoster = Boolean(normalizedPoster && !posterError);
   const videoHasPreviewFrame = hasVideoFrame || videoReady;
@@ -1653,9 +1648,8 @@ function FeedVideoPlayer({
         onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
       />
 
-      {/* Transparent tap overlay — intercepts taps to toggle playback,
-          prevents parent <Link> from navigating */}
-      {!hasError ? (
+      {/* Only intercept taps to start playback. Playing cards expose their profile link. */}
+      {!hasError && !isPlaying ? (
         <div
           role="button"
           tabIndex={0}
@@ -1688,12 +1682,12 @@ function FeedVideoPlayer({
         <button
           type="button"
           data-carousel-control="true"
-          className="absolute bottom-3 left-3 z-[13] inline-flex min-h-11 items-center gap-2 rounded-full bg-black/60 px-3 text-xs font-medium text-white backdrop-blur-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+          className="absolute bottom-1.5 left-1/2 z-[13] inline-flex h-11 w-11 -translate-x-1/2 items-center justify-center rounded-full text-white touch-manipulation before:absolute before:inset-1.5 before:rounded-full before:bg-black/60 before:backdrop-blur-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+          onPointerDown={(event) => event.stopPropagation()}
           onClick={handleTap}
           aria-label="Pause video"
         >
-          <Pause className="h-4 w-4" aria-hidden="true" />
-          Pause
+          <Pause className="relative h-3.5 w-3.5" aria-hidden="true" />
         </button>
       ) : null}
 

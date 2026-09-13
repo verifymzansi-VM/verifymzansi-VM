@@ -38,8 +38,16 @@ class MockIntersectionObserver {
   thresholds = [];
 }
 
-function Probe({ videoSrc }: { videoSrc?: string }) {
-  const { videoRef } = useVideoVisibility(videoSrc);
+function Probe({
+  videoSrc,
+  autoplay = true,
+  manual = false,
+}: {
+  videoSrc?: string;
+  autoplay?: boolean;
+  manual?: boolean;
+}) {
+  const { videoRef } = useVideoVisibility(videoSrc, autoplay, manual);
   return <video ref={videoRef} />;
 }
 
@@ -52,6 +60,37 @@ function renderProbe(videoSrc?: string) {
 }
 
 describe("useVideoVisibility", () => {
+  it("keeps its registration when resuming and permits explicit reduced-motion playback", () => {
+    reducedMotionMock.mockReturnValue(true);
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+    const { container, rerender } = render(
+      <VideoPlaybackProvider>
+        <Probe videoSrc="/clip.mp4" autoplay={false} />
+      </VideoPlaybackProvider>
+    );
+    const video = container.querySelector("video")!;
+    const observer = observerCallback;
+    const pause = vi.spyOn(video, "pause");
+    pause.mockClear();
+    rerender(
+      <VideoPlaybackProvider>
+        <Probe videoSrc="/clip.mp4" manual />
+      </VideoPlaybackProvider>
+    );
+    expect(observerCallback).toBe(observer);
+    expect(pause).not.toHaveBeenCalled();
+    observerCallback?.(
+      [
+        {
+          target: video,
+          isIntersecting: true,
+          intersectionRatio: 0.8,
+        } as IntersectionObserverEntry,
+      ],
+      {} as IntersectionObserver
+    );
+    expect(pause).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     vi.useFakeTimers();
     vi.restoreAllMocks();

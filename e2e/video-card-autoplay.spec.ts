@@ -210,6 +210,7 @@ test.describe("Card video autoplay", () => {
   for (const route of routes) {
     test(`${route.name} supports manual play and pause without opening the card`, async ({
       page,
+      isMobile,
     }) => {
       await page.emulateMedia({ reducedMotion: "reduce" });
       await installMediaPlaybackShim(page);
@@ -237,10 +238,33 @@ test.describe("Card video autoplay", () => {
       await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(false);
       await page.mouse.move(0, 0);
       await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(false);
+      const mute = card.getByRole("button", { name: "Unmute", exact: true });
+      const frameBounds = await card.locator("[data-card-media]").boundingBox();
+      const muteBounds = await mute.boundingBox();
+      expect(frameBounds).toBeTruthy();
+      expect(muteBounds).toBeTruthy();
+      expect(muteBounds!.width).toBeGreaterThanOrEqual(44);
+      expect(muteBounds!.height).toBeGreaterThanOrEqual(44);
+      expect(muteBounds!.x + muteBounds!.width).toBeLessThanOrEqual(
+        frameBounds!.x + frameBounds!.width
+      );
+      expect(muteBounds!.y).toBeGreaterThanOrEqual(frameBounds!.y);
+      await mute.click();
+      await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.muted)).toBe(false);
+      await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(false);
+      await card.getByRole("button", { name: "Mute", exact: true }).click();
+      await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(false);
+      expect(page.url()).toBe(url);
+      if (!isMobile) {
+        await expect(card.getByRole("button", { name: /Pause video/ })).toHaveCount(0);
+        return;
+      }
       await card
         .getByRole("button", { name: /Pause video/ })
         .last()
         .click();
+      await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(true);
+      await card.getByRole("button", { name: "Unmute", exact: true }).click();
       await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(true);
       await expect(card.locator("[data-card-overlay]")).toHaveCSS("opacity", "1");
       await expect(card.getByText("Johannesburg", { exact: true })).toBeVisible();

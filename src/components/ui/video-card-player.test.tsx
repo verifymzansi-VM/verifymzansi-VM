@@ -75,6 +75,54 @@ describe("VideoCardPlayer", () => {
     }
   );
 
+  it.each([false, true])(
+    "omits desktop playback controls while hover playing is %s",
+    (isPlaying) => {
+      useVideoHoverMock.mockReturnValue({
+        videoRef: { current: null },
+        containerRef: { current: null },
+        reducedMotion: false,
+        isHovering: isPlaying,
+        isPlaying,
+        togglePlayback: vi.fn(),
+      });
+      render(<VideoCardPlayer src="https://example.com/clip.mp4" mode="hover" />);
+      expect(screen.queryByRole("button", { name: /play|pause/i })).toBeNull();
+    }
+  );
+
+  it("lets playing mobile media open its profile and confines playback changes to pause", () => {
+    const togglePlayback = vi.fn();
+    const openProfile = vi.fn((event: React.MouseEvent) => event.preventDefault());
+    useHoverCapabilityMock.mockReturnValue(false);
+    useVideoFeedMock.mockReturnValue({
+      videoRef: { current: null },
+      isPlaying: true,
+      togglePlayback,
+      reducedMotion: false,
+    });
+    render(
+      <a href="/profile/example" onClick={openProfile}>
+        <VideoCardPlayer
+          src="https://example.com/clip.mp4"
+          mode="hover"
+          muteControlVisibility="always"
+        />
+      </a>
+    );
+    expect(screen.queryByRole("button", { name: "Pause video preview" })).toBeNull();
+    fireEvent.click(document.querySelector("video")!);
+    expect(openProfile).toHaveBeenCalledOnce();
+    expect(togglePlayback).not.toHaveBeenCalled();
+    openProfile.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Pause video" }));
+    expect(togglePlayback).toHaveBeenCalledOnce();
+    expect(openProfile).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Unmute" }));
+    expect(openProfile).not.toHaveBeenCalled();
+    expect(togglePlayback).toHaveBeenCalledOnce();
+  });
+
   it("offers manual hover playback when automatic motion is disabled", () => {
     const togglePlayback = vi.fn();
     useVideoHoverMock.mockReturnValue({
@@ -254,7 +302,7 @@ describe("VideoCardPlayer", () => {
       />
     );
 
-    expect(useVideoVisibilityMock).toHaveBeenCalledWith(undefined, false);
+    expect(useVideoVisibilityMock).toHaveBeenCalledWith(undefined, false, false);
     expect(screen.getByRole("button", { name: /play video/i })).toBeTruthy();
   });
 

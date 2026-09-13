@@ -19,12 +19,30 @@ import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
  * @returns `{ videoRef, autoplayBlocked }` — attach `videoRef` to the `<video>` element.
  *   `autoplayBlocked` is true when the user prefers reduced motion or data saving.
  */
-export function useVideoVisibility(videoSrc?: string, shouldAutoplay = true) {
+export function useVideoVisibility(
+  videoSrc?: string,
+  shouldAutoplay = true,
+  manualPlayback = false
+) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const reducedMotion = useReducedMotion();
   const dataSaver = useDataSaver();
   const autoplayBlocked = reducedMotion || dataSaver;
   const manager = useVideoPlaybackManager();
+  const autoplayAllowedRef = useRef(shouldAutoplay && (!autoplayBlocked || manualPlayback));
+  const visibilityRef = useRef(0);
+
+  useEffect(() => {
+    autoplayAllowedRef.current = shouldAutoplay && (!autoplayBlocked || manualPlayback);
+    const el = videoRef.current;
+    if (!el) return;
+    if (!autoplayAllowedRef.current) {
+      el.pause();
+      manager.updateVisibility(el, 0);
+    } else {
+      manager.updateVisibility(el, visibilityRef.current);
+    }
+  }, [shouldAutoplay, autoplayBlocked, manualPlayback, manager]);
 
   useEffect(() => {
     const el = videoRef.current;
@@ -34,13 +52,14 @@ export function useVideoVisibility(videoSrc?: string, shouldAutoplay = true) {
 
     const observer = new IntersectionObserver(
       ([entry]) => {
+        visibilityRef.current = entry.isIntersecting ? entry.intersectionRatio : 0;
         if (entry.isIntersecting) {
           // Lazily assign src the first time the element is visible
           if (el.getAttribute("src") !== videoSrc) {
             el.src = videoSrc;
           }
 
-          if (!autoplayBlocked && shouldAutoplay) {
+          if (autoplayAllowedRef.current) {
             // Report visibility to the global manager — it decides which video plays
             manager.updateVisibility(el, entry.intersectionRatio);
           } else {
@@ -60,7 +79,7 @@ export function useVideoVisibility(videoSrc?: string, shouldAutoplay = true) {
       observer.disconnect();
       manager.unregister(el);
     };
-  }, [videoSrc, autoplayBlocked, shouldAutoplay, manager]);
+  }, [videoSrc, manager]);
 
   return { videoRef, reducedMotion: autoplayBlocked, autoplayBlocked };
 }

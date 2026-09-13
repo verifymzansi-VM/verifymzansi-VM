@@ -91,6 +91,12 @@ describe("useVideoHover", () => {
 
       expect(manager.register).toHaveBeenCalledWith(video);
 
+      // First hover can precede the initial visibility callback.
+      act(() => container.dispatchEvent(new Event("mouseenter")));
+      expect(video.src).toContain("/media/clip.mp4");
+      expect(manager.requestPriority).toHaveBeenCalledWith(video);
+      manager.requestPriority.mockClear();
+
       act(() => {
         intersectionCallback?.([createIntersectionEntry(video)], {} as IntersectionObserver);
       });
