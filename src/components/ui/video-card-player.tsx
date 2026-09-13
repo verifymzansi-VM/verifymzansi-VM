@@ -707,11 +707,19 @@ function VideoCardPlayerInner({
       if (!el) return;
 
       if (el.paused) {
-        if (!el.src && normalizedSrc) el.src = normalizedSrc;
+        if (!el.src && normalizedSrc) {
+          const playAfterLoad = () => {
+            el.play().catch(() => setIsPlaybackPaused(true));
+          };
+          el.src = normalizedSrc;
+          el.addEventListener("canplay", playAfterLoad, { once: true });
+          el.load();
+          el.play().catch(() => setIsPlaybackPaused(true));
+        } else {
+          el.play().catch(() => setIsPlaybackPaused(true));
+        }
         setIsPlaybackPaused(false);
         setHasActivatedPlayback(true);
-        // Let media events report success; a rejected play must remain retryable.
-        el.play().catch(() => setIsPlaybackPaused(true));
         return;
       }
 
