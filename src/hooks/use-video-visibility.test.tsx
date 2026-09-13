@@ -85,6 +85,10 @@ describe("useVideoVisibility", () => {
           target: video,
           isIntersecting: true,
           intersectionRatio: 0.8,
+          boundingClientRect: {} as DOMRectReadOnly,
+          intersectionRect: {} as DOMRectReadOnly,
+          rootBounds: null,
+          time: 0,
         } as IntersectionObserverEntry,
       ],
       {} as IntersectionObserver
