@@ -29,7 +29,10 @@ export default function MzansiMarketError({
           </p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" onClick={() => (window.location.href = "/")}>
+          <Button
+            variant="outline"
+            onClick={() => window.location.assign(new URL("/", window.location.origin).toString())}
+          >
             Go to homepage
           </Button>
           <Button onClick={() => reset()}>Try again</Button>

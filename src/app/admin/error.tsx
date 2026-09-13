@@ -40,7 +40,12 @@ export default function AdminError({
           <Button variant="outline" asChild>
             <Link href="/">Go to homepage</Link>
           </Button>
-          <Button variant="outline" onClick={() => (window.location.href = "/admin")}>
+          <Button
+            variant="outline"
+            onClick={() =>
+              window.location.assign(new URL("/admin", window.location.origin).toString())
+            }
+          >
             Reload Admin
           </Button>
           <Button onClick={() => reset()}>Retry</Button>

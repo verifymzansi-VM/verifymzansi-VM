@@ -40,9 +40,12 @@ describe("usePostDraftAutosave", () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => ({}) });
   });
 
-  it("saves draft to localStorage when save is called", () => {
+  it("saves draft to localStorage when save is called", async () => {
     const { result } = renderHook(() => usePostDraftAutosave("listing", "user-1", true));
 
+    await act(async () => {
+      await result.current.restore();
+    });
     act(() => {
       result.current.save(1, { title: "Test" });
     });
@@ -70,25 +73,26 @@ describe("usePostDraftAutosave", () => {
     expect(mockSaveDraft).not.toHaveBeenCalled();
   });
 
-  it("restores draft from localStorage", () => {
+  it("restores draft from localStorage", async () => {
     const draft = { v: 1, savedAt: Date.now(), step: 2, data: { title: "Saved" } };
     mockLoadDraft.mockReturnValue(draft);
 
     const { result } = renderHook(() => usePostDraftAutosave("listing", "user-1", true));
 
-    const restored = result.current.restore();
+    const restored = await result.current.restore();
     expect(restored).toEqual(draft);
     expect(mockLoadDraft).toHaveBeenCalledWith("listing", "user-1");
   });
 
-  it("restores only once per mount", () => {
+  it("restores only once per mount", async () => {
     mockLoadDraft.mockReturnValue({ v: 1, savedAt: Date.now(), step: 1, data: {} });
 
     const { result } = renderHook(() => usePostDraftAutosave("listing", "user-1", true));
 
-    result.current.restore();
+    const first = result.current.restore();
     const second = result.current.restore();
-    expect(second).toBeNull(); // second call returns null
+    expect(second).toBe(first);
+    await first;
   });
 
   it("discard clears localStorage and calls server delete", () => {

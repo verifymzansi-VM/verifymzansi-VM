@@ -28,7 +28,12 @@ export default function VerificationError({
         )}
       </div>
       <div className="flex gap-3">
-        <Button variant="outline" onClick={() => (window.location.href = "/dashboard")}>
+        <Button
+          variant="outline"
+          onClick={() =>
+            window.location.assign(new URL("/dashboard", window.location.origin).toString())
+          }
+        >
           Back to Dashboard
         </Button>
         <Button onClick={() => reset()}>Try again</Button>

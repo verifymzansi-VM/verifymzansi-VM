@@ -39,7 +39,12 @@ export default function PostError({
           <Button variant="outline" asChild>
             <Link href="/">Go to homepage</Link>
           </Button>
-          <Button variant="outline" onClick={() => (window.location.href = "/dashboard")}>
+          <Button
+            variant="outline"
+            onClick={() =>
+              window.location.assign(new URL("/dashboard", window.location.origin).toString())
+            }
+          >
             Dashboard
           </Button>
           <Button onClick={() => reset()}>Try again</Button>

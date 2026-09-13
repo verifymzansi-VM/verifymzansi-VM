@@ -33,7 +33,9 @@ export default function ListingError({
           <Button
             variant="outline"
             className="h-11 w-full sm:w-auto"
-            onClick={() => (window.location.href = "/mzansi-market")}
+            onClick={() =>
+              window.location.assign(new URL("/mzansi-market", window.location.origin).toString())
+            }
           >
             Browse Listings
           </Button>

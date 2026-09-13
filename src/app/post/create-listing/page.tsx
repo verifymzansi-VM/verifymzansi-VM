@@ -377,33 +377,34 @@ export default function CreateListingPage() {
   useEffect(() => {
     if (!user?.id || isLoading || submitSucceeded) return;
 
-    const restored = restoreDraft();
-    if (!restored) return;
+    void Promise.resolve(restoreDraft()).then((restored) => {
+      if (!restored) return;
 
-    const restoredData = restored.data;
-    queueMicrotask(() => {
-      setStep(Math.min(Math.max(restored.step ?? 0, 0), STEPS.length - 1));
-      setTitle(restoredData.title ?? "");
-      setDescription(restoredData.description ?? "");
-      setPrice(restoredData.price ?? "");
-      setNegotiable(Boolean(restoredData.negotiable));
-      setCategory((restoredData.category as ListingCategory | "") ?? "");
-      setCondition((restoredData.condition as ListingCondition | "") ?? "");
-      setCategoryAttributes(restoredData.categoryAttributes ?? {});
-      setProvince(restoredData.province ?? "");
-      setCity(restoredData.city ?? "");
-      setTown(restoredData.town ?? "");
-      setAddress(restoredData.address ?? "");
-      setContactMethods(
-        Array.isArray(restoredData.contactMethods) && restoredData.contactMethods.length > 0
-          ? restoredData.contactMethods
-          : ["call"]
-      );
-      setLastSavedAt(restored.savedAt ?? null);
-      toast({
-        title: "Draft restored",
-        description: "You can continue from where you left off.",
-        variant: "success",
+      const restoredData = restored.data;
+      queueMicrotask(() => {
+        setStep(Math.min(Math.max(restored.step ?? 0, 0), STEPS.length - 1));
+        setTitle(restoredData.title ?? "");
+        setDescription(restoredData.description ?? "");
+        setPrice(restoredData.price ?? "");
+        setNegotiable(Boolean(restoredData.negotiable));
+        setCategory((restoredData.category as ListingCategory | "") ?? "");
+        setCondition((restoredData.condition as ListingCondition | "") ?? "");
+        setCategoryAttributes(restoredData.categoryAttributes ?? {});
+        setProvince(restoredData.province ?? "");
+        setCity(restoredData.city ?? "");
+        setTown(restoredData.town ?? "");
+        setAddress(restoredData.address ?? "");
+        setContactMethods(
+          Array.isArray(restoredData.contactMethods) && restoredData.contactMethods.length > 0
+            ? restoredData.contactMethods
+            : ["call"]
+        );
+        setLastSavedAt(restored.savedAt ?? null);
+        toast({
+          title: "Draft restored",
+          description: "You can continue from where you left off.",
+          variant: "success",
+        });
       });
     });
   }, [user?.id, isLoading, submitSucceeded, restoreDraft, toast]);

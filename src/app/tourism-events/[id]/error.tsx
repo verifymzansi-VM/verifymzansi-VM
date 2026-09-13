@@ -33,7 +33,9 @@ export default function PromotionError({
           <Button
             variant="outline"
             className="h-11 w-full sm:w-auto"
-            onClick={() => (window.location.href = "/tourism-events")}
+            onClick={() =>
+              window.location.assign(new URL("/tourism-events", window.location.origin).toString())
+            }
           >
             Browse Tourism & Events
           </Button>

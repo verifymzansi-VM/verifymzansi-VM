@@ -32,7 +32,7 @@ export default function DsarError({
           <Button
             variant="outline"
             className="h-11 w-full sm:w-auto"
-            onClick={() => (window.location.href = "/")}
+            onClick={() => window.location.assign(new URL("/", window.location.origin).toString())}
           >
             Go to homepage
           </Button>

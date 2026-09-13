@@ -38,7 +38,9 @@ export default function BillingError({
         <Button
           variant="outline"
           className="h-11 w-full sm:w-auto"
-          onClick={() => (window.location.href = "/dashboard")}
+          onClick={() =>
+            window.location.assign(new URL("/dashboard", window.location.origin).toString())
+          }
         >
           Back to Dashboard
         </Button>
