@@ -1,5 +1,7 @@
 "use client";
 
+import { VideoViewTracker } from "@/components/ui/video-view-tracker";
+
 import { memo } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -96,19 +98,22 @@ export const ListingCardList = memo(function ListingCardList({
             <div className="relative w-36 shrink-0 overflow-hidden rounded-xl bg-slate-900 sm:w-40">
               {normalizedImageUrl ? (
                 isVideo ? (
-                  <VideoCardPlayer
-                    src={normalizedImageUrl}
-                    posterUrl={posterUrl}
-                    alt={title}
-                    sizes="160px"
-                    mode="ambient"
-                    fitStrategy="contain"
-                    containerAspectRatio={frameAspectRatio}
-                    muteControlVisibility="auto"
-                    hoverScale={false}
-                    focalX={focalX}
-                    focalY={focalY}
-                  />
+                  <VideoViewTracker targetId={id} targetType="listing">
+                    <VideoCardPlayer
+                      src={normalizedImageUrl}
+                      posterUrl={posterUrl}
+                      alt={title}
+                      sizes="160px"
+                      mode="ambient"
+                      showPlaybackControl
+                      fitStrategy="contain"
+                      containerAspectRatio={frameAspectRatio}
+                      muteControlVisibility="auto"
+                      hoverScale={false}
+                      focalX={focalX}
+                      focalY={focalY}
+                    />
+                  </VideoViewTracker>
                 ) : (
                   <Image
                     src={normalizedImageUrl}
@@ -124,7 +129,7 @@ export const ListingCardList = memo(function ListingCardList({
               ) : (
                 <div className="absolute inset-0 bg-gradient-to-br from-warm-300 via-warm-200 to-warm-100 dark:from-warm-800 dark:via-warm-700 dark:to-warm-900" />
               )}
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-black/10" />
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-black/10" />
               {isVideo ? <VideoDurationBadge seconds={videoDuration} /> : null}
             </div>
 

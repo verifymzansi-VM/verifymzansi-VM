@@ -58,6 +58,36 @@ vi.mock("@/components/ui/video-duration-badge", () => ({
 }));
 
 describe("PosterCardShell", () => {
+  it.each(["hero", "showcase"] as const)("records %s card video playback", (cardVariant) => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ recorded: true }),
+    } as Response);
+    videoCardPlayerMock.mockImplementationOnce(() => <video src="/clip.mp4" />);
+    try {
+      const id = "00000000-0000-0000-0000-000000000123";
+      const { container, unmount } = render(
+        <PosterCardShell
+          href={`/listing/${id}`}
+          title="Video"
+          mediaUrl="/clip.mp4"
+          cardVariant={cardVariant}
+        />
+      );
+      expect(fetchSpy).not.toHaveBeenCalled();
+      fireEvent.playing(container.querySelector("video")!);
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/engagement/view",
+        expect.objectContaining({
+          body: expect.stringContaining(`"targetId":"${id}"`),
+        })
+      );
+      unmount();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
   it("fills homepage cards with media and fades details only during playback", () => {
     const { container } = render(
       <PosterCardShell
@@ -65,6 +95,8 @@ describe("PosterCardShell", () => {
         title="Mobile video"
         mediaUrl="/clip.mp4"
         eyebrow="R 123 000"
+        location="Durban"
+        logoUrl="/logo.png"
         cardVariant="showcase"
         immersive
       />
@@ -78,6 +110,8 @@ describe("PosterCardShell", () => {
       "/listing/mobile"
     );
     expect(overlay).toHaveClass("opacity-100");
+    expect(overlay).toContainElement(screen.getByText("Durban"));
+    expect(overlay).toContainElement(screen.getByAltText("Mobile video logo"));
     fireEvent.playing(player);
     expect(overlay).toHaveClass("opacity-0");
     fireEvent.pause(player);

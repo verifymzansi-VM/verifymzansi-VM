@@ -1,4 +1,4 @@
-import { act, render } from "@testing-library/react";
+import { act, fireEvent, render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useVideoHover } from "@/hooks/use-video-hover";
 
@@ -33,10 +33,11 @@ describe("useVideoHover", () => {
   }
 
   function Harness({ src }: { src?: string }) {
-    const { videoRef, containerRef } = useVideoHover(src);
+    const { videoRef, containerRef, togglePlayback } = useVideoHover(src);
     return (
       <div data-testid="container" ref={containerRef}>
         <video data-testid="video" ref={videoRef} />
+        <button onClick={togglePlayback}>Toggle</button>
       </div>
     );
   }
@@ -59,49 +60,60 @@ describe("useVideoHover", () => {
     globalThis.IntersectionObserver = MockIntersectionObserver as never;
   });
 
-  it("registers video and requests priority on mouse enter when motion is allowed", () => {
-    const manager = {
-      register: vi.fn(),
-      unregister: vi.fn(),
-      updateVisibility: vi.fn(),
-      requestPriority: vi.fn(),
-      releasePriority: vi.fn(),
-      claimExclusive: vi.fn(),
-      releaseExclusive: vi.fn(),
-    };
-    useReducedMotionMock.mockReturnValue(false);
-    useVideoPlaybackManagerMock.mockReturnValue(manager);
+  it.each([false, true])(
+    "registers video and plays on hover with a shared card frame: %s",
+    (sharedFrame) => {
+      const manager = {
+        register: vi.fn(),
+        unregister: vi.fn(),
+        updateVisibility: vi.fn(),
+        requestPriority: vi.fn(),
+        releasePriority: vi.fn(),
+        claimExclusive: vi.fn(),
+        releaseExclusive: vi.fn(),
+      };
+      useReducedMotionMock.mockReturnValue(false);
+      useVideoPlaybackManagerMock.mockReturnValue(manager);
 
-    const { getByTestId, unmount } = render(<Harness src="/media/clip.mp4" />);
+      const { getByTestId, unmount } = render(
+        sharedFrame ? (
+          <div data-card-variant="showcase" data-testid="frame">
+            <Harness src="/media/clip.mp4" />
+          </div>
+        ) : (
+          <Harness src="/media/clip.mp4" />
+        )
+      );
 
-    const video = getByTestId("video") as HTMLVideoElement;
-    const container = getByTestId("container") as HTMLDivElement;
-    const pauseSpy = vi.spyOn(video, "pause").mockImplementation(() => undefined);
+      const video = getByTestId("video") as HTMLVideoElement;
+      const container = getByTestId(sharedFrame ? "frame" : "container") as HTMLDivElement;
+      const pauseSpy = vi.spyOn(video, "pause").mockImplementation(() => undefined);
 
-    expect(manager.register).toHaveBeenCalledWith(video);
+      expect(manager.register).toHaveBeenCalledWith(video);
 
-    act(() => {
-      intersectionCallback?.([createIntersectionEntry(video)], {} as IntersectionObserver);
-    });
+      act(() => {
+        intersectionCallback?.([createIntersectionEntry(video)], {} as IntersectionObserver);
+      });
 
-    expect(video.src).toContain("/media/clip.mp4");
+      expect(video.src).toContain("/media/clip.mp4");
 
-    act(() => {
-      container.dispatchEvent(new Event("mouseenter"));
-    });
-    expect(manager.requestPriority).toHaveBeenCalledWith(video);
+      act(() => {
+        container.dispatchEvent(new Event("mouseenter"));
+      });
+      expect(manager.requestPriority).toHaveBeenCalledWith(video);
 
-    video.currentTime = 9;
-    act(() => {
-      container.dispatchEvent(new Event("mouseleave"));
-    });
-    expect(pauseSpy).toHaveBeenCalled();
-    expect(video.currentTime).toBe(0);
-    expect(manager.releasePriority).toHaveBeenCalledWith(video);
+      video.currentTime = 9;
+      act(() => {
+        container.dispatchEvent(new Event("mouseleave"));
+      });
+      expect(pauseSpy).toHaveBeenCalled();
+      expect(video.currentTime).toBe(0);
+      expect(manager.releasePriority).toHaveBeenCalledWith(video);
 
-    unmount();
-    expect(manager.unregister).toHaveBeenCalledWith(video);
-  });
+      unmount();
+      expect(manager.unregister).toHaveBeenCalledWith(video);
+    }
+  );
 
   it("does not request priority on mouse enter when reduced motion is enabled", () => {
     const manager = {
@@ -173,5 +185,39 @@ describe("useVideoHover", () => {
     render(<Harness src={undefined} />);
 
     expect(manager.register).not.toHaveBeenCalled();
+  });
+
+  it("preserves manual play and pause when the pointer leaves and re-enters", () => {
+    const manager = {
+      register: vi.fn(),
+      unregister: vi.fn(),
+      updateVisibility: vi.fn(),
+      requestPriority: vi.fn(),
+      releasePriority: vi.fn(),
+    };
+    useReducedMotionMock.mockReturnValue(false);
+    useVideoPlaybackManagerMock.mockReturnValue(manager);
+    const { getByTestId, getByRole } = render(<Harness src="/media/clip.mp4" />);
+    const video = getByTestId("video") as HTMLVideoElement;
+    const container = getByTestId("container");
+    const paused = vi.spyOn(video, "paused", "get").mockReturnValue(true);
+    const pause = vi.spyOn(video, "pause").mockImplementation(() => undefined);
+    pause.mockClear();
+    fireEvent.click(getByRole("button"));
+    expect(manager.requestPriority).toHaveBeenCalledTimes(1);
+    video.currentTime = 9;
+    fireEvent.mouseLeave(container);
+    expect(pause).not.toHaveBeenCalled();
+    expect(video.currentTime).toBe(9);
+    paused.mockReturnValue(false);
+    fireEvent.click(getByRole("button"));
+    act(() => {
+      container.dispatchEvent(new Event("mouseleave"));
+      container.dispatchEvent(new Event("mouseenter"));
+    });
+    expect(manager.requestPriority).toHaveBeenCalledTimes(1);
+    expect(pause).toHaveBeenCalledTimes(1);
+    paused.mockRestore();
+    pause.mockRestore();
   });
 });

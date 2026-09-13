@@ -1,5 +1,7 @@
 "use client";
 
+import { VideoViewTracker } from "@/components/ui/video-view-tracker";
+
 import Link from "next/link";
 import { MapPin, Play } from "lucide-react";
 import Image from "next/image";
@@ -72,18 +74,20 @@ export function AreaPreviewCard({
       <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-warm-100 dark:bg-warm-800">
         {normalizedImageUrl ? (
           isVideo ? (
-            <VideoCardPlayer
-              src={imageUrl}
-              posterUrl={posterUrl || imageUrl}
-              alt={title}
-              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-              mode="hover"
-              fitStrategy="contain"
-              containerAspectRatio={4 / 3}
-              muteControlVisibility="always"
-              focalX={focalX}
-              focalY={focalY}
-            />
+            <VideoViewTracker href={href}>
+              <VideoCardPlayer
+                src={imageUrl}
+                posterUrl={posterUrl || imageUrl}
+                alt={title}
+                sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                mode="hover"
+                fitStrategy="contain"
+                containerAspectRatio={4 / 3}
+                muteControlVisibility="always"
+                focalX={focalX}
+                focalY={focalY}
+              />
+            </VideoViewTracker>
           ) : (
             <Image
               src={normalizedImageUrl}

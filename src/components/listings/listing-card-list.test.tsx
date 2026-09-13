@@ -93,6 +93,9 @@ describe("ListingCardList", () => {
     expect(player).toHaveAttribute("data-src", "https://example.com/listing.mp4");
     expect(player).toHaveAttribute("data-poster", "https://example.com/listing.jpg");
     expect(player).toHaveAttribute("data-mode", "ambient");
+    expect(videoCardPlayerMock.mock.calls.at(-1)?.[0]).toEqual(
+      expect.objectContaining({ showPlaybackControl: true })
+    );
   });
 
   it("hides view counts and keeps the like control in the metadata area", () => {

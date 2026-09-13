@@ -55,21 +55,25 @@ vi.mock("@/hooks/use-global-mute", () => ({
 const { VideoCardPlayer } = await import("./video-card-player");
 
 describe("VideoCardPlayer", () => {
-  it("preserves the decoded frame when an interactive preview is paused", () => {
-    render(
-      <VideoCardPlayer
-        src="https://example.com/clip.mp4"
-        posterUrl="https://example.com/poster.jpg"
-        alt="Clip"
-      />
-    );
-    const video = document.querySelector("video")!;
-    fireEvent.play(video);
-    fireEvent.playing(video);
-    fireEvent.pause(video);
-    expect(video.className).toContain("opacity-100");
-    expect(screen.getByAltText("Clip").className).toContain("opacity-0");
-  });
+  it.each(["interactive", "hover"] as const)(
+    "preserves the decoded frame when a %s preview is paused",
+    (mode) => {
+      render(
+        <VideoCardPlayer
+          src="https://example.com/clip.mp4"
+          posterUrl="https://example.com/poster.jpg"
+          alt="Clip"
+          mode={mode}
+        />
+      );
+      const video = document.querySelector("video")!;
+      fireEvent.play(video);
+      fireEvent.playing(video);
+      fireEvent.pause(video);
+      expect(video.className).toContain("opacity-100");
+      expect(screen.getByAltText("Clip").className).toContain("opacity-0");
+    }
+  );
 
   it("offers manual hover playback when automatic motion is disabled", () => {
     const togglePlayback = vi.fn();

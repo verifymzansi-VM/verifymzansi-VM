@@ -26,6 +26,7 @@ export function useVideoHover(videoSrc?: string) {
   const [isHovering, setIsHovering] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const manager = useVideoPlaybackManager();
+  const manualPlaybackRef = useRef<"play" | "pause" | null>(null);
 
   useEffect(() => {
     const el = videoRef.current;
@@ -44,9 +45,11 @@ export function useVideoHover(videoSrc?: string) {
     const el = videoRef.current;
     if (!el || !videoSrc) return;
     if (el.paused) {
+      manualPlaybackRef.current = "play";
       if (el.getAttribute("src") !== videoSrc) el.src = videoSrc;
       manager.requestPriority(el);
     } else {
+      manualPlaybackRef.current = "pause";
       el.pause();
       manager.releasePriority(el);
       manager.updateVisibility(el, 0);
@@ -67,6 +70,7 @@ export function useVideoHover(videoSrc?: string) {
             el.src = videoSrc;
           }
         } else {
+          manualPlaybackRef.current = null;
           // Pause when out of viewport regardless of hover state
           el.pause();
           manager.updateVisibility(el, 0);
@@ -86,7 +90,7 @@ export function useVideoHover(videoSrc?: string) {
   const onMouseEnter = useCallback(() => {
     setIsHovering(true);
     const el = videoRef.current;
-    if (!el || autoplayBlocked) return;
+    if (!el || autoplayBlocked || manualPlaybackRef.current) return;
     if (el.src) {
       manager.requestPriority(el);
     }
@@ -96,6 +100,7 @@ export function useVideoHover(videoSrc?: string) {
     setIsHovering(false);
     const el = videoRef.current;
     if (!el) return;
+    if (manualPlaybackRef.current) return;
     el.pause();
     el.currentTime = 0;
     manager.releasePriority(el);
@@ -103,7 +108,9 @@ export function useVideoHover(videoSrc?: string) {
 
   // Attach hover listeners to the container
   useEffect(() => {
-    const container = containerRef.current;
+    // The media-wide navigation link is a sibling of the player. Observe their
+    // shared frame so moving over that link still starts the hover preview.
+    const container = containerRef.current?.closest("[data-card-variant]") ?? containerRef.current;
     if (!container) return;
 
     container.addEventListener("mouseenter", onMouseEnter);

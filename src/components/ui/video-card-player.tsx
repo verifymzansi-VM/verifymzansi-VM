@@ -1287,7 +1287,7 @@ function HoverVideoPlayer({
             foregroundMediaClassName,
             "focal-position-object",
             focalPositionClassName,
-            (isHovering || isPlaying) && videoReady && !hasError ? "opacity-0" : "opacity-100"
+            videoReady && !hasError ? "opacity-0" : "opacity-100"
           )}
           sizes={sizes}
           priority={priority}
@@ -1315,8 +1315,7 @@ function HoverVideoPlayer({
           usesSmartFit ? foregroundMediaClassName : animatedMediaClassName,
           "focal-position-object",
           focalPositionClassName,
-          hasError ||
-            (hasUsablePoster ? !videoReady || (!isHovering && !isPlaying) : !videoHasPreviewFrame)
+          hasError || (hasUsablePoster ? !videoReady : !videoHasPreviewFrame)
             ? "opacity-0"
             : "opacity-100"
         )}

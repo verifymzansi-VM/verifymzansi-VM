@@ -1,5 +1,7 @@
 "use client";
 
+import { VideoViewTracker } from "@/components/ui/video-view-tracker";
+
 import Image from "next/image";
 import { useCallback, useState } from "react";
 import {
@@ -1076,13 +1078,20 @@ export function BusinessDetailContent({
       <article className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           {business.cover_video && (
-            <BusinessPromoVideo
-              videoUrl={normalizeMediaUrl(business.cover_video)}
-              thumbnailUrl={
-                business.video_thumbnail ? normalizeMediaUrl(business.video_thumbnail) : undefined
-              }
-              businessName={business.business_name}
-            />
+            <VideoViewTracker
+              targetId={business.id}
+              targetType="business"
+              enabled={business.status === "live"}
+              onRecorded={handleViewRecorded}
+            >
+              <BusinessPromoVideo
+                videoUrl={normalizeMediaUrl(business.cover_video)}
+                thumbnailUrl={
+                  business.video_thumbnail ? normalizeMediaUrl(business.video_thumbnail) : undefined
+                }
+                businessName={business.business_name}
+              />
+            </VideoViewTracker>
           )}
 
           {galleryPhotos.length > 0 && (

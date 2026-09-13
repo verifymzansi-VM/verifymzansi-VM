@@ -17,10 +17,12 @@ import { uuidSchema } from "@/lib/validations/shared";
 
 const engagementRequestSchema = z.object({
   targetId: uuidSchema,
+  playbackId: uuidSchema.optional(),
   targetType: z.string().refine(isContentTargetType, "Invalid target type"),
 });
 
 type PreparedEngagementMutation = {
+  playbackId?: string;
   targetId: string;
   targetType: ContentTargetType;
   userId: string | null;
@@ -97,6 +99,7 @@ export async function prepareEngagementMutation(
   return {
     success: true,
     data: {
+      playbackId: parsedBody.data.playbackId,
       targetId: parsedBody.data.targetId,
       targetType: parsedBody.data.targetType as ContentTargetType,
       userId: user?.id ?? null,

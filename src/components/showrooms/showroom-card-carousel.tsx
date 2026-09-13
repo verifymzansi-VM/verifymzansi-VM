@@ -996,6 +996,7 @@ export function ShowroomCardCarousel({
               className={cn(
                 CARD_W,
                 "absolute left-1/2 top-0 will-change-transform",
+                offset !== 0 && "saturate-50 brightness-75",
                 slotClass(offset)
               )}
               data-showroom-index={i}

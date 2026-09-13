@@ -1,5 +1,7 @@
 "use client";
 
+import { VideoViewTracker } from "@/components/ui/video-view-tracker";
+
 import Link from "next/link";
 import Image from "next/image";
 import { ImageOff, MapPin } from "lucide-react";
@@ -342,33 +344,35 @@ export function PosterCardShell({
         )}
       >
         {normalizedMediaUrl ? (
-          <VideoCardPlayer
-            src={normalizedMediaUrl}
-            isVideo={hasVideo}
-            posterUrl={normalizedPosterUrl}
-            alt={mediaAlt || title}
-            sizes={immersive ? "(max-width: 640px) 50vw, 296px" : mediaSizes}
-            mode={videoMode ?? "hover"}
-            fitStrategy={effectiveFitStrategy}
-            containerAspectRatio={frame.aspectRatio}
-            muteControlVisibility={hasVideo ? "always" : "hidden"}
-            hoverScale={!hasVideo}
-            mediaClassName={
-              hasVideo ? undefined : "transition-transform duration-700 group-hover:scale-[1.03]"
-            }
-            priority={priority}
-            focalX={focalX}
-            focalY={focalY}
-            mediaWidth={mediaWidth}
-            mediaHeight={mediaHeight}
-            onEnded={onVideoEnded}
-            showPlaybackControl={showPlaybackControl}
-            controlVariant={mediaControlVariant}
-            feedPlaybackActive={feedPlaybackActive}
-            deferVideoLoadUntilPlay={deferVideoLoadUntilPlay}
-            disableNativeDrag={disableNativeDrag}
-            fallback={mediaFallback}
-          />
+          <VideoViewTracker href={href}>
+            <VideoCardPlayer
+              src={normalizedMediaUrl}
+              isVideo={hasVideo}
+              posterUrl={normalizedPosterUrl}
+              alt={mediaAlt || title}
+              sizes={immersive ? "(max-width: 640px) 50vw, 296px" : mediaSizes}
+              mode={videoMode ?? "hover"}
+              fitStrategy={effectiveFitStrategy}
+              containerAspectRatio={frame.aspectRatio}
+              muteControlVisibility={hasVideo ? "always" : "hidden"}
+              hoverScale={!hasVideo}
+              mediaClassName={
+                hasVideo ? undefined : "transition-transform duration-700 group-hover:scale-[1.03]"
+              }
+              priority={priority}
+              focalX={focalX}
+              focalY={focalY}
+              mediaWidth={mediaWidth}
+              mediaHeight={mediaHeight}
+              onEnded={onVideoEnded}
+              showPlaybackControl={showPlaybackControl}
+              controlVariant={mediaControlVariant}
+              feedPlaybackActive={feedPlaybackActive}
+              deferVideoLoadUntilPlay={deferVideoLoadUntilPlay}
+              disableNativeDrag={disableNativeDrag}
+              fallback={mediaFallback}
+            />
+          </VideoViewTracker>
         ) : (
           <div className="absolute inset-0">{mediaFallback}</div>
         )}
@@ -403,6 +407,12 @@ export function PosterCardShell({
               <h3 className="line-clamp-2 text-[11px] font-semibold leading-tight sm:text-sm">
                 {title}
               </h3>
+              {location ? (
+                <p className="mt-1 flex min-w-0 items-center gap-1 text-[10px] leading-tight sm:text-xs">
+                  <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{location}</span>
+                </p>
+              ) : null}
             </div>
             {normalizedLogoUrl ? (
               <Image

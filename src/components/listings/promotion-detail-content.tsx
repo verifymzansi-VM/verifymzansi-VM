@@ -1,5 +1,7 @@
 "use client";
 
+import { VideoViewTracker } from "@/components/ui/video-view-tracker";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { contactPhone, whatsappLink } from "@/lib/utils/contact-links";
@@ -367,16 +369,23 @@ export function PromotionDetailContent({
           >
             <div className={cn("relative aspect-[9/16] overflow-hidden bg-black touch-pan-y")}>
               {activeMedia.kind === "video" ? (
-                <ProfileVideoPlayer
-                  ref={videoRef}
-                  src={normalizeMediaUrl(activeMedia.url)}
-                  poster={activeMedia.poster ? normalizeMediaUrl(activeMedia.poster) : undefined}
-                  title={promotion.title}
-                  mediaFit="contain"
-                  videoClassName="bg-black object-contain"
-                  skipSeconds={10}
-                  showErrorState
-                />
+                <VideoViewTracker
+                  targetId={promotion.id}
+                  targetType="promotion"
+                  enabled={shouldTrackView}
+                  onRecorded={handleViewRecorded}
+                >
+                  <ProfileVideoPlayer
+                    ref={videoRef}
+                    src={normalizeMediaUrl(activeMedia.url)}
+                    poster={activeMedia.poster ? normalizeMediaUrl(activeMedia.poster) : undefined}
+                    title={promotion.title}
+                    mediaFit="contain"
+                    videoClassName="bg-black object-contain"
+                    skipSeconds={10}
+                    showErrorState
+                  />
+                </VideoViewTracker>
               ) : (
                 <button
                   type="button"

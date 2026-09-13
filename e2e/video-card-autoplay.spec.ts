@@ -169,9 +169,7 @@ async function assertVisibleCardVideoAutoplays(page: Page) {
 
   // Desktop cards use hover-to-play mode — hover over the card container to
   // trigger playback. The video is inside a parent card wrapper.
-  const cardContainer = firstVideo
-    .locator("xpath=ancestor::div[contains(@class,'relative')]")
-    .first();
+  const cardContainer = firstVideo.locator("xpath=ancestor::div[@data-card-variant]").first();
   await cardContainer.hover({ timeout: 5_000 }).catch(() => {
     // Hover may fail on mobile viewports — feed mode auto-plays on scroll instead.
   });
@@ -210,6 +208,45 @@ async function assertVisibleCardVideoAutoplays(page: Page) {
 
 test.describe("Card video autoplay", () => {
   for (const route of routes) {
+    test(`${route.name} supports manual play and pause without opening the card`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await installMediaPlaybackShim(page);
+      await stubCardApiWithVideoData(page, route.name);
+      // The playback shim tests control hit targets and state, not video decoding.
+      await page.addInitScript(() => {
+        document.addEventListener(
+          "error",
+          (event) => {
+            if (event.target instanceof HTMLVideoElement) event.stopImmediatePropagation();
+          },
+          true
+        );
+      });
+      await gotoReady(page, route);
+      const card = page
+        .locator("[data-card-variant]")
+        .filter({ has: page.locator("video") })
+        .first();
+      // Keep the bottom controls clear of the fixed mobile navigation bar.
+      await card.evaluate((element) => element.scrollIntoView({ block: "center" }));
+      const video = card.locator("video");
+      const url = page.url();
+      await card.getByRole("button", { name: "Play video", exact: true }).click();
+      await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(false);
+      await page.mouse.move(0, 0);
+      await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(false);
+      await card
+        .getByRole("button", { name: /Pause video/ })
+        .last()
+        .click();
+      await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(true);
+      await expect(card.locator("[data-card-overlay]")).toHaveCSS("opacity", "1");
+      await expect(card.getByText("Johannesburg", { exact: true })).toBeVisible();
+      expect(page.url()).toBe(url);
+    });
+
     test(`${route.name} autoplays visible card videos`, async ({ page }, testInfo) => {
       test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
 

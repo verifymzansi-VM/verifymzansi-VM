@@ -18,7 +18,7 @@ import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
  * - Respects `prefers-reduced-motion: reduce`.
  *
  * @param videoSrc The video URL. Pass `undefined` when the media is not a video.
- * @param isPlaybackEligible When false, the video stays paused even if visible.
+ * @param isPlaybackEligible Whether this card may autoplay. Manual play always works.
  */
 export function useVideoFeed(videoSrc?: string, isPlaybackEligible = true) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -28,6 +28,12 @@ export function useVideoFeed(videoSrc?: string, isPlaybackEligible = true) {
   // the card falls back to a poster with a manual play button.
   const autoplayBlocked = reducedMotion || dataSaver;
   const manager = useVideoPlaybackManager();
+  const manuallyPlayingRef = useRef(false);
+  const playbackEligibleRef = useRef(isPlaybackEligible);
+  const visibilityRef = useRef(0);
+  useEffect(() => {
+    playbackEligibleRef.current = isPlaybackEligible;
+  }, [isPlaybackEligible]);
 
   // Track whether the user explicitly paused via tap
   const [isPausedByUser, setIsPausedByUser] = useState(false);
@@ -66,6 +72,7 @@ export function useVideoFeed(videoSrc?: string, isPlaybackEligible = true) {
 
     const observer = new IntersectionObserver(
       ([entry]) => {
+        visibilityRef.current = entry.isIntersecting ? entry.intersectionRatio : 0;
         if (entry.isIntersecting && entry.intersectionRatio >= 0.25) {
           // Lazily assign src the first time the element is visible
           if (el.getAttribute("src") !== videoSrc) {
@@ -75,7 +82,12 @@ export function useVideoFeed(videoSrc?: string, isPlaybackEligible = true) {
           // Reset user-pause when element scrolls back into view from being mostly hidden
           // (handled below in the !isIntersecting branch)
 
-          if (!autoplayBlocked && isPlaybackEligible && !isPausedByUserRef.current) {
+          if (manuallyPlayingRef.current) {
+            // Keep explicit playback priority as a visible rail card moves.
+            // Re-reporting autoplay eligibility here would cancel the user's play.
+            return;
+          }
+          if (!autoplayBlocked && playbackEligibleRef.current && !isPausedByUserRef.current) {
             manager.updateVisibility(el, entry.intersectionRatio);
           } else {
             // User paused or autoplay blocked — don't compete for playback
@@ -83,6 +95,7 @@ export function useVideoFeed(videoSrc?: string, isPlaybackEligible = true) {
             manager.updateVisibility(el, 0);
           }
         } else {
+          manuallyPlayingRef.current = false;
           el.pause();
           manager.releasePriority(el);
           manager.updateVisibility(el, 0);
@@ -103,20 +116,24 @@ export function useVideoFeed(videoSrc?: string, isPlaybackEligible = true) {
       observer.disconnect();
       manager.unregister(el);
     };
-  }, [videoSrc, autoplayBlocked, manager, isPlaybackEligible]);
+  }, [videoSrc, autoplayBlocked, manager]);
 
   useEffect(() => {
     const el = videoRef.current;
-    if (!el || isPlaybackEligible) return;
-    el.pause();
-    manager.releasePriority(el);
-    manager.updateVisibility(el, 0);
-  }, [isPlaybackEligible, manager]);
+    if (!el || manuallyPlayingRef.current) return;
+    if (isPlaybackEligible && !autoplayBlocked && !isPausedByUserRef.current) {
+      manager.updateVisibility(el, visibilityRef.current);
+    } else {
+      el.pause();
+      manager.releasePriority(el);
+      manager.updateVisibility(el, 0);
+    }
+  }, [isPlaybackEligible, autoplayBlocked, manager]);
 
   // Tap-to-toggle playback
   const togglePlayback = useCallback(() => {
     const el = videoRef.current;
-    if (!el || !videoSrc || !isPlaybackEligible) return;
+    if (!el || !videoSrc) return;
 
     if (el.paused) {
       // Resume / start playback — claim exclusive priority
@@ -124,17 +141,19 @@ export function useVideoFeed(videoSrc?: string, isPlaybackEligible = true) {
         el.src = videoSrc;
       }
       isPausedByUserRef.current = false;
+      manuallyPlayingRef.current = true;
       setIsPausedByUser(false);
       manager.requestPriority(el);
     } else {
       // Pause playback
       el.pause();
+      manuallyPlayingRef.current = false;
       isPausedByUserRef.current = true;
       setIsPausedByUser(true);
       manager.releasePriority(el);
       manager.updateVisibility(el, 0);
     }
-  }, [videoSrc, manager, isPlaybackEligible]);
+  }, [videoSrc, manager]);
 
   return { videoRef, isPlaying, isPausedByUser, togglePlayback, reducedMotion: autoplayBlocked };
 }

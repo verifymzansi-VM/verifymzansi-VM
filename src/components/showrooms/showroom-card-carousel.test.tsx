@@ -169,6 +169,14 @@ describe("ShowroomCardCarousel", () => {
     expect(screen.getByRole("group", { name: "3 of 3" })).toBeInTheDocument();
   });
 
+  it("keeps the playing center card clear while softening side cards", () => {
+    render(<ShowroomCardCarousel items={mockItems} />);
+
+    expect(screen.getByRole("group", { name: "1 of 3" })).not.toHaveClass("saturate-50");
+    expect(screen.getByRole("group", { name: "2 of 3" })).toHaveClass("saturate-50");
+    expect(screen.getByRole("group", { name: "3 of 3" })).toHaveClass("saturate-50");
+  });
+
   it("renders all card items as links", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
     const cards = screen.getAllByTestId("poster-card");

@@ -1,5 +1,7 @@
 "use client";
 
+import { VideoViewTracker } from "@/components/ui/video-view-tracker";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
@@ -234,17 +236,24 @@ export function ListingDetailClient({
           ) : isVideo ? (
             /* ---- Autoplay video with custom controls ---- */
             <>
-              <ProfileVideoPlayer
-                ref={videoRef}
-                key={`${activeUrl}-${videoRetries}`}
-                src={activeUrl}
-                poster={firstPhotoUrl}
-                title={title}
-                onError={() => setVideoError(true)}
-                mediaFit="contain"
-                videoClassName={heroMediaClassName ?? "rounded-xl bg-black object-contain"}
-                skipSeconds={10}
-              />
+              <VideoViewTracker
+                targetId={listingId}
+                targetType="listing"
+                enabled={trackView}
+                onRecorded={onViewRecorded}
+              >
+                <ProfileVideoPlayer
+                  ref={videoRef}
+                  key={`${activeUrl}-${videoRetries}`}
+                  src={activeUrl}
+                  poster={firstPhotoUrl}
+                  title={title}
+                  onError={() => setVideoError(true)}
+                  mediaFit="contain"
+                  videoClassName={heroMediaClassName ?? "rounded-xl bg-black object-contain"}
+                  skipSeconds={10}
+                />
+              </VideoViewTracker>
             </>
           ) : (
             /* ---- Photo with click-to-lightbox ---- */
@@ -366,16 +375,23 @@ export function ListingDetailClient({
       </div>
 
       {/* ── Media Lightbox ──────────────────────────────── */}
-      <MediaLightbox
-        items={orderedMedia.map((m) => ({
-          url: m.url,
-          kind: m.kind,
-          poster: m.kind === "video" ? firstPhotoUrl : undefined,
-        }))}
-        startIndex={lightboxStart}
-        isOpen={lightboxOpen}
-        onClose={closeLightbox}
-      />
+      <VideoViewTracker
+        targetId={listingId}
+        targetType="listing"
+        enabled={trackView}
+        onRecorded={onViewRecorded}
+      >
+        <MediaLightbox
+          items={orderedMedia.map((m) => ({
+            url: m.url,
+            kind: m.kind,
+            poster: m.kind === "video" ? firstPhotoUrl : undefined,
+          }))}
+          startIndex={lightboxStart}
+          isOpen={lightboxOpen}
+          onClose={closeLightbox}
+        />
+      </VideoViewTracker>
     </div>
   );
 }

@@ -109,4 +109,49 @@ describe("POST /api/engagement/view", () => {
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toEqual({ error: "Failed to record view" });
   });
+
+  it("records separate plays from the same device before and after logout, but deduplicates delivery", async () => {
+    const seen = new Set<string>();
+    const rpc = vi.fn(async (_name: string, args: { p_viewer_key: string }) => {
+      const recorded = !seen.has(args.p_viewer_key);
+      seen.add(args.p_viewer_key);
+      return { data: recorded, error: null };
+    });
+    mockCreateAdminClient.mockReturnValue({ rpc });
+    const getUser = vi.fn().mockResolvedValue({ data: { user: { id: "owner-1" } } });
+    mockCreateClient.mockResolvedValue({ auth: { getUser } });
+    const payload = {
+      targetId: "00000000-0000-0000-0000-000000000123",
+      targetType: "listing",
+      playbackId: "00000000-0000-4000-8000-000000000001",
+    };
+    const first = await POST(createRequest(payload, "same-device"));
+    await expect(first.json()).resolves.toMatchObject({ recorded: true });
+    getUser.mockResolvedValue({ data: { user: null } });
+    const duplicate = await POST(createRequest(payload, "same-device"));
+    await expect(duplicate.json()).resolves.toMatchObject({ recorded: false });
+    const next = await POST(
+      createRequest(
+        {
+          ...payload,
+          playbackId: "00000000-0000-4000-8000-000000000002",
+        },
+        "same-device"
+      )
+    );
+    await expect(next.json()).resolves.toMatchObject({ recorded: true });
+    expect(rpc.mock.calls[0][1].p_viewer_key).toBe(`playback:${payload.playbackId}`);
+  });
+
+  it("rejects malformed playback IDs before writing a view", async () => {
+    const response = await POST(
+      createRequest({
+        targetId: "00000000-0000-0000-0000-000000000123",
+        targetType: "listing",
+        playbackId: "invalid",
+      })
+    );
+    expect(response.status).toBe(400);
+    expect(mockCreateAdminClient).not.toHaveBeenCalled();
+  });
 });

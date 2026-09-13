@@ -17,12 +17,14 @@ export async function POST(request: NextRequest) {
       return prepared.response;
     }
 
-    const { targetId, targetType, viewerKey, userId } = prepared.data;
+    const { targetId, targetType, viewerKey, userId, playbackId } = prepared.data;
     const admin = createAdminClient();
     const { data, error } = await admin.rpc("record_content_view", {
       p_target_id: targetId,
       p_target_type: targetType,
-      p_viewer_key: viewerKey,
+      // Playback IDs count repeat plays while keeping delivery of the same event idempotent.
+      // Ordinary page views retain their existing unique-view behavior.
+      p_viewer_key: playbackId ? `playback:${playbackId}` : viewerKey,
       p_viewer_user_id: userId,
       p_viewer_ip_hash: null,
     });

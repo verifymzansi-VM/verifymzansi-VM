@@ -49,14 +49,26 @@ describe("mobile feed playback", () => {
     expect(document.querySelector("video")!.src).toBe("https://example.com/new.mp4");
   });
 
-  it("does not let an inactive carousel card claim playback on tap", () => {
-    render(
+  it("lets an inactive carousel card play and pause manually through visibility and focus changes", () => {
+    const { rerender } = render(
       <VideoPlaybackProvider>
         <Probe eligible={false} />
       </VideoPlaybackProvider>
     );
     visibility(0.75);
+    expect(document.querySelector("video")!.paused).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    expect(document.querySelector("video")!.paused).toBe(false);
+    visibility(0.5);
+    expect(document.querySelector("video")!.paused).toBe(false);
+    rerender(
+      <VideoPlaybackProvider>
+        <Probe eligible />
+      </VideoPlaybackProvider>
+    );
+    expect(document.querySelector("video")!.paused).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    visibility(0.75);
     expect(document.querySelector("video")!.paused).toBe(true);
   });
 

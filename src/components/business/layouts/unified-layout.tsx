@@ -1,5 +1,7 @@
 "use client";
 
+import { VideoViewTracker } from "@/components/ui/video-view-tracker";
+
 import { useCallback, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
@@ -247,11 +249,13 @@ function MediaColumn({
   business,
   galleryPhotos,
   layoutMode,
+  onViewRecorded,
 }: {
   family: BusinessProfileFamily;
   business: BusinessDetailRecord;
   galleryPhotos: string[];
   layoutMode: "public" | "review";
+  onViewRecorded: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const heroMediaItems = useMemo<BusinessHeroMediaItem[]>(() => {
@@ -366,16 +370,23 @@ function MediaColumn({
         <div className="relative overflow-hidden rounded-[28px] border border-slate-200/70 bg-slate-950 shadow-[0_35px_80px_-48px_rgba(15,23,42,0.55)] dark:border-white/10">
           <div className="relative aspect-[9/16] overflow-hidden touch-pan-y" {...swipeHandlers}>
             {activeMedia?.kind === "video" ? (
-              <ProfileVideoPlayer
-                ref={videoRef}
-                src={activeMedia.url}
-                poster={activeMedia.poster}
-                title={business.business_name}
-                mediaFit="contain"
-                videoClassName="object-contain"
-                skipSeconds={10}
-                showErrorState
-              />
+              <VideoViewTracker
+                targetId={business.id}
+                targetType="business"
+                enabled={layoutMode === "public" && business.status === "live"}
+                onRecorded={onViewRecorded}
+              >
+                <ProfileVideoPlayer
+                  ref={videoRef}
+                  src={activeMedia.url}
+                  poster={activeMedia.poster}
+                  title={business.business_name}
+                  mediaFit="contain"
+                  videoClassName="object-contain"
+                  skipSeconds={10}
+                  showErrorState
+                />
+              </VideoViewTracker>
             ) : activeMedia?.kind === "photo" ? (
               <button
                 type="button"
@@ -979,6 +990,7 @@ export function UnifiedLayout({
           business={business}
           galleryPhotos={galleryPhotos}
           layoutMode={layoutMode}
+          onViewRecorded={handleViewRecorded}
         />
 
         <div className="space-y-5">{infoColumn}</div>
