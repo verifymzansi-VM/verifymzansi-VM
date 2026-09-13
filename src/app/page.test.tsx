@@ -61,16 +61,25 @@ describe("HomePage", () => {
     vi.clearAllMocks();
   });
 
-  it("renders the hero and onboarding guide without the showcase rails", async () => {
+  it("renders the hero, showcase rails, and onboarding guide", async () => {
     const ui = await HomePage();
     render(ui);
 
     const heroBanner = screen.getByTestId("hero-banner-with-data");
+    const promotionsShowcase = screen.getByTestId("promotions-showcase");
+    const businessShowcase = screen.getByTestId("business-showcase");
+    const marketShowcase = screen.getByTestId("market-showcase");
 
     expect(heroBanner).toBeInTheDocument();
-    expect(screen.queryByTestId("promotions-showcase")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("business-showcase")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("market-showcase")).not.toBeInTheDocument();
+    expect(promotionsShowcase).toBeInTheDocument();
+    expect(businessShowcase).toBeInTheDocument();
+    expect(marketShowcase).toBeInTheDocument();
+    expect(promotionsShowcase.compareDocumentPosition(businessShowcase)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+    expect(businessShowcase.compareDocumentPosition(marketShowcase)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
     expect(
       screen.getByRole("heading", {
         level: 1,

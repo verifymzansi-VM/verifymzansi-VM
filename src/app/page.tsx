@@ -7,8 +7,12 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { HomeOnboardingDestinations } from "@/components/home/home-onboarding-destinations";
+import { MarketplacePreviewsSkeleton } from "@/components/home/marketplace-previews-skeleton";
 import { HeroBannerWithData } from "@/components/home/hero-banner-with-data";
 import { HeroBannerSkeleton } from "@/components/home/hero-banner-skeleton";
+import { HomeMzansiMarketShowcase } from "@/components/home/home-mzansi-market-showcase";
+import { HomeBusinessShowcase } from "@/components/home/home-business-showcase";
+import { HomePromotionsShowcase } from "@/components/home/home-promotions-showcase";
 import { HELLO_CONTACT_EMAIL } from "@/lib/contact-email";
 import { getServerPublicRuntimeConfig } from "@/lib/public-runtime-config";
 import { getOfficialSocialSameAs } from "@/lib/official-social-links";
@@ -180,6 +184,20 @@ export default async function HomePage() {
             className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-black/[0.04] to-transparent dark:from-white/[0.02]"
             aria-hidden="true"
           />
+
+          <div className="lg:-mt-10">
+            <Suspense fallback={<MarketplacePreviewsSkeleton />}>
+              <HomePromotionsShowcase />
+            </Suspense>
+
+            <Suspense fallback={<MarketplacePreviewsSkeleton />}>
+              <HomeBusinessShowcase />
+            </Suspense>
+
+            <Suspense fallback={<MarketplacePreviewsSkeleton />}>
+              <HomeMzansiMarketShowcase />
+            </Suspense>
+          </div>
 
           {/* ═══ Onboarding Guide Section ═══ */}
           <section className="relative py-10 sm:py-14 lg:py-20">
