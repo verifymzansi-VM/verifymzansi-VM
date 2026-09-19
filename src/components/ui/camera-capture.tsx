@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useFaceLiveness } from "./use-face-liveness";
 import { SelfieCameraDialog } from "./selfie-camera-dialog";
+import { SelfieFaceGuide } from "./selfie-face-guide";
 
 interface CameraCaptureProps {
   onCapture: (file: File, meta?: CaptureMeta) => void;
@@ -315,14 +316,15 @@ export function CameraCapture({
 
       // Try with full constraints first, then progressively relax
       let stream: MediaStream | null = null;
+      // Keep the camera's native field of view. Requesting a portrait width/height
+      // pair can make the browser crop a landscape sensor before we even preview it.
+      const videoConstraints: MediaTrackConstraints & { resizeMode?: ConstrainDOMString } = {
+        facingMode,
+        width: { ideal: 1280 },
+        ...(requireLiveness ? { resizeMode: { ideal: "none" } } : { height: { ideal: 720 } }),
+      };
       const constraintSets: MediaStreamConstraints[] = [
-        {
-          video: {
-            facingMode,
-            width: { ideal: requireLiveness ? 720 : 1280 },
-            height: { ideal: requireLiveness ? 960 : 720 },
-          },
-        },
+        { video: videoConstraints },
         { video: { facingMode } },
         { video: true },
       ];
@@ -693,7 +695,7 @@ export function CameraCapture({
           role="status"
         >
           <Loader2 className="h-8 w-8 animate-spin" aria-hidden />
-          <p>Opening camera� Allow camera access when prompted.</p>
+          <p>Opening camera... Allow camera access when prompted.</p>
         </div>
       )}
       {state === "streaming" && (
@@ -711,7 +713,7 @@ export function CameraCapture({
               autoPlay
               playsInline
               muted
-              className={`${requireLiveness ? "absolute inset-0 h-full w-full object-cover" : "w-full"} ${facingMode === "user" ? "scale-x-[-1]" : ""}`}
+              className={`${requireLiveness ? "absolute inset-0 h-full w-full object-contain" : "w-full"} ${facingMode === "user" ? "scale-x-[-1]" : ""}`}
             />
             {documentGuide && (
               <div className="pointer-events-none absolute inset-0 p-6" aria-hidden="true">
@@ -738,28 +740,7 @@ export function CameraCapture({
               </div>
             )}
             {requireLiveness && (
-              <div
-                className="pointer-events-none absolute inset-0 flex items-center justify-center"
-                aria-hidden="true"
-              >
-                <svg
-                  className="h-[80%] w-[80%] overflow-visible"
-                  viewBox="0 0 300 400"
-                  preserveAspectRatio="xMidYMid meet"
-                >
-                  <ellipse
-                    cx="150"
-                    cy="200"
-                    rx="147"
-                    ry="197"
-                    fill="none"
-                    style={{ filter: "drop-shadow(0 0 2px black)" }}
-                    stroke={livenessStatus.livenessPassed ? "#34d399" : "white"}
-                    strokeWidth="2"
-                    vectorEffect="non-scaling-stroke"
-                  />
-                </svg>
-              </div>
+              <SelfieFaceGuide videoRef={videoRef} passed={livenessStatus.livenessPassed} />
             )}
           </div>
           <div
@@ -841,7 +822,7 @@ export function CameraCapture({
             >
               <Camera className="h-4 w-4" />
               {isCapturing
-                ? "Saving photo�"
+                ? "Saving photo..."
                 : requireLiveness && !captureAllowed
                   ? "Complete Liveness Check"
                   : manualCapture

@@ -506,12 +506,16 @@ describe("ShowroomCardCarousel", () => {
   it("keeps mobile side cards inside the viewport by using tighter side offsets", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
 
-    expect(screen.getByRole("group", { name: "2 of 3" }).className).toContain(
-      "translate-x-[calc(-50%+23%)]"
-    );
-    expect(screen.getByRole("group", { name: "3 of 3" }).className).toContain(
-      "translate-x-[calc(-50%-23%)]"
-    );
+    expect(
+      screen
+        .getByRole("group", { name: "2 of 3" })
+        .style.getPropertyValue("--slide-mobile-transform")
+    ).toContain("-50% + 23%");
+    expect(
+      screen
+        .getByRole("group", { name: "3 of 3" })
+        .style.getPropertyValue("--slide-mobile-transform")
+    ).toContain("-50% + -23%");
   });
 
   it("does not navigate when playback controls are tapped", () => {

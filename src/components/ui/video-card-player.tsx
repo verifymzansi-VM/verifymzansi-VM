@@ -347,7 +347,8 @@ export function VideoCardPlayer({
   const effectiveMode = mode === "hover" && !canHover ? "ambient" : mode;
   // Exclude effectiveMode from the key so that the canHover hydration flip
   // (false → true) does not unmount/remount the player and restart image loads.
-  const mediaKey = `${normalizedSrc ?? "none"}|${normalizedPoster ?? "none"}|${showPlaybackControl ? "controls" : "no-controls"}`;
+  // Image slides also retain their decoded frame when carousel controls change.
+  const mediaKey = `${normalizedSrc ?? "none"}|${normalizedPoster ?? "none"}|${isVideoMedia && showPlaybackControl ? "controls" : "no-controls"}`;
 
   if (effectiveMode === "hover" && isVideoMedia) {
     return (
@@ -562,7 +563,6 @@ function VideoCardPlayerInner({
     measuredMediaAspectRatio?.key === aspectRatioKey
       ? measuredMediaAspectRatio.value
       : getInitialMediaAspectRatio(mediaWidth, mediaHeight);
-  const [imageLoaded, setImageLoaded] = useState(false);
 
   const usesSmartFit = shouldUseSmartFit(fitStrategy, mediaAspectRatio, containerAspectRatio);
   const showSmartFitBackdrop = usesSmartFit && canHover;
@@ -665,7 +665,6 @@ function VideoCardPlayerInner({
       if (isVideo && isVisuallyBlankImage(image)) {
         setPosterError(true);
       }
-      setImageLoaded(true);
     },
     [aspectRatioKey, isVideo]
   );
@@ -775,16 +774,11 @@ function VideoCardPlayerInner({
           ) : (
             <SmartFitStaticBackdrop />
           )}
-          {!imageLoaded && <div className="absolute inset-0 z-[1] skeleton-shimmer" />}
           <Image
             src={normalizedSrc}
             alt={alt}
             fill
-            className={cn(
-              foregroundMediaClassName,
-              "transition-opacity duration-300",
-              imageLoaded ? "opacity-100" : "opacity-0"
-            )}
+            className={foregroundMediaClassName}
             sizes={sizes}
             priority={priority}
             onLoad={handleImageLoad}
@@ -800,18 +794,11 @@ function VideoCardPlayerInner({
 
     return (
       <>
-        {!imageLoaded && <div className="absolute inset-0 skeleton-shimmer" />}
         <Image
           src={normalizedSrc}
           alt={alt}
           fill
-          className={cn(
-            animatedMediaClassName,
-            "focal-position-object",
-            focalPositionClassName,
-            "transition-opacity duration-300",
-            imageLoaded ? "opacity-100" : "opacity-0"
-          )}
+          className={cn(animatedMediaClassName, "focal-position-object", focalPositionClassName)}
           sizes={sizes}
           priority={priority}
           onLoad={handleImageLoad}

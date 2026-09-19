@@ -21,9 +21,18 @@ security.
 
 Concrete fixes:
 
-- Face positioning is measured against the visible, cropped camera preview and
-  oval size. Prompts distinguish moving closer, moving further away and
-  centering.
+- The camera shows its entire image without CSS cropping. Selfie constraints
+  avoid forcing a portrait sensor crop and prefer native camera output. The oval
+  follows the actual image area, including after rotation, so framing checks and
+  the visible guide agree. Prompts distinguish moving closer, further away and
+  centering. See
+  [MDN camera constraints](https://developer.mozilla.org/en-US/docs/Web/API/MediaTrackConstraints).
+- Movement tracking uses a wider envelope than final-photo framing. Turning
+  outside the oval no longer discards a completed blink. A tracking interruption
+  of up to 1.2 seconds pauses progress and blocks capture; sustained face loss
+  or a second face resets the challenge. Blinks cannot complete across a
+  tracking gap. Turns are measured relative to the initial neutral pose. Final
+  capture still requires a fresh, centred, eyes-open frame.
 - Automatic capture removes the need to press a shutter before the five-second
   completion window expires. Capture still rechecks freshness and visibility.
 - Closing, unmounting or losing the camera invalidates pending work. Camera
@@ -44,12 +53,28 @@ requires a human decision.
 
 Regression coverage includes mobile and desktop modal bounds, cancel/reopen,
 automatic capture, stale-frame rejection, late permission and encoding results,
-portrait/landscape crop geometry, admin retries, newest-selfie selection, upload
-and evidence routes. Real iOS/Android cameras and varied faces/lighting still
-need physical-device acceptance testing before rollout. Automated checks cannot
-establish biometric accuracy or guarantee that no bugs remain.
+portrait/landscape uncropped image and guide geometry, admin retries,
+newest-selfie selection, upload and evidence routes. Real iOS/Android cameras
+and varied faces/lighting still need physical-device acceptance testing before
+rollout. Automated checks cannot establish biometric accuracy or guarantee that
+no bugs remain.
 
-### Validation outcome for this update
+### Follow-up for the reported blink/turn reset and zoom
+
+The new regression tests exercise the reported blink-then-right-turn sequence
+through both the state machine and the MediaPipe hook with synthetic landmarks.
+They also cover short tracking interruptions, sustained loss, wrong turns,
+neutral-pose calibration and centering before capture. The five focused suites
+pass all 66 tests. Another 101 admin preview, queue, evidence, upload and query
+tests pass, as do TypeScript and lint with zero warnings. The rebuilt desktop
+and mobile Chromium walkthroughs both pass, including assertions that the guide
+matches the uncropped image in portrait and landscape. Their screenshots were
+visually inspected. These browser tests intentionally exercise explicit manual
+review with a synthetic camera; the successful movement sequence is covered by
+the hook and state-machine regressions. Physical-device movement and camera
+checks remain necessary; this is a local fix, not a production deployment.
+
+### Validation outcome for the initial full-screen update
 
 - PASS: 241 tests across 15 focused suites, covering camera lifecycle, face
   challenge/framing, verification page, upload, risk engine, admin evidence and
@@ -66,8 +91,8 @@ establish biometric accuracy or guarantee that no bugs remain.
   policy and database migration invariants.
 - FAIL: `pnpm safety:review`. Its initial report records lint, dead-code and
   blocking-test failures. Lint and dead-code findings were subsequently fixed
-  and their commands passed on recheck. The crop-policy failure was resolved by
-  explicitly allowing live selfie preview cropping; saved evidence is uncropped.
+  and their commands passed on recheck. The crop-policy failure is also
+  resolved; both the live selfie preview and saved evidence are now uncropped.
 
 The broad test run reported 24 failures out of 3,915 tests. The resolved crop
 policy accounts for one; the other 23 are in seven unrelated marketplace/card,
@@ -96,8 +121,9 @@ migration was performed for this update.
   review still use resources. One database migration repairs the
   upload-frequency check.
 - Selfies require an eyes-closed/open movement and a randomly directed head
-  turn, in random order, with a neutral pose before and after. Face loss, extra
-  faces, invalid framing and stale video invalidate progress. Challenges expire;
+  turn, in random order, with a neutral pose before and after. Sustained face
+  loss, extra faces and stale video invalidate progress. Invalid final framing
+  blocks capture without discarding completed movements. Challenges expire;
   eligibility is checked again at capture time.
 - Model initialization retries on CPU after GPU failure and has a bounded
   overall wait. Superseded and late models are closed. Unsupported devices offer

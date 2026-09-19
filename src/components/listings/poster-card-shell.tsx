@@ -140,7 +140,9 @@ export function PosterCardShell({
     : undefined;
   const hasVideo = isVideo ?? isVideoUrl(mediaUrl);
   const frame = CARD_FRAME;
-  const hasIndependentControls = hasVideo || showPlaybackControl;
+  // Keep hero media mounted as cards move between active and side slots.
+  const hasIndependentControls =
+    hasVideo || showPlaybackControl || (cardVariant === "hero" && makeEntireCardClickable);
   const effectiveFitStrategy = immersive ? "cover" : fitStrategy;
   const isHeroVariant = cardVariant === "hero";
   const isShowcaseVariant = cardVariant === "showcase";

@@ -386,6 +386,33 @@
     );
   }
 
+  /* Render the complete stack even when hydration is delayed. */
+  .showroom-slide {
+    transform: var(--slide-mobile-transform);
+    opacity: var(--slide-mobile-opacity);
+    visibility: var(--slide-mobile-visibility);
+    pointer-events: var(--slide-mobile-pointer-events);
+    z-index: var(--slide-z-index);
+  }
+
+  @media (min-width: 768px) {
+    .showroom-slide {
+      transform: var(--slide-tablet-transform);
+      opacity: var(--slide-tablet-opacity);
+      visibility: var(--slide-tablet-visibility);
+      pointer-events: var(--slide-tablet-pointer-events);
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .showroom-slide {
+      transform: var(--slide-desktop-transform);
+      opacity: var(--slide-desktop-opacity);
+      visibility: var(--slide-desktop-visibility);
+      pointer-events: var(--slide-desktop-pointer-events);
+    }
+  }
+
   /* Preserve the portrait frame: capping height alone adds bars beside the video. */
   .showroom-card-frame [data-card-media] {
     aspect-ratio: 9 / 16;

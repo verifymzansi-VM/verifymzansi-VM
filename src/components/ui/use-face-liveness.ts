@@ -154,6 +154,7 @@ export function useFaceLiveness() {
             const faces = model.detectForVideo(video, now).faceLandmarks ?? [];
             const points = faces[0];
             let framingInstruction = "";
+            let trackingOk = false;
             let faceOk = false,
               yaw = 0,
               eyesClosed = false;
@@ -166,6 +167,7 @@ export function useFaceLiveness() {
                 video.clientHeight || video.videoHeight
               );
               faceOk = framing.faceOk;
+              trackingOk = framing.trackingOk;
               framingInstruction = framing.instruction;
               yaw =
                 (points[1].x - (points[234].x + points[454].x) / 2) /
@@ -176,17 +178,13 @@ export function useFaceLiveness() {
                 eyeRatio(points, [362, 385, 387, 263, 373, 380], aspect) < 0.21;
             }
             const next = challenge.update(
-              { faceCount: faces.length, faceOk, yaw, eyesClosed },
+              { faceCount: faces.length, faceOk, trackingOk, framingInstruction, yaw, eyesClosed },
               now
             );
             latestFrameAt.current = now;
             latestPassed.current = next.livenessPassed;
             errors = 0;
-            setStatus(
-              !faceOk && faces.length === 1 && framingInstruction
-                ? { ...next, instruction: framingInstruction }
-                : next
-            );
+            setStatus(next);
           } catch {
             challenge.reset();
             latestPassed.current = false;

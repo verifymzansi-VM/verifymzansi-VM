@@ -18,7 +18,34 @@ const VALID_SA_ID = "8001015009087"; // Luhn-valid, DOB 1980-01-01
 const SCREENSHOT_DIR = path.join("test-results", "verification-flow");
 
 async function shot(page: Page, name: string) {
-  await page.screenshot({ path: path.join(SCREENSHOT_DIR, `${name}.png`), fullPage: true });
+  await page.screenshot({
+    path: path.join(SCREENSHOT_DIR, `${name}.png`),
+    fullPage: !name.includes("selfie-fullscreen") && !name.includes("selfie-landscape"),
+  });
+}
+
+async function expectUncroppedSelfie(page: Page) {
+  const guide = page.getByTestId("selfie-face-guide");
+  await expect(guide).toBeVisible();
+  const camera = await page.locator("video").evaluate((video: HTMLVideoElement) => {
+    const rect = video.getBoundingClientRect();
+    const scale = Math.min(rect.width / video.videoWidth, rect.height / video.videoHeight);
+    return {
+      fit: getComputedStyle(video).objectFit,
+      width: video.videoWidth * scale,
+      height: video.videoHeight * scale,
+      x: rect.x,
+      y: rect.y,
+      viewportWidth: rect.width,
+      viewportHeight: rect.height,
+    };
+  });
+  expect(camera.fit).toBe("contain");
+  const bounds = (await guide.boundingBox())!;
+  expect(bounds.width).toBeCloseTo(camera.width, 0);
+  expect(bounds.height).toBeCloseTo(camera.height, 0);
+  expect(bounds.x).toBeCloseTo(camera.x + (camera.viewportWidth - camera.width) / 2, 0);
+  expect(bounds.y).toBeCloseTo(camera.y + (camera.viewportHeight - camera.height) / 2, 0);
 }
 
 test.use({
@@ -127,11 +154,13 @@ test.describe("Verification wizard (authenticated)", () => {
     expect(
       await selfieDialog.evaluate((el) => el.contains(document.elementFromPoint(24, 24)))
     ).toBe(true);
+    await expectUncroppedSelfie(page);
     await shot(page, "step3-selfie-fullscreen");
     await page.setViewportSize({ width: 844, height: 390 });
     const landscapeVideo = await page.locator("video").boundingBox();
     expect(landscapeVideo!.height).toBeGreaterThan(100);
     expect(landscapeVideo!.y + landscapeVideo!.height).toBeLessThanOrEqual(390);
+    await expectUncroppedSelfie(page);
     await expect(page.getByRole("button", { name: "Close camera" })).toBeInViewport();
     await shot(page, "step3-selfie-landscape");
     await page.setViewportSize(viewport);

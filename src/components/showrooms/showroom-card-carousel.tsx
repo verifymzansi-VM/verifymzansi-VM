@@ -10,6 +10,7 @@ import {
   useRef,
   type PointerEvent as ReactPointerEvent,
   type KeyboardEvent,
+  type CSSProperties,
 } from "react";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
@@ -148,6 +149,50 @@ function clamp(value: number, min: number, max: number): number {
 
 function lerp(start: number, end: number, progress: number): number {
   return start + (end - start) * progress;
+}
+
+// Share geometry between server-rendered CSS and interactive animation.
+// CSS selects the initial responsive frame before hydration measures the viewport.
+function getSlideFrame(index: number, position: number, count: number, width: number) {
+  const maxDepth = width < 768 ? 1 : width < 1024 ? 2 : 3;
+  const xStops = [0, width < 768 ? 23 : 39, 72, 106, 140];
+  const scales = [1, width < 1024 ? 0.91 : 0.86, 0.72, 0.55, 0.45];
+  const yStops = [0, width >= 1024 ? -8 : 0, 8, 16, 20];
+  let offset = index - position;
+  if (count > 1) offset = ((((offset + count / 2) % count) + count) % count) - count / 2;
+  const depth = Math.abs(offset);
+  const stop = Math.min(Math.floor(depth), 3);
+  const fraction = clamp(depth - stop, 0, 1);
+  const x = lerp(xStops[stop], xStops[stop + 1], fraction) * Math.sign(offset);
+  const scale = lerp(scales[stop], scales[stop + 1], fraction);
+  const y = lerp(yStops[stop], yStops[stop + 1], fraction);
+  // Hide a looping card before it changes sides behind the stack.
+  const fadeEdge = count === 2 ? 1.45 : Math.min(maxDepth + 1, count / 2);
+  const opacity = count <= 1 ? 1 : clamp((fadeEdge - depth) / Math.min(0.45, fadeEdge), 0, 1);
+  return {
+    transform: `translateX(calc(-50% + ${x}%)) translateY(${y}px) scale(${scale})`,
+    opacity: String(opacity),
+    zIndex: String(Math.round(100 - depth * 20)),
+    pointerEvents: depth < 1.1 && opacity > 0.1 ? "auto" : "none",
+    visibility: opacity > 0 ? "visible" : "hidden",
+  };
+}
+
+function getInitialSlideStyle(index: number, count: number): CSSProperties {
+  const style: Record<string, string> = {};
+  for (const [breakpoint, width] of [
+    ["mobile", 0],
+    ["tablet", 768],
+    ["desktop", 1024],
+  ] as const) {
+    const frame = getSlideFrame(index, 0, count, width);
+    style[`--slide-${breakpoint}-transform`] = frame.transform;
+    style[`--slide-${breakpoint}-opacity`] = frame.opacity;
+    style[`--slide-${breakpoint}-visibility`] = frame.visibility;
+    style[`--slide-${breakpoint}-pointer-events`] = frame.pointerEvents;
+    style["--slide-z-index"] = frame.zIndex;
+  }
+  return style as CSSProperties;
 }
 
 /* ── Arrow controls ───────────────────────────────────────── */
@@ -841,42 +886,20 @@ export function ShowroomCardCarousel({
     return raw;
   }
 
-  // Keep semantic slot classes available for responsive CSS and consumers that inspect the stack;
-  // the inline style from the motion value remains the source of truth during interaction.
-  function slotClass(offset: number): string {
-    if (offset === 0) return "translate-x-[-50%] scale-100";
-    if (offset === 1) return "translate-x-[calc(-50%+23%)] md:translate-x-[calc(-50%+39%)]";
-    if (offset === -1) return "translate-x-[calc(-50%-23%)] md:translate-x-[calc(-50%-39%)]";
-    return "";
-  }
-
   useLayoutEffect(() => {
     const paint = () => {
-      const width = window.innerWidth;
-      const maxDepth = width < 768 ? 1 : width < 1024 ? 2 : 3;
-      const xStops = [0, width < 768 ? 23 : 39, 72, 106, 140];
-      const scales = [1, width < 1024 ? 0.91 : 0.86, 0.72, 0.55, 0.45];
-      const yStops = [0, width >= 1024 ? -8 : 0, 8, 16, 20];
       coverflowRef.current
         ?.querySelectorAll<HTMLElement>("[data-showroom-index]")
         .forEach((card) => {
-          let offset = Number(card.dataset.showroomIndex) - position.get();
-          if (count > 1) offset = ((((offset + count / 2) % count) + count) % count) - count / 2;
-          const depth = Math.abs(offset);
-          const stop = Math.min(Math.floor(depth), 3);
-          const fraction = clamp(depth - stop, 0, 1);
-          const x = lerp(xStops[stop], xStops[stop + 1], fraction) * Math.sign(offset);
-          const scale = lerp(scales[stop], scales[stop + 1], fraction);
-          const y = lerp(yStops[stop], yStops[stop + 1], fraction);
-          // Fade at the back before a looping card changes sides; never sweep it through the front.
-          const fadeEdge = count === 2 ? 1.45 : Math.min(maxDepth + 1, count / 2);
-          const opacity =
-            count <= 1 ? 1 : clamp((fadeEdge - depth) / Math.min(0.45, fadeEdge), 0, 1);
-          card.style.transform = `translateX(calc(-50% + ${x}%)) translateY(${y}px) scale(${scale})`;
-          card.style.opacity = String(opacity);
-          card.style.zIndex = String(Math.round(100 - depth * 20));
-          card.style.pointerEvents = depth < 1.1 && opacity > 0.1 ? "" : "none";
-          card.style.visibility = opacity > 0 ? "visible" : "hidden";
+          Object.assign(
+            card.style,
+            getSlideFrame(
+              Number(card.dataset.showroomIndex),
+              position.get(),
+              count,
+              window.innerWidth
+            )
+          );
         });
     };
     paint();
@@ -995,10 +1018,10 @@ export function ShowroomCardCarousel({
               key={item.id}
               className={cn(
                 CARD_W,
-                "absolute left-1/2 top-0 will-change-transform",
-                offset !== 0 && "saturate-50 brightness-75",
-                slotClass(offset)
+                "showroom-slide absolute left-1/2 top-0 will-change-transform",
+                offset !== 0 && "saturate-50 brightness-75"
               )}
+              style={getInitialSlideStyle(i, count)}
               data-showroom-index={i}
               data-showroom-layer={
                 offset === 0 ? "active" : Math.abs(offset) <= 3 ? "stack" : "offscreen"
@@ -1038,7 +1061,7 @@ export function ShowroomCardCarousel({
                 videoMode={offset === 0 ? "ambient" : undefined}
                 onVideoEnded={offset === 0 ? handleVideoEnded : undefined}
                 showPlaybackControl={offset === 0}
-                makeEntireCardClickable={offset === 0}
+                makeEntireCardClickable
                 cardVariant="hero"
                 mediaControlVariant={offset === 0 ? "hero" : "default"}
                 fitStrategy="contain"

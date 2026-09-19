@@ -55,6 +55,17 @@ vi.mock("@/hooks/use-global-mute", () => ({
 const { VideoCardPlayer } = await import("./video-card-player");
 
 describe("VideoCardPlayer", () => {
+  it("shows photos before load handlers run and preserves them when carousel controls change", () => {
+    const { rerender, container } = render(
+      <VideoCardPlayer src="/photo.jpg" alt="Photo" showPlaybackControl={false} />
+    );
+    const image = screen.getByAltText("Photo");
+    expect(image).not.toHaveClass("opacity-0");
+    expect(container.querySelector(".skeleton-shimmer")).toBeNull();
+    rerender(<VideoCardPlayer src="/photo.jpg" alt="Photo" showPlaybackControl />);
+    expect(screen.getByAltText("Photo")).toBe(image);
+  });
+
   it.each(["interactive", "hover"] as const)(
     "preserves the decoded frame when a %s preview is paused",
     (mode) => {

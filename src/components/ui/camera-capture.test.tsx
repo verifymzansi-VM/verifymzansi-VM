@@ -112,6 +112,19 @@ beforeEach(() => {
 });
 
 describe("full-screen selfie session", () => {
+  it("requests the native camera view without forced portrait dimensions", async () => {
+    mockGetUserMedia.mockResolvedValueOnce(createMockStream());
+    render(<CameraCapture onCapture={vi.fn()} facingMode="user" requireLiveness />);
+    await clickOpenCamera();
+    await waitFor(() => expect(livenessMocks.start).toHaveBeenCalled());
+    expect(mockGetUserMedia.mock.calls[0][0].video).toMatchObject({
+      facingMode: "user",
+      resizeMode: { ideal: "none" },
+    });
+    expect(mockGetUserMedia.mock.calls[0][0].video).not.toHaveProperty("height");
+    expect(document.querySelector("video")).toHaveClass("object-contain");
+    expect(document.querySelector("video")).not.toHaveClass("object-cover");
+  });
   it("opens a modal and releases the camera when closed", async () => {
     mockGetUserMedia.mockResolvedValueOnce(createMockStream());
     render(<CameraCapture onCapture={vi.fn()} facingMode="user" requireLiveness />);
