@@ -212,12 +212,13 @@ describe("POST /api/account/delete", () => {
       identities: [{ provider: "google" }],
       app_metadata: { provider: "google" },
     });
-    const { deleteUser } = createAdminClientMock();
+    const { admin, deleteUser } = createAdminClientMock();
 
     const res = await POST(createRequest({ confirmation: "DELETE" }));
 
     expect(res.status).toBe(200);
     expect(signInWithPassword).not.toHaveBeenCalled();
+    expect(admin.from).toHaveBeenCalledWith("consent_records");
     expect(deleteUser).toHaveBeenCalledWith("user-1");
     expect(signOut).toHaveBeenCalled();
   });

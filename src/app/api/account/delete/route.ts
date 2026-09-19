@@ -88,6 +88,7 @@ async function cleanupBlockingUserReferences(
 ): Promise<SupabaseMutationResult> {
   const operations: Array<[string, PromiseLike<SupabaseMutationResult>]> = [
     ["audit_logs.actor_id", admin.from("audit_logs").delete().eq("actor_id", userId)],
+    ["consent_records.user_id", admin.from("consent_records").delete().eq("user_id", userId)],
     [
       "audit_logs.target_seller_id",
       admin.from("audit_logs").update({ target_seller_id: null }).eq("target_seller_id", userId),
