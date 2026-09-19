@@ -110,6 +110,10 @@ async function cleanupBlockingUserReferences(
       admin.from("verification_steps").update({ reviewed_by: null }).eq("reviewed_by", userId),
     ],
     [
+      "content_edit_requests.reviewed_by",
+      admin.from("content_edit_requests").update({ reviewed_by: null }).eq("reviewed_by", userId),
+    ],
+    [
       "feature_flags.updated_by",
       admin.from("feature_flags").update({ updated_by: null }).eq("updated_by", userId),
     ],

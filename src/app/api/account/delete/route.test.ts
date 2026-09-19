@@ -219,6 +219,7 @@ describe("POST /api/account/delete", () => {
     expect(res.status).toBe(200);
     expect(signInWithPassword).not.toHaveBeenCalled();
     expect(admin.from).toHaveBeenCalledWith("consent_records");
+    expect(admin.from).toHaveBeenCalledWith("content_edit_requests");
     expect(deleteUser).toHaveBeenCalledWith("user-1");
     expect(signOut).toHaveBeenCalled();
   });
