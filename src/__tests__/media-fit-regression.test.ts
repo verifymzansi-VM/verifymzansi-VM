@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 
 const SOURCE_ROOT = path.join(process.cwd(), "src");
 const ALLOWLIST = new Set([
+  // Live selfie framing intentionally fills the viewport; saved evidence keeps all camera pixels.
+  path.join("components", "ui", "camera-capture.tsx"),
   path.join("components", "admin", "content-queue-table.tsx"),
   path.join("components", "showrooms", "showroom-card-carousel.tsx"),
   path.join("components", "business", "layouts", "unified-layout.tsx"),

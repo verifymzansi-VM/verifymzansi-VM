@@ -88,12 +88,12 @@ export function createFaceChallenge(random: number) {
     else if (passed)
       instruction = frame.eyesClosed
         ? "Open your eyes for the photo."
-        : "Challenge complete. Keep looking at the camera and take your photo.";
+        : "Hold still. Taking your photo automatically.";
     else if (stage === "return") instruction = "Look straight at the camera again and hold still.";
     else if (stage === "action")
       instruction =
         sequence[step] === "blink"
-          ? "Close both eyes briefly, then open them."
+          ? "Close both eyes for a moment, then open them."
           : sequence[step] === "turn_left"
             ? "Slowly turn your head to your left."
             : "Slowly turn your head to your right.";

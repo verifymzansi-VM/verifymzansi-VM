@@ -116,10 +116,35 @@ test.describe("Verification wizard (authenticated)", () => {
     await page.route("https://cdn.jsdelivr.net/**", (route) => route.abort());
     await page.getByRole("button", { name: /open camera/i }).click();
     await expect(page.locator("video")).toBeVisible({ timeout: 20_000 });
+    const selfieDialog = page.getByRole("dialog", { name: "Selfie verification" });
+    await expect(selfieDialog).toBeVisible();
+    const bounds = await selfieDialog.boundingBox();
+    const viewport = page.viewportSize()!;
+    expect(bounds?.x).toBe(0);
+    expect(bounds?.y).toBe(0);
+    expect(bounds?.width).toBe(viewport.width);
+    expect(bounds?.height).toBe(viewport.height);
+    expect(
+      await selfieDialog.evaluate((el) => el.contains(document.elementFromPoint(24, 24)))
+    ).toBe(true);
+    await shot(page, "step3-selfie-fullscreen");
+    await page.setViewportSize({ width: 844, height: 390 });
+    const landscapeVideo = await page.locator("video").boundingBox();
+    expect(landscapeVideo!.height).toBeGreaterThan(100);
+    expect(landscapeVideo!.y + landscapeVideo!.height).toBeLessThanOrEqual(390);
+    await expect(page.getByRole("button", { name: "Close camera" })).toBeInViewport();
+    await shot(page, "step3-selfie-landscape");
+    await page.setViewportSize(viewport);
+    await page.getByRole("button", { name: "Close camera" }).click();
+    await expect(selfieDialog).not.toBeVisible();
+    await page.getByRole("button", { name: /open camera/i }).click();
+    await expect(page.locator("video")).toBeVisible();
     await expect(page.getByRole("button", { name: /complete liveness check/i })).toBeDisabled();
     await page.getByRole("button", { name: /use manual review/i }).click();
     await page.getByRole("button", { name: /take photo/i }).click();
     await expect(page.getByRole("button", { name: /retake/i })).toBeVisible();
+    await expect(selfieDialog).not.toBeVisible();
+    await expect(page.getByRole("img", { name: "Captured photo" })).toBeVisible();
     await shot(page, "step3-selfie-captured");
 
     await page.getByRole("button", { name: /^continue$/i }).click();

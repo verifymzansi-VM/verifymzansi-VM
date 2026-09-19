@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { assessSelfieFraming } from "@/lib/verification/selfie-framing";
 import { createFaceChallenge, type FaceChallenge } from "@/lib/verification/face-challenge";
 
 export type LivenessChallenge = FaceChallenge;
@@ -152,25 +153,20 @@ export function useFaceLiveness() {
           try {
             const faces = model.detectForVideo(video, now).faceLandmarks ?? [];
             const points = faces[0];
+            let framingInstruction = "";
             let faceOk = false,
               yaw = 0,
               eyesClosed = false;
             if (faces.length === 1 && points?.length >= 455) {
-              const xs = points.map((p) => p.x),
-                ys = points.map((p) => p.y);
-              const minX = Math.min(...xs),
-                maxX = Math.max(...xs);
-              const minY = Math.min(...ys),
-                maxY = Math.max(...ys);
-              faceOk =
-                maxX - minX >= 0.18 &&
-                maxX - minX <= 0.8 &&
-                minX > 0.02 &&
-                maxX < 0.98 &&
-                minY > 0.02 &&
-                maxY < 0.98 &&
-                Math.abs((minX + maxX) / 2 - 0.5) < 0.22 &&
-                Math.abs((minY + maxY) / 2 - 0.5) < 0.22;
+              const framing = assessSelfieFraming(
+                points,
+                video.videoWidth,
+                video.videoHeight,
+                video.clientWidth || video.videoWidth,
+                video.clientHeight || video.videoHeight
+              );
+              faceOk = framing.faceOk;
+              framingInstruction = framing.instruction;
               yaw =
                 (points[1].x - (points[234].x + points[454].x) / 2) /
                 Math.max(0.001, Math.abs(points[454].x - points[234].x));
@@ -186,7 +182,11 @@ export function useFaceLiveness() {
             latestFrameAt.current = now;
             latestPassed.current = next.livenessPassed;
             errors = 0;
-            setStatus(next);
+            setStatus(
+              !faceOk && faces.length === 1 && framingInstruction
+                ? { ...next, instruction: framingInstruction }
+                : next
+            );
           } catch {
             challenge.reset();
             latestPassed.current = false;

@@ -1,6 +1,89 @@
 # Selfie capture and identity review
 
-## Changes
+## Full-screen selfie update — 19 September 2026
+
+The selfie camera now opens in a viewport-sized modal, with safe-area spacing,
+keyboard focus containment, a close control, two movement indicators and an oval
+face guide. It uses dynamic viewport height rather than requiring the browser's
+Fullscreen API, so it can fit mobile browsers that do not support that API. The
+photo is captured automatically when the challenge has a fresh, centred,
+eyes-open frame. The user can review or retake it before submitting.
+
+The design follows the guided face positioning, feedback and reference-photo
+pattern in
+[Amazon Rekognition Face Liveness](https://docs.aws.amazon.com/rekognition/latest/dg/face-liveness.html)
+and the preparation/lighting guidance in
+[AWS usage recommendations](https://docs.aws.amazon.com/rekognition/latest/dg/recommendations-liveness.html).
+The compatible implementation for this repository keeps its existing MediaPipe
+and human-review workflow. No AWS service or proprietary vendor code was added.
+This adopts the interaction pattern, not a claim of equivalent biometric
+security.
+
+Concrete fixes:
+
+- Face positioning is measured against the visible, cropped camera preview and
+  oval size. Prompts distinguish moving closer, moving further away and
+  centering.
+- Automatic capture removes the need to press a shutter before the five-second
+  completion window expires. Capture still rechecks freshness and visibility.
+- Closing, unmounting or losing the camera invalidates pending work. Camera
+  permission results arriving late are stopped; stale image-encoding callbacks
+  cannot submit a photo from an abandoned session. Encoding failures are
+  visible.
+- The video attaches when the modal content actually mounts, avoiding a blank
+  camera caused by an effect running before its portal exists.
+- The admin queue displays uploaded selfie thumbnails with an enlarged preview.
+  Thumbnail retries now trigger a new request, changing users reloads the photo,
+  newest matching artifacts are selected, and requests have a bounded wait.
+
+Admin photos become available after the user submits the capture through the
+existing upload flow. They continue to use authenticated, audited evidence
+endpoints and private encrypted storage. A local photo preview is not an upload.
+Browser movement results remain untrusted review context; every selfie still
+requires a human decision.
+
+Regression coverage includes mobile and desktop modal bounds, cancel/reopen,
+automatic capture, stale-frame rejection, late permission and encoding results,
+portrait/landscape crop geometry, admin retries, newest-selfie selection, upload
+and evidence routes. Real iOS/Android cameras and varied faces/lighting still
+need physical-device acceptance testing before rollout. Automated checks cannot
+establish biometric accuracy or guarantee that no bugs remain.
+
+### Validation outcome for this update
+
+- PASS: 241 tests across 15 focused suites, covering camera lifecycle, face
+  challenge/framing, verification page, upload, risk engine, admin evidence and
+  metadata routes, queue/preview/comparison, admin queries and media-fit policy.
+- PASS: desktop Chromium and mobile Chromium verification walkthroughs, each
+  including portrait/full-screen bounds, landscape rotation, cancel/reopen and
+  explicit manual-review capture using a synthetic camera. Successful movement
+  capture is covered by unit tests; the browser fixture cannot perform human
+  face movements. Screenshots were inspected after correcting header stacking.
+- PASS: final `pnpm lint --max-warnings=0`, `pnpm knip`, `pnpm typecheck`, and
+  the production build made with the deterministic browser-test environment.
+- PASS in the consolidated run: OpenAPI drift, dependency graph, duplication
+  budget, development preflight, secret scan, dependency security audit, license
+  policy and database migration invariants.
+- FAIL: `pnpm safety:review`. Its initial report records lint, dead-code and
+  blocking-test failures. Lint and dead-code findings were subsequently fixed
+  and their commands passed on recheck. The crop-policy failure was resolved by
+  explicitly allowing live selfie preview cropping; saved evidence is uncropped.
+
+The broad test run reported 24 failures out of 3,915 tests. The resolved crop
+policy accounts for one; the other 23 are in seven unrelated marketplace/card,
+business-detail, video tracking and engagement-route suites. The first
+actionable follow-up is to reconcile their existing card-content/fit and
+playback-counting expectations with the intended product behavior, then rerun
+`pnpm test:blocking` and `pnpm safety:review`. Database test commands chained
+after the failed Vitest run did not execute. These failures have not been
+concealed by weakening tests.
+
+The original gate artifacts are preserved in `tmp/safety-gate/latest-review.md`,
+`latest-review.json` and `latest-review-blockers.txt`; they record the initial
+run, not the later focused rechecks described above. No deployment or database
+migration was performed for this update.
+
+## Earlier capture improvements
 
 - Fixed the MediaPipe loader's CSP mismatch. Its pinned WASM directory also
   contains a JavaScript bootstrap; allowing only model/WASM fetches in
@@ -55,7 +138,7 @@ execution. The migration has not been applied to production; the existing server
 failure policy remains intact until deployment. Historical risk signals are
 retained for audit rather than silently cleared.
 
-## Validation and release
+## Earlier validation and release
 
 Final local review: `pnpm safety:review` passed all 12 gates on 6
 September 2026. This includes 3,716 tests across 423 files and 21 trial database

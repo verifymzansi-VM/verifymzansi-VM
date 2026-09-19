@@ -128,54 +128,59 @@ describe("/api/admin/verification/evidence", () => {
     });
   });
 
-  it("streams evidence for an authorized admin when the active-case lookup is stale", async () => {
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "kyc_artifacts") {
-          return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            single: vi.fn().mockResolvedValue({
-              data: {
-                id: "artifact-1",
-                user_id: "user-1",
-                r2_key: "kyc/id_document/user-1/file.bin",
-                content_type: "image/jpeg",
-                artifact_kind: "document",
-                step_type: "id_doc",
-              },
-              error: null,
-            }),
-          };
-        }
+  it.each(["id_doc", "selfie"])(
+    "streams %s evidence for an authorized admin when the active-case lookup is stale",
+    async (stepType) => {
+      mockCreateAdminClient.mockReturnValue({
+        from: vi.fn((table: string) => {
+          if (table === "kyc_artifacts") {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              single: vi.fn().mockResolvedValue({
+                data: {
+                  id: "artifact-1",
+                  user_id: "user-1",
+                  r2_key: `kyc/${stepType}/user-1/file.bin`,
+                  content_type: "image/jpeg",
+                  artifact_kind: "document",
+                  step_type: stepType,
+                },
+                error: null,
+              }),
+            };
+          }
 
-        if (table === "verification_steps") {
-          return createVerificationStepsBuilder(0);
-        }
+          if (table === "verification_steps") {
+            return createVerificationStepsBuilder(0);
+          }
 
-        if (table === "kyc_evidence_access_logs") {
-          return createAccessLogsBuilder();
-        }
+          if (table === "kyc_evidence_access_logs") {
+            return createAccessLogsBuilder();
+          }
 
-        throw new Error(`Unexpected table lookup: ${table}`);
-      }),
-    });
+          throw new Error(`Unexpected table lookup: ${table}`);
+        }),
+      });
 
-    mockDownloadKycDocument.mockResolvedValue({
-      buffer: Buffer.from("document-image"),
-      downloadMs: 4,
-      decryptMs: 6,
-    });
+      mockDownloadKycDocument.mockResolvedValue({
+        buffer: Buffer.from("document-image"),
+        downloadMs: 4,
+        decryptMs: 6,
+      });
 
-    const response = await GET(
-      createGetRequest(
-        "http://localhost:3000/api/admin/verification/evidence?artifactId=123e4567-e89b-42d3-a456-426614174000"
-      )
-    );
+      const response = await GET(
+        createGetRequest(
+          "http://localhost:3000/api/admin/verification/evidence?artifactId=123e4567-e89b-42d3-a456-426614174000"
+        )
+      );
 
-    expect(response.status).toBe(200);
-    expect(mockDownloadKycDocument).toHaveBeenCalledWith("kyc/id_document/user-1/file.bin");
-  });
+      expect(response.status).toBe(200);
+      expect(response.headers.get("Content-Type")).toBe("image/jpeg");
+      expect(await response.text()).toBe("document-image");
+      expect(mockDownloadKycDocument).toHaveBeenCalledWith(`kyc/${stepType}/user-1/file.bin`);
+    }
+  );
 
   it("streams evidence for an authorized admin when session linkage is stale", async () => {
     mockGetLinkedEvidenceArtifactIds.mockResolvedValue(["artifact-99"]);

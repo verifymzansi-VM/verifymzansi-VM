@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const sentryMocks = vi.hoisted(() => ({
@@ -72,6 +72,7 @@ beforeEach(() => {
   livenessMocks.status.faceCount = 1;
   livenessMocks.status.livenessPassed = false;
   livenessMocks.status.supported = true;
+  livenessMocks.canCapture.mockReturnValue(true);
 
   Object.defineProperty(global.navigator, "mediaDevices", {
     configurable: true,
@@ -108,6 +109,112 @@ beforeEach(() => {
       static revokeObjectURL = vi.fn();
     }
   );
+});
+
+describe("full-screen selfie session", () => {
+  it("opens a modal and releases the camera when closed", async () => {
+    mockGetUserMedia.mockResolvedValueOnce(createMockStream());
+    render(<CameraCapture onCapture={vi.fn()} facingMode="user" requireLiveness />);
+    await clickOpenCamera();
+    expect(await screen.findByRole("dialog", { name: "Selfie verification" })).toBeVisible();
+    await waitFor(() => expect(livenessMocks.start).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "Close camera" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(mockStop).toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /open camera/i })).toBeEnabled();
+  });
+
+  it.each(["close", "unmount"])("releases permission results arriving after %s", async (action) => {
+    let resolve!: (stream: MediaStream) => void;
+    mockGetUserMedia.mockImplementationOnce(
+      () =>
+        new Promise<MediaStream>((done) => {
+          resolve = done;
+        })
+    );
+    const { unmount } = render(
+      <CameraCapture onCapture={vi.fn()} facingMode="user" requireLiveness />
+    );
+    await clickOpenCamera();
+    if (action === "close")
+      fireEvent.click(await screen.findByRole("button", { name: "Close camera" }));
+    else unmount();
+    await act(async () => resolve(createMockStream()));
+    expect(mockStop).toHaveBeenCalledOnce();
+    expect(livenessMocks.start).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it.each([true, false])(
+    "automatically captures only a fresh eligible frame (eligible=%s)",
+    async (eligible) => {
+      mockGetUserMedia.mockResolvedValueOnce(createMockStream());
+      const onCapture = vi.fn();
+      const { rerender } = render(
+        <CameraCapture onCapture={onCapture} facingMode="user" requireLiveness />
+      );
+      await clickOpenCamera();
+      await waitFor(() => expect(livenessMocks.start).toHaveBeenCalled());
+      const video = document.querySelector("video")!;
+      Object.defineProperties(video, {
+        videoWidth: { value: 720 },
+        videoHeight: { value: 960 },
+        readyState: { value: 4 },
+      });
+      const drawImage = vi.fn();
+      const context = vi
+        .spyOn(HTMLCanvasElement.prototype, "getContext")
+        .mockReturnValue({ drawImage } as unknown as CanvasRenderingContext2D);
+      const encode = vi
+        .spyOn(HTMLCanvasElement.prototype, "toBlob")
+        .mockImplementation((done) => done(new Blob(["photo"], { type: "image/jpeg" })));
+      livenessMocks.status.livenessPassed = true;
+      livenessMocks.canCapture.mockReturnValue(eligible);
+      rerender(<CameraCapture onCapture={onCapture} facingMode="user" requireLiveness />);
+      if (eligible) {
+        await waitFor(() => expect(onCapture).toHaveBeenCalledOnce());
+        expect(onCapture).toHaveBeenCalledWith(expect.objectContaining({ type: "image/jpeg" }), {
+          livenessPassed: true,
+        });
+        expect(drawImage).toHaveBeenCalledWith(video, 0, 0);
+        expect(screen.getByRole("img", { name: "Captured photo" })).toBeVisible();
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      } else {
+        expect(encode).not.toHaveBeenCalled();
+        expect(onCapture).not.toHaveBeenCalled();
+      }
+      context.mockRestore();
+      encode.mockRestore();
+    }
+  );
+
+  it("ignores a photo encoding callback after closing the camera", async () => {
+    mockGetUserMedia.mockResolvedValueOnce(createMockStream());
+    livenessMocks.status.supported = false;
+    const onCapture = vi.fn();
+    render(<CameraCapture onCapture={onCapture} facingMode="user" requireLiveness />);
+    await clickOpenCamera();
+    fireEvent.click(await screen.findByRole("button", { name: "Use manual review" }));
+    const video = document.querySelector("video")!;
+    Object.defineProperties(video, {
+      videoWidth: { value: 720 },
+      videoHeight: { value: 960 },
+      readyState: { value: 4 },
+    });
+    const context = vi
+      .spyOn(HTMLCanvasElement.prototype, "getContext")
+      .mockReturnValue({ drawImage: vi.fn() } as unknown as CanvasRenderingContext2D);
+    let finish!: BlobCallback;
+    const encode = vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation((done) => {
+      finish = done;
+    });
+    fireEvent.click(screen.getByRole("button", { name: /take photo for manual review/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Close camera" }));
+    await act(async () => finish(new Blob(["photo"], { type: "image/jpeg" })));
+    expect(onCapture).not.toHaveBeenCalled();
+    context.mockRestore();
+    encode.mockRestore();
+  });
 });
 
 afterEach(() => {

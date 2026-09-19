@@ -49,13 +49,17 @@ export function KycInlinePreview({
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const fetchedRef = useRef(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   // IntersectionObserver — trigger load when card scrolls into viewport
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
+    if (typeof IntersectionObserver === "undefined") {
+      setIsVisible(true);
+      return;
+    }
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -72,18 +76,22 @@ export function KycInlinePreview({
 
   // Fetch artifact metadata + blob once visible
   useEffect(() => {
-    if (!isVisible || fetchedRef.current) return;
-    fetchedRef.current = true;
+    if (!isVisible) return;
 
     let cancelled = false;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20_000);
 
     async function loadThumbnail() {
       setLoading(true);
       setError(null);
+      setArtifact(null);
+      setBlobUrl(null);
 
       async function fetchEvidenceByArtifactId(targetArtifactId: string) {
         const evidenceRes = await fetch(`/api/admin/verification/evidence`, {
           method: "POST",
+          signal: controller.signal,
           headers: withCsrfHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({ artifactId: targetArtifactId }),
         });
@@ -107,9 +115,10 @@ export function KycInlinePreview({
       }
 
       try {
-        // 1. Fetch metadata to get artifact ID (use GET with query params)
+        // 1. Resolve the latest uploaded photo through the authorized metadata endpoint.
         const metaRes = await fetch(`/api/admin/verification/evidence/metadata`, {
           method: "POST",
+          signal: controller.signal,
           headers: withCsrfHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({ stepId, userId }),
         });
@@ -127,7 +136,9 @@ export function KycInlinePreview({
 
         // Find matching artifact for this step type
         const artifacts: Artifact[] = meta.artifacts || [];
-        const match = artifacts.find((a: Artifact) => a.step_type === stepType);
+        const match = artifacts
+          .filter((a) => a.step_type === stepType)
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
 
         if (!match) {
           if (!cancelled) setError("No document uploaded");
@@ -136,7 +147,8 @@ export function KycInlinePreview({
 
         if (!cancelled) setArtifact(match);
 
-        const cachedBlob = getCachedKycArtifactBlob(match.id);
+        // A retry must also recover from a cached image that failed to decode.
+        const cachedBlob = retryCount === 0 ? getCachedKycArtifactBlob(match.id) : null;
         if (cachedBlob) {
           if (!cancelled) {
             const cachedUrl = URL.createObjectURL(cachedBlob);
@@ -153,6 +165,7 @@ export function KycInlinePreview({
         if (!evidenceResult.ok && evidenceResult.code === "not_found") {
           const retryMetaRes = await fetch(`/api/admin/verification/evidence/metadata`, {
             method: "POST",
+            signal: controller.signal,
             headers: withCsrfHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify({ userId }),
           });
@@ -187,9 +200,16 @@ export function KycInlinePreview({
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Load failed");
+          setError(
+            controller.signal.aborted
+              ? "Photo loading timed out. Please retry."
+              : err instanceof Error
+                ? err.message
+                : "Load failed"
+          );
         }
       } finally {
+        clearTimeout(timeout);
         if (!cancelled) setLoading(false);
       }
     }
@@ -198,8 +218,10 @@ export function KycInlinePreview({
 
     return () => {
       cancelled = true;
+      clearTimeout(timeout);
+      controller.abort();
     };
-  }, [isVisible, stepId, userId, stepType]);
+  }, [isVisible, stepId, userId, stepType, retryCount]);
 
   // Cleanup blob URL on unmount
   useEffect(() => {
@@ -215,15 +237,14 @@ export function KycInlinePreview({
     }
     setArtifact(null);
     setError(null);
-    fetchedRef.current = false;
-    setIsVisible(true); // re-trigger fetch
+    setRetryCount((count) => count + 1);
   }, [blobUrl]);
 
   const handleClick = useCallback(() => {
-    if (artifact && onClickPreview) {
+    if (!loading && !error && artifact && blobUrl && onClickPreview) {
       onClickPreview(artifact);
     }
-  }, [artifact, onClickPreview]);
+  }, [artifact, onClickPreview, loading, error, blobUrl]);
 
   const isImage = artifact?.content_type?.startsWith("image/");
 
@@ -265,6 +286,8 @@ export function KycInlinePreview({
               <AlertTriangle className="h-4 w-4 text-destructive/60" />
               <span className="text-[9px] text-destructive mt-1 leading-tight">{error}</span>
               <Button
+                type="button"
+                aria-label="Retry loading photo"
                 variant="ghost"
                 size="sm"
                 className="h-5 px-1 mt-1"
@@ -283,12 +306,13 @@ export function KycInlinePreview({
       {/* Image thumbnail */}
       {blobUrl && !loading && !error && isImage && (
         <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {/* eslint-disable-next-line @next/next/no-img-element, jsx-a11y/no-noninteractive-element-interactions -- onError handles failed image decoding, not user interaction. */}
           <img
             src={blobUrl}
             alt={`${stepType.replace("_", " ")} document thumbnail`}
             className="h-full w-full bg-black object-contain select-none"
             draggable={false}
+            onError={() => setError("This photo could not be displayed. Try loading it again.")}
           />
           {/* Mini watermark */}
           <div

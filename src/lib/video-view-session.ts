@@ -1,4 +1,4 @@
-export const VIDEO_SESSION_IDLE_MS = 30 * 60 * 1000;
+const VIDEO_SESSION_IDLE_MS = 30 * 60 * 1000;
 
 interface VideoSession {
   playbackId: string;

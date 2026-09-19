@@ -116,6 +116,86 @@ describe("KycInlinePreview", () => {
     vi.restoreAllMocks();
   });
 
+  it("retries a failed selfie preview without remounting", async () => {
+    const selfie = { ...MOCK_METADATA_RESPONSE.artifacts[0], id: "selfie-1", step_type: "selfie" };
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ error: "Temporary failure" }),
+    });
+    render(<KycInlinePreview stepId="selfie-step" userId="user-1" stepType="selfie" />);
+    await triggerIntersection();
+    await screen.findByText("Temporary failure");
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ artifacts: [selfie] }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        blob: async () => new Blob(["selfie"], { type: "image/jpeg" }),
+      });
+    fireEvent.click(screen.getByRole("button", { name: "Retry loading photo" }));
+    expect(await screen.findByRole("img", { name: /selfie/ })).toBeVisible();
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("loads a new user's selfie when the selected row changes", async () => {
+    const metadata = (id: string) => ({
+      artifacts: [{ ...MOCK_METADATA_RESPONSE.artifacts[0], id, step_type: "selfie" }],
+    });
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, json: async () => metadata("first") })
+      .mockResolvedValueOnce({
+        ok: true,
+        blob: async () => new Blob(["first"], { type: "image/jpeg" }),
+      });
+    const onClickPreview = vi.fn();
+    const { rerender } = render(
+      <KycInlinePreview
+        stepId="step-1"
+        userId="user-1"
+        stepType="selfie"
+        onClickPreview={onClickPreview}
+      />
+    );
+    await triggerIntersection();
+    await screen.findByRole("img");
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, json: async () => metadata("second") })
+      .mockResolvedValueOnce({
+        ok: true,
+        blob: async () => new Blob(["second"], { type: "image/jpeg" }),
+      });
+    rerender(
+      <KycInlinePreview
+        stepId="step-2"
+        userId="user-2"
+        stepType="selfie"
+        onClickPreview={onClickPreview}
+      />
+    );
+    await screen.findByRole("img");
+    fireEvent.click(screen.getByRole("button", { name: /preview selfie/i }));
+    expect(onClickPreview).toHaveBeenCalledWith(expect.objectContaining({ id: "second" }));
+    expect(mockFetch).toHaveBeenCalledTimes(4);
+  });
+
+  it("selects the newest selfie regardless of metadata order", async () => {
+    const selfie = { ...MOCK_METADATA_RESPONSE.artifacts[0], step_type: "selfie" };
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          artifacts: [selfie, { ...selfie, id: "newest", created_at: "2026-09-19T12:00:00Z" }],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        blob: async () => new Blob(["selfie"], { type: "image/jpeg" }),
+      });
+    render(<KycInlinePreview stepId="step-1" userId="user-1" stepType="selfie" />);
+    await triggerIntersection();
+    await screen.findByRole("img");
+    expect(mockFetch.mock.calls[1][1].body).toBe(JSON.stringify({ artifactId: "newest" }));
+  });
+
   it("renders loading state then fetches metadata and blob", async () => {
     mockFetch
       .mockResolvedValueOnce({

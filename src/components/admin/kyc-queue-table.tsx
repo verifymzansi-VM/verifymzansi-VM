@@ -30,6 +30,7 @@ import {
 import Link from "next/link";
 import { KycComparisonViewer } from "./kyc-comparison-viewer";
 import { KycPreviewLightbox } from "./kyc-preview-lightbox";
+import { KycInlinePreview } from "./kyc-inline-preview";
 import { getKycEvidenceErrorMessage } from "./kyc-evidence-errors";
 import { KYC_REVIEW_REASON_CODES } from "./kyc-review-constants";
 import type { PendingVerificationGroup } from "@/lib/utils/admin-queries";
@@ -341,6 +342,21 @@ export function KycQueueTable({
                             className="flex flex-col gap-3 rounded-lg border border-border/60 bg-muted/20 px-3 py-3 md:flex-row md:items-center md:justify-between"
                           >
                             <div className="flex items-center gap-3 min-w-0">
+                              {step.step_type === "selfie" && (
+                                <KycInlinePreview
+                                  key={step.updated_at ?? step.created_at}
+                                  stepId={step.id}
+                                  userId={step.user_id}
+                                  stepType="selfie"
+                                  onClickPreview={(artifact) => {
+                                    setLightboxStep({
+                                      ...step,
+                                      account_display_name: group.account_display_name,
+                                    });
+                                    setLightboxArtifact(artifact);
+                                  }}
+                                />
+                              )}
                               <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-muted flex items-center justify-center">
                                 <StepIcon className="h-4 w-4 text-muted-foreground" />
                               </div>
@@ -375,6 +391,7 @@ export function KycQueueTable({
                                   className="h-8 text-brand-blue hover:text-brand-blue/80 hover:bg-brand-blue/10"
                                   onClick={() => void handleRowViewClick(step)}
                                   title="View"
+                                  aria-label={`View ${stepLabel}`}
                                   disabled={isViewingStep}
                                 >
                                   {isViewingStep ? (

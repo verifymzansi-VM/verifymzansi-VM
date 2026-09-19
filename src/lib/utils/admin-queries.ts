@@ -28,6 +28,7 @@ export interface PendingVerification {
   step_type: string;
   status: string;
   created_at: string;
+  updated_at?: string | null;
   risk_level: string | null;
   risk_score: number | null;
   auto_status: string | null;
@@ -482,7 +483,7 @@ export async function getPendingVerifications(limit = 50): Promise<PendingVerifi
   const { data: steps } = await supabase
     .from("verification_steps")
     .select(
-      "id, user_id, step_type, status, created_at, risk_level, risk_score, auto_status, reviewed_at"
+      "id, user_id, step_type, status, created_at, updated_at, risk_level, risk_score, auto_status, reviewed_at"
     )
     .eq("status", "pending")
     .neq("step_type", "location")

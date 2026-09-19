@@ -7,6 +7,7 @@ import { Camera, Loader2, RefreshCw, ScanFace, VideoOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useFaceLiveness } from "./use-face-liveness";
+import { SelfieCameraDialog } from "./selfie-camera-dialog";
 
 interface CameraCaptureProps {
   onCapture: (file: File, meta?: CaptureMeta) => void;
@@ -116,6 +117,10 @@ export function CameraCapture({
   onReset,
 }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const sessionRef = useRef(0);
+  const startingRef = useRef(false);
+  const capturingRef = useRef(false);
+  const openButtonRef = useRef<HTMLButtonElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const streamContainerRef = useRef<HTMLDivElement>(null);
@@ -126,6 +131,8 @@ export function CameraCapture({
   const [isStartingCamera, setIsStartingCamera] = useState(false);
   const [documentFormat, setDocumentFormat] = useState<"card" | "book">("card");
   const [manualCapture, setManualCapture] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [captureError, setCaptureError] = useState("");
 
   const {
     status: livenessStatus,
@@ -278,7 +285,7 @@ export function CameraCapture({
   }, []);
 
   const startCamera = useCallback(async () => {
-    if (isStartingCamera) {
+    if (startingRef.current || disabled) {
       return;
     }
 
@@ -292,6 +299,11 @@ export function CameraCapture({
       return;
     }
 
+    const session = ++sessionRef.current;
+    startingRef.current = true;
+    capturingRef.current = false;
+    setIsCapturing(false);
+    setCaptureError("");
     try {
       setIsStartingCamera(true);
       setState("idle");
@@ -318,8 +330,13 @@ export function CameraCapture({
       for (const constraints of constraintSets) {
         try {
           stream = await getUserMediaWithTimeout(constraints);
+          if (session !== sessionRef.current) {
+            stream.getTracks().forEach((track) => track.stop());
+            return;
+          }
           break;
         } catch (innerErr) {
+          if (session !== sessionRef.current) return;
           const innerName = getCameraErrorName(innerErr);
           if (!shouldTryRelaxedCameraConstraints(innerName)) {
             throw innerErr;
@@ -332,18 +349,9 @@ export function CameraCapture({
       }
 
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        // Explicit play() — mobile browsers often ignore autoPlay attribute
-        try {
-          await videoRef.current.play();
-        } catch {
-          // AbortError / NotAllowedError from play() is non-fatal if
-          // autoPlay eventually kicks in; we proceed to streaming state.
-        }
-      }
       setState("streaming");
     } catch (err) {
+      if (session !== sessionRef.current) return;
       stopStream();
       stopLiveness();
       const name = getCameraErrorName(err);
@@ -355,6 +363,7 @@ export function CameraCapture({
               supported: Boolean(navigator.permissions?.query),
               queryFailed: false,
             };
+      if (session !== sessionRef.current) return;
       const permissionState = permissionLookup.state;
 
       reportCameraInitFailure(name || "UnknownCameraError", permissionState, permissionLookup);
@@ -388,14 +397,17 @@ export function CameraCapture({
       }
       setState("error");
     } finally {
-      setIsStartingCamera(false);
+      if (session === sessionRef.current) {
+        startingRef.current = false;
+        setIsStartingCamera(false);
+      }
     }
   }, [
     facingMode,
     requireLiveness,
     getPermissionState,
     getUserMediaWithTimeout,
-    isStartingCamera,
+    disabled,
     reportCameraInitFailure,
     stopStream,
     stopLiveness,
@@ -406,24 +418,61 @@ export function CameraCapture({
   // Cleanup stream on unmount
   useEffect(() => {
     return () => {
+      sessionRef.current += 1;
+      startingRef.current = false;
       stopStream();
     };
   }, [stopStream]);
 
-  // Attach the stream to the <video> element once it mounts.
-  // The video element is conditionally rendered (only when state === "streaming"),
-  // so srcObject must be set after the re-render, not inline in startCamera().
-  useEffect(() => {
-    if (state === "streaming" && videoRef.current && streamRef.current) {
-      videoRef.current.srcObject = streamRef.current;
-      videoRef.current.play().catch(() => {});
+  const closeCamera = useCallback(() => {
+    sessionRef.current += 1;
+    startingRef.current = false;
+    capturingRef.current = false;
+    stopStream();
+    resetLiveness();
+    setIsStartingCamera(false);
+    setIsCapturing(false);
+    setState("idle");
+  }, [stopStream, resetLiveness]);
 
-      // Kick off the liveness challenge against the live frame.
-      if (requireLiveness) {
-        void startLiveness(videoRef.current);
-      }
-    }
-  }, [state, requireLiveness, startLiveness]);
+  // Portal content mounts after the parent effects. Attach directly when the video mounts.
+  const attachVideo = useCallback(
+    (video: HTMLVideoElement | null) => {
+      videoRef.current = video;
+      if (!video || !streamRef.current) return;
+      const session = sessionRef.current;
+      video.srcObject = streamRef.current;
+      void video.play().catch(() => {
+        if (session !== sessionRef.current) return;
+        stopStream();
+        stopLiveness();
+        setErrorMessage("Camera playback was interrupted. Please try again.");
+        setState("error");
+      });
+      if (requireLiveness) void startLiveness(video);
+    },
+    [requireLiveness, startLiveness, stopStream, stopLiveness]
+  );
+
+  useEffect(() => {
+    if (state !== "streaming") return;
+    const interrupt = () => {
+      sessionRef.current += 1;
+      stopStream();
+      stopLiveness();
+      setIsCapturing(false);
+      capturingRef.current = false;
+      setErrorMessage("Camera was interrupted. Please try again.");
+      setState("error");
+    };
+    const tracks = streamRef.current?.getTracks() ?? [];
+    tracks.forEach((track) => track.addEventListener?.("ended", interrupt));
+    window.addEventListener("pagehide", closeCamera);
+    return () => {
+      tracks.forEach((track) => track.removeEventListener?.("ended", interrupt));
+      window.removeEventListener("pagehide", closeCamera);
+    };
+  }, [state, closeCamera, stopStream, stopLiveness]);
 
   // Bring the camera frame into view as soon as streaming starts so the user
   // never has to scroll to find it (the "Open Camera" button can sit low on
@@ -435,7 +484,7 @@ export function CameraCapture({
   // height, so the browser clamps the scroll to a too-short page and the
   // expanded frame ends up below the fold.
   useEffect(() => {
-    if (state !== "streaming") return;
+    if (state !== "streaming" || requireLiveness) return;
 
     const container = streamContainerRef.current;
     const video = videoRef.current;
@@ -454,12 +503,12 @@ export function CameraCapture({
     }
 
     scrollToFrame();
-  }, [state]);
+  }, [state, requireLiveness]);
 
   const takePhoto = useCallback(() => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    if (!video || !canvas) return;
+    if (!video || !canvas || disabled || capturingRef.current || document.hidden) return;
 
     // Guard against capturing before the stream has produced a frame —
     // otherwise a blank 0x0 image would be uploaded as the "photo".
@@ -475,30 +524,50 @@ export function CameraCapture({
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) {
+      setCaptureError("Could not prepare your photo. Close the camera and try again.");
+      return;
+    }
 
-    // Mirror only the preview. Save original camera pixels for ID comparison.
-    ctx.drawImage(video, 0, 0);
+    const session = sessionRef.current;
+    capturingRef.current = true;
+    setIsCapturing(true);
+    setCaptureError("");
 
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) return;
-        const file = new File([blob], `capture-${Date.now()}.jpg`, {
-          type: "image/jpeg",
-        });
-        const url = URL.createObjectURL(blob);
-        setCapturedUrl(url);
-        stopStream();
-        stopLiveness();
-        setState("captured");
-        onCapture(file, {
-          livenessPassed: requireLiveness ? livenessStatus.livenessPassed : false,
-        });
-      },
-      "image/jpeg",
-      0.92
-    );
+    try {
+      // Mirror only the preview. Save original camera pixels for ID comparison.
+      ctx.drawImage(video, 0, 0);
+      canvas.toBlob(
+        (blob) => {
+          if (session !== sessionRef.current) return;
+          capturingRef.current = false;
+          setIsCapturing(false);
+          if (!blob || blob.size === 0) {
+            setCaptureError("Could not save your photo. Please try taking it again.");
+            return;
+          }
+          const file = new File([blob], `capture-${Date.now()}.jpg`, {
+            type: "image/jpeg",
+          });
+          const url = URL.createObjectURL(blob);
+          setCapturedUrl(url);
+          stopStream();
+          stopLiveness();
+          setState("captured");
+          onCapture(file, {
+            livenessPassed: requireLiveness ? livenessStatus.livenessPassed : false,
+          });
+        },
+        "image/jpeg",
+        0.92
+      );
+    } catch {
+      capturingRef.current = false;
+      setIsCapturing(false);
+      setCaptureError("Could not save your photo. Please try taking it again.");
+    }
   }, [
+    disabled,
     stopStream,
     stopLiveness,
     onCapture,
@@ -508,6 +577,13 @@ export function CameraCapture({
     livenessActive,
     canCaptureLiveFrame,
   ]);
+
+  // Capture while the fresh, centred frame is eligible; no race to reach a shutter.
+  useEffect(() => {
+    if (state !== "streaming" || !requireLiveness || !livenessStatus.livenessPassed || captureError)
+      return;
+    takePhoto();
+  }, [state, requireLiveness, livenessStatus.livenessPassed, takePhoto, captureError]);
 
   const retake = useCallback(() => {
     if (capturedUrl) {
@@ -543,7 +619,7 @@ export function CameraCapture({
       <div className="space-y-3">
         <div className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200">
           <VideoOff className="h-4 w-4 shrink-0" />
-          <p>{errorMessage}</p>
+          <p role="alert">{errorMessage}</p>
         </div>
         <p className="text-xs text-muted-foreground">
           No camera prompt? Open{" "}
@@ -554,6 +630,7 @@ export function CameraCapture({
         </p>
         <Button
           type="button"
+          ref={openButtonRef}
           variant="outline"
           onClick={() => void startCamera()}
           disabled={disabled || isStartingCamera}
@@ -597,6 +674,7 @@ export function CameraCapture({
           type="button"
           variant="outline"
           onClick={retake}
+          ref={openButtonRef}
           disabled={disabled}
           className="gap-1"
         >
@@ -606,6 +684,180 @@ export function CameraCapture({
       </div>
     );
   }
+
+  const cameraContent = (
+    <>
+      {isStartingCamera && (
+        <div
+          className="col-span-2 flex flex-1 flex-col items-center justify-center gap-4 p-6"
+          role="status"
+        >
+          <Loader2 className="h-8 w-8 animate-spin" aria-hidden />
+          <p>Opening camera� Allow camera access when prompted.</p>
+        </div>
+      )}
+      {state === "streaming" && (
+        <>
+          <div
+            ref={streamContainerRef}
+            className={
+              requireLiveness
+                ? "relative min-h-[180px] flex-1 overflow-hidden bg-black [@media(max-height:500px)]:min-h-0 [@media(max-height:500px)]:h-full"
+                : "relative scroll-mt-24 overflow-hidden rounded-xl border bg-black"
+            }
+          >
+            <video
+              ref={attachVideo}
+              autoPlay
+              playsInline
+              muted
+              className={`${requireLiveness ? "absolute inset-0 h-full w-full object-cover" : "w-full"} ${facingMode === "user" ? "scale-x-[-1]" : ""}`}
+            />
+            {documentGuide && (
+              <div className="pointer-events-none absolute inset-0 p-6" aria-hidden="true">
+                <svg
+                  className="h-full w-full overflow-visible"
+                  viewBox={documentFormat === "card" ? "0 0 856 540" : "0 0 540 750"}
+                  preserveAspectRatio="xMidYMid meet"
+                >
+                  <rect
+                    x="2"
+                    y="2"
+                    width={documentFormat === "card" ? 852 : 536}
+                    height={documentFormat === "card" ? 536 : 746}
+                    rx="20"
+                    fill="none"
+                    stroke="white"
+                    strokeWidth="2"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </svg>
+                <span className="absolute left-3 top-2 rounded bg-black/80 px-2 py-0.5 text-[10px] font-medium text-white">
+                  {documentFormat === "card" ? "SMART ID · FRONT" : "ID BOOK · PHOTO PAGE"}
+                </span>
+              </div>
+            )}
+            {requireLiveness && (
+              <div
+                className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                aria-hidden="true"
+              >
+                <svg
+                  className="h-[80%] w-[80%] overflow-visible"
+                  viewBox="0 0 300 400"
+                  preserveAspectRatio="xMidYMid meet"
+                >
+                  <ellipse
+                    cx="150"
+                    cy="200"
+                    rx="147"
+                    ry="197"
+                    fill="none"
+                    style={{ filter: "drop-shadow(0 0 2px black)" }}
+                    stroke={livenessStatus.livenessPassed ? "#34d399" : "white"}
+                    strokeWidth="2"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </svg>
+              </div>
+            )}
+          </div>
+          <div
+            className={
+              requireLiveness
+                ? "shrink-0 space-y-3 bg-slate-950 px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] [@media(max-height:500px)]:min-h-0 [@media(max-height:500px)]:overflow-y-auto"
+                : "space-y-3"
+            }
+          >
+            {livenessActive && (
+              <div className="mx-auto max-w-md text-center">
+                <div className="mb-3 flex justify-center gap-2" aria-hidden="true">
+                  {[0, 1].map((step) => (
+                    <span
+                      key={step}
+                      className={`h-1.5 w-16 rounded-full ${livenessStatus.completedSteps > step ? "bg-emerald-400" : "bg-slate-600"}`}
+                    />
+                  ))}
+                </div>
+                <p className="text-xs uppercase tracking-wider text-emerald-300">
+                  {livenessStatus.phase === "loading"
+                    ? "Getting ready"
+                    : `Movement ${Math.min((livenessStatus.completedSteps ?? 0) + 1, 2)} of 2`}
+                </p>
+                <p
+                  className="mt-2 flex min-h-12 items-center justify-center gap-2 text-base font-medium"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <ScanFace className="h-5 w-5 shrink-0" aria-hidden />
+                  {livenessStatus.instruction}
+                </p>
+                <p className="mt-1 text-xs text-slate-300">
+                  Keep your face inside the oval in even light.
+                </p>
+              </div>
+            )}
+            {requireLiveness && !livenessStatus.supported && (
+              <div
+                className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
+                role="status"
+              >
+                <p>
+                  The live face check could not run. Retry first, or take a photo for manual review.
+                  A photo alone cannot confirm liveness.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={disabled}
+                    onClick={() => {
+                      setManualCapture(false);
+                      if (videoRef.current) void startLiveness(videoRef.current);
+                    }}
+                  >
+                    Retry face check
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={disabled || manualCapture}
+                    onClick={() => setManualCapture(true)}
+                  >
+                    Use manual review
+                  </Button>
+                </div>
+              </div>
+            )}
+            <Button
+              type="button"
+              ref={takePhotoButtonRef}
+              onClick={takePhoto}
+              disabled={disabled || !captureAllowed || isCapturing}
+              variant="trust-verified"
+              className="w-full gap-2"
+            >
+              <Camera className="h-4 w-4" />
+              {isCapturing
+                ? "Saving photo�"
+                : requireLiveness && !captureAllowed
+                  ? "Complete Liveness Check"
+                  : manualCapture
+                    ? "Take Photo for Manual Review"
+                    : "Take Photo"}
+            </Button>
+            {captureError && (
+              <p role="alert" className="text-center text-sm text-red-300">
+                {captureError}
+              </p>
+            )}
+          </div>
+        </>
+      )}
+    </>
+  );
 
   return (
     <div className="space-y-3">
@@ -636,12 +888,14 @@ export function CameraCapture({
       {requireLiveness && state === "idle" && (
         <p className="text-sm text-muted-foreground">
           Use good light, remove sunglasses and keep your whole face visible. Follow two short
-          movements, then look straight at the camera. Your selfie will be reviewed with your ID.
+          movements, then look straight at the camera. We will take your photo automatically. Your
+          selfie will be reviewed with your ID.
         </p>
       )}
       {state === "idle" && (
         <Button
           type="button"
+          ref={openButtonRef}
           variant="outline"
           onClick={() => void startCamera()}
           disabled={disabled || isStartingCamera}
@@ -656,127 +910,15 @@ export function CameraCapture({
         </Button>
       )}
 
-      {state === "streaming" && (
-        <>
-          <div
-            ref={streamContainerRef}
-            className="relative scroll-mt-24 overflow-hidden rounded-xl border bg-black"
-          >
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className={`w-full ${facingMode === "user" ? "scale-x-[-1]" : ""}`}
-            />
-            {documentGuide && (
-              <div className="pointer-events-none absolute inset-0 p-6" aria-hidden="true">
-                <svg
-                  className="h-full w-full overflow-visible"
-                  viewBox={documentFormat === "card" ? "0 0 856 540" : "0 0 540 750"}
-                  preserveAspectRatio="xMidYMid meet"
-                >
-                  <rect
-                    x="2"
-                    y="2"
-                    width={documentFormat === "card" ? 852 : 536}
-                    height={documentFormat === "card" ? 536 : 746}
-                    rx="20"
-                    fill="none"
-                    stroke="white"
-                    strokeWidth="2"
-                    vectorEffect="non-scaling-stroke"
-                  />
-                </svg>
-                <span className="absolute left-3 top-2 rounded bg-black/80 px-2 py-0.5 text-[10px] font-medium text-white">
-                  {documentFormat === "card" ? "SMART ID · FRONT" : "ID BOOK · PHOTO PAGE"}
-                </span>
-              </div>
-            )}
-            {requireLiveness && (
-              <div
-                className="pointer-events-none absolute inset-0 flex items-center justify-center pb-8"
-                aria-hidden="true"
-              >
-                <svg
-                  className="h-[75%] w-[80%]"
-                  viewBox="0 0 300 400"
-                  preserveAspectRatio="xMidYMid meet"
-                >
-                  <ellipse
-                    cx="150"
-                    cy="200"
-                    rx="147"
-                    ry="197"
-                    fill="none"
-                    stroke={livenessStatus.livenessPassed ? "#34d399" : "white"}
-                    strokeWidth="2"
-                    vectorEffect="non-scaling-stroke"
-                  />
-                </svg>
-              </div>
-            )}
-            {livenessActive && (
-              <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-2 bg-black/55 px-3 py-2 text-center">
-                <ScanFace className="h-4 w-4 shrink-0 text-white" aria-hidden />
-                <p className="text-xs font-medium text-white" role="status" aria-live="polite">
-                  {livenessStatus.phase === "challenge" &&
-                    `Step ${Math.min((livenessStatus.completedSteps ?? 0) + 1, 2)} of 2 · `}
-                  {livenessStatus.instruction}
-                </p>
-              </div>
-            )}
-          </div>
-          {requireLiveness && !livenessStatus.supported && (
-            <div
-              className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
-              role="status"
-            >
-              <p>
-                The live face check could not run. Retry first, or take a photo for manual review. A
-                photo alone cannot confirm liveness.
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={disabled}
-                  onClick={() => {
-                    setManualCapture(false);
-                    if (videoRef.current) void startLiveness(videoRef.current);
-                  }}
-                >
-                  Retry face check
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={disabled || manualCapture}
-                  onClick={() => setManualCapture(true)}
-                >
-                  Use manual review
-                </Button>
-              </div>
-            </div>
-          )}
-          <Button
-            type="button"
-            ref={takePhotoButtonRef}
-            onClick={takePhoto}
-            disabled={disabled || !captureAllowed}
-            variant="trust-verified"
-            className="w-full gap-2"
-          >
-            <Camera className="h-4 w-4" />
-            {requireLiveness && !captureAllowed
-              ? "Complete Liveness Check"
-              : manualCapture
-                ? "Take Photo for Manual Review"
-                : "Take Photo"}
-          </Button>
-        </>
+      {requireLiveness && (state === "streaming" || isStartingCamera) ? (
+        <SelfieCameraDialog
+          onClose={closeCamera}
+          onRestoreFocus={() => openButtonRef.current?.focus()}
+        >
+          {cameraContent}
+        </SelfieCameraDialog>
+      ) : (
+        cameraContent
       )}
 
       <canvas ref={canvasRef} className="hidden" />
