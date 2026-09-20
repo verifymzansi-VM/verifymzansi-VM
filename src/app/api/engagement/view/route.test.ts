@@ -110,7 +110,7 @@ describe("POST /api/engagement/view", () => {
     await expect(response.json()).resolves.toEqual({ error: "Failed to record view" });
   });
 
-  it("records separate plays from the same device before and after logout, but deduplicates delivery", async () => {
+  it("passes stable device identity and playback IDs to the deduplicating RPC across logout", async () => {
     const seen = new Set<string>();
     const rpc = vi.fn(async (_name: string, args: { p_viewer_key: string }) => {
       const recorded = !seen.has(args.p_viewer_key);
@@ -139,8 +139,25 @@ describe("POST /api/engagement/view", () => {
         "same-device"
       )
     );
-    await expect(next.json()).resolves.toMatchObject({ recorded: true });
-    expect(rpc.mock.calls[0][1].p_viewer_key).toBe(`playback:${payload.playbackId}`);
+    await expect(next.json()).resolves.toMatchObject({ recorded: false });
+    expect(rpc).toHaveBeenNthCalledWith(
+      1,
+      "record_content_playback",
+      expect.objectContaining({
+        p_viewer_key: "device:same-device",
+        p_playback_id: payload.playbackId,
+        p_viewer_user_id: "owner-1",
+      })
+    );
+    expect(rpc).toHaveBeenNthCalledWith(
+      3,
+      "record_content_playback",
+      expect.objectContaining({
+        p_viewer_key: "device:same-device",
+        p_playback_id: "00000000-0000-4000-8000-000000000002",
+        p_viewer_user_id: null,
+      })
+    );
   });
 
   it("rejects malformed playback IDs before writing a view", async () => {

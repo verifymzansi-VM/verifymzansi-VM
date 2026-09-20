@@ -98,11 +98,11 @@ describe("BusinessCard", () => {
     );
 
     expect(screen.getByText("Nomsa Fashion")).toBeTruthy();
-    // Card shows subcategory label + business type label
-    expect(screen.getByText(/Clothing Store/i)).toBeTruthy();
-    expect(screen.getByText(/Own Premises/i)).toBeTruthy();
+    // Immersive cards keep only the title and location overlay.
+    expect(screen.queryByText(/Clothing Store/i)).toBeNull();
+    expect(screen.queryByText(/Own Premises/i)).toBeNull();
     expect(screen.getByText(/Johannesburg/i)).toBeTruthy();
-    expect(screen.getByText("Featured")).toBeTruthy();
+    expect(screen.queryByText("Featured")).toBeNull();
   });
 
   it("shows the business logo when provided", () => {
@@ -114,7 +114,7 @@ describe("BusinessCard", () => {
     );
   });
 
-  it("uses the shared smart-fit video player when video is available", () => {
+  it("uses the shared cover-fit video player when video is available", () => {
     render(
       <BusinessCard
         {...defaultProps}
@@ -128,7 +128,7 @@ describe("BusinessCard", () => {
       "https://example.com/cover.mp4"
     );
     expect(screen.getByTestId("video-card-player")).toHaveAttribute("data-mode", "hover");
-    expect(screen.getByTestId("video-card-player")).toHaveAttribute("data-fit-strategy", "smart");
+    expect(screen.getByTestId("video-card-player")).toHaveAttribute("data-fit-strategy", "cover");
     expect(screen.getByTestId("video-card-player")).toHaveAttribute("data-mute-control", "always");
   });
 

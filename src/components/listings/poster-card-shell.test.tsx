@@ -65,7 +65,7 @@ describe("PosterCardShell", () => {
     } as Response);
     videoCardPlayerMock.mockImplementationOnce(() => <video src="/clip.mp4" />);
     try {
-      const id = "00000000-0000-0000-0000-000000000123";
+      const id = crypto.randomUUID();
       const { container, unmount } = render(
         <PosterCardShell
           href={`/listing/${id}`}
@@ -75,7 +75,19 @@ describe("PosterCardShell", () => {
         />
       );
       expect(fetchSpy).not.toHaveBeenCalled();
-      fireEvent.playing(container.querySelector("video")!);
+      const video = container.querySelector("video")!;
+      let now = Date.now();
+      const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+      Object.defineProperty(video, "paused", { configurable: true, value: false });
+      Object.defineProperty(video, "duration", { configurable: true, value: 10 });
+      fireEvent.playing(video);
+      expect(fetchSpy).not.toHaveBeenCalled();
+      for (let i = 1; i <= 9; i++) {
+        now += 1000;
+        video.currentTime = i;
+        fireEvent.timeUpdate(video);
+      }
+      clock.mockRestore();
       expect(fetchSpy).toHaveBeenCalledWith(
         "/api/engagement/view",
         expect.objectContaining({

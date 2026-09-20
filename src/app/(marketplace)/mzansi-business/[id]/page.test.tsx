@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import BusinessDetailPage from "./page";
 import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
@@ -241,7 +241,6 @@ describe("BusinessDetailPage", () => {
 
     render(await BusinessDetailPage({ params: Promise.resolve({ id: "business-1" }) }));
 
-    fireEvent.click(screen.getByRole("button", { name: /Business Details/i }));
     expect(screen.getByText("Service suburb")).toBeInTheDocument();
     expect(screen.getByText("Noordwyk")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -438,7 +437,6 @@ describe("BusinessDetailPage", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(/pending moderation/i);
     expect(screen.queryByRole("button", { name: /Share/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Report/i })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Business Details/i }));
     expect(screen.getByText("Primary order channel")).toBeInTheDocument();
   });
 
@@ -527,11 +525,9 @@ describe("BusinessDetailPage", () => {
 
     render(await BusinessDetailPage({ params: Promise.resolve({ id: "business-4" }) }));
 
-    fireEvent.click(screen.getByRole("button", { name: /Payment & Delivery/i }));
     expect(screen.getByText("Delivery")).toBeInTheDocument();
     expect(screen.getByText("Available")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /Business Details/i }));
     expect(screen.getByRole("link", { name: /Order Online/i })).toHaveAttribute(
       "href",
       "https://legacy-orders.example.com"
@@ -628,7 +624,6 @@ describe("BusinessDetailPage", () => {
 
     render(await BusinessDetailPage({ params: Promise.resolve({ id: "business-6" }) }));
 
-    fireEvent.click(screen.getByRole("button", { name: /Business Details/i }));
     expect(screen.getByText("Mall")).toBeInTheDocument();
     expect(screen.getByText("Maponya Mall")).toBeInTheDocument();
   });

@@ -125,8 +125,7 @@ describe("PromotionCard", () => {
     );
 
     expect(screen.getByText("TUE, 10 MAR")).toBeTruthy();
-    expect(screen.getByText("Event")).toBeTruthy();
-    expect(screen.getByText("Event")).toHaveClass("bg-teal-800");
+    expect(screen.queryByText("Event")).toBeNull();
     expect(screen.getByTestId("card")).toHaveClass("hover:border-teal-600/60");
   });
 
@@ -136,7 +135,7 @@ describe("PromotionCard", () => {
     expect(screen.queryByText(/by Nomsa Foods/i)).toBeNull();
   });
 
-  it("shows the highest-priority chip and removes category text", () => {
+  it("hides status chips and category text on immersive cards", () => {
     render(
       <PromotionCard
         {...defaultProps}
@@ -147,20 +146,20 @@ describe("PromotionCard", () => {
       />
     );
 
-    expect(screen.getByText("Featured")).toBeTruthy();
+    expect(screen.queryByText("Featured")).toBeNull();
     expect(screen.queryByText(/Food & Dining/i)).toBeNull();
     expect(screen.getByTestId("card")).toHaveClass("hover:border-teal-600/60");
   });
 
-  it("uses the event styling when no override badge is active", () => {
+  it("preserves event card styling without a status badge", () => {
     render(<PromotionCard {...defaultProps} promotionType="event" />);
 
-    expect(screen.getByText("Event")).toHaveClass("bg-teal-800");
+    expect(screen.queryByText("Event")).toBeNull();
     expect(screen.getByTestId("card")).toHaveClass("hover:border-teal-600/60");
   });
 
   it("keeps the type ribbon visible when the card is boosted", () => {
-    render(<PromotionCard {...defaultProps} promotionType="event" boosted />);
+    render(<PromotionCard {...defaultProps} promotionType="event" boosted immersive={false} />);
 
     expect(screen.getByText("Event ★")).toBeTruthy();
     expect(screen.getByText("Event ★")).toHaveClass("bg-teal-800");
@@ -175,7 +174,7 @@ describe("PromotionCard", () => {
     );
   });
 
-  it("uses the shared smart-fit video player for motion promotions", () => {
+  it("uses the shared cover-fit video player for motion promotions", () => {
     render(
       <PromotionCard
         {...defaultProps}
@@ -187,7 +186,7 @@ describe("PromotionCard", () => {
     const videoPlayer = screen.getByTestId("video-card-player");
     expect(videoPlayer).toHaveAttribute("data-src", "https://example.com/promo.mp4");
     expect(videoPlayer).toHaveAttribute("data-mode", "hover");
-    expect(videoPlayer).toHaveAttribute("data-fit-strategy", "smart");
+    expect(videoPlayer).toHaveAttribute("data-fit-strategy", "cover");
     expect(videoPlayer).toHaveAttribute("data-mute-control", "always");
   });
 

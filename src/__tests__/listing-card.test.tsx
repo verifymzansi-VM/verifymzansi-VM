@@ -175,9 +175,9 @@ describe("ListingCard", () => {
     expect(screen.queryByText(/Brand: Apple/i)).toBeNull();
   });
 
-  it("renders the highest-priority status chip only", () => {
+  it("hides status chips on immersive cards", () => {
     render(<ListingCard {...defaultProps} featured boosted urgent />);
-    expect(screen.getByText("Urgent")).toBeTruthy();
+    expect(screen.queryByText("Urgent")).toBeNull();
     expect(screen.queryByText("Boosted")).toBeNull();
   });
 
@@ -219,7 +219,7 @@ describe("ListingCard", () => {
     expect(videoPlayer).toHaveAttribute("data-src", blobUrl);
     expect(videoPlayer).toHaveAttribute("data-is-video", "true");
     expect(videoPlayer).toHaveAttribute("data-mode", "hover");
-    expect(videoPlayer).toHaveAttribute("data-fit-strategy", "smart");
+    expect(videoPlayer).toHaveAttribute("data-fit-strategy", "cover");
     expect(videoPlayer).toHaveAttribute("data-mute-control", "always");
     expect(screen.queryByAltText("Test Listing")).toBeNull();
   });
