@@ -133,6 +133,11 @@ jobs:
 
   db-rls:
     runs-on: ubuntu-latest
+    env:
+      # secrets context is not allowed in step-level if conditions, so map
+      # these to env first and reference env in the Docker Hub login step.
+      DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v5
@@ -145,11 +150,11 @@ jobs:
       # `supabase start` flaky; logging in (when credentials are configured)
       # raises the pull quota.
       - name: Log in to Docker Hub
-        if: ${{ vars.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+        if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
         uses: docker/login-action@v3
         with:
-          username: ${{ vars.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
       # A previous rate-limited/interrupted `supabase start` can leave the
       # database container behind holding port 54322; remove leftovers so the
       # fresh start below cannot fail with "address already in use".
