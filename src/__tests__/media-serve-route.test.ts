@@ -43,7 +43,49 @@ describe("GET /api/media/serve/[...key]", () => {
     process.env.R2_PUBLIC_BUCKET = "public-bucket";
     delete process.env.R2_PUBLIC_URL;
     delete process.env.NEXT_PUBLIC_MEDIA_URL;
+    delete process.env.PLAYWRIGHT_TEST_MODE;
+    delete process.env.PLAYWRIGHT_SUPABASE_MODE;
     delete (process.env as unknown as Record<string, unknown>).PUBLIC_BUCKET;
+  });
+
+  it("serves e2e-stub uploads from the local filesystem without hitting S3", async () => {
+    process.env.PLAYWRIGHT_TEST_MODE = "1";
+    process.env.PLAYWRIGHT_SUPABASE_MODE = "stub";
+    // Point the stub's public/e2e-media root at a temp dir with a known file.
+    const fs = await import("node:fs/promises");
+    const os = await import("node:os");
+    const path = await import("node:path");
+    const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "vmz-media-"));
+    const mediaDir = path.join(tmpRoot, "public", "e2e-media", "media", "listing", "u1");
+    await fs.mkdir(mediaDir, { recursive: true });
+    const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    await fs.writeFile(path.join(mediaDir, "123-photo.png"), pngBytes);
+    const cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(tmpRoot);
+    try {
+      const res = await GET(createRequest(), {
+        params: Promise.resolve({ key: ["media", "listing", "u1", "123-photo.png"] }),
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Content-Type")).toBe("image/png");
+      expect(res.headers.get("Content-Length")).toBe(String(pngBytes.length));
+      // S3 must never be touched in stub mode.
+      expect(mockSend).not.toHaveBeenCalled();
+    } finally {
+      cwdSpy.mockRestore();
+      await fs.rm(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("returns 404 in e2e-stub mode when the local file is missing", async () => {
+    process.env.PLAYWRIGHT_TEST_MODE = "1";
+    process.env.PLAYWRIGHT_SUPABASE_MODE = "stub";
+    const res = await GET(createRequest(), {
+      params: Promise.resolve({
+        key: ["media", "listing", "u1", `missing-${Date.now()}.png`],
+      }),
+    });
+    expect(res.status).toBe(404);
+    expect(mockSend).not.toHaveBeenCalled();
   });
 
   it("rejects invalid storage keys", async () => {

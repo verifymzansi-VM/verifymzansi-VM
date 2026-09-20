@@ -339,10 +339,36 @@ async function serveMediaForKey(request: NextRequest, key: string): Promise<Next
   const ifNoneMatch = request.headers.get("if-none-match");
   const rangeHeader = request.headers.get("range");
 
-  try {
-    const ext = key.split(".").pop()?.toLowerCase() ?? "";
-    const isVideo = VIDEO_EXTENSIONS.has(ext);
+  const ext = key.split(".").pop()?.toLowerCase() ?? "";
+  const isVideo = VIDEO_EXTENSIONS.has(ext);
 
+  // ── Playwright e2e stub: serve uploads written to public/e2e-media ──
+  // uploadToR2 writes to the local filesystem in stub mode, but this route
+  // otherwise falls through to the S3 API with fake credentials — producing
+  // TLS handshake errors and test timeouts. Serve the local file directly.
+  if (process.env.PLAYWRIGHT_TEST_MODE === "1" && process.env.PLAYWRIGHT_SUPABASE_MODE === "stub") {
+    try {
+      const fs = await import("node:fs/promises");
+      const path = await import("node:path");
+      const filePath = path.join(process.cwd(), "public", "e2e-media", key);
+      const buffer = await fs.readFile(filePath);
+      const contentType = MIME_MAP[ext] || "application/octet-stream";
+      return new NextResponse(new Uint8Array(buffer), {
+        status: 200,
+        headers: {
+          "Content-Type": contentType,
+          "Content-Length": String(buffer.length),
+          "Cache-Control": "public, max-age=31536000, immutable",
+          "Content-Disposition": `inline; filename="${deriveFilename(key)}"`,
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
+    } catch {
+      return new NextResponse(null, { status: 404 });
+    }
+  }
+
+  try {
     // ── Try native R2 binding first (in-worker, ~2-5x faster) ─────────
     const r2 = await getR2Binding();
     if (r2) {
@@ -539,9 +565,14 @@ export async function GET(
     return NextResponse.json({ error: "Invalid key" }, { status: 400 });
   }
 
-  // Rate-limit: generous threshold (public CDN-cached content)
+  // Rate-limit: generous threshold (public CDN-cached content). The Playwright
+  // e2e suite issues hundreds of media requests (image retries, video range
+  // probes, retries of failed tests) from a single IP, so skip the local
+  // in-memory limiter in stub mode to avoid starving the server.
+  const isE2eStub =
+    process.env.PLAYWRIGHT_TEST_MODE === "1" && process.env.PLAYWRIGHT_SUPABASE_MODE === "stub";
   const ip = getClientIp(request);
-  const rl = checkLocalRateLimit(ip, "media:serve", 300);
+  const rl = isE2eStub ? { limited: false } : checkLocalRateLimit(ip, "media:serve", 300);
   if (rl.limited) {
     return NextResponse.json(
       { error: "Too many requests" },

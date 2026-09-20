@@ -33,12 +33,20 @@ export function useVideoVisibility(
   const visibilityRef = useRef(0);
 
   useEffect(() => {
-    autoplayAllowedRef.current = shouldAutoplay && (!autoplayBlocked || manualPlayback);
+    const allowed = shouldAutoplay && (!autoplayBlocked || manualPlayback);
+    const wasAllowed = autoplayAllowedRef.current;
+    autoplayAllowedRef.current = allowed;
     const el = videoRef.current;
     if (!el) return;
-    if (!autoplayAllowedRef.current) {
-      el.pause();
-      manager.updateVisibility(el, 0);
+    if (!allowed) {
+      // Only pause/report on the allowed → blocked transition. Ambient cards
+      // rerender when unrelated state changes (play state, mute, aspect
+      // ratio); pausing unconditionally here would fight a manual play click
+      // and restart the arbitration loop.
+      if (wasAllowed || !el.paused) {
+        if (!el.paused) el.pause();
+        manager.updateVisibility(el, 0);
+      }
     } else {
       manager.updateVisibility(el, visibilityRef.current);
     }
