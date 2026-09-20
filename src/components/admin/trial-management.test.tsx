@@ -17,10 +17,13 @@ describe("account free-post management", () => {
         claims={[]}
         summary={[]}
         accountSearch="Siya"
-        accounts={[{ user_id: "account-1", display_name: "Siya", remaining: 2 }]}
+        accounts={[
+          { user_id: "account-1", display_name: "Siya", email: "siya@example.com", remaining: 2 },
+        ]}
       />
     );
     expect(screen.getByText("Currently 2 extra free posts remaining")).toBeInTheDocument();
+    expect(screen.getByText("siya@example.com")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save free posts" })).toBeDisabled();
     fireEvent.change(screen.getByLabelText("Reason for change"), {
       target: { value: "Support allowance" },

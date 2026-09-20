@@ -43,7 +43,7 @@ export function TrialManagement({
   campaigns: Campaign[];
   claims: Claim[];
   summary: Summary[];
-  accounts?: { user_id: string; display_name: string; remaining: number }[];
+  accounts?: { user_id: string; display_name: string; email: string | null; remaining: number }[];
   accountSearch?: string;
 }) {
   const [reason, setReason] = useState("");
@@ -71,8 +71,8 @@ export function TrialManagement({
     <div className="space-y-6 p-4">
       <h1 className="text-2xl font-bold">Free Posts & Trials</h1>
       <p className="text-sm text-muted-foreground">
-        One introductory choice per verified identity. Capacity counts active 30-day trials; paid
-        and staff posts are excluded. Changes are audited.
+        One introductory choice per verified identity. Capacity counts active 30-day launch trials;
+        paid posts, staff posts and individual account grants are excluded. Changes are audited.
       </p>
       <label className="block">
         Reason for change
@@ -90,17 +90,17 @@ export function TrialManagement({
         <h2 className="text-lg font-semibold">Free posts for an individual account</h2>
         <p className="text-sm text-muted-foreground">
           Set how many additional free posts this account can still submit across all categories.
-          Each lasts 7 days from approval. Verification and moderation are required. Setting 0
-          removes unused credits; existing submissions are kept.
+          Each new post lasts 30 days from approval. Verification and moderation are required.
+          Setting 0 removes unused credits; existing submissions are kept.
         </p>
         <form action="/admin/trials" method="get" className="flex flex-wrap gap-2 items-end">
           <label className="flex-1">
-            Find account by display name or account ID
+            Find account by email, display name or account ID
             <input
               className="block w-full rounded border p-2"
               name="account"
               required
-              maxLength={100}
+              maxLength={254}
               defaultValue={accountSearch}
             />
           </label>
@@ -108,6 +108,9 @@ export function TrialManagement({
             Find account
           </Button>
         </form>
+        <p className="text-xs text-muted-foreground">
+          Use the full sign-in email for an exact match. Email matching ignores capital letters.
+        </p>
         {accountSearch && accounts.length === 0 && <p>No matching accounts found.</p>}
         {accounts.length === 20 && (
           <p>Showing the first 20 matches. Refine your search if needed.</p>
@@ -125,6 +128,7 @@ export function TrialManagement({
             }}
           >
             <p className="font-semibold">{account.display_name || "Unnamed account"}</p>
+            <p className="text-sm break-all">{account.email || "No sign-in email"}</p>
             <p className="text-xs break-all text-muted-foreground">{account.user_id}</p>
             <p className="text-sm">Currently {account.remaining} extra free posts remaining</p>
             <label className="block">

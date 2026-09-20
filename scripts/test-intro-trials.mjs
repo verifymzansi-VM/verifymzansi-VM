@@ -10,9 +10,9 @@ await db.exec(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_
 CREATE SCHEMA auth;
 CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT nullif(current_setting('test.uid',true),'')::uuid $$;
 CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql AS $$ SELECT nullif(current_setting('test.role',true),'') $$;
-CREATE TABLE auth.users(id uuid PRIMARY KEY,raw_app_meta_data jsonb DEFAULT '{}');
+CREATE TABLE auth.users(id uuid PRIMARY KEY,raw_app_meta_data jsonb DEFAULT '{}',email text);
 CREATE TYPE marketplace_area AS ENUM ('MZANSI_MARKET','MZANSI_BUSINESS','PROMOTIONS_EVENTS');
-CREATE TABLE account_profiles(user_id uuid,account_verification_status text,account_status text,phone text);
+CREATE TABLE account_profiles(user_id uuid,account_verification_status text,account_status text,phone text,display_name text);
 CREATE TABLE verification_steps(user_id uuid,step_type text,status text,id_number_hmac text);
 CREATE TABLE free_posts_used(user_id uuid,area marketplace_area,content_id uuid,release_reason text,released_at timestamptz);
 CREATE TABLE entitlements(id uuid DEFAULT gen_random_uuid(),user_id uuid,area marketplace_area,tier text,type text,status text,expires_at timestamptz);
@@ -27,16 +27,18 @@ for (const f of [
   "20260906041543_trial_management_and_renewal.sql",
   "20260906041600_paid_capacity_for_retained_posts.sql",
   "20260920100000_account_free_posts.sql",
+  "20260920110000_account_trials_30_days_email_search.sql",
 ])
   await db.exec(fs.readFileSync("supabase/migrations/" + f, "utf8"));
 const scalar = async (sql, args) => (await db.query(sql, args)).rows[0];
 const uuid = () => crypto.randomUUID();
 async function user(role = "member", h = uuid()) {
   const id = uuid();
-  await db.query(`INSERT INTO auth.users VALUES($1,$2)`, [id, { role }]);
-  await db.query(`INSERT INTO account_profiles VALUES($1,'verified','active','+27712345678')`, [
-    id,
-  ]);
+  await db.query(`INSERT INTO auth.users(id,raw_app_meta_data) VALUES($1,$2)`, [id, { role }]);
+  await db.query(
+    `INSERT INTO account_profiles(user_id,account_verification_status,account_status,phone) VALUES($1,'verified','active','+27712345678')`,
+    [id]
+  );
   for (const step of ["phone", "id_doc", "selfie", "location"])
     await db.query(`INSERT INTO verification_steps VALUES($1,$2,'approved',$3)`, [
       id,
@@ -306,14 +308,14 @@ await test("account grants work after introductory use, across categories, and b
   await db.query("SELECT set_config('test.uid',$1,false)", [owner]);
   const offer = (await scalar("SELECT intro_trial_offer('MZANSI_MARKET') AS offer")).offer;
   assert.equal(offer.adminFreePostsRemaining, 3);
-  assert.equal(offer.sevenDayAvailable, true);
-  assert.equal(offer.thirtyDayAvailable, false);
+  assert.equal(offer.sevenDayAvailable, false);
+  assert.equal(offer.thirtyDayAvailable, true);
   await db.exec(
     "UPDATE intro_trial_campaigns SET launch_enabled=false,seven_day_enabled=false,slot_limit=0"
   );
-  const a = await reserve(owner, "MZANSI_MARKET", 7);
-  const b = await reserve(owner, "MZANSI_BUSINESS", 7);
-  const c = await reserve(owner, "PROMOTIONS_EVENTS", 7);
+  const a = await reserve(owner, "MZANSI_MARKET", 30);
+  const b = await reserve(owner, "MZANSI_BUSINESS", 30);
+  const c = await reserve(owner, "PROMOTIONS_EVENTS", 30);
   assert(a.ok && b.ok && c.ok);
   assert.equal(await balance(), 0);
   assert.equal((await reserve(owner, "MZANSI_MARKET", 7)).ok, false);
@@ -324,24 +326,24 @@ await test("account grants work after introductory use, across categories, and b
   await live(b.id, "businesses");
   await live(c.id, "promotions");
   const expiry = (await scalar("SELECT expires_at FROM listings WHERE id=$1", [a.id])).expires_at;
-  assert(Math.abs(new Date(expiry) - Date.now() - 7 * 86400000) < 5000);
+  assert(Math.abs(new Date(expiry) - Date.now() - 30 * 86400000) < 5000);
   await db.query("DELETE FROM listings WHERE id=$1", [a.id]);
   assert.equal(await balance(), 0, "deleting a published post does not refund it");
   await set(2);
-  const failed = await reserve(owner, "MZANSI_MARKET", 7);
+  const failed = await reserve(owner, "MZANSI_MARKET", 30);
   assert.equal(await balance(), 1);
   await db.query("SELECT release_intro_trial($1,'MZANSI_MARKET',$2,'create_failed')", [
     owner,
     failed.id,
   ]);
   assert.equal(await balance(), 2);
-  const pending = await reserve(owner, "MZANSI_MARKET", 7);
+  const pending = await reserve(owner, "MZANSI_MARKET", 30);
   await post(owner, pending);
   await set(0);
   await live(pending.id);
   assert.equal(await balance(), 0, "reset does not revoke existing reservations");
   await set(1);
-  const rejected = await reserve(owner, "MZANSI_MARKET", 7);
+  const rejected = await reserve(owner, "MZANSI_MARKET", 30);
   await post(owner, rejected);
   await db.query("UPDATE listings SET status='rejected' WHERE id=$1", [rejected.id]);
   assert.equal(await balance(), 1);
@@ -356,7 +358,7 @@ await test("account grants work after introductory use, across categories, and b
     [owner]
   );
   assert.equal(audit.details.remaining, 1);
-  const stale = await reserve(owner, "MZANSI_MARKET", 7);
+  const stale = await reserve(owner, "MZANSI_MARKET", 30);
   await db.query(
     "UPDATE intro_trial_claims SET created_at=now()-interval '16 minutes' WHERE content_id=$1",
     [stale.id]
@@ -380,6 +382,75 @@ await test("account grants work after introductory use, across categories, and b
     /permission denied/
   );
   await db.exec("RESET ROLE");
+});
+await test("email search distinguishes duplicate names, matches exact sign-in email, and is staff-only", async () => {
+  const actor = await user("admin"),
+    first = await user(),
+    second = await user();
+  await db.query("UPDATE account_profiles SET display_name='Same Name' WHERE user_id IN ($1,$2)", [
+    first,
+    second,
+  ]);
+  await db.query("UPDATE auth.users SET email='first@example.com' WHERE id=$1", [first]);
+  await db.query("UPDATE auth.users SET email='second@example.com' WHERE id=$1", [second]);
+  await db.query("SELECT set_account_free_posts($1,$2,4,'Search balance test')", [actor, second]);
+  const search = async (term, staff = actor) =>
+    (await db.query("SELECT * FROM search_free_post_accounts($1,$2)", [staff, term])).rows;
+  assert.equal((await search("Same Name")).length, 2);
+  assert.deepEqual(await search(" SECOND@EXAMPLE.COM "), [
+    { user_id: second, display_name: "Same Name", email: "second@example.com", remaining: 4 },
+  ]);
+  assert.equal((await search(first))[0].email, "first@example.com");
+  assert.equal((await search("missing@example.com")).length, 0);
+  assert.equal((await search("%")).length, 0, "wildcards are treated literally");
+  assert.equal((await search(" ")).length, 0);
+  assert.equal((await search("a".repeat(255))).length, 0);
+  await assert.rejects(search("Same Name", first), /permission required/);
+  await assert.rejects(search("Same Name", await user("moderator")), /permission required/);
+  await db.exec("SET ROLE authenticated");
+  await assert.rejects(search("Same Name"), /permission denied/);
+  await db.exec("RESET ROLE");
+});
+await test("30-day account grants do not consume launch capacity or skew campaign statistics", async () => {
+  const actor = await user("admin"),
+    owner = await user();
+  const before = (await scalar("SELECT intro_trial_summary() AS summary")).summary;
+  await db.query("SELECT set_account_free_posts($1,$2,1,'Individual 30 day trial')", [
+    actor,
+    owner,
+  ]);
+  const grant = await reserve(owner);
+  assert(grant.ok);
+  await post(owner, grant);
+  const pendingClaim = (
+    await scalar("SELECT id FROM intro_trial_claims WHERE content_id=$1", [grant.id])
+  ).id;
+  await assert.rejects(
+    db.query("SELECT update_own_intro_trial($1,$2,'choose_seven')", [owner, pendingClaim]),
+    /keep their assigned duration/
+  );
+  await live(grant.id);
+  assert.deepEqual((await scalar("SELECT intro_trial_summary() AS summary")).summary, before);
+  const claim = (await scalar("SELECT id FROM intro_trial_claims WHERE content_id=$1", [grant.id]))
+    .id;
+  await db.query("SELECT manage_intro_trial($1,'extend',$2,$3,'Support extension')", [
+    actor,
+    claim,
+    { expiresAt: new Date(Date.now() + 40 * 86400000).toISOString() },
+  ]);
+  const ordinary = await user();
+  await db.exec(
+    "UPDATE intro_trial_campaigns c SET launch_enabled=true,slot_limit=(SELECT count(*) FROM intro_trial_claims t WHERE t.area=c.area AND NOT t.admin_granted AND t.duration_days=30 AND t.activated_at IS NOT NULL AND t.released_at IS NULL AND t.converted_at IS NULL AND t.expires_at>now())+1"
+  );
+  await db.query("SELECT set_config('test.uid',$1,false)", [ordinary]);
+  assert.equal(
+    (await scalar("SELECT intro_trial_offer('MZANSI_MARKET') AS offer")).offer.remaining,
+    1
+  );
+  const launch = await reserve(ordinary);
+  assert(launch.ok);
+  await post(ordinary, launch);
+  await live(launch.id);
 });
 console.log(checks + " database checks passed");
 await db.close();

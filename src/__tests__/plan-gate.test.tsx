@@ -480,43 +480,47 @@ describe("PlanGate", () => {
     );
   });
 
-  it("shows the free-post trial state when one free post remains", async () => {
-    const selectedTrial = vi.fn();
-    mockTrialRpc.mockResolvedValue({
-      data: {
-        eligible: true,
-        sevenDayAvailable: true,
-        thirtyDayAvailable: true,
-        remaining: 50,
-        launchEnabled: true,
-      },
-      error: null,
-    });
-    mockFrom.mockImplementation((table: string) => {
-      if (table === "account_profiles") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
-                data: { id: "sp-1", created_at: new Date().toISOString() },
-                error: null,
+  it.each([false, true])(
+    "shows the correct free-post flow (account grant: %s)",
+    async (accountGrant) => {
+      const selectedTrial = vi.fn();
+      mockTrialRpc.mockResolvedValue({
+        data: {
+          eligible: true,
+          sevenDayAvailable: !accountGrant,
+          thirtyDayAvailable: true,
+          adminFreePostsRemaining: accountGrant ? 3 : 0,
+          remaining: 50,
+          launchEnabled: true,
+        },
+        error: null,
+      });
+      mockFrom.mockImplementation((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: { id: "sp-1", created_at: new Date().toISOString() },
+                  error: null,
+                }),
               }),
             }),
-          }),
-        };
-      }
-      if (table === "entitlements") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 eq: vi.fn().mockReturnValue({
-                  gt: vi.fn().mockReturnValue({
-                    order: vi.fn().mockReturnValue({
-                      limit: vi.fn().mockReturnValue({
-                        maybeSingle: vi.fn().mockResolvedValue({
-                          data: null,
-                          error: null,
+                  eq: vi.fn().mockReturnValue({
+                    gt: vi.fn().mockReturnValue({
+                      order: vi.fn().mockReturnValue({
+                        limit: vi.fn().mockReturnValue({
+                          maybeSingle: vi.fn().mockResolvedValue({
+                            data: null,
+                            error: null,
+                          }),
                         }),
                       }),
                     }),
@@ -524,46 +528,64 @@ describe("PlanGate", () => {
                 }),
               }),
             }),
-          }),
-        };
-      }
-      if (table === "listings") {
-        return createCountQuery(0);
-      }
-      if (table === "free_posts_used") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
+          };
+        }
+        if (table === "listings") {
+          return createCountQuery(0);
+        }
+        if (table === "free_posts_used") {
+          return {
+            select: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                is: vi.fn().mockResolvedValue({ count: 0, error: null }),
+                eq: vi.fn().mockReturnValue({
+                  is: vi.fn().mockResolvedValue({ count: 0, error: null }),
+                }),
               }),
             }),
-          }),
-        };
-      }
+          };
+        }
 
-      return {};
-    });
+        return {};
+      });
 
-    render(
-      <PlanGate area={"MZANSI_MARKET" as never} onTrialSelected={selectedTrial}>
-        <div>Protected Content</div>
-      </PlanGate>
-    );
+      render(
+        <PlanGate area={"MZANSI_MARKET" as never} onTrialSelected={selectedTrial}>
+          <div>Protected Content</div>
+        </PlanGate>
+      );
 
-    await waitFor(() => {
-      expect(screen.getByText(/One introductory post across all three areas/i)).toBeTruthy();
-    });
-    expect(screen.getByRole("button", { name: /Choose 7 Days Free/i })).toBeTruthy();
-    expect(screen.queryByText(/used your free post/i)).toBeNull();
-    // Selecting the launch offer opens the form without reserving or consuming
-    // an entitlement. The posting API receives the duration through the callback.
-    fireEvent.click(screen.getByRole("button", { name: /Choose 30 Days Free/i }));
-    expect(screen.getByText("Protected Content")).toBeTruthy();
-    expect(screen.getByText(/Introductory trial — 30 days/i)).toBeTruthy();
-    expect(selectedTrial).toHaveBeenCalledWith(30);
-    expect(mockTrialRpc.mock.calls.every(([name]) => name === "intro_trial_offer")).toBe(true);
-  });
+      await waitFor(() => {
+        expect(
+          screen.getByText(
+            accountGrant
+              ? /3 extra free posts remaining/i
+              : /One introductory post across all three areas/i
+          )
+        ).toBeTruthy();
+      });
+      expect(
+        screen.getByRole("button", {
+          name: accountGrant ? /Use 30-Day Free Post/i : /Choose 7 Days Free/i,
+        })
+      ).toBeTruthy();
+      expect(screen.queryByText(/used your free post/i)).toBeNull();
+      // Selecting the launch offer opens the form without reserving or consuming
+      // an entitlement. The posting API receives the duration through the callback.
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: accountGrant ? /Use 30-Day Free Post/i : /Choose 30 Days Free/i,
+        })
+      );
+      expect(screen.getByText("Protected Content")).toBeTruthy();
+      expect(
+        screen.getByText(
+          accountGrant ? /Account free post — 30 days/i : /Introductory trial — 30 days/i
+        )
+      ).toBeTruthy();
+      expect(selectedTrial).toHaveBeenCalledWith(30);
+      expect(mockTrialRpc.mock.calls.every(([name]) => name === "intro_trial_offer")).toBe(true);
+    }
+  );
 
   it("keeps tourism business rows from consuming the Mzansi Business gate", async () => {
     mockTrialRpc.mockResolvedValue({

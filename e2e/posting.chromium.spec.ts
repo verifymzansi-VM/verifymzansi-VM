@@ -91,7 +91,9 @@ async function completeListingCreate(page: Page) {
 
   await page.getByRole("button", { name: /Submit for review/i }).click();
   const response = await responsePromise;
-  expect(response.ok(), await response.text()).toBe(true);
+  // Navigation can detach the response body in Chromium; the status and
+  // dashboard/public assertions below verify the completed create request.
+  expect(response.status(), `Listing create returned HTTP ${response.status()}`).toBe(201);
   await expect(page).toHaveURL(/\/dashboard\/listings/);
 
   const editLink = page.getByRole("link", { name: /edit/i }).filter({ hasText: /edit/i }).first();
@@ -115,6 +117,7 @@ async function completeBusinessCreate(page: Page) {
   await enterPostingForm(page, businessTypeLabel);
   await businessTypeLabel.click();
   await page.getByLabel(/Business Name/i).fill(businessName);
+  await page.getByText("Advanced: customise your link", { exact: true }).click();
   await page.getByLabel(/URL Slug/i).fill(businessSlug);
   await page
     .getByRole("button", { name: /fashion/i })

@@ -836,7 +836,7 @@ function PlanPickerWithTrial({
             <span className="text-amber-600 dark:text-amber-400 font-medium">
               {planInfo.postingLimitBypassEnabled
                 ? `Staff / testing access — Unlimited posts • ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`
-                : `Introductory trial — ${trialDays} days • ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`}
+                : `${(planInfo.offer?.adminFreePostsRemaining ?? 0) > 0 ? "Account free post" : "Introductory trial"} — ${trialDays} days • ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`}
             </span>
           </div>
 
@@ -895,17 +895,28 @@ function PlanPickerWithTrial({
                 {planInfo.postingLimitBypassEnabled
                   ? `Each post still uses free-tier media limits: ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video.`
                   : (planInfo.offer?.adminFreePostsRemaining ?? 0) > 0
-                    ? "Your account has extra free posts. Each lasts 7 days from approval with standard placement."
+                    ? "Your account has extra free posts. Each lasts 30 days from approval with standard placement."
                     : "Choose 7 or 30 days once. Standard placement; no boosts, featured placement or urgent badges. Your trial starts on approval. 30-day availability is checked again then."}
               </p>
             </div>
             <Button
               className="gap-2 bg-amber-500 hover:bg-amber-600 text-white shadow-sm border-0 whitespace-nowrap"
-              disabled={!planInfo.postingLimitBypassEnabled && !planInfo.offer?.sevenDayAvailable}
-              onClick={() => selectTrial(7)}
+              disabled={
+                !planInfo.postingLimitBypassEnabled &&
+                !((planInfo.offer?.adminFreePostsRemaining ?? 0) > 0
+                  ? planInfo.offer?.thirtyDayAvailable
+                  : planInfo.offer?.sevenDayAvailable)
+              }
+              onClick={() =>
+                selectTrial((planInfo.offer?.adminFreePostsRemaining ?? 0) > 0 ? 30 : 7)
+              }
             >
               <ArrowRight className="h-4 w-4" />
-              {planInfo.postingLimitBypassEnabled ? "Start Posting" : "Choose 7 Days Free"}
+              {planInfo.postingLimitBypassEnabled
+                ? "Start Posting"
+                : (planInfo.offer?.adminFreePostsRemaining ?? 0) > 0
+                  ? "Use 30-Day Free Post"
+                  : "Choose 7 Days Free"}
             </Button>
           </div>
         </div>

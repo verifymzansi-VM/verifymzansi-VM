@@ -10,6 +10,7 @@ import { hasCapability } from "@/lib/auth/roles";
 type Claim = {
   id: string;
   duration_days: number;
+  admin_granted: boolean;
   activated_at: string | null;
   expires_at: string | null;
   released_at: string | null;
@@ -17,6 +18,7 @@ type Claim = {
 };
 export function IntroductoryTrialCard() {
   const [eligible, setEligible] = useState(false);
+  const [freePostsRemaining, setFreePostsRemaining] = useState(0);
   const [claim, setClaim] = useState<Claim | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -32,14 +34,15 @@ export function IntroductoryTrialCard() {
         getActiveFreePostUsage(client, user.id, "MZANSI_MARKET"),
         client
           .from("intro_trial_claims")
-          .select("id,duration_days,activated_at,expires_at,released_at,converted_at")
+          .select("id,duration_days,admin_granted,activated_at,expires_at,released_at,converted_at")
           .eq("user_id", user.id)
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle(),
       ]);
       if (alive) {
-        setEligible(usage.offer?.eligible ?? false);
+        setEligible(usage.available);
+        setFreePostsRemaining(usage.offer?.adminFreePostsRemaining ?? 0);
         setClaim(claims.data);
       }
     }
@@ -71,13 +74,16 @@ export function IntroductoryTrialCard() {
   if (!eligible && (!claim || claim.converted_at || (!claim.activated_at && claim.released_at)))
     return null;
   return (
-    <section className="rounded-xl border bg-card p-5 space-y-3" aria-label="Introductory trial">
+    <section className="rounded-xl border bg-card p-5 space-y-3" aria-label="Free posts and trials">
       {eligible ? (
         <>
-          <h2 className="font-semibold">Your Free Launch Offer</h2>
+          <h2 className="font-semibold">
+            {freePostsRemaining > 0 ? "Your Free Posts" : "Your Free Launch Offer"}
+          </h2>
           <p className="text-sm text-muted-foreground">
-            Choose one free 7-day post or a limited 30-day launch trial across Mzansi Market, Mzansi
-            Business and Tourism &amp; Events. Select your offer while posting. No automatic charge.
+            {freePostsRemaining > 0
+              ? `${freePostsRemaining} extra free posts remaining across all categories. Each lasts 30 days from approval. No automatic charge.`
+              : "Choose one free 7-day post or a limited 30-day launch trial across Mzansi Market, Mzansi Business and Tourism & Events. Select your offer while posting. No automatic charge."}
           </p>
           <Button asChild>
             <Link href="/post/create">Choose a posting area</Link>
@@ -85,14 +91,19 @@ export function IntroductoryTrialCard() {
         </>
       ) : (
         <>
-          <h2 className="font-semibold">Your {claim?.duration_days}-day introductory trial</h2>
+          <h2 className="font-semibold">
+            Your {claim?.duration_days}-day{" "}
+            {claim?.admin_granted ? "free post" : "introductory trial"}
+          </h2>
           <p className="text-sm">
             {claim?.activated_at
               ? `Trial visibility ends ${new Date(claim.expires_at!).toLocaleString("en-ZA")}. Your content stays saved for renewal.`
-              : "Your post is awaiting review. The trial starts only when approved; 30-day capacity is checked then."}
+              : claim?.admin_granted
+                ? `Your post is awaiting review. Your ${claim.duration_days} free days start when approved.`
+                : "Your post is awaiting review. The trial starts only when approved; 30-day capacity is checked then."}
           </p>
           <div className="flex flex-wrap gap-2">
-            {!claim?.activated_at && claim?.duration_days === 30 && (
+            {!claim?.admin_granted && !claim?.activated_at && claim?.duration_days === 30 && (
               <Button variant="outline" disabled={busy} onClick={() => update("choose_seven")}>
                 Switch pending post to 7 days
               </Button>

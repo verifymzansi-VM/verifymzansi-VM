@@ -99,6 +99,7 @@ async function completeMobileBusinessCreate(page: Page) {
   await enterPostingForm(page, businessTypeLabel);
   await businessTypeLabel.click();
   await page.getByLabel(/Business Name/i).fill(businessName);
+  await page.getByText("Advanced: customise your link", { exact: true }).click();
   await page.getByLabel(/URL Slug/i).fill(businessSlug);
   await page
     .getByRole("button", { name: /fashion/i })

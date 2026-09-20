@@ -3,7 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
 import { TrialManagement } from "@/components/admin/trial-management";
-import { z } from "zod";
 
 export const metadata = { title: "Free Posts & Trials" };
 export default async function TrialManagementPage({
@@ -19,25 +18,20 @@ export default async function TrialManagementPage({
   if (!(await verifyCapabilityFromDb(user, "trials:manage"))) redirect("/admin");
   const admin = createAdminClient();
   const params = await searchParams;
-  const search = typeof params.account === "string" ? params.account.trim().slice(0, 100) : "";
-  let accounts: { user_id: string; display_name: string; remaining: number }[] = [];
+  const search = typeof params.account === "string" ? params.account.trim().slice(0, 254) : "";
+  let accounts: {
+    user_id: string;
+    display_name: string;
+    email: string | null;
+    remaining: number;
+  }[] = [];
   if (search) {
-    const query = admin.from("account_profiles").select("user_id,display_name").limit(20);
-    const result = await (z.uuid().safeParse(search).success
-      ? query.eq("user_id", search)
-      : query
-          .ilike("display_name", `%${search.replace(/[\\%_]/g, "\\$&")}%`)
-          .order("display_name"));
+    const result = await admin.rpc("search_free_post_accounts", {
+      p_actor_id: user.id,
+      p_search: search,
+    });
     if (result.error) throw new Error("Unable to search accounts");
-    accounts = await Promise.all(
-      (result.data ?? []).map(async (account) => {
-        const balance = await admin.rpc("account_free_posts_remaining", {
-          p_user_id: account.user_id,
-        });
-        if (balance.error) throw new Error("Unable to load account free posts");
-        return { ...account, remaining: balance.data as number };
-      })
-    );
+    accounts = result.data ?? [];
   }
   const [campaigns, claims, summary] = await Promise.all([
     admin.from("intro_trial_campaigns").select("*"),
