@@ -3,6 +3,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
+import { useEffect } from "react";
 import { VideoPlaybackProvider, useVideoPlaybackManager } from "@/contexts/video-playback-context";
 
 /* ------------------------------------------------------------------ */
@@ -43,6 +44,29 @@ function wrapper({ children }: { children: React.ReactNode }) {
 /* ------------------------------------------------------------------ */
 
 describe("VideoPlaybackContext", () => {
+  it("does not schedule arbitration from child cleanup after provider unmount", () => {
+    const video = makeVideo("cleanup");
+    const { unmount } = renderHook(
+      () => {
+        const manager = useVideoPlaybackManager();
+        useEffect(() => {
+          manager.register(video);
+          manager.updateVisibility(video, 0.9);
+          return () => {
+            manager.unregister(video);
+            manager.releasePriority(video);
+          };
+        }, [manager]);
+      },
+      { wrapper }
+    );
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+    vi.advanceTimersByTime(100);
+    expect(video.play).not.toHaveBeenCalled();
+  });
+
   it("does not let a delayed canplay retry undo a pause before arbitration", async () => {
     const { result } = renderHook(() => useVideoPlaybackManager(), { wrapper });
     const video = makeVideo("delayed");

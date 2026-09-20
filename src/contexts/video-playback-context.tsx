@@ -53,6 +53,7 @@ export function VideoPlaybackProvider({ children }: { children: React.ReactNode 
   const activeRef = useRef<HTMLVideoElement | null>(null);
   // Debounce timer for arbitration
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const disposedRef = useRef(false);
   // Active exclusive lock holder (e.g. lightbox/modal)
   const exclusiveRef = useRef<string | null>(null);
   // Play-event listeners keyed per element (for cleanup in unregister)
@@ -63,7 +64,7 @@ export function VideoPlaybackProvider({ children }: { children: React.ReactNode 
 
   const arbitrate = useCallback(() => {
     // If exclusive lock is held, do not arbitrate — videos stay paused
-    if (exclusiveRef.current || document.hidden) return;
+    if (disposedRef.current || exclusiveRef.current || document.hidden) return;
 
     const videos = videosRef.current;
     const priority = priorityRef.current;
@@ -143,6 +144,7 @@ export function VideoPlaybackProvider({ children }: { children: React.ReactNode 
   }, []);
 
   const scheduleArbitration = useCallback(() => {
+    if (disposedRef.current) return;
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(arbitrate, 80);
   }, [arbitrate]);
@@ -270,6 +272,9 @@ export function VideoPlaybackProvider({ children }: { children: React.ReactNode 
   );
 
   useEffect(() => {
+    disposedRef.current = false;
+    // Resume scheduling after React's Strict Mode effect cleanup/re-setup.
+    if (videosRef.current.size > 0) scheduleArbitration();
     const onVisibilityChange = () => {
       if (document.hidden) {
         if (timerRef.current) clearTimeout(timerRef.current);
@@ -282,8 +287,12 @@ export function VideoPlaybackProvider({ children }: { children: React.ReactNode 
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
+      // Parent cleanup runs before child unregister/release callbacks. Prevent
+      // those callbacks from creating a new timer after this one is cancelled.
+      disposedRef.current = true;
       document.removeEventListener("visibilitychange", onVisibilityChange);
       if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = null;
     };
   }, [scheduleArbitration]);
 
