@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as TurnstileClient from "@/lib/turnstile-client";
 import LoginPage from "./page";
@@ -136,6 +136,12 @@ describe("LoginPage", () => {
         expect.objectContaining({ title: "Confirmation email sent" })
       )
     );
+    // The resend handler's finally block resets the single-use CAPTCHA: it
+    // clears the consumed token and bumps the widget retryToken, and the
+    // mocked widget re-issues the fresh token from a passive effect. Flush
+    // that effect before submitting so the login payload carries the new
+    // token instead of racing it (this flaked under CI load).
+    await act(async () => {});
     fireEvent.click(screen.getByRole("button", { name: /^Sign in$/i }));
     await waitFor(() => expect(pushMock).toHaveBeenCalled());
     expect(consumed.size).toBe(2);
