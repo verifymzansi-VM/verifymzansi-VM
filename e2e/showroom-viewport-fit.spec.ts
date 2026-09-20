@@ -66,9 +66,16 @@ for (const viewport of sizes) {
       expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
       const mediaBox = (await card.locator("[data-card-media]").boundingBox())!;
       // The portrait video must fill its frame without the widened side bars.
-      expect(Math.abs(mediaBox.width - (mediaBox.height * 9) / 16)).toBeLessThan(1);
+      // Landscape phone layouts switch the card to a side-by-side grid (globals.css
+      // @media (min-width: 640px) and (max-height: 500px)), so the media no longer
+      // keeps the 9:16 aspect there.
+      const landscapeLayout = viewport.width >= 640 && viewport.height <= 500;
+      if (!landscapeLayout) {
+        expect(Math.abs(mediaBox.width - (mediaBox.height * 9) / 16)).toBeLessThan(1);
+      }
       if (viewport.width === 390 && viewport.height === 844) {
-        expect(box.width).toBeCloseTo(272, 0);
+        // Matches --showroom-card-width (260px), the mobile card width cap in globals.css.
+        expect(box.width).toBeCloseTo(260, 0);
       }
       const showroomBox = (await showroom.boundingBox())!;
       expect(box.y).toBeGreaterThanOrEqual(showroomBox.y);

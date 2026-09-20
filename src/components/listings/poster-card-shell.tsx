@@ -173,13 +173,13 @@ export function PosterCardShell({
       ? "text-[13px] sm:text-[14px]"
       : "text-xs sm:text-sm";
   const descriptionClassName = isHeroVariant
-    ? "text-[12px] sm:text-[13px]"
+    ? "text-[12px] leading-[18px]"
     : "text-xs sm:text-[13px]";
   const locationClassName = isHeroVariant
-    ? "text-[11.5px] sm:text-[12.5px]"
+    ? "text-[11.5px] leading-[17px]"
     : "text-[11px] sm:text-xs";
   const eyebrowTextClassName = isHeroVariant
-    ? "text-[11.5px] sm:text-[12.5px]"
+    ? "text-[11.5px] leading-[17px]"
     : "text-[11px] sm:text-xs";
   const wrapperClassName = cn(
     "group/poster group relative block h-full w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
@@ -204,8 +204,9 @@ export function PosterCardShell({
   const metadataClassName = cn("flex flex-1", contentPaddingClassName, contentClassName);
   const metadataBody = (
     <div className={metadataClassName} data-card-metadata>
-      {/* Channel avatar / logo */}
-      <div className="mt-0.5 shrink-0">
+      {/* Channel avatar / logo — the nudge uses translate so it does not
+          inflate the height-capped metadata row's scroll height. */}
+      <div className={cn("shrink-0", isHeroVariant ? "translate-y-0.5" : "mt-0.5")}>
         {normalizedLogoUrl ? (
           <div
             className={cn(
@@ -240,13 +241,18 @@ export function PosterCardShell({
       <div className="min-w-0 flex-1">
         <h3
           className={cn(
-            "font-display font-semibold leading-tight text-slate-900 line-clamp-2 dark:text-white",
+            "font-display font-semibold leading-tight text-slate-900 dark:text-white",
+            // Hero/showroom metadata is height-capped (64px); a wrapped title
+            // would overflow the row, so keep it to a single line there.
+            isHeroVariant ? "truncate" : "line-clamp-2",
             titleClassName
           )}
         >
           {title}
         </h3>
-        {description ? (
+        {description && !isHeroVariant ? (
+          // Showroom (hero) metadata is capped at two compact rows
+          // (title + location/price); other surfaces keep the extra line.
           <p
             className={cn(
               "mt-0.5 leading-tight text-slate-500 line-clamp-1 dark:text-slate-400",

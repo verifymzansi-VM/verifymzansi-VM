@@ -210,7 +210,6 @@ test.describe("Card video autoplay", () => {
   for (const route of routes) {
     test(`${route.name} supports manual play and pause without opening the card`, async ({
       page,
-      isMobile,
     }) => {
       await page.emulateMedia({ reducedMotion: "reduce" });
       await installMediaPlaybackShim(page);
@@ -255,10 +254,8 @@ test.describe("Card video autoplay", () => {
       await card.getByRole("button", { name: "Mute", exact: true }).click();
       await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(false);
       expect(page.url()).toBe(url);
-      if (!isMobile) {
-        await expect(card.getByRole("button", { name: /Pause video/ })).toHaveCount(0);
-        return;
-      }
+      // The pause control stays visible on desktop cards too (44px hit target),
+      // so every project exercises the same manual pause flow.
       await card
         .getByRole("button", { name: /Pause video/ })
         .last()

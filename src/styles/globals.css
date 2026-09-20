@@ -372,7 +372,7 @@
 @layer components {
   .showroom-viewport {
     /* Header, mobile navigation, section padding, controls, and metadata. */
-    --showroom-reserved-height: calc(262px + env(safe-area-inset-bottom, 0px));
+    --showroom-reserved-height: calc(272px + env(safe-area-inset-bottom, 0px));
     --showroom-card-width: 260px;
     padding-block: 16px;
   }
@@ -436,7 +436,7 @@
     .showroom-viewport {
       --showroom-card-width: 440px;
       /* Use the space recovered from the desktop padding, details, and controls. */
-      --showroom-reserved-height: 180px;
+      --showroom-reserved-height: 196px;
       padding-block: 8px;
     }
 

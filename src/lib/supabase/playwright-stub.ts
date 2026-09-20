@@ -696,6 +696,56 @@ export function createPlaywrightStubSupabaseClient(
     },
     async rpc(fn: string, params?: Record<string, unknown>) {
       if (fn === "fulfill_ozow_payment") return fulfillPlaywrightPayment(params);
+      if (fn === "reserve_intro_trial") {
+        // E2E personas are always verified members, so the identity gate from
+        // intro_trial_identity() is treated as satisfied. Mirror the claim
+        // ledger so trial-aware screens keep working.
+        const userId = String(params?.p_user_id ?? "");
+        const area = String(params?.p_area ?? "");
+        const contentId = String(params?.p_content_id ?? "");
+        const durationDays = Number(params?.p_duration_days ?? 7);
+        const rows = listPlaywrightTableRows("intro_trial_claims");
+        const existingRow = rows.find(
+          (row) => row.user_id === userId && row.content_id === contentId && row.released_at == null
+        );
+        if (existingRow) {
+          return { data: true, error: null };
+        }
+        rows.push({
+          id: crypto.randomUUID(),
+          user_id: userId,
+          area,
+          content_id: contentId,
+          content_table: null,
+          duration_days: durationDays,
+          admin_granted: false,
+          created_at: new Date().toISOString(),
+          activated_at: null,
+          expires_at: null,
+          released_at: null,
+          release_reason: null,
+          converted_at: null,
+        });
+        writePlaywrightTableRows("intro_trial_claims", rows);
+        return { data: true, error: null };
+      }
+      if (fn === "release_intro_trial") {
+        const userId = String(params?.p_user_id ?? "");
+        const contentId = String(params?.p_content_id ?? "");
+        const reason = String(params?.p_reason ?? "released");
+        const rows = listPlaywrightTableRows("intro_trial_claims");
+        const row = rows.find(
+          (entry) =>
+            entry.user_id === userId && entry.content_id === contentId && entry.released_at == null
+        );
+        if (!row) {
+          return { data: false, error: null };
+        }
+        row.released_at = new Date().toISOString();
+        row.release_reason = reason;
+        writePlaywrightTableRows("intro_trial_claims", rows);
+        return { data: true, error: null };
+      }
       if (fn === "claim_free_post_slot") {
         const userId = String(params?.p_user_id ?? "");
         const area = String(params?.p_area ?? "");

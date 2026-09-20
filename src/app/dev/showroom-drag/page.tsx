@@ -48,7 +48,7 @@ export default function ShowroomDragPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 py-12">
+    <main className="min-h-screen bg-slate-950 py-4">
       <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4">
         <div className="max-w-2xl text-white">
           <h1 className="text-2xl font-semibold">Showroom Drag Test</h1>
