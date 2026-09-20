@@ -6,6 +6,19 @@ import {
   trialAvailabilityMessage,
 } from "./free-posts";
 describe("introductory trial client", () => {
+  it("shows the account's extra free-post balance", async () => {
+    const offer = {
+      eligible: true,
+      sevenDayAvailable: true,
+      thirtyDayAvailable: false,
+      adminFreePostsRemaining: 3,
+    };
+    const rpc = vi.fn().mockResolvedValue({ data: offer, error: null });
+    expect(await getActiveFreePostUsage({ rpc } as never, "u", "MZANSI_MARKET")).toMatchObject({
+      remaining: 3,
+      available: true,
+    });
+  });
   it("binds eligibility to the authenticated RPC, not a supplied user or category", async () => {
     const offer = {
       eligible: true,

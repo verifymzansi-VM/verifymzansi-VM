@@ -26,6 +26,7 @@ for (const f of [
   "20260906041522_introductory_trials.sql",
   "20260906041543_trial_management_and_renewal.sql",
   "20260906041600_paid_capacity_for_retained_posts.sql",
+  "20260920100000_account_free_posts.sql",
 ])
   await db.exec(fs.readFileSync("supabase/migrations/" + f, "utf8"));
 const scalar = async (sql, args) => (await db.query(sql, args)).rows[0];
@@ -284,6 +285,100 @@ await test("ordinary authenticated database role cannot inspect identities or ca
     /permission denied/
   );
   await assert.rejects(db.exec("SELECT intro_trial_summary()"), /permission denied/);
+  await db.exec("RESET ROLE");
+});
+await test("account grants work after introductory use, across categories, and beyond campaign limits", async () => {
+  const actor = await user("admin");
+  const owner = await user();
+  const intro = await reserve(owner, "MZANSI_MARKET", 7);
+  await post(owner, intro);
+  await live(intro.id);
+  const set = (remaining) =>
+    db.query("SELECT set_account_free_posts($1,$2,$3,'Support allowance')", [
+      actor,
+      owner,
+      remaining,
+    ]);
+  const balance = async () =>
+    (await scalar("SELECT account_free_posts_remaining($1) AS n", [owner])).n;
+  await set(3);
+  assert.equal(await balance(), 3);
+  await db.query("SELECT set_config('test.uid',$1,false)", [owner]);
+  const offer = (await scalar("SELECT intro_trial_offer('MZANSI_MARKET') AS offer")).offer;
+  assert.equal(offer.adminFreePostsRemaining, 3);
+  assert.equal(offer.sevenDayAvailable, true);
+  assert.equal(offer.thirtyDayAvailable, false);
+  await db.exec(
+    "UPDATE intro_trial_campaigns SET launch_enabled=false,seven_day_enabled=false,slot_limit=0"
+  );
+  const a = await reserve(owner, "MZANSI_MARKET", 7);
+  const b = await reserve(owner, "MZANSI_BUSINESS", 7);
+  const c = await reserve(owner, "PROMOTIONS_EVENTS", 7);
+  assert(a.ok && b.ok && c.ok);
+  assert.equal(await balance(), 0);
+  assert.equal((await reserve(owner, "MZANSI_MARKET", 7)).ok, false);
+  await post(owner, a);
+  await post(owner, b, "businesses", "MZANSI_BUSINESS");
+  await post(owner, c, "promotions", "PROMOTIONS_EVENTS");
+  await live(a.id);
+  await live(b.id, "businesses");
+  await live(c.id, "promotions");
+  const expiry = (await scalar("SELECT expires_at FROM listings WHERE id=$1", [a.id])).expires_at;
+  assert(Math.abs(new Date(expiry) - Date.now() - 7 * 86400000) < 5000);
+  await db.query("DELETE FROM listings WHERE id=$1", [a.id]);
+  assert.equal(await balance(), 0, "deleting a published post does not refund it");
+  await set(2);
+  const failed = await reserve(owner, "MZANSI_MARKET", 7);
+  assert.equal(await balance(), 1);
+  await db.query("SELECT release_intro_trial($1,'MZANSI_MARKET',$2,'create_failed')", [
+    owner,
+    failed.id,
+  ]);
+  assert.equal(await balance(), 2);
+  const pending = await reserve(owner, "MZANSI_MARKET", 7);
+  await post(owner, pending);
+  await set(0);
+  await live(pending.id);
+  assert.equal(await balance(), 0, "reset does not revoke existing reservations");
+  await set(1);
+  const rejected = await reserve(owner, "MZANSI_MARKET", 7);
+  await post(owner, rejected);
+  await db.query("UPDATE listings SET status='rejected' WHERE id=$1", [rejected.id]);
+  assert.equal(await balance(), 1);
+  await assert.rejects(set(-1), /Invalid free post count/);
+  await assert.rejects(set(10001), /Invalid free post count/);
+  await assert.rejects(
+    db.query("SELECT set_account_free_posts($1,$1,9,'Self grant attempt')", [owner]),
+    /permission required/
+  );
+  const audit = await scalar(
+    "SELECT details FROM intro_trial_audit WHERE target_id=$1 AND action='set_account_free_posts' ORDER BY created_at DESC LIMIT 1",
+    [owner]
+  );
+  assert.equal(audit.details.remaining, 1);
+  const stale = await reserve(owner, "MZANSI_MARKET", 7);
+  await db.query(
+    "UPDATE intro_trial_claims SET created_at=now()-interval '16 minutes' WHERE content_id=$1",
+    [stale.id]
+  );
+  await set(0);
+  await post(owner, stale);
+  await assert.rejects(live(stale.id), /TRIAL_RELEASED/);
+  await set(1);
+  await db.query("UPDATE account_profiles SET account_status='suspended' WHERE user_id=$1", [
+    owner,
+  ]);
+  assert.equal((await reserve(owner, "MZANSI_MARKET", 7)).ok, false);
+  assert.equal(
+    (await scalar("SELECT intro_trial_offer('MZANSI_MARKET') AS offer")).offer.sevenDayAvailable,
+    false
+  );
+  await db.exec("SET ROLE authenticated");
+  await assert.rejects(db.exec("SELECT * FROM account_free_post_allowances"), /permission denied/);
+  await assert.rejects(
+    db.query("SELECT set_account_free_posts($1,$2,9,'Self grant attempt')", [actor, owner]),
+    /permission denied/
+  );
   await db.exec("RESET ROLE");
 });
 console.log(checks + " database checks passed");

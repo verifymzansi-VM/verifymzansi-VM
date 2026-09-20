@@ -17,6 +17,7 @@ type Claim = {
   area: MarketplaceArea;
   content_id: string;
   duration_days: number;
+  admin_granted?: boolean;
   activated_at: string | null;
   expires_at: string | null;
   released_at: string | null;
@@ -36,10 +37,14 @@ export function TrialManagement({
   campaigns,
   claims,
   summary,
+  accounts = [],
+  accountSearch = "",
 }: {
   campaigns: Campaign[];
   claims: Claim[];
   summary: Summary[];
+  accounts?: { user_id: string; display_name: string; remaining: number }[];
+  accountSearch?: string;
 }) {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -64,7 +69,7 @@ export function TrialManagement({
   }
   return (
     <div className="space-y-6 p-4">
-      <h1 className="text-2xl font-bold">Free Trial Management</h1>
+      <h1 className="text-2xl font-bold">Free Posts & Trials</h1>
       <p className="text-sm text-muted-foreground">
         One introductory choice per verified identity. Capacity counts active 30-day trials; paid
         and staff posts are excluded. Changes are audited.
@@ -81,6 +86,64 @@ export function TrialManagement({
         />
       </label>
       {message && <p role="alert">{message}</p>}
+      <section className="rounded border p-4 space-y-4">
+        <h2 className="text-lg font-semibold">Free posts for an individual account</h2>
+        <p className="text-sm text-muted-foreground">
+          Set how many additional free posts this account can still submit across all categories.
+          Each lasts 7 days from approval. Verification and moderation are required. Setting 0
+          removes unused credits; existing submissions are kept.
+        </p>
+        <form action="/admin/trials" method="get" className="flex flex-wrap gap-2 items-end">
+          <label className="flex-1">
+            Find account by display name or account ID
+            <input
+              className="block w-full rounded border p-2"
+              name="account"
+              required
+              maxLength={100}
+              defaultValue={accountSearch}
+            />
+          </label>
+          <Button type="submit" variant="outline">
+            Find account
+          </Button>
+        </form>
+        {accountSearch && accounts.length === 0 && <p>No matching accounts found.</p>}
+        {accounts.length === 20 && (
+          <p>Showing the first 20 matches. Refine your search if needed.</p>
+        )}
+        {accounts.map((account) => (
+          <form
+            key={account.user_id}
+            className="rounded border p-3 space-y-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const data = new FormData(event.currentTarget);
+              void save("set_account_free_posts", account.user_id, {
+                remaining: Number(data.get("remaining")),
+              });
+            }}
+          >
+            <p className="font-semibold">{account.display_name || "Unnamed account"}</p>
+            <p className="text-xs break-all text-muted-foreground">{account.user_id}</p>
+            <p className="text-sm">Currently {account.remaining} extra free posts remaining</p>
+            <label className="block">
+              Free posts remaining
+              <input
+                className="block w-32 rounded border p-2"
+                type="number"
+                name="remaining"
+                min={0}
+                max={10000}
+                step={1}
+                required
+                defaultValue={account.remaining}
+              />
+            </label>
+            <Button disabled={busy || reason.trim().length < 5}>Save free posts</Button>
+          </form>
+        ))}
+      </section>
       <div className="grid gap-4 lg:grid-cols-3">
         {campaigns.map((c) => {
           const stats = summary.find((s) => s.area === c.area);
@@ -134,7 +197,7 @@ export function TrialManagement({
           );
         })}
       </div>
-      <h2 className="text-lg font-semibold">Latest 100 trial submissions</h2>
+      <h2 className="text-lg font-semibold">Latest 100 free post submissions</h2>
       <p className="text-sm">
         Conversion uses all activated trials as its denominator. Extensions apply only to active
         30-day trials and cannot exceed 60 days from activation.
@@ -162,6 +225,7 @@ export function TrialManagement({
                   </Link>
                 </td>
                 <td>
+                  {t.admin_granted ? "Account grant · " : "Introductory trial · "}
                   {t.duration_days} days ·{" "}
                   {t.converted_at
                     ? "Paid"

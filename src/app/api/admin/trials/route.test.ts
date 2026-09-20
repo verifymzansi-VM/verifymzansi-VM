@@ -50,4 +50,40 @@ describe("trial management API", () => {
     expect(response.status).toBe(409);
     expect(await response.text()).not.toContain("internal secret");
   });
+  it("sets the account balance using the verified actor", async () => {
+    const target = "e416d52a-55ea-490b-b6c9-f8c5055305fa";
+    expect(
+      (
+        await POST(
+          request({
+            action: "set_account_free_posts",
+            target,
+            reason: "Support allowance",
+            values: { remaining: 3 },
+          })
+        )
+      ).status
+    ).toBe(200);
+    expect(rpc).toHaveBeenCalledWith("set_account_free_posts", {
+      p_actor_id: "staff-id",
+      p_user_id: target,
+      p_remaining: 3,
+      p_reason: "Support allowance",
+    });
+  });
+  it.each([-1, 1.5, 10001, "3", null])(
+    "rejects invalid free-post balance %s",
+    async (remaining) => {
+      const response = await POST(
+        request({
+          action: "set_account_free_posts",
+          target: "e416d52a-55ea-490b-b6c9-f8c5055305fa",
+          reason: "Support allowance",
+          values: { remaining },
+        })
+      );
+      expect(response.status).toBeGreaterThanOrEqual(400);
+      expect(rpc).not.toHaveBeenCalled();
+    }
+  );
 });

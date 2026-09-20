@@ -140,7 +140,7 @@ function buildGovernanceSections(newSupportRequests: number): NavSection[] {
       label: "Oversight",
       items: [
         { href: "/admin/governance/oversight", label: "Oversight Hub", icon: Eye },
-        { href: "/admin/trials", label: "Free Trials", icon: ToggleLeft },
+        { href: "/admin/trials", label: "Free Posts & Trials", icon: ToggleLeft },
         { href: "/admin/audit-log", label: "Audit Log", icon: ScrollText },
         { href: "/admin/governance/roles", label: "Role Management", icon: Users },
       ],
@@ -250,7 +250,7 @@ function buildAdminSections(
       label: "Tools",
       items: [
         { href: "/admin/feature-flags", label: "Feature Flags", icon: ToggleLeft },
-        { href: "/admin/trials", label: "Free Trials", icon: ToggleLeft },
+        { href: "/admin/trials", label: "Free Posts & Trials", icon: ToggleLeft },
       ],
     },
   ];

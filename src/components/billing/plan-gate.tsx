@@ -886,13 +886,17 @@ function PlanPickerWithTrial({
                 <p className="text-xs text-amber-200">
                   {planInfo.postingLimitBypassEnabled
                     ? `Posting limits bypassed — ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`
-                    : "One introductory post across all three areas"}
+                    : (planInfo.offer?.adminFreePostsRemaining ?? 0) > 0
+                      ? `${planInfo.offer?.adminFreePostsRemaining} extra free posts remaining across all categories`
+                      : "One introductory post across all three areas"}
                 </p>
               </div>
               <p className="text-white/70 text-xs">
                 {planInfo.postingLimitBypassEnabled
                   ? `Each post still uses free-tier media limits: ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video.`
-                  : "Choose 7 or 30 days once. Standard placement; no boosts, featured placement or urgent badges. Your trial starts on approval. 30-day availability is checked again then."}
+                  : (planInfo.offer?.adminFreePostsRemaining ?? 0) > 0
+                    ? "Your account has extra free posts. Each lasts 7 days from approval with standard placement."
+                    : "Choose 7 or 30 days once. Standard placement; no boosts, featured placement or urgent badges. Your trial starts on approval. 30-day availability is checked again then."}
               </p>
             </div>
             <Button
@@ -917,21 +921,24 @@ function PlanPickerWithTrial({
         </div>
       )}
 
-      {planInfo.offer && planInfo.isTrial && !planInfo.postingLimitBypassEnabled && (
-        <div className="rounded-lg border p-4 space-y-2">
-          <p className="font-semibold">30-Day Free Launch Trial</p>
-          <p className="text-sm text-muted-foreground">
-            {trialAvailabilityMessage(planInfo.offer)}
-          </p>
-          <Button disabled={!planInfo.offer.thirtyDayAvailable} onClick={() => selectTrial(30)}>
-            Choose 30 Days Free
-          </Button>
-          <p className="text-xs text-muted-foreground">
-            One post, one introductory choice. No automatic charge or free renewal. If capacity
-            fills before approval, your post stays pending; you can choose seven days instead.
-          </p>
-        </div>
-      )}
+      {planInfo.offer &&
+        planInfo.isTrial &&
+        !planInfo.postingLimitBypassEnabled &&
+        !(planInfo.offer.adminFreePostsRemaining ?? 0) && (
+          <div className="rounded-lg border p-4 space-y-2">
+            <p className="font-semibold">30-Day Free Launch Trial</p>
+            <p className="text-sm text-muted-foreground">
+              {trialAvailabilityMessage(planInfo.offer)}
+            </p>
+            <Button disabled={!planInfo.offer.thirtyDayAvailable} onClick={() => selectTrial(30)}>
+              Choose 30 Days Free
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              One post, one introductory choice. No automatic charge or free renewal. If capacity
+              fills before approval, your post stays pending; you can choose seven days instead.
+            </p>
+          </div>
+        )}
       {/* ── Section 2: Monthly Plans ─── */}
       <div className="space-y-2">
         <h3 className="font-display text-sm font-bold flex items-center gap-2">

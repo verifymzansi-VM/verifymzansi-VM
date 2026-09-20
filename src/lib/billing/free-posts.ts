@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MarketplaceArea } from "@/types/enums";
 export type IntroTrialOffer = {
+  adminFreePostsRemaining?: number;
   eligible: boolean;
   sevenDayAvailable: boolean;
   thirtyDayAvailable: boolean;
@@ -35,7 +36,12 @@ export async function getActiveFreePostUsage(
   if (error || !data) throw new Error("Unable to check introductory offer");
   const offer = data as IntroTrialOffer;
   const available = offer.eligible && (offer.sevenDayAvailable || offer.thirtyDayAvailable);
-  return { used: offer.eligible ? 0 : 1, remaining: available ? 1 : 0, available, offer };
+  return {
+    used: offer.eligible ? 0 : 1,
+    remaining: available ? Math.max(1, offer.adminFreePostsRemaining ?? 0) : 0,
+    available,
+    offer,
+  };
 }
 export async function claimFreePostSlot(
   admin: SupabaseClient,
