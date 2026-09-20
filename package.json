@@ -45,7 +45,7 @@
     "secret-scan": "tsx scripts/secret-scan.ts",
     "secret-scan:strict": "tsx scripts/secret-scan.ts --strict",
     "test": "pnpm test:blocking",
-    "test:blocking": "tsx scripts/run-vitest.ts blocking && pnpm test:trials && pnpm test:payments:db && pnpm test:media:db",
+    "test:blocking": "tsx scripts/run-vitest.ts blocking && pnpm test:trials && pnpm test:payments:db && pnpm test:media:db && pnpm test:visits:db",
     "stability:check": "pnpm lint --max-warnings=0 && pnpm typecheck && pnpm test:smoke && pnpm test:blocking && pnpm build && pnpm audit --prod",
     "test:all": "pnpm test:blocking && pnpm test:coverage:core && pnpm exec playwright test",
     "test:deep": "pnpm test:coverage:core && pnpm exec playwright test",
@@ -99,6 +99,7 @@
     "generate:api-types": "pnpm exec openapi-typescript docs/openapi.json -o src/lib/api/v1.d.ts && pnpm exec prettier --write src/lib/api/v1.d.ts",
     "quality:openapi-drift": "tsx scripts/check-openapi-drift.ts",
     "quality:lighthouse": "lhci autorun --config=.lighthouserc.json",
+    "test:visits:db": "node scripts/test-site-visits.mjs",
     "test:trials": "node scripts/test-intro-trials.mjs",
     "test:payments:db": "node scripts/test-payment-fulfillment.mjs",
     "test:media:db": "node scripts/test-media-upload-authorization.mjs"

@@ -1005,3 +1005,53 @@ export async function getActionsToday(area?: string): Promise<Record<string, num
   }
   return counts;
 }
+
+// ── Site visit analytics (Strategy Dashboard) ────────────────
+
+export interface SiteVisitDailyPoint {
+  date: string; // YYYY-MM-DD
+  visits: number;
+  visitors: number;
+}
+
+export interface SiteVisitTopPage {
+  path: string;
+  visits: number;
+}
+
+export interface SiteVisitStats {
+  available: boolean;
+  visitsToday: number;
+  visits7d: number;
+  visits30d: number;
+  uniqueVisitorsToday: number;
+  uniqueVisitors7d: number;
+  uniqueVisitors30d: number;
+  daily: SiteVisitDailyPoint[]; // last 14 days, oldest first
+  topPages: SiteVisitTopPage[];
+  byArea: { area: string; visits: number }[];
+}
+
+export const EMPTY_SITE_VISIT_STATS: SiteVisitStats = {
+  available: false,
+  visitsToday: 0,
+  visits7d: 0,
+  visits30d: 0,
+  uniqueVisitorsToday: 0,
+  uniqueVisitors7d: 0,
+  uniqueVisitors30d: 0,
+  daily: [],
+  topPages: [],
+  byArea: [],
+};
+
+/** One database snapshot; aggregate results are not subject to REST row limits. */
+export async function getSiteVisitStats(): Promise<SiteVisitStats> {
+  try {
+    const { data, error } = await createAdminClient().rpc("get_site_visit_stats");
+    if (error || !data) return EMPTY_SITE_VISIT_STATS;
+    return { ...(data as Omit<SiteVisitStats, "available">), available: true };
+  } catch {
+    return EMPTY_SITE_VISIT_STATS;
+  }
+}

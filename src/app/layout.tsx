@@ -23,6 +23,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { DesktopPageShell } from "@/components/layout/desktop-page-shell";
+import { SiteVisitTracker } from "@/components/analytics/site-visit-tracker";
 import { HELLO_CONTACT_EMAIL } from "@/lib/contact-email";
 import { VERIFY_MZANSI_SITE_DESCRIPTION } from "@/lib/seo/public-categories";
 import "@/styles/globals.css";
@@ -241,6 +242,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <Toaster />
             <PwaInstallPrompt />
             <ServiceWorkerRegistrar />
+            <SiteVisitTracker />
           </DesktopPageShell>
         </ThemeProvider>
         <noscript>

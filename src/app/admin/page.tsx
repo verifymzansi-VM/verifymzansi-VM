@@ -9,12 +9,19 @@ import {
   getDashboardAreaSummary,
   getAreaCardCounts,
   getVerificationStepCounts,
+  getSiteVisitStats,
+  EMPTY_SITE_VISIT_STATS,
   type AdminDashboardStats,
   type VerificationStepCounts,
 } from "@/lib/utils/admin-queries";
 import { calculateSlaState } from "@/lib/utils/sla";
 import type { ReportSeverity } from "@/types/enums";
 import { RoleCommandCenter, AreaDashboardCard } from "@/components/admin/dashboard-cards";
+import {
+  TrafficSection,
+  DecisionsSection,
+  GrowthTrustSection,
+} from "@/components/admin/strategy-dashboard";
 import { PageHeader } from "@/components/layout/page-header";
 
 export const metadata = {
@@ -86,6 +93,7 @@ export default async function AdminPage() {
     getDashboardAreaSummary(),
     getAreaCardCounts(),
     getVerificationStepCounts(),
+    isAdminRole ? getSiteVisitStats() : Promise.resolve(EMPTY_SITE_VISIT_STATS),
   ]);
 
   const stats = settled[0].status === "fulfilled" ? settled[0].value : EMPTY_STATS;
@@ -104,6 +112,7 @@ export default async function AdminPage() {
           PROMOTIONS_EVENTS: EMPTY_AREA_COUNTS,
         };
   const stepCounts = settled[5].status === "fulfilled" ? settled[5].value : EMPTY_STEP_COUNTS;
+  const siteVisits = settled[6].status === "fulfilled" ? settled[6].value : EMPTY_SITE_VISIT_STATS;
 
   // ── Compute health status ──────────────────────────────────
   const breachedReports = reports.filter((r) => {
@@ -128,6 +137,53 @@ export default async function AdminPage() {
       ? Math.round((verifiedAccounts / totalAccounts) * 100)
       : null;
 
+  const totalPendingContent =
+    areaCounts.MZANSI_MARKET.pendingContent +
+    areaCounts.MZANSI_BUSINESS.pendingContent +
+    areaCounts.PROMOTIONS_EVENTS.pendingContent;
+
+  // ── Admin gets the redesigned Strategy Dashboard ───────────
+  if (isAdminRole) {
+    return (
+      <div className="space-y-8">
+        <PageHeader
+          title="Strategy Dashboard"
+          description="Traffic, growth, and the decisions that need attention — one view for management."
+          breadcrumbs={[{ label: "Admin" }]}
+        >
+          <Badge variant={roleBadgeVariant}>{roleLabel}</Badge>
+          <Badge
+            variant={
+              healthStatus === "healthy"
+                ? "outline"
+                : healthStatus === "warning"
+                  ? "secondary"
+                  : "destructive"
+            }
+          >
+            {healthStatus === "healthy"
+              ? "Healthy"
+              : healthStatus === "warning"
+                ? "Needs attention"
+                : "Urgent"}
+          </Badge>
+        </PageHeader>
+
+        <TrafficSection visits={siteVisits} />
+
+        <DecisionsSection
+          stats={stats}
+          stepCounts={stepCounts}
+          breachedReportCount={breachedReports.length}
+          pendingContent={totalPendingContent}
+        />
+
+        <GrowthTrustSection stats={stats} extended={extended} visits={siteVisits} />
+      </div>
+    );
+  }
+
+  // ── Moderator / governance keep the operational command center ──
   return (
     <div className="space-y-5">
       {/* ── Header ──────────────────────────────────────────── */}
