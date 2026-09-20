@@ -101,6 +101,10 @@ async function completeMobileBusinessCreate(page: Page) {
   await page.getByLabel(/Business Name/i).fill(businessName);
   await page.getByText("Advanced: customise your link", { exact: true }).click();
   await page.getByLabel(/URL Slug/i).fill(businessSlug);
+  // Step 1 validation requires a business overview (>= 20 chars).
+  await page
+    .getByLabel(/About Your Business/i)
+    .fill("A mobile Playwright e2e test business with enough detail to satisfy validation.");
   await page
     .getByRole("button", { name: /fashion/i })
     .first()
