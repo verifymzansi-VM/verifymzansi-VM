@@ -1312,11 +1312,11 @@ function HoverVideoPlayer({
 
       <MuteButton videoRef={videoRef} showMuteControl={showMuteControl} />
 
-      {!hasError && reducedMotion && !isPlaying ? (
+      {!hasError && reducedMotion ? (
         <button
           type="button"
           data-carousel-control="true"
-          aria-label="Play video"
+          aria-label={isPlaying ? "Pause video" : "Play video"}
           className="absolute bottom-3 left-3 z-[13] inline-flex min-h-11 items-center gap-2 rounded-full bg-black/60 px-3 text-xs font-medium text-white backdrop-blur-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
           onClick={(event) => {
             event.preventDefault();
@@ -1324,8 +1324,12 @@ function HoverVideoPlayer({
             togglePlayback();
           }}
         >
-          <Play className="h-4 w-4" aria-hidden="true" />
-          Play
+          {isPlaying ? (
+            <Pause className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <Play className="h-4 w-4" aria-hidden="true" />
+          )}
+          {isPlaying ? "Pause" : "Play"}
         </button>
       ) : null}
 

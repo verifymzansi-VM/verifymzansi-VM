@@ -116,7 +116,8 @@ async function completeMobileBusinessCreate(page: Page) {
   await page.getByLabel(/^City(?: \/ Town)?$/i).selectOption("Johannesburg");
   await page.getByRole("button", { name: "Next" }).click();
   await uploaderFor(page, /^Profile photos/i).setInputFiles(IMAGE_FIXTURE);
-  await completeSubmission(page, BUSINESS_DASHBOARD_URL, /Your Content|Mzansi Business/i);
+  await page.getByRole("checkbox", { name: /I accept the VerifyMzansi posting terms/i }).check();
+  await completeSubmission(page, BUSINESS_DASHBOARD_URL, /^Your Content$|^Mzansi Business$/i);
 }
 
 async function completeMobilePromotionCreate(page: Page) {
@@ -150,7 +151,8 @@ async function completeMobilePromotionCreate(page: Page) {
   await page.getByLabel(/^City(?: \/ Town)?$/i).selectOption("Johannesburg");
   await page.getByRole("button", { name: "Next" }).click();
   await uploaderFor(page, /^Upload photos/i).setInputFiles(IMAGE_FIXTURE);
-  await completeSubmission(page, PROMOTION_DASHBOARD_URL, /Your Content|Tourism & Events/i);
+  await page.getByRole("checkbox", { name: /I accept the VerifyMzansi posting terms/i }).check();
+  await completeSubmission(page, PROMOTION_DASHBOARD_URL, /^Your Content$|^Tourism & Events$/i);
 }
 
 test.describe("Posting flows on mobile Chrome", () => {

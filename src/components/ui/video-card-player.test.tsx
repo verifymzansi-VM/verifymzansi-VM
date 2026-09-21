@@ -149,6 +149,21 @@ describe("VideoCardPlayer", () => {
     expect(togglePlayback).toHaveBeenCalledOnce();
   });
 
+  it("keeps a pause control available while reduced-motion hover playback is active", () => {
+    const togglePlayback = vi.fn();
+    useVideoHoverMock.mockReturnValue({
+      videoRef: { current: null },
+      containerRef: { current: null },
+      reducedMotion: true,
+      isHovering: false,
+      isPlaying: true,
+      togglePlayback,
+    });
+    render(<VideoCardPlayer src="https://example.com/clip.mp4" mode="hover" />);
+    fireEvent.click(screen.getByRole("button", { name: "Pause video" }));
+    expect(togglePlayback).toHaveBeenCalledOnce();
+  });
+
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
