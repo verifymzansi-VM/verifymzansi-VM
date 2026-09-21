@@ -201,8 +201,8 @@ export default function VerifyBuyerPage() {
               </CardContent>
             </Card>
 
-            <div className="rounded-lg border bg-muted/30 p-4">
-              <p className="text-sm text-muted-foreground">
+            <div className="surface-card p-5">
+              <p className="text-sm leading-6 text-muted-foreground">
                 A buyer shares this token from their VerifyMzansi account. A valid token confirms
                 platform checks at issue time — it is not a payment guarantee. Ask for a fresh token
                 if it expired or the deal changed.

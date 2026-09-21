@@ -31,6 +31,7 @@ import { Separator } from "@/components/ui/separator";
 import { PromotionContactActions } from "@/components/listings/promotion-contact-actions";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { MediaLightbox } from "@/components/ui/media-lightbox";
+import { StickyMobileBar } from "@/components/ui/sticky-mobile-bar";
 import { formatZAR } from "@/lib/utils/format";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
@@ -527,7 +528,7 @@ export function PromotionDetailContent({
           </div>
         )}
         <div className="space-y-4">
-          <Card className="border-slate-200/75 bg-white/95 elev-sm dark:border-white/10 dark:bg-slate-950/75">
+          <Card className="surface-card elev-sm">
             <CardContent className="space-y-4 p-5">
               <div className="space-y-1">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
@@ -1117,36 +1118,44 @@ export function PromotionDetailContent({
       />
 
       {showStickyBar && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-4 py-3 backdrop-blur-md lg:hidden">
-          <div className="mx-auto flex max-w-lg gap-3">
-            {canCall && (
-              <Button type="button" className="flex-1 gap-2" size="lg" asChild>
-                <a href={`tel:${contactPhone(advertiserProfile?.phone)}`}>
-                  <Phone className="h-4 w-4" /> Call advertiser
-                </a>
-              </Button>
-            )}
+        <StickyMobileBar>
+          {canCall && (
+            <Button
+              type="button"
+              className="h-12 flex-1 gap-2 rounded-full font-semibold"
+              size="lg"
+              asChild
+            >
+              <a href={`tel:${contactPhone(advertiserProfile?.phone)}`}>
+                <Phone className="h-4 w-4" /> Call advertiser
+              </a>
+            </Button>
+          )}
 
-            {canWhatsapp && advertiserProfile?.phone && (
-              <Button variant="outline" className="flex-1 gap-2" size="lg" asChild>
-                <a
-                  href={
-                    whatsappLink(
-                      advertiserProfile.phone,
-                      promotion.title,
-                      `/tourism-events/${promotion.id}`
-                    )!
-                  }
-                  target="_blank"
-                  rel="noopener noreferrer nofollow ugc"
-                >
-                  <MessageCircle className="h-4 w-4" />
-                  WhatsApp
-                </a>
-              </Button>
-            )}
-          </div>
-        </div>
+          {canWhatsapp && advertiserProfile?.phone && (
+            <Button
+              variant="outline"
+              className="h-12 flex-1 gap-2 rounded-full font-semibold"
+              size="lg"
+              asChild
+            >
+              <a
+                href={
+                  whatsappLink(
+                    advertiserProfile.phone,
+                    promotion.title,
+                    `/tourism-events/${promotion.id}`
+                  )!
+                }
+                target="_blank"
+                rel="noopener noreferrer nofollow ugc"
+              >
+                <MessageCircle className="h-4 w-4" />
+                WhatsApp
+              </a>
+            </Button>
+          )}
+        </StickyMobileBar>
       )}
     </article>
   );

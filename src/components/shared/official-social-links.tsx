@@ -21,7 +21,9 @@ export function OfficialSocialLinks({
 
   return (
     <div className={className}>
-      <h4 className="font-display font-semibold text-xs">{title}</h4>
+      <h4 className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground/70">
+        {title}
+      </h4>
       <div className="mt-2 flex flex-wrap gap-2">
         {socialLinks.map((link) => (
           <a
@@ -31,7 +33,7 @@ export function OfficialSocialLinks({
             rel="noopener noreferrer"
             className={
               linkClassName ??
-              "inline-flex items-center rounded-full border border-border/70 px-3 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+              "inline-flex items-center rounded-full border border-border/70 px-3 py-1 text-xs text-muted-foreground transition-all duration-200 hover:border-brand-green/40 hover:text-brand-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:hover:text-brand-green-200"
             }
           >
             {link.label}

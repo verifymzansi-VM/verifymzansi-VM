@@ -91,21 +91,26 @@ function SafetyPanel({
   children: React.ReactNode;
 }) {
   const toneClasses = {
-    default: "border-border bg-background",
-    warning: "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30",
-    secure: "border-brand-green/20 bg-brand-green/5",
+    default: "border-border/60 bg-card elev-xs",
+    warning: "border-amber-200 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/30 elev-xs",
+    secure: "border-brand-green/25 bg-brand-green/5 dark:bg-brand-green/10 elev-xs",
   }[tone];
 
   return (
-    <section className={`rounded-lg border p-4 sm:p-5 ${toneClasses}`}>
+    <section
+      className={`rounded-2xl border p-5 transition-shadow duration-200 hover:elev-sm sm:p-6 ${toneClasses}`}
+    >
       <div className="space-y-3">
-        <h2 className="flex items-center gap-2 font-display text-base font-semibold sm:text-lg">
-          <Icon
-            className={`h-4 w-4 shrink-0 ${
-              tone === "warning" ? "text-amber-700 dark:text-amber-300" : "text-brand-green"
+        <h2 className="flex items-center gap-2.5 font-display text-base font-semibold sm:text-lg">
+          <span
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+              tone === "warning"
+                ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                : "bg-brand-green/10 text-brand-green dark:text-brand-green-300"
             }`}
-            aria-hidden="true"
-          />
+          >
+            <Icon className="h-4 w-4" aria-hidden="true" />
+          </span>
           {title}
         </h2>
         <div className="space-y-3 text-sm leading-6 text-muted-foreground">{children}</div>
@@ -299,11 +304,13 @@ export default function TrustSafetyPage() {
             </SafetyPanel>
           </section>
 
-          <section className="rounded-lg border bg-muted/30 p-4 sm:p-5">
+          <section className="surface-card p-5 sm:p-6">
             <div className="grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
               <div className="space-y-2">
-                <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
-                  <Building2 className="h-4 w-4 text-brand-green" aria-hidden="true" />
+                <h2 className="flex items-center gap-2.5 font-display text-lg font-semibold">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-green/10 text-brand-green dark:text-brand-green-300">
+                    <Building2 className="h-4 w-4" aria-hidden="true" />
+                  </span>
                   Company and platform transparency
                 </h2>
                 <p className="text-sm leading-6 text-muted-foreground">
@@ -321,7 +328,10 @@ export default function TrustSafetyPage() {
                   <h3 className="text-sm font-semibold">Business identity</h3>
                   <dl className="mt-3 grid gap-2">
                     {legalIdentityRows.map((row) => (
-                      <div key={row.label} className="rounded-md border bg-background px-3 py-2">
+                      <div
+                        key={row.label}
+                        className="rounded-xl border border-border/60 bg-background/70 px-3.5 py-2.5"
+                      >
                         <dt className="text-xs font-medium text-foreground">{row.label}</dt>
                         <dd className="mt-1 break-words text-sm text-muted-foreground">
                           {row.value}
@@ -335,7 +345,10 @@ export default function TrustSafetyPage() {
                   <h3 className="text-sm font-semibold">Contact details</h3>
                   <dl className="mt-3 grid gap-2">
                     {contactRows.map((row) => (
-                      <div key={row.label} className="rounded-md border bg-background px-3 py-2">
+                      <div
+                        key={row.label}
+                        className="rounded-xl border border-border/60 bg-background/70 px-3.5 py-2.5"
+                      >
                         <dt className="text-xs font-medium text-foreground">{row.label}</dt>
                         <dd className="mt-1 break-words text-sm text-muted-foreground">
                           {row.value}

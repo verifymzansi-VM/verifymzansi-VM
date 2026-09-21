@@ -48,15 +48,15 @@ export function HomeShowcaseEmptyState({
   const styles = toneClasses[tone];
 
   return (
-    <div className="rounded-[1.5rem] border border-dashed border-slate-300/70 bg-white/70 p-8 text-center shadow-inner dark:border-white/10 dark:bg-white/[0.03]">
+    <div className="rounded-[1.5rem] border border-dashed border-border bg-card/70 p-8 text-center shadow-inner dark:bg-white/[0.03]">
       <div className="mx-auto flex max-w-sm flex-col items-center gap-3">
         <div
           className={`flex h-14 w-14 items-center justify-center rounded-full ${styles.iconClassName}`}
         >
           {icon}
         </div>
-        <p className="font-medium text-slate-900 dark:text-white">{title}</p>
-        <p className="text-sm text-slate-600 dark:text-slate-300">{description}</p>
+        <p className="font-display font-semibold text-foreground">{title}</p>
+        <p className="text-sm leading-6 text-muted-foreground">{description}</p>
         <Button asChild size="sm" className={`rounded-full px-5 ${styles.buttonClassName}`}>
           <Link href={ctaHref} prefetch={false}>
             {ctaLabel}

@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ShoppingBag, MessageSquare, Settings, LogOut } from "lucide-react";
+import {
+  LayoutDashboard,
+  ShoppingBag,
+  MessageSquare,
+  Settings,
+  LogOut,
+  ShieldCheck,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -63,10 +70,10 @@ export function DashboardSidebar({ badges = {}, onSignOut }: DashboardSidebarPro
         href={item.href}
         aria-current={isActive ? "page" : undefined}
         className={cn(
-          "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
+          "relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200",
           isActive
-            ? "bg-brand-green-50 text-brand-green shadow-sm dark:bg-brand-green-950"
-            : "text-muted-foreground hover:text-foreground hover:bg-muted"
+            ? "bg-brand-green-50 font-semibold text-brand-green shadow-sm ring-1 ring-brand-green/20 dark:bg-brand-green-950"
+            : "text-muted-foreground hover:bg-muted hover:text-foreground"
         )}
       >
         {isActive && (
@@ -87,7 +94,7 @@ export function DashboardSidebar({ badges = {}, onSignOut }: DashboardSidebarPro
   }
 
   return (
-    <aside className="hidden md:flex md:w-56 lg:w-60 flex-col border-r bg-background py-4 px-3">
+    <aside className="hidden md:flex md:w-56 lg:w-60 flex-col border-r border-border/60 bg-background py-4 px-3">
       <nav aria-label="Dashboard" className="flex-1 space-y-1">
         {/* Primary */}
         {PRIMARY_NAV.map(renderNavItem)}
@@ -118,25 +125,32 @@ export function DashboardSidebar({ badges = {}, onSignOut }: DashboardSidebarPro
                       ? "w-3/4"
                       : "w-full";
             return (
-              <div className="mt-3 rounded-lg border bg-muted/40 px-3 py-2">
-                <p className="text-xs font-medium text-muted-foreground mb-1">
+              <Link
+                href="/verification"
+                className="mt-3 block rounded-xl border border-brand-green/20 bg-gradient-to-br from-brand-green/5 to-transparent px-3 py-2.5 transition-colors hover:border-brand-green/40 hover:bg-brand-green/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                  <ShieldCheck className="h-3.5 w-3.5 text-brand-green" aria-hidden="true" />
                   Verification: {progressCount}/{badges.verificationProgress!.total}{" "}
                   {badges.verificationProgress!.submitted > badges.verificationProgress!.approved
                     ? "submitted"
                     : "steps"}
                 </p>
-                <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                   <div
-                    className={cn("h-full rounded-full bg-brand-green transition-all", widthClass)}
+                    className={cn(
+                      "h-full rounded-full bg-gradient-to-r from-brand-green to-brand-green-400 transition-all",
+                      widthClass
+                    )}
                   />
                 </div>
                 {badges.verificationProgress!.submitted > badges.verificationProgress!.approved && (
-                  <p className="text-[10px] text-muted-foreground mt-1">
+                  <p className="mt-1 text-[10px] text-muted-foreground">
                     {badges.verificationProgress!.submitted - badges.verificationProgress!.approved}{" "}
                     Pending Review
                   </p>
                 )}
-              </div>
+              </Link>
             );
           })()}
       </nav>

@@ -43,9 +43,9 @@ export function MobileNav() {
   return (
     <nav
       aria-label="Main"
-      className="fixed bottom-0 left-0 right-0 z-50 border-t border-warm-200 bg-white shadow-[0_-10px_30px_rgba(15,23,42,0.08)] dark:border-warm-800 dark:bg-warm-900 md:hidden safe-area-inset-bottom"
+      className="fixed bottom-0 left-0 right-0 z-50 px-3 pb-[max(env(safe-area-inset-bottom),10px)] md:hidden"
     >
-      <div className="flex items-center justify-around h-16 px-2">
+      <div className="glass-panel elev-lg mx-auto flex h-16 max-w-md items-center justify-around rounded-2xl px-2">
         {TABS.map((tab) => {
           const href = tab.href;
           const resolvedHref =
@@ -54,6 +54,7 @@ export function MobileNav() {
               : href;
           const isActive = href === "/" ? pathname === "/" : pathname.startsWith(href);
           const Icon = tab.icon;
+          const isPostAction = tab.id === "post";
 
           return (
             <Link
@@ -63,11 +64,15 @@ export function MobileNav() {
               onClick={() => triggerHaptic("light")}
               aria-current={isActive ? "page" : undefined}
               className={cn(
-                "relative flex flex-col items-center justify-center gap-0.5 flex-1 min-h-[44px] py-2 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                isActive ? "text-brand-green" : "text-muted-foreground hover:text-foreground"
+                "relative flex flex-col items-center justify-center gap-0.5 flex-1 min-h-[44px] py-2 rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                isPostAction
+                  ? "text-white"
+                  : isActive
+                    ? "text-brand-green"
+                    : "text-muted-foreground hover:text-foreground"
               )}
             >
-              {isActive ? (
+              {isActive && !isPostAction ? (
                 <span
                   aria-hidden="true"
                   className="absolute top-0 h-[3px] w-9 rounded-full bg-brand-green"
@@ -75,13 +80,20 @@ export function MobileNav() {
               ) : null}
               <span
                 className={cn(
-                  "relative flex items-center justify-center rounded-full px-3 py-0.5 transition-colors",
-                  isActive && "bg-brand-green-50 dark:bg-brand-green-950"
+                  "relative flex items-center justify-center rounded-full transition-all",
+                  isPostAction
+                    ? "-mt-6 h-12 w-12 bg-brand-green text-white shadow-lg shadow-brand-green/30 ring-4 ring-background"
+                    : cn("px-3 py-0.5", isActive && "bg-brand-green-50 dark:bg-brand-green-950")
                 )}
               >
-                <Icon className={cn("h-5 w-5", tab.id === "post" && "h-6 w-6")} />
+                <Icon className={cn("h-5 w-5", isPostAction && "h-6 w-6")} />
               </span>
-              <span className="max-w-16 text-center text-xs font-medium leading-tight">
+              <span
+                className={cn(
+                  "max-w-16 text-center text-xs font-medium leading-tight",
+                  isPostAction && "font-semibold text-brand-green"
+                )}
+              >
                 {tab.label}
               </span>
             </Link>

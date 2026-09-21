@@ -94,38 +94,45 @@ export default function GlobalError({
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-5 px-4 text-center">
-      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
-        <AlertTriangle className="h-7 w-7 text-destructive" />
-      </div>
-      <div className="space-y-2 max-w-md">
-        <h1 className="text-lg sm:text-xl font-display font-bold">Something went wrong</h1>
-        <p className="text-sm text-muted-foreground">
-          An unexpected error occurred. Please try again or return to the homepage.
-        </p>
-        {error.digest && (
-          <p className="text-xs text-muted-foreground">Error reference: {error.digest}</p>
-        )}
-        <p className="text-xs text-muted-foreground/60 break-all">
-          {error.message || "(no message)"}
-        </p>
-        {debugVisible && (
-          <pre
-            className="mt-2 overflow-auto rounded-lg bg-neutral-100 p-3 text-left text-xs text-red-700 dark:bg-neutral-900 dark:text-red-400"
-            aria-label="Error details"
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-16">
+      <div className="hero-panel flex w-full max-w-lg flex-col items-center gap-6 px-6 py-10 text-center sm:px-10">
+        <div className="flex h-16 w-16 items-center justify-center rounded-3xl border border-destructive/20 bg-destructive/10 shadow-xs">
+          <AlertTriangle className="h-8 w-8 text-destructive" aria-hidden="true" />
+        </div>
+        <div className="space-y-2 max-w-md">
+          <h1 className="text-xl sm:text-2xl font-display font-bold tracking-tight">
+            Something went wrong
+          </h1>
+          <p className="text-sm leading-6 text-muted-foreground">
+            An unexpected error occurred. Please try again or return to the homepage.
+          </p>
+          {error.digest && (
+            <p className="text-xs text-muted-foreground">Error reference: {error.digest}</p>
+          )}
+          <p className="text-xs text-muted-foreground/60 break-all">
+            {error.message || "(no message)"}
+          </p>
+          {debugVisible && (
+            <pre
+              className="mt-2 overflow-auto rounded-xl bg-neutral-100 p-3 text-left text-xs text-red-700 dark:bg-neutral-900 dark:text-red-400"
+              aria-label="Error details"
+            >
+              {error.message}\n{error.stack ?? "(no stack)"}
+            </pre>
+          )}
+        </div>
+        <div className="flex flex-wrap justify-center gap-3">
+          <Button
+            variant="outline"
+            className="rounded-full"
+            onClick={() => window.location.assign(new URL("/", window.location.origin).toString())}
           >
-            {error.message}\n{error.stack ?? "(no stack)"}
-          </pre>
-        )}
-      </div>
-      <div className="flex gap-3">
-        <Button
-          variant="outline"
-          onClick={() => window.location.assign(new URL("/", window.location.origin).toString())}
-        >
-          Go to homepage
-        </Button>
-        <Button onClick={retry}>Try Again</Button>
+            Go to homepage
+          </Button>
+          <Button variant="trust-verified" className="rounded-full font-semibold" onClick={retry}>
+            Try Again
+          </Button>
+        </div>
       </div>
     </div>
   );

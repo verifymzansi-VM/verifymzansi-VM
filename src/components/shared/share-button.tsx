@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { Share2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 interface ShareButtonProps {
   title: string;
@@ -71,7 +72,7 @@ export function ShareButton({
     <Button
       variant={variant}
       size={size}
-      className={`gap-1.5 ${className || ""}`}
+      className={cn("gap-1.5", size === "icon" && "rounded-full", className)}
       onClick={handleShare}
     >
       {copied ? (

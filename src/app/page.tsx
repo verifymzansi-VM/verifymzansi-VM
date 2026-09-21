@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Building2, ShoppingBag, TreePalm } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
@@ -55,6 +55,16 @@ export default async function HomePage() {
       accentClass: "text-brand-green",
       iconBgClass: "bg-brand-green/10",
     },
+  } as const;
+  const categoryNavIcons = {
+    "tourism-events": TreePalm,
+    "mzansi-business": Building2,
+    "mzansi-market": ShoppingBag,
+  } as const;
+  const categoryNavIconClasses = {
+    "tourism-events": "bg-teal-500/10 text-teal-600 dark:text-teal-300",
+    "mzansi-business": "bg-brand-blue/10 text-brand-blue dark:text-brand-blue-300",
+    "mzansi-market": "bg-brand-green/10 text-brand-green",
   } as const;
   const onboardingDestinations = VERIFY_MZANSI_CATEGORY_SEO.map((category) => ({
     id: category.id,
@@ -161,21 +171,36 @@ export default async function HomePage() {
           className="hidden border-y border-border/60 bg-background md:block"
         >
           <div className="container-page grid divide-y divide-border/60 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-            {VERIFY_MZANSI_CATEGORY_SEO.map((category) => (
-              <Link
-                key={category.id}
-                href={category.href}
-                prefetch={false}
-                className="group px-4 py-4 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-5"
-              >
-                <span className="block text-sm font-semibold text-foreground group-hover:text-brand-green">
-                  {category.name}
-                </span>
-                <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                  {category.searchSummary}
-                </span>
-              </Link>
-            ))}
+            {VERIFY_MZANSI_CATEGORY_SEO.map((category) => {
+              const CategoryIcon = categoryNavIcons[category.id];
+              return (
+                <Link
+                  key={category.id}
+                  href={category.href}
+                  prefetch={false}
+                  className="group flex items-center gap-3.5 px-4 py-4 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-5"
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-105 ${categoryNavIconClasses[category.id]}`}
+                  >
+                    <CategoryIcon className="h-5 w-5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold text-foreground transition-colors group-hover:text-brand-green">
+                      {category.name}
+                    </span>
+                    <span className="mt-0.5 block truncate text-xs leading-5 text-muted-foreground">
+                      {category.searchSummary}
+                    </span>
+                  </span>
+                  <ArrowRight
+                    aria-hidden="true"
+                    className="h-4 w-4 shrink-0 text-muted-foreground/50 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-foreground"
+                  />
+                </Link>
+              );
+            })}
           </div>
         </nav>
 
@@ -205,7 +230,7 @@ export default async function HomePage() {
               <div className="relative overflow-hidden rounded-3xl border border-border/60 bg-card elev-sm">
                 <div className="relative grid gap-10 px-6 py-10 sm:px-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:gap-16 lg:px-14 lg:py-16">
                   <div className="space-y-8">
-                    <div className="inline-flex items-center gap-2 rounded-full border border-brand-green/20 bg-brand-green/5 px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-green-800 dark:border-brand-green/25 dark:bg-brand-green/10 dark:text-brand-green-100">
+                    <div className="section-kicker">
                       <span className="h-1.5 w-1.5 rounded-full bg-brand-green-500" />
                       Get Started
                     </div>
@@ -222,10 +247,7 @@ export default async function HomePage() {
 
                       <div className="flex flex-wrap items-center gap-2 pt-1">
                         {freePostHighlights.map((highlight) => (
-                          <span
-                            key={highlight}
-                            className="inline-flex rounded-full border border-border/70 bg-muted/60 px-3 py-1 text-[11px] font-medium text-muted-foreground"
-                          >
+                          <span key={highlight} className="chip">
                             {highlight}
                           </span>
                         ))}

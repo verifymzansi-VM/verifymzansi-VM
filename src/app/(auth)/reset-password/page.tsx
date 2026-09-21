@@ -160,7 +160,12 @@ export default function ResetPasswordPage() {
           toggleLabel={{ show: "Show confirm password", hide: "Hide confirm password" }}
         />
 
-        <Button type="submit" className="w-full" variant="trust-verified" disabled={isSubmitting}>
+        <Button
+          type="submit"
+          className="h-11 w-full rounded-full text-[15px] font-semibold"
+          variant="trust-verified"
+          disabled={isSubmitting}
+        >
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {isSubmitting ? "Updating..." : "Update Password"}
         </Button>

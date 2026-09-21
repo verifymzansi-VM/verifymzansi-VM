@@ -133,13 +133,21 @@ export function ReportDialog({
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         {submitted ? (
-          <div className="text-center py-4 space-y-2">
-            <CheckCircle2 className="h-8 w-8 text-brand-green mx-auto" />
-            <DialogTitle className="font-display text-lg">Report Submitted</DialogTitle>
+          <div className="space-y-3 py-4 text-center">
+            <div className="empty-state-icon">
+              <CheckCircle2 className="h-7 w-7" aria-hidden="true" />
+            </div>
+            <DialogTitle className="font-display text-lg tracking-tight">
+              Report Submitted
+            </DialogTitle>
             <DialogDescription>
               Our moderation team will review this within 24 hours.
             </DialogDescription>
-            <Button variant="outline" onClick={() => handleOpenChange(false)}>
+            <Button
+              variant="outline"
+              className="rounded-full"
+              onClick={() => handleOpenChange(false)}
+            >
               Close
             </Button>
           </div>
@@ -160,7 +168,7 @@ export function ReportDialog({
                       key={r.value}
                       type="button"
                       onClick={() => setReason(r.value)}
-                      className={`rounded-lg border p-2.5 text-left text-sm transition-colors ${
+                      className={`rounded-xl border p-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
                         reason === r.value
                           ? "border-destructive bg-destructive/5 font-medium"
                           : "border-muted hover:border-foreground/20"
@@ -176,7 +184,7 @@ export function ReportDialog({
                 <Label htmlFor="report-desc">Details (min 10 characters)</Label>
                 <textarea
                   id="report-desc"
-                  className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="flex min-h-[80px] w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Describe the issue..."
@@ -193,7 +201,7 @@ export function ReportDialog({
               <Button
                 type="submit"
                 variant="destructive"
-                className="w-full gap-2"
+                className="w-full gap-2 rounded-full font-semibold"
                 disabled={submitting || !reason || description.length < 10}
               >
                 {submitting ? (

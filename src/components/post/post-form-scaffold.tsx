@@ -293,10 +293,11 @@ export function PostFormFooter({
         <Button
           key="submit-action"
           type={submitType}
+          variant="trust-verified"
           onClick={submitType === "button" ? onSubmitClick : undefined}
           disabled={submitDisabled || isSubmitting}
           aria-busy={isSubmitting}
-          className="min-w-36 gap-2"
+          className="min-w-36 gap-2 rounded-full font-semibold"
         >
           {isSubmitting ? (
             <>
@@ -308,7 +309,14 @@ export function PostFormFooter({
           )}
         </Button>
       ) : (
-        <Button key="next-action" type="button" onClick={onNext} disabled={nextDisabled}>
+        <Button
+          key="next-action"
+          type="button"
+          variant="trust-verified"
+          onClick={onNext}
+          disabled={nextDisabled}
+          className="rounded-full px-6 font-semibold"
+        >
           Next
         </Button>
       )}

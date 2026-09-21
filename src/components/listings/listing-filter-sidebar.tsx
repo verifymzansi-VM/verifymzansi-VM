@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, X } from "lucide-react";
+import { Search, SlidersHorizontal, X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,7 +36,15 @@ export function ListingFilterSidebar() {
     Object.values(filters.attributes).some((v) => v !== undefined && v !== "");
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5 rounded-2xl border border-border/70 bg-card p-4 elev-xs">
+      {/* ── Panel header ────────────────────────────── */}
+      <div className="flex items-center gap-2 border-b border-border/60 pb-3">
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-green/10 text-brand-green">
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+        </span>
+        <p className="font-display text-sm font-semibold tracking-tight">Refine results</p>
+      </div>
+
       {/* ── Search ────────────────────────────────────── */}
       <div className="relative" role="search">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -45,7 +53,7 @@ export function ListingFilterSidebar() {
           placeholder="Search listings..."
           aria-label="Search listings"
           enterKeyHint="search"
-          className="pl-9"
+          className="rounded-xl pl-9"
           value={localQuery}
           onChange={(e) => {
             setLocalQuery(e.target.value);
@@ -59,7 +67,7 @@ export function ListingFilterSidebar() {
         <Label className="text-sm font-semibold">Category</Label>
         <select
           aria-label="Category"
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs ring-offset-background transition-colors hover:border-brand-green/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           value={filters.category || ""}
           onChange={(e) => setFilter("category", e.target.value || undefined)}
         >
@@ -77,7 +85,7 @@ export function ListingFilterSidebar() {
         <Label className="text-sm font-semibold">Location</Label>
         <select
           aria-label="Province"
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs ring-offset-background transition-colors hover:border-brand-green/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           value={filters.province || ""}
           onChange={(e) => {
             setFilter("province", e.target.value || undefined);
@@ -94,7 +102,7 @@ export function ListingFilterSidebar() {
         <select
           aria-label="City"
           className={cn(
-            "w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            "h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs ring-offset-background transition-colors hover:border-brand-green/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
             !filters.province && "opacity-50"
           )}
           value={filters.city || ""}
@@ -170,10 +178,10 @@ export function ListingFilterSidebar() {
                 setFilter("condition", filters.condition === cond.value ? undefined : cond.value)
               }
               className={cn(
-                "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+                "rounded-full border px-3 py-1.5 text-xs font-medium transition-all active:scale-[0.97] motion-reduce:transition-none",
                 filters.condition === cond.value
-                  ? "border-brand-green bg-brand-green/10 text-brand-green"
-                  : "border-border text-muted-foreground hover:text-foreground hover:border-border/80"
+                  ? "border-brand-green bg-brand-green/10 text-brand-green shadow-xs"
+                  : "border-border/80 text-muted-foreground hover:text-foreground hover:border-brand-green/40 hover:bg-brand-green/5"
               )}
             >
               {cond.label}

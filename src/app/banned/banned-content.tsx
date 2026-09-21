@@ -12,10 +12,10 @@ export function BannedPageContent() {
     <div className="flex min-h-screen flex-col">
       <Header />
 
-      <main className="flex-1 flex items-center justify-center py-4 overflow-hidden relative">
-        <div className="container-page max-w-md text-center space-y-4 relative z-10">
-          <div className="mx-auto w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
-            <ShieldAlert className="h-6 w-6 text-destructive" />
+      <main className="flex-1 flex items-center justify-center px-4 py-12 overflow-hidden relative">
+        <div className="container-page max-w-md text-center space-y-5 relative z-10">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-destructive/20 bg-destructive/10 shadow-xs">
+            <ShieldAlert className="h-8 w-8 text-destructive" aria-hidden="true" />
           </div>
 
           <h1 className="font-display text-2xl font-bold tracking-tight text-destructive">
@@ -23,7 +23,7 @@ export function BannedPageContent() {
           </h1>
 
           <div>
-            <Card className="border-destructive/20 shadow-xl overflow-hidden">
+            <Card className="rounded-2xl border-destructive/20 elev-md overflow-hidden">
               <div className="h-1.5 w-full bg-destructive" />
               <CardContent className="p-4 space-y-3 text-left bg-gradient-to-b from-destructive/5 to-transparent">
                 <div className="flex items-start gap-2">
@@ -45,7 +45,7 @@ export function BannedPageContent() {
                   </div>
                 </div>
 
-                <div className="bg-background/50 rounded-lg p-3 border border-border/50">
+                <div className="bg-background/50 rounded-xl p-3 border border-border/50">
                   <p className="text-xs font-medium mb-1">When your account is banned:</p>
                   <ul className="grid grid-cols-2 gap-1 text-xs text-muted-foreground">
                     {[
@@ -66,7 +66,7 @@ export function BannedPageContent() {
 
                 <div className="border-t pt-3">
                   <p className="text-xs text-muted-foreground">Believe this was a mistake?</p>
-                  <div className="inline-flex items-center gap-1.5 mt-1 px-2 py-1 rounded-md bg-muted/50 border border-border">
+                  <div className="inline-flex items-center gap-1.5 mt-1 px-3 py-1.5 rounded-full bg-muted/50 border border-border/60">
                     <Mail className="h-3.5 w-3.5 text-foreground/70" />
                     <a
                       href="mailto:appeals@verifymzansi.com"
@@ -77,7 +77,7 @@ export function BannedPageContent() {
                   </div>
                 </div>
 
-                <Button asChild variant="outline" className="w-full hover:bg-muted">
+                <Button asChild variant="outline" className="w-full rounded-full hover:bg-muted">
                   <Link href="/">Return to Homepage</Link>
                 </Button>
               </CardContent>

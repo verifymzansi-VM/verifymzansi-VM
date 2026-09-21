@@ -82,21 +82,21 @@ export function BusinessCategoryStrip({ categoryCounts }: BusinessCategoryStripP
                 )
               }
               className={cn(
-                "snap-start flex items-center gap-1.5 rounded-full border px-3 py-1.5 whitespace-nowrap text-xs font-medium transition-all duration-200 shrink-0",
+                "snap-start flex items-center gap-1.5 rounded-full border px-3.5 py-2 whitespace-nowrap text-xs font-medium transition-all duration-200 shrink-0 active:scale-[0.97] motion-reduce:transition-none",
                 "hover:border-brand-blue/60 hover:bg-brand-blue/5",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-1",
                 isSelected
-                  ? "border-brand-blue bg-brand-blue text-white shadow-sm"
-                  : "border-border bg-background text-muted-foreground hover:text-foreground"
+                  ? "border-brand-blue bg-brand-blue text-white shadow-sm shadow-brand-blue/30"
+                  : "border-border/80 bg-card text-muted-foreground shadow-xs hover:text-foreground"
               )}
             >
-              <Icon className="h-3.5 w-3.5" />
+              <Icon className={cn("h-3.5 w-3.5", isSelected ? "text-white" : "text-brand-blue")} />
               <span>{cat.label}</span>
               {count != null && (
                 <span
                   className={cn(
-                    "ml-0.5 text-[10px]",
-                    isSelected ? "text-blue-100" : "text-muted-foreground/60"
+                    "ml-0.5 rounded-full px-1.5 py-px text-[10px] font-semibold tabular-nums",
+                    isSelected ? "bg-white/20 text-blue-50" : "bg-muted text-muted-foreground/80"
                   )}
                 >
                   ({count})

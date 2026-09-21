@@ -21,7 +21,7 @@ export function PageHeader({
 }: PageHeaderProps) {
   if (centered) {
     return (
-      <div className={cn("space-y-4 border-b border-border/60 pb-7", className)}>
+      <div className={cn("space-y-4 border-b border-border/50 pb-8", className)}>
         {breadcrumbs && (
           <div className="flex justify-center">
             <Breadcrumbs items={breadcrumbs} />

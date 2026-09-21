@@ -46,17 +46,25 @@ export function VerificationProgress({ steps, className }: VerificationProgressP
             <div className="flex flex-col items-center gap-1">
               <div
                 className={cn(
-                  "flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-semibold transition-colors",
-                  isApproved && "border-brand-green bg-brand-green text-white",
-                  isPending && "border-brand-gold bg-brand-gold-50 text-brand-gold-800",
-                  isRejected && "border-brand-red bg-brand-red-50 text-brand-red-800",
+                  "flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-semibold transition-all duration-300",
+                  isApproved &&
+                    "border-brand-green bg-brand-green text-white shadow-trust-verified",
+                  isPending &&
+                    "border-brand-gold bg-brand-gold-50 text-brand-gold-800 dark:bg-brand-gold-950/60 dark:text-brand-gold-300",
+                  isRejected &&
+                    "border-brand-red bg-brand-red-50 text-brand-red-800 dark:bg-brand-red-950/60 dark:text-brand-red-300",
                   !status &&
                     "border-warm-300 dark:border-warm-700 bg-warm-50 dark:bg-warm-900 text-warm-400 dark:text-warm-500"
                 )}
               >
                 {isApproved ? <Check className="h-4 w-4" /> : <span>{i + 1}</span>}
               </div>
-              <span className="text-[10px] sm:text-xs text-muted-foreground sm:whitespace-nowrap">
+              <span
+                className={cn(
+                  "text-[10px] sm:text-xs sm:whitespace-nowrap",
+                  isApproved ? "font-medium text-foreground" : "text-muted-foreground"
+                )}
+              >
                 {STEP_LABELS[stepType]}
               </span>
             </div>

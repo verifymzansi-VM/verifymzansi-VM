@@ -66,11 +66,16 @@ export function PricingPlanGrid({ plans }: { plans: PlanDefinition[] }) {
     <div className={gridClassName(plans.length)}>
       {plans.map((plan) => {
         const highlighted = plan.tier === "growth";
+        const premium = plan.tier === "pro";
         return (
           <Card
             key={`${plan.area}-${plan.tier}`}
-            className={`relative flex flex-col transition-shadow ${
-              highlighted ? "border-brand-green shadow-md" : "border-border/60 hover:shadow-sm"
+            className={`relative flex flex-col transition-all duration-200 hover:-translate-y-0.5 ${
+              highlighted
+                ? "border-brand-green/60 ring-2 ring-brand-green/15 elev-md hover:elev-lg"
+                : premium
+                  ? "border-brand-gold/60 ring-1 ring-brand-gold/20 hover:elev-md"
+                  : "border-border/60 hover:elev-md"
             }`}
           >
             <PlanBadge plan={plan} />
@@ -90,7 +95,7 @@ export function PricingPlanGrid({ plans }: { plans: PlanDefinition[] }) {
               <div className="mt-6 pt-2">
                 <Button
                   asChild
-                  className="w-full gap-2"
+                  className="h-11 w-full gap-2 rounded-full font-semibold"
                   variant={highlighted ? "default" : "outline"}
                 >
                   <Link href={getPlanCheckoutHref(plan)}>
@@ -112,11 +117,16 @@ export function BillingPlanGrid({ plans }: { plans: PlanDefinition[] }) {
     <div className={gridClassName(plans.length)}>
       {plans.map((plan) => {
         const highlighted = plan.tier === "growth";
+        const premium = plan.tier === "pro";
         return (
           <Card
             key={`${plan.area}-${plan.tier}`}
-            className={`relative flex flex-col transition-shadow ${
-              highlighted ? "border-brand-green shadow-md" : "border-border/60 hover:shadow-sm"
+            className={`relative flex flex-col transition-all duration-200 hover:-translate-y-0.5 ${
+              highlighted
+                ? "border-brand-green/60 ring-2 ring-brand-green/15 elev-md hover:elev-lg"
+                : premium
+                  ? "border-brand-gold/60 ring-1 ring-brand-gold/20 hover:elev-md"
+                  : "border-border/60 hover:elev-md"
             }`}
           >
             <PlanBadge plan={plan} />

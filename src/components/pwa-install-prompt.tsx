@@ -271,13 +271,13 @@ export function PwaInstallPrompt() {
 
   return (
     <div className="fixed bottom-24 left-4 right-4 z-50 md:hidden animate-in slide-in-from-bottom flex justify-center pb-safe">
-      <div className="bg-background/95 backdrop-blur-md border shadow-lg rounded-xl p-4 flex items-center justify-between gap-4 w-full max-w-sm relative overflow-hidden">
+      <div className="glass-panel elev-lg relative flex w-full max-w-sm items-center justify-between gap-4 overflow-hidden rounded-2xl p-4">
         {/* Decorative background element for premium feel */}
         <div className="absolute inset-0 bg-gradient-to-r from-brand-green/10 to-transparent pointer-events-none" />
 
         <div className="flex items-center gap-3 relative z-10">
-          <div className="bg-brand-green/10 p-2 rounded-lg text-brand-green">
-            <Download className="w-6 h-6" />
+          <div className="icon-tile h-11 w-11 bg-brand-green/10 text-brand-green dark:bg-brand-green/15 dark:text-brand-green-300">
+            <Download className="w-5 h-5" />
           </div>
           <div>
             <h3 className="font-semibold text-sm">Install App</h3>
@@ -299,7 +299,7 @@ export function PwaInstallPrompt() {
           </Button>
           <button
             onClick={handleDismiss}
-            className="p-1 rounded-full text-muted-foreground hover:bg-muted/50 transition-colors"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             aria-label="Dismiss install prompt"
           >
             <X className="w-4 h-4" />
@@ -321,7 +321,7 @@ export function PwaInstallPrompt() {
             aria-label="Install on iPhone"
             ref={iosDialogRef}
             tabIndex={-1}
-            className="w-full max-w-md rounded-2xl border bg-background p-5 shadow-2xl safe-area-inset-bottom"
+            className="w-full max-w-md rounded-3xl border border-border/60 bg-background p-6 elev-xl safe-area-inset-bottom"
           >
             <div className="flex items-start justify-between gap-3">
               <h3 className="text-base font-semibold">Install on iPhone</h3>
@@ -341,10 +341,10 @@ export function PwaInstallPrompt() {
               <li>Tap Add to finish installation.</li>
             </ol>
             <div className="mt-4 flex flex-wrap justify-end gap-2">
-              <Button size="sm" asChild>
+              <Button size="sm" asChild className="rounded-full">
                 <a href={installLinkHref}>Open install link</a>
               </Button>
-              <Button size="sm" onClick={closeIOSHelp}>
+              <Button size="sm" onClick={closeIOSHelp} className="rounded-full">
                 Got it
               </Button>
             </div>

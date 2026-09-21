@@ -17,33 +17,34 @@
        Fallbacks below only apply if the font variables are absent. */
     --desktop-page-scale: 1;
 
-    --background: 0 0% 100%;
-    --foreground: 30 20% 12%;
+    /* Warm paper canvas — crisp white cards float above it (premium SA feel) */
+    --background: 40 30% 98%;
+    --foreground: 30 24% 10%;
 
     --card: 0 0% 100%;
-    --card-foreground: 30 20% 12%;
+    --card-foreground: 30 24% 10%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 30 20% 12%;
+    --popover-foreground: 30 24% 10%;
 
-    --primary: 152 100% 26%;
+    --primary: 152 100% 25%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 37 26% 94%;
-    --secondary-foreground: 30 18% 22%;
+    --secondary: 38 26% 93%;
+    --secondary-foreground: 30 18% 20%;
 
-    --muted: 37 18% 95%;
-    --muted-foreground: 30 10% 42%;
+    --muted: 38 20% 94%;
+    --muted-foreground: 30 9% 40%;
 
     --accent: 43 100% 55%;
-    --accent-foreground: 30 20% 12%;
+    --accent-foreground: 30 24% 10%;
 
     --destructive: 4 73% 53%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 37 16% 90%;
-    --input: 37 16% 88%;
-    --ring: 152 100% 26%;
+    --border: 36 15% 87%;
+    --input: 36 14% 84%;
+    --ring: 152 100% 25%;
 
     --radius: 12px;
 
@@ -53,33 +54,33 @@
     --duration-slow: 400ms;
     --duration-slower: 600ms;
 
-    /* Elevation scale — softer, airier shadows for a cleaner minimal feel */
-    --shadow-xs: 0 1px 2px 0 rgb(15 23 42 / 0.04);
-    --shadow-sm: 0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.05);
-    --shadow-md: 0 2px 4px -1px rgb(15 23 42 / 0.05), 0 4px 12px -2px rgb(15 23 42 / 0.07);
-    --shadow-lg: 0 4px 8px -2px rgb(15 23 42 / 0.05), 0 12px 28px -6px rgb(15 23 42 / 0.09);
-    --shadow-xl: 0 8px 16px -4px rgb(15 23 42 / 0.06), 0 20px 44px -10px rgb(15 23 42 / 0.11);
+    /* Elevation scale — soft, warm-tinted layered shadows for a premium feel */
+    --shadow-xs: 0 1px 2px 0 rgb(45 37 31 / 0.04);
+    --shadow-sm: 0 1px 2px 0 rgb(45 37 31 / 0.04), 0 1px 3px 0 rgb(45 37 31 / 0.06);
+    --shadow-md: 0 2px 4px -1px rgb(45 37 31 / 0.05), 0 6px 14px -2px rgb(45 37 31 / 0.08);
+    --shadow-lg: 0 4px 8px -2px rgb(45 37 31 / 0.05), 0 14px 32px -6px rgb(45 37 31 / 0.1);
+    --shadow-xl: 0 8px 16px -4px rgb(45 37 31 / 0.06), 0 24px 48px -10px rgb(45 37 31 / 0.12);
   }
 
   /* ── Dark Theme ──────────────────────────────────────────── */
   .dark {
-    --background: 30 15% 8%;
+    --background: 30 14% 7%;
     --foreground: 37 20% 92%;
 
-    --card: 30 15% 11%;
+    --card: 30 12% 10%;
     --card-foreground: 37 20% 92%;
 
-    --popover: 30 15% 11%;
+    --popover: 30 12% 10%;
     --popover-foreground: 37 20% 92%;
 
-    --primary: 152 100% 32%;
+    --primary: 152 90% 33%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 30 10% 17%;
+    --secondary: 30 9% 15%;
     --secondary-foreground: 37 20% 88%;
 
-    --muted: 30 8% 15%;
-    --muted-foreground: 37 12% 58%;
+    --muted: 30 8% 14%;
+    --muted-foreground: 37 10% 60%;
 
     --accent: 43 100% 48%;
     --accent-foreground: 30 20% 8%;
@@ -87,9 +88,9 @@
     --destructive: 4 73% 48%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 30 8% 19%;
-    --input: 30 8% 21%;
-    --ring: 152 100% 32%;
+    --border: 30 8% 18%;
+    --input: 30 8% 22%;
+    --ring: 152 90% 33%;
   }
 
   /* ── Base Styles ─────────────────────────────────────────── */
@@ -511,21 +512,56 @@
     @apply mx-auto w-full max-w-container page-padding;
   }
 
-  /* Elevation utilities mapped to the token scale */
-  .elev-xs {
-    box-shadow: var(--shadow-xs);
+  /* ── VerifyMzansi 2.0 shared surface primitives ──────────── */
+
+  /* Frosted-glass panel for sticky chrome, drawers and popovers */
+  .glass-panel {
+    @apply border border-border/60 bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/75;
   }
-  .elev-sm {
-    box-shadow: var(--shadow-sm);
+
+  /* Eyebrow / kicker label used above section headings */
+  .section-kicker {
+    @apply inline-flex items-center gap-2 rounded-full border border-brand-green/20 bg-brand-green/5 px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-green-800 dark:border-brand-green/25 dark:bg-brand-green/10 dark:text-brand-green-100;
   }
-  .elev-md {
-    box-shadow: var(--shadow-md);
+
+  /* Small pill chip for meta info, filters and highlights */
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/60 px-3 py-1 text-[11px] font-medium text-muted-foreground;
   }
-  .elev-lg {
-    box-shadow: var(--shadow-lg);
+
+  /* Green-to-gold brand gradient text (headline accents) */
+  .text-gradient-brand {
+    @apply bg-gradient-to-r from-brand-green via-brand-green-600 to-brand-gold-600 bg-clip-text text-transparent dark:from-brand-green-300 dark:via-brand-green-400 dark:to-brand-gold-400;
   }
-  .elev-xl {
-    box-shadow: var(--shadow-xl);
+
+  /* Hairline divider that fades at both edges */
+  .divider-fade {
+    @apply h-px w-full bg-gradient-to-r from-transparent via-border to-transparent;
+  }
+
+  /* Standard content surface — white card floating on the warm canvas */
+  .surface-card {
+    @apply rounded-2xl border border-border/60 bg-card elev-xs;
+  }
+
+  /* Large feature/hero panel (onboarding, auth, pricing heroes) */
+  .hero-panel {
+    @apply relative overflow-hidden rounded-3xl border border-border/60 bg-card elev-sm;
+  }
+
+  /* Tinted icon tile used for category gateways, metric cards and feature lists */
+  .icon-tile {
+    @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-transform duration-200;
+  }
+
+  /* Inline text link with arrow affordance (tertiary actions) */
+  .link-arrow {
+    @apply inline-flex items-center gap-1.5 rounded-full text-sm font-medium text-brand-green transition-colors hover:text-brand-green-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:text-brand-green-300 dark:hover:text-brand-green-200;
+  }
+
+  /* Friendly empty-state icon disc */
+  .empty-state-icon {
+    @apply mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand-green/10 text-brand-green dark:bg-brand-green/15 dark:text-brand-green-300;
   }
 
   /* Hide scrollbar but keep scroll functionality */
@@ -544,6 +580,25 @@
   .content-auto {
     content-visibility: auto;
     contain-intrinsic-size: auto 420px;
+  }
+
+  /* Elevation utilities mapped to the token scale.
+     Defined last so an explicit elev-* class always overrides the
+     default elevation baked into surface primitives above. */
+  .elev-xs {
+    box-shadow: var(--shadow-xs);
+  }
+  .elev-sm {
+    box-shadow: var(--shadow-sm);
+  }
+  .elev-md {
+    box-shadow: var(--shadow-md);
+  }
+  .elev-lg {
+    box-shadow: var(--shadow-lg);
+  }
+  .elev-xl {
+    box-shadow: var(--shadow-xl);
   }
 }
 

@@ -132,8 +132,8 @@ export default function ScamAlertsPage() {
           </div>
 
           {/* Golden Rules - inline */}
-          <div className="rounded-lg border bg-muted/30 p-3">
-            <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold">
+          <div className="surface-card p-5">
+            <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold">
               <Badge className="bg-brand-green text-white text-[10px] px-1.5 py-0">
                 Golden Rules
               </Badge>

@@ -11,6 +11,7 @@ const footerSections = [
       { href: "/mzansi-market", label: "Mzansi Market" },
       { href: "/mzansi-business", label: "Mzansi Business" },
       { href: "/tourism-events", label: "Tourism & Events" },
+      { href: "/pricing", label: "Pricing" },
       { href: "/advertise", label: "Advertise" },
     ],
   },
@@ -60,10 +61,28 @@ export function Footer() {
   const currentYear = new Date().getFullYear();
   const runtimeConfig = getServerPublicRuntimeConfig();
   const footerLinkClassName =
-    "inline-flex min-h-7 items-center rounded-md py-1 text-[13px] text-muted-foreground transition-colors duration-200 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+    "inline-flex min-h-7 items-center rounded-md py-1 text-[13px] text-muted-foreground transition-all duration-200 hover:translate-x-0.5 hover:text-brand-green-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:hover:text-brand-green-300";
 
   return (
     <footer className="border-t border-border/50 bg-warm-50/70 dark:bg-warm-950/60">
+      {/* Trust band — reinforces the platform promise without implying guarantees */}
+      <div className="border-b border-border/50 bg-gradient-to-r from-brand-green-50/60 via-transparent to-brand-gold-50/50 dark:from-brand-green-950/40 dark:to-brand-gold-950/20">
+        <div className="container-page flex flex-col items-center justify-between gap-4 py-6 text-center sm:flex-row sm:text-left">
+          <p className="font-display text-sm font-semibold tracking-tight text-foreground sm:text-base">
+            Real people. Verified identities. Local opportunities.{" "}
+            <span className="text-muted-foreground font-normal">
+              Verification helps you check who you are dealing with.
+            </span>
+          </p>
+          <Link
+            href="/trust-safety"
+            prefetch={false}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-brand-green/25 bg-background/80 px-4 py-1.5 text-xs font-semibold text-brand-green-800 transition-colors hover:bg-brand-green/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:text-brand-green-200"
+          >
+            How verification works
+          </Link>
+        </div>
+      </div>
       <div className="container-page py-10 pb-[calc(env(safe-area-inset-bottom)+8rem)] md:py-14 md:pb-14">
         {/* Mobile nav is h-16 (64px). Extra bottom spacing keeps legal links above nav across mobile browsers. */}
         <h2 className="sr-only">Footer navigation</h2>
@@ -80,7 +99,7 @@ export function Footer() {
 
           {footerSections.map((section) => (
             <div key={section.title} className="space-y-3">
-              <h3 className="font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-foreground/80">
+              <h3 className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground/70">
                 {section.title}
               </h3>
               <nav aria-label={section.title} className="flex flex-col gap-1">
@@ -101,7 +120,7 @@ export function Footer() {
           <OfficialSocialLinks
             links={runtimeConfig.officialSocialLinks}
             className="space-y-2"
-            linkClassName="inline-flex items-center rounded-full border border-border/60 bg-background/60 px-3 py-1 text-xs text-muted-foreground transition-colors duration-200 hover:border-border hover:text-foreground"
+            linkClassName="inline-flex items-center rounded-full border border-border/60 bg-background/60 px-3 py-1 text-xs text-muted-foreground transition-all duration-200 hover:border-brand-green/40 hover:bg-brand-green/5 hover:text-brand-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:hover:text-brand-green-200"
           />
         </div>
 

@@ -298,7 +298,7 @@ export default function ContactPage() {
                     <Button
                       type="submit"
                       variant="trust-verified"
-                      className="h-11 w-full gap-2 sm:w-auto"
+                      className="h-11 w-full gap-2 rounded-full px-6 font-semibold sm:w-auto"
                       disabled={isSubmitting || !turnstileToken}
                     >
                       {isSubmitting ? (

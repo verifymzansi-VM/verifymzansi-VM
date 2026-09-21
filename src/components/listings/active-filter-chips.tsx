@@ -24,7 +24,7 @@ export function ActiveFilterChips({ chips, onClearAll }: ActiveFilterChipsProps)
           <button
             key={chip.key}
             type="button"
-            className="flex shrink-0 items-center gap-1 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-primary/10"
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-primary/25 bg-primary/5 py-1 pl-3 pr-2 text-xs font-medium text-foreground shadow-xs transition-all hover:border-primary/40 hover:bg-primary/10 active:scale-[0.97] motion-reduce:transition-none"
             aria-label={`Remove ${chip.label} filter`}
             onClick={() => {
               triggerHaptic("light");
@@ -32,7 +32,9 @@ export function ActiveFilterChips({ chips, onClearAll }: ActiveFilterChipsProps)
             }}
           >
             <span className="max-w-[120px] truncate">{chip.label}</span>
-            <X className="h-3 w-3 shrink-0 opacity-60" />
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/15">
+              <X className="h-2.5 w-2.5 shrink-0" />
+            </span>
           </button>
         ))}
         {chips.length >= 2 && onClearAll && (

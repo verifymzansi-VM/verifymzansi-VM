@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Calendar, Eye, MapPin, Phone, MessageCircle } from "lucide-react";
+import { Calendar, Eye, MapPin, Phone, MessageCircle, ShieldCheck } from "lucide-react";
 import { contactPhone, whatsappLink } from "@/lib/utils/contact-links";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +19,7 @@ import { ListingDetailClient } from "@/app/listing/[id]/client";
 import { ListingContactActions } from "@/app/listing/[id]/listing-contact-actions";
 import { getListingConditionLabel } from "@/lib/constants/listing-condition";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
+import { StickyMobileBar } from "@/components/ui/sticky-mobile-bar";
 import { resolveMarketProfileVariant } from "@/lib/presentation/profile-variants";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import type { AccountVerificationStatus } from "@/types/enums";
@@ -321,7 +322,7 @@ export function ListingDetailContent({
             </div>
 
             {quickFacts.length > 0 ? (
-              <Card className="border-slate-200/75 bg-white/95 elev-sm dark:border-white/10 dark:bg-slate-950/75">
+              <Card className="surface-card elev-sm">
                 <CardContent className="space-y-4 p-5">
                   <div className="space-y-1">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
@@ -349,7 +350,7 @@ export function ListingDetailContent({
             ) : null}
 
             {listing.description ? (
-              <Card className="border-slate-200/75 bg-white/95 elev-sm dark:border-white/10 dark:bg-slate-950/75">
+              <Card className="surface-card elev-sm">
                 <CardContent className="space-y-3 p-5">
                   <div className="space-y-1">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
@@ -368,7 +369,7 @@ export function ListingDetailContent({
               listing.location_city ||
               listing.location_suburb ||
               listing.location_address) && (
-              <Card className="border-slate-200/75 bg-white/95 elev-sm dark:border-white/10 dark:bg-slate-950/75">
+              <Card className="surface-card elev-sm">
                 <CardContent className="space-y-3 p-5">
                   <div className="flex items-center gap-2">
                     <MapPin className="h-4 w-4 text-brand-green" />
@@ -390,7 +391,7 @@ export function ListingDetailContent({
           </div>
 
           {detailFacts.length > 0 ? (
-            <Card className="border-slate-200/75 bg-white/95 elev-sm dark:border-white/10 dark:bg-slate-950/75 lg:col-span-2">
+            <Card className="surface-card elev-sm lg:col-span-2">
               <CardContent className="space-y-4 p-5">
                 <div className="space-y-1">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
@@ -468,7 +469,7 @@ export function ListingDetailContent({
         </div>
 
         <div className="space-y-4">
-          <Card className="border-slate-200/75 bg-white/95 elev-sm dark:border-white/10 dark:bg-slate-950/75">
+          <Card className="surface-card elev-sm">
             <CardContent className="space-y-4 p-5">
               <div className="space-y-1">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
@@ -538,8 +539,31 @@ export function ListingDetailContent({
             </CardContent>
           </Card>
 
+          <Card className="surface-card elev-sm">
+            <CardContent className="space-y-3 p-5">
+              <div className="flex items-center gap-3">
+                <span className="icon-tile bg-brand-green/10 text-brand-green dark:text-brand-green-300">
+                  <ShieldCheck className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <h3 className="font-display text-base font-semibold">Stay safe when you meet</h3>
+              </div>
+              <p className="text-sm leading-6 text-muted-foreground">
+                Meet in a public place, check the item before paying, and never share OTPs or
+                upfront deposits with strangers.
+              </p>
+              <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                <Link href="/safety/meeting-checklist" prefetch={false} className="link-arrow">
+                  Meeting checklist
+                </Link>
+                <Link href="/safety/scam-alerts" prefetch={false} className="link-arrow">
+                  Scam alerts
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+
           {listing.logo_url ? (
-            <Card className="border-slate-200/75 bg-white/95 elev-sm dark:border-white/10 dark:bg-slate-950/75">
+            <Card className="surface-card elev-sm">
               <CardContent className="flex items-center gap-3 p-5">
                 <div className="h-12 w-12 overflow-hidden rounded-2xl border bg-white p-1 dark:bg-warm-900">
                   <Image
@@ -563,31 +587,34 @@ export function ListingDetailContent({
       </article>
 
       {showStickyBar ? (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-4 py-3 backdrop-blur-md lg:hidden">
-          <div className="mx-auto flex max-w-lg gap-3">
-            {canCall ? (
-              <Button type="button" className="flex-1 gap-2" size="lg" asChild>
-                <a href={`tel:${sellerPhone}`}>
-                  <Phone className="h-4 w-4" /> Call seller
-                </a>
-              </Button>
-            ) : null}
+        <StickyMobileBar>
+          {canCall ? (
+            <Button
+              type="button"
+              className="h-12 flex-1 gap-2 rounded-full font-semibold"
+              size="lg"
+              asChild
+            >
+              <a href={`tel:${sellerPhone}`}>
+                <Phone className="h-4 w-4" /> Call seller
+              </a>
+            </Button>
+          ) : null}
 
-            {canWhatsapp && seller?.phone ? (
-              <Button
-                asChild
-                size="lg"
-                variant="outline"
-                className="flex-1 gap-2 border-green-500/30"
-              >
-                <a href={sellerWhatsappUrl!} target="_blank" rel="noopener noreferrer nofollow ugc">
-                  <MessageCircle className="h-4 w-4 text-green-600" />
-                  WhatsApp
-                </a>
-              </Button>
-            ) : null}
-          </div>
-        </div>
+          {canWhatsapp && seller?.phone ? (
+            <Button
+              asChild
+              size="lg"
+              variant="outline"
+              className="h-12 flex-1 gap-2 rounded-full border-green-500/30 font-semibold"
+            >
+              <a href={sellerWhatsappUrl!} target="_blank" rel="noopener noreferrer nofollow ugc">
+                <MessageCircle className="h-4 w-4 text-green-600" />
+                WhatsApp
+              </a>
+            </Button>
+          ) : null}
+        </StickyMobileBar>
       ) : null}
     </>
   );

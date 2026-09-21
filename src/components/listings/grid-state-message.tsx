@@ -8,9 +8,16 @@ type GridStateKind = "empty" | "filtered-empty" | "error";
 
 const toneTileClasses: Record<GridStateTone, string> = {
   green:
-    "bg-brand-green-50 ring-brand-green/10 dark:bg-brand-green-950/60 dark:ring-brand-green/20",
-  blue: "bg-brand-blue/10 ring-brand-blue/15 dark:bg-brand-blue/15 dark:ring-brand-blue/25",
-  teal: "bg-teal-500/10 ring-teal-500/15 dark:bg-teal-500/15 dark:ring-teal-400/25",
+    "bg-brand-green-50 text-brand-green ring-brand-green/15 dark:bg-brand-green-950/60 dark:ring-brand-green/25",
+  blue: "bg-brand-blue/10 text-brand-blue ring-brand-blue/20 dark:bg-brand-blue/15 dark:ring-brand-blue/30",
+  teal: "bg-teal-500/10 text-teal-600 ring-teal-500/20 dark:bg-teal-500/15 dark:text-teal-300 dark:ring-teal-400/30",
+};
+
+const tonePanelClasses: Record<GridStateTone, string> = {
+  green:
+    "border-brand-green/25 bg-gradient-to-b from-brand-green-50/60 to-transparent dark:from-brand-green-950/30",
+  blue: "border-brand-blue/25 bg-gradient-to-b from-brand-blue/5 to-transparent dark:from-brand-blue/10",
+  teal: "border-teal-500/25 bg-gradient-to-b from-teal-500/5 to-transparent dark:from-teal-500/10",
 };
 
 const toneIconClasses: Record<GridStateTone, string> = {
@@ -54,22 +61,32 @@ export function GridStateMessage({
 
   return (
     <div
-      className="flex flex-col items-center justify-center space-y-4 py-10 sm:py-14"
+      className={cn(
+        "flex flex-col items-center justify-center space-y-5 rounded-3xl border border-dashed px-6 py-12 text-center sm:py-16",
+        isError
+          ? "border-destructive/30 bg-gradient-to-b from-destructive/5 to-transparent"
+          : tonePanelClasses[tone]
+      )}
       data-testid={testId}
       data-grid-state={state}
     >
-      <div className={cn("rounded-2xl p-4 ring-1", toneTileClasses[tone])}>
+      <div
+        className={cn(
+          "flex h-16 w-16 items-center justify-center rounded-2xl ring-1 elev-xs",
+          isError ? "bg-amber-500/10 text-amber-500 ring-amber-500/25" : toneTileClasses[tone]
+        )}
+      >
         {icon ? (
           icon
         ) : isError ? (
-          <AlertTriangle className="h-7 w-7 text-amber-500" />
+          <AlertTriangle className="h-8 w-8" />
         ) : (
-          <PackageOpen className={cn("h-7 w-7", toneIconClasses[tone])} />
+          <PackageOpen className={cn("h-8 w-8", toneIconClasses[tone])} />
         )}
       </div>
 
       <div className="max-w-md space-y-1.5 text-center">
-        <p className="font-display text-lg font-semibold tracking-tight">{title}</p>
+        <p className="font-display text-lg font-semibold tracking-tight sm:text-xl">{title}</p>
         <p className="text-sm leading-6 text-muted-foreground">{body}</p>
         {isError && errorCode ? (
           <Badge variant="outline" className="mt-1 font-mono text-[10px]">
@@ -79,7 +96,7 @@ export function GridStateMessage({
       </div>
 
       {children ? (
-        <div className="flex flex-wrap items-center justify-center gap-2">{children}</div>
+        <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">{children}</div>
       ) : null}
     </div>
   );

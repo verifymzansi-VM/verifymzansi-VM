@@ -30,7 +30,7 @@ export function LanguageSwitcher() {
         <Button
           variant="ghost"
           size="sm"
-          className="gap-1.5"
+          className="gap-1.5 rounded-full"
           aria-label="Change language"
           disabled={isLoading}
         >

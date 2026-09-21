@@ -142,12 +142,12 @@ export function PromotionFilterDrawer({
         <SheetTrigger asChild>
           <button
             type="button"
-            className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] right-4 z-40 inline-flex h-11 w-11 items-center justify-center gap-1 rounded-full bg-amber-400 text-foreground shadow-lg transition-colors hover:bg-amber-500 active:bg-amber-600 md:hidden"
+            className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] right-4 z-40 inline-flex h-12 w-12 items-center justify-center gap-1 rounded-full bg-brand-gold text-warm-950 shadow-lg shadow-brand-gold/40 ring-1 ring-white/30 transition-all hover:brightness-105 active:scale-95 md:hidden motion-reduce:transition-none motion-reduce:active:scale-100"
             aria-label="Open tourism and events filters"
           >
-            <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+            <SlidersHorizontal className="h-4 w-4 shrink-0" />
             {activeFilterCount > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-foreground px-1 text-[9px] font-bold text-amber-400">
+              <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-warm-950 px-1 text-[10px] font-bold text-brand-gold ring-2 ring-background">
                 {activeFilterCount}
               </span>
             )}

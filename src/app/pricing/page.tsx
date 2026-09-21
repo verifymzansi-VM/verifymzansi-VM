@@ -77,32 +77,32 @@ export default function PricingPage() {
           </p>
 
           <section className="mx-auto grid max-w-5xl gap-4 md:grid-cols-2">
-            <div className="rounded-2xl border bg-card p-5 shadow-sm">
-              <div className="flex items-center gap-2.5">
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-green/10 text-brand-green">
+            <div className="surface-card p-5 transition-shadow duration-200 hover:elev-sm sm:p-6">
+              <div className="flex items-center gap-3">
+                <span className="icon-tile bg-brand-green/10 text-brand-green dark:text-brand-green-300">
                   <CreditCard className="h-[18px] w-[18px]" aria-hidden="true" />
                 </span>
                 <h2 className="font-display text-base font-semibold text-foreground">
                   Payment transparency
                 </h2>
               </div>
-              <p className="mt-2.5 text-sm text-muted-foreground">
+              <p className="mt-2.5 text-sm leading-6 text-muted-foreground">
                 Paid features are processed in ZAR through secure hosted checkout.{" "}
                 {trustConfig.ozowMerchantName
                   ? `Your bank or Ozow record may show ${trustConfig.ozowMerchantName}.`
                   : "Your bank record should identify VerifyMzansi or its checkout provider."}
               </p>
             </div>
-            <div className="rounded-2xl border bg-card p-5 shadow-sm">
-              <div className="flex items-center gap-2.5">
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-green/10 text-brand-green">
+            <div className="surface-card p-5 transition-shadow duration-200 hover:elev-sm sm:p-6">
+              <div className="flex items-center gap-3">
+                <span className="icon-tile bg-brand-green/10 text-brand-green dark:text-brand-green-300">
                   <ShieldCheck className="h-[18px] w-[18px]" aria-hidden="true" />
                 </span>
                 <h2 className="font-display text-base font-semibold text-foreground">
                   Moderation and refunds
                 </h2>
               </div>
-              <p className="mt-2.5 text-sm text-muted-foreground">
+              <p className="mt-2.5 text-sm leading-6 text-muted-foreground">
                 Paid visibility does not bypass moderation. If paid content is rejected, support can
                 review correction, credit, or refund options.
               </p>

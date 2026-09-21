@@ -230,7 +230,7 @@ function SectionCard({
   body: React.ReactNode;
 }) {
   return (
-    <Card className="border-slate-200/75 bg-white/95 elev-sm dark:border-white/10 dark:bg-slate-950/75">
+    <Card className="surface-card elev-sm">
       <CardContent className="space-y-3 p-5">
         <div className="space-y-1">
           <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
@@ -997,7 +997,7 @@ export function UnifiedLayout({
 
         <div className={isReviewLayout ? "space-y-4 2xl:col-span-2" : "space-y-4"}>
           <ManagedByCard ownerProfile={ownerProfile} trustLevel={trustLevel} />
-          <Card className="border-slate-200/75 bg-white/95 elev-sm dark:border-white/10 dark:bg-slate-950/75">
+          <Card className="surface-card elev-sm">
             <CardContent className="space-y-4 p-5">
               <div className="space-y-1">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">

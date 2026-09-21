@@ -329,7 +329,12 @@ export default async function DashboardPage() {
           )}
         </div>
 
-        <Button asChild size="sm" className="h-11 gap-1.5 flex-shrink-0">
+        <Button
+          asChild
+          size="sm"
+          variant="trust-verified"
+          className="h-11 gap-1.5 flex-shrink-0 rounded-full px-5 font-semibold shadow-sm"
+        >
           <Link href="/post/create">
             <Plus className="h-4 w-4" />
             <span className="hidden xs:inline">Create Post</span>

@@ -52,14 +52,16 @@ export default function SafetyCentrePage() {
             breadcrumbs={[{ label: "Safety Centre" }]}
           />
 
-          <section className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/40">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 elev-xs dark:border-amber-900/60 dark:bg-amber-950/40">
+            <div className="flex items-start gap-3.5">
+              <span className="icon-tile bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                <AlertTriangle className="h-5 w-5" />
+              </span>
               <div className="space-y-1">
                 <h2 className="font-display text-lg font-semibold text-amber-900 dark:text-amber-100">
                   Verification reduces risk. It does not remove the need for safe trading.
                 </h2>
-                <p className="text-sm text-amber-800 dark:text-amber-200">
+                <p className="text-sm leading-6 text-amber-800 dark:text-amber-200">
                   Inspect goods, confirm details, avoid pressure, and walk away from unsafe deals.
                 </p>
               </div>
@@ -95,9 +97,14 @@ export default function SafetyCentrePage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 {responseSteps.map((step) => (
-                  <div key={step.title} className="rounded-md border bg-background p-3">
+                  <div
+                    key={step.title}
+                    className="rounded-xl border border-border/60 bg-muted/40 p-3.5"
+                  >
                     <h3 className="text-sm font-semibold">{step.title}</h3>
-                    <p className="mt-1 text-sm text-muted-foreground">{step.description}</p>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                      {step.description}
+                    </p>
                   </div>
                 ))}
               </CardContent>
@@ -107,43 +114,45 @@ export default function SafetyCentrePage() {
           <section className="grid gap-4 md:grid-cols-2">
             <Link
               href="/safety/scam-alerts"
-              className="rounded-lg border bg-card p-4 transition-colors hover:bg-muted/40"
+              className="group surface-card p-5 transition-all duration-200 hover:-translate-y-0.5 hover:elev-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h2 className="font-display text-base font-semibold">Scam Alerts</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
                     Learn common marketplace scam patterns and warning signs.
                   </p>
                 </div>
-                <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-foreground" />
               </div>
             </Link>
 
             <Link
               href="/safety/meeting-checklist"
-              className="rounded-lg border bg-card p-4 transition-colors hover:bg-muted/40"
+              className="group surface-card p-5 transition-all duration-200 hover:-translate-y-0.5 hover:elev-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h2 className="font-display text-base font-semibold">Meeting Safety</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
                     Use a simple checklist before meeting someone from a listing.
                   </p>
                 </div>
-                <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <MapPin className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" />
               </div>
             </Link>
           </section>
 
-          <section className="rounded-lg border bg-muted/30 p-4">
-            <div className="flex items-start gap-3">
-              <Gavel className="mt-0.5 h-5 w-5 shrink-0 text-brand-green" />
+          <section className="surface-card p-5">
+            <div className="flex items-start gap-3.5">
+              <span className="icon-tile bg-brand-green/10 text-brand-green dark:text-brand-green-300">
+                <Gavel className="h-5 w-5" />
+              </span>
               <div className="space-y-1">
                 <h2 className="font-display text-base font-semibold">
                   Criminal matters should be reported to SAPS.
                 </h2>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm leading-6 text-muted-foreground">
                   VerifyMzansi can moderate platform content, but cannot recover money, goods, or
                   identity documents.
                 </p>

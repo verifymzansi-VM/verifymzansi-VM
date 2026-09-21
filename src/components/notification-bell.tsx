@@ -262,12 +262,12 @@ export function NotificationBell({ userId }: { userId?: string }) {
         <Button
           variant="ghost"
           size="icon"
-          className="relative"
+          className="relative rounded-full"
           aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ""}`}
         >
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+            <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-green px-1 text-[10px] font-bold text-white ring-2 ring-background">
               {unreadCount > 99 ? "99+" : unreadCount}
             </span>
           )}
@@ -319,7 +319,9 @@ export function NotificationBell({ userId }: { userId?: string }) {
         {/* Notification list */}
         {notifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center px-6 py-8 text-center text-sm text-muted-foreground">
-            <Bell className="mb-1.5 h-6 w-6 opacity-20" />
+            <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-full bg-brand-green/10 text-brand-green dark:bg-brand-green/15 dark:text-brand-green-300">
+              <Bell className="h-5 w-5" aria-hidden="true" />
+            </div>
             <p className="font-medium text-foreground">No notifications yet</p>
             <p className="mt-1 text-xs">
               Verification, billing, content, and account updates will appear here.

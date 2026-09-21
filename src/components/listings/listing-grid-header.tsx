@@ -43,7 +43,7 @@ export function ListingGridHeader() {
         <div className="flex items-center gap-1.5 text-muted-foreground">
           {isHydrated ? (
             <DropdownMenu>
-              <DropdownMenuTrigger className="flex min-h-9 items-center gap-1.5 rounded-full border border-border/80 bg-background px-3.5 py-1.5 text-xs font-medium text-foreground outline-none transition-colors hover:border-brand-green/50 hover:text-brand-green focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+              <DropdownMenuTrigger className="flex min-h-9 items-center gap-1.5 rounded-full border border-border/70 bg-card px-3.5 py-1.5 text-xs font-medium text-foreground shadow-xs outline-none transition-all hover:-translate-y-px hover:border-brand-green/50 hover:text-brand-green hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0">
                 <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="hidden sm:inline">{currentSortLabel}</span>
                 <span className="sm:hidden">Sort</span>
@@ -83,7 +83,10 @@ export function ListingGridHeader() {
       {hasActiveFilters && (
         <div className="hidden lg:flex flex-wrap items-center gap-1.5">
           {filters.query && (
-            <Badge variant="secondary" className="gap-1 text-xs px-2 py-0.5 rounded-md">
+            <Badge
+              variant="secondary"
+              className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-green-200"
+            >
               {filters.query}
               <button
                 type="button"
@@ -96,7 +99,10 @@ export function ListingGridHeader() {
             </Badge>
           )}
           {filters.category && (
-            <Badge variant="secondary" className="gap-1 text-xs px-2 py-0.5 rounded-md">
+            <Badge
+              variant="secondary"
+              className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-green-200"
+            >
               {[...CATEGORIES, ...BUSINESS_CATEGORIES].find((c) => c.value === filters.category)
                 ?.label ||
                 filters.category.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
@@ -111,7 +117,10 @@ export function ListingGridHeader() {
             </Badge>
           )}
           {filters.province && (
-            <Badge variant="secondary" className="gap-1 text-xs px-2 py-0.5 rounded-md">
+            <Badge
+              variant="secondary"
+              className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-green-200"
+            >
               {filters.province}
               {filters.city && ` › ${filters.city}`}
               <button
@@ -125,7 +134,10 @@ export function ListingGridHeader() {
             </Badge>
           )}
           {filters.condition && (
-            <Badge variant="secondary" className="gap-1 text-xs px-2 py-0.5 rounded-md">
+            <Badge
+              variant="secondary"
+              className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-green-200"
+            >
               {getListingConditionLabel(filters.condition)}
               <button
                 type="button"
@@ -138,7 +150,10 @@ export function ListingGridHeader() {
             </Badge>
           )}
           {(filters.priceMin || filters.priceMax) && (
-            <Badge variant="secondary" className="gap-1 text-xs px-2 py-0.5 rounded-md">
+            <Badge
+              variant="secondary"
+              className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-green-200"
+            >
               R{filters.priceMin || 0} – R{filters.priceMax || "∞"}
               <button
                 type="button"
@@ -159,7 +174,7 @@ export function ListingGridHeader() {
               <Badge
                 key={name}
                 variant="secondary"
-                className="gap-1 text-xs px-2 py-0.5 rounded-md capitalize"
+                className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium capitalize text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-green-200"
               >
                 {typeof val === "boolean" ? name.replace(/_/g, " ") : String(val)}
                 <button

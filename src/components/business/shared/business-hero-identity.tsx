@@ -110,7 +110,7 @@ export function BusinessHeroIdentity({
       {/* CTA */}
       {!hideCallCta && business.phone && (
         <div className="mb-2 hidden gap-3 self-end md:flex">
-          <Button asChild className="gap-2 shrink-0 shadow-md">
+          <Button asChild className="h-11 shrink-0 gap-2 rounded-full px-5 font-semibold elev-sm">
             <a href={`tel:${business.phone}`}>
               <Phone className="h-4 w-4" /> {primaryCtaLabel ?? "Call"}
             </a>

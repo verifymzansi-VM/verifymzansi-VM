@@ -22,7 +22,7 @@ import { useHydrated } from "@/hooks/use-hydrated";
 import { ActiveFilterChips, type FilterChip } from "./active-filter-chips";
 
 const selectClassName =
-  "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
+  "flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-colors hover:border-brand-blue/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
 
 export function BusinessFilterDrawer() {
   const { filters, setFilter, resetFilters } = useMarketplaceStore();
@@ -125,13 +125,13 @@ export function BusinessFilterDrawer() {
       <SheetTrigger asChild>
         <button
           type="button"
-          className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] right-4 z-40 inline-flex h-9 w-9 items-center justify-center gap-1 rounded-full bg-amber-400 text-foreground shadow-lg transition-colors hover:bg-amber-500 active:bg-amber-600 md:hidden"
+          className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] right-4 z-40 inline-flex h-12 w-12 items-center justify-center gap-1 rounded-full bg-brand-blue text-white shadow-lg shadow-brand-blue/30 ring-1 ring-white/20 transition-all hover:bg-brand-blue/90 active:scale-95 md:hidden motion-reduce:transition-none motion-reduce:active:scale-100"
           aria-label="Open business filters"
           disabled={!isInteractive}
         >
-          <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+          <SlidersHorizontal className="h-4 w-4 shrink-0" />
           {activeFilterCount > 0 && (
-            <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-foreground px-1 text-[9px] font-bold text-amber-400">
+            <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-gold px-1 text-[10px] font-bold text-warm-950 ring-2 ring-background">
               {activeFilterCount}
             </span>
           )}
@@ -140,9 +140,10 @@ export function BusinessFilterDrawer() {
 
       <SheetContent
         side="bottom"
-        className="max-h-[90dvh] overflow-y-auto rounded-t-2xl pb-[calc(6.5rem+env(safe-area-inset-bottom))]"
+        className="max-h-[90dvh] overflow-y-auto rounded-t-3xl pb-[calc(6.5rem+env(safe-area-inset-bottom))]"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
+        <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-border" aria-hidden="true" />
         <SheetHeader className="mb-3">
           <SheetTitle>Filter Businesses</SheetTitle>
           <SheetDescription>
@@ -163,7 +164,7 @@ export function BusinessFilterDrawer() {
                 type="search"
                 placeholder="Search businesses, services, or brands"
                 aria-label="Search businesses"
-                className="pl-9"
+                className="rounded-xl pl-9"
                 defaultValue={filters.query || ""}
                 disabled={!isInteractive}
                 onChange={(event) => {

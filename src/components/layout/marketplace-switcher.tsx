@@ -25,8 +25,8 @@ const AREA_TABS: AreaTab[] = [
     slug: "/mzansi-market",
     icon: ShoppingBag,
     iconColor: "text-brand-green",
-    activeClass: "border-brand-green text-brand-green bg-brand-green-50 dark:bg-brand-green-950",
-    hoverClass: "hover:border-brand-green/40 hover:bg-brand-green-50/80",
+    activeClass: "bg-card text-brand-green shadow-sm ring-1 ring-brand-green/30",
+    hoverClass: "hover:bg-card/70 hover:text-foreground",
   },
   {
     area: "MZANSI_BUSINESS",
@@ -35,8 +35,9 @@ const AREA_TABS: AreaTab[] = [
     slug: "/mzansi-business",
     icon: Building2,
     iconColor: "text-brand-blue",
-    activeClass: "border-brand-blue text-brand-blue bg-brand-blue-50 dark:bg-brand-blue-950",
-    hoverClass: "hover:border-brand-blue/40 hover:bg-brand-blue-50/80",
+    activeClass:
+      "bg-card text-brand-blue shadow-sm ring-1 ring-brand-blue/30 dark:text-brand-blue-300",
+    hoverClass: "hover:bg-card/70 hover:text-foreground",
   },
   {
     area: "PROMOTIONS",
@@ -45,8 +46,8 @@ const AREA_TABS: AreaTab[] = [
     slug: "/tourism-events",
     icon: TreePalm,
     iconColor: "text-teal-500",
-    activeClass: "border-teal-500 text-teal-600 bg-teal-50 dark:bg-teal-950",
-    hoverClass: "hover:border-teal-400/40 hover:bg-teal-50/80",
+    activeClass: "bg-card text-teal-600 shadow-sm ring-1 ring-teal-500/30 dark:text-teal-300",
+    hoverClass: "hover:bg-card/70 hover:text-foreground",
   },
 ];
 
@@ -55,7 +56,7 @@ export function MarketplaceSwitcher() {
 
   return (
     <nav
-      className="mx-auto flex w-full items-center justify-center gap-1 overflow-x-auto pb-1 scrollbar-hide lg:w-fit lg:max-w-full lg:overflow-visible lg:pb-0"
+      className="mx-auto flex w-full items-center justify-center gap-0.5 overflow-x-auto rounded-full border border-border/60 bg-muted/70 p-1 scrollbar-hide lg:w-fit lg:max-w-full lg:overflow-visible lg:border-border/50 lg:bg-background/70 lg:shadow-xs lg:backdrop-blur-md"
       aria-label="Marketplace areas"
     >
       {AREA_TABS.map((tab) => {
@@ -70,13 +71,10 @@ export function MarketplaceSwitcher() {
             aria-label={tab.label}
             aria-current={isActive ? "page" : undefined}
             className={cn(
-              "inline-flex min-w-0 flex-1 items-center justify-center gap-1 rounded-lg border px-2 py-1.5 text-[10px] font-medium leading-tight transition-colors lg:min-w-0 lg:flex-none lg:gap-1.5 lg:px-4 lg:py-2 lg:text-sm lg:leading-none",
+              "inline-flex min-w-0 flex-1 items-center justify-center gap-1 rounded-full px-3 py-1.5 text-[10px] font-semibold leading-tight transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 lg:min-w-0 lg:flex-none lg:gap-1.5 lg:px-4 lg:py-2 lg:text-sm lg:leading-none",
               isActive
                 ? tab.activeClass
-                : cn(
-                    "border-transparent text-muted-foreground hover:text-foreground",
-                    tab.hoverClass
-                  )
+                : cn("text-muted-foreground hover:text-foreground", tab.hoverClass)
             )}
           >
             <Icon

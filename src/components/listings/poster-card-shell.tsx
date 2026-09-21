@@ -197,7 +197,7 @@ export function PosterCardShell({
       ? "border border-slate-200 bg-white text-slate-950 elev-lg ring-1 ring-black/5 hover:-translate-y-0.5 hover:elev-xl dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:ring-white/10"
       : isShowcaseVariant || immersive
         ? "border-transparent bg-transparent shadow-none hover:-translate-y-0.5 hover:border-transparent hover:bg-transparent hover:shadow-none dark:bg-transparent"
-        : "bg-warm-100 elev-xs hover:-translate-y-px hover:elev-sm dark:border-white/10 dark:bg-slate-950 dark:text-white dark:ring-1 dark:ring-white/10",
+        : "border border-border/60 bg-card elev-xs hover:-translate-y-px hover:elev-sm hover:border-foreground/15 dark:bg-card dark:text-white",
     rootRadiusClassName,
     accentClassName
   );
@@ -241,7 +241,7 @@ export function PosterCardShell({
       <div className="min-w-0 flex-1">
         <h3
           className={cn(
-            "font-display font-semibold leading-tight text-slate-900 dark:text-white",
+            "font-display font-semibold leading-tight text-foreground",
             // Hero/showroom metadata is height-capped (64px); a wrapped title
             // would overflow the row, so keep it to a single line there.
             isHeroVariant ? "truncate" : "line-clamp-2",
@@ -255,7 +255,7 @@ export function PosterCardShell({
           // (title + location/price); other surfaces keep the extra line.
           <p
             className={cn(
-              "mt-0.5 leading-tight text-slate-500 line-clamp-1 dark:text-slate-400",
+              "mt-0.5 leading-tight text-muted-foreground line-clamp-1",
               descriptionClassName
             )}
           >
@@ -265,14 +265,14 @@ export function PosterCardShell({
         {eyebrow || location ? (
           <p
             className={cn(
-              "mt-0.5 flex min-w-0 items-center gap-1 leading-tight text-slate-500 dark:text-slate-400",
+              "mt-0.5 flex min-w-0 items-center gap-1 leading-tight text-muted-foreground",
               locationClassName
             )}
           >
             {eyebrow ? (
               <span
                 className={cn(
-                  "shrink-0 font-semibold text-slate-900 dark:text-white",
+                  "shrink-0 font-semibold text-foreground",
                   eyebrowTextClassName,
                   eyebrowClassName
                 )}
@@ -281,7 +281,7 @@ export function PosterCardShell({
               </span>
             ) : null}
             {eyebrow && location ? (
-              <span aria-hidden="true" className="shrink-0 text-slate-300 dark:text-slate-600">
+              <span aria-hidden="true" className="shrink-0 text-muted-foreground/50">
                 ·
               </span>
             ) : null}
@@ -390,7 +390,7 @@ export function PosterCardShell({
           <div className="absolute left-2 top-2 z-[6]">
             <span
               className={cn(
-                "inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] shadow-md",
+                "inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] shadow-md ring-1 ring-black/10",
                 statusClassName
               )}
             >

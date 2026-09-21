@@ -55,7 +55,7 @@ export function ListingFilterDrawer() {
   const draftFilterCount = countActiveFilters(draftFilters);
 
   const selectClass =
-    "w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+    "h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-colors hover:border-brand-green/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
   function updateDraftFilter<K extends keyof MarketplaceFilters>(
     key: K,
@@ -173,12 +173,12 @@ export function ListingFilterDrawer() {
         <SheetTrigger asChild>
           <button
             type="button"
-            className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] right-4 z-40 inline-flex h-11 w-11 items-center justify-center gap-1 rounded-full bg-amber-400 text-foreground shadow-lg transition-colors hover:bg-amber-500 active:bg-amber-600 md:hidden"
+            className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] right-4 z-40 inline-flex h-12 w-12 items-center justify-center gap-1 rounded-full bg-brand-green text-white shadow-lg shadow-brand-green/30 ring-1 ring-white/20 transition-all hover:bg-brand-green-600 active:scale-95 md:hidden motion-reduce:transition-none motion-reduce:active:scale-100"
             aria-label="Open listing filters"
           >
-            <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+            <SlidersHorizontal className="h-4 w-4 shrink-0" />
             {appliedFilterCount > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-foreground px-1 text-[9px] font-bold text-amber-400">
+              <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-gold px-1 text-[10px] font-bold text-warm-950 ring-2 ring-background">
                 {appliedFilterCount}
               </span>
             )}
@@ -187,19 +187,20 @@ export function ListingFilterDrawer() {
       ) : (
         <button
           type="button"
-          className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] right-4 z-40 inline-flex h-11 w-11 items-center justify-center rounded-full bg-amber-400 text-foreground shadow-lg opacity-50 md:hidden"
+          className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] right-4 z-40 inline-flex h-12 w-12 items-center justify-center rounded-full bg-brand-green text-white shadow-lg opacity-50 md:hidden"
           aria-label="Open listing filters"
           disabled
         >
-          <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+          <SlidersHorizontal className="h-4 w-4 shrink-0" />
         </button>
       )}
 
       <SheetContent
         side="bottom"
-        className="max-h-[90dvh] overflow-y-auto rounded-t-2xl"
+        className="max-h-[90dvh] overflow-y-auto rounded-t-3xl"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
+        <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-border" aria-hidden="true" />
         <SheetHeader className="flex flex-row items-center justify-between pb-3">
           <SheetTitle>Filters</SheetTitle>
           {draftFilterCount > 0 && (
@@ -225,7 +226,7 @@ export function ListingFilterDrawer() {
                 placeholder="Search listings..."
                 aria-label="Search listings"
                 enterKeyHint="search"
-                className="pl-9"
+                className="rounded-xl pl-9"
                 value={draftFilters.query || ""}
                 onChange={(event) => updateDraftFilter("query", event.target.value || undefined)}
               />
@@ -341,10 +342,10 @@ export function ListingFilterDrawer() {
                     )
                   }
                   className={cn(
-                    "rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
+                    "rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all active:scale-[0.97] motion-reduce:transition-none",
                     draftFilters.condition === condition.value
-                      ? "border-brand-green bg-brand-green/10 text-brand-green"
-                      : "border-border text-muted-foreground hover:text-foreground hover:border-border/80"
+                      ? "border-brand-green bg-brand-green/10 text-brand-green shadow-xs"
+                      : "border-border/80 text-muted-foreground hover:text-foreground hover:border-brand-green/40 hover:bg-brand-green/5"
                   )}
                 >
                   {condition.label}
@@ -354,8 +355,8 @@ export function ListingFilterDrawer() {
           </div>
         </div>
 
-        <div className="fixed bottom-0 left-0 right-0 border-t bg-background p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:pb-3">
-          <Button className="w-full" size="lg" onClick={handleApply}>
+        <div className="fixed bottom-0 left-0 right-0 border-t border-border/70 bg-background/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur md:pb-3">
+          <Button className="w-full elev-xs" size="lg" onClick={handleApply}>
             Show results
           </Button>
         </div>

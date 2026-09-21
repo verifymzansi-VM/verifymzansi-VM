@@ -372,7 +372,7 @@ export default function RegisterPage() {
 
         <Button
           type="submit"
-          className="w-full"
+          className="h-11 w-full rounded-full text-[15px] font-semibold"
           variant="trust-verified"
           disabled={!isInteractive || isSubmitting || captchaUnavailable || Boolean(turnstileError)}
         >

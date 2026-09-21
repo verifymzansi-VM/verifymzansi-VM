@@ -264,8 +264,8 @@ export default function VerificationHelpPage() {
       </section>
 
       {/* ---------- Still stuck? ---------- */}
-      <section className="mt-10 rounded-lg border bg-muted/30 p-4 text-center">
-        <p className="text-sm font-medium mb-1">Still having trouble?</p>
+      <section className="surface-card mt-10 p-5 text-center">
+        <p className="mb-1 font-display text-sm font-semibold">Still having trouble?</p>
         <p className="text-xs text-muted-foreground">
           Contact us at{" "}
           <a href={`mailto:${SUPPORT_CONTACT_EMAIL}`} className="underline">

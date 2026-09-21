@@ -29,6 +29,7 @@ vi.mock("lucide-react", () => ({
   Calendar: () => <span data-testid="icon-calendar" />,
   Eye: () => <span data-testid="icon-eye" />,
   MapPin: () => <span data-testid="icon-map-pin" />,
+  ShieldCheck: () => <span data-testid="icon-shield-check" />,
 }));
 
 vi.mock("@/components/ui/card", () => ({

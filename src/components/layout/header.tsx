@@ -31,6 +31,7 @@ import { TrustBadge } from "@/components/trust/trust-badge";
 import { MarketplaceSwitcher } from "./marketplace-switcher";
 import { useAuth } from "@/hooks/use-auth";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
+import { cn } from "@/lib/utils";
 import type { TrustLevel } from "@/types/enums";
 
 const LOGIN_HREF = "/login?authFresh=20260515";
@@ -63,7 +64,7 @@ export function Header(props: HeaderProps) {
     <ErrorBoundary
       label="Header"
       fallback={
-        <header className="sticky top-0 z-50 w-full border-b bg-background">
+        <header className="glass-panel sticky top-0 z-50 w-full">
           <div className="container-page flex h-16 items-center">
             <Link href="/" prefetch={false} className="text-lg font-bold">
               VerifyMzansi
@@ -118,7 +119,7 @@ function HeaderInner({
       onClick={handleThemeToggle}
       aria-label="Toggle theme"
       title="Toggle theme"
-      className={className}
+      className={cn("rounded-full", className)}
     >
       <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
       <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
@@ -167,11 +168,10 @@ function HeaderInner({
 
   return (
     <header
-      className={`sticky top-0 z-[110] isolate w-full transition-all duration-300 ${
-        scrolled
-          ? "border-b border-border/60 bg-background/80 elev-sm backdrop-blur-xl supports-[backdrop-filter]:bg-background/70"
-          : "border-b border-transparent bg-background lg:bg-background/90 lg:backdrop-blur-md lg:supports-[backdrop-filter]:bg-background/60"
-      }`}
+      className={cn(
+        "glass-panel sticky top-0 z-[110] isolate w-full transition-all duration-300",
+        scrolled ? "elev-sm" : "shadow-none"
+      )}
     >
       {isAuthenticated ? (
         <>
@@ -213,12 +213,17 @@ function HeaderInner({
               {(trustLevelProp || auth.trustLevel) > 0 && (
                 <TrustBadge level={trustLevelProp || auth.trustLevel} size="sm" />
               )}
-              <Button asChild variant="outline" size="sm">
+              <Button asChild variant="ghost" size="sm">
                 <Link href="/advertise" prefetch={false}>
                   Advertise
                 </Link>
               </Button>
-              <Button asChild variant="trust-verified" size="sm">
+              <Button
+                asChild
+                variant="trust-verified"
+                size="sm"
+                className="rounded-full px-4 font-semibold shadow-sm"
+              >
                 <Link href="/post/create" prefetch={false}>
                   + Post
                 </Link>
@@ -293,7 +298,7 @@ function HeaderInner({
             </>
           ) : (
             <>
-              <Button asChild variant="outline" size="sm">
+              <Button asChild variant="ghost" size="sm">
                 <Link href="/advertise" prefetch={false}>
                   Advertise
                 </Link>
@@ -301,12 +306,17 @@ function HeaderInner({
               <Button
                 asChild
                 variant="outline"
-                className="border-brand-green border-2 hover:bg-brand-green/10"
+                className="rounded-full border-brand-green/40 hover:border-brand-green hover:bg-brand-green/5 hover:text-brand-green-800 dark:hover:text-brand-green-200"
                 size="sm"
               >
                 <a href={LOGIN_HREF}>Sign in</a>
               </Button>
-              <Button asChild variant="trust-verified" size="sm">
+              <Button
+                asChild
+                variant="trust-verified"
+                size="sm"
+                className="rounded-full px-4 font-semibold shadow-sm"
+              >
                 <a href={REGISTER_HREF}>Register</a>
               </Button>
             </>
@@ -320,7 +330,7 @@ function HeaderInner({
           <button
             ref={mobileToggleRef}
             type="button"
-            className="relative z-[120] flex h-11 w-11 items-center justify-center rounded-md p-2 touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="relative z-[120] flex h-11 w-11 items-center justify-center rounded-full p-2 touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             onClick={() => setMobileOpen((prev) => !prev)}
             aria-label={mobileOpen ? "Close menu" : "Open menu"}
             aria-controls="mobile-nav-menu"
@@ -333,8 +343,8 @@ function HeaderInner({
       </div>
 
       {/* Mobile Marketplace Tabs — always visible on mobile */}
-      <div className="lg:hidden w-full border-t border-border/50 bg-background/90 backdrop-blur-sm">
-        <div className="px-3 py-1.5">
+      <div className="lg:hidden w-full border-t border-border/40">
+        <div className="px-3 py-2">
           <MarketplaceSwitcher />
         </div>
       </div>
@@ -344,7 +354,7 @@ function HeaderInner({
         id="mobile-nav-menu"
         aria-label="Mobile navigation"
         hidden={!mobileOpen}
-        className={`lg:hidden border-t bg-background ${
+        className={`lg:hidden border-t border-border/60 bg-background/95 backdrop-blur-xl ${
           mobileOpen ? "animate-fade-in-up" : "hidden"
         }`}
       >
@@ -395,12 +405,16 @@ function HeaderInner({
                     Admin
                   </Link>
                 )}
-                <Button asChild variant="trust-verified" className="w-full">
+                <Button
+                  asChild
+                  variant="trust-verified"
+                  className="w-full rounded-full font-semibold"
+                >
                   <Link href="/post/create" prefetch={false} onClick={() => setMobileOpen(false)}>
                     + Post
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="w-full">
+                <Button asChild variant="outline" className="w-full rounded-full">
                   <Link href="/advertise" prefetch={false} onClick={() => setMobileOpen(false)}>
                     Advertise
                   </Link>
@@ -423,17 +437,21 @@ function HeaderInner({
               </>
             ) : (
               <>
-                <Button asChild variant="outline" className="w-full">
+                <Button asChild variant="outline" className="w-full rounded-full">
                   <Link href="/advertise" prefetch={false} onClick={() => setMobileOpen(false)}>
                     Advertise
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="w-full">
+                <Button asChild variant="outline" className="w-full rounded-full">
                   <a href={LOGIN_HREF} onClick={() => setMobileOpen(false)}>
                     Sign in
                   </a>
                 </Button>
-                <Button asChild variant="trust-verified" className="w-full">
+                <Button
+                  asChild
+                  variant="trust-verified"
+                  className="w-full rounded-full font-semibold"
+                >
                   <a href={REGISTER_HREF} onClick={() => setMobileOpen(false)}>
                     Register
                   </a>

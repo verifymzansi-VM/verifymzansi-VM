@@ -69,7 +69,7 @@ export default function MeetingChecklistPage() {
       <Header />
 
       <main className="flex-1">
-        <div className="container-page py-4 space-y-3">
+        <div className="container-page py-6 space-y-5">
           <PageHeader
             title="Meeting Safety Checklist"
             description="Stay safe when meeting buyers or sellers."
@@ -136,11 +136,13 @@ export default function MeetingChecklistPage() {
           </Card>
 
           {/* Emergency */}
-          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
+          <div className="flex items-start gap-3.5 rounded-2xl border border-destructive/30 bg-destructive/5 p-5 elev-xs">
+            <span className="icon-tile bg-destructive/10 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+            </span>
             <div>
-              <p className="font-semibold text-xs text-destructive">Emergency</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="font-display text-sm font-semibold text-destructive">Emergency</p>
+              <p className="mt-0.5 text-sm leading-6 text-muted-foreground">
                 Call <strong>10111</strong> (SAPS) or <strong>112</strong> (any cellphone)
                 immediately if you feel unsafe.
               </p>
