@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
         error: revokeError.message,
       });
 
-      void sendPasswordChangeNotification(user.email).catch((err) => {
+      await sendPasswordChangeNotification(user.email).catch((err) => {
         log.warn("Failed to send password change notification", {
           userId: user.id,
           error: err instanceof Error ? err.message : "Unknown",
@@ -121,8 +121,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Non-blocking notification so users can spot unauthorized changes
-    void sendPasswordChangeNotification(user.email).catch((err) => {
+    // Finish the security notification before the Worker request ends.
+    await sendPasswordChangeNotification(user.email).catch((err) => {
       log.warn("Failed to send password change notification", {
         userId: user.id,
         error: err instanceof Error ? err.message : "Unknown",

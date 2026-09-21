@@ -14,7 +14,7 @@ import { TurnstileWidget } from "@/components/ui/turnstile-widget";
 import { useToast } from "@/hooks/use-toast";
 import { getPublicRuntimeConfig } from "@/lib/public-runtime-config";
 import { OfficialSocialLinks } from "@/components/shared/official-social-links";
-import { SUPPORT_CONTACT_EMAIL } from "@/lib/contact-email";
+import { CONTACT_CATEGORY_EMAILS, SUPPORT_CONTACT_EMAIL } from "@/lib/contact-email";
 
 const contactCategories = [
   {
@@ -64,6 +64,7 @@ export default function ContactPage() {
   const [turnstileUnavailable, setTurnstileUnavailable] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [receipt, setReceipt] = useState<{ reference?: string; acknowledgement?: string }>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
   const runtimeConfig = getPublicRuntimeConfig();
@@ -109,6 +110,7 @@ export default function ContactPage() {
         throw new Error(data.error || "Failed to send message");
       }
 
+      setReceipt(await res.json());
       setIsSubmitted(true);
     } catch (err) {
       toast({
@@ -145,16 +147,25 @@ export default function ContactPage() {
               <Card>
                 <CardContent className="p-6 text-center space-y-3">
                   <CheckCircle2 className="h-10 w-10 text-brand-green mx-auto" />
-                  <h2 className="font-display text-xl font-bold">Message Sent</h2>
+                  <h2 className="font-display text-xl font-bold">Request received</h2>
                   <p className="text-muted-foreground">
-                    We will reply to <strong>{email}</strong> within 1-2 business days. Fraud and
-                    security reports are prioritised.
+                    Your request is saved in our support inbox. Our team will review it and reply to{" "}
+                    <strong>{email}</strong>. {selectedCategory?.response}
+                  </p>
+                  {receipt.reference && (
+                    <p className="break-all text-sm font-medium">Reference: {receipt.reference}</p>
+                  )}
+                  <p className="text-sm text-muted-foreground">
+                    {receipt.acknowledgement === "accepted"
+                      ? "An acknowledgement email has been queued. If it does not arrive, check spam. You do not need to submit again."
+                      : "Your request is saved, but we could not confirm the acknowledgement email was sent. Keep your reference; you do not need to submit again."}
                   </p>
                   <Button
                     variant="outline"
                     className="h-11"
                     onClick={() => {
                       setIsSubmitted(false);
+                      setReceipt({});
                       setName("");
                       setEmail("");
                       setCategory("general_support");
@@ -301,6 +312,13 @@ export default function ContactPage() {
                 </CardContent>
               </Card>
             )}
+            <p className="mt-4 text-sm text-muted-foreground">
+              Prefer email? For {selectedCategory?.label.toLowerCase()}, contact{" "}
+              <a className="underline" href={`mailto:${CONTACT_CATEGORY_EMAILS[category]}`}>
+                {CONTACT_CATEGORY_EMAILS[category]}
+              </a>
+              .
+            </p>
           </div>
         </div>
       </main>

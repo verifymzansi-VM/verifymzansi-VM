@@ -1,4 +1,4 @@
-import { type NextRequest, NextResponse } from "next/server";
+import { after, type NextRequest, NextResponse } from "next/server";
 import { registerSchema } from "@/lib/validations/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -270,12 +270,13 @@ export async function POST(request: NextRequest) {
       signUpData?.user && (!signUpData.user.identities || signUpData.user.identities.length === 0);
 
     if (isExistingAccount) {
-      // Non-blocking: notify the existing account owner so they have
-      // an actionable path (sign in or reset password) without leaking
-      // account existence to the requester.
-      sendAlreadyRegisteredEmail(normalizedEmail).catch((err) => {
-        log.warn("Failed to send already-registered email", {
-          error: err instanceof Error ? err.message : "Unknown",
+      // Keep mail latency out of the response to avoid revealing account existence.
+      // Next's after() extends the Worker lifetime for this notification.
+      after(async () => {
+        await sendAlreadyRegisteredEmail(normalizedEmail).catch((err) => {
+          log.warn("Failed to send already-registered email", {
+            error: err instanceof Error ? err.message : "Unknown",
+          });
         });
       });
       return NextResponse.json({ success: true });

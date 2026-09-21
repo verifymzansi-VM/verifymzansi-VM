@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import type { SupportSubmission } from "./page";
+import { supportReference } from "@/lib/contact-email";
+import { Input } from "@/components/ui/input";
 
 type StatusFilter = "all" | "new" | "in_progress" | "resolved";
 
@@ -34,8 +36,15 @@ export function SupportInboxClient({ submissions }: { submissions: SupportSubmis
   const [filter, setFilter] = useState<StatusFilter>("all");
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
 
-  const filtered = filter === "all" ? submissions : submissions.filter((s) => s.status === filter);
+  const filtered = submissions.filter(
+    (s) =>
+      (filter === "all" || s.status === filter) &&
+      `${s.id} ${supportReference(s.id)} ${s.name} ${s.email} ${s.message}`
+        .toLowerCase()
+        .includes(search.trim().toLowerCase())
+  );
 
   async function updateStatus(id: string, status: SupportSubmission["status"]) {
     setPendingId(id);
@@ -60,6 +69,12 @@ export function SupportInboxClient({ submissions }: { submissions: SupportSubmis
 
   return (
     <div className="space-y-4">
+      <Input
+        aria-label="Search requests on this page"
+        placeholder="Search this page by reference, email or message"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+      />
       {/* Status filter */}
       <div className="flex items-center gap-2 flex-wrap">
         {STATUS_FILTERS.map((s) => {
@@ -98,12 +113,12 @@ export function SupportInboxClient({ submissions }: { submissions: SupportSubmis
             const badge = STATUS_BADGE[sub.status] ?? STATUS_BADGE.new;
             const busy = pendingId === sub.id;
             return (
-              <li key={sub.id} className="rounded-xl border bg-card p-4 space-y-3">
+              <li key={sub.id} id={sub.id} className="rounded-xl border bg-card p-4 space-y-3">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold">{sub.name}</p>
                     <a
-                      href={`mailto:${sub.email}`}
+                      href={`mailto:${encodeURIComponent(sub.email)}?subject=${encodeURIComponent(`Re: VerifyMzansi request (${supportReference(sub.id)})`)}`}
                       className="truncate text-xs text-primary hover:underline"
                     >
                       {sub.email}
@@ -116,8 +131,31 @@ export function SupportInboxClient({ submissions }: { submissions: SupportSubmis
                     </span>
                   </div>
                 </div>
+                <p className="break-all text-xs text-muted-foreground">
+                  Reference: {supportReference(sub.id)}
+                </p>
 
                 <p className="whitespace-pre-wrap text-sm text-foreground/90">{sub.message}</p>
+                <div className="text-xs text-muted-foreground space-y-1">
+                  {sub.emailActivity?.length ? (
+                    sub.emailActivity.map((event, index) => (
+                      <p key={`${event.created_at}-${index}`}>
+                        {event.template === "support_acknowledgement"
+                          ? "Sender acknowledgement"
+                          : "Team email alert"}
+                        :{" "}
+                        {event.accepted
+                          ? "Accepted by email provider; inbox delivery unconfirmed"
+                          : "Send failed"}
+                      </p>
+                    ))
+                  ) : (
+                    <p>
+                      No recorded email notification. Older requests may have been saved without
+                      sending an email.
+                    </p>
+                  )}
+                </div>
 
                 <div className="flex flex-wrap gap-2 pt-1">
                   {sub.status !== "in_progress" && sub.status !== "resolved" && (

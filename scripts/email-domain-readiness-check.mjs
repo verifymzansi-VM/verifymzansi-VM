@@ -10,12 +10,12 @@ const strictMode = args.has("--strict");
 
 const domain = process.env.EMAIL_DOMAIN || process.env.CF_DOMAIN || "verifymzansi.com";
 const gmailInbox = process.env.EMAIL_GMAIL_INBOX || "verifymzansi2s@gmail.com";
-const dkimSelectors = (process.env.EMAIL_DKIM_SELECTORS || "google,resend,selector1,selector2")
+const dkimSelectors = (process.env.EMAIL_DKIM_SELECTORS || "resend")
   .split(",")
   .map((value) => value.trim())
   .filter(Boolean);
 
-const publicResolver = new Resolver();
+const publicResolver = new Resolver({ timeout: 2000, tries: 1 });
 publicResolver.setServers(["1.1.1.1", "8.8.8.8"]);
 
 function record(severity, name, detail, extra = {}) {
@@ -25,7 +25,9 @@ function record(severity, name, detail, extra = {}) {
 async function resolveDns(name, type) {
   try {
     if (type === "TXT") {
-      const answers = (await publicResolver.resolveTxt(name)).map((parts) => ({ data: parts.join("") }));
+      const answers = (await publicResolver.resolveTxt(name)).map((parts) => ({
+        data: parts.join(""),
+      }));
       if (answers.length > 0) {
         return { ok: true, provider: "public-dns", answers, status: 0 };
       }
@@ -53,6 +55,7 @@ async function resolveDns(name, type) {
   for (const url of providers) {
     try {
       const response = await fetch(url, {
+        signal: AbortSignal.timeout(5000),
         headers: {
           accept: "application/dns-json, application/json",
           "user-agent": "verifymzansi-email-domain-readiness/1.0",
@@ -64,7 +67,9 @@ async function resolveDns(name, type) {
       }
 
       const payload = await response.json();
-      const answers = Array.isArray(payload?.Answer) ? payload.Answer : [];
+      const answers = Array.isArray(payload?.Answer)
+        ? payload.Answer.filter((answer) => answer.type === (type === "TXT" ? 16 : 15))
+        : [];
       const result = {
         ok: true,
         provider: url,
@@ -86,7 +91,9 @@ async function resolveDns(name, type) {
 }
 
 function normalizeTxt(answer) {
-  return String(answer?.data ?? "").replace(/^"|"$/g, "").replace(/"\s+"/g, "");
+  return String(answer?.data ?? "")
+    .replace(/^"|"$/g, "")
+    .replace(/"\s+"/g, "");
 }
 
 async function checkMx() {
@@ -112,29 +119,29 @@ async function checkMx() {
   );
 }
 
-async function checkSpf() {
-  const result = await resolveDns(domain, "TXT");
+async function checkSpf(name = domain) {
+  const result = await resolveDns(name, "TXT");
   if (!result.ok) {
-    return record("fail", "SPF lookup", `Could not resolve TXT records for ${domain}.`);
+    return record("fail", "SPF lookup", `Could not resolve TXT records for ${name}.`);
   }
 
   const txtRecords = result.answers.map(normalizeTxt);
-  const spfRecord = txtRecords.find((value) => /^v=spf1\b/i.test(value));
-
-  if (!spfRecord) {
-    return record("fail", "SPF", `No SPF record found on ${domain}.`, { records: txtRecords });
+  const spfRecords = txtRecords.filter((value) => /^v=spf1\b/i.test(value));
+  const spfRecord = spfRecords[0];
+  if (spfRecords.length > 1) {
+    return record("fail", `SPF (${name})`, "Multiple SPF records cause authentication errors.");
   }
 
-  const includesGoogle = /include:_spf\.google\.com/i.test(spfRecord);
+  if (!spfRecord) {
+    return record("fail", "SPF", `No SPF record found on ${name}.`, { records: txtRecords });
+  }
+
   const includesResend = /include:spf\.resend\.com|include:amazonses\.com|resend/i.test(spfRecord);
-
-  const detail = [
-    `SPF record present on ${domain}.`,
-    includesGoogle ? "Google sending is explicitly included." : "Google sending is not explicitly included.",
-    includesResend ? "Resend or current app sender appears represented." : "No obvious Resend include detected.",
-  ].join(" ");
-
-  return record(includesGoogle || includesResend ? "pass" : "warn", "SPF", detail, {
+  const isReturnPath = name !== domain;
+  const detail = isReturnPath
+    ? `Resend return-path SPF at ${name}: ${includesResend ? "sender included" : "sender include missing"}.`
+    : `One SPF record at ${domain}. Resend authenticates its separate return-path subdomain; Google SPF alone does not verify Gmail alias sending.`;
+  return record(isReturnPath && !includesResend ? "fail" : "pass", `SPF (${name})`, detail, {
     record: spfRecord,
   });
 }
@@ -148,6 +155,9 @@ async function checkDmarc() {
 
   const txtRecords = result.answers.map(normalizeTxt);
   const dmarcRecord = txtRecords.find((value) => /^v=DMARC1\b/i.test(value));
+  if (txtRecords.filter((value) => /^v=DMARC1\b/i.test(value)).length > 1) {
+    return record("fail", "DMARC", "Multiple DMARC records are invalid.");
+  }
 
   if (!dmarcRecord) {
     return record("fail", "DMARC", `No DMARC record found on ${name}.`, { records: txtRecords });
@@ -161,25 +171,6 @@ async function checkDmarc() {
   });
 }
 
-async function checkRoutingTxt() {
-  const result = await resolveDns(domain, "TXT");
-  if (!result.ok) {
-    return record("warn", "Email Routing TXT", `Could not resolve TXT records for ${domain}.`);
-  }
-
-  const txtRecords = result.answers.map(normalizeTxt);
-  const hasCloudflareRoutingMarker = txtRecords.some((value) => /cloudflare/i.test(value) && /email/i.test(value));
-
-  return record(
-    hasCloudflareRoutingMarker ? "pass" : "warn",
-    "Email Routing TXT",
-    hasCloudflareRoutingMarker
-      ? `A Cloudflare email-related TXT marker is present on ${domain}.`
-      : `No obvious Cloudflare email-routing TXT marker detected on ${domain}.`,
-    { records: txtRecords }
-  );
-}
-
 async function checkDkimSelectors() {
   const checks = [];
 
@@ -187,9 +178,7 @@ async function checkDkimSelectors() {
     const fqdn = `${selector}._domainkey.${domain}`;
     const result = await resolveDns(fqdn, "TXT");
     const txtRecords = result.ok ? result.answers.map(normalizeTxt) : [];
-    const dkimRecord = txtRecords.find(
-      (value) => /\bv=DKIM1\b/i.test(value) || /^p=/i.test(value)
-    );
+    const dkimRecord = txtRecords.find((value) => /\bv=DKIM1\b/i.test(value) || /^p=/i.test(value));
 
     checks.push({ selector, fqdn, found: Boolean(dkimRecord), record: dkimRecord || "" });
   }
@@ -204,12 +193,11 @@ async function checkDkimSelectors() {
     );
   }
 
-  const hasGoogleSelector = checks.some((check) => check.selector === "google" && check.found);
-  if (!hasGoogleSelector) {
+  if (foundSelectors.length !== checks.length) {
     return record(
       "warn",
       "DKIM selectors",
-      `Found DKIM record(s) for selector(s): ${foundSelectors.map((check) => check.selector).join(", ")}. Google-specific DKIM was not found, so Gmail native outbound may still need Google Workspace or another authenticated SMTP sender.`,
+      "Some configured DKIM selectors are missing. Confirm the active sending providers.",
       { checks }
     );
   }
@@ -233,8 +221,21 @@ async function main() {
   const checks = [];
 
   checks.push(await checkMx());
-  checks.push(await checkRoutingTxt());
   checks.push(await checkSpf());
+  checks.push(await checkSpf(process.env.EMAIL_RETURN_PATH_DOMAIN || `send.${domain}`));
+  const returnPathMx = await resolveDns(
+    process.env.EMAIL_RETURN_PATH_DOMAIN || `send.${domain}`,
+    "MX"
+  );
+  checks.push(
+    record(
+      returnPathMx.answers.some((a) => /feedback-smtp\..*\.amazonses\.com\.?$/i.test(a.data))
+        ? "pass"
+        : "fail",
+      "Resend return-path MX",
+      "Checks the separate Resend bounce-handling MX; root MX stays with Cloudflare."
+    )
+  );
   checks.push(await checkDmarc());
   checks.push(await checkDkimSelectors());
 
@@ -243,19 +244,25 @@ async function main() {
     `Receive target inbox: ${gmailInbox}`,
     "Cloudflare Email Routing is required for inbox forwarding unless another mail host owns MX.",
     "Gmail Send mail as still requires alias verification in Gmail and a sender with proper SPF/DKIM alignment.",
+    "DNS checks do not prove inbox delivery or verified Cloudflare destinations. Check routing status and provider delivery events separately.",
   ];
 
   if (jsonOutput) {
-    console.log(JSON.stringify({ domain, gmailInbox, dkimSelectors, checks, summary, nextSteps }, null, 2));
+    console.log(
+      JSON.stringify({ domain, gmailInbox, dkimSelectors, checks, summary, nextSteps }, null, 2)
+    );
   } else {
     console.log(`Email domain readiness for ${domain}`);
     console.log("----------------------------------------");
     for (const check of checks) {
-      const prefix = check.severity === "fail" ? "FAIL" : check.severity === "warn" ? "WARN" : "PASS";
+      const prefix =
+        check.severity === "fail" ? "FAIL" : check.severity === "warn" ? "WARN" : "PASS";
       console.log(`${prefix}: ${check.name}: ${check.detail}`);
     }
     console.log("----------------------------------------");
-    console.log(`Summary: ${summary.failCount} fail, ${summary.warnCount} warn, ${summary.passCount} pass`);
+    console.log(
+      `Summary: ${summary.failCount} fail, ${summary.warnCount} warn, ${summary.passCount} pass`
+    );
     console.log("Next steps:");
     for (const step of nextSteps) {
       console.log(`- ${step}`);

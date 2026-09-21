@@ -76,6 +76,7 @@ docs/*
 !docs/verification-capture-review.md
 !docs/video-upload-r2-design.md
 !docs/payment-fulfillment-rollout.md
+!docs/domain-email-gmail-setup.md
 !.github/**/*.md
 !docs/RUNBOOK.md
 !docs/playbooks/

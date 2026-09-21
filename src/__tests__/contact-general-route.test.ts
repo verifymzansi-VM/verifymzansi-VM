@@ -7,11 +7,17 @@ const {
   mockVerifyTurnstile,
   mockLogger,
   mockNotifyStaffForAdminEvent,
+  mockSendSupportRequestNotification,
+  mockSendSupportAcknowledgement,
+  mockAudit,
 } = vi.hoisted(() => ({
   mockCreateAdminClient: vi.fn(),
   mockCheckRateLimit: vi.fn().mockReturnValue({ limited: false }),
   mockVerifyTurnstile: vi.fn().mockResolvedValue({ success: true }),
   mockNotifyStaffForAdminEvent: vi.fn().mockResolvedValue(true),
+  mockSendSupportRequestNotification: vi.fn().mockResolvedValue({ success: true }),
+  mockSendSupportAcknowledgement: vi.fn().mockResolvedValue({ success: true, messageId: "ack-id" }),
+  mockAudit: vi.fn().mockResolvedValue(undefined),
   mockLogger: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -36,6 +42,11 @@ vi.mock("@/lib/utils/mutation-origin", () => ({
 vi.mock("@/lib/notifications", () => ({
   notifyStaffForAdminEvent: mockNotifyStaffForAdminEvent,
 }));
+vi.mock("@/lib/services/email", () => ({
+  sendSupportRequestNotification: mockSendSupportRequestNotification,
+  sendSupportAcknowledgement: mockSendSupportAcknowledgement,
+}));
+vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockAudit }));
 
 import { POST } from "@/app/api/contact/general/route";
 
@@ -60,6 +71,8 @@ describe("POST /api/contact/general", () => {
     vi.clearAllMocks();
     mockCheckRateLimit.mockReturnValue({ limited: false });
     mockVerifyTurnstile.mockResolvedValue({ success: true });
+    mockSendSupportRequestNotification.mockResolvedValue({ success: true });
+    mockSendSupportAcknowledgement.mockResolvedValue({ success: true, messageId: "ack-id" });
   });
 
   afterEach(() => {
@@ -135,8 +148,13 @@ describe("POST /api/contact/general", () => {
     );
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ success: true });
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      reference: expect.stringMatching(/^VM-/),
+      acknowledgement: "accepted",
+    });
     expect(insert).toHaveBeenCalledWith({
+      id: expect.any(String),
       name: "Nomsa",
       email: "nomsa@example.com",
       message: "[general_support] alert(&quot;xss&quot;)Hello from customer support form.",
@@ -170,5 +188,57 @@ describe("POST /api/contact/general", () => {
       token: "a".repeat(1200),
       remoteIp: "203.0.113.10",
     });
+  });
+
+  it("preserves saved requests when the email alert fails", async () => {
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({ insert: vi.fn().mockResolvedValue({ error: null }) }),
+    });
+    mockSendSupportRequestNotification.mockResolvedValue({ success: false, error: "Unavailable" });
+    const response = await POST(createRequest({ ...validBody, category: "payment_refund" }));
+    expect(response.status).toBe(200);
+    expect(mockSendSupportRequestNotification).toHaveBeenCalledWith(
+      "payment_refund",
+      expect.any(String)
+    );
+    expect(mockLogger.warn).toHaveBeenCalledWith("Support request stored but email failed", {
+      submissionId: expect.any(String),
+      template: "support_staff_alert",
+    });
+  });
+
+  it("records acknowledgement failure without losing a saved request", async () => {
+    const insert = vi.fn().mockResolvedValue({ error: null });
+    mockCreateAdminClient.mockReturnValue({ from: vi.fn().mockReturnValue({ insert }) });
+    mockSendSupportAcknowledgement.mockResolvedValue({ success: false, error: "Unavailable" });
+    const response = await POST(createRequest(validBody));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ success: true, acknowledgement: "failed" });
+    const id = insert.mock.calls[0][0].id;
+    expect(mockAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "communication_email_failed",
+        targetId: id,
+        targetType: "contact_submission",
+        metadata: expect.objectContaining({ template: "support_acknowledgement" }),
+      })
+    );
+    expect(mockSendSupportAcknowledgement).toHaveBeenCalledWith(
+      validBody.email,
+      id,
+      "general_support"
+    );
+  });
+
+  it("blocks repeated messages to one recipient across different IPs", async () => {
+    mockCheckRateLimit
+      .mockReturnValueOnce({ limited: false })
+      .mockReturnValueOnce({ limited: true, retryAfter: 60 });
+    const response = await POST(createRequest(validBody));
+    expect(response.status).toBe(429);
+    expect(mockCreateAdminClient).not.toHaveBeenCalled();
+    expect(mockSendSupportAcknowledgement).not.toHaveBeenCalled();
+    expect(mockCheckRateLimit.mock.calls[1][0]).toMatchObject({ degradedMode: "block" });
+    expect(mockCheckRateLimit.mock.calls[1][0].key).not.toContain(validBody.email);
   });
 });

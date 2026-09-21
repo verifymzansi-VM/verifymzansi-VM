@@ -22,6 +22,8 @@ import {
   sendDsarCompletedEmail,
   sendDsarSubmissionEmail,
   sendContactFormNotification,
+  sendSupportRequestNotification,
+  sendSupportAcknowledgement,
 } from "./email";
 
 describe("email service", () => {
@@ -35,7 +37,8 @@ describe("email service", () => {
       "Garden cottage"
     );
     expect(mockSend).toHaveBeenCalledWith(
-      expect.objectContaining({ to: "seller@example.com", replyTo: "buyer@example.com" })
+      expect.objectContaining({ to: "seller@example.com", replyTo: "buyer@example.com" }),
+      expect.objectContaining({ idempotencyKey: expect.any(String) })
     );
   });
   beforeEach(() => {
@@ -46,6 +49,7 @@ describe("email service", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllEnvs();
   });
 
@@ -59,7 +63,8 @@ describe("email service", () => {
         expect.objectContaining({
           to: "user@example.com",
           subject: expect.stringContaining("Verified"),
-        })
+        }),
+        expect.objectContaining({ idempotencyKey: expect.any(String) })
       );
     });
 
@@ -253,6 +258,76 @@ describe("email service", () => {
   });
 
   describe("error handling", () => {
+    it("retries a timeout with the same key and clears the timer after acceptance", async () => {
+      vi.useFakeTimers();
+      mockSend.mockImplementationOnce(() => new Promise(() => {}));
+      const pending = sendVerificationApprovedEmail("user@example.com", "Test");
+      await vi.advanceTimersByTimeAsync(9_000);
+      expect(await pending).toMatchObject({ success: true });
+      expect(mockSend).toHaveBeenCalledTimes(2);
+      expect(mockSend.mock.calls[0][1]).toEqual(mockSend.mock.calls[1][1]);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("retries a structured 503 even when the message has no status code", async () => {
+      vi.useFakeTimers();
+      mockSend.mockResolvedValueOnce({
+        data: null,
+        error: { statusCode: 503, message: "Unavailable" },
+      });
+      const pending = sendVerificationApprovedEmail("user@example.com", "Test");
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(await pending).toMatchObject({ success: true });
+      expect(mockSend).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not retry validation errors containing numbers", async () => {
+      mockSend.mockResolvedValue({
+        data: null,
+        error: { statusCode: 422, message: "Invalid address 503" },
+      });
+      expect((await sendVerificationApprovedEmail("user@example.com", "Test")).success).toBe(false);
+      expect(mockSend).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not report acceptance without a provider message ID", async () => {
+      mockSend.mockResolvedValue({ data: null, error: null });
+      expect((await sendVerificationApprovedEmail("user@example.com", "Test")).success).toBe(false);
+    });
+
+    it("uses separate keys for independent emails", async () => {
+      await sendVerificationApprovedEmail("user@example.com", "Test");
+      await sendVerificationApprovedEmail("user@example.com", "Test");
+      expect(mockSend.mock.calls[0][1]).not.toEqual(mockSend.mock.calls[1][1]);
+    });
+
+    it("stops after three timeouts without leaking timers", async () => {
+      vi.useFakeTimers();
+      mockSend.mockImplementation(() => new Promise(() => {}));
+      const pending = sendVerificationApprovedEmail("user@example.com", "Test");
+      await vi.advanceTimersByTimeAsync(27_000);
+      expect(await pending).toMatchObject({ success: false, error: "Email send timed out" });
+      expect(mockSend).toHaveBeenCalledTimes(3);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("routes payment support to billing with an authenticated queue link", async () => {
+      await sendSupportRequestNotification("payment_refund", "request-123");
+      expect(mockSend.mock.calls[0][0]).toMatchObject({
+        to: "billing@verifymzansi.com",
+        text: expect.stringContaining("/admin/support"),
+      });
+    });
+
+    it("acknowledges with a stable reference and category reply address", async () => {
+      await sendSupportAcknowledgement("sender@example.com", "request-123", "privacy_popia");
+      expect(mockSend.mock.calls[0][0]).toMatchObject({
+        to: "sender@example.com",
+        replyTo: "privacy@verifymzansi.com",
+        text: expect.stringContaining("VM-REQUEST-123"),
+      });
+      expect(mockSend.mock.calls[0][1]).toEqual({ idempotencyKey: "support-ack/request-123" });
+    });
     it("returns error when Resend responds with error", async () => {
       mockSend.mockResolvedValue({
         data: null,

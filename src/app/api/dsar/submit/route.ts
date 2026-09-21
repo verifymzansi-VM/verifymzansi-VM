@@ -165,14 +165,14 @@ export async function POST(request: NextRequest) {
     // Generate a human-readable reference
     const reference = `DSAR-${dsarRecord.id.slice(0, 8).toUpperCase()}`;
 
-    sendDsarSubmissionEmail(email, reference, dueBy.toISOString()).catch((emailError) => {
+    await sendDsarSubmissionEmail(email, reference, dueBy.toISOString()).catch((emailError) => {
       log.warn("Failed to send DSAR submission confirmation email", {
         requestId: dsarRecord.id,
         error: emailError instanceof Error ? emailError.message : "unknown error",
       });
     });
 
-    void notifyStaffForAdminEvent({
+    await notifyStaffForAdminEvent({
       capability: "dsar:manage",
       title: "New data request submitted",
       message: `${type.replace(/_/g, " ")} request ${reference} is ready for review.`,

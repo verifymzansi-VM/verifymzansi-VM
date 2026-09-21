@@ -1,5 +1,9 @@
 import { Resend } from "resend";
-import { SUPPORT_CONTACT_EMAIL } from "@/lib/contact-email";
+import {
+  CONTACT_CATEGORY_EMAILS,
+  SUPPORT_CONTACT_EMAIL,
+  supportReference,
+} from "@/lib/contact-email";
 import { createLogger } from "@/lib/utils/logger";
 import {
   brandedEmail,
@@ -24,9 +28,9 @@ function getResend(): Resend {
 }
 
 const FROM_EMAIL = "VerifyMzansi <noreply@verifymzansi.com>";
-const REPLY_TO = process.env.VERIFYMZANSI_SUPPORT_EMAIL?.trim() || SUPPORT_CONTACT_EMAIL;
 
 interface SendEmailParams {
+  idempotencyKey?: string;
   replyTo?: string;
   to: string;
   subject: string;
@@ -42,17 +46,29 @@ interface SendEmailResult {
 
 const EMAIL_MAX_RETRIES = 2;
 const EMAIL_BASE_DELAY_MS = 1_000;
-const EMAIL_TIMEOUT_MS = 10_000;
+// Three attempts plus backoff fit inside Workers' 30-second background window.
+const EMAIL_TIMEOUT_MS = 8_000;
 
 function isRetryableEmailError(error: unknown): boolean {
-  if (error instanceof Error && error.name === "AbortError") return true;
+  if (error instanceof Error && ["AbortError", "EmailTimeoutError"].includes(error.name))
+    return true;
   if (error instanceof TypeError) return true;
   return false;
 }
 
-function isRetryableStatusMessage(message: string | undefined): boolean {
-  if (!message) return false;
-  return /rate.?limit|429|5\d{2}/i.test(message);
+function isRetryableProviderError(error: {
+  statusCode?: number | null;
+  name?: string;
+  message?: string;
+}): boolean {
+  if (typeof error.statusCode === "number") {
+    return error.statusCode === 429 || error.statusCode >= 500;
+  }
+  return (
+    ["rate_limit_exceeded", "internal_server_error", "application_error"].includes(
+      error.name ?? ""
+    ) || /rate.?limit|\b429\b|\b5\d{2}\b/i.test(error.message ?? "")
+  );
 }
 
 async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
@@ -65,27 +81,36 @@ async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
   }
 
   let lastError: string | undefined;
+  // Reuse across retries: a timeout does not mean the provider rejected the first send.
+  const idempotencyKey = params.idempotencyKey || crypto.randomUUID();
+  const payload = {
+    from: FROM_EMAIL,
+    to: params.to,
+    subject: params.subject,
+    html: params.html,
+    text: params.text,
+    replyTo:
+      params.replyTo || process.env.VERIFYMZANSI_SUPPORT_EMAIL?.trim() || SUPPORT_CONTACT_EMAIL,
+  };
 
   for (let attempt = 0; attempt <= EMAIL_MAX_RETRIES; attempt++) {
     try {
-      const sendPromise = getResend().emails.send({
-        from: FROM_EMAIL,
-        to: params.to,
-        subject: params.subject,
-        html: params.html,
-        text: params.text,
-        replyTo: params.replyTo || REPLY_TO,
-      });
+      const sendPromise = getResend().emails.send(payload, { idempotencyKey });
+      let timer: ReturnType<typeof setTimeout> | undefined;
       const result = await Promise.race([
         sendPromise,
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Email send timed out")), EMAIL_TIMEOUT_MS)
-        ),
-      ]);
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => {
+            const error = new Error("Email send timed out");
+            error.name = "EmailTimeoutError";
+            reject(error);
+          }, EMAIL_TIMEOUT_MS);
+        }),
+      ]).finally(() => clearTimeout(timer));
 
       if (result.error) {
         lastError = result.error.message;
-        if (isRetryableStatusMessage(result.error.message) && attempt < EMAIL_MAX_RETRIES) {
+        if (isRetryableProviderError(result.error) && attempt < EMAIL_MAX_RETRIES) {
           const backoff = EMAIL_BASE_DELAY_MS * Math.pow(2, attempt);
           log.warn("Resend transient error, retrying", {
             attempt: attempt + 1,
@@ -99,6 +124,10 @@ async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
         return { success: false, error: result.error.message };
       }
 
+      if (!result.data?.id) {
+        log.error("Resend returned no message ID");
+        return { success: false, error: "Email provider returned no message ID" };
+      }
       return {
         success: true,
         messageId: result.data?.id,
@@ -561,4 +590,50 @@ export async function sendPasswordChangeNotification(email: string): Promise<Sen
   const text = `Hi,\n\nYour VerifyMzansi account password was just changed.\n\nIf you made this change, no further action is needed.\n\nIf you did not change your password, reset it immediately: ${appUrl}/forgot-password`;
 
   return sendEmail({ to: email, subject, html, text });
+}
+
+export async function sendSupportRequestNotification(
+  category: keyof typeof CONTACT_CATEGORY_EMAILS,
+  submissionId: string
+): Promise<SendEmailResult> {
+  const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
+  const label = category.replace(/_/g, " ");
+  // Keep potentially sensitive reports in the authenticated support queue.
+  return sendEmail({
+    idempotencyKey: `support-alert/${submissionId}`,
+    to: CONTACT_CATEGORY_EMAILS[category],
+    subject: `New VerifyMzansi support request: ${label} (${supportReference(submissionId)})`,
+    html: brandedEmail({
+      title: "New support request",
+      intro: `A ${label} request is ready for review.`,
+      bodyHtml: paragraph(
+        "Sign in to the support queue to read the request and contact the sender."
+      ),
+      cta: { label: "Open request", href: `${appUrl}/admin/support?submission=${submissionId}` },
+      reason: "A request was saved through the VerifyMzansi contact form.",
+    }),
+    text: `Request ${supportReference(submissionId)}: a ${label} request is ready for review. Sign in to read it and contact the sender: ${appUrl}/admin/support?submission=${submissionId}`,
+  });
+}
+
+export async function sendSupportAcknowledgement(
+  email: string,
+  submissionId: string,
+  category: keyof typeof CONTACT_CATEGORY_EMAILS
+): Promise<SendEmailResult> {
+  const reference = supportReference(submissionId);
+  // Never echo unverified form content into mail sent to an arbitrary address.
+  return sendEmail({
+    to: email,
+    replyTo: CONTACT_CATEGORY_EMAILS[category],
+    idempotencyKey: `support-ack/${submissionId}`,
+    subject: `VerifyMzansi request received (${reference})`,
+    html: brandedEmail({
+      title: "Request received",
+      intro: "Your request has been saved in our support inbox for review.",
+      bodyHtml: `${detailList([["Reference", reference]])}${paragraph("Our team will reply after reviewing your request. Keep this reference when contacting us. If you did not submit a request, you can ignore this message.")}`,
+      reason: "A request was submitted using this email address on VerifyMzansi.",
+    }),
+    text: `Your request has been saved in our support inbox for review.\n\nReference: ${reference}\n\nOur team will reply after reviewing your request. Keep this reference when contacting us. If you did not submit a request, you can ignore this message.`,
+  });
 }

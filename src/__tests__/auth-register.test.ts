@@ -1,11 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
+import type * as NextServerModule from "next/server";
 import type * as ApiModule from "@/lib/utils/api";
 import type * as TurnstileModule from "@/lib/utils/turnstile";
 
 const { mockCreateClient, mockVerifyTurnstile } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockVerifyTurnstile: vi.fn(),
+}));
+
+const { mockAfter, mockSendAlreadyRegisteredEmail } = vi.hoisted(() => ({
+  mockAfter: vi.fn(),
+  mockSendAlreadyRegisteredEmail: vi.fn().mockResolvedValue({ success: true }),
+}));
+vi.mock("next/server", async () => ({
+  ...(await vi.importActual<typeof NextServerModule>("next/server")),
+  after: mockAfter,
+}));
+vi.mock("@/lib/services/email", () => ({
+  sendAlreadyRegisteredEmail: mockSendAlreadyRegisteredEmail,
 }));
 
 const {
@@ -165,6 +178,24 @@ describe("POST /api/auth/register", () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
+  });
+
+  it("schedules existing-account mail after the generic response", async () => {
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        signUp: vi.fn().mockResolvedValue({
+          data: { user: { id: "existing", identities: [] } },
+          error: null,
+        }),
+      },
+    });
+    const response = await POST(createRequest(validBody));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ success: true });
+    expect(mockAfter).toHaveBeenCalledTimes(1);
+    expect(mockSendAlreadyRegisteredEmail).not.toHaveBeenCalled();
+    await mockAfter.mock.calls[0][0]();
+    expect(mockSendAlreadyRegisteredEmail).toHaveBeenCalledWith(validBody.email);
   });
 
   it("returns 400 for invalid JSON", async () => {

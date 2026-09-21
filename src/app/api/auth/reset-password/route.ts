@@ -168,7 +168,7 @@ export async function POST(request: NextRequest) {
     await supabase.auth.signOut();
 
     if (user.email) {
-      void sendPasswordChangeNotification(user.email).catch((err) => {
+      await sendPasswordChangeNotification(user.email).catch((err) => {
         log.warn("Failed to send password reset completion notification", {
           userId: user.id,
           error: err instanceof Error ? err.message : "Unknown",
