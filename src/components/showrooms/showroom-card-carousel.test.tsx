@@ -359,12 +359,12 @@ describe("ShowroomCardCarousel", () => {
     expect(ambientCards.length).toBe(1);
   });
 
-  it("autoplays the center card immediately instead of deferring hero playback", () => {
+  it("defers hero video downloads until the visitor presses play", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
     const cards = screen.getAllByTestId("poster-card");
     const ambientCard = cards.find((card) => card.getAttribute("data-video-mode") === "ambient");
 
-    expect(ambientCard).toHaveAttribute("data-defer", "no");
+    expect(ambientCard).toHaveAttribute("data-defer", "yes");
   });
 
   it("keeps playable video source on center card only", () => {
@@ -548,4 +548,19 @@ describe("ShowroomCardCarousel", () => {
     expect(activeCards).toHaveLength(1);
     expect(stackCards).toHaveLength(6);
   });
+});
+
+it("does not advance the carousel during a diagonal vertical touch scroll", () => {
+  render(<ShowroomCardCarousel items={mockItems} />);
+  const group = screen.getByLabelText("Carousel slides", { exact: true });
+  fireEvent.pointerDown(group, {
+    clientX: 240,
+    clientY: 500,
+    pointerId: 9,
+    pointerType: "touch",
+    button: 0,
+  });
+  fireEvent.pointerMove(window, { clientX: 170, clientY: 200, pointerId: 9, pointerType: "touch" });
+  fireEvent.pointerUp(window, { clientX: 170, clientY: 200, pointerId: 9, pointerType: "touch" });
+  expect(screen.getByText("Slide 1 of 3")).toBeInTheDocument();
 });

@@ -57,6 +57,7 @@ describe("mobile feed playback", () => {
     );
     visibility(0.75);
     expect(document.querySelector("video")!.paused).toBe(true);
+    expect(document.querySelector("video")!.getAttribute("src")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Play" }));
     expect(document.querySelector("video")!.paused).toBe(false);
     visibility(0.5);
@@ -108,6 +109,22 @@ describe("mobile feed playback", () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it("loads a visible card when it becomes eligible without another intersection", () => {
+    const { rerender } = render(
+      <VideoPlaybackProvider>
+        <Probe eligible={false} />
+      </VideoPlaybackProvider>
+    );
+    visibility(0.75);
+    expect(document.querySelector("video")!.getAttribute("src")).toBeNull();
+    rerender(
+      <VideoPlaybackProvider>
+        <Probe eligible />
+      </VideoPlaybackProvider>
+    );
+    expect(document.querySelector("video")!.src).toBe("https://example.com/clip.mp4");
   });
 
   it("keeps a manual pause through visibility changes and resumes on tap", () => {

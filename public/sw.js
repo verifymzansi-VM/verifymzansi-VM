@@ -5,14 +5,12 @@
  *
  * Strategy:
  *  - Next.js build assets: Network-only (hashed chunks must never be stale)
- *  - Public images/icons: Cache-first with long TTL
+ *  - Public images/icons: Revalidate online, cached fallback offline
  *  - HTML pages: Network-only with offline fallback
  *  - API calls: Network-only (no caching of dynamic data)
  */
 
-const CACHE_NAME = "verifymzansi-v5-no-next-static-cache";
-const MEDIA_CACHE_NAME = "verifymzansi-media-v1";
-const MEDIA_CACHE_MAX_ENTRIES = 100;
+const CACHE_NAME = "verifymzansi-v6-fresh-assets";
 const OFFLINE_URL = "/offline";
 
 const PRECACHE_URLS = ["/offline", "/manifest.json"];
@@ -40,7 +38,7 @@ self.addEventListener("activate", (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((key) => key !== CACHE_NAME && key !== MEDIA_CACHE_NAME)
+            .filter((key) => key.startsWith("verifymzansi-") && key !== CACHE_NAME)
             .map((key) => caches.delete(key))
         )
       )
@@ -57,13 +55,9 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
   if (url.origin !== self.location.origin) return;
 
-  // Media serve — cache-first for images/small videos served from R2
-  // Skip large video responses (>10 MB) to avoid blowing the cache quota.
-  if (url.pathname.startsWith("/api/media/serve/")) {
-    event.respondWith(mediaCacheFirst(request));
-    return;
-  }
-
+  // Let the HTTP cache handle media, including Range requests. Cache Storage
+  // ignores Range when matching and can return an entire cached video instead
+  // of the requested segment. It also bypasses expiry and access-control headers.
   if (url.pathname.startsWith("/api/")) return;
 
   // Next.js build assets are content-hashed and deployment-scoped. Serving an
@@ -76,7 +70,7 @@ self.addEventListener("fetch", (event) => {
 
   // Public static assets — cache-first
   if (url.pathname.startsWith("/icons/") || url.pathname.startsWith("/images/")) {
-    event.respondWith(cacheFirst(request));
+    event.respondWith(networkFirst(request, event));
     return;
   }
 
@@ -87,65 +81,23 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Everything else — network-first
-  event.respondWith(networkFirst(request));
+  // Do not persist RSC navigation/prefetch payloads or other dynamic responses.
+  // The browser and server own their caching policy.
 });
 
-async function cacheFirst(request) {
-  const cached = await caches.match(request);
-  if (cached) return cached;
-
-  const response = await fetch(request);
-  if (response.ok) {
-    const cache = await caches.open(CACHE_NAME);
-    cache.put(request, response.clone());
-  }
-  return response;
-}
-
-/**
- * Cache-first strategy for media assets served from /api/media/serve/*.
- * Skips caching for responses >10 MB (large videos) to avoid quota issues.
- * Uses LRU eviction when the cache exceeds MEDIA_CACHE_MAX_ENTRIES.
- */
-async function mediaCacheFirst(request) {
-  const cached = await caches.match(request);
-  if (cached) return cached;
-
+async function networkFirst(request, event) {
   try {
-    const response = await fetch(request);
-    if (!response.ok) return response;
-
-    // Never cache 206 Partial Content — video players use Range requests
-    // and caching a partial response would serve truncated data later.
-    if (response.status === 206) return response;
-
-    // Don't cache large responses (>10 MB) — they blow out quota.
-    const size = parseInt(response.headers.get("content-length") || "0", 10);
-    if (size > 10 * 1024 * 1024) return response;
-
-    const cache = await caches.open(MEDIA_CACHE_NAME);
-    // LRU eviction: trim oldest entries when we exceed the cap.
-    const keys = await cache.keys();
-    if (keys.length >= MEDIA_CACHE_MAX_ENTRIES) {
-      // Delete the oldest 10% to avoid evicting on every insert.
-      const toDelete = keys.slice(0, Math.max(1, Math.ceil(keys.length * 0.1)));
-      await Promise.all(toDelete.map((k) => cache.delete(k)));
-    }
-    cache.put(request, response.clone());
-    return response;
-  } catch {
-    // Offline — already checked cache above, nothing available
-    return new Response("Offline", { status: 503 });
-  }
-}
-
-async function networkFirst(request) {
-  try {
-    const response = await fetch(request);
+    const response = await fetch(request, { cache: "no-cache" });
     if (response.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, response.clone());
+      const copy = response.clone();
+      // Persist in the background so image rendering never waits for a full
+      // cache write. Quota/private-mode errors must not discard a fresh response.
+      event.waitUntil(
+        caches
+          .open(CACHE_NAME)
+          .then((cache) => cache.put(request, copy))
+          .catch(() => {})
+      );
     }
     return response;
   } catch {
@@ -193,13 +145,11 @@ self.addEventListener("push", (event) => {
             : payload.title,
         body:
           typeof parsed?.body === "string" && parsed.body.length > 0 ? parsed.body : payload.body,
-        url: typeof parsed?.url === "string" && parsed.url.startsWith("/") ? parsed.url : payload.url,
+        url:
+          typeof parsed?.url === "string" && parsed.url.startsWith("/") ? parsed.url : payload.url,
         icon:
-          typeof parsed?.icon === "string" && parsed.icon.length > 0
-            ? parsed.icon
-            : payload.icon,
-        tag:
-          typeof parsed?.tag === "string" && parsed.tag.length > 0 ? parsed.tag : payload.tag,
+          typeof parsed?.icon === "string" && parsed.icon.length > 0 ? parsed.icon : payload.icon,
+        tag: typeof parsed?.tag === "string" && parsed.tag.length > 0 ? parsed.tag : payload.tag,
       };
     } catch {
       // Fall back to defaults if the payload isn't valid JSON.
@@ -227,22 +177,20 @@ self.addEventListener("notificationclick", (event) => {
       : "/dashboard";
 
   event.waitUntil(
-    self.clients
-      .matchAll({ type: "window", includeUncontrolled: true })
-      .then((clients) => {
-        const targetUrl = new URL(targetPath, self.location.origin).href;
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      const targetUrl = new URL(targetPath, self.location.origin).href;
 
-        for (const client of clients) {
-          if (client.url === targetUrl && "focus" in client) {
-            return client.focus();
-          }
+      for (const client of clients) {
+        if (client.url === targetUrl && "focus" in client) {
+          return client.focus();
         }
+      }
 
-        if (self.clients.openWindow) {
-          return self.clients.openWindow(targetPath);
-        }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetPath);
+      }
 
-        return undefined;
-      })
+      return undefined;
+    })
   );
 });

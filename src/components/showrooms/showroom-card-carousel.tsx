@@ -397,6 +397,7 @@ export function ShowroomCardCarousel({
     [position]
   );
   const dragStartXRef = useRef(0);
+  const dragStartYRef = useRef(0);
   const didDragRef = useRef(false);
   const activePointerIdRef = useRef<number | null>(null);
   const activeInputModeRef = useRef<"pointer" | "mouse" | null>(null);
@@ -494,6 +495,7 @@ export function ShowroomCardCarousel({
       activePointerIdRef.current = e.pointerId;
       activeInputModeRef.current = "pointer";
       dragStartXRef.current = e.clientX;
+      dragStartYRef.current = e.clientY;
       didDragRef.current = false;
       position.stop();
       dragBaseRef.current = position.get();
@@ -545,6 +547,7 @@ export function ShowroomCardCarousel({
       activePointerIdRef.current = null;
       activeInputModeRef.current = "mouse";
       dragStartXRef.current = e.clientX;
+      dragStartYRef.current = e.clientY;
       didDragRef.current = false;
       position.stop();
       dragBaseRef.current = position.get();
@@ -644,6 +647,16 @@ export function ShowroomCardCarousel({
         return;
       }
       const delta = event.clientX - dragStartXRef.current;
+      // Yield vertical gestures before moving cards or suppressing their links.
+      // A diagonal page scroll must not animate the stack under the finger.
+      if (event.pointerType === "touch" && !didDragRef.current) {
+        const verticalDelta = Math.abs(event.clientY - dragStartYRef.current);
+        if (verticalDelta > DRAG_CLICK_THRESHOLD && verticalDelta > Math.abs(delta)) {
+          cancelDrag(event.pointerId);
+          return;
+        }
+        if (Math.abs(delta) <= DRAG_CLICK_THRESHOLD) return;
+      }
       if (Math.abs(delta) > DRAG_CLICK_THRESHOLD) {
         if (!didDragRef.current) {
           setCarouselLinkInteractivity(false);
@@ -1058,6 +1071,8 @@ export function ShowroomCardCarousel({
                 mediaWidth={item.mediaWidth}
                 mediaHeight={item.mediaHeight}
                 priority={offset === 0}
+                mediaSizes="(max-width: 767px) 260px, (max-width: 1023px) 300px, 440px"
+                deferVideoLoadUntilPlay
                 videoMode={offset === 0 ? "ambient" : undefined}
                 onVideoEnded={offset === 0 ? handleVideoEnded : undefined}
                 showPlaybackControl={offset === 0}
