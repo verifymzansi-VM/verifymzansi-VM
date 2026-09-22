@@ -185,8 +185,7 @@ export default function EditListingPage() {
         setCondition(
           ((data.condition as ListingCondition | null) ??
             ((data.attributes as Record<string, unknown> | null)?.condition as
-              | ListingCondition
-              | undefined) ??
+              ListingCondition | undefined) ??
             "") as ListingCondition | ""
         );
         setCategoryAttributes(

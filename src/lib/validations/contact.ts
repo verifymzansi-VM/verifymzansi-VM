@@ -28,9 +28,7 @@ export const contactAccountHolderSchema = z
   .transform((value) => ({
     targetId: value.businessId ?? value.promotionId ?? value.listingId!,
     targetType: (value.businessId ? "business" : value.promotionId ? "promotion" : "listing") as
-      | "listing"
-      | "promotion"
-      | "business",
+      "listing" | "promotion" | "business",
     message: value.message,
     buyerName: value.buyerName,
     buyerEmail: value.buyerEmail,

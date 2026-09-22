@@ -9,11 +9,7 @@ import { createLogger } from "@/lib/utils/logger";
 const log = createLogger("Consent");
 
 export type ConsentPurpose =
-  | "marketing_email"
-  | "marketing_sms"
-  | "data_processing"
-  | "third_party_sharing"
-  | "analytics";
+  "marketing_email" | "marketing_sms" | "data_processing" | "third_party_sharing" | "analytics";
 
 interface ConsentUpdate {
   userId: string;

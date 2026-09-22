@@ -65,8 +65,7 @@ interface TourismBusinessRow {
 }
 
 type ShowcaseItem =
-  | { kind: "event"; data: PromotionRow }
-  | { kind: "tourism"; data: TourismBusinessRow };
+  { kind: "event"; data: PromotionRow } | { kind: "tourism"; data: TourismBusinessRow };
 
 export async function HomePromotionsShowcase() {
   const cookieStore = await getOptionalCookieStore();

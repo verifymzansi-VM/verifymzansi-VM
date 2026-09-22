@@ -1140,13 +1140,11 @@ export function PromotionDetailContent({
               asChild
             >
               <a
-                href={
-                  whatsappLink(
-                    advertiserProfile.phone,
-                    promotion.title,
-                    `/tourism-events/${promotion.id}`
-                  )!
-                }
+                href={whatsappLink(
+                  advertiserProfile.phone,
+                  promotion.title,
+                  `/tourism-events/${promotion.id}`
+                )!}
                 target="_blank"
                 rel="noopener noreferrer nofollow ugc"
               >

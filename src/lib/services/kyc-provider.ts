@@ -142,9 +142,5 @@ export function getConfiguredProvider(): IKycProvider {
   return new StubKycProvider();
 }
 
-// Re-export types so existing imports from this file keep working.
-export type {
-  KycProviderResult,
-  IKycProvider,
-  KycProviderSubmission,
-} from "./kyc-provider-interface";
+// Re-export the provider contract so existing imports from this file keep working.
+export type { IKycProvider } from "./kyc-provider-interface";

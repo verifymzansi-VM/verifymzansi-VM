@@ -89,9 +89,13 @@ export default function LoginPage() {
     }
 
     if (loginPageFlags.emailConfirmed) {
-      setEmailConfirmedVisible(true);
-      // Clean URL to prevent re-flash on refresh/back navigation
-      window.history.replaceState({}, "", window.location.pathname);
+      // Defer past the synchronous effect body to avoid a cascading render
+      // (react-hooks/set-state-in-effect).
+      queueMicrotask(() => {
+        setEmailConfirmedVisible(true);
+        // Clean URL to prevent re-flash on refresh/back navigation
+        window.history.replaceState({}, "", window.location.pathname);
+      });
     }
 
     if (loginPageFlags.error === "auth_callback_failed") {

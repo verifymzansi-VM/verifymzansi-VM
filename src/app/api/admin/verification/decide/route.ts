@@ -416,9 +416,7 @@ export async function POST(request: Request) {
         actorId: user.id,
         actorRole,
         action: auditAction as
-          | "verification_approved"
-          | "verification_rejected"
-          | "verification_resubmission_requested",
+          "verification_approved" | "verification_rejected" | "verification_resubmission_requested",
         targetType: "verification_step",
         targetId: stepId,
         metadata: {

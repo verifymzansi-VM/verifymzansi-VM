@@ -316,14 +316,12 @@ export function BusinessDetailsCard({
       ? businessDetails
       : null;
 
-  if (
-    !(
-      businessDetails ||
-      business.store_number ||
-      (canShowMapDirections && business.map_directions) ||
-      serviceAreas
-    )
-  ) {
+  if (!(
+    businessDetails ||
+    business.store_number ||
+    (canShowMapDirections && business.map_directions) ||
+    serviceAreas
+  )) {
     return null;
   }
 

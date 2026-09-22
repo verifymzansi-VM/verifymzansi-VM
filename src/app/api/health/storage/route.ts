@@ -54,8 +54,7 @@ export async function GET(request: Request) {
   try {
     const contextSymbol = Symbol.for("__cloudflare-context__");
     const context = (globalThis as Record<PropertyKey, unknown>)[contextSymbol] as
-      | { env?: Record<string, unknown> }
-      | undefined;
+      { env?: Record<string, unknown> } | undefined;
     if (context && context.env) {
       const envKeys = Object.keys(context.env);
       const envBindingTypes: Record<string, string> = {};
@@ -168,8 +167,7 @@ export async function GET(request: Request) {
   try {
     const contextSymbol = Symbol.for("__cloudflare-context__");
     const context = (globalThis as Record<PropertyKey, unknown>)[contextSymbol] as
-      | { env?: Record<string, unknown> }
-      | undefined;
+      { env?: Record<string, unknown> } | undefined;
     if (context?.env?.PRIVATE_BUCKET) {
       const binding = context.env.PRIVATE_BUCKET as {
         put: (key: string, value: ArrayBuffer) => Promise<unknown>;

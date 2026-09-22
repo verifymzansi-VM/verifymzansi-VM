@@ -207,14 +207,12 @@ export function LeadsFeed({ initialLeads, ownerColumn, ownerId }: LeadsFeedProps
               ) && (
                 <Button asChild variant="outline" size="sm">
                   <a
-                    href={
-                      whatsappLink(
-                        lead.buyer_phone,
-                        lead.listings?.title || "your enquiry",
-                        `/${lead.target_type === "promotion" ? "tourism-events" : "listing"}/${lead.target_id}`,
-                        "Hi, thanks for your enquiry about"
-                      )!
-                    }
+                    href={whatsappLink(
+                      lead.buyer_phone,
+                      lead.listings?.title || "your enquiry",
+                      `/${lead.target_type === "promotion" ? "tourism-events" : "listing"}/${lead.target_id}`,
+                      "Hi, thanks for your enquiry about"
+                    )!}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
