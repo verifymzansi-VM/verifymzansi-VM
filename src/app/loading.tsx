@@ -1,22 +1,14 @@
+import { HeroBannerSkeleton } from "@/components/home/hero-banner-skeleton";
+import { Header } from "@/components/layout/header";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function HomeLoading() {
   return (
     <div className="flex min-h-screen flex-col" aria-busy="true" aria-label="Loading">
-      {/* Header placeholder */}
-      <div className="h-16 border-b border-warm-200 dark:border-warm-800" />
+      <Header />
 
       <main className="flex-1">
-        {/* Hero banner skeleton */}
-        <div className="relative w-full aspect-[21/9] md:aspect-[3/1] bg-warm-100 dark:bg-warm-900">
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center space-y-4 max-w-xl px-4">
-              <Skeleton className="h-8 w-64 mx-auto" />
-              <Skeleton className="h-4 w-80 mx-auto" />
-              <Skeleton className="h-10 w-full max-w-md mx-auto rounded-full" />
-            </div>
-          </div>
-        </div>
+        <HeroBannerSkeleton />
 
         {/* Browse by Category skeleton */}
         <section className="py-5 sm:py-8 border-b border-warm-200 dark:border-warm-800 bg-white dark:bg-warm-950">

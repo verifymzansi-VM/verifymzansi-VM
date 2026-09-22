@@ -1,4 +1,4 @@
-import type { ShowroomDecorativeBackground } from "./showroom-card-carousel";
+import type { ShowroomDecorativeBackground } from "./showroom-section-shell";
 
 export const generatedMzansiShowroomBackground: ShowroomDecorativeBackground = {
   src: "/images/showrooms/generated-mzansi-showroom.webp",

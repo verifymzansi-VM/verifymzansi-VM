@@ -1,16 +1,17 @@
+import { ShowroomSectionShell, type ShowroomDecorativeBackground } from "./showroom-section-shell";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
  * Loading skeleton for ShowroomCardCarousel – rendered while hero data streams in via Suspense.
  * Matches the showroom card footprint and section height so content does not shift on load.
  */
-export function ShowroomCardCarouselSkeleton() {
+export function ShowroomCardCarouselSkeleton({
+  background,
+}: {
+  background?: ShowroomDecorativeBackground;
+}) {
   return (
-    <section className="relative w-full overflow-hidden bg-[linear-gradient(180deg,#faf8f3_0%,#f3eee4_52%,#ece5d6_100%)] showroom-viewport dark:bg-[linear-gradient(180deg,#0c0f14_0%,#0a0d12_52%,#080a0f_100%)]">
-      <div
-        className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(250,246,239,0.22)_0%,rgba(241,232,218,0.08)_42%,rgba(15,23,42,0.14)_100%)] dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.02)_0%,rgba(0,0,0,0.1)_42%,rgba(0,0,0,0.24)_100%)]"
-        aria-hidden="true"
-      />
+    <ShowroomSectionShell sectionClassName="showroom-viewport" background={background}>
       <div className="relative z-10 mx-auto flex items-center justify-center overflow-hidden px-4 lg:h-full">
         {/* Left card (scaled down) */}
         <div
@@ -33,7 +34,7 @@ export function ShowroomCardCarouselSkeleton() {
           <CardSkeleton />
         </div>
       </div>
-    </section>
+    </ShowroomSectionShell>
   );
 }
 
