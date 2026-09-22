@@ -163,23 +163,29 @@ const nextConfig = {
     // responses do not emit duplicate security headers from both layers.
     return [
       {
-        // Media proxy serves R2 objects with long-lived immutable headers;
-        // exclude it from the generic no-cache rule so browsers and CDN can
-        // cache video responses served through the proxy.
-        source: "/api/media/serve/:path*",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=31536000, s-maxage=31536000, immutable",
-          },
-        ],
-      },
-      {
+        // Generic API rule: no caching by default.
+        // IMPORTANT: must be listed BEFORE the media serve rule below —
+        // Next.js header overriding semantics are "last match wins", so the
+        // immutable media cache header must come last or every video/image
+        // response ends up as `private, no-store` and nothing is ever cached
+        // by browsers or the CDN edge (causing slow, repeat media downloads).
         source: "/api/:path*",
         headers: [
           {
             key: "Cache-Control",
             value: "private, no-store, no-cache, must-revalidate",
+          },
+        ],
+      },
+      {
+        // Media proxy serves R2 objects with long-lived immutable headers;
+        // listed after the generic /api/:path* rule so this immutable header
+        // overrides it (Next.js: last matching header key wins).
+        source: "/api/media/serve/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, s-maxage=31536000, immutable",
           },
         ],
       },

@@ -592,12 +592,17 @@ export async function GET(
   if (response.status === 404) {
     const stem = originalKeyForVariant(key);
     if (stem) {
-      for (const originalExt of VARIANT_ORIGINAL_EXTS) {
-        const originalKey = `${stem}.${originalExt}`;
-        const originalResponse = await serveMediaForKey(request, originalKey);
-        if (originalResponse.status !== 404) {
-          return originalResponse;
-        }
+      // Probe all candidate extensions in parallel — the previous sequential
+      // loop added up to 6 serial R2/S3 round-trips of latency per image for
+      // legacy media without pre-generated variants.
+      const probes = await Promise.all(
+        VARIANT_ORIGINAL_EXTS.map((originalExt) =>
+          serveMediaForKey(request, `${stem}.${originalExt}`)
+        )
+      );
+      const hit = probes.find((probe) => probe.status !== 404);
+      if (hit) {
+        return hit;
       }
     }
   }

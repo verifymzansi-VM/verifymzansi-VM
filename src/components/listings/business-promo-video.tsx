@@ -108,7 +108,7 @@ export function BusinessPromoVideo({
           <button
             type="button"
             onClick={toggleMute}
-            className="absolute bottom-3 right-3 flex min-h-11 min-w-11 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-colors hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+            className="absolute bottom-3 right-3 flex min-h-11 min-w-11 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
             aria-label={isMuted ? "Unmute" : "Mute"}
           >
             {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}

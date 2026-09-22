@@ -316,7 +316,9 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
                   alt=""
                   aria-hidden="true"
                   fill
-                  className="absolute inset-0 scale-110 object-cover opacity-75 blur-2xl brightness-75"
+                  // Blur backdrop is desktop-only: full-width Gaussian blur is a
+                  // severe mobile GPU cost (see video-card-player SmartFitBackdrop).
+                  className="absolute inset-0 scale-110 object-cover opacity-75 blur-none brightness-100 md:blur-2xl md:brightness-75 md:motion-reduce:blur-none"
                   sizes="100vw"
                 />
                 <div className="absolute inset-0 bg-black/35" aria-hidden="true" />
@@ -351,7 +353,7 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
             className="absolute inset-0 z-10 flex items-center justify-center bg-black/25"
             aria-label="Play video"
           >
-            <div className="rounded-full bg-white/90 p-4 shadow-xl backdrop-blur-sm">
+            <div className="rounded-full bg-white/90 p-4 shadow-xl">
               <Play className="h-8 w-8 fill-black text-black" />
             </div>
           </button>
@@ -362,7 +364,7 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
             <button
               type="button"
               onClick={enterFullscreen}
-              className="absolute right-3 top-3 z-20 rounded-full bg-black/45 p-2 text-white/95 backdrop-blur-sm transition-colors hover:bg-black/65"
+              className="absolute right-3 top-3 z-20 rounded-full bg-black/45 p-2 text-white/95 transition-colors hover:bg-black/65"
               aria-label="Fullscreen"
               data-carousel-control="true"
             >

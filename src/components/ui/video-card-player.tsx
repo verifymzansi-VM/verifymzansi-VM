@@ -152,12 +152,21 @@ function SmartFitBackdrop({
 
   return (
     <>
+      {/*
+        The blurred duplicate behind smart-fit media is one of the most
+        expensive GPU operations a browser can do (large-radius Gaussian blur
+        over a full-card layer, per card, repainted while scrolling). On
+        mobile-sized viewports this caused severe GPU load and jank, so the
+        blur + saturation filters are desktop-only (md:). Small screens get a
+        plain dimmed backdrop image + overlay, which composites cheaply.
+        Reduced-motion users also skip the blur entirely.
+      */}
       <Image
         src={src}
         alt=""
         aria-hidden="true"
         fill
-        className="absolute inset-0 scale-110 object-cover blur-2xl brightness-90 dark:brightness-110 saturate-150"
+        className="absolute inset-0 scale-110 object-cover blur-none saturate-100 brightness-95 md:blur-2xl md:brightness-90 md:saturate-150 md:dark:brightness-110 md:motion-reduce:blur-none md:motion-reduce:saturate-100"
         sizes={sizes}
         priority={priority}
         {...(priority ? {} : { loading: "lazy" as const })}
@@ -205,7 +214,10 @@ function MuteButton({
           toggleMute();
         }}
         className={cn(
-          "relative flex items-center justify-center rounded-full text-white transition-colors select-none touch-manipulation before:absolute before:inset-1.5 before:rounded-full before:border before:border-white/20 before:bg-black/60 before:shadow-lg before:backdrop-blur-md sm:before:inset-0",
+          // No backdrop-blur here: the button floats over playing video, and
+          // backdrop-filter forces the GPU to re-blur the video region every
+          // frame — a major mobile battery/perf drain. Solid bg is cheap.
+          "relative flex items-center justify-center rounded-full text-white transition-colors select-none touch-manipulation before:absolute before:inset-1.5 before:rounded-full before:border before:border-white/20 before:bg-black/60 before:shadow-lg sm:before:inset-0",
           controlVariant === "hero"
             ? "h-11 w-11 p-0 sm:min-h-[46px] sm:min-w-[46px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
             : "h-11 w-11 p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
@@ -901,7 +913,7 @@ function VideoCardPlayerInner({
             <button
               type="button"
               data-carousel-control="true"
-              className="absolute bottom-3 left-1/2 z-[12] inline-flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/20 bg-black/52 min-h-11 px-3 py-2 text-xs font-medium text-white shadow-lg backdrop-blur-md transition-colors hover:bg-black/62 sm:bottom-4"
+              className="absolute bottom-3 left-1/2 z-[12] inline-flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/20 bg-black/52 min-h-11 px-3 py-2 text-xs font-medium text-white shadow-lg transition-colors hover:bg-black/62 sm:bottom-4"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -1031,7 +1043,7 @@ function VideoCardPlayerInner({
 
       {!hasError && !isPlaying ? (
         <div className="pointer-events-none absolute inset-0 z-[5] flex items-center justify-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/55 text-white shadow-lg backdrop-blur-md">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/55 text-white shadow-lg">
             <Play className="h-6 w-6 fill-white pl-0.5" />
           </div>
         </div>
@@ -1317,7 +1329,7 @@ function HoverVideoPlayer({
           type="button"
           data-carousel-control="true"
           aria-label={isPlaying ? "Pause video" : "Play video"}
-          className="absolute bottom-3 left-3 z-[13] inline-flex min-h-11 items-center gap-2 rounded-full bg-black/60 px-3 text-xs font-medium text-white backdrop-blur-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+          className="absolute bottom-3 left-3 z-[13] inline-flex min-h-11 items-center gap-2 rounded-full bg-black/60 px-3 text-xs font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -1367,7 +1379,7 @@ function FeedTapIndicator({ action }: { action: "play" | "pause" }) {
       className="pointer-events-none absolute inset-0 z-[12] flex items-center justify-center animate-feed-tap-indicator"
       aria-hidden="true"
     >
-      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/55 text-white shadow-lg backdrop-blur-md">
+      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/55 text-white shadow-lg">
         {action === "play" ? (
           <Play className="h-6 w-6 fill-white pl-0.5" />
         ) : (
@@ -1663,7 +1675,7 @@ function FeedVideoPlayer({
           className="pointer-events-none absolute inset-0 z-[11] flex items-center justify-center"
           aria-hidden="true"
         >
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-sm">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/60 text-white shadow-lg">
             <Play className="h-6 w-6 fill-white pl-0.5" />
           </div>
         </div>
@@ -1673,7 +1685,7 @@ function FeedVideoPlayer({
         <button
           type="button"
           data-carousel-control="true"
-          className="absolute bottom-1.5 left-1/2 z-[13] inline-flex h-11 w-11 -translate-x-1/2 items-center justify-center rounded-full text-white touch-manipulation before:absolute before:inset-1.5 before:rounded-full before:bg-black/60 before:backdrop-blur-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+          className="absolute bottom-1.5 left-1/2 z-[13] inline-flex h-11 w-11 -translate-x-1/2 items-center justify-center rounded-full text-white touch-manipulation before:absolute before:inset-1.5 before:rounded-full before:bg-black/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
           onPointerDown={(event) => event.stopPropagation()}
           onClick={handleTap}
           aria-label="Pause video"

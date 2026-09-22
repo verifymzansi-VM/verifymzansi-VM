@@ -93,7 +93,7 @@ describe("ModerationPreviewPanel", () => {
 
     expect(screen.getByTestId("video-with-poster")).toHaveAttribute(
       "data-src",
-      "/api/media/serve/listings/video-1.mp4"
+      "https://media.verifymzansi.com/listings/video-1.mp4"
     );
     expect(screen.getByTestId("video-with-poster")).toHaveAttribute(
       "data-poster-url",
@@ -134,7 +134,7 @@ describe("ModerationPreviewPanel", () => {
 
     expect(screen.getByTestId("video-with-poster")).toHaveAttribute(
       "data-src",
-      "/api/media/serve/listings/video-2.mov"
+      "https://media.verifymzansi.com/listings/video-2.mov"
     );
     expect(screen.queryByAltText(/image 1/i)).toBeNull();
   });

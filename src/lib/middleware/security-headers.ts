@@ -79,8 +79,10 @@ export function buildCsp(
     // for layout-critical positioning. Keep style tags nonce-bound, but allow
     // style attributes so media and responsive UI render under the production CSP.
     ...(nonce ? ["style-src-attr 'unsafe-inline'"] : []),
-    `img-src 'self' blob:${supabaseOrigin ? " " + supabaseOrigin : ""}${cdnOrigin ? " " + cdnOrigin : ""} https://*.r2.cloudflarestorage.com https://images.unsplash.com https://storage.googleapis.com`,
-    `media-src 'self' blob:${cdnOrigin ? " " + cdnOrigin : ""} https://*.r2.cloudflarestorage.com https://storage.googleapis.com`,
+    // Media hosts: media.verifymzansi.com is the R2 public custom domain that
+    // serves videos directly (and is the canonical host for platform media).
+    `img-src 'self' blob:${supabaseOrigin ? " " + supabaseOrigin : ""}${cdnOrigin ? " " + cdnOrigin : ""} https://media.verifymzansi.com https://media-staging.verifymzansi.com https://*.r2.cloudflarestorage.com https://images.unsplash.com https://storage.googleapis.com`,
+    `media-src 'self' blob:${cdnOrigin ? " " + cdnOrigin : ""} https://media.verifymzansi.com https://media-staging.verifymzansi.com https://*.r2.cloudflarestorage.com https://storage.googleapis.com`,
     "font-src 'self'",
     connectSrc,
     "frame-src https://challenges.cloudflare.com",

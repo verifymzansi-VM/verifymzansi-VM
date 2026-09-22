@@ -52,9 +52,9 @@ describe("media-url variant helpers", () => {
       expect(url).toContain("quality=90");
     });
 
-    it("returns proxy path for video files regardless of variant", () => {
+    it("returns the direct CDN URL for video files regardless of variant", () => {
       const url = getVariantUrl("/api/media/serve/media/listing/clip.mp4", "thumb");
-      expect(url).toBe("/api/media/serve/media/listing/clip.mp4");
+      expect(url).toBe("https://media.verifymzansi.com/media/listing/clip.mp4");
     });
 
     it("falls back to original URL for unrecognised input", () => {

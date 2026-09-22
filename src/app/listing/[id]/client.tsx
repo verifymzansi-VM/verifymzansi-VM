@@ -288,7 +288,7 @@ export function ListingDetailClient({
                 type="button"
                 onClick={() => goTo(activeIndex - 1)}
                 disabled={activeIndex === 0}
-                className="absolute left-2 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-0 hover:bg-black/60 max-lg:opacity-100"
+                className="absolute left-2 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-0 hover:bg-black/60 max-lg:opacity-100"
                 aria-label="Previous image"
                 data-carousel-control="true"
               >
@@ -298,7 +298,7 @@ export function ListingDetailClient({
                 type="button"
                 onClick={() => goTo(activeIndex + 1)}
                 disabled={activeIndex === orderedMedia.length - 1}
-                className="absolute right-2 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-0 hover:bg-black/60 max-lg:opacity-100"
+                className="absolute right-2 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-0 hover:bg-black/60 max-lg:opacity-100"
                 aria-label="Next image"
                 data-carousel-control="true"
               >
@@ -309,7 +309,7 @@ export function ListingDetailClient({
 
           {/* Image counter */}
           {orderedMedia.length > 1 && (
-            <div className="absolute left-3 top-3 bg-black/50 text-white text-xs font-medium px-2.5 py-1 rounded-full backdrop-blur-sm">
+            <div className="absolute left-3 top-3 bg-black/50 text-white text-xs font-medium px-2.5 py-1 rounded-full">
               {activeIndex + 1} / {orderedMedia.length}
             </div>
           )}

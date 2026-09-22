@@ -399,7 +399,9 @@ function MediaColumn({
                   alt=""
                   aria-hidden="true"
                   fill
-                  className="absolute inset-0 scale-110 object-cover opacity-75 blur-2xl brightness-75"
+                  // Blur backdrop is desktop-only: full-width Gaussian blur is a
+                  // severe mobile GPU cost (see video-card-player SmartFitBackdrop).
+                  className="absolute inset-0 scale-110 object-cover opacity-75 blur-none brightness-100 md:blur-2xl md:brightness-75 md:motion-reduce:blur-none"
                   sizes="(max-width: 1024px) 78vw, 420px"
                 />
                 <div className="absolute inset-0 bg-black/35" aria-hidden="true" />
@@ -462,7 +464,7 @@ function MediaColumn({
                   type="button"
                   onClick={goToPreviousMedia}
                   disabled={!canPrevious}
-                  className="absolute left-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/50 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/70 disabled:pointer-events-none disabled:opacity-35"
+                  className="absolute left-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/50 text-white shadow-lg transition hover:bg-black/70 disabled:pointer-events-none disabled:opacity-35"
                   aria-label="Previous media"
                   data-carousel-control="true"
                 >
@@ -472,7 +474,7 @@ function MediaColumn({
                   type="button"
                   onClick={goToNextMedia}
                   disabled={!canNext}
-                  className="absolute right-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/50 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/70 disabled:pointer-events-none disabled:opacity-35"
+                  className="absolute right-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/50 text-white shadow-lg transition hover:bg-black/70 disabled:pointer-events-none disabled:opacity-35"
                   aria-label="Next media"
                   data-carousel-control="true"
                 >

@@ -403,14 +403,14 @@ export function PromotionDetailContent({
                     priority
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/5 to-transparent" />
-                  <div className="absolute bottom-4 right-4 z-10 rounded-full bg-black/50 p-2 text-white backdrop-blur-sm">
+                  <div className="absolute bottom-4 right-4 z-10 rounded-full bg-black/50 p-2 text-white">
                     <Maximize2 className="h-5 w-5" />
                   </div>
                 </button>
               )}
 
               <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
-                <Badge className="bg-black/50 text-white backdrop-blur-sm border-0">Event</Badge>
+                <Badge className="bg-black/50 text-white border-0">Event</Badge>
                 {eventState && (
                   <Badge className={`${EVENT_STATE_BADGE[eventState].className} border-0`}>
                     {EVENT_STATE_BADGE[eventState].label}

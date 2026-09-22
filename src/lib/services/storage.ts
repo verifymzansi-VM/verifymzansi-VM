@@ -336,6 +336,10 @@ export async function uploadToR2(params: UploadParams): Promise<UploadResult> {
     Key: params.key,
     Body: buffer,
     ContentType: params.contentType,
+    // Media keys are immutable (timestamp + UUID), so cache them forever.
+    // This header is served by the R2 public custom domain
+    // (media.verifymzansi.com) and lets Cloudflare edge-cache the object.
+    CacheControl: "public, max-age=31536000, immutable",
   });
 
   await client.send(command);

@@ -1031,7 +1031,11 @@ export function ShowroomCardCarousel({
               key={item.id}
               className={cn(
                 CARD_W,
-                "showroom-slide absolute left-1/2 top-0 will-change-transform",
+                // will-change is applied via CSS only to the active slide and
+                // its immediate neighbours (see globals.css .showroom-slide);
+                // promoting all 15 slides to compositor layers exhausts mobile
+                // GPU memory and causes jank.
+                "showroom-slide absolute left-1/2 top-0",
                 offset !== 0 && "saturate-50 brightness-75"
               )}
               style={getInitialSlideStyle(i, count)}

@@ -1,13 +1,18 @@
 /**
  * Normalize media URLs stored in the database.
  *
- * Uploaded photos may be stored with:
+ * Uploaded media may be stored with:
  *   1. An R2 S3-compatible URL (requires auth, not publicly accessible)
  *   2. A custom-domain URL like https://media.verifymzansi.com/…
  *
- * Both images and videos are rewritten to use the local media-proxy API route
- * (/api/media/serve/…) for reliable MIME types, ETag caching, consistent
- * headers, and HTTP Range request support for video playback.
+ * Delivery strategy:
+ *   - Videos are served DIRECTLY from the R2 public custom domain
+ *     (media.verifymzansi.com) — edge-cached by Cloudflare with native HTTP
+ *     Range support and zero Worker hop. Videos have no responsive variants,
+ *     so the proxy added latency without adding value.
+ *   - Images stay on the local media-proxy route (/api/media/serve/…) which
+ *     provides responsive WebP variants (…w400/w800/w1600) with fallback to
+ *     the original object for legacy uploads, plus SVG hardening.
  */
 
 const MEDIA_BASE = process.env.NEXT_PUBLIC_MEDIA_URL || "https://media.verifymzansi.com";
@@ -16,6 +21,20 @@ const PROXY_PREFIX = "/api/media/serve/";
 const KNOWN_MEDIA_HOSTS = new Set(["media.verifymzansi.com", "media-staging.verifymzansi.com"]);
 
 const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "ogg", "mov"]);
+
+/**
+ * In Playwright stub mode media is served from local fixture files via the
+ * proxy route, so keep videos on the proxy there — the real CDN has no test
+ * fixtures and e2e runs must never depend on production network access.
+ */
+function isPlaywrightStubMode(): boolean {
+  return (
+    (process.env.PLAYWRIGHT_TEST_MODE === "1" ||
+      process.env.NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE === "1") &&
+    (process.env.PLAYWRIGHT_SUPABASE_MODE === "stub" ||
+      process.env.NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE === "stub")
+  );
+}
 
 /**
  * Returns true when a URL points to a platform-controlled media host.
@@ -92,9 +111,11 @@ export function extractMediaStorageKey(url: string): string | null {
 }
 
 /**
- * Rewrite a media URL for delivery through the local media proxy:
- * - Videos → reliable MIME types and Range request support (streamed, no buffering)
- * - Images → ETag/304 caching and consistent headers
+ * Rewrite a media URL for delivery:
+ * - Videos → direct R2 custom-domain URL (edge-cached, native Range support,
+ *   no Worker hop). Falls back to the proxy in Playwright stub mode.
+ * - Images → media proxy for responsive variants, ETag/304 caching, and
+ *   legacy fallback to the original object.
  *
  * Returns the original string unchanged if it doesn't match any known pattern.
  */
@@ -106,13 +127,18 @@ export function normalizeMediaUrl(url: string | null | undefined): string {
   // Not a recognized media URL — return as-is
   if (key === null) return url;
 
+  if (isVideoUrl(key) && !isPlaywrightStubMode()) {
+    return `${MEDIA_BASE}/${key}`;
+  }
+
   return `${PROXY_PREFIX}${key}`;
 }
 
 /**
  * Normalize a media URL specifically for video playback.
- * Routes through the serve proxy for reliable MIME types, Range request
- * support, and consistent headers. The proxy streams without buffering.
+ * Serves directly from the R2 custom domain (edge-cached, native HTTP Range
+ * support) unless running in Playwright stub mode, where the proxy serves
+ * local fixture files instead.
  */
 export function normalizeVideoUrl(url: string | null | undefined): string {
   if (!url) return "";
@@ -120,7 +146,11 @@ export function normalizeVideoUrl(url: string | null | undefined): string {
   const key = extractMediaStorageKey(url);
   if (key === null) return url;
 
-  return `${PROXY_PREFIX}${key}`;
+  if (isPlaywrightStubMode()) {
+    return `${PROXY_PREFIX}${key}`;
+  }
+
+  return `${MEDIA_BASE}/${key}`;
 }
 
 /**

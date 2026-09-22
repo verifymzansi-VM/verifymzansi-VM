@@ -77,9 +77,9 @@ describe("normalizeMediaUrl", () => {
     expect(result).toBe("/api/media/serve/photos/abc.jpg");
   });
 
-  it("routes video URLs through proxy", () => {
+  it("serves video URLs directly from the R2 custom domain", () => {
     const result = normalizeMediaUrl("https://media.verifymzansi.com/videos/clip.mp4");
-    expect(result).toBe("/api/media/serve/videos/clip.mp4");
+    expect(result).toBe("https://media.verifymzansi.com/videos/clip.mp4");
   });
 
   it("returns original string for unrecognized URL", () => {
@@ -88,14 +88,21 @@ describe("normalizeMediaUrl", () => {
     );
   });
 
-  it("routes webm videos through proxy", () => {
+  it("serves webm videos directly from the R2 custom domain", () => {
     const result = normalizeMediaUrl("https://media.verifymzansi.com/videos/clip.webm");
-    expect(result).toBe("/api/media/serve/videos/clip.webm");
+    expect(result).toBe("https://media.verifymzansi.com/videos/clip.webm");
   });
 
-  it("routes .mov videos through proxy for correct MIME mapping", () => {
+  it("serves .mov videos directly from the R2 custom domain", () => {
     const result = normalizeMediaUrl("https://media.verifymzansi.com/videos/legacy.mov");
-    expect(result).toBe("/api/media/serve/videos/legacy.mov");
+    expect(result).toBe("https://media.verifymzansi.com/videos/legacy.mov");
+  });
+
+  it("rewrites stored R2/S3 video URLs to the custom domain", () => {
+    const result = normalizeMediaUrl(
+      "https://verifymzansi-public.acct.r2.cloudflarestorage.com/media/listing/u/clip.mp4"
+    );
+    expect(result).toBe("https://media.verifymzansi.com/media/listing/u/clip.mp4");
   });
 });
 
@@ -105,19 +112,19 @@ describe("normalizeVideoUrl", () => {
     expect(normalizeVideoUrl(undefined)).toBe("");
   });
 
-  it("routes mp4 videos through proxy", () => {
+  it("serves mp4 videos directly from the R2 custom domain", () => {
     const result = normalizeVideoUrl("https://media.verifymzansi.com/videos/clip.mp4");
-    expect(result).toBe("/api/media/serve/videos/clip.mp4");
+    expect(result).toBe("https://media.verifymzansi.com/videos/clip.mp4");
   });
 
-  it("routes webm videos through proxy", () => {
+  it("serves webm videos directly from the R2 custom domain", () => {
     const result = normalizeVideoUrl("https://media.verifymzansi.com/videos/clip.webm");
-    expect(result).toBe("/api/media/serve/videos/clip.webm");
+    expect(result).toBe("https://media.verifymzansi.com/videos/clip.webm");
   });
 
-  it("routes .mov videos through proxy", () => {
+  it("serves .mov videos directly from the R2 custom domain", () => {
     const result = normalizeVideoUrl("https://media.verifymzansi.com/videos/legacy.mov");
-    expect(result).toBe("/api/media/serve/videos/legacy.mov");
+    expect(result).toBe("https://media.verifymzansi.com/videos/legacy.mov");
   });
 
   it("returns original string for unrecognized URL", () => {

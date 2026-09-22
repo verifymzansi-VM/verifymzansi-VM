@@ -397,6 +397,15 @@
     z-index: var(--slide-z-index);
   }
 
+  /* Only promote the active slide and its immediate neighbours to their own
+     compositor layers. Promoting all 15 slides with will-change exhausts
+     mobile GPU memory and makes scrolling janky. */
+  .showroom-slide[data-slot-offset="0"],
+  .showroom-slide[data-slot-offset="1"],
+  .showroom-slide[data-slot-offset="-1"] {
+    will-change: transform;
+  }
+
   @media (min-width: 768px) {
     .showroom-slide {
       transform: var(--slide-tablet-transform);
@@ -518,6 +527,17 @@
   /* Frosted-glass panel for sticky chrome, drawers and popovers */
   .glass-panel {
     @apply border border-border/60 bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/75;
+  }
+
+  /* Full-width sticky chrome with backdrop-blur-xl (24px) forces the GPU to
+     re-blur everything scrolling beneath it every frame — a known cause of
+     mobile scroll jank. Use a much cheaper 8px blur on small screens; the
+     frosted look is preserved without the per-frame cost. */
+  @media (max-width: 767px) {
+    .glass-panel {
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
   }
 
   /* Eyebrow / kicker label used above section headings */
