@@ -18,6 +18,12 @@ test.describe("Marketplace showroom desktop drag", () => {
     const liveRegion = showroomSection.locator('[aria-live="polite"]').first();
     await expect(liveRegion).toContainText("Slide 1 of");
 
+    // Ambient videos stay poster-first until an explicit play action
+    // (deferVideoLoadUntilPlay), so activate playback before checking delivery.
+    const activeCard = showroomSection.locator('[data-showroom-layer="active"]').first();
+    const playButton = activeCard.getByRole("button", { name: "Play video", exact: true });
+    await expect(playButton).toBeVisible();
+    await playButton.click();
     const ambientVideo = showroomSection.locator("video").first();
     await expect(ambientVideo).toHaveAttribute("src", /advertiser-desktop\.webm$/);
 

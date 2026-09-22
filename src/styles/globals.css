@@ -372,8 +372,9 @@
 
 @layer components {
   .showroom-viewport {
-    /* Header, mobile navigation, section padding, controls, and metadata. */
-    --showroom-reserved-height: calc(272px + env(safe-area-inset-bottom, 0px));
+    /* Header, floating mobile navigation pill (74px incl. bottom offset),
+       section padding, controls, and metadata. */
+    --showroom-reserved-height: calc(292px + env(safe-area-inset-bottom, 0px));
     --showroom-card-width: 260px;
     padding-block: 16px;
   }
