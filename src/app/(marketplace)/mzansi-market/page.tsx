@@ -5,6 +5,7 @@ import { ShowroomCardCarousel } from "@/components/showrooms/showroom-card-carou
 import { mzansiMarketShowroomBackground } from "@/components/showrooms/showroom-backgrounds";
 import { listingToCarouselItem } from "@/components/showrooms/carousel-item-transforms";
 import { PageHeader } from "@/components/layout";
+import { DisableMobileAutoplay } from "@/contexts/autoplay-policy-context";
 import { TrustStrip } from "@/components/layout/trust-strip";
 import { ListingFilterSidebar } from "@/components/listings/listing-filter-sidebar";
 import { ListingFilterDrawer } from "@/components/listings/listing-filter-drawer";
@@ -79,87 +80,89 @@ export default async function MzansiMarketPage() {
     .map((l) => listingToCarouselItem(l));
 
   return (
-    <div className="space-y-0">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/<\//g, "<\\/") }}
-      />
-      <Suspense fallback={null}>
-        <MarketplaceUrlFilterSync />
-      </Suspense>
+    <DisableMobileAutoplay>
+      <div className="space-y-0">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/<\//g, "<\\/") }}
+        />
+        <Suspense fallback={null}>
+          <MarketplaceUrlFilterSync />
+        </Suspense>
 
-      {/* ── Card Carousel Showroom ─────────────── */}
-      <ShowroomCardCarousel
-        items={carouselItems}
-        emptyTitle="Mzansi Market"
-        emptyDescription={categorySeo.description}
-        emptyMediaUrl="/images/fallbacks/hero-listing.svg"
-        background={mzansiMarketShowroomBackground}
-      />
+        {/* ── Card Carousel Showroom ─────────────── */}
+        <ShowroomCardCarousel
+          items={carouselItems}
+          emptyTitle="Mzansi Market"
+          emptyDescription={categorySeo.description}
+          emptyMediaUrl="/images/fallbacks/hero-listing.svg"
+          background={mzansiMarketShowroomBackground}
+        />
 
-      <TrustStrip variant="green" title="Latest on Mzansi Market" />
+        <TrustStrip variant="green" title="Latest on Mzansi Market" />
 
-      {/* ── Main Content ─────────────────────────────────── */}
-      <div className="container-page py-8 space-y-7 lg:py-10">
-        {/* Compact mobile header */}
-        <div className="flex items-center justify-between lg:hidden">
-          <h1 className="font-display text-lg font-bold tracking-tight">
-            {categorySeo.searchName}
-          </h1>
-          <Button
-            asChild
-            size="sm"
-            variant="trust-verified"
-            className="h-11 gap-1 rounded-full px-4 font-semibold"
-          >
-            <Link href="/post/create-listing">
-              Create a listing
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
-        </div>
-
-        {/* Mobile filter drawer (FAB visible < lg only) */}
-        <ListingFilterDrawer />
-
-        {/* Two-column layout */}
-        <div className="flex gap-6 lg:gap-8">
-          {/* Desktop sidebar */}
-          <aside className="hidden w-72 shrink-0 lg:block">
-            <div className="sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pr-1 scrollbar-thin">
-              <ListingFilterSidebar />
-            </div>
-          </aside>
-
-          {/* Main content area */}
-          <div className="flex-1 min-w-0 space-y-5">
-            <PageHeader
-              title={categorySeo.searchName}
-              description={categorySeo.description}
-              breadcrumbs={[{ label: "Mzansi Market" }]}
-              className="hidden lg:block"
+        {/* ── Main Content ─────────────────────────────────── */}
+        <div className="container-page py-8 space-y-7 lg:py-10">
+          {/* Compact mobile header */}
+          <div className="flex items-center justify-between lg:hidden">
+            <h1 className="font-display text-lg font-bold tracking-tight">
+              {categorySeo.searchName}
+            </h1>
+            <Button
+              asChild
+              size="sm"
+              variant="trust-verified"
+              className="h-11 gap-1 rounded-full px-4 font-semibold"
             >
-              <Button
-                asChild
-                size="sm"
-                variant="trust-verified"
-                className="h-11 gap-1 rounded-full px-4 font-semibold"
+              <Link href="/post/create-listing">
+                Create a listing
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
+
+          {/* Mobile filter drawer (FAB visible < lg only) */}
+          <ListingFilterDrawer />
+
+          {/* Two-column layout */}
+          <div className="flex gap-6 lg:gap-8">
+            {/* Desktop sidebar */}
+            <aside className="hidden w-72 shrink-0 lg:block">
+              <div className="sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pr-1 scrollbar-thin">
+                <ListingFilterSidebar />
+              </div>
+            </aside>
+
+            {/* Main content area */}
+            <div className="flex-1 min-w-0 space-y-5">
+              <PageHeader
+                title={categorySeo.searchName}
+                description={categorySeo.description}
+                breadcrumbs={[{ label: "Mzansi Market" }]}
+                className="hidden lg:block"
               >
-                <Link href="/post/create-listing">
-                  Create a listing
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-            </PageHeader>
+                <Button
+                  asChild
+                  size="sm"
+                  variant="trust-verified"
+                  className="h-11 gap-1 rounded-full px-4 font-semibold"
+                >
+                  <Link href="/post/create-listing">
+                    Create a listing
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+              </PageHeader>
 
-            {/* Toolbar: location + sort + active chips */}
-            <ListingGridHeader />
+              {/* Toolbar: location + sort + active chips */}
+              <ListingGridHeader />
 
-            {/* Listings grid */}
-            <MzansiMarketGrid />
+              {/* Listings grid */}
+              <MzansiMarketGrid />
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </DisableMobileAutoplay>
   );
 }

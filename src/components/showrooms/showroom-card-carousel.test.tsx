@@ -1,5 +1,6 @@
-import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent, act } from "@testing-library/react";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { AutoplayPolicyProvider } from "@/contexts/autoplay-policy-context";
 import {
   ShowroomCardCarousel,
   type CarouselItem,
@@ -19,6 +20,7 @@ vi.mock("@/components/listings/poster-card-shell", () => ({
     mediaUrl,
     mediaFallbackUrl,
     showPlaybackControl,
+    stickyAutoplay,
     makeEntireCardClickable,
     deferVideoLoadUntilPlay,
   }: {
@@ -29,6 +31,7 @@ vi.mock("@/components/listings/poster-card-shell", () => ({
     mediaUrl?: string;
     mediaFallbackUrl?: string;
     showPlaybackControl?: boolean;
+    stickyAutoplay?: boolean;
     makeEntireCardClickable?: boolean;
     deferVideoLoadUntilPlay?: boolean;
   }) => (
@@ -38,6 +41,7 @@ vi.mock("@/components/listings/poster-card-shell", () => ({
       data-media-url={mediaUrl}
       data-fallback-media-url={mediaFallbackUrl}
       data-defer={deferVideoLoadUntilPlay ? "yes" : "no"}
+      data-sticky-autoplay={stickyAutoplay ? "yes" : "no"}
     >
       <div data-testid={`poster-card-surface-${title}`}>{title}</div>
       {description && <span>{description}</span>}
@@ -527,6 +531,25 @@ describe("ShowroomCardCarousel", () => {
     expect(screen.getAllByRole("button", { name: "Playback" })).toHaveLength(1);
   });
 
+  it("links sticky autoplay to the focused showroom card only", () => {
+    render(<ShowroomCardCarousel items={mockItems} />);
+    const stickyCards = screen
+      .getAllByTestId("poster-card")
+      .filter((el) => el.getAttribute("data-sticky-autoplay") === "yes");
+    expect(stickyCards).toHaveLength(1);
+    expect(stickyCards[0]).toHaveTextContent("Test Listing");
+  });
+
+  it("moves the sticky autoplay link as the user focuses another card", () => {
+    render(<ShowroomCardCarousel items={mockItems} />);
+    fireEvent.click(screen.getByText("Open Test Business"));
+    const stickyCards = screen
+      .getAllByTestId("poster-card")
+      .filter((el) => el.getAttribute("data-sticky-autoplay") === "yes");
+    expect(stickyCards).toHaveLength(1);
+    expect(stickyCards[0]).toHaveTextContent("Test Business");
+  });
+
   it("renders the wider desktop stack when seven cards are available", () => {
     render(<ShowroomCardCarousel items={denseItems} />);
 
@@ -561,4 +584,66 @@ it("does not advance the carousel during a diagonal vertical touch scroll", () =
   fireEvent.pointerMove(window, { clientX: 170, clientY: 200, pointerId: 9, pointerType: "touch" });
   fireEvent.pointerUp(window, { clientX: 170, clientY: 200, pointerId: 9, pointerType: "touch" });
   expect(screen.getByText("Slide 1 of 3")).toBeInTheDocument();
+});
+
+describe("auto-advance (autoplay)", () => {
+  let visibilityCallback: IntersectionObserverCallback | undefined;
+
+  class MockIntersectionObserver {
+    constructor(callback: IntersectionObserverCallback) {
+      visibilityCallback = callback;
+    }
+    observe = vi.fn();
+    disconnect = vi.fn();
+    unobserve = vi.fn();
+    takeRecords = vi.fn(() => []);
+    root = null;
+    rootMargin = "";
+    thresholds = [];
+  }
+
+  function triggerVisible() {
+    act(() => {
+      visibilityCallback?.(
+        [{ isIntersecting: true, intersectionRatio: 0.5 } as IntersectionObserverEntry],
+        {} as IntersectionObserver
+      );
+    });
+  }
+
+  beforeEach(() => {
+    visibilityCallback = undefined;
+    vi.stubGlobal("IntersectionObserver", MockIntersectionObserver);
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("auto-advances slides by default while visible", () => {
+    render(<ShowroomCardCarousel items={mockItems} imageDisplayMs={100} />);
+    triggerVisible();
+    expect(screen.getByText("Slide 1 of 3")).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(screen.getByText("Slide 2 of 3")).toBeInTheDocument();
+  });
+
+  it("does not auto-advance when the page disables autoplay (mobile policy)", () => {
+    render(
+      <AutoplayPolicyProvider disableAutoplay>
+        <ShowroomCardCarousel items={mockItems} imageDisplayMs={100} />
+      </AutoplayPolicyProvider>
+    );
+    triggerVisible();
+
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    expect(screen.getByText("Slide 1 of 3")).toBeInTheDocument();
+  });
 });

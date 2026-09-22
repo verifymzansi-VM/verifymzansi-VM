@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "./use-reduced-motion";
 import { useDataSaver } from "./use-data-saver";
 import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
+import { useAutoplayPolicy } from "@/contexts/autoplay-policy-context";
 
 /**
  * Hook for mobile feed-style video playback (Facebook / YouTube behaviour).
@@ -15,7 +16,8 @@ import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
  *   (b) the video scrolls > 75 % out of view (resets for next scroll-in).
  * - Play claims exclusive priority in the global manager, pausing all other
  *   videos (including showroom carousels).
- * - Respects `prefers-reduced-motion: reduce`.
+ * - Respects `prefers-reduced-motion: reduce`, `Save-Data`, and the page-level
+ *   autoplay policy (`useAutoplayPolicy`, e.g. autoplay disabled on mobile).
  *
  * @param videoSrc The video URL. Pass `undefined` when the media is not a video.
  * @param isPlaybackEligible Whether this card may autoplay. Manual play always works.
@@ -24,9 +26,11 @@ export function useVideoFeed(videoSrc?: string, isPlaybackEligible = true) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const reducedMotion = useReducedMotion();
   const dataSaver = useDataSaver();
-  // Autoplay stays off when the user prefers reduced motion or data saving;
-  // the card falls back to a poster with a manual play button.
-  const autoplayBlocked = reducedMotion || dataSaver;
+  const { disableAutoplay } = useAutoplayPolicy();
+  // Autoplay stays off when the user prefers reduced motion or data saving, or
+  // when the page disables autoplay (mobile browsers); the card falls back to
+  // a poster with a manual play button.
+  const autoplayBlocked = reducedMotion || dataSaver || disableAutoplay;
   const manager = useVideoPlaybackManager();
   const manuallyPlayingRef = useRef(false);
   const playbackEligibleRef = useRef(isPlaybackEligible);

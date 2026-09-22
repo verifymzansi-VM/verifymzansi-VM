@@ -13,6 +13,7 @@ import {
   type CSSProperties,
 } from "react";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { useAutoplayPolicy } from "@/contexts/autoplay-policy-context";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
 import { isVideoUrl } from "@/components/ui/video-card-player";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -360,6 +361,9 @@ export function ShowroomCardCarousel({
   const carouselItems = items.slice(0, DESKTOP_SHOWROOM_ITEM_LIMIT);
   const [activeIndex, setActiveIndex] = useState(0);
   const reducedMotion = useReducedMotion();
+  // Pages can disable autoplay (e.g. on mobile browsers) — the carousel then
+  // only advances via explicit user interaction (swipe, arrows, keyboard).
+  const { disableAutoplay } = useAutoplayPolicy();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const pausedRef = useRef(false);
   const pauseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -845,10 +849,10 @@ export function ShowroomCardCarousel({
   const videoEndedRef = useRef(false);
 
   const handleVideoEnded = useCallback(() => {
-    if (pausedRef.current || activeInputModeRef.current) return;
+    if (pausedRef.current || activeInputModeRef.current || disableAutoplay) return;
     videoEndedRef.current = true;
     nextRef.current();
-  }, []);
+  }, [disableAutoplay]);
 
   const displayIndex = normalizedActiveIndex;
   const activeIsVideo = isVideoUrl(carouselItems[displayIndex]?.mediaUrl);
@@ -858,7 +862,7 @@ export function ShowroomCardCarousel({
   }, [displayIndex]);
 
   useEffect(() => {
-    if (count <= 1 || reducedMotion || !isVisible) return;
+    if (count <= 1 || reducedMotion || disableAutoplay || !isVisible) return;
 
     // For video cards, set a safety fallback timeout only.
     // The primary advance is triggered by the video's onEnded callback.
@@ -877,6 +881,7 @@ export function ShowroomCardCarousel({
     count,
     isVisible,
     reducedMotion,
+    disableAutoplay,
   ]);
 
   /* ── Cleanup ───────────────────────────────────────────── */
@@ -1080,6 +1085,7 @@ export function ShowroomCardCarousel({
                 videoMode={offset === 0 ? "ambient" : undefined}
                 onVideoEnded={offset === 0 ? handleVideoEnded : undefined}
                 showPlaybackControl={offset === 0}
+                stickyAutoplay={offset === 0}
                 makeEntireCardClickable
                 cardVariant="hero"
                 mediaControlVariant={offset === 0 ? "hero" : "default"}

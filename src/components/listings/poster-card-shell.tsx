@@ -75,6 +75,8 @@ interface PosterCardShellProps {
   onVideoEnded?: () => void;
   /** Show play/pause toggle on ambient video cards (e.g. showroom center card). */
   showPlaybackControl?: boolean;
+  /** Links the card's ambient playback to the sticky showroom autoplay intent. */
+  stickyAutoplay?: boolean;
   /** Visual treatment used by homepage refresh surfaces. */
   cardVariant?: PosterCardVariant;
   /** Optional hero-specific chrome for media controls. */
@@ -124,6 +126,7 @@ export function PosterCardShell({
   videoMode,
   onVideoEnded,
   showPlaybackControl = false,
+  stickyAutoplay = false,
   cardVariant = "default",
   mediaControlVariant = "default",
   makeEntireCardClickable = false,
@@ -374,6 +377,7 @@ export function PosterCardShell({
               mediaHeight={mediaHeight}
               onEnded={onVideoEnded}
               showPlaybackControl={showPlaybackControl}
+              stickyAutoplay={stickyAutoplay}
               controlVariant={mediaControlVariant}
               feedPlaybackActive={feedPlaybackActive}
               deferVideoLoadUntilPlay={deferVideoLoadUntilPlay}

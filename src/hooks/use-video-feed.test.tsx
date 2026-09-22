@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { VideoPlaybackProvider } from "@/contexts/video-playback-context";
+import { AutoplayPolicyProvider } from "@/contexts/autoplay-policy-context";
 import { useVideoFeed } from "./use-video-feed";
 
 vi.mock("./use-reduced-motion", () => ({ useReducedMotion: () => false }));
@@ -109,6 +110,20 @@ describe("mobile feed playback", () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it("skips autoplay when the page disables autoplay (mobile policy)", () => {
+    render(
+      <VideoPlaybackProvider>
+        <AutoplayPolicyProvider disableAutoplay>
+          <Probe />
+        </AutoplayPolicyProvider>
+      </VideoPlaybackProvider>
+    );
+    visibility(0.75);
+    const video = document.querySelector("video")!;
+    expect(video.getAttribute("src")).toBeNull();
+    expect(video.paused).toBe(true);
   });
 
   it("loads a visible card when it becomes eligible without another intersection", () => {

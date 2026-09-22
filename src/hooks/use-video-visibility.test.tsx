@@ -5,13 +5,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render } from "@testing-library/react";
 import { useVideoVisibility } from "./use-video-visibility";
 import { VideoPlaybackProvider } from "@/contexts/video-playback-context";
+import { DisableMobileAutoplay } from "@/contexts/autoplay-policy-context";
 
-const { reducedMotionMock } = vi.hoisted(() => ({
+const { reducedMotionMock, hoverCapabilityMock } = vi.hoisted(() => ({
   reducedMotionMock: vi.fn(),
+  hoverCapabilityMock: vi.fn(),
 }));
 
 vi.mock("./use-reduced-motion", () => ({
   useReducedMotion: reducedMotionMock,
+}));
+
+vi.mock("@/hooks/use-hover-capability", () => ({
+  useHoverCapability: hoverCapabilityMock,
 }));
 
 let observerCallback: IntersectionObserverCallback | undefined;
@@ -102,6 +108,7 @@ describe("useVideoVisibility", () => {
     observerCallback = undefined;
     observerThresholds = undefined;
     reducedMotionMock.mockReturnValue(false);
+    hoverCapabilityMock.mockReturnValue(true);
     vi.stubGlobal("IntersectionObserver", MockIntersectionObserver);
   });
 
@@ -178,5 +185,36 @@ describe("useVideoVisibility", () => {
     renderProbe("https://example.com/demo.mp4");
 
     expect(observerThresholds).toEqual([0, 0.15, 0.5, 0.75, 1]);
+  });
+
+  it("skips autoplay when the page disables autoplay on mobile browsers", () => {
+    hoverCapabilityMock.mockReturnValue(false); // mobile browser: no hover/fine pointer
+    const { container } = render(
+      <VideoPlaybackProvider>
+        <DisableMobileAutoplay>
+          <Probe videoSrc="https://example.com/demo.mp4" />
+        </DisableMobileAutoplay>
+      </VideoPlaybackProvider>
+    );
+    const video = container.querySelector("video");
+    const playSpy = vi
+      .spyOn(HTMLMediaElement.prototype, "play")
+      .mockResolvedValue(undefined as never);
+
+    observerCallback?.(
+      [
+        {
+          isIntersecting: true,
+          intersectionRatio: 0.5,
+          target: video as Element,
+        } as IntersectionObserverEntry,
+      ],
+      {} as IntersectionObserver
+    );
+
+    // The video still lazy-loads (poster-frame extraction), but never plays.
+    expect(video?.getAttribute("src")).toContain("https://example.com/demo.mp4");
+    vi.advanceTimersByTime(100);
+    expect(playSpy).not.toHaveBeenCalled();
   });
 });

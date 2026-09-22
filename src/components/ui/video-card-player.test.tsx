@@ -3,6 +3,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { useShowroomAutoplayStore } from "@/stores/showroom-autoplay-store";
 
 const {
   useVideoVisibilityMock,
@@ -167,6 +168,7 @@ describe("VideoCardPlayer", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
+    useShowroomAutoplayStore.setState({ autoplayEnabled: false });
     useHoverCapabilityMock.mockReturnValue(true);
     useVideoVisibilityMock.mockReturnValue({
       videoRef: { current: null },
@@ -589,6 +591,75 @@ describe("VideoCardPlayer", () => {
     fireEvent.error(document.querySelector("video") as HTMLVideoElement);
 
     expect(screen.getByTestId("media-fallback")).toHaveTextContent("Fallback media");
+  });
+
+  describe("sticky showroom autoplay", () => {
+    const stickyShowroomCard = (
+      <VideoCardPlayer
+        src="https://example.com/clip.mp4"
+        posterUrl="https://example.com/poster.jpg"
+        alt="Clip"
+        mode="ambient"
+        showPlaybackControl
+        stickyAutoplay
+        deferVideoLoadUntilPlay
+      />
+    );
+
+    it("starts paused by default until the user presses play", () => {
+      render(stickyShowroomCard);
+      expect(useShowroomAutoplayStore.getState().autoplayEnabled).toBe(false);
+      expect(useVideoVisibilityMock.mock.calls.at(-1)).toEqual([undefined, false, false]);
+    });
+
+    it("auto-plays the next showroom card after the user pressed play", () => {
+      const { unmount } = render(stickyShowroomCard);
+
+      fireEvent.click(screen.getByRole("button", { name: "Play video" }));
+      expect(useShowroomAutoplayStore.getState().autoplayEnabled).toBe(true);
+
+      // The next showroom card loads and auto-plays on its own.
+      unmount();
+      render(stickyShowroomCard);
+      expect(useVideoVisibilityMock.mock.calls.at(-1)).toEqual([
+        "https://example.com/clip.mp4",
+        true,
+        true,
+      ]);
+    });
+
+    it("stops auto-playing cards after the user presses pause", () => {
+      const { unmount } = render(stickyShowroomCard);
+
+      fireEvent.click(screen.getByRole("button", { name: "Play video" }));
+      expect(useShowroomAutoplayStore.getState().autoplayEnabled).toBe(true);
+
+      // Press pause while the card is playing.
+      const video = document.querySelector("video")!;
+      fireEvent.play(video);
+      fireEvent.click(screen.getByRole("button", { name: "Pause video" }));
+      expect(useShowroomAutoplayStore.getState().autoplayEnabled).toBe(false);
+
+      // The next showroom card starts paused again.
+      unmount();
+      render(stickyShowroomCard);
+      expect(useVideoVisibilityMock.mock.calls.at(-1)).toEqual([undefined, false, false]);
+    });
+
+    it("does not link non-showroom cards to the sticky intent", () => {
+      render(
+        <VideoCardPlayer
+          src="https://example.com/clip.mp4"
+          posterUrl="https://example.com/poster.jpg"
+          alt="Clip"
+          mode="ambient"
+          showPlaybackControl
+          deferVideoLoadUntilPlay
+        />
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Play video" }));
+      expect(useShowroomAutoplayStore.getState().autoplayEnabled).toBe(false);
+    });
   });
 });
 

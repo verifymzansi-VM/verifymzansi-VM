@@ -9,6 +9,7 @@ import {
 import { Suspense } from "react";
 import { cookies } from "next/headers";
 import { PageHeader } from "@/components/layout";
+import { DisableMobileAutoplay } from "@/contexts/autoplay-policy-context";
 import { TrustStrip } from "@/components/layout/trust-strip";
 import { MzansiBusinessGrid } from "./grid";
 import { MzansiBusinessFilterSync } from "./filter-sync";
@@ -101,80 +102,82 @@ export default async function MzansiBusinessPage() {
         ];
 
   return (
-    <div className="space-y-0">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/<\//g, "<\\/") }}
-      />
-      <Suspense fallback={<div className="h-10" />}>
-        <MzansiBusinessFilterSync />
-      </Suspense>
+    <DisableMobileAutoplay>
+      <div className="space-y-0">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/<\//g, "<\\/") }}
+        />
+        <Suspense fallback={<div className="h-10" />}>
+          <MzansiBusinessFilterSync />
+        </Suspense>
 
-      {/* ── Card Carousel Showroom ─────────────── */}
-      <ShowroomCardCarousel
-        items={carouselItems}
-        emptyTitle="Mzansi Business"
-        emptyDescription={categorySeo.description}
-        background={mzansiBusinessShowroomBackground}
-      />
+        {/* ── Card Carousel Showroom ─────────────── */}
+        <ShowroomCardCarousel
+          items={carouselItems}
+          emptyTitle="Mzansi Business"
+          emptyDescription={categorySeo.description}
+          background={mzansiBusinessShowroomBackground}
+        />
 
-      <TrustStrip variant="blue" title="Latest Mzansi Businesses" />
+        <TrustStrip variant="blue" title="Latest Mzansi Businesses" />
 
-      {/* ── Main Content ─────────────────────────────────── */}
-      <div className="container-page py-8 space-y-7 lg:py-10">
-        {/* Compact mobile header */}
-        <div className="flex items-center justify-between lg:hidden">
-          <h1 className="font-display text-lg font-bold tracking-tight">Mzansi Business</h1>
-          <Button asChild size="sm" className="h-11 gap-1">
-            <Link href="/post/create-business">
-              New business profile
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
-        </div>
+        {/* ── Main Content ─────────────────────────────────── */}
+        <div className="container-page py-8 space-y-7 lg:py-10">
+          {/* Compact mobile header */}
+          <div className="flex items-center justify-between lg:hidden">
+            <h1 className="font-display text-lg font-bold tracking-tight">Mzansi Business</h1>
+            <Button asChild size="sm" className="h-11 gap-1">
+              <Link href="/post/create-business">
+                New business profile
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
 
-        {/* Mobile filter drawer (FAB visible < lg only) */}
-        <BusinessFilterDrawer />
+          {/* Mobile filter drawer (FAB visible < lg only) */}
+          <BusinessFilterDrawer />
 
-        <div className="flex gap-6 lg:gap-8">
-          <aside className="hidden w-72 shrink-0 lg:block">
-            <div className="sticky top-24">
-              <Suspense
-                fallback={
-                  <div className="space-y-3">
-                    <Skeleton className="h-8 w-full" />
-                    <Skeleton className="h-6 w-3/4" />
-                    <Skeleton className="h-6 w-1/2" />
-                    <Skeleton className="h-6 w-2/3" />
-                  </div>
-                }
+          <div className="flex gap-6 lg:gap-8">
+            <aside className="hidden w-72 shrink-0 lg:block">
+              <div className="sticky top-24">
+                <Suspense
+                  fallback={
+                    <div className="space-y-3">
+                      <Skeleton className="h-8 w-full" />
+                      <Skeleton className="h-6 w-3/4" />
+                      <Skeleton className="h-6 w-1/2" />
+                      <Skeleton className="h-6 w-2/3" />
+                    </div>
+                  }
+                >
+                  <BusinessDiscoveryBar />
+                </Suspense>
+              </div>
+            </aside>
+
+            <section className="min-w-0 flex-1 space-y-6">
+              <PageHeader
+                title="Mzansi Business"
+                description={categorySeo.description}
+                breadcrumbs={[{ label: "Mzansi Business" }]}
+                className="hidden lg:block"
               >
-                <BusinessDiscoveryBar />
+                <Button asChild size="sm" className="h-11 gap-2 elev-xs hover:elev-sm">
+                  <Link href="/post/create-business">
+                    Create Business Profile
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+              </PageHeader>
+
+              <Suspense fallback={<ListingGridSkeleton count={6} />}>
+                <MzansiBusinessGrid />
               </Suspense>
-            </div>
-          </aside>
-
-          <section className="min-w-0 flex-1 space-y-6">
-            <PageHeader
-              title="Mzansi Business"
-              description={categorySeo.description}
-              breadcrumbs={[{ label: "Mzansi Business" }]}
-              className="hidden lg:block"
-            >
-              <Button asChild size="sm" className="h-11 gap-2 elev-xs hover:elev-sm">
-                <Link href="/post/create-business">
-                  Create Business Profile
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-            </PageHeader>
-
-            <Suspense fallback={<ListingGridSkeleton count={6} />}>
-              <MzansiBusinessGrid />
-            </Suspense>
-          </section>
+            </section>
+          </div>
         </div>
       </div>
-    </div>
+    </DisableMobileAutoplay>
   );
 }

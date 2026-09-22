@@ -11,6 +11,7 @@ import {
 } from "@/components/showrooms/carousel-item-transforms";
 import { tourismEventsShowroomBackground } from "@/components/showrooms/showroom-backgrounds";
 import { TrustStrip } from "@/components/layout/trust-strip";
+import { DisableMobileAutoplay } from "@/contexts/autoplay-policy-context";
 import { getOwnerColumn, withOwnerColumn } from "@/lib/account/compat";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 import { shouldHidePlaywrightFixtureRowWhenEnabled } from "@/components/home/playwright-fixture-filter";
@@ -208,24 +209,26 @@ export default async function PromotionsPage() {
   }
 
   return (
-    <div className="space-y-0">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/<\//g, "<\\/") }}
-      />
-      {/* ── Card Carousel Showroom ── */}
-      <ShowroomCardCarousel
-        items={carouselItems}
-        emptyTitle="Tourism & Events"
-        emptyDescription={categorySeo.description}
-        background={tourismEventsShowroomBackground}
-      />
+    <DisableMobileAutoplay>
+      <div className="space-y-0">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/<\//g, "<\\/") }}
+        />
+        {/* ── Card Carousel Showroom ── */}
+        <ShowroomCardCarousel
+          items={carouselItems}
+          emptyTitle="Tourism & Events"
+          emptyDescription={categorySeo.description}
+          background={tourismEventsShowroomBackground}
+        />
 
-      <TrustStrip variant="green" title="Latest Tourism & Events" />
+        <TrustStrip variant="green" title="Latest Tourism & Events" />
 
-      <Suspense fallback={null}>
-        <PromotionsExplorer />
-      </Suspense>
-    </div>
+        <Suspense fallback={null}>
+          <PromotionsExplorer />
+        </Suspense>
+      </div>
+    </DisableMobileAutoplay>
   );
 }

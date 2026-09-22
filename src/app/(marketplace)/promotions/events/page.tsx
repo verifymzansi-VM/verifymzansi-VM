@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PromotionCard } from "@/components/listings/promotion-card";
+import { DisableMobileAutoplay } from "@/contexts/autoplay-policy-context";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import {
   ACCOUNT_PROFILE_TABLE,
@@ -180,156 +181,158 @@ export default async function EventsPage() {
   const monthGroups = groupByMonth(upcoming);
 
   return (
-    <div className="container-page py-8 space-y-6">
-      <PageHeader
-        title="Events in South Africa"
-        description="Browse upcoming events, markets, shows, community gatherings, and live experiences from South African hosts, organisers, and businesses."
-        breadcrumbs={[
-          { label: "Home", href: "/" },
-          { label: "Tourism & Events", href: "/tourism-events" },
-          { label: "Events" },
-        ]}
-      >
-        <Button asChild size="sm" className="h-11 gap-1">
-          <Link href="/post/create-tourism?type=event">Create Event</Link>
-        </Button>
-      </PageHeader>
+    <DisableMobileAutoplay>
+      <div className="container-page py-8 space-y-6">
+        <PageHeader
+          title="Events in South Africa"
+          description="Browse upcoming events, markets, shows, community gatherings, and live experiences from South African hosts, organisers, and businesses."
+          breadcrumbs={[
+            { label: "Home", href: "/" },
+            { label: "Tourism & Events", href: "/tourism-events" },
+            { label: "Events" },
+          ]}
+        >
+          <Button asChild size="sm" className="h-11 gap-1">
+            <Link href="/post/create-tourism?type=event">Create Event</Link>
+          </Button>
+        </PageHeader>
 
-      {/* Upcoming Events — grouped by month */}
-      {upcoming.length > 0 ? (
-        <>
-          {monthGroups.map((group) => (
-            <section key={group.label} className="space-y-4">
-              <div className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-purple-500" />
-                <h2 className="text-xl font-display font-semibold">{group.label}</h2>
-                <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
-                  {group.events.length}
-                </Badge>
-              </div>
+        {/* Upcoming Events — grouped by month */}
+        {upcoming.length > 0 ? (
+          <>
+            {monthGroups.map((group) => (
+              <section key={group.label} className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-purple-500" />
+                  <h2 className="text-xl font-display font-semibold">{group.label}</h2>
+                  <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                    {group.events.length}
+                  </Badge>
+                </div>
 
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-5 xl:gap-6">
-                {group.events.map((event, index) => {
-                  const accountProfile = accountProfileMap.get(readOwnerId(event) as string);
-                  const businessName = event.business_id
-                    ? businessMap.get(event.business_id as string)
-                    : undefined;
-                  const businessLogo = event.business_id
-                    ? businessLogoMap.get(event.business_id as string)
-                    : undefined;
-                  const nowDate = new Date();
-                  const isBoosted = event.boost_until
-                    ? new Date(event.boost_until as string) > nowDate
-                    : false;
-                  const isFeatured = event.featured_until
-                    ? new Date(event.featured_until as string) > nowDate
-                    : false;
+                <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-5 xl:gap-6">
+                  {group.events.map((event, index) => {
+                    const accountProfile = accountProfileMap.get(readOwnerId(event) as string);
+                    const businessName = event.business_id
+                      ? businessMap.get(event.business_id as string)
+                      : undefined;
+                    const businessLogo = event.business_id
+                      ? businessLogoMap.get(event.business_id as string)
+                      : undefined;
+                    const nowDate = new Date();
+                    const isBoosted = event.boost_until
+                      ? new Date(event.boost_until as string) > nowDate
+                      : false;
+                    const isFeatured = event.featured_until
+                      ? new Date(event.featured_until as string) > nowDate
+                      : false;
 
-                  return (
-                    <div
-                      key={event.id}
-                      className={`content-auto animate-in fade-in fill-mode-both [animation-duration:400ms] sm:slide-in-from-bottom-2 [animation-delay:${Math.min(index * 50, 400)}ms]`}
-                    >
-                      <PromotionCard
-                        id={event.id}
-                        title={event.title as string}
-                        price={event.price_cents as number | null}
-                        negotiable={event.price_negotiable as boolean}
-                        imageUrl={
-                          (event.videos as string[] | null)?.[0] ||
-                          (event.video_thumbnail as string | null) ||
-                          (event.photos as string[] | null)?.[0]
-                        }
-                        posterUrl={
-                          (event.video_thumbnail as string | null) ||
-                          (event.photos as string[] | null)?.[0] ||
-                          undefined
-                        }
-                        province={event.location_province as string}
-                        city={event.location_city as string}
-                        promotionType="event"
-                        createdAt={event.created_at}
-                        ownerTrustLevel={accountProfile?.trust}
-                        ownerName={accountProfile?.name}
-                        viewCount={
-                          allViewSummary.ok
-                            ? (allViewSummary.data.get(event.id) ?? undefined)
-                            : undefined
-                        }
-                        boosted={isBoosted}
-                        featured={isFeatured}
-                        startDate={event.start_date as string | null}
-                        endDate={event.end_date as string | null}
-                        businessName={businessName}
-                        logoUrl={
-                          ((event as Record<string, unknown>).logo_url as string | undefined) ||
-                          businessLogo
-                        }
-                        focalX={(event.focal_x as number | null | undefined) ?? null}
-                        focalY={(event.focal_y as number | null | undefined) ?? null}
-                        mediaWidth={(event.media_width as number | null | undefined) ?? null}
-                        mediaHeight={(event.media_height as number | null | undefined) ?? null}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
-        </>
-      ) : (
-        <Card>
-          <CardContent className="space-y-3 p-6 text-center">
-            <Calendar className="mx-auto h-8 w-8 text-muted-foreground" />
-            <h3 className="font-display text-lg font-semibold">No upcoming events</h3>
-            <p className="mx-auto max-w-md text-sm text-muted-foreground">
-              Check back soon for South African events from local hosts, organisers, and businesses.
-              Past events may appear below.
-            </p>
-            <Button asChild size="sm" className="mx-auto h-11 w-fit gap-1">
-              <Link href="/post/create-tourism?type=event">Create Event</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+                    return (
+                      <div
+                        key={event.id}
+                        className={`content-auto animate-in fade-in fill-mode-both [animation-duration:400ms] sm:slide-in-from-bottom-2 [animation-delay:${Math.min(index * 50, 400)}ms]`}
+                      >
+                        <PromotionCard
+                          id={event.id}
+                          title={event.title as string}
+                          price={event.price_cents as number | null}
+                          negotiable={event.price_negotiable as boolean}
+                          imageUrl={
+                            (event.videos as string[] | null)?.[0] ||
+                            (event.video_thumbnail as string | null) ||
+                            (event.photos as string[] | null)?.[0]
+                          }
+                          posterUrl={
+                            (event.video_thumbnail as string | null) ||
+                            (event.photos as string[] | null)?.[0] ||
+                            undefined
+                          }
+                          province={event.location_province as string}
+                          city={event.location_city as string}
+                          promotionType="event"
+                          createdAt={event.created_at}
+                          ownerTrustLevel={accountProfile?.trust}
+                          ownerName={accountProfile?.name}
+                          viewCount={
+                            allViewSummary.ok
+                              ? (allViewSummary.data.get(event.id) ?? undefined)
+                              : undefined
+                          }
+                          boosted={isBoosted}
+                          featured={isFeatured}
+                          startDate={event.start_date as string | null}
+                          endDate={event.end_date as string | null}
+                          businessName={businessName}
+                          logoUrl={
+                            ((event as Record<string, unknown>).logo_url as string | undefined) ||
+                            businessLogo
+                          }
+                          focalX={(event.focal_x as number | null | undefined) ?? null}
+                          focalY={(event.focal_y as number | null | undefined) ?? null}
+                          mediaWidth={(event.media_width as number | null | undefined) ?? null}
+                          mediaHeight={(event.media_height as number | null | undefined) ?? null}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </>
+        ) : (
+          <Card>
+            <CardContent className="space-y-3 p-6 text-center">
+              <Calendar className="mx-auto h-8 w-8 text-muted-foreground" />
+              <h3 className="font-display text-lg font-semibold">No upcoming events</h3>
+              <p className="mx-auto max-w-md text-sm text-muted-foreground">
+                Check back soon for South African events from local hosts, organisers, and
+                businesses. Past events may appear below.
+              </p>
+              <Button asChild size="sm" className="mx-auto h-11 w-fit gap-1">
+                <Link href="/post/create-tourism?type=event">Create Event</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
-      {/* Past Events — collapsed accordion */}
-      {past.length > 0 && (
-        <PastEventsAccordion
-          events={past.map((event) => {
-            const accountProfile = accountProfileMap.get(readOwnerId(event) as string);
-            const videos = event.videos as string[] | null;
-            const photos = event.photos as string[] | null;
-            return {
-              id: event.id,
-              title: event.title ?? "Untitled event",
-              price: event.price_cents ?? null,
-              negotiable: event.price_negotiable as boolean,
-              imageUrl: videos?.[0] || (event.video_thumbnail as string | null) || photos?.[0],
-              posterUrl: videos?.[0]
-                ? (event.video_thumbnail as string | null) || photos?.[0] || undefined
-                : undefined,
-              province: event.location_province ?? "",
-              city: event.location_city ?? "",
-              createdAt: event.created_at,
-              viewCount: allViewSummary.ok
-                ? (allViewSummary.data.get(event.id) ?? undefined)
-                : undefined,
-              ownerTrustLevel: accountProfile?.trust,
-              ownerName: accountProfile?.name,
-              startDate: event.start_date,
-              endDate: event.end_date,
-              focalX: (event.focal_x as number | null | undefined) ?? null,
-              focalY: (event.focal_y as number | null | undefined) ?? null,
-              mediaWidth: (event.media_width as number | null | undefined) ?? null,
-              mediaHeight: (event.media_height as number | null | undefined) ?? null,
-              logoUrl: event.business_id
-                ? (businessLogoMap.get(event.business_id as string) ?? null)
-                : null,
-            };
-          })}
-        />
-      )}
-    </div>
+        {/* Past Events — collapsed accordion */}
+        {past.length > 0 && (
+          <PastEventsAccordion
+            events={past.map((event) => {
+              const accountProfile = accountProfileMap.get(readOwnerId(event) as string);
+              const videos = event.videos as string[] | null;
+              const photos = event.photos as string[] | null;
+              return {
+                id: event.id,
+                title: event.title ?? "Untitled event",
+                price: event.price_cents ?? null,
+                negotiable: event.price_negotiable as boolean,
+                imageUrl: videos?.[0] || (event.video_thumbnail as string | null) || photos?.[0],
+                posterUrl: videos?.[0]
+                  ? (event.video_thumbnail as string | null) || photos?.[0] || undefined
+                  : undefined,
+                province: event.location_province ?? "",
+                city: event.location_city ?? "",
+                createdAt: event.created_at,
+                viewCount: allViewSummary.ok
+                  ? (allViewSummary.data.get(event.id) ?? undefined)
+                  : undefined,
+                ownerTrustLevel: accountProfile?.trust,
+                ownerName: accountProfile?.name,
+                startDate: event.start_date,
+                endDate: event.end_date,
+                focalX: (event.focal_x as number | null | undefined) ?? null,
+                focalY: (event.focal_y as number | null | undefined) ?? null,
+                mediaWidth: (event.media_width as number | null | undefined) ?? null,
+                mediaHeight: (event.media_height as number | null | undefined) ?? null,
+                logoUrl: event.business_id
+                  ? (businessLogoMap.get(event.business_id as string) ?? null)
+                  : null,
+              };
+            })}
+          />
+        )}
+      </div>
+    </DisableMobileAutoplay>
   );
 }

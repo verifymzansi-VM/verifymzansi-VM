@@ -14,6 +14,7 @@ import { useVideoVisibility } from "@/hooks/use-video-visibility";
 import { useVideoHover } from "@/hooks/use-video-hover";
 import { useVideoFeed } from "@/hooks/use-video-feed";
 import { useGlobalMute } from "@/hooks/use-global-mute";
+import { useShowroomAutoplayStore } from "@/stores/showroom-autoplay-store";
 
 const DEFAULT_MEDIA_FIT = "object-cover";
 const DEFAULT_CONTAINER_ASPECT_RATIO = 9 / 16;
@@ -283,6 +284,12 @@ export interface VideoCardPlayerProps {
   deferVideoLoadUntilPlay?: boolean;
   /** Notifies callers when the ambient playback control changes state. */
   onPlaybackStateChange?: (isPlaying: boolean) => void;
+  /**
+   * Links this card to the sticky showroom autoplay intent: pressing play/pause
+   * on the card updates the shared preference (like the mute button), and while
+   * the preference is "play" the card starts playback automatically when focused.
+   */
+  stickyAutoplay?: boolean;
   /** Called when the video reaches the end (only fires when loop is disabled). */
   onEnded?: () => void;
   /** Horizontal focal point (0–1, left to right). */
@@ -345,6 +352,7 @@ export function VideoCardPlayer({
   controlVariant = "default",
   deferVideoLoadUntilPlay = false,
   onPlaybackStateChange,
+  stickyAutoplay = false,
   onEnded,
   focalX,
   focalY,
@@ -450,6 +458,7 @@ export function VideoCardPlayer({
       controlVariant={controlVariant}
       deferVideoLoadUntilPlay={deferVideoLoadUntilPlay}
       onPlaybackStateChange={onPlaybackStateChange}
+      stickyAutoplay={stickyAutoplay}
       onEnded={onEnded}
       focalX={focalX}
       focalY={focalY}
@@ -505,6 +514,7 @@ interface VideoCardPlayerInnerProps {
   controlVariant: MediaControlVariant;
   deferVideoLoadUntilPlay: boolean;
   onPlaybackStateChange?: (isPlaying: boolean) => void;
+  stickyAutoplay: boolean;
   onEnded?: () => void;
   focalX?: number | null;
   focalY?: number | null;
@@ -534,6 +544,7 @@ function VideoCardPlayerInner({
   controlVariant,
   deferVideoLoadUntilPlay,
   onPlaybackStateChange,
+  stickyAutoplay,
   onEnded,
   focalX,
   focalY,
@@ -545,10 +556,28 @@ function VideoCardPlayerInner({
   const srcNeedsUnoptimized =
     normalizedSrc?.startsWith("blob:") || normalizedSrc?.startsWith("data:");
 
-  const [isPlaybackPaused, setIsPlaybackPaused] = useState(() =>
-    getInitialAmbientPlaybackPaused(mode, showPlaybackControl, deferVideoLoadUntilPlay)
+  const stickyAutoplayEnabled = useShowroomAutoplayStore((s) => s.autoplayEnabled);
+  const setStickyAutoplayEnabled = useShowroomAutoplayStore((s) => s.setAutoplayEnabled);
+  // Only showroom center cards opt in: their play/pause toggle drives the
+  // shared sticky intent (like the mute button) across all showroom cards.
+  const linkStickyAutoplay = Boolean(
+    stickyAutoplay && isVideo && mode === "ambient" && showPlaybackControl
   );
-  const [hasActivatedPlayback, setHasActivatedPlayback] = useState(false);
+
+  // Sticky intent (mute-button style): when the user has pressed play on a
+  // showroom card, newly focused showroom cards start playing on their own
+  // (desktop and mobile) until the user presses pause. The inner player
+  // remounts whenever a card becomes the focused showroom card, so reading
+  // the persisted preference as initial state covers every focus change.
+  // Hydration-safe: it only arms playback through the visibility hook
+  // post-mount and never changes the initially rendered DOM.
+  const initiallyAutoPlay = linkStickyAutoplay && stickyAutoplayEnabled;
+  const [isPlaybackPaused, setIsPlaybackPaused] = useState(() =>
+    initiallyAutoPlay
+      ? false
+      : getInitialAmbientPlaybackPaused(mode, showPlaybackControl, deferVideoLoadUntilPlay)
+  );
+  const [hasActivatedPlayback, setHasActivatedPlayback] = useState(initiallyAutoPlay);
   const [tapIndicator, setTapIndicator] = useState<{
     key: number;
     action: "play" | "pause";
@@ -730,14 +759,18 @@ function VideoCardPlayerInner({
         el.play().catch(() => setIsPlaybackPaused(true));
         setIsPlaybackPaused(false);
         setHasActivatedPlayback(true);
+        // Sticky intent (mute-button style): keep auto-playing the next cards.
+        if (linkStickyAutoplay) setStickyAutoplayEnabled(true);
         return;
       }
 
       el.pause();
       setIsPlaybackPaused(true);
       onPlaybackStateChange?.(false);
+      // Sticky intent: stop auto-playing until the user presses play again.
+      if (linkStickyAutoplay) setStickyAutoplayEnabled(false);
     },
-    [normalizedSrc, onPlaybackStateChange, videoRef]
+    [normalizedSrc, onPlaybackStateChange, videoRef, linkStickyAutoplay, setStickyAutoplayEnabled]
   );
 
   const handleError = useCallback(() => {
