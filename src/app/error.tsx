@@ -1,11 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import * as Sentry from "@sentry/nextjs";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const CHUNK_RECOVERY_SESSION_KEY = "vmz-chunk-recovery-v1";
+
+/**
+ * Report to Sentry lazily: a static `@sentry/nextjs` import here pins the
+ * ~600 KB monitoring SDK into every page's critical bundle, which hurts
+ * mobile load times. The dynamic import is cached once the deferred
+ * instrumentation-client init has run, so this is usually instant.
+ */
+function reportError(error: Error): void {
+  void import("@sentry/nextjs")
+    .then((Sentry) => Sentry.captureException(error))
+    .catch(() => {
+      // Monitoring must never break the error boundary itself.
+    });
+}
 
 function isLikelyChunkLoadError(error: Error) {
   const message = `${error.name ?? ""} ${error.message ?? ""} ${error.stack ?? ""}`.toLowerCase();
@@ -62,7 +75,7 @@ export default function GlobalError({
   });
 
   useEffect(() => {
-    Sentry.captureException(error);
+    reportError(error);
     console.error("[GlobalError]", error.digest ?? error.message, error.stack);
   }, [error]);
 

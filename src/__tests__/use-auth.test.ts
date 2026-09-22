@@ -6,6 +6,45 @@ const { mockCreateClient } = vi.hoisted(() => ({
 
 vi.mock("@/lib/supabase/client", () => ({ createClient: mockCreateClient }));
 
+import { hasBrowserAuthSession } from "@/hooks/use-auth";
+
+function clearBrowserCookies() {
+  for (const entry of document.cookie.split(";")) {
+    const name = entry.split("=")[0]?.trim();
+    if (name) {
+      document.cookie = `${name}=; max-age=0; path=/`;
+    }
+  }
+}
+
+describe("hasBrowserAuthSession", () => {
+  beforeEach(() => clearBrowserCookies());
+
+  it("returns false for anonymous visitors without a session cookie", () => {
+    expect(hasBrowserAuthSession()).toBe(false);
+  });
+
+  it("ignores unrelated cookies such as the CSRF token", () => {
+    document.cookie = "vm_csrf=abc123";
+    expect(hasBrowserAuthSession()).toBe(false);
+  });
+
+  it("returns true when a Supabase auth-token cookie is present", () => {
+    document.cookie = "sb-projectref-auth-token=session-value";
+    expect(hasBrowserAuthSession()).toBe(true);
+  });
+
+  it("matches chunked Supabase auth-token cookies", () => {
+    document.cookie = "sb-projectref-auth-token.0=chunk";
+    expect(hasBrowserAuthSession()).toBe(true);
+  });
+
+  it("does not match the PKCE code-verifier cookie as a session", () => {
+    document.cookie = "sb-projectref-auth-token-code-verifier=verifier";
+    expect(hasBrowserAuthSession()).toBe(false);
+  });
+});
+
 describe("use-auth", () => {
   beforeEach(() => vi.clearAllMocks());
 

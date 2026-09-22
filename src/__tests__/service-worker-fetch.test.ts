@@ -51,8 +51,26 @@ describe("service worker freshness and media streaming", () => {
     expect(caches.match).not.toHaveBeenCalled();
   });
 
-  it("revalidates mutable artwork instead of serving an old cached image", async () => {
+  it("serves versioned static artwork via the HTTP cache without forced revalidation", async () => {
     const { handlers, fetch } = worker();
+    const respondWith = vi.fn();
+    handlers.fetch({
+      request: new Request("https://verifymzansi.com/images/banner.webp?v=2026"),
+      respondWith,
+      waitUntil: vi.fn(),
+    });
+    const response = await respondWith.mock.calls[0][0];
+    expect(await response.text()).toBe("fresh");
+    // /images/ and /icons/ assets are versioned (?v=...) and carry long-lived
+    // Cache-Control headers, so the worker defers freshness to the HTTP cache
+    // instead of forcing a revalidation round-trip on every mobile visit.
+    expect(fetch).toHaveBeenCalledWith(expect.anything());
+    expect(fetch.mock.calls[0][1]).toBeUndefined();
+  });
+
+  it("falls back to cache storage for artwork when offline", async () => {
+    const { handlers, fetch, caches } = worker();
+    fetch.mockRejectedValue(new Error("offline"));
     const respondWith = vi.fn();
     handlers.fetch({
       request: new Request("https://verifymzansi.com/images/banner.webp"),
@@ -60,8 +78,8 @@ describe("service worker freshness and media streaming", () => {
       waitUntil: vi.fn(),
     });
     const response = await respondWith.mock.calls[0][0];
-    expect(await response.text()).toBe("fresh");
-    expect(fetch).toHaveBeenCalledWith(expect.anything(), { cache: "no-cache" });
+    expect(await response.text()).toBe("old");
+    expect(caches.match).toHaveBeenCalled();
   });
 
   it("retains the offline page fallback", async () => {

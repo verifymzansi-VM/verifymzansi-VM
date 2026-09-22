@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import * as Sentry from "@sentry/nextjs";
+
 import { Camera, Loader2, RefreshCw, ScanFace, VideoOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -169,29 +169,33 @@ export function CameraCapture({
         topLevelFrame = "unknown";
       }
 
-      try {
-        Sentry.withScope((scope) => {
-          scope.setTag("feature", "verification_camera");
-          scope.setTag("camera_error", errorName || "unknown");
-          scope.setContext("camera_init", {
-            errorName: errorName || "unknown",
-            permissionState: permissionState ?? "unknown",
-            permissionApiSupported:
-              permissionLookup?.supported ?? Boolean(navigator.permissions?.query),
-            permissionQueryFailed: permissionLookup?.queryFailed ?? false,
-            telemetryContext: telemetryContext ?? "unknown",
-            facingMode,
-            isSecureContext,
-            topLevelFrame,
-            mediaDevicesAvailable: Boolean(getCameraRequest()),
-            platform: uaData?.platform ?? navigator.platform ?? "unknown",
-            mobile: uaData?.mobile ?? /Android|iPhone|iPad|iPod/i.test(navigator.userAgent),
+      // Lazy-load Sentry so the monitoring SDK stays out of this page's
+      // critical bundle; telemetry must never block camera fallback UX.
+      void import("@sentry/nextjs")
+        .then((Sentry) => {
+          Sentry.withScope((scope) => {
+            scope.setTag("feature", "verification_camera");
+            scope.setTag("camera_error", errorName || "unknown");
+            scope.setContext("camera_init", {
+              errorName: errorName || "unknown",
+              permissionState: permissionState ?? "unknown",
+              permissionApiSupported:
+                permissionLookup?.supported ?? Boolean(navigator.permissions?.query),
+              permissionQueryFailed: permissionLookup?.queryFailed ?? false,
+              telemetryContext: telemetryContext ?? "unknown",
+              facingMode,
+              isSecureContext,
+              topLevelFrame,
+              mediaDevicesAvailable: Boolean(getCameraRequest()),
+              platform: uaData?.platform ?? navigator.platform ?? "unknown",
+              mobile: uaData?.mobile ?? /Android|iPhone|iPad|iPod/i.test(navigator.userAgent),
+            });
+            Sentry.captureMessage("camera_init_failed", "warning");
           });
-          Sentry.captureMessage("camera_init_failed", "warning");
+        })
+        .catch(() => {
+          // Telemetry should never block camera fallback UX.
         });
-      } catch {
-        // Telemetry should never block camera fallback UX.
-      }
     },
     [facingMode, telemetryContext]
   );

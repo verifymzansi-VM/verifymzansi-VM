@@ -1,7 +1,20 @@
 "use client";
 
 import { useEffect } from "react";
-import * as Sentry from "@sentry/nextjs";
+
+/**
+ * Report to Sentry lazily: a static `@sentry/nextjs` import here pins the
+ * ~600 KB monitoring SDK into every page's critical bundle, which hurts
+ * mobile load times. The dynamic import is cached once the deferred
+ * instrumentation-client init has run, so this is usually instant.
+ */
+function reportError(error: Error): void {
+  void import("@sentry/nextjs")
+    .then((Sentry) => Sentry.captureException(error))
+    .catch(() => {
+      // Monitoring must never break the error boundary itself.
+    });
+}
 
 /**
  * Global error boundary — catches errors thrown by the root layout itself.
@@ -16,7 +29,7 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    Sentry.captureException(error);
+    reportError(error);
     // Log error with structured data so monitoring tools (Cloudflare, Sentry, etc.) can ingest it.
     // Strip stack traces in production to avoid leaking internal paths in the browser console.
     console.error("[GlobalError]", {

@@ -10,7 +10,7 @@
  *  - API calls: Network-only (no caching of dynamic data)
  */
 
-const CACHE_NAME = "verifymzansi-v6-fresh-assets";
+const CACHE_NAME = "verifymzansi-v7-http-cache-images";
 const OFFLINE_URL = "/offline";
 
 const PRECACHE_URLS = ["/offline", "/manifest.json"];
@@ -87,7 +87,11 @@ self.addEventListener("fetch", (event) => {
 
 async function networkFirst(request, event) {
   try {
-    const response = await fetch(request, { cache: "no-cache" });
+    // Respect the HTTP cache (images ship long-lived Cache-Control headers and
+    // versioned query strings) so repeat mobile visits render instantly instead
+    // of revalidating every image on every load. Cache Storage remains the
+    // offline fallback only.
+    const response = await fetch(request);
     if (response.ok) {
       const copy = response.clone();
       // Persist in the background so image rendering never waits for a full
