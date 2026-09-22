@@ -151,8 +151,7 @@ export function PromotionsExplorer() {
       city: normalizeValue(currentSearchParams.get("city")),
       businessId: normalizeValue(currentSearchParams.get("business_id")),
       eventState: normalizeValue(currentSearchParams.get("event_state")) as
-        | PromotionEventState
-        | undefined,
+        PromotionEventState | undefined,
       subcategory: normalizeValue(currentSearchParams.get("subcategory")),
       eventType: normalizeValue(currentSearchParams.get("event_type")),
       page: Math.max(1, parseInt(currentSearchParams.get("page") || "1", 10)),

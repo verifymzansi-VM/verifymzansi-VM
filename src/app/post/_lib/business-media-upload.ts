@@ -11,11 +11,7 @@ import type { UploadArea } from "@/types/enums";
 const log = createLogger("BusinessMediaUpload");
 
 export type BusinessMediaField =
-  | "logo_url"
-  | "cover_photo"
-  | "gallery_photos"
-  | "cover_video"
-  | "video_thumbnail";
+  "logo_url" | "cover_photo" | "gallery_photos" | "cover_video" | "video_thumbnail";
 
 const FIELD_MESSAGES: Record<BusinessMediaField, string> = {
   logo_url: "Business logo upload failed. Retry the selected image.",

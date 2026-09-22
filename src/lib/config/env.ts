@@ -190,12 +190,7 @@ function _createFallbackEnv(): Env {
     NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
     PLAYWRIGHT_E2E_AUTH: process.env.PLAYWRIGHT_E2E_AUTH as "0" | "1" | undefined,
     VERIFYMZANSI_RUNTIME_MODE: process.env.VERIFYMZANSI_RUNTIME_MODE as
-      | "development"
-      | "e2e"
-      | "playwright"
-      | "test"
-      | "production"
-      | undefined,
+      "development" | "e2e" | "playwright" | "test" | "production" | undefined,
     VERIFYMZANSI_VALIDATION_MODE: process.env.VERIFYMZANSI_VALIDATION_MODE,
     STRICT_ENV_STARTUP_BLOCK: process.env.STRICT_ENV_STARTUP_BLOCK as "0" | "1" | undefined,
   } as Env;

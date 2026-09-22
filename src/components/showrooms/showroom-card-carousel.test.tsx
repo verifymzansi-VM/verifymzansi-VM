@@ -104,9 +104,7 @@ const denseItems: CarouselItem[] = Array.from({ length: 7 }, (_, index) => ({
 const expandedItems: CarouselItem[] = Array.from({ length: 15 }, (_, index) => ({
   id: `expanded-${index + 1}`,
   type: (index % 3 === 0 ? "listing" : index % 3 === 1 ? "business" : "promotion") as
-    | "listing"
-    | "business"
-    | "promotion",
+    "listing" | "business" | "promotion",
   href: `/expanded/${index + 1}`,
   title: `Expanded ${index + 1}`,
   description: `Expanded card ${index + 1}`,

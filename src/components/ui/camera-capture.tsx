@@ -83,8 +83,7 @@ function getCameraErrorName(error: unknown): string {
 }
 
 function getCameraRequest():
-  | ((constraints: MediaStreamConstraints) => Promise<MediaStream>)
-  | null {
+  ((constraints: MediaStreamConstraints) => Promise<MediaStream>) | null {
   if (navigator.mediaDevices?.getUserMedia) {
     return (constraints) => navigator.mediaDevices.getUserMedia(constraints);
   }
@@ -588,7 +587,9 @@ export function CameraCapture({
   useEffect(() => {
     if (state !== "streaming" || !requireLiveness || !livenessStatus.livenessPassed || captureError)
       return;
-    takePhoto();
+    // takePhoto sets capture state; defer it past the synchronous effect body
+    // to avoid a cascading render (react-hooks/set-state-in-effect).
+    queueMicrotask(() => takePhoto());
   }, [state, requireLiveness, livenessStatus.livenessPassed, takePhoto, captureError]);
 
   const retake = useCallback(() => {

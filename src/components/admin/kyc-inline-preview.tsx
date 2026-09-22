@@ -57,7 +57,9 @@ export function KycInlinePreview({
     if (!el) return;
 
     if (typeof IntersectionObserver === "undefined") {
-      setIsVisible(true);
+      // Defer past the synchronous effect body so the fallback does not
+      // trigger a cascading render (react-hooks/set-state-in-effect).
+      queueMicrotask(() => setIsVisible(true));
       return;
     }
     const observer = new IntersectionObserver(

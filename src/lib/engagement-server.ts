@@ -18,10 +18,7 @@ type ContentLikeSummaryRow = {
 };
 
 type EngagementReadErrorCode =
-  | "admin_unavailable"
-  | "rpc_unavailable"
-  | "query_failed"
-  | "unexpected_error";
+  "admin_unavailable" | "rpc_unavailable" | "query_failed" | "unexpected_error";
 
 export interface EngagementReadResult<T> {
   ok: boolean;

@@ -1,14 +1,7 @@
 export type WalkInPolicy = "walk_ins_welcome" | "appointments_preferred" | "appointment_only";
 
 export type PrimaryOrderChannel =
-  | "website"
-  | "whatsapp"
-  | "instagram"
-  | "facebook"
-  | "marketplace"
-  | "phone"
-  | "email"
-  | "other";
+  "website" | "whatsapp" | "instagram" | "facebook" | "marketplace" | "phone" | "email" | "other";
 
 export interface MallStoreBusinessDetails {
   type: "mall_store";

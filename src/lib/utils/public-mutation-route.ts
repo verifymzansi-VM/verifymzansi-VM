@@ -8,8 +8,7 @@ import type { Logger } from "@/lib/utils/logger";
 import type { User } from "@supabase/supabase-js";
 
 type PublicMutationPreludeResult =
-  | { success: true; user: User | null }
-  | { success: false; response: NextResponse };
+  { success: true; user: User | null } | { success: false; response: NextResponse };
 
 async function verifyPublicTurnstile(request: NextRequest, token: string, logger: Logger) {
   if (process.env.TURNSTILE_SECRET_KEY) {

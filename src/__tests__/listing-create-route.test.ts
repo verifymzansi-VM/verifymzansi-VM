@@ -714,8 +714,7 @@ describe("POST /api/listings", () => {
       expect.objectContaining({ p_user_id: USER_ID })
     );
     const insertArgs = rpcSpy.mock.calls.find(([fn]) => fn === "insert_listing_with_limit")?.[1] as
-      | { p_data?: Record<string, unknown> }
-      | undefined;
+      { p_data?: Record<string, unknown> } | undefined;
     expect(insertArgs?.p_data).not.toHaveProperty("owner_id");
     expect(insertArgs?.p_data).not.toHaveProperty("seller_id");
   });

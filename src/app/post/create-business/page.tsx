@@ -906,11 +906,9 @@ function CreateBusinessContent() {
       const operatingHours: Record<string, string> = {};
       if (businessType === "market_stall") {
         const td = (businessDetails as unknown as Record<string, unknown>).trading_days as
-          | string[]
-          | undefined;
+          string[] | undefined;
         const th = (businessDetails as unknown as Record<string, unknown>).trading_hours as
-          | string
-          | undefined;
+          string | undefined;
         if (td && th) {
           const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
           const hasWeekday = td.some((d) => WEEKDAYS.includes(d));

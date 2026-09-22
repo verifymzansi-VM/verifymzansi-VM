@@ -74,9 +74,7 @@ export type BusinessCategory =
 export type PromotionType = "product" | "service" | "event" | "deal" | "general";
 export type PromotionEventState = "upcoming" | "ongoing" | "ended";
 export type SocialAuthorizerRelationship =
-  | "owner"
-  | "business_representative"
-  | "agency_or_marketing_partner";
+  "owner" | "business_representative" | "agency_or_marketing_partner";
 
 export const PROMOTION_TYPE_LABELS: Record<PromotionType, string> = {
   product: "Promotions",
@@ -101,12 +99,7 @@ export type EntitlementType = "subscription" | "trial" | "pay_per_post";
 export type EntitlementStatus = "active" | "pending_verification" | "expired" | "cancelled";
 
 export type PaymentStatus =
-  | "pending"
-  | "processing"
-  | "complete"
-  | "failed"
-  | "expired"
-  | "refunded";
+  "pending" | "processing" | "complete" | "failed" | "expired" | "refunded";
 
 export type PaymentProvider = "ozow";
 
@@ -115,11 +108,7 @@ export type LeadStatus = "new" | "read" | "contacted" | "closed";
 export type ContactEventType = "call" | "whatsapp" | "form";
 
 export type ReportCategory =
-  | "scam"
-  | "prohibited_item"
-  | "impersonation"
-  | "harassment"
-  | "misleading_info";
+  "scam" | "prohibited_item" | "impersonation" | "harassment" | "misleading_info";
 
 export type ReportSeverity = "high" | "standard";
 
@@ -160,21 +149,12 @@ export type SensitiveActionCategory =
 
 /** Status of an appeal/reconsideration case. */
 export type AppealStatus =
-  | "submitted"
-  | "under_review"
-  | "upheld"
-  | "overturned"
-  | "partially_overturned"
-  | "dismissed";
+  "submitted" | "under_review" | "upheld" | "overturned" | "partially_overturned" | "dismissed";
 
 export type DsarType = "access" | "correction" | "deletion" | "objection";
 
 export type DsarStatus =
-  | "submitted"
-  | "identity_pending"
-  | "in_progress"
-  | "completed"
-  | "rejected";
+  "submitted" | "identity_pending" | "in_progress" | "completed" | "rejected";
 
 export type BuyerTokenStatus = "valid" | "expired" | "revoked";
 

@@ -517,10 +517,7 @@ export async function POST(request: Request) {
       actorId: guard.user.id,
       actorRole: guard.actorRole,
       action: (auditActionMap[action] || "moderation_action") as
-        | "moderation_action"
-        | "account_suspended"
-        | "account_banned"
-        | "report_resolved",
+        "moderation_action" | "account_suspended" | "account_banned" | "report_resolved",
       targetType: "report",
       targetId: reportId,
       metadata: {
