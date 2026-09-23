@@ -104,7 +104,8 @@ export function ShowroomSectionShell({
               alt=""
               fill
               sizes="100vw"
-              priority
+              preload
+              fetchPriority="high"
               className="object-cover scale-[1.12] md:scale-[1.08] lg:scale-[1.04]"
               style={{ objectPosition: mobilePosition, filter: backgroundFilter }}
               data-showroom-background="shared"
@@ -116,7 +117,7 @@ export function ShowroomSectionShell({
                 alt=""
                 fill
                 sizes="100vw"
-                priority
+                fetchPriority="high"
                 className={cn("hidden object-cover md:block", "scale-[1.08] lg:scale-[1.04]")}
                 style={{ objectPosition: desktopPosition, filter: backgroundFilter }}
                 data-showroom-background="desktop"
@@ -126,7 +127,7 @@ export function ShowroomSectionShell({
                 alt=""
                 fill
                 sizes="100vw"
-                priority
+                fetchPriority="high"
                 className="object-cover md:hidden scale-[1.12]"
                 style={{ objectPosition: mobilePosition, filter: backgroundFilter }}
                 data-showroom-background="mobile"
