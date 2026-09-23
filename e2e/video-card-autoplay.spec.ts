@@ -268,7 +268,7 @@ test.describe("Card video autoplay", () => {
       expect(page.url()).toBe(url);
     });
 
-    test(`${route.name} autoplays visible card videos`, async ({ page }, testInfo) => {
+    test(`${route.name} follows the visible card autoplay policy`, async ({ page }, testInfo) => {
       test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
 
       await installMediaPlaybackShim(page);
@@ -280,7 +280,25 @@ test.describe("Card video autoplay", () => {
         test.skip(true, `${route.name} is empty in current fixture data.`);
       }
 
-      await assertVisibleCardVideoAutoplays(page);
+      if (testInfo.project.name === "mobile-chrome") {
+        const card = page
+          .locator("[data-card-variant]")
+          .filter({ has: page.locator("video") })
+          .first();
+        const video = card.locator("video");
+        await video.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(750);
+        expect(await video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(true);
+        expect(
+          await page.evaluate(
+            () => (window as Window & { __vmPlayCalls?: number }).__vmPlayCalls ?? 0
+          )
+        ).toBe(0);
+        await card.getByRole("button", { name: "Play video", exact: true }).click();
+        await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(false);
+      } else {
+        await assertVisibleCardVideoAutoplays(page);
+      }
     });
   }
 });

@@ -130,7 +130,7 @@ test.describe("Singleton video playback", () => {
       .waitFor({ state: "visible" });
     await page.waitForLoadState("networkidle").catch(() => {});
 
-    const videos = page.locator("video");
+    const videos = page.locator('[data-testid="mzansi-market-grid-ready"] video');
     const videoCount = await videos.count();
     if (videoCount < 2) {
       test.skip(true, "Need at least 2 video cards to test singleton behavior.");
@@ -160,7 +160,7 @@ test.describe("Singleton video playback", () => {
       .waitFor({ state: "visible" });
     await page.waitForLoadState("networkidle").catch(() => {});
 
-    const videos = page.locator("video");
+    const videos = page.locator('[data-testid="mzansi-market-grid-ready"] video');
     const videoCount = await videos.count();
     if (videoCount < 2) {
       test.skip(true, "Need at least 2 video cards to test singleton behavior.");
@@ -172,7 +172,14 @@ test.describe("Singleton video playback", () => {
     await firstVideo.scrollIntoViewIfNeeded();
 
     // Trigger play on the first video via user gesture
-    await firstVideo.evaluate((el) => (el as HTMLVideoElement).play());
+    if (testInfo.project.name === "mobile-chrome") {
+      await firstVideo
+        .locator("xpath=ancestor::div[@data-card-variant]")
+        .getByRole("button", { name: "Play video", exact: true })
+        .click();
+    } else {
+      await firstVideo.evaluate((el) => (el as HTMLVideoElement).play());
+    }
     await page.waitForTimeout(200);
 
     // Confirm first video is playing
@@ -181,7 +188,14 @@ test.describe("Singleton video playback", () => {
 
     // Now scroll the second video into view and trigger play via the manager
     await secondVideo.scrollIntoViewIfNeeded();
-    await secondVideo.evaluate((el) => (el as HTMLVideoElement).play());
+    if (testInfo.project.name === "mobile-chrome") {
+      await secondVideo
+        .locator("xpath=ancestor::div[@data-card-variant]")
+        .getByRole("button", { name: "Play video", exact: true })
+        .click();
+    } else {
+      await secondVideo.evaluate((el) => (el as HTMLVideoElement).play());
+    }
     await page.waitForTimeout(200);
 
     // The second should now be playing
@@ -226,7 +240,7 @@ test.describe("Singleton video playback", () => {
       .waitFor({ state: "visible" });
     await page.waitForLoadState("networkidle").catch(() => {});
 
-    const videos = page.locator("video");
+    const videos = page.locator('[data-testid="mzansi-market-grid-ready"] video');
     const videoCount = await videos.count();
     if (videoCount < 3) {
       test.skip(true, "Need at least 3 video cards to test scroll singleton behavior.");

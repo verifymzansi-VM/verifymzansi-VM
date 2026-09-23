@@ -5,10 +5,7 @@ import {
   getBackgroundOverlayClasses,
   type ShowroomDecorativeBackground,
 } from "./showroom-section-shell";
-export type {
-  ShowroomDecorativeBackground,
-  ShowroomBackgroundOverlayPreset,
-} from "./showroom-section-shell";
+export type { ShowroomDecorativeBackground } from "./showroom-section-shell";
 import { animate, useMotionValue } from "framer-motion";
 import {
   useState,

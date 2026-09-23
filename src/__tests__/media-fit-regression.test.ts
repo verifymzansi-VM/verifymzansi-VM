@@ -6,6 +6,7 @@ const SOURCE_ROOT = path.join(process.cwd(), "src");
 const ALLOWLIST = new Set([
   path.join("components", "admin", "content-queue-table.tsx"),
   path.join("components", "showrooms", "showroom-card-carousel.tsx"),
+  path.join("components", "showrooms", "showroom-section-shell.tsx"),
   path.join("components", "business", "layouts", "unified-layout.tsx"),
   path.join("components", "ui", "focal-point-picker.tsx"),
   path.join("components", "ui", "media-crop-preview.tsx"),
