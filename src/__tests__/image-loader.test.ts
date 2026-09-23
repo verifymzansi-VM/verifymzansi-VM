@@ -15,14 +15,14 @@ describe("cloudflareImageLoader", () => {
     return mod.default;
   }
 
-  it("returns proxy path unchanged when CF resizing is disabled", async () => {
+  it("uses the R2 variant when CF resizing is disabled", async () => {
     const loader = await importLoader(false);
     const result = loader({
       src: `${PROXY}media/listing/abc.jpg`,
       width: 800,
       quality: 75,
     });
-    expect(result).toBe(`${PROXY}media/listing/abc.jpg?w=800&q=75`);
+    expect(result).toBe(`${PROXY}media/listing/abc.w800.webp`);
   });
 
   it("rewrites proxy path to the nearest pre-generated variant when CF resizing is enabled", async () => {
