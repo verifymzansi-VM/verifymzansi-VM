@@ -1,10 +1,12 @@
 "use client";
 
-import { startTransition, useEffect, useRef } from "react";
+import { startTransition, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useRealtime } from "@/hooks/use-realtime";
 
 const REFRESH_DEBOUNCE_MS = 400;
+const FALLBACK_REFRESH_MS = 120_000;
+const FOCUS_REFRESH_STALE_MS = 30_000;
 const DSAR_ACTIVE_STATUSES = new Set(["submitted", "in_progress"]);
 
 type RealtimePayload = Record<string, unknown> & {
@@ -54,6 +56,16 @@ function isContactSubmissionQueueEntry(payload: RealtimePayload) {
 export function AdminRealtimeRefresh() {
   const router = useRouter();
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastRefreshAtRef = useRef(0);
+
+  const refresh = useCallback(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    lastRefreshAtRef.current = Date.now();
+    startTransition(() => router.refresh());
+  }, [router]);
 
   const scheduleRefresh = () => {
     if (timeoutRef.current) {
@@ -61,29 +73,34 @@ export function AdminRealtimeRefresh() {
     }
 
     timeoutRef.current = setTimeout(() => {
-      startTransition(() => {
-        router.refresh();
-      });
+      refresh();
     }, REFRESH_DEBOUNCE_MS);
   };
 
   useEffect(() => {
-    // Recover from missed notifications or a disconnected realtime channel.
-    const refreshVisibleQueue = () => {
-      if (document.visibilityState === "visible") {
-        startTransition(() => router.refresh());
+    lastRefreshAtRef.current = Date.now();
+    // Recover missed events without reloading every admin query on every focus.
+    const refreshIfStale = (minAgeMs: number) => {
+      if (
+        document.visibilityState === "visible" &&
+        Date.now() - lastRefreshAtRef.current >= minAgeMs
+      ) {
+        refresh();
       }
     };
-    const interval = setInterval(refreshVisibleQueue, 30_000);
-    window.addEventListener("focus", refreshVisibleQueue);
+    const refreshOnFocus = () => refreshIfStale(FOCUS_REFRESH_STALE_MS);
+    const interval = setInterval(() => refreshIfStale(FALLBACK_REFRESH_MS), FALLBACK_REFRESH_MS);
+    window.addEventListener("focus", refreshOnFocus);
+    document.addEventListener("visibilitychange", refreshOnFocus);
     return () => {
       clearInterval(interval);
-      window.removeEventListener("focus", refreshVisibleQueue);
+      window.removeEventListener("focus", refreshOnFocus);
+      document.removeEventListener("visibilitychange", refreshOnFocus);
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [router]);
+  }, [refresh]);
 
   useRealtime({
     table: "verification_steps",

@@ -177,6 +177,28 @@ describe("GET /api/media/serve/[...key]", () => {
     expect(res.headers.get("Accept-Ranges")).toBe("bytes");
   });
 
+  it("briefly caches an original served while a responsive variant is missing", async () => {
+    mockSend.mockImplementation(async (command: { input: { Key: string } }) => {
+      if (command.input.Key.endsWith(".jpg")) {
+        return {
+          ContentType: "image/jpeg",
+          Body: {
+            transformToByteArray: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
+          },
+        };
+      }
+      throw Object.assign(new Error("missing"), { name: "NoSuchKey" });
+    });
+
+    const res = await GET(createRequest(), {
+      params: Promise.resolve({ key: ["media", "listing", "abc", "photo.w400.webp"] }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("image/jpeg");
+    expect(res.headers.get("Cache-Control")).toBe("public, max-age=300, s-maxage=300");
+  });
+
   it("redirects to R2_PUBLIC_URL when credentials are missing", async () => {
     delete process.env.R2_ACCESS_KEY_ID;
     delete process.env.R2_SECRET_ACCESS_KEY;

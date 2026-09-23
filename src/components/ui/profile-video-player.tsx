@@ -32,6 +32,7 @@ interface ProfileVideoPlayerProps {
   src: string;
   title: string;
   poster?: string;
+  prioritizePoster?: boolean;
   className?: string;
   videoClassName?: string;
   mediaFit?: "contain" | "cover";
@@ -60,6 +61,7 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
       src,
       title,
       poster,
+      prioritizePoster = false,
       className,
       videoClassName,
       mediaFit = "contain",
@@ -320,6 +322,8 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
                   // severe mobile GPU cost (see video-card-player SmartFitBackdrop).
                   className="absolute inset-0 scale-110 object-cover opacity-75 blur-none brightness-100 md:blur-2xl md:brightness-75 md:motion-reduce:blur-none"
                   sizes="100vw"
+                  loading={prioritizePoster ? "eager" : "lazy"}
+                  fetchPriority={prioritizePoster ? "high" : "auto"}
                 />
                 <div className="absolute inset-0 bg-black/35" aria-hidden="true" />
               </>

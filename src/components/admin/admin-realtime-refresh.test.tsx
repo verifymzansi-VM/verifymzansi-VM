@@ -66,13 +66,31 @@ describe("AdminRealtimeRefresh", () => {
   it("refreshes without a notification and cleans up its fallback", () => {
     const { unmount } = render(<AdminRealtimeRefresh />);
     vi.advanceTimersByTime(30_000);
+    expect(mockRefresh).not.toHaveBeenCalled();
+    window.dispatchEvent(new Event("focus"));
     expect(mockRefresh).toHaveBeenCalledTimes(1);
+    window.dispatchEvent(new Event("focus"));
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(210_000);
+    expect(mockRefresh).toHaveBeenCalledTimes(2);
     window.dispatchEvent(new Event("focus"));
     expect(mockRefresh).toHaveBeenCalledTimes(2);
     unmount();
-    vi.advanceTimersByTime(30_000);
+    vi.advanceTimersByTime(120_000);
     window.dispatchEvent(new Event("focus"));
     expect(mockRefresh).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not refresh twice when a realtime event overlaps the fallback", () => {
+    render(<AdminRealtimeRefresh />);
+    const reportsRealtime = realtimeOptions.find((option) => option.table === "reports");
+    const onEvent = reportsRealtime?.onEvent as (payload: Record<string, unknown>) => void;
+
+    vi.advanceTimersByTime(119_800);
+    onEvent({ eventType: "INSERT", new: { status: "open" } });
+    vi.advanceTimersByTime(600);
+
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
   });
 
   it("ignores queue events that do not enter a tracked admin status", () => {

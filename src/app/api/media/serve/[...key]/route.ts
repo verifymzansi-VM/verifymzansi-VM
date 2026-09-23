@@ -602,6 +602,11 @@ export async function GET(
       );
       const hit = probes.find((probe) => probe.status !== 404);
       if (hit) {
+        // The original can be replaced by a generated variant at this URL.
+        // Do not cache the temporary fallback as immutable for a year.
+        if (hit.ok) {
+          hit.headers.set("Cache-Control", "public, max-age=300, s-maxage=300");
+        }
         return hit;
       }
     }

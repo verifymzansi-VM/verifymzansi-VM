@@ -76,11 +76,17 @@ export async function HomePromotionsShowcase() {
   const engagementAdmin = tryCreateAdminClient();
   const now = new Date().toISOString();
 
-  const { data: eventData } = await buildPublicEventPromotionsQuery(
-    supabase,
-    now,
-    "id, title, price_cents, price_negotiable, photos, videos, video_thumbnail, category, category_key, location_province, location_city, promotion_type, view_count, boost_until, featured_until, media_width, media_height, start_date, end_date, created_at, business_id"
-  ).limit(8);
+  const [{ data: eventData }, { data: tourismData }] = await Promise.all([
+    buildPublicEventPromotionsQuery(
+      supabase,
+      now,
+      "id, title, price_cents, price_negotiable, photos, videos, video_thumbnail, category, category_key, location_province, location_city, promotion_type, view_count, boost_until, featured_until, media_width, media_height, start_date, end_date, created_at, business_id"
+    ).limit(8),
+    buildPublicTourismBusinessesQuery(
+      supabase,
+      "id, business_name, business_type, cover_photo, cover_video, video_thumbnail, logo_url, location_province, location_city, boost_until, featured_until, focal_x, focal_y, media_width, media_height"
+    ).limit(8),
+  ]);
 
   const eventRows = (eventData || []) as unknown as PromotionRow[];
 
@@ -88,18 +94,6 @@ export async function HomePromotionsShowcase() {
     .filter((promotion) => !shouldHidePlaywrightFixtureRowWhenEnabled(promotion, hideFixtures))
     .filter((promotion) => !isPlaceholderMarketplaceContent(promotion.title))
     .slice(0, 4);
-  const promotionIds = promotions.map((promotion) => promotion.id);
-  const promotionViewCountMap = await getOptionalContentViewCountMap(
-    engagementAdmin,
-    "promotion",
-    promotionIds
-  );
-
-  const { data: tourismData } = await buildPublicTourismBusinessesQuery(
-    supabase,
-    "id, business_name, business_type, cover_photo, cover_video, video_thumbnail, logo_url, location_province, location_city, boost_until, featured_until, focal_x, focal_y, media_width, media_height"
-  ).limit(8);
-
   const tourismRows = (tourismData || []) as unknown as TourismBusinessRow[];
 
   const tourismBusinesses = tourismRows
@@ -107,19 +101,19 @@ export async function HomePromotionsShowcase() {
     .filter((b) => !isPlaceholderMarketplaceContent(b.business_name))
     .slice(0, 4);
   const tourismIds = tourismBusinesses.map((business) => business.id);
-  const tourismViewCountMap = await getOptionalContentViewCountMap(
-    engagementAdmin,
-    "business",
-    tourismIds
-  );
+  const promotionIds = promotions.map((promotion) => promotion.id);
 
   // Fetch business logos for promotions linked to a business
   const businessIds = [
     ...new Set(promotions.map((p) => p.business_id).filter(Boolean)),
   ] as string[];
-  const { data: businesses } = businessIds.length
-    ? await supabase.from("businesses").select("id, logo_url").in("id", businessIds)
-    : { data: [] };
+  const [promotionViewCountMap, tourismViewCountMap, { data: businesses }] = await Promise.all([
+    getOptionalContentViewCountMap(engagementAdmin, "promotion", promotionIds),
+    getOptionalContentViewCountMap(engagementAdmin, "business", tourismIds),
+    businessIds.length
+      ? supabase.from("businesses").select("id, logo_url").in("id", businessIds)
+      : Promise.resolve({ data: [] as { id: string; logo_url: string | null }[] }),
+  ]);
   const logoMap = new Map((businesses ?? []).map((b) => [b.id, b.logo_url as string | null]));
 
   // Interleave tourism and events
@@ -196,7 +190,7 @@ export async function HomePromotionsShowcase() {
                   item.data.cover_photo ||
                   undefined
                 }
-                posterUrl={item.data.video_thumbnail ?? undefined}
+                posterUrl={item.data.video_thumbnail || item.data.cover_photo || undefined}
                 logoUrl={item.data.logo_url ?? undefined}
                 title={item.data.business_name}
                 businessType={item.data.business_type as BusinessType}

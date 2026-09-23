@@ -198,6 +198,42 @@ describe("HomePromotionsShowcase", () => {
     );
   });
 
+  it("uses the cover photo as the poster when a tourism video has no thumbnail", async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      createSupabaseMock(
+        [],
+        [
+          {
+            id: "tourism-video",
+            business_name: "Beach Lodge",
+            business_type: "standalone_shop",
+            cover_photo: "https://example.com/lodge-cover.jpg",
+            cover_video: "https://example.com/lodge.mp4",
+            video_thumbnail: null,
+            logo_url: null,
+            location_province: "KwaZulu-Natal",
+            location_city: "Durban",
+            boost_until: null,
+            featured_until: null,
+            focal_x: null,
+            focal_y: null,
+            media_width: null,
+            media_height: null,
+          },
+        ]
+      ) as never
+    );
+
+    render(await HomePromotionsShowcase());
+
+    expect(businessPreviewCardSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        imageUrl: "https://example.com/lodge.mp4",
+        posterUrl: "https://example.com/lodge-cover.jpg",
+      })
+    );
+  });
+
   it("renders an empty-state CTA when no promotions exist", async () => {
     vi.mocked(createClient).mockResolvedValue(createSupabaseMock([]) as never);
 

@@ -247,6 +247,7 @@ export function ListingDetailClient({
                   key={`${activeUrl}-${videoRetries}`}
                   src={activeUrl}
                   poster={firstPhotoUrl}
+                  prioritizePoster={activeIndex === 0}
                   title={title}
                   onError={() => setVideoError(true)}
                   mediaFit="contain"

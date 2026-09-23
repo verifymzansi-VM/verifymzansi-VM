@@ -8,6 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { ACCOUNT_PROFILE_WRITE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
 import { ensureAccountProfile } from "@/lib/account/ensure-profile";
 import type { MarketplaceArea } from "@/types/enums";
+import { cache } from "react";
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -76,7 +77,7 @@ export interface RecentOtpAttempt {
 
 const TOURISM_BUSINESS_FILTER = "area.eq.PROMOTIONS_EVENTS,category.eq.tourism_hospitality";
 
-async function getPendingModerationCountsByArea() {
+const getPendingModerationCountsByArea = cache(async () => {
   const supabase = createAdminClient();
   const [
     { count: pendingListings },
@@ -121,7 +122,7 @@ async function getPendingModerationCountsByArea() {
     pendingTourismBusinesses: pendingTourismBusinesses || 0,
     pendingPromotions: (pendingPromotions || 0) + (tourismEdits || 0),
   };
-}
+});
 
 async function getPendingModerationCountInternal() {
   const { pendingListings, pendingBusinesses, pendingTourismBusinesses, pendingPromotions } =
@@ -252,14 +253,13 @@ export async function getAreaCardCounts(): Promise<
   const supabase = createAdminClient();
 
   // Reports counts by area — map target_type to area
-  const { data: openReports } = await supabase
-    .from("reports")
-    .select("target_type, area")
-    .eq("status", "open")
-    .limit(10000);
-
-  const { pendingListings, pendingBusinesses, pendingTourismBusinesses, pendingPromotions } =
-    await getPendingModerationCountsByArea();
+  const [
+    { data: openReports },
+    { pendingListings, pendingBusinesses, pendingTourismBusinesses, pendingPromotions },
+  ] = await Promise.all([
+    supabase.from("reports").select("target_type, area").eq("status", "open").limit(10000),
+    getPendingModerationCountsByArea(),
+  ]);
 
   // Map target_type to area. Prefer the explicit report area when present so
   // tourism/hospitality businesses stay with Tourism & Events instead of the
