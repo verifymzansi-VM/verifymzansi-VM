@@ -7,6 +7,7 @@ import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
 import { useGlobalMute } from "@/hooks/use-global-mute";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { useDataSaver } from "@/hooks/use-data-saver";
+import { getVariantUrl } from "@/lib/utils/media-url";
 
 interface BusinessPromoVideoProps {
   videoUrl: string;
@@ -79,7 +80,7 @@ export function BusinessPromoVideo({
           <video
             ref={videoRef}
             src={videoUrl}
-            poster={thumbnailUrl}
+            poster={thumbnailUrl ? getVariantUrl(thumbnailUrl, "card") : undefined}
             preload="metadata"
             muted
             loop

@@ -30,8 +30,8 @@ describe("cloudflareImageLoader", () => {
     expect(result).toBe("/images/hero.jpg?w=1024&q=75");
   });
 
-  it("maps media proxy images to the nearest pre-generated variant key", async () => {
-    vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "true");
+  it("maps media proxy images to pre-generated variants even when Cloudflare resizing is disabled", async () => {
+    vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "false");
     const { default: loader } = await import("./image-loader");
     // 512 requested → nearest variant >= 512 is 800
     const result = loader({ src: "/api/media/serve/media/listing/hero.jpg", width: 512 });
@@ -60,10 +60,18 @@ describe("cloudflareImageLoader", () => {
   });
 
   it("leaves media proxy videos on the original key", async () => {
-    vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "true");
+    vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "false");
     const { default: loader } = await import("./image-loader");
     const result = loader({ src: "/api/media/serve/media/listing/clip.mp4", width: 512 });
     expect(result).toBe("/api/media/serve/media/listing/clip.mp4");
+  });
+
+  it("maps absolute same-origin media proxy URLs without Cloudflare resizing", async () => {
+    vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "false");
+    const { default: loader } = await import("./image-loader");
+    expect(
+      loader({ src: "https://verifymzansi.com/api/media/serve/media/listing/hero.jpg", width: 320 })
+    ).toBe("/api/media/serve/media/listing/hero.w400.webp");
   });
 
   it("transforms known media host absolute URLs via /cdn-cgi/image/ when resizing enabled", async () => {

@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
+import { getVariantUrl } from "@/lib/utils/media-url";
 import { useGlobalMute } from "@/hooks/use-global-mute";
 import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
@@ -93,6 +94,7 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
     const [isCompactLayout, setIsCompactLayout] = useState(false);
     const videoError = showErrorState && errorSource === src;
     const mediaFitClassName = getMediaFitClassName(mediaFit);
+    const nativePoster = poster ? getVariantUrl(poster, "card") : undefined;
 
     useEffect(() => {
       const video = localVideoRef.current;
@@ -332,7 +334,7 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
               key={retryKey}
               ref={localVideoRef}
               src={src}
-              poster={poster}
+              poster={nativePoster}
               muted
               loop={loop}
               playsInline

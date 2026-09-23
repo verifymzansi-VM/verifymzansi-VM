@@ -91,6 +91,21 @@ describe("ProfileVideoPlayer", () => {
     expect(video).toHaveClass("object-contain");
   });
 
+  it("uses a responsive R2 variant for the native video poster", () => {
+    render(
+      <ProfileVideoPlayer
+        src="/video.mp4"
+        title="Profile clip"
+        poster="/api/media/serve/media/business/photo.webp"
+      />
+    );
+
+    expect(screen.getByLabelText("Profile clip video")).toHaveAttribute(
+      "poster",
+      "/api/media/serve/media/business/photo.w800.webp"
+    );
+  });
+
   it("resumes playback after a manual pause", () => {
     render(<ProfileVideoPlayer src="/video.mp4" title="Profile clip" poster="/poster.jpg" />);
 

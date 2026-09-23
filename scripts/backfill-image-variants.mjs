@@ -92,8 +92,17 @@ async function objectExists(key) {
   try {
     await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
     return true;
-  } catch {
-    return false;
+  } catch (err) {
+    // Only a missing object permits a new upload. Authentication and network
+    // failures must stop this image rather than be mistaken for a cache miss.
+    if (
+      err?.$metadata?.httpStatusCode === 404 ||
+      err?.name === "NotFound" ||
+      err?.name === "NoSuchKey"
+    ) {
+      return false;
+    }
+    throw err;
   }
 }
 
@@ -159,6 +168,7 @@ console.log(`Mode: ${WRITE ? "WRITE" : "DRY-RUN"} | bucket: ${bucket} | limit: $
 let scanned = 0;
 let processed = 0;
 let totalGenerated = 0;
+let failed = 0;
 const inFlight = new Set();
 
 async function runOne(key) {
@@ -169,6 +179,7 @@ async function runOne(key) {
       console.log(`  + ${key} → ${r.generated} variant(s)`);
     }
   } catch (err) {
+    failed++;
     console.error(`  ! ${key}: ${err instanceof Error ? err.message : err}`);
   }
 }
@@ -185,5 +196,6 @@ for await (const key of listAllObjects()) {
 }
 await Promise.all(inFlight);
 
-console.log(`\nScanned ${scanned} originals, processed ${processed}, generated ${totalGenerated} variant(s).`);
+console.log(`\nScanned ${scanned} originals, processed ${processed}, generated ${totalGenerated} variant(s), failed ${failed}.`);
 if (!WRITE) console.log("Dry-run — re-run with --write to upload variants.");
+if (failed > 0) process.exitCode = 1;

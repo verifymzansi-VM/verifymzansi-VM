@@ -31,25 +31,19 @@ describe("media-url variant helpers", () => {
       expect(url).toBe("/api/media/serve/media/listing/abc.jpg");
     });
 
-    it("returns CDN-cgi URL for thumb variant", () => {
+    it("returns an R2 WebP proxy URL for the thumb variant", () => {
       const url = getVariantUrl("/api/media/serve/media/listing/abc.jpg", "thumb");
-      expect(url).toContain("/cdn-cgi/image/");
-      expect(url).toContain("width=400");
-      expect(url).toContain("quality=80");
-      expect(url).toContain("format=auto");
-      expect(url).toContain("media.verifymzansi.com/media/listing/abc.jpg");
+      expect(url).toBe("/api/media/serve/media/listing/abc.w400.webp");
     });
 
-    it("returns CDN-cgi URL for card variant", () => {
+    it("returns an R2 WebP proxy URL for the card variant", () => {
       const url = getVariantUrl("media/listing/abc.jpg", "card");
-      expect(url).toContain("width=800");
-      expect(url).toContain("quality=85");
+      expect(url).toBe("/api/media/serve/media/listing/abc.w800.webp");
     });
 
-    it("returns CDN-cgi URL for full variant", () => {
+    it("returns an R2 WebP proxy URL for the full variant", () => {
       const url = getVariantUrl("media/listing/abc.jpg", "full");
-      expect(url).toContain("width=1600");
-      expect(url).toContain("quality=90");
+      expect(url).toBe("/api/media/serve/media/listing/abc.w1600.webp");
     });
 
     it("returns the direct CDN URL for video files regardless of variant", () => {
@@ -61,14 +55,20 @@ describe("media-url variant helpers", () => {
       const url = getVariantUrl("https://example.com/foo.jpg", "card");
       expect(url).toBe("https://example.com/foo.jpg");
     });
+
+    it("does not double-rewrite an existing variant", () => {
+      expect(getVariantUrl("media/listing/abc.w400.webp", "card")).toBe(
+        "/api/media/serve/media/listing/abc.w400.webp"
+      );
+    });
   });
 
   describe("getResponsiveImageUrls", () => {
     it("returns all four variant URLs", () => {
       const urls = getResponsiveImageUrls("/api/media/serve/media/listing/abc.jpg");
-      expect(urls.thumb).toContain("width=400");
-      expect(urls.card).toContain("width=800");
-      expect(urls.full).toContain("width=1600");
+      expect(urls.thumb).toBe("/api/media/serve/media/listing/abc.w400.webp");
+      expect(urls.card).toBe("/api/media/serve/media/listing/abc.w800.webp");
+      expect(urls.full).toBe("/api/media/serve/media/listing/abc.w1600.webp");
       expect(urls.original).toBe("/api/media/serve/media/listing/abc.jpg");
     });
   });

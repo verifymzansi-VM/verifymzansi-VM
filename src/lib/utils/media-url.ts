@@ -164,14 +164,11 @@ export function normalizeMediaUrls(urls: string[]): string[] {
 
 export type ImageVariant = "thumb" | "card" | "full" | "original";
 
-/** Cloudflare Image Resizing widths & qualities per variant. */
-const VARIANT_PARAMS: Record<
-  Exclude<ImageVariant, "original">,
-  { width: number; quality: number }
-> = {
-  thumb: { width: 400, quality: 80 },
-  card: { width: 800, quality: 85 },
-  full: { width: 1600, quality: 90 },
+/** R2 image sizes generated at upload time. */
+const VARIANT_WIDTHS: Record<Exclude<ImageVariant, "original">, number> = {
+  thumb: 400,
+  card: 800,
+  full: 1600,
 };
 
 /**
@@ -187,12 +184,8 @@ export function getMediaCdnUrl(keyOrUrl: string): string {
 }
 
 /**
- * Build a Cloudflare Image Resizing URL for a specific variant.
- *
- * The `/cdn-cgi/image/` URL is built unconditionally; it only produces a
- * resized image where Cloudflare Image Resizing is enabled for the zone —
- * elsewhere Cloudflare passes the request through to the origin image, so
- * the unoptimised original still renders.
+ * Build a URL for a pre-generated R2 WebP variant. The media serve route
+ * falls back to the original for older or smaller images without that size.
  *
  * @param url     - Any media URL or storage key
  * @param variant - Size preset: "thumb" (400w), "card" (800w), "full" (1600w), "original"
@@ -206,14 +199,14 @@ export function getVariantUrl(url: string, variant: ImageVariant = "original"): 
   // Video files don't have image variants
   if (isVideoUrl(url)) return normalizeMediaUrl(url);
 
-  const { width, quality } = VARIANT_PARAMS[variant];
-  return `/cdn-cgi/image/width=${width},quality=${quality},format=auto/https://${MEDIA_BASE.replace(/^https?:\/\//, "")}/${key}`;
+  if (/\.w\d+\.webp$/.test(key)) return normalizeMediaUrl(url);
+  const dot = key.lastIndexOf(".");
+  if (dot <= 0) return normalizeMediaUrl(url);
+  return `${PROXY_PREFIX}${key.slice(0, dot)}.w${VARIANT_WIDTHS[variant]}.webp`;
 }
 
 /**
- * Return all variant URLs for responsive `<Image>` srcSet usage.
- * Falls back to the proxy URL for each variant when CF Image Resizing
- * is unavailable (the Next.js custom loader handles the same fallback).
+ * Return all available variant URLs for responsive image usage.
  */
 export function getResponsiveImageUrls(url: string): Record<ImageVariant, string> {
   return {

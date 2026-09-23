@@ -4,10 +4,9 @@
  * Cloudflare does not support the default Next.js `/_next/image` endpoint,
  * so we use a custom loader instead of setting `images.unoptimized: true`.
  *
- * If Cloudflare Image Resizing is enabled on the zone, this will
- * automatically produce optimised images via the `/cdn-cgi/image/` endpoint.
- * If it's not enabled, the URL passes through unchanged (same behaviour as
- * `unoptimized: true`, but with proper `srcset` / `sizes` attributes).
+ * Media served from R2 uses pre-generated WebP variants. Other images use
+ * Cloudflare Image Resizing when available, or retain their source URL with
+ * width/quality query parameters.
  *
  * @see https://developers.cloudflare.com/images/transform-images/transform-via-url/
  */
@@ -44,9 +43,8 @@ function isImageSource(src: string): boolean {
 }
 
 /**
- * When Cloudflare Image Resizing is disabled on the zone (or during local
- * development), the `/cdn-cgi/image/` endpoint returns 403/404 and every
- * image breaks. Toggle via `NEXT_PUBLIC_CF_IMAGE_RESIZING`.
+ * Controls only the Cloudflare /cdn-cgi/image/ path. R2 variants work without
+ * this feature and must not depend on a server/client environment flag.
  */
 const CF_RESIZING_ENABLED = process.env.NEXT_PUBLIC_CF_IMAGE_RESIZING === "true";
 
@@ -94,9 +92,24 @@ function toVariantProxyPath(path: string, requestedWidth: number): string {
 export default function cloudflareImageLoader({ src, width, quality }: ImageLoaderParams): string {
   const resolvedQuality = quality || 75;
 
-  // If Cloudflare Image Resizing is not available, return the src unchanged
-  // so images still render (unoptimized but functional) while preserving
-  // width-aware URLs required by Next.js custom loaders.
+  // The media proxy can always serve a pre-generated variant, falling back to
+  // its original when that variant is absent. Keep this path independent of
+  // Cloudflare Image Resizing so SSR preloads match hydrated image URLs.
+  if (src.startsWith("/api/media/serve/")) {
+    return toVariantProxyPath(src, width);
+  }
+  if (src.startsWith("http://") || src.startsWith("https://")) {
+    try {
+      const parsed = new URL(src);
+      if (parsed.pathname.startsWith("/api/media/serve/")) {
+        return toVariantProxyPath(parsed.pathname, width);
+      }
+    } catch {
+      return src;
+    }
+  }
+
+  // If Cloudflare Image Resizing is unavailable, retain non-media image URLs.
   if (!CF_RESIZING_ENABLED) {
     return withSizeQuery(src, width, resolvedQuality);
   }
@@ -113,27 +126,10 @@ export default function cloudflareImageLoader({ src, width, quality }: ImageLoad
   // sized to the requested width (upload-time WebP variants). The serve route
   // falls back to the original object when the variant does not exist yet.
   if (!src.startsWith("http://") && !src.startsWith("https://")) {
-    if (src.startsWith("/api/media/serve/")) {
-      return toVariantProxyPath(src, width);
-    }
     if (!isImageSource(src)) {
       return src;
     }
     return withSizeQuery(src, width, resolvedQuality);
-  }
-
-  // Absolute proxy URLs: resize via pre-generated variant keys, leave videos
-  // and non-image assets on the proxy path untouched.
-  if (src.includes("/api/media/serve/")) {
-    try {
-      const parsed = new URL(src);
-      if (isImageSource(parsed.pathname)) {
-        return toVariantProxyPath(parsed.pathname, width);
-      }
-    } catch {
-      return src;
-    }
-    return src;
   }
 
   // Same-origin CDN URLs (media.verifymzansi.com) — extract the pathname
