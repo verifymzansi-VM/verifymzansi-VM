@@ -380,6 +380,8 @@ function MediaColumn({
                   ref={videoRef}
                   src={activeMedia.url}
                   poster={activeMedia.poster}
+                  prioritizePoster={activeMediaIndex === 0}
+                  autoPlayOnMobile={false}
                   title={business.business_name}
                   mediaFit="contain"
                   videoClassName="object-contain"

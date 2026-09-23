@@ -248,6 +248,7 @@ export function ListingDetailClient({
                   src={activeUrl}
                   poster={firstPhotoUrl}
                   prioritizePoster={activeIndex === 0}
+                  autoPlayOnMobile={false}
                   title={title}
                   onError={() => setVideoError(true)}
                   mediaFit="contain"

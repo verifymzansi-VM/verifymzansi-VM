@@ -73,7 +73,21 @@ vi.mock("@/components/ui/media-lightbox", () => ({
 }));
 
 vi.mock("@/components/ui/profile-video-player", () => ({
-  ProfileVideoPlayer: ({ title }: { title: string }) => <video aria-label={`${title} video`} />,
+  ProfileVideoPlayer: ({
+    title,
+    prioritizePoster,
+    autoPlayOnMobile,
+  }: {
+    title: string;
+    prioritizePoster: boolean;
+    autoPlayOnMobile: boolean;
+  }) => (
+    <video
+      aria-label={`${title} video`}
+      data-poster-priority={prioritizePoster}
+      data-mobile-autoplay={autoPlayOnMobile}
+    />
+  ),
 }));
 
 vi.mock("@/components/listings/promotion-card", () => ({
@@ -170,6 +184,14 @@ describe("UnifiedLayout", () => {
 
     expect(screen.queryByAltText("Unified Studio logo")).not.toBeInTheDocument();
     expect(screen.queryByText("Featured Profile")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Unified Studio video")).toHaveAttribute(
+      "data-poster-priority",
+      "true"
+    );
+    expect(screen.getByLabelText("Unified Studio video")).toHaveAttribute(
+      "data-mobile-autoplay",
+      "false"
+    );
   });
 
   it("keeps the profile identity overlay on photo slides", () => {

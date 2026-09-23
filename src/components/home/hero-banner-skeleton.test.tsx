@@ -1,19 +1,19 @@
 import { render } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import HomeLoading from "@/app/loading";
+import { describe, expect, it } from "vitest";
+import GlobalLoading from "@/app/loading";
 import { HeroBannerSkeleton } from "./hero-banner-skeleton";
 import { generatedMzansiShowroomBackground } from "@/components/showrooms/showroom-backgrounds";
 
-vi.mock("@/components/layout/header", () => ({
-  Header: () => <header>VerifyMzansi</header>,
-}));
-
 describe("homepage loading background", () => {
-  it.each([
-    ["route fallback", HomeLoading],
-    ["hero data fallback", HeroBannerSkeleton],
-  ] as const)("renders the showroom artwork in the %s before data arrives", (_, Loading) => {
-    const { container } = render(<Loading />);
+  it("keeps showroom artwork out of the shared route fallback", () => {
+    const { container } = render(<GlobalLoading />);
+
+    expect(container.querySelector("[data-showroom-background]")).toBeNull();
+    expect(container.querySelector("img")).toBeNull();
+  });
+
+  it("renders showroom artwork in the homepage hero data fallback", () => {
+    const { container } = render(<HeroBannerSkeleton />);
     const background = container.querySelector<HTMLImageElement>("[data-showroom-background]");
 
     expect(background).not.toBeNull();

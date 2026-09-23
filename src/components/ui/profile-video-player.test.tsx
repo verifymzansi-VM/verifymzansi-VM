@@ -106,6 +106,59 @@ describe("ProfileVideoPlayer", () => {
     );
   });
 
+  it("holds mobile autoplay until the visitor plays the video", () => {
+    const originalMatchMedia = window.matchMedia;
+    const originalIntersectionObserver = globalThis.IntersectionObserver;
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn(() => ({ matches: true })),
+    });
+    class VisibleIntersectionObserver {
+      constructor(private callback: IntersectionObserverCallback) {}
+      observe(target: Element) {
+        this.callback(
+          [{ target, intersectionRatio: 1 } as IntersectionObserverEntry],
+          this as unknown as IntersectionObserver
+        );
+      }
+      disconnect() {}
+      unobserve() {}
+      takeRecords() {
+        return [];
+      }
+    }
+    vi.stubGlobal("IntersectionObserver", VisibleIntersectionObserver);
+
+    try {
+      const { container } = render(
+        <ProfileVideoPlayer
+          src="/video.mp4"
+          title="Profile clip"
+          poster="/poster.jpg"
+          prioritizePoster
+          autoPlayOnMobile={false}
+        />
+      );
+
+      const video = screen.getByLabelText("Profile clip video") as HTMLVideoElement;
+      expect(video).toHaveAttribute("preload", "none");
+      expect(managerMock.updateVisibility).toHaveBeenCalledWith(video, 0);
+      expect(container.querySelector("img")).toHaveAttribute("loading", "eager");
+      expect(container.querySelector("img")).toHaveAttribute("fetchpriority", "high");
+
+      video.play = vi.fn().mockResolvedValue(undefined);
+      fireEvent.click(screen.getByRole("button", { name: "Play video" }));
+      expect(managerMock.requestPriority).toHaveBeenCalledWith(video);
+      expect(video.play).toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(window, "matchMedia", {
+        configurable: true,
+        value: originalMatchMedia,
+      });
+      vi.stubGlobal("IntersectionObserver", originalIntersectionObserver);
+    }
+  });
+
   it("resumes playback after a manual pause", () => {
     render(<ProfileVideoPlayer src="/video.mp4" title="Profile clip" poster="/poster.jpg" />);
 

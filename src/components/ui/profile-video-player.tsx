@@ -34,6 +34,7 @@ interface ProfileVideoPlayerProps {
   title: string;
   poster?: string;
   prioritizePoster?: boolean;
+  autoPlayOnMobile?: boolean;
   className?: string;
   videoClassName?: string;
   mediaFit?: "contain" | "cover";
@@ -63,6 +64,7 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
       title,
       poster,
       prioritizePoster = false,
+      autoPlayOnMobile = true,
       className,
       videoClassName,
       mediaFit = "contain",
@@ -79,7 +81,13 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
 
     const manager = useVideoPlaybackManager();
     const containerRef = useRef<HTMLDivElement>(null);
-    const isPausedByUserRef = useRef(!autoPlay);
+    const isPausedByUserRef = useRef(
+      !autoPlay ||
+        (!autoPlayOnMobile &&
+          typeof window !== "undefined" &&
+          typeof window.matchMedia === "function" &&
+          window.matchMedia("(max-width: 767px)").matches)
+    );
     const reducedMotion = useReducedMotion();
     const dataSaver = useDataSaver();
     const autoplayBlocked = reducedMotion || dataSaver;
@@ -335,6 +343,7 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
               ref={localVideoRef}
               src={src}
               poster={nativePoster}
+              preload={autoPlayOnMobile ? "metadata" : "none"}
               muted
               loop={loop}
               playsInline

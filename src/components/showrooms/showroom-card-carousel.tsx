@@ -912,7 +912,7 @@ export function ShowroomCardCarousel({
                 mediaWidth={item.mediaWidth}
                 mediaHeight={item.mediaHeight}
                 priority={offset === 0}
-                mediaSizes="(max-width: 767px) 260px, (max-width: 1023px) 300px, 440px"
+                mediaSizes="(max-width: 767px) and (max-height: 650px) and (orientation: portrait) 200px, (max-width: 767px) 260px, (max-width: 1023px) 300px, 440px"
                 deferVideoLoadUntilPlay
                 videoMode={offset === 0 ? "ambient" : undefined}
                 onVideoEnded={offset === 0 ? handleVideoEnded : undefined}

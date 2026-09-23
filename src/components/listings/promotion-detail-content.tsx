@@ -380,6 +380,8 @@ export function PromotionDetailContent({
                     ref={videoRef}
                     src={normalizeMediaUrl(activeMedia.url)}
                     poster={activeMedia.poster ? normalizeMediaUrl(activeMedia.poster) : undefined}
+                    prioritizePoster={activeMediaIndex === 0}
+                    autoPlayOnMobile={false}
                     title={promotion.title}
                     mediaFit="contain"
                     videoClassName="bg-black object-contain"
