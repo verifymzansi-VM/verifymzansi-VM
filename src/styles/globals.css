@@ -371,6 +371,16 @@
    ══════════════════════════════════════════════════════════════ */
 
 @layer components {
+  .showroom-artwork {
+    object-position: var(--showroom-mobile-position, center);
+  }
+
+  @media (min-width: 768px), (orientation: landscape) {
+    .showroom-artwork {
+      object-position: var(--showroom-desktop-position, center);
+    }
+  }
+
   .showroom-viewport {
     /* Header, floating mobile navigation pill (74px incl. bottom offset),
        section padding, controls, and metadata. */

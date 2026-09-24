@@ -72,6 +72,7 @@ docs/*
 !LAUNCH-HARDENING-PLAN.md
 !docs/ARCHITECTURE.md
 !docs/POSTING-GUIDE.md
+!docs/showroom-artwork.md
 !docs/introductory-trial-strategy.md
 !docs/verification-capture-review.md
 !docs/video-upload-r2-design.md

@@ -248,7 +248,7 @@ describe("PromotionsPage", () => {
     expect(carouselSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         background: expect.objectContaining({
-          src: "/images/showrooms/generated-mzansi-showroom-optimized.webp",
+          src: "/images/showrooms/tourism-v2-desktop.avif",
           overlayPreset: "tourism",
         }),
       })

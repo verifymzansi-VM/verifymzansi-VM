@@ -222,17 +222,17 @@ describe("ShowroomCardCarousel", () => {
       <ShowroomCardCarousel items={mockItems} background={mockBackground} />
     );
 
-    const desktopBackground = container.querySelector('[data-showroom-background="desktop"]');
-    const mobileBackground = container.querySelector('[data-showroom-background="mobile"]');
+    const desktopBackground = container.querySelector("picture source");
+    const mobileBackground = container.querySelector('[data-showroom-background="responsive"]');
 
+    expect(desktopBackground).toHaveAttribute("srcset", "/images/showrooms/test-desktop.jpg");
+    expect(mobileBackground).toHaveAttribute("src", "/images/showrooms/test-mobile.jpg");
+    expect(container.querySelectorAll("picture img")).toHaveLength(1);
     expect(desktopBackground).toHaveAttribute(
-      "src",
-      expect.stringContaining(encodeURIComponent("/images/showrooms/test-desktop.jpg"))
+      "media",
+      "(min-width: 768px), (orientation: landscape)"
     );
-    expect(mobileBackground).toHaveAttribute(
-      "src",
-      expect.stringContaining(encodeURIComponent("/images/showrooms/test-mobile.jpg"))
-    );
+    expect(mobileBackground).toHaveAttribute("fetchpriority", "low");
   });
 
   it("keeps the default gradient-only shell when no decorative background is provided", () => {
@@ -253,7 +253,7 @@ describe("ShowroomCardCarousel", () => {
     );
 
     expect(screen.getAllByText("No Items").length).toBeGreaterThanOrEqual(1);
-    expect(container.querySelector('[data-showroom-background="desktop"]')).toBeTruthy();
+    expect(container.querySelector('[data-showroom-background="responsive"]')).toBeTruthy();
   });
 
   it("announces active slide changes via aria-live", () => {

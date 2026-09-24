@@ -1,5 +1,5 @@
 import Image from "next/image";
-import type { ReactNode, Ref } from "react";
+import type { CSSProperties, ReactNode, Ref } from "react";
 import { cn } from "@/lib/utils";
 
 export type ShowroomBackgroundOverlayPreset = "market" | "business" | "tourism";
@@ -111,28 +111,28 @@ export function ShowroomSectionShell({
               data-showroom-background="shared"
             />
           ) : (
-            <>
-              <Image
-                src={backgroundSrc}
-                alt=""
-                fill
-                sizes="100vw"
-                fetchPriority="high"
-                className={cn("hidden object-cover md:block", "scale-[1.08] lg:scale-[1.04]")}
-                style={{ objectPosition: desktopPosition, filter: backgroundFilter }}
-                data-showroom-background="desktop"
-              />
-              <Image
+            <picture>
+              <source media="(min-width: 768px), (orientation: landscape)" srcSet={backgroundSrc} />
+              {/* Precompressed local artwork: picture selects one file before downloading. */}
+              <img
                 src={mobileBackgroundSrc}
                 alt=""
-                fill
-                sizes="100vw"
-                fetchPriority="high"
-                className="object-cover md:hidden scale-[1.12]"
-                style={{ objectPosition: mobilePosition, filter: backgroundFilter }}
-                data-showroom-background="mobile"
+                width={600}
+                height={800}
+                loading="eager"
+                decoding="async"
+                fetchPriority="low"
+                className="showroom-artwork absolute inset-0 h-full w-full object-cover"
+                style={
+                  {
+                    "--showroom-desktop-position": desktopPosition,
+                    "--showroom-mobile-position": mobilePosition,
+                    filter: backgroundFilter,
+                  } as CSSProperties
+                }
+                data-showroom-background="responsive"
               />
-            </>
+            </picture>
           )}
           <div
             className="absolute inset-0 bg-slate-950"

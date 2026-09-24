@@ -18,10 +18,10 @@ describe("homepage loading background", () => {
 
     expect(background).not.toBeNull();
     expect(decodeURIComponent(background?.getAttribute("src") ?? "")).toContain(
-      generatedMzansiShowroomBackground.src
+      generatedMzansiShowroomBackground.mobileSrc
     );
     expect(background?.closest("section")).toHaveClass("showroom-viewport");
-    expect(background?.style.objectPosition).toBe("center 48%");
+    expect(background?.style.getPropertyValue("--showroom-mobile-position")).toBe("center");
     expect(background?.style.filter).toContain("blur(0px)");
     expect(background?.getAttribute("loading")).not.toBe("lazy");
     expect(container.querySelector(".aspect-\\[21\\/9\\]")).toBeNull();
