@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { runInNewContext } from "node:vm";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -41,6 +42,45 @@ import RootLayout from "./layout";
 import { headers } from "next/headers";
 
 describe("RootLayout", () => {
+  it.each([
+    { saved: null, systemDark: true, expected: "dark" },
+    { saved: null, systemDark: false, expected: "light" },
+    { saved: "system", systemDark: true, expected: "dark" },
+    { saved: "light", systemDark: true, expected: "light" },
+    { saved: "dark", systemDark: false, expected: "dark" },
+    { saved: "blocked", systemDark: true, expected: "dark" },
+  ])(
+    "applies $expected before the streamed body ($saved, OS dark: $systemDark)",
+    async ({ saved, systemDark, expected }) => {
+      const markup = renderToStaticMarkup(await RootLayout({ children: <div>Content</div> }));
+      const head = new DOMParser().parseFromString(markup, "text/html").head;
+      const bootstrap = head.querySelector("script#theme-bootstrap");
+
+      expect(bootstrap).not.toBeNull();
+      expect(bootstrap?.getAttribute("nonce")).toBe("nonce-123");
+      expect(bootstrap?.getAttribute("data-cfasync")).toBe("false");
+      expect(head.querySelector("style")?.getAttribute("nonce")).toBe("nonce-123");
+
+      const root = document.createElement("html");
+      root.classList.add("font-class");
+      // No body or React hydration exists yet, as during a streamed response.
+      runInNewContext(bootstrap!.textContent!, {
+        document: { documentElement: root },
+        localStorage: {
+          getItem: () => {
+            if (saved === "blocked") throw new Error("Storage unavailable");
+            return saved;
+          },
+        },
+        window: { matchMedia: () => ({ matches: systemDark }) },
+      });
+
+      expect(root.classList.contains(expected)).toBe(true);
+      expect(root.classList.contains("font-class")).toBe(true);
+      expect(root.style.colorScheme).toBe(expected);
+    }
+  );
+
   it("renders the __name bootstrap script before the app shell", async () => {
     const markup = renderToStaticMarkup(
       await RootLayout({

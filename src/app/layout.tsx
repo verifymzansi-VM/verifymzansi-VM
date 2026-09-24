@@ -28,6 +28,29 @@ import { HELLO_CONTACT_EMAIL } from "@/lib/contact-email";
 import { VERIFY_MZANSI_SITE_DESCRIPTION } from "@/lib/seo/public-categories";
 import "@/styles/globals.css";
 
+// Run in the head: streaming can paint the body before next-themes' script arrives.
+// Keep the storage key and system default in sync with ThemeProvider below.
+const THEME_BOOTSTRAP = `
+(function () {
+  var theme;
+  try { theme = localStorage.getItem("theme"); } catch (_) {}
+  if (theme !== "light" && theme !== "dark") {
+    theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  var root = document.documentElement;
+  root.classList.remove("light", "dark");
+  root.classList.add(theme);
+  root.style.colorScheme = theme;
+})();
+`;
+
+// Paint the document canvas even before the body or external styles arrive.
+// Fallback colors match the --background tokens in globals.css.
+const THEME_CANVAS_CSS = `
+html { background-color: hsl(var(--background, 40 30% 98%)); }
+html.dark { background-color: hsl(var(--background, 30 14% 7%)); }
+`;
+
 const TURBOPACK_NAME_POLYFILL =
   'if(typeof globalThis.__name!=="function"){globalThis.__name=function(fn,name){Object.defineProperty(fn,"name",{value:name,configurable:true});return fn;};}var __name=globalThis.__name;';
 
@@ -209,6 +232,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       className={`${fontDisplay.variable} ${fontBody.variable}`}
     >
       <head>
+        <script
+          id="theme-bootstrap"
+          nonce={nonce}
+          data-cfasync="false"
+          dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }}
+        />
+        <style nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_CANVAS_CSS }} />
         {/* Prevent iOS Safari from auto-detecting phone numbers, dates, emails,
             and addresses — it wraps detected content in <a> tags which causes
             React 19 hydration mismatches ("Something went wrong" crash). */}
