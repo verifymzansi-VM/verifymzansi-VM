@@ -265,7 +265,7 @@ test.describe("Platform Smoke", () => {
       .toBeFalsy();
   });
 
-  test("@smoke mobile footer stays above bottom nav and marketplace tabs remain readable", async ({
+  test("@smoke mobile footer and marketplace tabs stay clear with home-only bottom nav", async ({
     page,
   }) => {
     test.skip((page.viewportSize()?.width ?? 1280) >= 1024, "Mobile-only layout check");
@@ -290,14 +290,14 @@ test.describe("Platform Smoke", () => {
     const bottomNav = page.getByRole("navigation", { name: "Main" });
 
     await expect(footerLink).toBeVisible();
+    await expect(bottomNav).toHaveCount(0);
+
+    await page.goto("/");
     await expect(bottomNav).toBeVisible();
-
-    const footerBottom = await footerLink.evaluate(
-      (element) => element.getBoundingClientRect().bottom
+    await expect(bottomNav.getByRole("link", { name: "Search" })).toHaveAttribute(
+      "href",
+      "/search"
     );
-    const navTop = await bottomNav.evaluate((element) => element.getBoundingClientRect().top);
-
-    expect(footerBottom).toBeLessThanOrEqual(navTop);
   });
 
   test("@smoke marketplace mobile pages avoid bootstrap errors and overlapping chrome", async ({
@@ -329,10 +329,8 @@ test.describe("Platform Smoke", () => {
         const filterButton = page
           .locator(`button[aria-label="${check.filterButtonName}"]:visible`)
           .last();
-        const bottomNav = page.getByRole("navigation", { name: "Main" });
-
         await expect(filterButton).toBeVisible();
-        await expect(bottomNav).toBeVisible();
+        await expect(page.getByRole("navigation", { name: "Main" })).toHaveCount(0);
         await filterButton.click();
         await expect(page.getByRole("dialog").first()).toBeVisible();
       }

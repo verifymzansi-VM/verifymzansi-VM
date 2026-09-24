@@ -173,7 +173,7 @@ export function ListingFilterDrawer() {
         <SheetTrigger asChild>
           <button
             type="button"
-            className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] right-4 z-40 inline-flex h-12 w-12 items-center justify-center gap-1 rounded-full bg-brand-green text-white shadow-lg shadow-brand-green/30 ring-1 ring-white/20 transition-all hover:bg-brand-green-600 active:scale-95 md:hidden motion-reduce:transition-none motion-reduce:active:scale-100"
+            className="fixed bottom-0 left-1/2 z-40 inline-flex h-12 w-12 -translate-x-1/2 items-center justify-center gap-1 rounded-full bg-brand-green text-white shadow-lg shadow-brand-green/30 ring-1 ring-white/20 transition-all hover:bg-brand-green-600 active:scale-95 md:hidden motion-reduce:transition-none motion-reduce:active:scale-100"
             aria-label="Open listing filters"
           >
             <SlidersHorizontal className="h-4 w-4 shrink-0" />
@@ -187,7 +187,7 @@ export function ListingFilterDrawer() {
       ) : (
         <button
           type="button"
-          className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] right-4 z-40 inline-flex h-12 w-12 items-center justify-center rounded-full bg-brand-green text-white shadow-lg opacity-50 md:hidden"
+          className="fixed bottom-0 left-1/2 z-40 inline-flex h-12 w-12 -translate-x-1/2 items-center justify-center rounded-full bg-brand-green text-white shadow-lg opacity-50 md:hidden"
           aria-label="Open listing filters"
           disabled
         >

@@ -431,7 +431,7 @@ export function ListingDetailContent({
                   View all
                 </Link>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-[repeat(auto-fill,minmax(0,15rem))]">
                 {similarItems.map((item) => {
                   const sellerRow = similarSellers.get(readOwnerId(item) ?? "");
                   const videoUrl = item.videos?.[0];

@@ -44,11 +44,8 @@ export function MobileNav() {
   if (pathname !== "/") return null;
 
   return (
-    <nav
-      aria-label="Main"
-      className="fixed bottom-0 left-0 right-0 z-50 px-3 pb-[max(env(safe-area-inset-bottom),10px)] md:hidden"
-    >
-      <div className="glass-panel elev-lg mx-auto flex h-16 max-w-md items-center justify-around rounded-2xl px-2">
+    <nav aria-label="Main" className="fixed bottom-0 left-0 right-0 z-50 px-3 pb-0 md:hidden">
+      <div className="glass-panel elev-lg mx-auto flex h-16 max-w-md items-center justify-around rounded-t-2xl px-2">
         {TABS.map((tab) => {
           const href = tab.href;
           const resolvedHref =

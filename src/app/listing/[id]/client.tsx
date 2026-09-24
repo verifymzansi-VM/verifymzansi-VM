@@ -164,6 +164,7 @@ export function ListingDetailClient({
   const goTo = useCallback(
     (index: number) => {
       if (index >= 0 && index < orderedMedia.length) {
+        setVideoError(false);
         setActiveIndex(index);
       }
     },
@@ -290,7 +291,7 @@ export function ListingDetailClient({
                 type="button"
                 onClick={() => goTo(activeIndex - 1)}
                 disabled={activeIndex === 0}
-                className="absolute left-2 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-0 hover:bg-black/60 max-lg:opacity-100"
+                className="absolute left-2 top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:pointer-events-none disabled:opacity-0"
                 aria-label="Previous image"
                 data-carousel-control="true"
               >
@@ -300,7 +301,7 @@ export function ListingDetailClient({
                 type="button"
                 onClick={() => goTo(activeIndex + 1)}
                 disabled={activeIndex === orderedMedia.length - 1}
-                className="absolute right-2 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-0 hover:bg-black/60 max-lg:opacity-100"
+                className="absolute right-2 top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:pointer-events-none disabled:opacity-0"
                 aria-label="Next image"
                 data-carousel-control="true"
               >
@@ -327,7 +328,7 @@ export function ListingDetailClient({
               <button
                 key={i}
                 type="button"
-                onClick={() => setActiveIndex(i)}
+                onClick={() => goTo(i)}
                 aria-label={`View ${item.kind} ${i + 1} of ${orderedMedia.length}`}
                 className={cn(
                   "relative flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border-2 transition-all duration-200",

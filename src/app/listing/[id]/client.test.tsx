@@ -72,6 +72,35 @@ vi.mock("@/contexts/video-playback-context", () => ({
 const { ListingDetailClient } = await import("@/app/listing/[id]/client");
 
 describe("ListingDetailClient", () => {
+  it("clears a failed video's error when navigating with arrows or thumbnails", () => {
+    render(
+      <ListingDetailClient
+        photos={[]}
+        videos={["https://example.com/broken.mp4", "https://example.com/working.mp4"]}
+        title="Video recovery"
+        listingId="video-recovery"
+        trackView={false}
+      />
+    );
+
+    fireEvent.error(screen.getByLabelText("Video recovery video"));
+    expect(screen.getByText("Video failed to load")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Next image" }));
+    expect(screen.queryByText("Video failed to load")).toBeNull();
+    expect(screen.getByLabelText("Video recovery video")).toHaveAttribute(
+      "src",
+      "https://example.com/working.mp4"
+    );
+
+    fireEvent.error(screen.getByLabelText("Video recovery video"));
+    fireEvent.click(screen.getByRole("button", { name: "View video 1 of 2" }));
+    expect(screen.queryByText("Video failed to load")).toBeNull();
+    expect(screen.getByLabelText("Video recovery video")).toHaveAttribute(
+      "src",
+      "https://example.com/broken.mp4"
+    );
+  });
+
   it("opens on the first video when photos and videos are both present", () => {
     render(
       <ListingDetailClient
