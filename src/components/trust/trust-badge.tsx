@@ -1,6 +1,7 @@
 "use client";
 
-import { Circle, CircleDashed, Clock, ShieldCheck, Crown } from "lucide-react";
+import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
+import { Circle, CircleDashed, Clock, Crown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getTrustTier } from "@/lib/constants/trust-scale";
 import type { TrustLevel } from "@/types/enums";

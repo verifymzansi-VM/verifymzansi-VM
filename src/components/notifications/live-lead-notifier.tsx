@@ -44,7 +44,7 @@ export function LiveLeadNotifier({ userId }: LiveLeadNotifierProps) {
       const showFallbackNotification = () => {
         const notice = new Notification("VerifyMzansi", {
           body: description,
-          icon: "/icons/icon-192.png?v=10",
+          icon: "/icons/icon-192.png?v=20260924",
           tag: notificationId ? `lead-${notificationId}` : "lead-alert",
         });
 
@@ -70,7 +70,7 @@ export function LiveLeadNotifier({ userId }: LiveLeadNotifierProps) {
             }
             return registration.showNotification("VerifyMzansi", {
               body: description,
-              icon: "/icons/icon-192.png?v=10",
+              icon: "/icons/icon-192.png?v=20260924",
               tag: notificationId ? `lead-${notificationId}` : "lead-alert",
               data: { url: targetHref },
             });

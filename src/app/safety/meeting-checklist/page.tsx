@@ -1,13 +1,5 @@
-import {
-  CheckCircle2,
-  MapPin,
-  Users,
-  Clock,
-  Phone,
-  Shield,
-  Car,
-  AlertTriangle,
-} from "lucide-react";
+import { BrandShield as Shield } from "@/components/shared/brand-shield";
+import { CheckCircle2, MapPin, Users, Clock, Phone, Car, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/header";

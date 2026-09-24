@@ -1,5 +1,6 @@
 "use client";
 
+import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -8,7 +9,6 @@ import {
   Flag,
   ScrollText,
   FileText,
-  ShieldCheck,
   ChevronLeft,
   ChevronRight,
   ToggleLeft,

@@ -1,11 +1,12 @@
 "use client";
 
+import { BrandShieldAlert as ShieldAlert } from "@/components/shared/brand-shield";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { CheckCircle, Loader2, ShieldAlert, XCircle } from "lucide-react";
+import { CheckCircle, Loader2, XCircle } from "lucide-react";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 /** Categories that require a secondary approver (mirrors the API route). */

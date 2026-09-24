@@ -1,5 +1,6 @@
 "use client";
 
+import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import Image from "next/image";
 import {
   useState,
@@ -28,7 +29,6 @@ import {
   ZoomIn,
   ZoomOut,
   ScanFace,
-  ShieldCheck,
 } from "lucide-react";
 import { getKycEvidenceErrorMessage } from "./kyc-evidence-errors";
 import {

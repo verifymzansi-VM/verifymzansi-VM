@@ -1,5 +1,6 @@
 "use client";
 
+import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import { VideoViewTracker } from "@/components/ui/video-view-tracker";
 
 import Image from "next/image";
@@ -16,7 +17,6 @@ import {
   MessageSquare,
   Music2,
   Phone,
-  ShieldCheck,
   Star,
   Store,
   Truck,

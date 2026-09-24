@@ -1,8 +1,9 @@
 "use client";
 
+import { BrandShield as Shield } from "@/components/shared/brand-shield";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Info, Shield, Clock, User } from "lucide-react";
+import { Info, Clock, User } from "lucide-react";
 import type { AccessLog, Artifact, EvidenceStep, ProviderResult } from "./evidence-types";
 
 function formatDate(iso: string): string {

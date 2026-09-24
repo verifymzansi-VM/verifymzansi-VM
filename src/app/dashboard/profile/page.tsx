@@ -1,5 +1,6 @@
 "use client";
 
+import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -7,7 +8,6 @@ import {
   Loader2,
   User,
   Save,
-  ShieldCheck,
   KeyRound,
   Mail,
   Check,

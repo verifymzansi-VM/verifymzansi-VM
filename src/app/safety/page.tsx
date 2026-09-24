@@ -1,13 +1,6 @@
+import { BrandShieldAlert as ShieldAlert } from "@/components/shared/brand-shield";
 import Link from "next/link";
-import {
-  AlertTriangle,
-  ArrowRight,
-  Ban,
-  FileWarning,
-  Gavel,
-  MapPin,
-  ShieldAlert,
-} from "lucide-react";
+import { AlertTriangle, ArrowRight, Ban, FileWarning, Gavel, MapPin } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";

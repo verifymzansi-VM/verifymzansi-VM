@@ -1,15 +1,9 @@
 "use client";
 
+import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  LayoutDashboard,
-  ShoppingBag,
-  MessageSquare,
-  Settings,
-  LogOut,
-  ShieldCheck,
-} from "lucide-react";
+import { LayoutDashboard, ShoppingBag, MessageSquare, Settings, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

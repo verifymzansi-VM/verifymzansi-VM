@@ -1,3 +1,4 @@
+import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { hasCapability } from "@/lib/auth/roles";
@@ -5,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ShieldCheck, AlertTriangle, Clock } from "lucide-react";
+import { AlertTriangle, Clock } from "lucide-react";
 
 export const metadata = {
   title: "Enforcement Review — Governance",

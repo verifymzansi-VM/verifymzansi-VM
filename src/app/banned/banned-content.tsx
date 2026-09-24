@@ -1,6 +1,7 @@
 "use client";
 
-import { ShieldAlert, AlertTriangle, Mail } from "lucide-react";
+import { BrandShieldAlert as ShieldAlert } from "@/components/shared/brand-shield";
+import { AlertTriangle, Mail } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/layout/header";

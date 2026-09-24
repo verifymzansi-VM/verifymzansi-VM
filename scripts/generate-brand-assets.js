@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const sharp = require("sharp");
 
-const SOURCE_LOGO = path.join(__dirname, "..", "public", "images", "logo-transparent.png");
+const SOURCE_LOGO = path.join(__dirname, "..", "public", "images", "brand-shield.png");
 const OUTPUT_DIR = path.join(__dirname, "..", "public", "images");
 
 const HORIZONTAL_WIDTH = 516;
@@ -104,10 +104,7 @@ function buildSquareInverseOverlay() {
 async function main() {
   ensureDir(OUTPUT_DIR);
 
-  const shield = await sharp(SOURCE_LOGO)
-    .extract({ left: 0, top: 0, width: SHIELD_SIZE, height: SHIELD_SIZE })
-    .png()
-    .toBuffer();
+  const shield = await sharp(SOURCE_LOGO).resize(SHIELD_SIZE, SHIELD_SIZE).png().toBuffer();
 
   const transparentBase = sharp({
     create: {
@@ -144,6 +141,21 @@ async function main() {
     .png()
     .toFile(path.join(OUTPUT_DIR, "logo-transparent.png"));
 
+  await sharp({
+    create: {
+      width: HORIZONTAL_WIDTH,
+      height: HORIZONTAL_HEIGHT,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  })
+    .composite([
+      { input: shield, left: 0, top: 0 },
+      { input: Buffer.from(buildHorizontalOverlay({ inverse: true })) },
+    ])
+    .png()
+    .toFile(path.join(OUTPUT_DIR, "logo-inverse.png"));
+
   await darkBase
     .composite([
       { input: shield, left: 0, top: 0 },
@@ -152,7 +164,7 @@ async function main() {
     .png()
     .toFile(path.join(OUTPUT_DIR, "logo.png"));
 
-  const squareShield = await sharp(shield)
+  const squareShield = await sharp(SOURCE_LOGO)
     .resize(176, 176, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
     .png()
     .toBuffer();

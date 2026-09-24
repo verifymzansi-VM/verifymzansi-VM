@@ -110,7 +110,7 @@ export default async function HomePage() {
         "@type": "Organization",
         name: "VerifyMzansi",
         url,
-        logo: `${url}/icons/icon-1024.png?v=10`,
+        logo: `${url}/icons/icon-1024.png?v=20260924`,
         sameAs,
         contactPoint: {
           "@type": "ContactPoint",

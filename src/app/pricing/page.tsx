@@ -1,8 +1,9 @@
+import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import { TrialPolicy } from "@/components/billing/trial-policy";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
-import { CreditCard, ShieldCheck } from "lucide-react";
+import { CreditCard } from "lucide-react";
 import { getActivePlansByArea } from "@/lib/constants/pricing";
 import { PricingPlanGrid } from "@/components/billing/plan-grid";
 import { PlanTabs } from "@/components/billing/plan-tabs";

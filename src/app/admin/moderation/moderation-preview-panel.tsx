@@ -1,5 +1,6 @@
 "use client";
 
+import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import { useState } from "react";
 import {
   ChevronLeft,
@@ -13,7 +14,6 @@ import {
   Package,
   Phone,
   Play,
-  ShieldCheck,
   Store,
   Tag,
   Truck,

@@ -1,8 +1,12 @@
 "use client";
 
+import {
+  BrandShield as ShieldCheck,
+  BrandShieldAlert as ShieldAlert,
+} from "@/components/shared/brand-shield";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, ShieldCheck, PlusCircle, ShieldAlert, User } from "lucide-react";
+import { Home, PlusCircle, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { triggerHaptic } from "@/lib/utils/haptics";

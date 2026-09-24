@@ -1,5 +1,6 @@
 "use client";
 
+import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +12,6 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Loader2,
   Search,
-  ShieldCheck,
   AlertTriangle,
   Eye,
   FileText,

@@ -1,5 +1,6 @@
 "use client";
 
+import { BrandShield as Shield } from "@/components/shared/brand-shield";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KycQueueTable } from "./kyc-queue-table";
 import { ContentQueueTable, type ContentItem } from "./content-queue-table";
@@ -7,7 +8,7 @@ import { FlaggingQueueTable } from "./flagging-queue-table";
 import { AreaOverviewStats } from "./area-overview-stats";
 import { ActivityFeed } from "./activity-feed";
 import { VerificationAlertBanner } from "./verification-alert-banner";
-import { FileCheck, Flag, BarChart3, Clock, AlertCircle, Shield } from "lucide-react";
+import { FileCheck, Flag, BarChart3, Clock, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
 import type { MarketplaceArea } from "@/types/enums";

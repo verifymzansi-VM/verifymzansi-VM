@@ -1,9 +1,10 @@
 "use client";
 
+import { BrandShieldAlert as ShieldAlert } from "@/components/shared/brand-shield";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Building2, Loader2, TreePalm, ShieldAlert, ShoppingBag } from "lucide-react";
+import { ArrowRight, Building2, Loader2, TreePalm, ShoppingBag } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
 import { buildPostCategoryHref } from "@/app/post/_lib/post-access";

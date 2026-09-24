@@ -1,3 +1,4 @@
+import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +13,6 @@ import {
   TrendingUp,
   CheckCircle2,
   AlertTriangle,
-  ShieldCheck,
   Clock,
   Flag,
   Inbox,

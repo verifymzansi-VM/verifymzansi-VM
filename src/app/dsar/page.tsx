@@ -1,8 +1,9 @@
 "use client";
 
+import { BrandShield as Shield } from "@/components/shared/brand-shield";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Send, Loader2, CheckCircle2, Shield, ArrowLeft } from "lucide-react";
+import { Send, Loader2, CheckCircle2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

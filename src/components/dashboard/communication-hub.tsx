@@ -1,7 +1,8 @@
 "use client";
 
+import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bell, Inbox, Mail, Loader2, ShieldCheck, Megaphone, BarChart2 } from "lucide-react";
+import { Bell, Inbox, Mail, Loader2, Megaphone, BarChart2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

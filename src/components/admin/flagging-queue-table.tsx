@@ -1,5 +1,6 @@
 "use client";
 
+import { BrandShield as Shield } from "@/components/shared/brand-shield";
 import { useState } from "react";
 import { formatRelativeTime } from "@/lib/utils/format";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,7 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { AlertTriangle, Shield, EyeOff, Ban, XCircle, Flag, Loader2 } from "lucide-react";
+import { AlertTriangle, EyeOff, Ban, XCircle, Flag, Loader2 } from "lucide-react";
 import { calculateSlaState, slaSortPriority } from "@/lib/utils/sla";
 import type { ReportSeverity } from "@/types/enums";
 import { withCsrfHeaders } from "@/lib/utils/csrf";

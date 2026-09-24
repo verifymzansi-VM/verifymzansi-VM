@@ -1,11 +1,11 @@
 "use client";
+import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import { hasCapability } from "@/lib/auth/roles";
 
 import { useState, useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  ShieldCheck,
   AlertTriangle,
   ArrowRight,
   Loader2,

@@ -104,7 +104,9 @@ describe("production service worker caching", () => {
   it("keeps Next.js app shells and chunks out of the service-worker cache", () => {
     const serviceWorkerSource = readFileSync(join(process.cwd(), "public", "sw.js"), "utf8");
 
-    expect(serviceWorkerSource).toContain('const PRECACHE_URLS = ["/offline", "/manifest.json"]');
+    expect(serviceWorkerSource).toContain(
+      'const PRECACHE_URLS = ["/offline", "/manifest.json", "/icons/icon-192.png?v=20260924"]'
+    );
     expect(serviceWorkerSource).toContain('url.pathname.startsWith("/_next/static/")');
     expect(serviceWorkerSource).toContain("event.respondWith(networkOnly(request))");
     expect(serviceWorkerSource).toContain("networkOnlyWithOffline(request)");

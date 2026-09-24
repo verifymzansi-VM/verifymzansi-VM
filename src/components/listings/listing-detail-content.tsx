@@ -1,9 +1,10 @@
 "use client";
 
+import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Calendar, Eye, MapPin, Phone, MessageCircle, ShieldCheck } from "lucide-react";
+import { Calendar, Eye, MapPin, Phone, MessageCircle } from "lucide-react";
 import { contactPhone, whatsappLink } from "@/lib/utils/contact-links";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

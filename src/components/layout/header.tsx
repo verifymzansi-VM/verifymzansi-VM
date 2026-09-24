@@ -1,19 +1,10 @@
 "use client";
 
+import { BrandShieldAlert as ShieldAlert } from "@/components/shared/brand-shield";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback, useRef } from "react";
-import {
-  Menu,
-  X,
-  ShieldAlert,
-  LayoutDashboard,
-  Settings,
-  LogOut,
-  Loader2,
-  Sun,
-  Moon,
-} from "lucide-react";
+import { Menu, X, LayoutDashboard, Settings, LogOut, Loader2, Sun, Moon } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";

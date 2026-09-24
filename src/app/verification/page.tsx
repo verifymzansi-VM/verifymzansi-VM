@@ -1,5 +1,6 @@
 "use client";
 
+import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -13,7 +14,6 @@ import {
   Loader2,
   MapPin,
   Phone,
-  ShieldCheck,
   Navigation,
   AlertTriangle,
 } from "lucide-react";

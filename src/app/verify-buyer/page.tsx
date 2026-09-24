@@ -1,7 +1,8 @@
 "use client";
 
+import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import { useState } from "react";
-import { ShieldCheck, Search, CheckCircle2, XCircle, Loader2, AlertTriangle } from "lucide-react";
+import { Search, CheckCircle2, XCircle, Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

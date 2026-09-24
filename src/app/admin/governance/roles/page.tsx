@@ -1,3 +1,4 @@
+import { BrandShield as Shield } from "@/components/shared/brand-shield";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { hasCapability, isAdmin } from "@/lib/auth/roles";
@@ -6,7 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Shield, UserPlus, UserMinus, Clock } from "lucide-react";
+import { UserPlus, UserMinus, Clock } from "lucide-react";
 import { RoleAssignForm } from "@/components/admin/role-assign-form";
 
 export const metadata = {

@@ -1,7 +1,8 @@
 "use client";
 
+import { BrandShieldAlert as ShieldAlert } from "@/components/shared/brand-shield";
 import { useEffect } from "react";
-import { ShieldAlert } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 

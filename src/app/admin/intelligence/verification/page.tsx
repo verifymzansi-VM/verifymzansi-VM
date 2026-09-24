@@ -1,3 +1,4 @@
+import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { hasCapability } from "@/lib/auth/roles";
@@ -5,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DecisionPanel, HorizontalBarPanel } from "@/components/admin/intelligence-panels";
-import { ShieldCheck, Clock, CheckCircle, XCircle } from "lucide-react";
+import { Clock, CheckCircle, XCircle } from "lucide-react";
 
 export const metadata = {
   title: "Verification Metrics — Intelligence",

@@ -1,5 +1,6 @@
+import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import Link from "next/link";
-import { ShieldCheck, PlusCircle, Building2, CheckCircle2, ArrowRight } from "lucide-react";
+import { PlusCircle, Building2, CheckCircle2, ArrowRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";

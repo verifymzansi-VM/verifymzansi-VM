@@ -1,12 +1,6 @@
+import { BrandShieldAlert as ShieldAlert } from "@/components/shared/brand-shield";
 import Link from "next/link";
-import {
-  AlertTriangle,
-  MessageSquare,
-  Clock,
-  TrendingUp,
-  ShieldAlert,
-  ChevronRight,
-} from "lucide-react";
+import { AlertTriangle, MessageSquare, Clock, TrendingUp, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AccountVerificationStatus } from "@/types/enums";
 

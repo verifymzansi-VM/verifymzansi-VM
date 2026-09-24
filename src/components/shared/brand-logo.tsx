@@ -8,7 +8,7 @@ type BrandLogoLayout = "horizontal" | "stacked";
 type BrandLogoTone = "default" | "inverse";
 type BrandLogoVariant = "solid" | "transparent";
 
-const BRAND_LOGO_ASSET_VERSION = "20260312-logo-refresh";
+const BRAND_LOGO_ASSET_VERSION = "20260924-gold-shield";
 
 interface BrandLogoProps {
   className?: string;

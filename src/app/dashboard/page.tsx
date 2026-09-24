@@ -1,9 +1,10 @@
+import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import { IntroductoryTrialCard } from "@/components/dashboard/introductory-trial-card";
 import { createClient } from "@/lib/supabase/server";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Plus, BadgeCheck, ShieldCheck, ChevronRight } from "lucide-react";
+import { Plus, BadgeCheck, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {

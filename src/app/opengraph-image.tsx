@@ -1,3 +1,4 @@
+import shieldData from "@/lib/brand-shield-data.json";
 import { ImageResponse } from "next/og";
 import type { CSSProperties } from "react";
 
@@ -49,26 +50,6 @@ const brandRowStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 28,
-};
-
-const shieldBadgeStyle: CSSProperties = {
-  display: "flex",
-  width: 128,
-  height: 128,
-  borderRadius: 28,
-  alignItems: "center",
-  justifyContent: "center",
-  background: "linear-gradient(145deg, #0f3d2f 0%, #00833e 58%, #00a14b 100%)",
-  border: "2px solid rgba(255, 255, 255, 0.28)",
-  boxShadow: "0 14px 30px rgba(0, 0, 0, 0.35)",
-};
-
-const shieldTextStyle: CSSProperties = {
-  fontSize: 48,
-  fontWeight: 800,
-  letterSpacing: "-0.04em",
-  color: "#fffaf5",
-  lineHeight: 1,
 };
 
 const brandTextStyle: CSSProperties = {
@@ -129,9 +110,9 @@ export default function OpenGraphImage() {
 
       <div style={contentStyle}>
         <div style={brandRowStyle}>
-          <div style={shieldBadgeStyle}>
-            <div style={shieldTextStyle}>VM</div>
-          </div>
+          {/* ImageResponse renders native images into the social card. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={shieldData} alt="VerifyMzansi shield" width={128} height={128} />
 
           <div style={brandTextStyle}>
             <div style={eyebrowStyle}>Find And Post With Trust</div>

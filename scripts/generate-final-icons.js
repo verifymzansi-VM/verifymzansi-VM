@@ -1,69 +1,61 @@
-const sharp = require('sharp');
-const fs = require('fs/promises');
-const pngToIco = require('png-to-ico').default;
+const sharp = require("sharp");
+const fs = require("fs/promises");
+const path = require("path");
+const pngToIco = require("png-to-ico").default;
+const root = path.join(__dirname, "..");
+const source = path.join(root, "public/images/brand-shield.png");
+const output = (file) => path.join(root, file);
 
 async function generateAllIcons() {
-  const logoPath = './public/images/logo-transparent.png';
-  const { height } = await sharp(logoPath).metadata();
-  const shieldSize = height || 145;
-  const appIconCanvasSize = 1024;
-  const shieldRenderSize = 800;
-  
-  // 1. Extract the actual brand shield from the logo file.
-  let shieldBuffer = await sharp(logoPath)
-    .extract({ left: 0, top: 0, width: shieldSize, height: shieldSize })
-    .toBuffer();
-    
-  // 2. Generate transparent browser icons directly from the preserved shield.
-  await sharp(shieldBuffer)
-    .resize(16, 16)
+  await fs.mkdir(output("public/icons"), { recursive: true });
+  const master = await sharp(source).png().toBuffer();
+  for (const size of [16, 32, 192, 256, 512, 1024]) {
+    await sharp(master)
+      .resize(size, size)
+      .png()
+      .toFile(output(`public/icons/icon-${size}.png`));
+  }
+  await sharp(master).resize(64, 64).png().toFile(output("src/app/icon.png"));
+  await sharp(master).resize(96, 96).png().toFile(output("public/images/brand-shield-small.png"));
+  const favicon = await pngToIco(
+    await Promise.all([16, 32, 48].map((size) => sharp(master).resize(size, size).png().toBuffer()))
+  );
+  await fs.writeFile(output("src/app/favicon.ico"), favicon);
+  await fs.writeFile(output("public/favicon.ico"), favicon);
+  await sharp(master)
+    .resize(180, 180)
+    .flatten({ background: "#faf8f5" })
     .png()
-    .toFile('./public/icons/icon-16.png');
-
-  await sharp(shieldBuffer)
-    .resize(32, 32)
-    .png()
-    .toFile('./public/icons/icon-32.png');
-
-  await sharp(shieldBuffer)
-    .resize(32, 32)
-    .png()
-    .toFile('./src/app/icon.png');
-
-  const faviconPngBuffer = await sharp(shieldBuffer)
-    .resize(32, 32)
-    .png()
-    .toBuffer();
-
-  const faviconIcoBuffer = await pngToIco([faviconPngBuffer]);
-  await fs.writeFile('./src/app/favicon.ico', faviconIcoBuffer);
-
-  // 3. Generate transparent app and Apple icons with a larger shield so installs stay legible.
-  const paddedShieldMaster = await sharp(shieldBuffer)
-    .resize(shieldRenderSize, shieldRenderSize, { fit: 'contain', background: { r: 0, g: 0, b:0, alpha: 0 } })
-    .toBuffer();
-
-  const iconMaster = await sharp({
-    create: {
-      width: appIconCanvasSize,
-      height: appIconCanvasSize,
-      channels: 4,
-      background: { r: 0, g: 0, b: 0, alpha: 0 },
-    },
+    .toFile(output("src/app/apple-icon.png"));
+  // A 70% canvas fits the entire square artwork in the circular maskable safe zone.
+  const maskable = await sharp({
+    create: { width: 1024, height: 1024, channels: 4, background: "#faf8f5" },
   })
-    .composite([{ input: paddedShieldMaster, gravity: 'center' }])
+    .composite([{ input: await sharp(master).resize(716, 716).toBuffer(), gravity: "center" }])
     .png()
     .toBuffer();
-
-  await sharp(iconMaster).toFile('./public/icons/icon-1024.png');
-  await sharp(iconMaster).resize(512, 512).toFile('./public/icons/icon-512.png');
-  await sharp(iconMaster).resize(256, 256).toFile('./public/icons/icon-256.png');
-  await sharp(iconMaster).resize(192, 192).toFile('./public/icons/icon-192.png');
-  
-  // Generate apple-icon.png for iOS home screen (180x180) from the high-resolution master.
-  await sharp(iconMaster).resize(180, 180).toFile('./src/app/apple-icon.png');
-  
-  console.log('Successfully generated transparent favicon, browser, app, and Apple icons from the official brand logo shield!');
+  for (const size of [192, 512]) {
+    await sharp(maskable)
+      .resize(size, size)
+      .toFile(output(`public/icons/icon-maskable-${size}.png`));
+  }
+  await fs.mkdir(output("public/social"), { recursive: true });
+  for (const suffix of ["512", "150", "150-outline", "150-clean-badge", "150-badge"]) {
+    const size = suffix === "512" ? 512 : 150;
+    await sharp(master)
+      .resize(size, size)
+      .toFile(output(`public/social/youtube-watermark-shield-${suffix}.png`));
+  }
+  // Embed a small PNG in the social card, avoiding runtime network or filesystem dependencies.
+  const og = await sharp(master).resize(160, 160).png().toBuffer();
+  await fs.writeFile(
+    output("src/lib/brand-shield-data.json"),
+    JSON.stringify(`data:image/png;base64,${og.toString("base64")}`) + "\n"
+  );
+  console.log("Brand browser, app, Apple, maskable and social icons regenerated.");
 }
 
-generateAllIcons().catch(console.error);
+generateAllIcons().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

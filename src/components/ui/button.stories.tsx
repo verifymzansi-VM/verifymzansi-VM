@@ -1,6 +1,7 @@
+import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import type { Meta, StoryObj } from "@storybook/react";
 import { Button } from "@/components/ui/button";
-import { ShieldCheck, ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight, Loader2 } from "lucide-react";
 
 const meta = {
   title: "UI/Button",

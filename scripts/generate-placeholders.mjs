@@ -145,30 +145,6 @@ for (let i = 0; i < promoThemes.length; i++) {
   console.log(`Created ${outPath}`)
 }
 
-// ---------- Icons ----------
-// 192x192 icon
-{
-  const sz = 192
-  const pixels = solidImage(sz, sz, 0, 131, 62) // VerifyMzansi green
-  // White check-circle hint
-  addCenterRect(pixels, sz, sz, 80, 80, 255, 255, 255, 200)
-  addCenterRect(pixels, sz, sz, 60, 60, 0, 131, 62, 255)
-  addCenterRect(pixels, sz, sz, 30, 8, 255, 255, 255, 220) // small check hint
-  const png = createPNG(sz, sz, pixels)
-  writeFileSync(join(iconsDir, "icon-192.png"), png)
-  console.log("Created icon-192.png")
-}
-
-// 512x512 icon
-{
-  const sz = 512
-  const pixels = solidImage(sz, sz, 0, 131, 62)
-  addCenterRect(pixels, sz, sz, 220, 220, 255, 255, 255, 200)
-  addCenterRect(pixels, sz, sz, 160, 160, 0, 131, 62, 255)
-  addCenterRect(pixels, sz, sz, 80, 20, 255, 255, 255, 220)
-  const png = createPNG(sz, sz, pixels)
-  writeFileSync(join(iconsDir, "icon-512.png"), png)
-  console.log("Created icon-512.png")
-}
+// Brand icons are generated from the user-approved shield via `pnpm brand:assets`.
 
 console.log("\nAll placeholder images generated!")

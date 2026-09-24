@@ -1,5 +1,6 @@
 "use client";
 
+import { BrandShieldAlert as ShieldAlert } from "@/components/shared/brand-shield";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ShieldAlert, UserCog } from "lucide-react";
+import { Loader2, UserCog } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 

@@ -1,5 +1,6 @@
+import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import Link from "next/link";
-import { ShieldCheck, BadgeCheck, LockKeyhole } from "lucide-react";
+import { BadgeCheck, LockKeyhole } from "lucide-react";
 import { BrandLogo } from "@/components/shared/brand-logo";
 
 export const metadata = {

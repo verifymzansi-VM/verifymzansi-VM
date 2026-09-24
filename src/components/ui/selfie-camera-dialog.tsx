@@ -1,8 +1,9 @@
 "use client";
 
+import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import { type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { ShieldCheck, X } from "lucide-react";
+import { X } from "lucide-react";
 
 /** A viewport-sized camera surface, including on browsers without Fullscreen API support. */
 export function SelfieCameraDialog({

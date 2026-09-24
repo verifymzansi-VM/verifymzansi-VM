@@ -10,12 +10,12 @@
  *  - API calls: Network-only (no caching of dynamic data)
  */
 
-const CACHE_NAME = "verifymzansi-v7-http-cache-images";
+const CACHE_NAME = "verifymzansi-v8-brand-shield-cache";
 const OFFLINE_URL = "/offline";
 
-const PRECACHE_URLS = ["/offline", "/manifest.json"];
+const PRECACHE_URLS = ["/offline", "/manifest.json", "/icons/icon-192.png?v=20260924"];
 
-const DEFAULT_NOTIFICATION_ICON = "/icons/icon-192.png?v=10";
+const DEFAULT_NOTIFICATION_ICON = "/icons/icon-192.png?v=20260924";
 const DEFAULT_NOTIFICATION_TAG = "verifymzansi-notification";
 
 // @ts-ignore - ServiceWorkerGlobalScope
