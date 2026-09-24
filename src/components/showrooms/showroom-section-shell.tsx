@@ -65,16 +65,21 @@ export function ShowroomSectionShell({
   sectionClassName,
   extraClassName,
   background,
+  hasListings = false,
 }: {
   children: ReactNode;
   sectionRef?: Ref<HTMLDivElement>;
   sectionClassName: string;
   extraClassName?: string;
   background?: ShowroomDecorativeBackground;
+  hasListings?: boolean;
 }) {
   const hasBackground = Boolean(background?.src);
   const overlayClasses = getBackgroundOverlayClasses(background?.overlayPreset);
-  const backgroundFilter = `blur(${background?.blurPx ?? 18}px) saturate(0.82) brightness(0.78)`;
+  // Keep the room warm, but let populated listing cards carry the visual focus.
+  const backgroundFilter = hasListings
+    ? `blur(${Math.max(background?.blurPx ?? 18, 1)}px) saturate(0.75) brightness(0.7)`
+    : `blur(${background?.blurPx ?? 18}px) saturate(0.82) brightness(0.78)`;
   const backgroundSrc = background?.src ?? "";
   const mobileBackgroundSrc = background?.mobileSrc ?? backgroundSrc;
   const desktopPosition = background?.objectPosition ?? "center";
@@ -92,6 +97,7 @@ export function ShowroomSectionShell({
       )}
       aria-roledescription="carousel"
       aria-label="Showroom carousel"
+      data-showroom-populated={hasListings || undefined}
     >
       {hasBackground ? (
         <div
@@ -122,7 +128,10 @@ export function ShowroomSectionShell({
                 loading="eager"
                 decoding="async"
                 fetchPriority="low"
-                className="showroom-artwork absolute inset-0 h-full w-full object-cover"
+                className={cn(
+                  "showroom-artwork absolute inset-0 h-full w-full object-cover",
+                  hasListings && "scale-[1.01]"
+                )}
                 style={
                   {
                     "--showroom-desktop-position": desktopPosition,
@@ -170,7 +179,7 @@ export function ShowroomSectionShell({
         )}
         aria-hidden="true"
       />
-      {/* Content above the flag */}
+      {/* Keep cards above the decorative lighting layers. */}
       <div className="relative z-10">{children}</div>
     </section>
   );

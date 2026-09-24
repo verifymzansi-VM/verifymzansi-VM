@@ -405,6 +405,19 @@
     visibility: var(--slide-mobile-visibility);
     pointer-events: var(--slide-mobile-pointer-events);
     z-index: var(--slide-z-index);
+    filter: saturate(0.65) brightness(0.75);
+    transition: filter 700ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* The light travels with the selected card; preserve its original colours. */
+  .showroom-slide[data-showroom-layer="active"] {
+    filter: saturate(1) brightness(1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .showroom-slide {
+      transition: none;
+    }
   }
 
   /* Only promote the active slide and its immediate neighbours to their own

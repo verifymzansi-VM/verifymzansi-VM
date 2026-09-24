@@ -174,9 +174,18 @@ describe("ShowroomCardCarousel", () => {
   it("keeps the playing center card clear while softening side cards", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
 
-    expect(screen.getByRole("group", { name: "1 of 3" })).not.toHaveClass("saturate-50");
-    expect(screen.getByRole("group", { name: "2 of 3" })).toHaveClass("saturate-50");
-    expect(screen.getByRole("group", { name: "3 of 3" })).toHaveClass("saturate-50");
+    expect(screen.getByRole("group", { name: "1 of 3" })).toHaveAttribute(
+      "data-showroom-layer",
+      "active"
+    );
+    expect(screen.getByRole("group", { name: "2 of 3" })).toHaveAttribute(
+      "data-showroom-layer",
+      "stack"
+    );
+    expect(screen.getByRole("group", { name: "3 of 3" })).toHaveAttribute(
+      "data-showroom-layer",
+      "stack"
+    );
   });
 
   it("renders all card items as links", () => {

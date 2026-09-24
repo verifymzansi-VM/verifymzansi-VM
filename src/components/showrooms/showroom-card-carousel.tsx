@@ -800,6 +800,7 @@ export function ShowroomCardCarousel({
       sectionClassName={SECTION_SPACING}
       extraClassName={className}
       background={background}
+      hasListings
     >
       <div
         className={cn(
@@ -872,8 +873,7 @@ export function ShowroomCardCarousel({
                 // its immediate neighbours (see globals.css .showroom-slide);
                 // promoting all 15 slides to compositor layers exhausts mobile
                 // GPU memory and causes jank.
-                "showroom-slide absolute left-1/2 top-0",
-                offset !== 0 && "saturate-50 brightness-75"
+                "showroom-slide absolute left-1/2 top-0"
               )}
               style={getInitialSlideStyle(i, count)}
               data-showroom-index={i}
