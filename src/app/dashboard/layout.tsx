@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/header";
-import { MobileNav } from "@/components/layout/mobile-nav";
 import { ACCOUNT_PROFILE_TABLE, applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
 import { summarizeVerification } from "@/lib/account/verification-summary";
 import {
@@ -129,12 +128,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <DashboardSidebar badges={sidebarBadges} onSignOut={handleSignOut} />
 
         {/* Main content */}
-        <main className="w-0 min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto pb-20 md:pb-0">
+        <main className="w-0 min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto">
           <div className="container-page min-w-0 max-w-full py-6">{children}</div>
         </main>
       </div>
-
-      <MobileNav />
     </div>
   );
 }

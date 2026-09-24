@@ -1,18 +1,15 @@
 "use client";
 
-import {
-  BrandShield as ShieldCheck,
-  BrandShieldAlert as ShieldAlert,
-} from "@/components/shared/brand-shield";
+import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, PlusCircle, User } from "lucide-react";
+import { Home, PlusCircle, Search, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { triggerHaptic } from "@/lib/utils/haptics";
 
 interface TabDef {
-  id: "home" | "verify" | "post" | "trust-safety" | "dashboard";
+  id: "home" | "verify" | "post" | "search" | "dashboard";
   href: string;
   icon: typeof Home;
   label: string;
@@ -25,10 +22,10 @@ const TABS: TabDef[] = [
   { id: "verify", href: "/verification", icon: ShieldCheck, label: "Verify" },
   { id: "post", href: "/post/create", icon: PlusCircle, label: "Post", requiresAuth: true },
   {
-    id: "trust-safety",
-    href: "/trust-safety",
-    icon: ShieldAlert,
-    label: "Safety",
+    id: "search",
+    href: "/search",
+    icon: Search,
+    label: "Search",
   },
   {
     id: "dashboard",
@@ -43,6 +40,8 @@ const TABS: TabDef[] = [
 export function MobileNav() {
   const pathname = usePathname();
   const { isAuthenticated } = useAuth();
+
+  if (pathname !== "/") return null;
 
   return (
     <nav

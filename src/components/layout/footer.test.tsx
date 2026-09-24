@@ -3,6 +3,10 @@ import { render, screen } from "@testing-library/react";
 import { Footer } from "./footer";
 
 describe("Footer", () => {
+  it("provides a search entry point at every screen size", () => {
+    render(<Footer />);
+    expect(screen.getByRole("link", { name: "Search website" })).toHaveAttribute("href", "/search");
+  });
   afterEach(() => {
     vi.unstubAllEnvs();
   });

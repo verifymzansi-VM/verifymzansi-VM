@@ -8,6 +8,7 @@ const footerSections = [
   {
     title: "Marketplace",
     links: [
+      { href: "/search", label: "Search website" },
       { href: "/mzansi-market", label: "Mzansi Market" },
       { href: "/mzansi-business", label: "Mzansi Business" },
       { href: "/tourism-events", label: "Tourism & Events" },
