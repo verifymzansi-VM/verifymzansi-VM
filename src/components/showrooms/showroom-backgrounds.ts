@@ -1,7 +1,7 @@
 import type { ShowroomDecorativeBackground } from "./showroom-section-shell";
 
 export const generatedMzansiShowroomBackground: ShowroomDecorativeBackground = {
-  src: "/images/showrooms/generated-mzansi-showroom.webp",
+  src: "/images/showrooms/generated-mzansi-showroom-optimized.webp",
   objectPosition: "center 48%",
   mobileObjectPosition: "center 48%",
   overlayPreset: "market",
