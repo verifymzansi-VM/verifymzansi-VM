@@ -1,6 +1,7 @@
 "use client";
 
 import { Store } from "lucide-react";
+import { AffiliationBadge } from "@/components/organisations/affiliation-badges";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
 import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
 import type { TrustLevel, BusinessType, BusinessCategory } from "@/types/enums";
@@ -125,6 +126,7 @@ export function BusinessCard({
       title={businessName}
       description={cardDescription}
       location={city || null}
+      affiliation={<AffiliationBadge businessId={id} />}
       mediaUrl={displayCover}
       posterUrl={posterUrl}
       mediaAlt={businessName}

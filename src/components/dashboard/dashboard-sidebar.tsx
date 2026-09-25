@@ -3,7 +3,15 @@
 import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ShoppingBag, MessageSquare, Settings, LogOut } from "lucide-react";
+import {
+  LayoutDashboard,
+  ShoppingBag,
+  MessageSquare,
+  Settings,
+  LogOut,
+  Landmark,
+  Handshake,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,9 +27,13 @@ const PRIMARY_NAV: NavItem[] = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/dashboard/listings", icon: ShoppingBag, label: "My Posts" },
   { href: "/dashboard/leads", icon: MessageSquare, label: "Leads" },
+  { href: "/dashboard/affiliations", icon: Landmark, label: "Affiliations" },
 ];
 
-const TERTIARY_NAV: NavItem[] = [{ href: "/dashboard/profile", icon: Settings, label: "Profile" }];
+const TERTIARY_NAV: NavItem[] = [
+  { href: "/dashboard/partner", icon: Handshake, label: "Partner programme" },
+  { href: "/dashboard/profile", icon: Settings, label: "Profile" },
+];
 
 export interface DashboardSidebarBadges {
   unreadLeads?: number;

@@ -19,6 +19,7 @@ export function MzansiBusinessFilterSync() {
       businessType: parsed.businessType,
       province: parsed.province,
       city: parsed.city,
+      organisation: parsed.organisation,
     }),
     []
   );
@@ -33,6 +34,7 @@ export function MzansiBusinessFilterSync() {
           businessType: filters.businessType,
           province: filters.province,
           city: filters.city,
+          organisation: filters.organisation,
         },
         page
       ),

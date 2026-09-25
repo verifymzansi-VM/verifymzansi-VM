@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { recordAcquisitionFromCookie } from "@/lib/analytics/record-acquisition";
+import { ACQUISITION_COOKIE } from "@/lib/analytics/acquisition";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
@@ -139,6 +141,14 @@ export async function GET(request: Request) {
     const user = data?.session?.user;
     if (user?.id && user.email) {
       await finalizePendingEmailChange(user.id, user.email);
+    }
+    // OAuth sign-ups never pass through /api/auth/register; first touch wins.
+    if (user?.id) {
+      const acquisition = (request.headers.get("cookie") ?? "")
+        .split(/;\s*/)
+        .find((part) => part.startsWith(`${ACQUISITION_COOKIE}=`))
+        ?.slice(ACQUISITION_COOKIE.length + 1);
+      await recordAcquisitionFromCookie(user.id, acquisition);
     }
 
     // For email signup confirmations, honor the requested success route.

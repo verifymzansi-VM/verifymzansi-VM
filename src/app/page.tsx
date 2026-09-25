@@ -12,6 +12,7 @@ import { HeroBannerWithData } from "@/components/home/hero-banner-with-data";
 import { HeroBannerSkeleton } from "@/components/home/hero-banner-skeleton";
 import { HomeMzansiMarketShowcase } from "@/components/home/home-mzansi-market-showcase";
 import { HomeBusinessShowcase } from "@/components/home/home-business-showcase";
+import { HomeProgrammeShowcase } from "@/components/home/home-programme-showcase";
 import { HomePromotionsShowcase } from "@/components/home/home-promotions-showcase";
 import { HELLO_CONTACT_EMAIL } from "@/lib/contact-email";
 import { DisableMobileAutoplay } from "@/contexts/autoplay-policy-context";
@@ -223,6 +224,10 @@ export default async function HomePage() {
 
               <Suspense fallback={<MarketplacePreviewsSkeleton />}>
                 <HomeMzansiMarketShowcase />
+              </Suspense>
+
+              <Suspense fallback={null}>
+                <HomeProgrammeShowcase />
               </Suspense>
             </div>
 

@@ -21,6 +21,8 @@ export interface MarketplaceFilters {
   businessType?: BusinessType;
   businessCategory?: BusinessCategory;
   businessSubcategory?: string;
+  /** Organisation / programme slug. Optional filter; never affects ranking. */
+  organisation?: string;
 }
 
 export function cloneMarketplaceFilters(

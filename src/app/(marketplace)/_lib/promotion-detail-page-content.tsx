@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { ContactActionTracker } from "@/components/analytics/contact-action-tracker";
 import type { Metadata } from "next";
 
 import { PageHeader } from "@/components/layout/page-header";
@@ -116,6 +117,7 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
             { label: promotion.title },
           ]}
         />
+        <ContactActionTracker table="promotions" id={promotion.id} />
         <PromotionDetailContent
           promotion={{
             ...promotion,

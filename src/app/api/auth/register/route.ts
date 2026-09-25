@@ -1,4 +1,6 @@
 import { after, type NextRequest, NextResponse } from "next/server";
+import { recordAcquisitionFromCookie } from "@/lib/analytics/record-acquisition";
+import { ACQUISITION_COOKIE } from "@/lib/analytics/acquisition";
 import { registerSchema } from "@/lib/validations/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -322,6 +324,14 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
+    }
+
+    if (signUpData?.user?.id) {
+      // Attribution never affects sign-up; failures are logged and ignored.
+      await recordAcquisitionFromCookie(
+        signUpData.user.id,
+        request.cookies?.get(ACQUISITION_COOKIE)?.value
+      );
     }
 
     return NextResponse.json({ success: true });

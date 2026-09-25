@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { AcquisitionCapture } from "@/components/analytics/acquisition-capture";
 import { headers } from "next/headers";
 import { Inter, Sora } from "next/font/google";
 import { CSRF_HEADER_NAME } from "@/lib/utils/csrf";
@@ -273,6 +274,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <PwaInstallPrompt />
             <ServiceWorkerRegistrar />
             <SiteVisitTracker />
+            <AcquisitionCapture />
           </DesktopPageShell>
         </ThemeProvider>
         <noscript>

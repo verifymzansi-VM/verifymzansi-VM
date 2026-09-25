@@ -1,4 +1,9 @@
 import type { Metadata } from "next";
+import {
+  BusinessAffiliationsSection,
+  loadBusinessAffiliations,
+} from "@/components/organisations/business-affiliations-section";
+import { ContactActionTracker } from "@/components/analytics/contact-action-tracker";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
@@ -330,6 +335,7 @@ export async function BusinessDetailPageContent({
     ? computeTrustLevel(readAccountVerificationStatus(ownerProfile))
     : null;
   const breadcrumbs = getBreadcrumbs(isOwnerPreview, business.business_name, resolvedSection);
+  const affiliations = isOwnerPreview ? [] : await loadBusinessAffiliations(supabase, business.id);
   const promotionsWithLikes = promotions.map((promotion) => ({
     ...promotion,
     view_count: promotionViewSummary.ok ? (promotionViewSummary.data.get(promotion.id) ?? 0) : null,
@@ -391,6 +397,9 @@ export async function BusinessDetailPageContent({
           </Alert>
         )}
 
+        {!isOwnerPreview ? (
+          <ContactActionTracker table="businesses" id={business.id} website={business.website} />
+        ) : null}
         <BusinessLayoutRouter
           business={{
             ...business,
@@ -401,6 +410,7 @@ export async function BusinessDetailPageContent({
           promotions={promotionsWithLikes}
           showPublicActions={!isOwnerPreview}
         />
+        <BusinessAffiliationsSection affiliations={affiliations} />
       </div>
     </div>
   );

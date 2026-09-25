@@ -152,6 +152,7 @@ export interface BusinessFiltersFromParams {
   businessType?: BusinessType;
   province?: string;
   city?: string;
+  organisation?: string;
   page: number;
 }
 
@@ -214,8 +215,14 @@ export function parseBusinessFiltersFromSearchParams(
     businessType: normalizeBusinessTypeParam(searchParams.get("type")),
     province: normalizeParamValue(searchParams.get("province")),
     city: normalizeParamValue(searchParams.get("city")),
+    organisation: normalizeOrganisationSlug(searchParams.get("org")),
     page: normalizeIntegerParam(searchParams.get("page")) ?? 1,
   };
+}
+
+function normalizeOrganisationSlug(value: string | null): string | undefined {
+  const slug = value?.trim().toLowerCase();
+  return slug && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug) && slug.length <= 80 ? slug : undefined;
 }
 
 export interface MarketFiltersForUrl {
@@ -237,6 +244,7 @@ export interface BusinessFiltersForUrl {
   businessType?: string;
   province?: string;
   city?: string;
+  organisation?: string;
 }
 
 function appendIfPresent(params: URLSearchParams, key: string, value: string | number | undefined) {
@@ -291,6 +299,7 @@ export function serializeBusinessFiltersToSearchParams(
   appendIfPresent(params, "type", filters.businessType);
   appendIfPresent(params, "province", filters.province);
   appendIfPresent(params, "city", filters.city);
+  appendIfPresent(params, "org", filters.organisation);
 
   if (page > 1) {
     params.set("page", String(page));

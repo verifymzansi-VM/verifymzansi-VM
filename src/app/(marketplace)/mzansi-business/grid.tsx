@@ -65,6 +65,10 @@ export function MzansiBusinessGrid() {
         params.set("subcategory", filters.businessSubcategory);
       }
 
+      if (filters.organisation) {
+        params.set("org", filters.organisation);
+      }
+
       if (filters.query) {
         params.set("q", filters.query);
       }
@@ -126,6 +130,7 @@ export function MzansiBusinessGrid() {
       filters.query,
       filters.province,
       filters.city,
+      filters.organisation,
       page,
     ]
   );

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { ContactActionTracker } from "@/components/analytics/contact-action-tracker";
 import { createClient } from "@/lib/supabase/server";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { Header } from "@/components/layout/header";
@@ -183,6 +184,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
               { label: listing.title },
             ]}
           />
+          <ContactActionTracker table="listings" id={listing.id} />
           <ListingDetailContent
             listing={{
               ...listing,

@@ -93,6 +93,8 @@ const businessesQuerySchema = z.object({
   province: optionalTrimmedStringSchema,
   city: optionalTrimmedStringSchema,
   q: optionalTrimmedStringSchema,
+  /** Organisation / programme filter (organisation slug). Never affects ranking. */
+  org: optionalTrimmedStringSchema,
   page: createBoundedIntegerSchema({
     defaultValue: 1,
     min: 1,
@@ -698,17 +700,48 @@ export async function GET(request: NextRequest) {
       },
     ] as const;
 
+    // Optional Organisation / Programme filter: restrict to businesses with an
+    // active affiliation to a listed organisation. Without it, independent
+    // businesses are listed exactly as before.
+    let orgBusinessIds: string[] | null = null;
+    if (query.org) {
+      const slug = query.org.toLowerCase();
+      const { data: org } = /^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)
+        ? await admin
+            .from("organisations")
+            .select("id")
+            .eq("slug", slug)
+            .eq("is_public", true)
+            .in("programme_status", ["founding_trial", "active_paid", "affiliation_only"])
+            .maybeSingle()
+        : { data: null };
+      const { data: affiliated } = org
+        ? await admin
+            .from("organisation_affiliations")
+            .select("business_id")
+            .eq("organisation_id", org.id)
+            .eq("status", "active")
+            .limit(2000)
+        : { data: [] };
+      orgBusinessIds = (affiliated ?? []).map((row: { business_id: string }) => row.business_id);
+      if (orgBusinessIds.length === 0) orgBusinessIds = ["00000000-0000-0000-0000-000000000000"];
+    }
+
     const buildQuery = (selectClause: string) => {
       let query = applyVisibleExpiryFilter(
         admin.from("businesses").select(selectClause, { count: "exact" }).eq("status", "live")
       );
+
+      if (orgBusinessIds) {
+        query = query.in("id", orgBusinessIds);
+      }
 
       // When filtering by category (e.g. showroom tourism tab), skip the
       // area filter so tourism businesses with area=PROMOTIONS_EVENTS are
       // still returned. When searching, include both areas so tourism
       // businesses appear in text search results. For general browsing,
       // scope to MZANSI_BUSINESS only.
-      if (!category && !search) {
+      if (!category && !search && !orgBusinessIds) {
         query = query.eq("area", "MZANSI_BUSINESS");
       } else if (!category) {
         query = query.in("area", ["MZANSI_BUSINESS", "PROMOTIONS_EVENTS"]);

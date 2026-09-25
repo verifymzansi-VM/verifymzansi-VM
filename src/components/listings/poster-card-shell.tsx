@@ -51,6 +51,8 @@ interface PosterCardShellProps {
   description?: string | null;
   /** Location text (city name) — shown with MapPin icon below description */
   location?: string | null;
+  /** Secondary organisation affiliation line (never replaces verification or branding). */
+  affiliation?: ReactNode;
   /** ISO date string — shown as compact relative time ("2h ago") */
   createdAt?: string | null;
   /** View count — shown in the card engagement row. */
@@ -114,6 +116,7 @@ export function PosterCardShell({
   logoUrl,
   description,
   location,
+  affiliation,
   createdAt: _createdAt,
   viewCount: _viewCount,
   fitStrategy = "contain",
@@ -296,6 +299,7 @@ export function PosterCardShell({
             ) : null}
           </p>
         ) : null}
+        {affiliation && !isHeroVariant ? affiliation : null}
       </div>
     </div>
   );

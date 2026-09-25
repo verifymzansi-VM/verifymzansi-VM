@@ -306,7 +306,7 @@ BEGIN
  END IF;
  INSERT INTO public.notifications(user_id,type,title,message,href) VALUES (b.owner_id,'success','Sponsored visibility activated',
   o.sponsorship_wording || ' ' || o.name || ' until ' || to_char(ends AT TIME ZONE 'Africa/Johannesburg','DD Mon YYYY') || '. It does not renew automatically.',
-  '/dashboard/businesses');
+  '/dashboard/affiliations');
 END;
 $$;
 
@@ -525,16 +525,16 @@ BEGIN
   VALUES (a.organisation_id,a.programme_id,a.business_id,a.id,p_user)
   ON CONFLICT (organisation_id,business_id) WHERE status = 'active' DO NOTHING RETURNING id INTO aff;
   INSERT INTO public.notifications(user_id,type,title,message,href) VALUES (owner,'success','Affiliation confirmed',
-   o.name || ' confirmed your business as a programme participant.','/dashboard/businesses');
+   o.name || ' confirmed your business as a programme participant.','/dashboard/affiliations');
  ELSIF p_decision = 'decline' THEN
   UPDATE public.organisation_applications SET status = 'declined', decision_by = p_user, decision_at = now(), decision_note = p_note, updated_at = now() WHERE id = a.id;
   INSERT INTO public.notifications(user_id,type,title,message,href) VALUES (owner,'info','Affiliation not confirmed',
-   o.name || ' could not confirm this affiliation. Your VerifyMzansi account and listings are unaffected.','/dashboard/businesses');
+   o.name || ' could not confirm this affiliation. Your VerifyMzansi account and listings are unaffected.','/dashboard/affiliations');
  ELSIF p_decision = 'request_info' THEN
   IF length(btrim(COALESCE(p_note,''))) < 5 THEN RAISE EXCEPTION 'Describe the information required'; END IF;
   UPDATE public.organisation_applications SET status = 'more_info_required', info_request = p_note, updated_at = now() WHERE id = a.id;
   INSERT INTO public.notifications(user_id,type,title,message,href) VALUES (owner,'warning','More information requested',
-   o.name || ' needs more information about your affiliation request.','/dashboard/businesses');
+   o.name || ' needs more information about your affiliation request.','/dashboard/affiliations');
  ELSE RAISE EXCEPTION 'Unknown decision';
  END IF;
  PERFORM public.commercial_audit(p_user,'affiliation_' || p_decision,'organisation_application',a.id,
@@ -559,7 +559,7 @@ BEGIN
   PERFORM public.end_sponsorship_internal(r.id,'revoked','Affiliation revoked');
  END LOOP;
  INSERT INTO public.notifications(user_id,type,title,message,href)
- SELECT b.owner_id,'info','Affiliation ended','An organisation affiliation was removed. Your VerifyMzansi account and business profile are unaffected.','/dashboard/businesses'
+ SELECT b.owner_id,'info','Affiliation ended','An organisation affiliation was removed. Your VerifyMzansi account and business profile are unaffected.','/dashboard/affiliations'
  FROM public.businesses b WHERE b.id = f.business_id;
  PERFORM public.commercial_audit(p_user,'affiliation_revoked','organisation_affiliation',f.id,to_jsonb(f),jsonb_build_object('status','revoked'),p_reason);
 END;

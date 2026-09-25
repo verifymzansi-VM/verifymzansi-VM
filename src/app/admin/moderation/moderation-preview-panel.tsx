@@ -1,6 +1,7 @@
 "use client";
 
 import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
+import { scoreListingQuality } from "@/lib/quality/score-listing";
 import { useState } from "react";
 import {
   ChevronLeft,
@@ -941,6 +942,36 @@ function isBusinessModerationItem(item: ModerationItem) {
   );
 }
 
+/** Advisory only: explains weaknesses; never auto-rejects. */
+function QualitySummary({ score, issues }: ReturnType<typeof scoreListingQuality>) {
+  const tone =
+    score >= 80
+      ? "border-emerald-200 bg-emerald-50"
+      : score >= 50
+        ? "border-amber-200 bg-amber-50"
+        : "border-red-200 bg-red-50";
+  return (
+    <div
+      className={`rounded-lg border p-3 text-sm text-slate-900 ${tone}`}
+      data-testid="quality-summary"
+    >
+      <p className="font-medium">Listing quality {score} / 100</p>
+      {issues.length > 0 ? (
+        <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs">
+          {issues.map((issue) => (
+            <li key={issue.code}>
+              {issue.severity === "review" ? "Review: " : ""}
+              {issue.message}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-xs">No issues found.</p>
+      )}
+    </div>
+  );
+}
+
 export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -999,9 +1030,20 @@ export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
     Boolean
   );
 
+  const quality = scoreListingQuality({
+    title: item.title,
+    description: item.description,
+    priceCents: item.price_cents,
+    priceExpected: item.contentType === "listing",
+    category: item.category,
+    location: item.location_city,
+    photos: item.photos,
+  });
+
   return (
     <div className="h-full min-h-0 overflow-auto">
       <div className="space-y-5 pr-4">
+        <QualitySummary score={quality.score} issues={quality.issues} />
         {item.isEditRequest && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
             <p className="font-medium">Edit review</p>

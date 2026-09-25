@@ -24,6 +24,23 @@ import { ActiveFilterChips, type FilterChip } from "./active-filter-chips";
 const selectClassName =
   "flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-colors hover:border-brand-blue/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
 
+/** Listed organisations for the optional programme filter (loaded on demand). */
+function useFilterOrganisations(enabled: boolean): Array<{ slug: string; name: string }> {
+  const [organisations, setOrganisations] = useState<Array<{ slug: string; name: string }>>([]);
+  useEffect(() => {
+    if (!enabled || organisations.length > 0) return;
+    const controller = new AbortController();
+    fetch("/api/organisations/search?purpose=filter", { signal: controller.signal })
+      .then((res) => (res.ok ? res.json() : { organisations: [] }))
+      .then((data: { organisations?: Array<{ slug: string; name: string }> }) =>
+        setOrganisations((data.organisations ?? []).map(({ slug, name }) => ({ slug, name })))
+      )
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [enabled, organisations.length]);
+  return organisations;
+}
+
 export function BusinessFilterDrawer() {
   const { filters, setFilter, resetFilters } = useMarketplaceStore();
   const [open, setOpen] = useState(false);
@@ -45,7 +62,9 @@ export function BusinessFilterDrawer() {
     filters.businessType,
     filters.province,
     filters.city,
+    filters.organisation,
   ].filter(Boolean).length;
+  const organisations = useFilterOrganisations(open || Boolean(filters.organisation));
 
   const clearAllFilters = () => {
     triggerHaptic("light");
@@ -105,6 +124,16 @@ export function BusinessFilterDrawer() {
         setFilter("province", undefined);
         setFilter("city", undefined);
       },
+    });
+  }
+
+  if (filters.organisation) {
+    activeChips.push({
+      key: "organisation",
+      label:
+        organisations.find((org) => org.slug === filters.organisation)?.name ??
+        filters.organisation.replace(/-/g, " "),
+      onRemove: () => setFilter("organisation", undefined),
     });
   }
 
@@ -301,6 +330,27 @@ export function BusinessFilterDrawer() {
                 ))}
             </select>
           </div>
+          {/* Organisation / programme (optional; never changes ranking) */}
+          {organisations.length > 0 ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="drawer-business-organisation">Organisation / Programme</Label>
+              <select
+                id="drawer-business-organisation"
+                aria-label="Organisation or programme"
+                className={selectClassName}
+                value={filters.organisation || ""}
+                onChange={(event) => setFilter("organisation", event.target.value || undefined)}
+                disabled={!isInteractive}
+              >
+                <option value="">All businesses</option>
+                {organisations.map((org) => (
+                  <option key={org.slug} value={org.slug}>
+                    {org.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           {/* Actions */}
           <div className="sticky bottom-0 flex gap-3 border-t bg-background/95 px-0 pb-[calc(env(safe-area-inset-bottom)+0.25rem)] pt-4 backdrop-blur">
             <Button
