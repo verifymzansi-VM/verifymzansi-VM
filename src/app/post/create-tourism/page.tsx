@@ -1748,7 +1748,11 @@ function CreateTourismContent() {
       <Header isAuthenticated />
       <main className="flex-1">
         <div className="container-page py-6">
-          <PlanGate area="PROMOTIONS_EVENTS" onTrialSelected={setTrialDays}>
+          <PlanGate
+            area="PROMOTIONS_EVENTS"
+            onTrialSelected={setTrialDays}
+            freePosting={listingType === "event"}
+          >
             <form noValidate onSubmit={handleSubmit}>
               <PostFormScaffold
                 title={

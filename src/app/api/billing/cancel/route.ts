@@ -30,6 +30,19 @@ export async function POST(request: NextRequest) {
       limitedMessage: "Too many cancellation attempts. Please try again later.",
     });
     if (!guard.success) return guard.response;
+
+    // Retired with the fixed-term slot model (2026-09). Kept behind the same
+    // guards so stale clients receive a clear answer instead of a 404.
+    if (!process.env.VM_ENABLE_LEGACY_PLAN_CHANGES) {
+      return NextResponse.json(
+        {
+          error:
+            "Plans are prepaid for a fixed period and never renew automatically, so there is nothing to cancel.",
+          code: "LEGACY_PLAN_ROUTE_RETIRED",
+        },
+        { status: 410 }
+      );
+    }
     const { user } = guard;
 
     const parsed = await parseAndValidateJsonRequest(request, cancelSchema, {

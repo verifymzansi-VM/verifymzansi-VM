@@ -38,7 +38,7 @@ describe("billing plan resolver", () => {
       {
         id: "plan-db-growth",
         area: "MZANSI_MARKET",
-        tier: "growth",
+        tier: "half_year",
         name: "Mzansi Market Growth",
         price_cents: 25000,
         active: true,
@@ -54,12 +54,12 @@ describe("billing plan resolver", () => {
   });
 
   it("resolves stable frontend tokens to the active database row", async () => {
-    const stableToken = getStablePlanId("MZANSI_MARKET", "growth");
+    const stableToken = getStablePlanId("MZANSI_MARKET", "half_year");
     const client = createPlanClient([
       {
         id: "plan-db-growth",
         area: "MZANSI_MARKET",
-        tier: "growth",
+        tier: "half_year",
         name: "Mzansi Market Growth",
         price_cents: 25000,
         active: true,
@@ -71,17 +71,17 @@ describe("billing plan resolver", () => {
     });
 
     expect(result.plan?.id).toBe("plan-db-growth");
-    expect(result.plan?.tier).toBe("growth");
+    expect(result.plan?.tier).toBe("half_year");
     expect(result.source).toBe("stable-token");
   });
 
   it("resolves the Basic stable frontend token to the active database row", async () => {
-    const stableToken = getStablePlanId("MZANSI_MARKET", "basic");
+    const stableToken = getStablePlanId("MZANSI_MARKET", "month");
     const client = createPlanClient([
       {
         id: "plan-db-basic",
         area: "MZANSI_MARKET",
-        tier: "basic",
+        tier: "month",
         name: "Mzansi Market Basic",
         price_cents: 3000,
         active: true,
@@ -93,7 +93,7 @@ describe("billing plan resolver", () => {
     });
 
     expect(result.plan?.id).toBe("plan-db-basic");
-    expect(result.plan?.tier).toBe("basic");
+    expect(result.plan?.tier).toBe("month");
     expect(result.source).toBe("stable-token");
   });
 
@@ -102,7 +102,7 @@ describe("billing plan resolver", () => {
       {
         id: "plan-db-inactive",
         area: "MZANSI_MARKET",
-        tier: "growth",
+        tier: "half_year",
         name: "Mzansi Market Growth",
         price_cents: 25000,
         active: false,
@@ -118,12 +118,12 @@ describe("billing plan resolver", () => {
   });
 
   it("rejects stable tokens when the mapped area/tier has no active database row", async () => {
-    const stableToken = getStablePlanId("MZANSI_MARKET", "growth");
+    const stableToken = getStablePlanId("MZANSI_MARKET", "half_year");
     const client = createPlanClient([
       {
         id: "plan-db-inactive",
         area: "MZANSI_MARKET",
-        tier: "growth",
+        tier: "half_year",
         name: "Mzansi Market Growth",
         price_cents: 25000,
         active: false,
@@ -136,7 +136,7 @@ describe("billing plan resolver", () => {
 
     expect(getActivePlanSelectionFromToken(stableToken)).toMatchObject({
       area: "MZANSI_MARKET",
-      tier: "growth",
+      tier: "half_year",
     });
     expect(result.plan).toBeNull();
     expect(result.source).toBeNull();

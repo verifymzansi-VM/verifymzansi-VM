@@ -31,6 +31,19 @@ export async function POST(request: NextRequest) {
       limitedMessage: "Too many plan change attempts. Please try again later.",
     });
     if (!guard.success) return guard.response;
+
+    // Retired with the fixed-term slot model (2026-09). Kept behind the same
+    // guards so stale clients receive a clear answer instead of a 404.
+    if (!process.env.VM_ENABLE_LEGACY_PLAN_CHANGES) {
+      return NextResponse.json(
+        {
+          error:
+            "Plans no longer change tier. Each plan is a prepaid posting slot: buy another slot from R50 / 30 days to post more.",
+          code: "LEGACY_PLAN_ROUTE_RETIRED",
+        },
+        { status: 410 }
+      );
+    }
     const { user } = guard;
 
     const parsed = await parseAndValidateJsonRequest(request, changePlanSchema, {
@@ -161,7 +174,7 @@ export async function POST(request: NextRequest) {
       const checkout = await createHostedCheckout({
         admin: admin as never,
         userId: user.id,
-        area: newPlan.area,
+        area: newPlan.area ?? entitlement.area,
         amountCents: newPlan.price_cents,
         itemName: newPlan.name,
         itemDescription: `${newPlan.name} - plan change`,

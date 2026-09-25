@@ -101,12 +101,16 @@ function buildReceiptDetails(payment: PaymentRow): PaymentReceiptDetails {
   const type = typeof meta?.type === "string" ? meta.type : null;
 
   if (!type || type === "subscription") {
-    // Mirrors the entitlement window set during fulfillment (payment + 30 days).
+    // Mirrors the slot window set during fulfillment (payment + plan duration).
+    const durationDays =
+      typeof meta?.duration_days === "number" && meta.duration_days > 0
+        ? meta.duration_days
+        : SUBSCRIPTION_DURATION_DAYS;
     return {
       kind: "subscription",
       expiresAt: new Date(
         (payment.created_at ? Date.parse(payment.created_at) : Date.now()) +
-          SUBSCRIPTION_DURATION_DAYS * 24 * 60 * 60 * 1000
+          durationDays * 24 * 60 * 60 * 1000
       ).toISOString(),
     };
   }
@@ -137,7 +141,11 @@ async function sendPaymentStatusEmail(params: {
   const email = recipient.email;
   const accountName = recipient.accountName;
   const amount = params.payment.amount_cents / 100;
-  const planName = getPlanNameFromArea(params.payment.area);
+  const paymentMeta = getPaymentMetadata(params.payment);
+  const planName =
+    typeof paymentMeta?.plan_name === "string"
+      ? paymentMeta.plan_name
+      : getPlanNameFromArea(params.payment.area);
 
   const result =
     params.status === "success"

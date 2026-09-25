@@ -5,15 +5,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { promotionSchema } from "@/lib/validations/promotion";
-import { canCreateListing } from "@/lib/services/entitlements";
 import { checkLocalRateLimit, checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { isPostingLimitBypassEnabled } from "@/lib/utils/posting-limit-bypass";
-import {
-  type MarketplaceArea,
-  type PlanTier,
-  type PromotionEventState,
-  type PromotionType,
-} from "@/types/enums";
+import { type MarketplaceArea, type PromotionEventState, type PromotionType } from "@/types/enums";
 import { inferPromotionCategoryKey } from "@/lib/utils/promotion-category";
 import {
   createNotification,
@@ -39,7 +33,9 @@ import { userOwnsBusiness } from "@/lib/account/owned-business";
 import { enforceVerifiedPostingAccess } from "@/app/api/_lib/verified-posting-access";
 import {
   enforcePostingMediaLimits,
+  enforceEventCreationLimit,
   getActivePostingPlanOrResponse,
+  slotLimitReason,
 } from "@/app/api/_lib/posting-entitlements";
 import { requirePostingMutationSession } from "@/app/api/_lib/posting-mutation-session";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
@@ -371,8 +367,16 @@ export async function POST(request: NextRequest) {
     // both the count check and the INSERT, closing the TOCTOU race (#25/M1).
     // -1 skips the check (unlimited plans, bypass mode, and free-post users
     // whose limit is enforced by the free_posts_used ledger).
+    // Events are free until they end: no trial, no paid slot. Fair use is
+    // enforced here (creation rate) and at publication (active events).
+    const isFreeEvent = data.promotion_type === "event";
     const maxAllowedForInsert =
-      hasPaidPlan && tier && !postingLimitBypassEnabled ? ent.maxAllowed : -1;
+      hasPaidPlan && tier && !postingLimitBypassEnabled && !isFreeEvent ? ent.maxAllowed : -1;
+
+    if (isFreeEvent && !postingLimitBypassEnabled) {
+      const eventLimitBlock = await enforceEventCreationLimit(getAdmin(), user.id, log);
+      if (eventLimitBlock) return eventLimitBlock;
+    }
 
     const freePostContentId = crypto.randomUUID();
     let freePostClaimed = false;
@@ -392,7 +396,7 @@ export async function POST(request: NextRequest) {
       throw mediaError;
     }
 
-    if (!hasPaidPlan && !postingLimitBypassEnabled) {
+    if (!hasPaidPlan && !postingLimitBypassEnabled && !isFreeEvent) {
       try {
         freePostClaimed = await claimFreePostSlot(getAdmin(), {
           durationDays: data.trialDays,
@@ -453,7 +457,10 @@ export async function POST(request: NextRequest) {
       logo_url: data.logo_url || null,
       event_details: data.event_details ?? null,
       status: "pending_moderation",
-      expires_at: getPostExpiryIso({ hasPaidPlan: hasPaidPlan || postingLimitBypassEnabled }),
+      expires_at:
+        isFreeEvent && data.end_date
+          ? new Date(data.end_date).toISOString()
+          : getPostExpiryIso({ hasPaidPlan: hasPaidPlan || postingLimitBypassEnabled }),
     };
 
     let promotion: { id: string } | null = null;
@@ -505,9 +512,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (limitReached) {
-      const check = canCreateListing(maxAllowedForInsert, tier as PlanTier, AREA);
       return NextResponse.json(
-        { error: "Promotion limit reached", reason: check.reason },
+        { error: "Promotion limit reached", reason: slotLimitReason(ent.maxAllowed) },
         { status: 403 }
       );
     }

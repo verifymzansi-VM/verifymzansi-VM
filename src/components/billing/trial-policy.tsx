@@ -3,17 +3,19 @@ import Link from "next/link";
 export function TrialPolicy() {
   return (
     <section className="mx-auto max-w-4xl rounded-xl border bg-card p-5 space-y-3">
+      <p className="text-xs font-semibold uppercase tracking-wider text-brand-green">
+        Public introductory trial
+      </p>
       <h2 className="font-semibold">One free introductory choice</h2>
       <p className="text-sm text-muted-foreground">
-        Eligible verified members can choose one standard post for 7 days, or a 30-Day Free Launch
-        Trial while spaces are available. The default allocation is 50 active 30-day trials in each
-        of Mzansi Market, Mzansi Business and Tourism &amp; Events. Availability is confirmed on
-        approval.
+        Eligible verified members can choose one post for 7 days, or a 30-Day Launch Trial while
+        spaces are available in Mzansi Market, Mzansi Business and Tourism. Availability is
+        confirmed on approval. Events are always free and do not use the trial.
       </p>
       <p className="text-sm text-muted-foreground">
-        Choose once across all three areas. No boosts, featured placement, urgent badge, automatic
-        charge or repeated free renewal. Your saved post can be renewed with an appropriate paid
-        plan after expiry.
+        Choose once across all areas. No boosts, featured placement, urgent badge, automatic charge
+        or repeated free renewal. When the trial ends your post stays saved in your dashboard —
+        reactivate it for R50 / 30 days, R250 / 6 months or R450 / 12 months.
       </p>
       <details className="text-sm">
         <summary className="cursor-pointer font-medium">
@@ -36,9 +38,13 @@ export function TrialPolicy() {
             restoring your own offer.
           </p>
           <p>
-            Event visibility ends at the earlier of the event end date and trial expiry. Other trial
-            posts run from approval for the chosen duration. Expired content is hidden publicly and
-            saved in your dashboard for renewal.
+            Trial posts run from approval for the chosen duration. Expired content is hidden
+            publicly and saved in your dashboard for renewal.
+          </p>
+          <p>
+            Strategic, founding partner and organisation-sponsored programmes are by invitation
+            only. They cannot be claimed publicly and do not stack with this trial: one verified
+            identity receives one free programme.
           </p>
           <p>
             Campaign availability and allocation can change. Pausing an offer affects future

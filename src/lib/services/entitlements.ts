@@ -2,7 +2,11 @@
  * Entitlement engine — check what an account holder's plan allows.
  */
 
-import { FREE_POST_CONFIG, PLANS, type PlanDefinition } from "@/lib/constants/pricing";
+import {
+  FREE_POST_CONFIG,
+  getPlan as getCatalogPlan,
+  type PlanDefinition,
+} from "@/lib/constants/pricing";
 import type { PlanTier, MarketplaceArea } from "@/types/enums";
 
 export interface Entitlements {
@@ -31,12 +35,23 @@ const FREE_ENTITLEMENTS: Entitlements = {
   urgentAllowed: false,
 };
 
+const ENTERPRISE_ENTITLEMENTS: Entitlements = {
+  maxAllowed: 1,
+  maxPhotos: FREE_POST_CONFIG.maxPhotos,
+  maxVideos: 1,
+  maxPostsPerMonth: 100,
+  videoAllowed: true,
+  boostAllowed: true,
+  featuredAllowed: true,
+  urgentAllowed: true,
+};
+
 /**
  * Look up the plan definition for a given tier and marketplace area.
  * @returns The matching {@link PlanDefinition}, or `undefined` if not found.
  */
 export function getPlan(tier: PlanTier, area: MarketplaceArea): PlanDefinition | undefined {
-  return PLANS.find((p) => p.tier === tier && p.area === area);
+  return getCatalogPlan(area, tier);
 }
 
 /**
@@ -44,6 +59,10 @@ export function getPlan(tier: PlanTier, area: MarketplaceArea): PlanDefinition |
  * Falls back to free-tier limits when no plan is found.
  */
 export function getEntitlements(tier: PlanTier, area: MarketplaceArea): Entitlements {
+  // Bulk and programme slots cover every area; capacity comes from the slot
+  // allowance (posting_allowance), so only feature flags matter here.
+  if (tier === "enterprise") return ENTERPRISE_ENTITLEMENTS;
+
   const plan = getPlan(tier, area);
 
   if (!plan) return FREE_ENTITLEMENTS;
@@ -94,19 +113,17 @@ export function canCreateListing(
   if (ent.maxAllowed === -1) return { allowed: true };
 
   if (currentCount >= ent.maxAllowed) {
-    const itemType =
-      area === "MZANSI_BUSINESS"
-        ? "businesses"
-        : area === "PROMOTIONS_EVENTS"
-          ? "events"
-          : "live listings";
-    return {
-      allowed: false,
-      reason: `Your ${tier} plan allows up to ${ent.maxAllowed} ${itemType}. Upgrade to post more.`,
-    };
+    return { allowed: false, reason: slotLimitReason(ent.maxAllowed) };
   }
 
   return { allowed: true };
+}
+
+/** Plain-language explanation shown when every active posting slot is in use. */
+export function slotLimitReason(capacity: number): string {
+  const slots =
+    capacity === 1 ? "Your active posting slot is" : `All ${capacity} active posting slots are`;
+  return `${slots} in use. Mark a post as sold, deactivate one, or add a slot from R50 / 30 days.`;
 }
 
 /**
@@ -122,7 +139,7 @@ export function canBoost(
   if (!ent.boostAllowed) {
     return {
       allowed: false,
-      reason: "Boost is not available on your plan. Upgrade to use boosts.",
+      reason: "Boost is available on paid plans. Choose a plan from R50 / 30 days to use boosts.",
     };
   }
 
@@ -142,7 +159,7 @@ export function canFeatured(
   if (!ent.featuredAllowed) {
     return {
       allowed: false,
-      reason: "Featured is only available on the Pro plan. Upgrade to feature your listings.",
+      reason: "Featured placement is available on paid plans. Choose a plan from R50 / 30 days.",
     };
   }
 
@@ -162,7 +179,7 @@ export function canUrgent(
   if (!ent.urgentAllowed) {
     return {
       allowed: false,
-      reason: "Urgent is only available on the Pro plan. Upgrade to mark listings as urgent.",
+      reason: "The urgent badge is available on paid plans. Choose a plan from R50 / 30 days.",
     };
   }
 

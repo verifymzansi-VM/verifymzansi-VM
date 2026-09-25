@@ -32,6 +32,8 @@ export type ListingStatus =
   | "hidden"
   | "expired"
   | "sold"
+  | "suspended"
+  | "archived"
   | "rejected";
 
 export type ListingCategory =
@@ -92,14 +94,27 @@ export const PROMOTION_EVENT_STATE_LABELS: Record<PromotionEventState, string> =
 
 export type ContactMethod = "call" | "whatsapp" | "form" | "in_app";
 
-export type PlanTier = "basic" | "starter" | "growth" | "pro";
+/** Retail durations (month/half_year/year), bulk `enterprise`, and legacy tiers. */
+export type PlanTier =
+  "month" | "half_year" | "year" | "enterprise" | "basic" | "starter" | "growth" | "pro";
+
+export type RetailPlanTier = "month" | "half_year" | "year";
+
+export const LEGACY_PLAN_TIERS = ["basic", "starter", "growth", "pro"] as const;
 
 export type EntitlementType = "subscription" | "trial" | "pay_per_post";
 
 export type EntitlementStatus = "active" | "pending_verification" | "expired" | "cancelled";
 
 export type PaymentStatus =
-  "pending" | "processing" | "complete" | "failed" | "expired" | "refunded";
+  | "pending"
+  | "processing"
+  | "complete"
+  | "failed"
+  | "expired"
+  | "refunded"
+  | "chargeback"
+  | "cancelled";
 
 export type PaymentProvider = "ozow";
 
@@ -236,6 +251,10 @@ export const BUSINESS_CATEGORY_LABELS: Record<BusinessCategory, string> = {
 };
 
 export const PLAN_TIER_LABELS: Record<PlanTier, string> = {
+  month: "30 Days",
+  half_year: "6 Months",
+  year: "12 Months",
+  enterprise: "Enterprise",
   basic: "Basic",
   starter: "Starter",
   growth: "Growth",

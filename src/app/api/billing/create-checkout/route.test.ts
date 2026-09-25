@@ -198,7 +198,7 @@ describe("POST /api/billing/create-checkout", () => {
             id: "550e8400-e29b-41d4-a716-446655440000",
             name: "Mzansi Market Growth",
             area: "MZANSI_MARKET",
-            tier: "growth",
+            tier: "half_year",
             price_cents: 25000,
             active: true,
           },
@@ -327,7 +327,7 @@ describe("POST /api/billing/create-checkout", () => {
             id: "550e8400-e29b-41d4-a716-446655440000",
             name: "Mzansi Market Growth",
             area: "MZANSI_MARKET",
-            tier: "growth",
+            tier: "half_year",
             price_cents: 25000,
             active: true,
           },
@@ -371,7 +371,7 @@ describe("POST /api/billing/create-checkout", () => {
 
   it("resolves stable frontend plan tokens to the canonical database plan id", async () => {
     const canonicalPlanId = "d76308c6-1e2c-4035-b4f9-7ae40c62125d";
-    const stablePlanToken = getStablePlanId("MZANSI_MARKET", "growth");
+    const stablePlanToken = getStablePlanId("MZANSI_MARKET", "half_year");
 
     mockSupabase.auth.getUser.mockResolvedValue({
       data: { user: { ...CONFIRMED_USER, email: "member@test.com" } },
@@ -394,7 +394,7 @@ describe("POST /api/billing/create-checkout", () => {
               id: canonicalPlanId,
               name: "Mzansi Market Growth",
               area: "MZANSI_MARKET",
-              tier: "growth",
+              tier: "half_year",
               price_cents: 25000,
               active: true,
             },
@@ -420,16 +420,16 @@ describe("POST /api/billing/create-checkout", () => {
       expect.objectContaining({
         providerData: expect.objectContaining({
           plan_id: canonicalPlanId,
-          plan_tier: "growth",
+          plan_tier: "half_year",
           area: "MZANSI_MARKET",
         }),
       })
     );
   });
 
-  it("starts checkout for the Mzansi Market Basic package", async () => {
+  it("starts checkout for the R50 / 30 days plan", async () => {
     const canonicalPlanId = "b0cc0d82-b2ff-4cae-a0c2-3c7209925c98";
-    const stablePlanToken = getStablePlanId("MZANSI_MARKET", "basic");
+    const stablePlanToken = getStablePlanId("MZANSI_MARKET", "month");
 
     mockSupabase.auth.getUser.mockResolvedValue({
       data: { user: { ...CONFIRMED_USER, email: "member@test.com" } },
@@ -452,8 +452,8 @@ describe("POST /api/billing/create-checkout", () => {
               id: canonicalPlanId,
               name: "Mzansi Market Basic",
               area: "MZANSI_MARKET",
-              tier: "basic",
-              price_cents: 3000,
+              tier: "month",
+              price_cents: 5000,
               active: true,
             },
           ],
@@ -475,10 +475,10 @@ describe("POST /api/billing/create-checkout", () => {
     expect(data.success).toBe(true);
     expect(vi.mocked(createHostedCheckout)).toHaveBeenCalledWith(
       expect.objectContaining({
-        amountCents: 3000,
+        amountCents: 5000,
         providerData: expect.objectContaining({
           plan_id: canonicalPlanId,
-          plan_tier: "basic",
+          plan_tier: "month",
           area: "MZANSI_MARKET",
         }),
       })
@@ -604,7 +604,7 @@ describe("POST /api/billing/create-checkout", () => {
     expect(res.status).toBe(503);
   });
 
-  it("returns 400 when user already has an active entitlement for the area", async () => {
+  it("lets members buy another slot while a plan is active (slots stack)", async () => {
     mockAdmin.from.mockImplementation((table: string) => {
       if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
@@ -621,7 +621,7 @@ describe("POST /api/billing/create-checkout", () => {
             id: "550e8400-e29b-41d4-a716-446655440000",
             name: "Mzansi Market Growth",
             area: "MZANSI_MARKET",
-            tier: "growth",
+            tier: "half_year",
             price_cents: 25000,
             active: true,
           },
@@ -630,6 +630,9 @@ describe("POST /api/billing/create-checkout", () => {
       if (table === "entitlements") {
         return createEntitlementsTableMock({ data: { id: "ent-active" } });
       }
+      if (table === "payments") {
+        return createPaymentsSelectMock({ data: null });
+      }
     });
 
     const res = await createCheckout(
@@ -637,8 +640,8 @@ describe("POST /api/billing/create-checkout", () => {
     );
     const data = await res.json();
 
-    expect(res.status).toBe(400);
-    expect(data.error).toContain("already have an active subscription");
+    expect(res.status).toBe(200);
+    expect(data.success).toBe(true);
   });
 
   it("returns 409 with recovery actions when a pending payment already exists for the area", async () => {
@@ -658,7 +661,7 @@ describe("POST /api/billing/create-checkout", () => {
             id: "550e8400-e29b-41d4-a716-446655440000",
             name: "Mzansi Market Growth",
             area: "MZANSI_MARKET",
-            tier: "growth",
+            tier: "half_year",
             price_cents: 25000,
             active: true,
           },
@@ -718,47 +721,6 @@ describe("POST /api/billing/create-checkout", () => {
     expect(data.error).toBe("Unable to verify account");
   });
 
-  it("returns 503 when entitlement check encounters a DB error", async () => {
-    mockAdmin.from.mockImplementation((table: string) => {
-      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({
-            data: { id: "profile-1", display_name: "Test Account" },
-            error: null,
-          }),
-        };
-      }
-      if (table === "plans") {
-        return createPlansTableMock([
-          {
-            id: "550e8400-e29b-41d4-a716-446655440000",
-            name: "Mzansi Market Growth",
-            area: "MZANSI_MARKET",
-            tier: "growth",
-            price_cents: 25000,
-            active: true,
-          },
-        ]);
-      }
-      if (table === "entitlements") {
-        return createEntitlementsTableMock({
-          data: null,
-          error: { message: "RLS policy violation" },
-        });
-      }
-    });
-
-    const res = await createCheckout(
-      createMockRequest({ planId: "550e8400-e29b-41d4-a716-446655440000" })
-    );
-    const data = await res.json();
-
-    expect(res.status).toBe(503);
-    expect(data.error).toBe("Unable to verify subscription status");
-  });
-
   it("returns 503 when pending payment check encounters a DB error", async () => {
     mockAdmin.from.mockImplementation((table: string) => {
       if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
@@ -777,7 +739,7 @@ describe("POST /api/billing/create-checkout", () => {
             id: "550e8400-e29b-41d4-a716-446655440000",
             name: "Mzansi Market Growth",
             area: "MZANSI_MARKET",
-            tier: "growth",
+            tier: "half_year",
             price_cents: 25000,
             active: true,
           },

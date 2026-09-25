@@ -14,6 +14,8 @@ import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { resolveBillingPlanSelection } from "@/lib/billing/plan-resolver";
 import { resolveSafeBillingAppUrl } from "@/lib/billing/app-url";
 import { enforceBillingMutationGuard } from "@/lib/billing/route-guard";
+import { validateCanonicalPaidPlan } from "@/lib/billing/plan-catalog";
+import { getCommercialSettings } from "@/lib/commercial/settings";
 
 const log = createLogger("Checkout");
 
@@ -134,50 +136,41 @@ export async function POST(request: NextRequest) {
 
     // Clients may echo the area they believe the plan belongs to — reject
     // mismatches instead of silently checking out a different area.
-    if (area && area !== plan.area) {
+    if (area && plan.area && area !== plan.area) {
       return NextResponse.json(
         { error: "Selected plan does not belong to the requested area" },
         { status: 400 }
       );
     }
 
-    // ── Prevent Duplicate Active Entitlements ─────────────
-    const { data: activeEntitlement, error: entitlementError } = await getAdmin()
-      .from("entitlements")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("area", plan.area)
-      .eq("type", "subscription")
-      .in("status", ["active", "pending_verification"])
-      .gt("expires_at", new Date().toISOString())
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (entitlementError) {
-      log.error("Failed to check active entitlements", {
-        userId: user.id,
-        error: entitlementError.message,
-      });
-      return NextResponse.json({ error: "Unable to verify subscription status" }, { status: 503 });
+    const catalogError = validateCanonicalPaidPlan(plan);
+    if (catalogError) {
+      return NextResponse.json({ error: "Plan not found or inactive" }, { status: 404 });
     }
 
-    if (activeEntitlement) {
-      return NextResponse.json(
-        {
-          error:
-            "You already have an active subscription for this area. Please cancel it before switching plans.",
-        },
-        { status: 400 }
-      );
+    if (plan.tier === "enterprise") {
+      const settings = await getCommercialSettings(getAdmin() as never);
+      if (!settings.features.enterpriseCheckout) {
+        return NextResponse.json(
+          { error: "Bulk plans are currently arranged by proposal. Please contact VerifyMzansi." },
+          { status: 403 }
+        );
+      }
     }
+
+    // Bulk plans cover every area; the payment row records a nominal area.
+    const paymentArea = plan.area ?? area ?? "MZANSI_BUSINESS";
+    const durationDays = plan.duration_days ?? 30;
+
+    // Slots stack: buying another plan adds capacity, so an active plan in the
+    // same area is not a reason to refuse checkout.
 
     // ── Prevent duplicate in-flight payments ─────────────
     const { data: pendingPayment, error: pendingError } = await getAdmin()
       .from("payments")
       .select("id, status, provider_data")
       .eq("user_id", user.id)
-      .eq("area", plan.area)
+      .eq("area", paymentArea)
       .in("status", ["pending", "processing"])
       .order("created_at", { ascending: false })
       .limit(1)
@@ -208,17 +201,20 @@ export async function POST(request: NextRequest) {
       const checkout = await createHostedCheckout({
         admin: getAdmin() as never,
         userId: user.id,
-        area: plan.area,
+        area: paymentArea,
         amountCents: plan.price_cents,
         itemName: plan.name,
-        itemDescription: `${plan.name} - 30-day subscription`,
+        itemDescription: `${plan.name} - ${durationDays}-day prepaid plan, no automatic renewal`,
         returnUrl: `${appUrl}/billing/success?payment=__PAYMENT_ID__`,
         cancelUrl: `${appUrl}/billing/cancel?payment=__PAYMENT_ID__`,
         providerData: {
           type: "subscription",
           plan_id: plan.id,
           plan_tier: plan.tier,
-          area: plan.area,
+          area: paymentArea,
+          plan_code: plan.plan_code ?? null,
+          plan_name: plan.name,
+          duration_days: durationDays,
         },
       });
       paymentId = checkout.paymentId;
@@ -232,7 +228,7 @@ export async function POST(request: NextRequest) {
           .from("payments")
           .select("id, status, provider_data")
           .eq("user_id", user.id)
-          .eq("area", plan.area)
+          .eq("area", paymentArea)
           .in("status", ["pending", "processing"])
           .order("created_at", { ascending: false })
           .limit(1)

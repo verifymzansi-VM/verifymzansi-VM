@@ -21,8 +21,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/client";
 import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
-import { toast } from "@/hooks/use-toast";
-import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { createLogger } from "@/lib/utils/logger";
 import { isPostingLimitBypassEnabled } from "../../lib/utils/posting-limit-bypass";
 import {
@@ -34,13 +32,13 @@ import {
 const logger = createLogger("PlanGate");
 import {
   PLANS,
-  TRIAL_CONFIG,
   FREE_POST_CONFIG,
-  getPlanCheckoutId,
+  formatPlanPrice,
+  getPlanCheckoutHref,
   type PlanDefinition,
 } from "@/lib/constants/pricing";
 import { getEntitlements } from "@/lib/services/entitlements";
-import type { MarketplaceArea, PlanTier } from "@/types/enums";
+import { PLAN_TIER_LABELS, type MarketplaceArea, type PlanTier } from "@/types/enums";
 import {
   getActiveFreePostUsage,
   trialAvailabilityMessage,
@@ -53,6 +51,29 @@ interface PlanGateProps {
   onTrialSelected?: (days: 7 | 30) => void;
   area: MarketplaceArea;
   children: ReactNode;
+  /** Free events: no trial or plan required (fair use is enforced on the server). */
+  freePosting?: boolean;
+}
+
+type AllowanceResponse = {
+  hasPaidPlan: boolean;
+  capacity: number;
+  used: number;
+  maxPhotos: number;
+  maxVideos: number;
+};
+
+async function fetchAllowance(area: MarketplaceArea): Promise<AllowanceResponse | null> {
+  try {
+    const res = await fetch(`/api/billing/allowance?area=${area}`, { cache: "no-store" });
+    if (!res.ok) return null;
+    const data = (await res.json()) as Partial<AllowanceResponse>;
+    return typeof data.hasPaidPlan === "boolean" && typeof data.capacity === "number"
+      ? (data as AllowanceResponse)
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 interface PlanInfo {
@@ -69,13 +90,6 @@ interface PlanInfo {
   maxPhotos: number;
   maxVideos: number;
   videoAllowed: boolean;
-}
-
-interface PendingPaymentRecovery {
-  id: string;
-  checkoutUrl?: string | null;
-  statusUrl?: string | null;
-  canCancel?: boolean;
 }
 
 const AREA_LABELS: Record<MarketplaceArea, string> = {
@@ -107,27 +121,12 @@ const AREA_COUNT_TARGETS: Record<MarketplaceArea, { table: string; area?: Market
    ───────────────────────────────────────────────────────────── */
 function planFeatureList(plan: PlanDefinition): { text: string; enabled: boolean }[] {
   const f = plan.features;
-  const rows: { text: string; enabled: boolean }[] = [];
-
-  const maxItems = f.maxListings ?? f.maxBusinesses ?? f.maxPromotions ?? 0;
-  const itemLabel =
-    plan.area === "MZANSI_BUSINESS"
-      ? "businesses"
-      : plan.area === "PROMOTIONS_EVENTS"
-        ? "events"
-        : "listings";
-
-  rows.push({ text: `${maxItems === -1 ? "Unlimited" : maxItems} ${itemLabel}`, enabled: true });
-  rows.push({ text: `${f.maxPhotos} photos per listing`, enabled: true });
-  rows.push({ text: "Boost listings", enabled: f.boostAllowed });
-  rows.push({ text: "Featured placement", enabled: f.featuredAllowed });
-  if (f.videoAllowed) {
-    const vCount = (f as Record<string, unknown>).maxVideos as number | undefined;
-    rows.push({ text: `${vCount ?? 1} video${(vCount ?? 1) > 1 ? "s" : ""}`, enabled: true });
-  } else {
-    rows.push({ text: "Videos", enabled: false });
-  }
-  return rows;
+  return [
+    { text: "1 active posting slot, reusable when an item sells", enabled: true },
+    { text: `${f.maxPhotos} photos and ${f.maxVideos ?? 1} video per post`, enabled: true },
+    { text: "Optional Boost and Featured add-ons", enabled: f.boostAllowed },
+    { text: "No automatic renewal", enabled: true },
+  ];
 }
 
 async function countCurrentAreaItems(
@@ -174,8 +173,8 @@ function InlinePlanGrid({
       } gap-3 max-w-4xl mx-auto`}
     >
       {plans.map((plan) => {
-        const isPopular = plan.tier === "growth";
-        const isPremium = plan.tier === "pro";
+        const isPopular = plan.tier === "half_year";
+        const isPremium = plan.tier === "year";
         const features = planFeatureList(plan);
         return (
           <Card
@@ -200,7 +199,7 @@ function InlinePlanGrid({
               <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                 <Badge className="bg-brand-gold text-amber-950 gap-1 text-[10px] px-2 py-0.5 whitespace-nowrap">
                   <Crown className="h-3 w-3" />
-                  PREMIUM
+                  BEST VALUE
                 </Badge>
               </div>
             )}
@@ -208,10 +207,16 @@ function InlinePlanGrid({
             <CardContent className="p-4 pt-5 space-y-3">
               {/* Plan name + price */}
               <div className="text-center">
-                <h3 className="font-display text-base font-bold capitalize">{plan.tier}</h3>
+                <h3 className="font-display text-base font-bold">{PLAN_TIER_LABELS[plan.tier]}</h3>
                 <div className="mt-0.5">
-                  <span className="font-display text-2xl font-bold">R{plan.priceCents / 100}</span>
-                  <span className="text-xs text-muted-foreground"> / 30 days</span>
+                  <span className="font-display text-2xl font-bold">
+                    {formatPlanPrice(plan.priceCents)}
+                  </span>
+                  {plan.compareAtCents ? (
+                    <span className="ml-1 text-xs text-muted-foreground line-through">
+                      {formatPlanPrice(plan.compareAtCents)}
+                    </span>
+                  ) : null}
                 </div>
               </div>
 
@@ -245,7 +250,7 @@ function InlinePlanGrid({
                     Processing…
                   </>
                 ) : (
-                  `Choose ${plan.tier.charAt(0).toUpperCase() + plan.tier.slice(1)}`
+                  `Choose ${PLAN_TIER_LABELS[plan.tier]}`
                 )}
               </Button>
             </CardContent>
@@ -256,78 +261,15 @@ function InlinePlanGrid({
   );
 }
 
-function CheckoutRecoveryNotice({
-  checkoutError,
-  pendingPayment,
-  cancellingPayment,
-  onCancelPendingPayment,
-}: {
-  checkoutError: string | null;
-  pendingPayment: PendingPaymentRecovery | null;
-  cancellingPayment: boolean;
-  onCancelPendingPayment: (paymentId: string) => void;
-}) {
-  if (!checkoutError) return null;
-
-  return (
-    <Card className="border-destructive/50 bg-destructive/5">
-      <CardContent className="space-y-3 p-4 text-sm">
-        <p className="font-medium text-destructive">Checkout unavailable</p>
-        <p className="mt-1 text-muted-foreground">{checkoutError}</p>
-        {pendingPayment && (
-          <div className="flex flex-wrap gap-2">
-            {pendingPayment.checkoutUrl && (
-              <Button
-                size="sm"
-                className="gap-2"
-                onClick={() => {
-                  window.location.href = pendingPayment.checkoutUrl ?? "";
-                }}
-              >
-                Continue payment <ArrowRight className="h-3.5 w-3.5" />
-              </Button>
-            )}
-            {pendingPayment.statusUrl && (
-              <Button asChild size="sm" variant="outline">
-                <Link href={pendingPayment.statusUrl}>Check status</Link>
-              </Button>
-            )}
-            {pendingPayment.canCancel && (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={cancellingPayment}
-                onClick={() => onCancelPendingPayment(pendingPayment.id)}
-              >
-                {cancellingPayment ? (
-                  <>
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                    Cancelling
-                  </>
-                ) : (
-                  "Cancel pending payment"
-                )}
-              </Button>
-            )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
 /* ─────────────────────────────────────────────────────────────
    PlanGate — main component
    ───────────────────────────────────────────────────────────── */
-export function PlanGate({ area, children, onTrialSelected }: PlanGateProps) {
+export function PlanGate({ area, children, onTrialSelected, freePosting = false }: PlanGateProps) {
   const pathname = usePathname();
   const [loading, setLoading] = useState(true);
   const [planInfo, setPlanInfo] = useState<PlanInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [subscribing, setSubscribing] = useState<string | null>(null);
-  const [checkoutError, setCheckoutError] = useState<string | null>(null);
-  const [pendingPayment, setPendingPayment] = useState<PendingPaymentRecovery | null>(null);
-  const [cancellingPayment, setCancellingPayment] = useState(false);
 
   useEffect(() => {
     if (isPlaywrightTestMode()) {
@@ -408,33 +350,36 @@ export function PlanGate({ area, children, onTrialSelected }: PlanGateProps) {
         const isTrial = freePostAvailable;
         const trialDaysLeft = freePostAvailable ? FREE_POST_CONFIG.durationDays : 0;
 
+        // Paid, programme and sponsored capacity come from active posting slots.
+        // If the allowance endpoint is unavailable, fall back to the plan
+        // summary; the server re-checks capacity either way.
+        const allowance = entitlement ? await fetchAllowance(area) : null;
+        const summary = entitlement && !allowance && tier ? getEntitlements(tier, area) : null;
+        const hasPaidPlan = Boolean(allowance?.hasPaidPlan || summary);
+
         // Count existing items for this area. Businesses and tourism share the
         // businesses table, so the area filter is what keeps their free posts separate.
-        const currentCount = await countCurrentAreaItems(supabase, user.id, area);
-
-        // Get entitlements for their plan
-        const effectiveTier: PlanTier = tier || TRIAL_CONFIG.tier;
-        const ent = getEntitlements(effectiveTier, area);
+        const currentCount = allowance?.hasPaidPlan
+          ? allowance.used
+          : await countCurrentAreaItems(supabase, user.id, area);
 
         // Testing mode keeps free-tier media limits but removes posting-count caps.
         const maxAllowed = postingLimitBypassEnabled
           ? -1
           : freePostAvailable
             ? FREE_POST_CONFIG.maxAllowed
-            : tier
-              ? ent.maxAllowed
+            : hasPaidPlan
+              ? (allowance?.capacity ?? summary?.maxAllowed ?? 0)
               : 0;
-        const maxPhotos = freePostAvailable
-          ? FREE_POST_CONFIG.maxPhotos
-          : tier
-            ? ent.maxPhotos
-            : FREE_POST_CONFIG.maxPhotos;
+        const maxPhotos = hasPaidPlan
+          ? (allowance?.maxPhotos ?? summary?.maxPhotos ?? FREE_POST_CONFIG.maxPhotos)
+          : FREE_POST_CONFIG.maxPhotos;
         const maxVideos = postingLimitBypassEnabled
           ? FREE_POST_CONFIG.maxVideos
           : freePostAvailable
             ? FREE_POST_CONFIG.maxVideos
-            : tier
-              ? ent.maxVideos
+            : hasPaidPlan
+              ? (allowance?.maxVideos ?? summary?.maxVideos ?? 0)
               : 0;
 
         if (cancelled) return;
@@ -456,9 +401,7 @@ export function PlanGate({ area, children, onTrialSelected }: PlanGateProps) {
             ? FREE_POST_CONFIG.videoAllowed
             : freePostAvailable
               ? FREE_POST_CONFIG.videoAllowed
-              : tier
-                ? ent.videoAllowed
-                : false,
+              : maxVideos > 0,
         });
       } catch {
         setError("failed");
@@ -486,85 +429,10 @@ export function PlanGate({ area, children, onTrialSelected }: PlanGateProps) {
   }, [area]);
 
   // Handle subscribe — redirect to checkout
-  async function handleSubscribe(plan: PlanDefinition) {
-    const key = `${plan.area}-${plan.tier}`;
-    setSubscribing(key);
-    setCheckoutError(null);
-    setPendingPayment(null);
-    try {
-      // Use the checkout API
-      const res = await fetch("/api/billing/create-checkout", {
-        method: "POST",
-        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ planId: getPlanCheckoutId(plan) }),
-      });
-      const data = await res.json();
-      if (data.checkoutUrl) {
-        window.location.href = data.checkoutUrl;
-        return;
-      }
-
-      if (data.pendingPayment && typeof data.pendingPayment.id === "string") {
-        setPendingPayment(data.pendingPayment);
-        setCheckoutError(data.error || "You already have a pending payment for this area.");
-        toast({
-          title: "Payment already started",
-          description: "Continue or cancel the pending payment before choosing another plan.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      throw new Error(data.error || "No checkout URL received");
-    } catch (err) {
-      logger.error("Checkout error", { error: err instanceof Error ? err.message : String(err) });
-      // Show user-facing error feedback
-      const errorMessage = err instanceof Error ? err.message : "Could not start checkout";
-      setCheckoutError(`${errorMessage}. Please try again.`);
-      toast({
-        title: "Checkout failed",
-        description: `${errorMessage}. Please try again.`,
-        variant: "destructive",
-      });
-    } finally {
-      setSubscribing(null);
-    }
-  }
-
-  async function handleCancelPendingPayment(paymentId: string) {
-    setCancellingPayment(true);
-    try {
-      const res = await fetch("/api/billing/cancel-pending", {
-        method: "POST",
-        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ paymentId }),
-      });
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Could not cancel pending payment");
-      }
-
-      setPendingPayment(null);
-      setCheckoutError(null);
-      toast({
-        title: "Pending payment cancelled",
-        description: "You can choose a payment plan again.",
-      });
-    } catch (err) {
-      logger.error("Pending payment cancellation error", {
-        error: err instanceof Error ? err.message : String(err),
-      });
-      const errorMessage = err instanceof Error ? err.message : "Could not cancel pending payment";
-      setCheckoutError(`${errorMessage}. Please try again.`);
-      toast({
-        title: "Cancellation failed",
-        description: `${errorMessage}. Please try again.`,
-        variant: "destructive",
-      });
-    } finally {
-      setCancellingPayment(false);
-    }
+  // Checkout confirms price, dates, slots and renewal before payment.
+  function handleSubscribe(plan: PlanDefinition) {
+    setSubscribing(`${plan.area}-${plan.tier}`);
+    window.location.assign(getPlanCheckoutHref(plan));
   }
 
   // Loading state
@@ -640,6 +508,22 @@ export function PlanGate({ area, children, onTrialSelected }: PlanGateProps) {
 
   if (!planInfo) return null;
 
+  // Events are free until they end: never block the form behind a plan.
+  if (freePosting) {
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-brand-green/25 bg-brand-green/5 px-4 py-3 text-sm">
+          <Badge className={AREA_COLORS[area]}>Events</Badge>
+          <span>
+            Events are <strong>free</strong> and stay visible until the event ends. They do not use
+            your trial or a paid slot.
+          </span>
+        </div>
+        {children}
+      </div>
+    );
+  }
+
   // Get plans for this area
   const areaPlans = PLANS.filter((p) => p.area === area);
 
@@ -658,17 +542,10 @@ export function PlanGate({ area, children, onTrialSelected }: PlanGateProps) {
           </p>
         </div>
 
-        <CheckoutRecoveryNotice
-          checkoutError={checkoutError}
-          pendingPayment={pendingPayment}
-          cancellingPayment={cancellingPayment}
-          onCancelPendingPayment={handleCancelPendingPayment}
-        />
-
         <InlinePlanGrid plans={areaPlans} onSubscribe={handleSubscribe} subscribing={subscribing} />
 
         <p className="text-center text-xs text-muted-foreground">
-          All plans include verification badge • Cancel anytime •{" "}
+          One reusable posting slot per plan • No automatic renewal •{" "}
           <Link href="/billing" className="text-brand-green underline">
             View full plan details
           </Link>
@@ -680,9 +557,8 @@ export function PlanGate({ area, children, onTrialSelected }: PlanGateProps) {
   // ── At listing limit → inline upgrade picker ──
   const isUnlimited = planInfo.maxAllowed === -1;
   if (!isUnlimited && planInfo.currentCount >= planInfo.maxAllowed) {
-    const tierOrder: Record<string, number> = { basic: 0, starter: 1, growth: 2, pro: 3 };
-    const currentTierOrder = planInfo.isTrial ? -1 : (tierOrder[planInfo.tier] ?? -1);
-    const upgradePlans = areaPlans.filter((p) => tierOrder[p.tier] > currentTierOrder);
+    // Slots stack: any retail plan adds one more active posting slot.
+    const upgradePlans = areaPlans;
 
     return (
       <div className="space-y-6">
@@ -691,7 +567,7 @@ export function PlanGate({ area, children, onTrialSelected }: PlanGateProps) {
             <div className="flex items-center gap-3">
               <AlertTriangle className="h-8 w-8 text-amber-500 flex-shrink-0" />
               <div>
-                <h2 className="font-display text-lg font-bold">Posting Limit Reached</h2>
+                <h2 className="font-display text-lg font-bold">All posting slots in use</h2>
                 <p className="text-sm text-muted-foreground">
                   You&apos;ve used{" "}
                   <strong>
@@ -701,19 +577,13 @@ export function PlanGate({ area, children, onTrialSelected }: PlanGateProps) {
                   <Badge variant="outline" className="capitalize mx-1 text-xs">
                     {planInfo.isTrial ? "Free Post" : planInfo.tier}
                   </Badge>{" "}
-                  plan. Upgrade to continue posting in this category.
+                  plan. Mark a sold item, deactivate a post from your dashboard, or add another slot
+                  below.
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
-
-        <CheckoutRecoveryNotice
-          checkoutError={checkoutError}
-          pendingPayment={pendingPayment}
-          cancellingPayment={cancellingPayment}
-          onCancelPendingPayment={handleCancelPendingPayment}
-        />
 
         {upgradePlans.length > 0 && (
           <InlinePlanGrid
@@ -736,10 +606,6 @@ export function PlanGate({ area, children, onTrialSelected }: PlanGateProps) {
         areaPlans={areaPlans}
         onSubscribe={handleSubscribe}
         subscribing={subscribing}
-        checkoutError={checkoutError}
-        pendingPayment={pendingPayment}
-        cancellingPayment={cancellingPayment}
-        onCancelPendingPayment={handleCancelPendingPayment}
       >
         {children}
       </PlanPickerWithTrial>
@@ -752,8 +618,8 @@ export function PlanGate({ area, children, onTrialSelected }: PlanGateProps) {
       <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/50 px-4 py-3">
         <Badge className={AREA_COLORS[area]}>{AREA_LABELS[area]}</Badge>
 
-        <Badge variant="outline" className="capitalize">
-          {planInfo.tier} Plan
+        <Badge variant="outline">
+          {PLAN_TIER_LABELS[planInfo.tier as PlanTier] ?? "Active"} plan
         </Badge>
 
         <div className="flex items-center gap-3 text-sm text-muted-foreground ml-auto">
@@ -794,10 +660,6 @@ function PlanPickerWithTrial({
   areaPlans,
   onSubscribe,
   subscribing,
-  checkoutError,
-  pendingPayment,
-  cancellingPayment,
-  onCancelPendingPayment,
   children,
 }: {
   onTrialSelected?: (days: 7 | 30) => void;
@@ -806,10 +668,6 @@ function PlanPickerWithTrial({
   areaPlans: PlanDefinition[];
   onSubscribe: (plan: PlanDefinition) => void;
   subscribing: string | null;
-  checkoutError: string | null;
-  pendingPayment: PendingPaymentRecovery | null;
-  cancellingPayment: boolean;
-  onCancelPendingPayment: (paymentId: string) => void;
   children: ReactNode;
 }) {
   const [showForm, setShowForm] = useState(false);
@@ -859,14 +717,6 @@ function PlanPickerWithTrial({
 
   return (
     <div className="space-y-3">
-      {checkoutError && (
-        <CheckoutRecoveryNotice
-          checkoutError={checkoutError}
-          pendingPayment={pendingPayment}
-          cancellingPayment={cancellingPayment}
-          onCancelPendingPayment={onCancelPendingPayment}
-        />
-      )}
       {/* Header + Free Post Combined */}
       {planInfo.isTrial ? (
         <div className="bg-gradient-to-r from-brand-green to-emerald-600 rounded-lg p-4 text-white shadow-md">
@@ -1016,14 +866,12 @@ function fetchSharedEntitlements(area: MarketplaceArea): Promise<PlanEntitlement
       .limit(1)
       .maybeSingle();
 
-    const tier = (entitlement?.tier as PlanTier) || null;
-
-    if (tier) {
-      const ent = getEntitlements(tier, area);
+    const allowance = entitlement ? await fetchAllowance(area) : null;
+    if (allowance?.hasPaidPlan) {
       return {
-        maxPhotos: ent.maxPhotos,
-        maxVideos: ent.maxVideos,
-        videoAllowed: ent.videoAllowed,
+        maxPhotos: allowance.maxPhotos,
+        maxVideos: allowance.maxVideos,
+        videoAllowed: allowance.maxVideos > 0,
       };
     }
 

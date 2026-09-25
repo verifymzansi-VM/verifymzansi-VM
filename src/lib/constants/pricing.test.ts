@@ -1,58 +1,79 @@
 import { describe, expect, it } from "vitest";
 import {
   PLANS,
+  LEGACY_PLANS,
+  RETAIL_OFFERS,
+  ENTERPRISE_PLANS,
   ADDON_PRICES,
-  PAY_PER_POST,
   TRIAL_CONFIG,
   FREE_POST_CONFIG,
   PAID_POST_CONFIG,
   ACTIVE_MARKETPLACE_AREAS,
+  formatDurationDays,
   getPlansForArea,
   getPlan,
+  getRetailSavingsCents,
+  isLegacyPlanTier,
   type PlanDefinition,
 } from "./pricing";
 
-describe("pricing constants", () => {
-  it("defines exactly 10 plans (3 areas × 3 tiers + 1 extra basic)", () => {
-    expect(PLANS).toHaveLength(10);
+describe("retail pricing ladder", () => {
+  it("sells R50 / 30 days, R250 / 6 months and R450 / 12 months", () => {
+    expect(RETAIL_OFFERS.map((o) => [o.tier, o.priceCents, o.durationDays])).toEqual([
+      ["month", 5000, 30],
+      ["half_year", 25000, 180],
+      ["year", 45000, 365],
+    ]);
   });
 
+  it("labels 6 months Most popular and 12 months Best value, with the savings", () => {
+    const [month, half, year] = RETAIL_OFFERS;
+    expect(month?.promoLabel).toBe("Flexible");
+    expect(half?.promoLabel).toBe("Most popular");
+    expect(year?.promoLabel).toBe("Best value");
+    expect(getRetailSavingsCents(half!)).toBe(5000);
+    expect(getRetailSavingsCents(year!)).toBe(15000);
+    expect(getRetailSavingsCents(month!)).toBe(0);
+  });
+
+  it("defines one retail plan per area and duration, each with one reusable slot", () => {
+    expect(PLANS).toHaveLength(9);
+    for (const area of ACTIVE_MARKETPLACE_AREAS) {
+      expect(getPlansForArea(area).map((p) => p.tier)).toEqual(["month", "half_year", "year"]);
+    }
+    for (const plan of PLANS) {
+      expect(plan.slotCapacity).toBe(1);
+      expect(plan.billingFrequency).toBe("fixed_term");
+      expect(plan.legacy).toBeUndefined();
+    }
+  });
+
+  it("keeps old tiers only as legacy definitions", () => {
+    expect(LEGACY_PLANS.every((p) => p.legacy && isLegacyPlanTier(p.tier))).toBe(true);
+    expect(PLANS.some((p) => isLegacyPlanTier(p.tier))).toBe(false);
+    expect(
+      LEGACY_PLANS.find((p) => p.area === "MZANSI_MARKET" && p.tier === "basic")?.priceCents
+    ).toBe(3000);
+  });
+
+  it("prices bulk slots and leaves 1,000+ to custom quotes", () => {
+    expect(ENTERPRISE_PLANS).toHaveLength(12);
+    expect(ENTERPRISE_PLANS.find((p) => p.planCode === "ENT_50_3M")?.priceCents).toBe(500000);
+    expect(ENTERPRISE_PLANS.find((p) => p.planCode === "ENT_500_12M")?.priceCents).toBe(10000000);
+    expect(ENTERPRISE_PLANS.some((p) => p.slots >= 1000)).toBe(false);
+  });
+
+  it("formats durations", () => {
+    expect(formatDurationDays(30)).toBe("30 days");
+    expect(formatDurationDays(180)).toBe("6 months");
+    expect(formatDurationDays(365)).toBe("12 months");
+  });
+});
+
+describe("pricing constants", () => {
   it("covers exactly the three marketplace areas", () => {
     const areas = Array.from(new Set(PLANS.map((p) => p.area)));
     expect(areas).toHaveLength(3);
-    expect(areas).toContain("MZANSI_MARKET");
-    expect(areas).toContain("MZANSI_BUSINESS");
-    expect(areas).toContain("PROMOTIONS_EVENTS");
-  });
-
-  it("covers all three tiers per area", () => {
-    for (const area of ["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"]) {
-      const tiers = PLANS.filter((p) => p.area === area).map((p) => p.tier);
-      expect(tiers).toContain("starter");
-      expect(tiers).toContain("growth");
-      expect(tiers).toContain("pro");
-    }
-  });
-
-  it("all plans have positive price in cents", () => {
-    for (const plan of PLANS) {
-      expect(plan.priceCents).toBeGreaterThan(0);
-    }
-  });
-
-  it("pro plans are the most expensive per area", () => {
-    for (const area of ["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"]) {
-      const areaPlans = PLANS.filter((p) => p.area === area);
-      const pro = areaPlans.find((p) => p.tier === "pro")!;
-      const starter = areaPlans.find((p) => p.tier === "starter")!;
-      expect(pro.priceCents).toBeGreaterThan(starter.priceCents);
-    }
-  });
-
-  it("all plans have billing frequency 30_days", () => {
-    for (const plan of PLANS) {
-      expect(plan.billingFrequency).toBe("30_days");
-    }
   });
 
   it("defines addon prices", () => {
@@ -61,14 +82,8 @@ describe("pricing constants", () => {
     expect(ADDON_PRICES.urgent).toBeGreaterThan(0);
   });
 
-  it("defines pay-per-post prices", () => {
-    expect(PAY_PER_POST["14_days"]).toBeGreaterThan(0);
-    expect(PAY_PER_POST["30_days"]).toBeGreaterThan(PAY_PER_POST["14_days"]);
-  });
-
   it("defines trial config", () => {
     expect(TRIAL_CONFIG.durationDays).toBe(30);
-    expect(TRIAL_CONFIG.tier).toBe("starter");
     expect(TRIAL_CONFIG.maxListings).toBeGreaterThan(0);
   });
 
@@ -85,38 +100,20 @@ describe("pricing constants", () => {
   });
 });
 
-describe("getPlansForArea", () => {
-  it("returns correct number of plans for each area", () => {
-    expect(getPlansForArea("MZANSI_MARKET")).toHaveLength(4);
-    expect(getPlansForArea("MZANSI_BUSINESS")).toHaveLength(3);
-    expect(getPlansForArea("PROMOTIONS_EVENTS")).toHaveLength(3);
+describe("getPlan", () => {
+  it("finds retail and legacy plans", () => {
+    expect(getPlan("MZANSI_BUSINESS", "half_year")?.priceCents).toBe(25000);
+    const legacy = getPlan("MZANSI_BUSINESS", "growth");
+    expect(legacy?.legacy).toBe(true);
+    expect(legacy?.priceCents).toBe(40000);
+  });
+
+  it("returns undefined for bulk tiers, which are not per-area plans", () => {
+    expect(getPlan("MZANSI_MARKET", "enterprise")).toBeUndefined();
   });
 
   it("returns plans only for the requested area", () => {
     const plans = getPlansForArea("MZANSI_MARKET");
     expect(plans.every((p: PlanDefinition) => p.area === "MZANSI_MARKET")).toBe(true);
-  });
-});
-
-describe("getPlan", () => {
-  it("finds a specific plan", () => {
-    const plan = getPlan("MZANSI_BUSINESS", "growth");
-    expect(plan).toBeDefined();
-    expect(plan?.name).toBe("Mzansi Business Growth");
-    expect(plan?.priceCents).toBe(40000);
-  });
-
-  it("returns undefined for non-existent combo", () => {
-    // @ts-expect-error testing invalid
-    expect(getPlan("MZANSI_MARKET", "enterprise")).toBeUndefined();
-  });
-});
-
-describe("active marketplace areas", () => {
-  it("ACTIVE_MARKETPLACE_AREAS contains exactly the three platform areas", () => {
-    expect(ACTIVE_MARKETPLACE_AREAS).toHaveLength(3);
-    expect(ACTIVE_MARKETPLACE_AREAS).toContain("MZANSI_MARKET");
-    expect(ACTIVE_MARKETPLACE_AREAS).toContain("MZANSI_BUSINESS");
-    expect(ACTIVE_MARKETPLACE_AREAS).toContain("PROMOTIONS_EVENTS");
   });
 });

@@ -4,22 +4,33 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 import { CreditCard } from "lucide-react";
-import { getActivePlansByArea } from "@/lib/constants/pricing";
-import { PricingPlanGrid } from "@/components/billing/plan-grid";
-import { PlanTabs } from "@/components/billing/plan-tabs";
+import { RetailPricing } from "@/components/billing/retail-pricing";
+import { EnterprisePricing } from "@/components/billing/enterprise-pricing";
+import { getCommercialCatalog } from "@/lib/commercial/plans";
+import { getCommercialSettings } from "@/lib/commercial/settings";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getTrustPublicConfig } from "@/lib/trust-public-config";
 import { HELLO_CONTACT_EMAIL } from "@/lib/contact-email";
 
 export const metadata = {
   title: "Pricing",
   description:
-    "View VerifyMzansi pricing for marketplace listings, business profiles, tourism posts, venues, and events. Start free, then upgrade for stronger placement.",
+    "Simple VerifyMzansi pricing: R50 for 30 days, R250 for 6 months, R450 for 12 months. Events are free. Bulk and organisation programmes on request.",
 };
 
-export default function PricingPage() {
-  const { marketPlans, businessPlans, promotionPlans } = getActivePlansByArea();
+export const revalidate = 300;
+
+async function loadSettings() {
+  try {
+    return await getCommercialSettings(createAdminClient() as never);
+  } catch {
+    return null;
+  }
+}
+
+export default async function PricingPage() {
+  const [catalog, settings] = await Promise.all([getCommercialCatalog(), loadSettings()]);
   const trustConfig = getTrustPublicConfig();
-  const allPlans = [...marketPlans, ...businessPlans, ...promotionPlans];
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "WebPage",
@@ -27,15 +38,15 @@ export default function PricingPage() {
     url: `${process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com"}/pricing`,
     mainEntity: {
       "@type": "ItemList",
-      itemListElement: allPlans.map((plan, i) => ({
+      itemListElement: catalog.retail.map((offer, i) => ({
         "@type": "ListItem",
         position: i + 1,
         item: {
           "@type": "Offer",
-          name: `${plan.area.replace(/_/g, " ")} — ${plan.tier}`,
+          name: `VerifyMzansi listing — ${offer.label}`,
           priceCurrency: "ZAR",
-          price: (plan.priceCents / 100).toFixed(2),
-          description: `VerifyMzansi ${plan.tier} plan for ${plan.area.replace(/_/g, " ")}`,
+          price: (offer.priceCents / 100).toFixed(2),
+          description: `One active posting slot for ${offer.label.toLowerCase()} in Mzansi Market, Mzansi Business or Tourism`,
           seller: { "@type": "Organization", name: "VerifyMzansi" },
         },
       })),
@@ -56,26 +67,27 @@ export default function PricingPage() {
           <div className="container-page py-6 sm:py-8">
             <PageHeader
               title="Pricing"
-              description="Start free for marketplace listings, business profiles, tourism posts, venues, and events. Upgrade when you want stronger placement."
+              description="One simple price in every section. R50 for 30 days, R250 for 6 months, R450 for 12 months — and events are free."
               breadcrumbs={[{ label: "Pricing" }]}
             />
           </div>
         </section>
 
         <div className="container-page space-y-8 py-8 sm:py-10">
-          <TrialPolicy />
-          <PlanTabs
-            marketPlans={marketPlans}
-            businessPlans={businessPlans}
-            promotionPlans={promotionPlans}
-            PlanGrid={PricingPlanGrid}
-            hideEmptyPromotionPlans
-          />
+          <RetailPricing offers={catalog.retail} />
 
           <p className="mx-auto max-w-2xl text-center text-xs text-muted-foreground">
-            Plans run for 30 days and do not auto-renew unless checkout clearly states recurring
-            billing is enabled. No payment is taken until you approve the hosted checkout.
+            Plans are prepaid for a fixed period and never renew automatically. Nothing is visible
+            until payment is confirmed. When a plan ends, your posts stay saved in your dashboard
+            and can be reactivated.
           </p>
+
+          <TrialPolicy />
+
+          <EnterprisePricing
+            plans={catalog.enterprise}
+            checkoutEnabled={settings?.features.enterpriseCheckout ?? true}
+          />
 
           <section className="mx-auto grid max-w-5xl gap-4 md:grid-cols-2">
             <div className="surface-card p-5 transition-shadow duration-200 hover:elev-sm sm:p-6">

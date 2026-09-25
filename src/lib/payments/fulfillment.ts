@@ -35,6 +35,14 @@ const ADDON_DURATIONS: Record<string, { key: string; days: number }> = {
   urgent_promotion: { key: "urgent_days", days: URGENT_DURATION_DAYS },
 };
 
+function isRetiredAfterCheckout(
+  retiredAt: string | null | undefined,
+  paymentCreatedAt: string | null | undefined
+): boolean {
+  if (!retiredAt || !paymentCreatedAt) return false;
+  return Date.parse(retiredAt) > Date.parse(paymentCreatedAt);
+}
+
 /** Validate the catalog in application code, then commit all effects under the
  * database payment lock. Never fall back to separate writes if the RPC is absent.
  * The database rechecks stored metadata, amount, plan and ownership under lock. */
@@ -53,14 +61,16 @@ export async function fulfillPayment(
     if (!meta) throw new Error(`Payment ${payment.id} has no parseable metadata — cannot fulfil`);
     if (meta.type === "subscription") {
       if (typeof meta.plan_id !== "string") throw new Error("Subscription has no plan ID");
-      const { plan, error } = await resolveBillingPlanSelection(supabase, meta.plan_id, {
-        requireActive: true,
-      });
+      // Plans retired after checkout still honour what the customer paid for.
+      const { plan, error } = await resolveBillingPlanSelection(supabase, meta.plan_id);
       if (error) throw new Error(`Plan lookup failed: ${error.message}`);
       if (!plan) throw new Error(`Plan ${meta.plan_id} not found or inactive`);
-      const catalogError = validateCanonicalPaidPlan(plan);
+      const retiredAfterCheckout = isRetiredAfterCheckout(plan.retired_at, payment.created_at);
+      if (!plan.active && !retiredAfterCheckout)
+        throw new Error(`Plan ${meta.plan_id} not found or inactive`);
+      const catalogError = retiredAfterCheckout ? null : validateCanonicalPaidPlan(plan);
       if (catalogError) throw new Error(`Paid plan validation failed: ${catalogError}`);
-      if (payment.area !== plan.area || meta.area !== plan.area)
+      if (plan.area && (payment.area !== plan.area || meta.area !== plan.area))
         throw new Error("Payment area does not match canonical plan");
       if (payment.amount_cents !== plan.price_cents)
         throw new Error("Payment amount does not match canonical plan");

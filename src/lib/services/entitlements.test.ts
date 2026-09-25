@@ -13,12 +13,15 @@ describe("entitlements service", () => {
     it("finds existing plan by tier and area", () => {
       const plan = getPlan("starter", "MZANSI_MARKET");
       expect(plan).toBeDefined();
-      expect(plan?.name).toBe("Mzansi Market Starter");
+      expect(plan?.name).toBe("Mzansi Market Starter (legacy)");
     });
 
-    it("returns undefined for non-existent plan", () => {
-      // @ts-expect-error testing invalid tier
+    it("returns undefined for bulk tiers, which are not per-area plans", () => {
       expect(getPlan("enterprise", "MZANSI_MARKET")).toBeUndefined();
+    });
+
+    it("finds retail plans", () => {
+      expect(getPlan("year", "MZANSI_MARKET")?.priceCents).toBe(45000);
     });
   });
 
@@ -47,11 +50,17 @@ describe("entitlements service", () => {
       expect(ent.featuredAllowed).toBe(true);
     });
 
-    it("returns free-tier defaults for unknown plan", () => {
-      // @ts-expect-error testing non-existent
+    it("gives bulk and programme slots the paid add-on features", () => {
       const ent = getEntitlements("enterprise", "MZANSI_MARKET");
-      expect(ent.maxAllowed).toBe(1);
       expect(ent.maxPhotos).toBe(10);
+      expect(ent.boostAllowed).toBe(true);
+    });
+
+    it("gives retail plans one slot with add-ons", () => {
+      const ent = getEntitlements("half_year", "MZANSI_BUSINESS");
+      expect(ent.maxAllowed).toBe(1);
+      expect(ent.boostAllowed).toBe(true);
+      expect(ent.maxVideos).toBe(1);
     });
 
     it("works for all three marketplace areas", () => {
@@ -69,7 +78,7 @@ describe("entitlements service", () => {
     it("blocks when at limit", () => {
       const result = canCreateListing(3, "starter", "MZANSI_MARKET");
       expect(result.allowed).toBe(false);
-      expect(result.reason).toContain("3 live listings");
+      expect(result.reason).toContain("All 3 active posting slots");
     });
 
     it("allows for pro under limit", () => {
@@ -80,7 +89,7 @@ describe("entitlements service", () => {
     it("blocks for pro at limit", () => {
       const result = canCreateListing(27, "pro", "MZANSI_MARKET");
       expect(result.allowed).toBe(false);
-      expect(result.reason).toContain("27 live listings");
+      expect(result.reason).toContain("All 27 active posting slots");
     });
   });
 
@@ -88,7 +97,7 @@ describe("entitlements service", () => {
     it("blocks boost on starter plan", () => {
       const result = canBoost("starter", "MZANSI_MARKET");
       expect(result.allowed).toBe(false);
-      expect(result.reason).toContain("Upgrade");
+      expect(result.reason).toContain("R50");
     });
 
     it("allows boost on growth plan", () => {
@@ -106,7 +115,7 @@ describe("entitlements service", () => {
     it("blocks featured on starter plan", () => {
       const result = canFeatured("starter", "MZANSI_MARKET");
       expect(result.allowed).toBe(false);
-      expect(result.reason).toContain("Upgrade");
+      expect(result.reason).toContain("R50");
     });
 
     it("blocks featured on growth plan", () => {
@@ -124,7 +133,7 @@ describe("entitlements service", () => {
     it("blocks urgent on starter plan", () => {
       const result = canUrgent("starter", "MZANSI_MARKET");
       expect(result.allowed).toBe(false);
-      expect(result.reason).toContain("Upgrade");
+      expect(result.reason).toContain("R50");
     });
 
     it("blocks urgent on growth plan", () => {

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
 import { type NextRequest } from "next/server";
 import { POST as cancelRoute } from "./route";
 import { createClient } from "@/lib/supabase/server";
@@ -70,9 +70,25 @@ describe("POST /api/billing/cancel", () => {
   };
 
   beforeEach(() => {
+    process.env.VM_ENABLE_LEGACY_PLAN_CHANGES = "1";
     vi.clearAllMocks();
     vi.mocked(createClient).mockResolvedValue(mockSupabase as never);
     vi.mocked(createAdminClient).mockReturnValue(mockAdmin as never);
+  });
+
+  afterEach(() => {
+    delete process.env.VM_ENABLE_LEGACY_PLAN_CHANGES;
+  });
+
+  it("is retired with a clear 410 now that plans are prepaid slots", async () => {
+    delete process.env.VM_ENABLE_LEGACY_PLAN_CHANGES;
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: CONFIRMED_USER } });
+    const res = await cancelRoute(
+      createMockRequest({ entitlementId: "550e8400-e29b-41d4-a716-446655440000" })
+    );
+    const data = await res.json();
+    expect(res.status).toBe(410);
+    expect(data.code).toBe("LEGACY_PLAN_ROUTE_RETIRED");
   });
 
   it("returns 401 when user is unauthenticated", async () => {

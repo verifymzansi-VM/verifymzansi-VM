@@ -301,8 +301,8 @@ export async function sendPaymentReceiptEmail(
   } else {
     const expiryDate = details?.expiresAt ? formatReceiptDate(details.expiresAt) : null;
     const activeUntilLine = expiryDate
-      ? `Your subscription is active until ${expiryDate}.`
-      : "Your subscription is active for 30 days from the payment date.";
+      ? `Your plan is active until ${expiryDate}.`
+      : "Your plan is active from the payment date for its purchased period.";
     bodyHtml = `
       ${paragraph(`Hi ${accountName},`)}
       ${paragraph(`Thank you for your payment. ${activeUntilLine}`)}

@@ -4,10 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listingSchema } from "@/lib/validations/listing";
 import { logAuditEvent } from "@/lib/services/audit";
-import { getEntitlements, canCreateListing } from "@/lib/services/entitlements";
+import {
+  getActivePostingPlanOrResponse,
+  slotLimitReason,
+} from "@/app/api/_lib/posting-entitlements";
 import { checkLocalRateLimit, checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
-import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import { parseJsonRequest, parseAndValidateSearchParams } from "@/lib/utils/api";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
@@ -23,7 +25,7 @@ import {
 import { ensureAccountProfile } from "@/lib/account/ensure-profile";
 import { hasPhoneNumber } from "@/lib/account/require-phone";
 import { resolveAccountVerification } from "@/lib/account/resolved-verification";
-import type { MarketplaceArea, PlanTier } from "@/types/enums";
+import type { MarketplaceArea } from "@/types/enums";
 import {
   normalizeMarketplaceCategoryParam,
   normalizeMarketplaceConditionParam,
@@ -545,44 +547,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── Check entitlement / plan limits ──────────────────────
-    // Check if user has a paid entitlement (not expired)
-    const { data: activeEntitlement, error: entitlementError } = await supabase
-      .from("entitlements")
-      .select("tier")
-      .eq("user_id", user.id)
-      .eq("area", AREA)
-      .eq("status", "active")
-      .gt("expires_at", new Date().toISOString())
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (entitlementError) {
-      log.error("Failed to check entitlements", {
-        userId: user.id,
-        error: entitlementError.message,
-      });
-      return NextResponse.json({ error: "Unable to verify subscription status" }, { status: 503 });
+    // ── Check slot allowance (paid, programme or sponsored) ──
+    const planResult = await getActivePostingPlanOrResponse(supabase, user.id, AREA, log);
+    if (planResult.response) {
+      return planResult.response;
     }
-
-    const hasPaidPlan = !!activeEntitlement;
-    const tier = (activeEntitlement?.tier as string) || null;
+    const { hasPaidPlan, tier, entitlements: ent } = planResult;
     const postingLimitBypassEnabled =
       isPostingLimitBypassEnabled() ||
       (await verifyCapabilityFromDb(user, "posting:bypass_limits"));
-
-    // ── Enforce photo/video limits based on plan ─────────────
-    // Validate before claiming a free-post slot so validation failures never
-    // consume one of the user's free posts.
-    const ent =
-      hasPaidPlan && tier
-        ? getEntitlements(tier as PlanTier, AREA)
-        : {
-            maxPhotos: FREE_POST_CONFIG.maxPhotos,
-            maxVideos: FREE_POST_CONFIG.maxVideos,
-            videoAllowed: FREE_POST_CONFIG.videoAllowed,
-          };
 
     if (data.images.length > ent.maxPhotos) {
       return NextResponse.json(
@@ -661,9 +634,7 @@ export async function POST(request: NextRequest) {
     // -1 skips the check (unlimited plans, bypass mode, and free-post users
     // whose limit is enforced by the free_posts_used ledger).
     const maxAllowedForInsert =
-      hasPaidPlan && tier && !postingLimitBypassEnabled
-        ? getEntitlements(tier as PlanTier, AREA).maxAllowed
-        : -1;
+      hasPaidPlan && tier && !postingLimitBypassEnabled ? ent.maxAllowed : -1;
 
     // ── Prepare listing record ───────────────────────────────
     const priceCents = Math.round(+(data.price_zar * 100).toPrecision(12));
@@ -744,9 +715,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (limitReached) {
-      const check = canCreateListing(maxAllowedForInsert, tier as PlanTier, AREA);
       return NextResponse.json(
-        { error: "Listing limit reached", reason: check.reason },
+        { error: "Listing limit reached", reason: slotLimitReason(ent.maxAllowed) },
         { status: 403 }
       );
     }

@@ -2,9 +2,13 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
+import { getPostingAllowance } from "@/lib/commercial/allowance";
+import { getCommercialSettings } from "@/lib/commercial/settings";
 import { getEntitlements, type Entitlements } from "@/lib/services/entitlements";
 import type { AppLogger } from "@/lib/utils/logger";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
+
+export { slotLimitReason } from "@/lib/services/entitlements";
 
 type EntitlementQueryClient = Pick<SupabaseClient, "from">;
 
@@ -63,7 +67,7 @@ function getFreeEntitlements(): Entitlements {
   };
 }
 
-async function getActivePostingPlan(
+async function getLegacyPostingPlan(
   supabase: EntitlementQueryClient,
   userId: string,
   area: MarketplaceArea,
@@ -81,10 +85,7 @@ async function getActivePostingPlan(
     .maybeSingle();
 
   if (entitlementError) {
-    log.error("Failed to check entitlements", {
-      userId,
-      error: entitlementError.message,
-    });
+    log.error("Failed to check entitlements", { userId, error: entitlementError.message });
     return {
       response: NextResponse.json(
         { error: "Unable to verify subscription status" },
@@ -93,13 +94,52 @@ async function getActivePostingPlan(
     };
   }
 
-  const hasPaidPlan = !!activeEntitlement;
   const tier = (activeEntitlement?.tier as PlanTier | null | undefined) ?? null;
+  return {
+    hasPaidPlan: Boolean(activeEntitlement),
+    tier,
+    entitlements: tier ? getEntitlements(tier, area) : getFreeEntitlements(),
+  };
+}
+
+async function getActivePostingPlan(
+  supabase: EntitlementQueryClient,
+  userId: string,
+  area: MarketplaceArea,
+  log: AppLogger
+): Promise<ActivePostingPlanResult> {
+  // Paid, programme and sponsored capacity all come from active posting slots.
+  let allowance;
+  try {
+    allowance = await getPostingAllowance(userId, area);
+  } catch (error) {
+    // Deploy-order safety: before the slot migration is applied, fall back to
+    // the per-area entitlement summary. Publication triggers stay authoritative.
+    log.warn("Posting allowance unavailable; using entitlement summary", {
+      userId,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    return getLegacyPostingPlan(supabase, userId, area, log);
+  }
+
+  if (!allowance.hasPaidPlan) {
+    return { hasPaidPlan: false, tier: null, entitlements: getFreeEntitlements() };
+  }
 
   return {
-    hasPaidPlan,
-    tier,
-    entitlements: hasPaidPlan && tier ? getEntitlements(tier, area) : getFreeEntitlements(),
+    hasPaidPlan: true,
+    // Slots are area-agnostic; the tier only labels messages and add-on checks.
+    tier: "month",
+    entitlements: {
+      maxAllowed: allowance.capacity,
+      maxPhotos: allowance.maxPhotos,
+      maxVideos: allowance.maxVideos,
+      maxPostsPerMonth: allowance.capacity,
+      videoAllowed: allowance.maxVideos > 0,
+      boostAllowed: allowance.boostAllowed,
+      featuredAllowed: allowance.boostAllowed,
+      urgentAllowed: allowance.boostAllowed,
+    },
   };
 }
 
@@ -148,6 +188,42 @@ export function enforcePostingMediaLimits({
     return NextResponse.json(
       { error: `Maximum ${entitlements.maxVideos} videos allowed on your plan` },
       { status: 422 }
+    );
+  }
+
+  return null;
+}
+
+/**
+ * Free events: fair-use creation limit per rolling 30 days. Active-event
+ * limits are enforced again by the publication trigger.
+ */
+export async function enforceEventCreationLimit(
+  admin: SupabaseClient,
+  userId: string,
+  log: AppLogger
+): Promise<NextResponse | null> {
+  const settings = await getCommercialSettings(admin as never);
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { count, error } = await admin
+    .from("promotions")
+    .select("id", { count: "exact", head: true })
+    .eq("owner_id", userId)
+    .eq("promotion_type", "event")
+    .gte("created_at", since);
+
+  if (error) {
+    log.error("Failed to check event fair use", { userId, error: error.message });
+    return NextResponse.json({ error: "Unable to verify event limits" }, { status: 503 });
+  }
+
+  if ((count ?? 0) >= settings.events.maxCreatedPer30Days) {
+    return NextResponse.json(
+      {
+        error: "Event limit reached",
+        reason: `Events are free, with up to ${settings.events.maxCreatedPer30Days} new events per 30 days. Contact VerifyMzansi for an organiser allowance.`,
+      },
+      { status: 429 }
     );
   }
 

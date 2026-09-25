@@ -18,8 +18,13 @@ vi.mock("@/components/layout/page-header", () => ({
     </div>
   ),
 }));
-vi.mock("@/components/billing/plan-grid", () => ({
-  PricingPlanGrid: () => <div>Plan grid</div>,
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: () => {
+    throw new Error("No database in unit tests");
+  },
+}));
+vi.mock("@/components/billing/retail-pricing", () => ({
+  RetailPricing: () => <div>Plan grid</div>,
 }));
 
 describe("public trust pages", () => {
@@ -87,8 +92,8 @@ describe("public trust pages", () => {
     expect(screen.getByText(/Plans do not auto-renew/i)).toBeInTheDocument();
   });
 
-  it("renders payment transparency on pricing", () => {
-    render(<PricingPage />);
+  it("renders payment transparency on pricing", async () => {
+    render(await PricingPage());
 
     expect(screen.getByRole("heading", { name: "Pricing" })).toBeInTheDocument();
     expect(screen.getByText("Payment transparency")).toBeInTheDocument();

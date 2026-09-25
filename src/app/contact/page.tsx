@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Loader2, CheckCircle2, Send } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
@@ -48,6 +48,12 @@ const contactCategories = [
     response: "Business claim requests require proof of authority and are reviewed manually.",
   },
   {
+    value: "organisation_proposal",
+    label: "Organisation or bulk posting proposal",
+    response:
+      "Proposals for organisations and 50+ active posting slots are answered within 2 business days.",
+  },
+  {
     value: "general_support",
     label: "General support",
     response: "General messages are answered within 1-2 business days.",
@@ -69,6 +75,13 @@ export default function ContactPage() {
   const { toast } = useToast();
   const runtimeConfig = getPublicRuntimeConfig();
   const selectedCategory = contactCategories.find((item) => item.value === category);
+
+  // Deep links such as /contact?topic=organisation_proposal preselect a category.
+  useEffect(() => {
+    const topic = new URLSearchParams(window.location.search).get("topic");
+    const match = contactCategories.find((item) => item.value === topic);
+    if (match) setCategory(match.value);
+  }, []);
 
   const handleTurnstileSuccess = useCallback((token: string) => {
     setTurnstileToken(token);

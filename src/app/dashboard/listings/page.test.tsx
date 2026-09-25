@@ -99,6 +99,12 @@ vi.mock("@/components/listings/resubmit-button", () => ({
   ResubmitButton: () => <button type="button">Resubmit</button>,
 }));
 
+vi.mock("@/components/listings/content-lifecycle-button", () => ({
+  ContentLifecycleButton: ({ action }: { action: string }) => (
+    <button type="button">{`lifecycle:${action}`}</button>
+  ),
+}));
+
 vi.mock("@/components/listings/delete-post-button", () => ({
   DeletePostButton: () => <button type="button">Delete</button>,
 }));

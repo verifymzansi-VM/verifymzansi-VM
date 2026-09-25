@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
 import type { NextRequest } from "next/server";
 
 const {
@@ -63,6 +63,7 @@ describe("POST /api/billing/change-plan", () => {
   const adminFrom = vi.fn();
 
   beforeEach(() => {
+    process.env.VM_ENABLE_LEGACY_PLAN_CHANGES = "1";
     vi.clearAllMocks();
     mockCheckRateLimit.mockResolvedValue({ limited: false });
     mockGetClientIp.mockReturnValue("127.0.0.1");
@@ -79,6 +80,18 @@ describe("POST /api/billing/change-plan", () => {
       success: true,
       data: { currentEntitlementId: "ent-1", newPlanId: "plan-2" },
     });
+  });
+
+  afterEach(() => {
+    delete process.env.VM_ENABLE_LEGACY_PLAN_CHANGES;
+  });
+
+  it("is retired with a clear 410 now that plans are prepaid slots", async () => {
+    delete process.env.VM_ENABLE_LEGACY_PLAN_CHANGES;
+    const res = await POST(makeRequest());
+    const data = await res.json();
+    expect(res.status).toBe(410);
+    expect(data.code).toBe("LEGACY_PLAN_ROUTE_RETIRED");
   });
 
   it("blocks plan downgrades (pro → growth)", async () => {

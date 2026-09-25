@@ -4,16 +4,23 @@ import type { MarketplaceArea, PlanTier } from "@/types/enums";
 
 export interface BillingPlanRow {
   id: string;
-  area: MarketplaceArea;
+  /** Null for bulk plans that cover every area. */
+  area: MarketplaceArea | null;
   tier: PlanTier;
   name: string;
   price_cents: number;
   active: boolean;
   billing_frequency?: string;
   features?: Record<string, unknown>;
+  plan_code?: string | null;
+  duration_days?: number | null;
+  slot_capacity?: number | null;
+  monthly_activation_limit?: number | null;
+  is_legacy?: boolean;
+  retired_at?: string | null;
 }
 
-type PlanTokenMatch = Pick<BillingPlanRow, "area" | "tier">;
+type PlanTokenMatch = { area: MarketplaceArea; tier: PlanTier };
 
 type SupabasePlanClient = {
   from: (table: "plans") => {
@@ -28,7 +35,8 @@ type PlanQueryResult = Promise<{
   error?: { message?: string; code?: string } | null;
 }>;
 
-const PLAN_SELECT = "id, area, tier, name, price_cents, active, billing_frequency, features";
+const PLAN_SELECT =
+  "id, area, tier, name, price_cents, active, billing_frequency, features, plan_code, duration_days, slot_capacity, monthly_activation_limit, is_legacy, retired_at";
 
 const ACTIVE_PLAN_TOKEN_MAP = new Map<string, PlanTokenMatch>(
   getActivePlans().map((plan) => [getStablePlanId(plan.area, plan.tier), plan])

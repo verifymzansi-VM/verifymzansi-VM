@@ -3,11 +3,10 @@ import { Gift, ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
-import { getActivePlansByArea } from "@/lib/constants/pricing";
+import { getCommercialCatalog } from "@/lib/commercial/plans";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { BillingPlanGrid } from "@/components/billing/plan-grid";
-import { PlanTabs } from "@/components/billing/plan-tabs";
+import { RetailPricing } from "@/components/billing/retail-pricing";
 import { PageHeader } from "@/components/layout/page-header";
 
 export const metadata = {
@@ -16,8 +15,10 @@ export const metadata = {
     "View your current plan, manage billing, and upgrade your VerifyMzansi subscription.",
 };
 
-export default function BillingPage() {
-  const { marketPlans, businessPlans, promotionPlans } = getActivePlansByArea();
+export const dynamic = "force-dynamic";
+
+export default async function BillingPage() {
+  const catalog = await getCommercialCatalog();
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -27,7 +28,7 @@ export default function BillingPage() {
           <PageHeader
             centered
             title="Choose your plan"
-            description="Choose an introductory trial, then a paid plan to keep posting after it ends."
+            description="R50 for 30 days, R250 for 6 months or R450 for 12 months. Each plan is one reusable posting slot."
             className="border-0 pb-0"
           />
 
@@ -55,19 +56,14 @@ export default function BillingPage() {
             </div>
           </div>
 
-          <TrialPolicy />
-          <PlanTabs
-            marketPlans={marketPlans}
-            businessPlans={businessPlans}
-            promotionPlans={promotionPlans}
-            PlanGrid={BillingPlanGrid}
-          />
+          <RetailPricing offers={catalog.retail} />
 
           <p className="mx-auto max-w-2xl text-center text-xs text-muted-foreground">
-            Plans run for 30 days and do not auto-renew unless checkout clearly states recurring
-            billing is enabled. Cancellation stops the next renewal and does not remove the current
-            30-day entitlement. Paid visibility does not bypass moderation.
+            Plans are prepaid and never renew automatically. Buy another slot at any time to post
+            more at once. Paid visibility does not bypass moderation.
           </p>
+
+          <TrialPolicy />
         </div>
       </main>
       <Footer />

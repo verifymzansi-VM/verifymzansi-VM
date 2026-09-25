@@ -42,6 +42,7 @@ const contactFormSchema = z.object({
       "payment_refund",
       "security_vulnerability",
       "business_claim",
+      "organisation_proposal",
       "general_support",
     ])
     .default("general_support"),

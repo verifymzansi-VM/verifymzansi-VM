@@ -110,11 +110,11 @@ WHERE tier::text IN ('basic','starter','growth','pro');
 
 INSERT INTO public.plans(area,tier,name,price_cents,billing_frequency,features,active,plan_code,duration_days,slot_capacity,
   monthly_activation_limit,promo_label,compare_at_cents,sort_order)
-SELECT a.area, d.tier, d.name, d.price, 'fixed_term',
+SELECT a.area, d.tier, a.label || ' — ' || d.name, d.price, 'fixed_term',
   jsonb_build_object('maxListings',1,'maxBusinesses',1,'maxPromotions',1,'maxPhotos',10,'maxVideos',1,'maxPostsPerMonth',10,
    'videoAllowed',true,'boostAllowed',true,'featuredAllowed',true,'urgentAllowed',true),
   true, d.code, d.days, 1, 10, d.label, d.compare, d.sort
-FROM (VALUES ('MZANSI_MARKET'::public.marketplace_area),('MZANSI_BUSINESS'),('PROMOTIONS_EVENTS')) a(area)
+FROM (VALUES ('MZANSI_MARKET'::public.marketplace_area,'Mzansi Market'),('MZANSI_BUSINESS','Mzansi Business'),('PROMOTIONS_EVENTS','Tourism')) a(area,label)
 CROSS JOIN (VALUES
  ('month'::public.plan_tier,'30 Days',5000,'RETAIL_30D',30,'Flexible',NULL::integer,10),
  ('half_year','6 Months',25000,'RETAIL_6M',180,'Most popular',30000,20),

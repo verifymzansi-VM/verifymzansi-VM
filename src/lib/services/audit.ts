@@ -84,7 +84,22 @@ export type AuditAction =
   | "role_revoked"
   | "role_assignment_reviewed"
   // Support inbox actions
-  | "support_submission_status_updated";
+  | "support_submission_status_updated"
+  // Commercial model (slots, programmes, organisations, partners, payments).
+  // SQL RPCs write most of these atomically via public.commercial_audit().
+  | "content_lifecycle_changed"
+  | "commercial_setting_updated"
+  | "plan_pricing_updated"
+  | "trial_entitlement_overridden"
+  | "affiliation_requested"
+  | "payment_refunded"
+  | "payment_chargeback"
+  | `programme_${string}`
+  | `organisation_${string}`
+  | `affiliation_${string}`
+  | `sponsorship_${string}`
+  | `partner_${string}`
+  | `commission_${string}`;
 
 interface AuditLogEntry {
   actorId: string;
@@ -94,6 +109,9 @@ interface AuditLogEntry {
   targetId?: string;
   area?: "MZANSI_MARKET" | "MZANSI_BUSINESS" | "PROMOTIONS_EVENTS";
   metadata?: Record<string, unknown>;
+  previousValue?: unknown;
+  newValue?: unknown;
+  reason?: string;
 }
 
 /** Counter for monitoring audit write failures (POPIA compliance).
@@ -128,6 +146,9 @@ export async function logAuditEvent(entry: AuditLogEntry): Promise<void> {
       target_id: entry.targetId || "00000000-0000-0000-0000-000000000000",
       area: entry.area || null,
       metadata: entry.metadata || {},
+      ...(entry.previousValue !== undefined ? { previous_value: entry.previousValue } : {}),
+      ...(entry.newValue !== undefined ? { new_value: entry.newValue } : {}),
+      ...(entry.reason ? { reason: entry.reason } : {}),
     });
 
     if (error) {

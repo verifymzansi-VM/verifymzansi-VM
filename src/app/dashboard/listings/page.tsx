@@ -18,6 +18,12 @@ import { FeaturedButton } from "@/components/listings/featured-button";
 import { UrgentButton } from "@/components/listings/urgent-button";
 import { ResubmitButton } from "@/components/listings/resubmit-button";
 import { DeletePostButton } from "@/components/listings/delete-post-button";
+import { ContentLifecycleButton } from "@/components/listings/content-lifecycle-button";
+import {
+  SlotUsageCard,
+  parseSlotUsage,
+  type SlotUsageEntry,
+} from "@/components/dashboard/slot-usage-card";
 import { PostAccountButton } from "@/components/listings/post-account-button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AreaFilter } from "@/components/dashboard/area-filter";
@@ -89,6 +95,23 @@ type BusinessDashboardRow = {
 };
 
 type ContentSource = DashboardItem["source"];
+
+/** Slot summary is informational: a failure must never block the dashboard. */
+async function loadSlotUsage(
+  admin: ReturnType<typeof tryCreateAdminClient>,
+  userId: string
+): Promise<SlotUsageEntry[]> {
+  if (!admin) return [];
+  try {
+    const result = await admin.rpc("slot_usage_summary", { p_user: userId });
+    return parseSlotUsage(result?.data ?? null);
+  } catch {
+    return [];
+  }
+}
+
+/** Matches the status_reason written by owner_content_action('deactivate'). */
+const OWNER_DEACTIVATED_REASON = "Deactivated by owner";
 
 function dashboardActionLabel(source: ContentSource) {
   return source === "business"
@@ -473,7 +496,12 @@ export default async function ListingsPage({
   const pending = items.filter(
     (item) => item.status === "pending_review" || item.status === "pending_moderation"
   );
-  const expired = items.filter((item) => item.status === "expired" || item.status === "sold");
+  const expired = items.filter(
+    (item) =>
+      item.status === "expired" ||
+      item.status === "sold" ||
+      (item.status === "hidden" && item.status_reason === OWNER_DEACTIVATED_REASON)
+  );
   const rejected = items.filter((item) => item.status === "rejected");
 
   const byArea = (list: DashboardItem[]) =>
@@ -495,6 +523,8 @@ export default async function ListingsPage({
     MZANSI_BUSINESS: mzansiBusinessTier,
     PROMOTIONS_EVENTS: promotionsTier,
   };
+
+  const slotUsage = await loadSlotUsage(engagementAdmin, user.id);
 
   return (
     <div className="min-w-0 max-w-full space-y-6 overflow-x-hidden">
@@ -519,6 +549,8 @@ export default async function ListingsPage({
           </Link>
         </Button>
       </PageHeader>
+
+      <SlotUsageCard entries={slotUsage} />
 
       <Suspense>
         <AreaFilter />
@@ -555,7 +587,7 @@ export default async function ListingsPage({
           <ListingList
             listings={filteredExpired}
             planTiers={planTiers}
-            emptyStateLabel="No expired or sold posts."
+            emptyStateLabel="No ended, sold or deactivated posts."
           />
         </TabsContent>
       </Tabs>
@@ -790,6 +822,7 @@ function ListingList({
                   Edit
                 </Link>
               </Button>
+              <LifecycleActions item={listing} />
               <DeletePostButton itemId={listing.id} area={listing.area} />
             </div>
           </CardContent>
@@ -797,6 +830,29 @@ function ListingList({
       ))}
     </div>
   );
+}
+
+/** Slot actions: free a slot (sold / deactivate) or reactivate saved content. */
+function LifecycleActions({ item }: { item: DashboardItem }) {
+  const isLive = item.status === "active" || item.status === "live";
+  const isFreeEvent = item.source === "promotion" && item.promotion_type === "event";
+  if (isLive) {
+    return (
+      <ContentLifecycleButton
+        contentType={item.source}
+        id={item.id}
+        action={item.source === "listing" ? "mark_sold" : "deactivate"}
+      />
+    );
+  }
+  const canReactivate =
+    !isFreeEvent &&
+    (item.status === "expired" ||
+      item.status === "sold" ||
+      (item.status === "hidden" && item.status_reason === OWNER_DEACTIVATED_REASON));
+  return canReactivate ? (
+    <ContentLifecycleButton contentType={item.source} id={item.id} action="reactivate" />
+  ) : null;
 }
 
 function Thumbnail({ item, muted = false }: { item: DashboardItem; muted?: boolean }) {

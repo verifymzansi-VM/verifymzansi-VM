@@ -38,5 +38,6 @@ export const CONTACT_CATEGORY_EMAILS = {
   payment_refund: BILLING_CONTACT_EMAIL,
   security_vulnerability: SECURITY_CONTACT_EMAIL,
   business_claim: SUPPORT_CONTACT_EMAIL,
+  organisation_proposal: HELLO_CONTACT_EMAIL,
   general_support: SUPPORT_CONTACT_EMAIL,
 } as const;

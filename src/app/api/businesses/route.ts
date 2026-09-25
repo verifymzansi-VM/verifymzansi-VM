@@ -6,7 +6,6 @@ import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { parseAndValidateJsonRequest, parseAndValidateSearchParams } from "@/lib/utils/api";
 import { businessSchema } from "@/lib/validations/business-unified";
-import { canCreateListing } from "@/lib/services/entitlements";
 import { checkLocalRateLimit, checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { isPostingLimitBypassEnabled } from "@/lib/utils/posting-limit-bypass";
 import {
@@ -16,7 +15,7 @@ import {
   withOwnerColumn,
   type OwnerColumn,
 } from "@/lib/account/compat";
-import type { MarketplaceArea, PlanTier } from "@/types/enums";
+import type { MarketplaceArea } from "@/types/enums";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 import { queryWithSelectFallbacks } from "@/lib/utils/marketplace-select-fallback";
 import {
@@ -50,6 +49,7 @@ import { enforceVerifiedPostingAccess } from "@/app/api/_lib/verified-posting-ac
 import {
   enforcePostingMediaLimits,
   getActivePostingPlanOrResponse,
+  slotLimitReason,
 } from "@/app/api/_lib/posting-entitlements";
 import { requirePostingMutationSession } from "@/app/api/_lib/posting-mutation-session";
 import { buildBusinessMutationPayload } from "@/app/api/businesses/_lib/build-business-mutation-payload";
@@ -336,9 +336,8 @@ export async function POST(request: NextRequest) {
 
     const limitRow = insertResult as { limit_reached?: boolean } | null;
     if (!insertError && limitRow?.limit_reached === true) {
-      const check = canCreateListing(maxAllowedForInsert, tier as PlanTier, effectiveArea);
       return NextResponse.json(
-        { error: "Business limit reached", reason: check.reason },
+        { error: "Business limit reached", reason: slotLimitReason(ent.maxAllowed) },
         { status: 403 }
       );
     }

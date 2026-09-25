@@ -30,8 +30,13 @@ vi.mock("@/components/layout/footer", () => ({
   Footer: () => <footer data-testid="mock-footer" />,
 }));
 
-vi.mock("@/components/billing/subscribe-button", () => ({
-  SubscribeButton: () => <button type="button">Subscribe</button>,
+vi.mock("server-only", () => ({}));
+// Pages read the plans table through the admin client; unit tests use the
+// seeded defaults (the live-DB comparison below is opt-in).
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: () => {
+    throw new Error("No database in unit tests");
+  },
 }));
 
 type DbPlanRow = {
@@ -84,32 +89,44 @@ beforeAll(async () => {
 });
 
 describe("Active-area pricing parity", () => {
-  it("pricing and billing pages render only the three active marketplace surfaces", () => {
-    render(<PricingPage />);
-    const tabLabels = screen
-      .getAllByRole("tab")
-      .map((tab) => tab.textContent?.replace(/\s+/g, " ").trim());
-
-    expect(tabLabels).toHaveLength(3);
-    expect(tabLabels).toEqual(
-      expect.arrayContaining(["Mzansi Market", "Mzansi Business", "Tourism & Events"])
+  it("pricing page shows the R50 / R250 / R450 ladder, free events and the organisation route", async () => {
+    render(await PricingPage());
+    const radios = screen
+      .getAllByRole("radio")
+      .map((radio) => radio.textContent?.replace(/\s+/g, " ").trim());
+    expect(radios).toHaveLength(3);
+    expect(screen.getByTestId("retail-offer-month")).toHaveTextContent("R50");
+    expect(screen.getByTestId("retail-offer-half_year")).toHaveTextContent("R250");
+    expect(screen.getByTestId("retail-offer-half_year")).toHaveTextContent("Most popular");
+    expect(screen.getByTestId("retail-offer-half_year")).toHaveTextContent("Save R50");
+    expect(screen.getByTestId("retail-offer-year")).toHaveTextContent("R450");
+    expect(screen.getByTestId("retail-offer-year")).toHaveTextContent("Best value");
+    expect(screen.getByTestId("retail-offer-year")).toHaveTextContent("Save R150");
+    expect(screen.getAllByText("Free").length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: /request a proposal/i })).toHaveAttribute(
+      "href",
+      "/contact?topic=organisation_proposal"
     );
+    expect(screen.queryByText(/R650|R30 /)).not.toBeInTheDocument();
     expect(screen.queryByText("Mall Shops")).not.toBeInTheDocument();
-    expect(screen.queryByText("Business Ads")).not.toBeInTheDocument();
+    const planLinks = screen.getAllByRole("link", {
+      name: /Choose .*(30 Days|6 Months|12 Months)/i,
+    });
+    expect(planLinks).toHaveLength(3);
     expect(
-      screen
-        .getAllByRole("link", { name: /Choose /i })
-        .find((link) => link.getAttribute("href")?.includes("/billing/checkout?plan="))
-    ).toHaveAttribute("href", expect.stringContaining("/billing/checkout?plan="));
+      planLinks.every((link) => link.getAttribute("href")?.startsWith("/billing/checkout?plan="))
+    ).toBe(true);
   });
 
-  it("billing page free-post copy matches the runtime free-post configuration", () => {
-    render(<BillingPage />);
+  it("billing page keeps the introductory trial copy", async () => {
+    render(await BillingPage());
     expect(
       screen.getByText(/One introductory choice: 7 days or limited 30 days/)
     ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Strategic, founding partner and organisation-sponsored/)
+    ).toBeInTheDocument();
     expect(screen.queryByText("Mall Shops")).not.toBeInTheDocument();
-    expect(screen.queryByText("Business Ads")).not.toBeInTheDocument();
   });
 
   it("runtime active plans stay aligned with entitlements and the live plans table", () => {

@@ -25,16 +25,22 @@ import type { PlanTier, MarketplaceArea } from "@/types/enums";
 // ── Plan matrix ───────────────────────────────────────────────
 
 const AREAS: MarketplaceArea[] = ["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"];
-const TIERS: PlanTier[] = ["basic", "starter", "growth", "pro"];
+const TIERS = ["basic", "starter", "growth", "pro", "month", "half_year", "year"] as const;
 
 /** Expected addon flags per tier (consistent across all areas) */
-const TIER_EXPECTATIONS: Record<PlanTier, { boost: boolean; featured: boolean; urgent: boolean }> =
-  {
-    basic: { boost: false, featured: false, urgent: false },
-    starter: { boost: false, featured: false, urgent: false },
-    growth: { boost: true, featured: false, urgent: false },
-    pro: { boost: true, featured: true, urgent: true },
-  };
+/** Legacy tiers keep their original limits until expiry; retail plans include add-ons. */
+const TIER_EXPECTATIONS: Record<
+  (typeof TIERS)[number],
+  { boost: boolean; featured: boolean; urgent: boolean }
+> = {
+  basic: { boost: false, featured: false, urgent: false },
+  starter: { boost: false, featured: false, urgent: false },
+  growth: { boost: true, featured: false, urgent: false },
+  pro: { boost: true, featured: true, urgent: true },
+  month: { boost: true, featured: true, urgent: true },
+  half_year: { boost: true, featured: true, urgent: true },
+  year: { boost: true, featured: true, urgent: true },
+};
 
 // ── Tests ─────────────────────────────────────────────────────
 
@@ -78,7 +84,7 @@ describe("Plan-tier entitlement boundaries", () => {
         expect(result.allowed).toBe(expectedFlags.boost);
         if (!expectedFlags.boost) {
           expect(result.reason).toBeDefined();
-          expect(result.reason).toContain("Upgrade");
+          expect(result.reason).toContain("R50");
         }
       });
 
@@ -87,7 +93,7 @@ describe("Plan-tier entitlement boundaries", () => {
         expect(result.allowed).toBe(expectedFlags.featured);
         if (!expectedFlags.featured) {
           expect(result.reason).toBeDefined();
-          expect(result.reason).toContain("Upgrade");
+          expect(result.reason).toContain("R50");
         }
       });
 
@@ -96,7 +102,7 @@ describe("Plan-tier entitlement boundaries", () => {
         expect(result.allowed).toBe(expectedFlags.urgent);
         if (!expectedFlags.urgent) {
           expect(result.reason).toBeDefined();
-          expect(result.reason).toContain("Upgrade");
+          expect(result.reason).toContain("R50");
         }
       });
 
@@ -120,7 +126,7 @@ describe("Plan-tier entitlement boundaries", () => {
       // Starter MZANSI_MARKET allows 5 listings
       const result = canCreateListing(5, "starter", "MZANSI_MARKET");
       expect(result.allowed).toBe(false);
-      expect(result.reason).toContain("live listings");
+      expect(result.reason).toContain("active posting slots");
     });
 
     it("blocks creation when count exceeds limit", () => {
@@ -135,23 +141,12 @@ describe("Plan-tier entitlement boundaries", () => {
       expect(result.allowed).toBe(true);
     });
 
-    it("uses correct item type label per area", () => {
-      // MZANSI_BUSINESS should say "businesses"
-      const bizResult = canCreateListing(100, "starter", "MZANSI_BUSINESS");
-      if (!bizResult.allowed) {
-        expect(bizResult.reason).toContain("businesses");
-      }
-
-      // PROMOTIONS_EVENTS should say "events"
-      const eventResult = canCreateListing(100, "starter", "PROMOTIONS_EVENTS");
-      if (!eventResult.allowed) {
-        expect(eventResult.reason).toContain("events");
-      }
-
-      // MZANSI_MARKET should say "live listings"
-      const mktResult = canCreateListing(100, "starter", "MZANSI_MARKET");
-      if (!mktResult.allowed) {
-        expect(mktResult.reason).toContain("live listings");
+    it("explains the slot limit the same way in every area", () => {
+      for (const area of AREAS) {
+        const result = canCreateListing(100, "month", area);
+        expect(result.allowed).toBe(false);
+        expect(result.reason).toContain("active posting slot");
+        expect(result.reason).toContain("Mark a post as sold");
       }
     });
   });

@@ -294,130 +294,6 @@ describe("POST /api/promotions", () => {
     });
   });
 
-  it("blocks a free promotion once the free-post limit is exhausted", async () => {
-    mockAuth({ id: USER_ID });
-    mockCreateAdminClient.mockReturnValue({
-      rpc: vi.fn().mockResolvedValue({ data: false, error: null }),
-      from: vi.fn((table: string) => {
-        if (table === "account_profiles") {
-          return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: {
-                id: "sp-1",
-                account_verification_status: "verified",
-              },
-            }),
-          };
-        }
-        if (table === "entitlements") {
-          return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            gt: vi.fn().mockReturnThis(),
-            order: vi.fn().mockReturnThis(),
-            limit: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-          };
-        }
-        if (table === "free_posts_used") {
-          return {
-            insert: vi.fn().mockResolvedValue({
-              error: { code: "23505", message: "duplicate key value violates unique constraint" },
-            }),
-          };
-        }
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          gte: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-        };
-      }),
-    });
-
-    const req = createRequest("http://localhost:3000/api/promotions", {
-      method: "POST",
-      body: VALID_BODY,
-    });
-    const res = await POST(req);
-
-    expect(res.status).toBe(403);
-    await expect(res.json()).resolves.toMatchObject({
-      error: "Free post limit reached",
-    });
-  });
-
-  it("returns a free-post limit error when the claim rpc reports no remaining promotion slots", async () => {
-    mockAuth({ id: USER_ID });
-    mockCreateAdminClient.mockReturnValue({
-      rpc: vi.fn().mockResolvedValue({ data: false, error: null }),
-      from: vi.fn((table: string) => {
-        if (table === "account_profiles") {
-          return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: {
-                id: "sp-1",
-                account_verification_status: "verified",
-              },
-            }),
-          };
-        }
-        if (table === "entitlements") {
-          return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            gt: vi.fn().mockReturnThis(),
-            order: vi.fn().mockReturnThis(),
-            limit: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-          };
-        }
-        if (table === "promotions") {
-          return {
-            select: vi.fn((fields: string) => {
-              if (fields === "id, owner_id") {
-                return {
-                  limit: vi.fn().mockResolvedValue({ error: null }),
-                };
-              }
-
-              return {
-                eq: vi.fn().mockReturnThis(),
-                gte: vi.fn().mockReturnThis(),
-                limit: vi.fn().mockReturnThis(),
-                neq: vi.fn().mockReturnThis(),
-                maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-              };
-            }),
-          };
-        }
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          gte: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-        };
-      }),
-    });
-
-    const req = createRequest("http://localhost:3000/api/promotions", {
-      method: "POST",
-      body: VALID_BODY,
-    });
-    const res = await POST(req);
-
-    expect(res.status).toBe(403);
-    await expect(res.json()).resolves.toMatchObject({
-      error: "Free post limit reached",
-    });
-  });
-
   it("does not claim a free post before validation passes", async () => {
     const freePostInsert = vi.fn().mockResolvedValue({ error: null });
 
@@ -469,113 +345,6 @@ describe("POST /api/promotions", () => {
     expect(freePostInsert).not.toHaveBeenCalled();
   });
 
-  it("releases the claimed free-post slot by content id when promotion insert fails", async () => {
-    const claimRpc = vi.fn().mockResolvedValue({ data: true, error: null });
-    const releaseMaybeSingle = vi.fn().mockResolvedValue({
-      data: { id: "claim-1" },
-      error: null,
-    });
-    const releaseIs = vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        maybeSingle: releaseMaybeSingle,
-      }),
-    });
-    const releaseContentEq = vi.fn().mockReturnValue({ is: releaseIs });
-    const releaseAreaEq = vi.fn().mockReturnValue({ eq: releaseContentEq });
-    const releaseUserEq = vi.fn().mockReturnValue({ eq: releaseAreaEq });
-    const generatedPromotionId = "33333333-3333-4333-8333-333333333333";
-    const randomUuidSpy = vi
-      .spyOn(globalThis.crypto, "randomUUID")
-      .mockReturnValue(generatedPromotionId);
-
-    mockAuth({ id: USER_ID });
-    mockCreateAdminClient.mockReturnValue({
-      rpc: claimRpc,
-      from: vi.fn((table: string) => {
-        if (table === "account_profiles") {
-          return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: {
-                id: "sp-1",
-                account_verification_status: "verified",
-              },
-            }),
-          };
-        }
-        if (table === "entitlements") {
-          return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            gt: vi.fn().mockReturnThis(),
-            order: vi.fn().mockReturnThis(),
-            limit: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-          };
-        }
-        if (table === "free_posts_used") {
-          return {
-            update: vi.fn().mockReturnValue({
-              eq: releaseUserEq,
-            }),
-          };
-        }
-        if (table === "promotions") {
-          return {
-            select: vi.fn((fields: string) => {
-              if (fields === "id, owner_id") {
-                return {
-                  limit: vi.fn().mockResolvedValue({ error: null }),
-                };
-              }
-
-              return {
-                eq: vi.fn().mockReturnThis(),
-                gte: vi.fn().mockReturnThis(),
-                limit: vi.fn().mockReturnThis(),
-                neq: vi.fn().mockReturnThis(),
-                maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-              };
-            }),
-            insert: vi.fn().mockReturnValue({
-              select: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({
-                  data: null,
-                  error: { message: "insert failed" },
-                }),
-              }),
-            }),
-          };
-        }
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-        };
-      }),
-    });
-
-    const req = createRequest("http://localhost:3000/api/promotions", {
-      method: "POST",
-      body: VALID_BODY,
-    });
-    const res = await POST(req);
-
-    expect(res.status).toBe(500);
-    expect(claimRpc).toHaveBeenCalledWith("reserve_intro_trial", {
-      p_user_id: USER_ID,
-      p_area: "PROMOTIONS_EVENTS",
-      p_content_id: generatedPromotionId,
-      p_duration_days: 7,
-    });
-    expect(claimRpc).toHaveBeenCalledWith(
-      "release_intro_trial",
-      expect.objectContaining({ p_user_id: USER_ID, p_reason: "create_failed" })
-    );
-    randomUuidSpy.mockRestore();
-  });
-
   it("allows promotion creation when the profile is stale but all verification steps are approved", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
@@ -625,6 +394,36 @@ describe("POST /api/promotions", () => {
     });
     const res = await POST(req);
     expect(res.status).toBe(201);
+  });
+
+  it("creates events for free without reserving an introductory trial", async () => {
+    const rpcSpy = vi.fn((fn: string) =>
+      Promise.resolve(
+        fn === "insert_promotion_with_limit"
+          ? { data: { id: VALID_UUID }, error: null }
+          : { data: false, error: null }
+      )
+    );
+    mockAuth({ id: USER_ID });
+    mockAdmin({
+      account_profiles: {
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: { id: "sp-1", account_verification_status: "verified" },
+        }),
+      },
+    });
+    const admin = mockCreateAdminClient.mock.results.at(-1)?.value ?? mockCreateAdminClient();
+    mockCreateAdminClient.mockReturnValue({ ...admin, rpc: rpcSpy });
+
+    const res = await POST(
+      createRequest("http://localhost:3000/api/promotions", { method: "POST", body: VALID_BODY })
+    );
+    expect(res.status).toBe(201);
+    expect(rpcSpy).not.toHaveBeenCalledWith("reserve_intro_trial", expect.anything());
+    expect(rpcSpy).toHaveBeenCalledWith(
+      "insert_promotion_with_limit",
+      expect.objectContaining({ p_max_allowed: -1 })
+    );
   });
 
   it("creates promotion successfully (201)", async () => {

@@ -11,8 +11,8 @@ import {
 const plan = {
   id: "db-plan",
   area: "MZANSI_MARKET",
-  tier: "growth",
-  name: "Growth",
+  tier: "half_year",
+  name: "Mzansi Market — 6 Months",
   price_cents: 25000,
   active: true,
 };
@@ -27,7 +27,7 @@ const payment: PaymentRecordShape = {
   provider_data: {
     type: "subscription",
     plan_id: plan.id,
-    plan_tier: "growth",
+    plan_tier: "half_year",
     area: "MZANSI_MARKET",
   },
   created_at: "2026-09-09T10:00:00Z",
@@ -86,18 +86,63 @@ describe("atomic payment fulfillment adapter (effects are tested in test-payment
       ...payment,
       provider_data: {
         ...payment.provider_data,
-        plan_id: getStablePlanId("MZANSI_MARKET", "growth"),
+        plan_id: getStablePlanId("MZANSI_MARKET", "half_year"),
       },
     });
     expect(admin.rpc.mock.calls[0][1].p_plan_id).toBe(plan.id);
   });
 
-  it("accepts the canonical Basic package", async () => {
-    const admin = client([{ ...plan, tier: "basic", price_cents: 3000 }]);
+  it("accepts the R50 / 30 days plan", async () => {
+    const admin = client([{ ...plan, tier: "month", price_cents: 5000 }]);
     await fulfillPayment(admin, {
       ...payment,
-      amount_cents: 3000,
-      provider_data: { ...payment.provider_data, plan_tier: "basic" },
+      amount_cents: 5000,
+      provider_data: { ...payment.provider_data, plan_tier: "month" },
+    });
+    expect(admin.rpc).toHaveBeenCalledOnce();
+  });
+
+  it("honours a legacy plan retired after the customer checked out", async () => {
+    const legacy = {
+      ...plan,
+      tier: "growth",
+      active: false,
+      is_legacy: true,
+      retired_at: "2026-09-25T09:00:00Z",
+    };
+    const admin = client([legacy]);
+    await fulfillPayment(admin, {
+      ...payment,
+      provider_data: { ...payment.provider_data, plan_tier: "growth" },
+    });
+    expect(admin.rpc).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a legacy plan bought after it was retired", async () => {
+    const legacy = {
+      ...plan,
+      tier: "growth",
+      active: false,
+      is_legacy: true,
+      retired_at: "2026-09-01T09:00:00Z",
+    };
+    const admin = client([legacy]);
+    await expect(
+      fulfillPayment(admin, {
+        ...payment,
+        provider_data: { ...payment.provider_data, plan_tier: "growth" },
+      })
+    ).rejects.toThrow(/not found or inactive/);
+  });
+
+  it("accepts bulk plans that cover every area", async () => {
+    const bulk = { ...plan, area: null, tier: "enterprise", price_cents: 500000 };
+    const admin = client([bulk]);
+    await fulfillPayment(admin, {
+      ...payment,
+      area: "MZANSI_BUSINESS",
+      amount_cents: 500000,
+      provider_data: { ...payment.provider_data, plan_tier: "enterprise", area: "MZANSI_BUSINESS" },
     });
     expect(admin.rpc).toHaveBeenCalledOnce();
   });
@@ -107,7 +152,8 @@ describe("atomic payment fulfillment adapter (effects are tested in test-payment
     [{ ...payment, area: "MZANSI_BUSINESS" }, [plan], /area/],
     [{ ...payment, provider_data: { ...payment.provider_data, plan_tier: "pro" } }, [plan], /tier/],
     [payment, [{ ...plan, active: false }], /not found or inactive/],
-    [payment, [{ ...plan, price_cents: 1 }], /catalog/],
+    [payment, [{ ...plan, price_cents: 1 }], /amount/],
+    [payment, [{ ...plan, is_legacy: true }], /catalog/],
     [{ ...payment, provider_data: { type: "subscription" } }, [plan], /no plan ID/],
     [{ ...payment, provider_data: null }, [plan], /no parseable metadata/],
     [{ ...payment, user_id: null }, [plan], /no user_id/],

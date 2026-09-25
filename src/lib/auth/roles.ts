@@ -43,7 +43,13 @@ export type Capability =
   // Cross-role
   | "audit:view"
   | "feature_flag:toggle"
-  | "dsar:manage";
+  | "dsar:manage"
+  // Commercial model
+  | "commercial:manage"
+  | "organisations:manage"
+  | "partners:manage"
+  | "contracts:manage"
+  | "payments:refund";
 
 const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
   /* 3rd — Moderator: queue & case operations */
@@ -73,6 +79,10 @@ const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
     "oversight:view",
     "audit:view",
     "dsar:manage",
+    "commercial:manage",
+    "organisations:manage",
+    "partners:manage",
+    "contracts:manage",
   ]),
   /* 1st — Admin: super-role — ALL platform capabilities */
   admin: new Set<Capability>([
@@ -104,6 +114,12 @@ const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
     "bi:drill_down",
     "audit:view",
     "feature_flag:toggle",
+    // Commercial model. Refunds and chargebacks are admin-only.
+    "commercial:manage",
+    "organisations:manage",
+    "partners:manage",
+    "contracts:manage",
+    "payments:refund",
   ]),
 };
 
