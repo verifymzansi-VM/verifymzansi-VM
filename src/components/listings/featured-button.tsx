@@ -24,7 +24,7 @@ export function FeaturedButton({
       isActive={isFeatured}
       canUse={canFeature}
       activeTitle="Already featured"
-      unavailableTitle={`Upgrade to Pro to feature this ${itemTypeLabel}`}
+      unavailableTitle={`Featured placement is available on paid plans for this ${itemTypeLabel}`}
       actionTitle={`Feature this ${itemTypeLabel} (R25 for 7 days)`}
       errorTitle="Featured failed"
       errorFallbackDescription="Failed to create featured checkout"

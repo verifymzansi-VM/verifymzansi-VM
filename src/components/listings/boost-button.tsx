@@ -25,7 +25,7 @@ export function BoostButton({
       isActive={isBoosted}
       canUse={canBoost}
       activeTitle="Already boosted"
-      unavailableTitle={`Upgrade to Growth or Pro to boost this ${itemTypeLabel}`}
+      unavailableTitle={`Boost is available on paid plans (from R50 / 30 days) for this ${itemTypeLabel}`}
       actionTitle={`Boost this ${itemTypeLabel} (R15 for 7 days)`}
       errorTitle="Boost failed"
       errorFallbackDescription="Failed to create boost checkout"

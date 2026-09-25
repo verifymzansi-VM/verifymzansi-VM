@@ -13,7 +13,7 @@ import {
   useCommercialAction,
 } from "./commercial-action";
 
-export const ORGANISATION_TYPES = [
+const ORGANISATION_TYPES = [
   ["municipality", "Municipality"],
   ["government_department", "Government department"],
   ["led_programme", "Local Economic Development programme"],

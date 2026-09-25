@@ -329,9 +329,9 @@ describe("FeaturedButton disabled states", () => {
     expect(btn).toBeDisabled();
   });
 
-  it("renders disabled 'Upgrade to Pro' button when canFeature=false", () => {
+  it("renders a disabled paid-plan button when canFeature=false", () => {
     render(<FeaturedButton listingId={LISTING_ID} isFeatured={false} canFeature={false} />);
-    const btn = screen.getByTitle(/Upgrade to Pro/i);
+    const btn = screen.getByTitle(/available on paid plans/i);
     expect(btn).toBeDisabled();
   });
 
@@ -344,7 +344,9 @@ describe("FeaturedButton disabled states", () => {
         itemTypeLabel="promotion"
       />
     );
-    const btn = screen.getByTitle(/Upgrade to Pro to feature this promotion/i);
+    const btn = screen.getByTitle(
+      /Featured placement is available on paid plans for this promotion/i
+    );
     expect(btn).toBeDisabled();
   });
 
@@ -363,9 +365,9 @@ describe("BoostButton disabled states", () => {
     expect(btn).toBeDisabled();
   });
 
-  it("renders disabled 'Upgrade to Growth or Pro' button when canBoost=false", () => {
+  it("renders a disabled paid-plan button when canBoost=false", () => {
     render(<BoostButton listingId={LISTING_ID} isBoosted={false} canBoost={false} />);
-    const btn = screen.getByTitle(/Upgrade to Growth or Pro/i);
+    const btn = screen.getByTitle(/available on paid plans/i);
     expect(btn).toBeDisabled();
   });
 
@@ -378,7 +380,7 @@ describe("BoostButton disabled states", () => {
         itemTypeLabel="business"
       />
     );
-    const btn = screen.getByTitle(/Upgrade to Growth or Pro to boost this business/i);
+    const btn = screen.getByTitle(/available on paid plans .*for this business/i);
     expect(btn).toBeDisabled();
   });
 
@@ -397,9 +399,9 @@ describe("UrgentButton disabled states", () => {
     expect(btn).toBeDisabled();
   });
 
-  it("renders disabled 'Upgrade to Pro' button when canMarkUrgent=false", () => {
+  it("renders a disabled paid-plan button when canMarkUrgent=false", () => {
     render(<UrgentButton listingId={LISTING_ID} isUrgent={false} canMarkUrgent={false} />);
-    const btn = screen.getByTitle(/Upgrade to Pro/i);
+    const btn = screen.getByTitle(/available on paid plans/i);
     expect(btn).toBeDisabled();
   });
 

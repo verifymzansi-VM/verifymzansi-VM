@@ -121,6 +121,7 @@ await db.query(
 await migration("20260925090100_commercial_foundation.sql");
 await migration("20260925090200_organisations.sql");
 await migration("20260925090300_partners_analytics_notifications.sql");
+await migration("20260925090400_event_archiving.sql");
 
 let checks = 0;
 async function test(name, fn) {
@@ -616,6 +617,15 @@ await test("lifecycle notifications fire once per milestone", async () => {
   await db.query(`SELECT notify_commercial_lifecycle()`);
   const n = (await scalar(`SELECT count(*)::int AS n FROM notifications WHERE user_id=$1 AND title='Your plan expires soon'`, [u])).n;
   assert.equal(n, 1);
+});
+
+await test("ended events are archived after the configured period", async () => {
+  const u = await user();
+  const e = await post(u, { table: "promotions", type: "event" });
+  await setStatus(e, "live", "promotions");
+  await db.query(`UPDATE promotions SET status='expired', end_date=now()-interval '40 days' WHERE id=$1`, [e]);
+  assert.equal((await scalar(`SELECT archive_ended_events() AS n`)).n, 1);
+  assert.equal(await statusOf(e, "promotions"), "archived");
 });
 
 console.log(`${checks} commercial model checks passed`);

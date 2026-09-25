@@ -291,12 +291,6 @@ export const PAID_POST_CONFIG = {
   durationDays: 30,
 } as const;
 
-/** Events are free until they end; fair-use limits live in commercial settings. */
-export const EVENT_POST_CONFIG = {
-  priceCents: 0,
-  maxActivePerAccount: 5,
-} as const;
-
 export function formatPlanPrice(priceCents: number): string {
   return `R${(priceCents / 100).toLocaleString("en-ZA")}`;
 }
@@ -307,10 +301,6 @@ export function getPlanCheckoutId(plan: Pick<PlanDefinition, "area" | "tier">): 
 
 export function getPlanCheckoutHref(plan: Pick<PlanDefinition, "area" | "tier">): string {
   return `/billing/checkout?plan=${getPlanCheckoutId(plan)}`;
-}
-
-export function getActivePlanByCheckoutId(planId: string): PlanDefinition | undefined {
-  return getActivePlans().find((plan) => getPlanCheckoutId(plan) === planId);
 }
 
 export function getPlanFeatureItems(
@@ -361,17 +351,6 @@ export function getRetailSavingsCents(
 
 export function getActivePlans(): PlanDefinition[] {
   return PLANS.filter((plan) => isActiveMarketplaceArea(plan.area));
-}
-
-export function getActivePlansByArea() {
-  const activePlans = getActivePlans();
-
-  return {
-    activePlans,
-    marketPlans: activePlans.filter((plan) => plan.area === "MZANSI_MARKET"),
-    businessPlans: activePlans.filter((plan) => plan.area === "MZANSI_BUSINESS"),
-    promotionPlans: activePlans.filter((plan) => plan.area === "PROMOTIONS_EVENTS"),
-  };
 }
 
 /**

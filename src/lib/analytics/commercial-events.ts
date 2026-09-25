@@ -64,7 +64,7 @@ function send(events: CommercialEvent[]) {
   });
 }
 
-export function flushCommercialEvents() {
+function flushCommercialEvents() {
   if (timer) clearTimeout(timer);
   timer = null;
   while (queue.length > 0) send(queue.splice(0, MAX_BATCH));

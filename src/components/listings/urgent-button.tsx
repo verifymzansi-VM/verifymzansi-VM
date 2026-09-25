@@ -25,7 +25,7 @@ export function UrgentButton({
       isActive={isUrgent}
       canUse={canMarkUrgent}
       activeTitle="Already urgent"
-      unavailableTitle={`Upgrade to Pro to mark this ${itemTypeLabel} as urgent`}
+      unavailableTitle={`The urgent badge is available on paid plans for this ${itemTypeLabel}`}
       actionTitle={`Mark this ${itemTypeLabel} as urgent (R10 for 7 days)`}
       errorTitle="Urgent failed"
       errorFallbackDescription="Failed to create urgent checkout"

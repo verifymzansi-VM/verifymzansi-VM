@@ -10,7 +10,7 @@ import {
 } from "@/lib/constants/pricing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
-import type { MarketplaceArea, RetailPlanTier } from "@/types/enums";
+import type { MarketplaceArea } from "@/types/enums";
 
 const log = createLogger("CommercialPlans");
 
@@ -121,8 +121,4 @@ export async function getCommercialCatalog(): Promise<CommercialCatalog> {
     });
     return defaultCatalog();
   }
-}
-
-export function retailTierLabel(tier: RetailPlanTier): string {
-  return RETAIL_OFFERS.find((offer) => offer.tier === tier)?.label ?? tier;
 }
