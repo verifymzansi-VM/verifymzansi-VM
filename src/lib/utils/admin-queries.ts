@@ -60,6 +60,9 @@ export interface AuditLogEntry {
   area: string | null;
   metadata: Record<string, unknown>;
   created_at: string;
+  reason?: string | null;
+  previous_value?: unknown;
+  new_value?: unknown;
 }
 
 export interface RecentOtpAttempt {

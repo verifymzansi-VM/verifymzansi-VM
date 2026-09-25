@@ -25,6 +25,11 @@ import {
   Scale,
   Menu,
   Inbox,
+  BadgePercent,
+  Landmark,
+  Handshake,
+  Receipt,
+  Award,
 } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -146,6 +151,15 @@ function buildGovernanceSections(newSupportRequests: number): NavSection[] {
       ],
     },
     {
+      label: "Commercial",
+      items: [
+        { href: "/admin/commercial", label: "Commercial Settings", icon: BadgePercent },
+        { href: "/admin/programmes", label: "Programmes & Contracts", icon: Award },
+        { href: "/admin/organisations", label: "Organisations", icon: Landmark },
+        { href: "/admin/partners", label: "Partners & Commission", icon: Handshake },
+      ],
+    },
+    {
       label: "Compliance",
       items: [
         { href: "/admin/dsar", label: "Data Requests", icon: FileText },
@@ -243,6 +257,16 @@ function buildAdminSections(
           icon: Inbox,
           badgeCount: newSupportRequests > 0 ? newSupportRequests : undefined,
         },
+      ],
+    },
+    {
+      label: "Commercial",
+      items: [
+        { href: "/admin/commercial", label: "Commercial Settings", icon: BadgePercent },
+        { href: "/admin/programmes", label: "Programmes & Contracts", icon: Award },
+        { href: "/admin/organisations", label: "Organisations", icon: Landmark },
+        { href: "/admin/partners", label: "Partners & Commission", icon: Handshake },
+        { href: "/admin/payments", label: "Payments & Refunds", icon: Receipt },
       ],
     },
     // Tools

@@ -81,7 +81,7 @@ describe("AdminAuditLogPage", () => {
       };
     });
 
-    render(await AdminAuditLogPage());
+    render(await AdminAuditLogPage({ searchParams: Promise.resolve({}) }));
 
     expect(mockSessionFrom).not.toHaveBeenCalled();
     expect(mockAdminFrom).toHaveBeenCalledWith("audit_logs");
@@ -107,7 +107,7 @@ describe("AdminAuditLogPage", () => {
       };
     });
 
-    render(await AdminAuditLogPage());
+    render(await AdminAuditLogPage({ searchParams: Promise.resolve({}) }));
 
     expect(screen.getByText("No audit entries recorded yet.")).toBeInTheDocument();
   });
