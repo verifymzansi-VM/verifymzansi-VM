@@ -113,7 +113,9 @@ test.describe("Mobile UX smoke", () => {
     expect(footerRect.bottom).toBeLessThanOrEqual(navRect.top);
   });
 
-  test("showroom hero content stays clear of the fixed bottom navigation", async ({ page }) => {
+  test("showroom hero content is visible without the home-only bottom navigation", async ({
+    page,
+  }) => {
     await page.goto("/mzansi-market", { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle").catch(() => {});
 
@@ -121,14 +123,12 @@ test.describe("Mobile UX smoke", () => {
       .locator('section[aria-roledescription="carousel"] h3:visible')
       .first();
     await expect(showroomTitle).toBeVisible();
-
-    const navRect = await getRect(page, 'nav[aria-label="Main"]');
-    const titleRect = await showroomTitle.evaluate((el) => {
-      const rect = el.getBoundingClientRect();
-      return { top: rect.top, bottom: rect.bottom };
-    });
-
-    expect(titleRect.bottom).toBeLessThanOrEqual(navRect.top);
+    await expect(page.getByRole("navigation", { name: "Main" })).toHaveCount(0);
+    await showroomTitle.scrollIntoViewIfNeeded();
+    const titleRect = await showroomTitle.boundingBox();
+    expect(titleRect).not.toBeNull();
+    expect(titleRect!.y).toBeGreaterThanOrEqual(0);
+    expect(titleRect!.y + titleRect!.height).toBeLessThanOrEqual(page.viewportSize()!.height);
   });
 
   test("listing filter FAB is touch-friendly and opens the drawer", async ({ page }) => {

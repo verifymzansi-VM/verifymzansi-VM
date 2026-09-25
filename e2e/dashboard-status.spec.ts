@@ -61,13 +61,7 @@ test.describe("Dashboard verification state", () => {
       await expect(page.getByRole("heading", { name: /^hi,/i })).toBeVisible();
       await expect(page.getByText(/steps left/i)).toHaveCount(0);
       await expect(page.getByText(/verification under review/i)).toHaveCount(0);
-      await expect(page.getByRole("link", { name: "Post", exact: true })).toBeVisible();
-      // Auth state in MobileNav hydrates asynchronously — give it time
-      await expect(page.getByRole("link", { name: "Post", exact: true })).toHaveAttribute(
-        "href",
-        "/post/create",
-        { timeout: 15_000 }
-      );
+      await expect(page.getByRole("navigation", { name: "Main" })).toHaveCount(0);
       await expect(page.getByRole("link", { name: /leads/i }).first()).toHaveAttribute(
         "href",
         "/dashboard/leads",
