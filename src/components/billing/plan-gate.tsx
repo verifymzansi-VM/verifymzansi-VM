@@ -53,6 +53,29 @@ interface PlanGateProps {
   children: ReactNode;
   /** Free events: no trial or plan required (fair use is enforced on the server). */
   freePosting?: boolean;
+  /** Tourism & Events: offer the free event path while a plan or trial is still needed. */
+  onChooseFreeEvent?: () => void;
+}
+
+/** Events never need a plan or trial, so the gate always offers them. */
+function FreeEventOption({ onChoose }: { onChoose: () => void }) {
+  return (
+    <div
+      data-testid="free-event-option"
+      className="flex flex-col gap-3 rounded-lg border border-brand-green/30 bg-brand-green/5 p-4 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <div>
+        <p className="font-semibold">Post an event — Free</p>
+        <p className="text-sm text-muted-foreground">
+          Festivals, markets, concerts and community events. No plan or trial needed; visible until
+          the event ends.
+        </p>
+      </div>
+      <Button type="button" variant="outline" className="h-11 shrink-0" onClick={onChoose}>
+        Create a free event
+      </Button>
+    </div>
+  );
 }
 
 type AllowanceResponse = {
@@ -269,7 +292,13 @@ function InlinePlanGrid({
 /* ─────────────────────────────────────────────────────────────
    PlanGate — main component
    ───────────────────────────────────────────────────────────── */
-export function PlanGate({ area, children, onTrialSelected, freePosting = false }: PlanGateProps) {
+export function PlanGate({
+  area,
+  children,
+  onTrialSelected,
+  freePosting = false,
+  onChooseFreeEvent,
+}: PlanGateProps) {
   const pathname = usePathname();
   const [loading, setLoading] = useState(true);
   const [planInfo, setPlanInfo] = useState<PlanInfo | null>(null);
@@ -547,6 +576,8 @@ export function PlanGate({ area, children, onTrialSelected, freePosting = false 
           </p>
         </div>
 
+        {onChooseFreeEvent ? <FreeEventOption onChoose={onChooseFreeEvent} /> : null}
+
         <InlinePlanGrid plans={areaPlans} onSubscribe={handleSubscribe} subscribing={subscribing} />
 
         <p className="text-center text-xs text-muted-foreground">
@@ -579,8 +610,10 @@ export function PlanGate({ area, children, onTrialSelected, freePosting = false 
                     {planInfo.currentCount}/{planInfo.maxAllowed}
                   </strong>{" "}
                   {AREA_ITEM_LABELS[area]} on your{" "}
-                  <Badge variant="outline" className="capitalize mx-1 text-xs">
-                    {planInfo.isTrial ? "Free Post" : planInfo.tier}
+                  <Badge variant="outline" className="mx-1 text-xs">
+                    {planInfo.isTrial
+                      ? "Free Post"
+                      : (PLAN_TIER_LABELS[planInfo.tier as PlanTier] ?? "Active")}
                   </Badge>{" "}
                   plan. Mark a sold item, deactivate a post from your dashboard, or add another slot
                   below.
@@ -589,6 +622,8 @@ export function PlanGate({ area, children, onTrialSelected, freePosting = false 
             </div>
           </CardContent>
         </Card>
+
+        {onChooseFreeEvent ? <FreeEventOption onChoose={onChooseFreeEvent} /> : null}
 
         {upgradePlans.length > 0 && (
           <InlinePlanGrid
@@ -606,6 +641,7 @@ export function PlanGate({ area, children, onTrialSelected, freePosting = false 
     return (
       <PlanPickerWithTrial
         onTrialSelected={onTrialSelected}
+        onChooseFreeEvent={onChooseFreeEvent}
         area={area}
         planInfo={planInfo}
         areaPlans={areaPlans}
@@ -660,6 +696,7 @@ export function PlanGate({ area, children, onTrialSelected, freePosting = false 
    ───────────────────────────────────────────────────────────── */
 function PlanPickerWithTrial({
   onTrialSelected,
+  onChooseFreeEvent,
   area,
   planInfo,
   areaPlans,
@@ -668,6 +705,7 @@ function PlanPickerWithTrial({
   children,
 }: {
   onTrialSelected?: (days: 7 | 30) => void;
+  onChooseFreeEvent?: () => void;
   area: MarketplaceArea;
   planInfo: PlanInfo;
   areaPlans: PlanDefinition[];
@@ -807,6 +845,8 @@ function PlanPickerWithTrial({
             </p>
           </div>
         )}
+      {onChooseFreeEvent ? <FreeEventOption onChoose={onChooseFreeEvent} /> : null}
+
       {/* ── Section 2: Paid plans (R50 / R250 / R450) ─── */}
       <div className="space-y-2">
         <h3 className="font-display text-sm font-bold flex items-center gap-2">

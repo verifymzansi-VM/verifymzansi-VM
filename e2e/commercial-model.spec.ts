@@ -37,7 +37,7 @@ test.describe("Commercial model", () => {
     await expect(main.getByTestId("retail-offer-month")).toContainText("R50");
   });
 
-  test("tourism leads with the free trial above the paid plans", async ({ page }) => {
+  test("tourism leads with the free trial above the paid plans", async ({ page }, info) => {
     await page.goto("/pricing", { waitUntil: "domcontentloaded" });
     const main = page.locator("main");
     await expect(main.getByTestId("tourism-free-trial")).toHaveCount(0);
@@ -51,6 +51,29 @@ test.describe("Commercial model", () => {
     const trialBox = await trial.boundingBox();
     const planBox = await main.getByTestId("retail-offer-month").boundingBox();
     expect(trialBox!.y).toBeLessThan(planBox!.y);
+    await page.screenshot({ path: info.outputPath("tourism-pricing.png"), fullPage: true });
+  });
+
+  test("tourism posting offers the trial first, then free events, then plans", async ({
+    page,
+  }, info) => {
+    test.skip(WEBKIT_SKIP.includes(info.project.name), "WebKit auth bootstrap is unreliable.");
+    await signIn(page, "billing-payment");
+    await page.goto("/post/create-tourism", { waitUntil: "domcontentloaded" });
+    const eventOption = page.getByTestId("free-event-option");
+    await expect(eventOption).toBeVisible({ timeout: 15_000 });
+    const heading = page.getByRole("heading", { name: /choose how you want to post/i });
+    const planCard = page.getByRole("button", { name: /choose 30 days/i }).first();
+    const [headingBox, eventBox, planBox] = await Promise.all([
+      heading.boundingBox(),
+      eventOption.boundingBox(),
+      planCard.boundingBox(),
+    ]);
+    expect(headingBox!.y).toBeLessThan(eventBox!.y);
+    expect(eventBox!.y).toBeLessThan(planBox!.y);
+    await page.screenshot({ path: info.outputPath("tourism-gate.png"), fullPage: true });
+    await eventOption.getByRole("button", { name: /create a free event/i }).click();
+    await expect(page.getByRole("heading", { name: /create an event/i })).toBeVisible();
   });
 
   test("pricing has no horizontal overflow on phones", async ({ page }) => {

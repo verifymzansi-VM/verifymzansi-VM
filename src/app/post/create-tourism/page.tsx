@@ -1752,6 +1752,11 @@ function CreateTourismContent() {
             area="PROMOTIONS_EVENTS"
             onTrialSelected={setTrialDays}
             freePosting={listingType === "event"}
+            onChooseFreeEvent={() => {
+              resetTourismSpecificFields();
+              setListingType("event");
+              clearErrors("listingType");
+            }}
           >
             <form noValidate onSubmit={handleSubmit}>
               <PostFormScaffold
