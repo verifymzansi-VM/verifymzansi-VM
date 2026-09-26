@@ -38,6 +38,9 @@ const PLACEHOLDER =
   /\b(lorem ipsum|test(ing)? (post|listing)|asdf|qwerty|placeholder|sample text|xxx+)\b/i;
 const CONTACT_IN_TEXT =
   /(\+?27|0)[\s-]?[6-8]\d[\s-]?\d{3}[\s-]?\d{4}|[\w.+-]+@[\w-]+\.[\w.]+|wa\.me\//i;
+/** Terms §3–4: weapons, illegal substances, counterfeit goods, protected wildlife products. */
+const PROHIBITED_TERMS =
+  /\b(firearms?|handguns?|ammunition|ammo|unlicensed (gun|pistol|rifle)s?|cocaine|heroin|mandrax|crystal meth|counterfeit|fake (id|passport|licen[cs]e|documents?|certificates?)|rhino horns?|elephant ivory|ivory tusks?)\b/i;
 const SUSPICIOUS_TERMS =
   /\b(western union|moneygram|gift ?cards?|crypto only|deposit first|pay (a )?deposit to (secure|reserve)|bitcoin only)\b/i;
 
@@ -135,6 +138,14 @@ export function scoreListingQuality(input: QualityInput): QualityResult {
       "review",
       20,
       "Payment wording that is common in scams was found. Moderators will review it."
+    );
+
+  if (PROHIBITED_TERMS.test(`${title} ${description}`))
+    add(
+      "prohibited_content",
+      "review",
+      30,
+      "Wording linked to prohibited items (weapons, illegal substances, counterfeit or protected wildlife goods) was found. A moderator will check it against the Terms."
     );
 
   const score = Math.max(0, 100 - issues.reduce((sum, issue) => sum + issue.penalty, 0));

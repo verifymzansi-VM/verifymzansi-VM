@@ -8,7 +8,14 @@ import { z } from "zod";
 const int = (min: number, max: number) => z.number().int().min(min).max(max);
 
 export const COMMERCIAL_SETTING_SCHEMAS = {
-  trials: z.object({ shortDays: int(1, 30), longDays: int(7, 90) }).strict(),
+  trials: z
+    .object({
+      shortDays: int(1, 30),
+      longDays: int(7, 90),
+      /** Extra admin-written rules shown with the public trial policy. */
+      rules: z.string().trim().max(600),
+    })
+    .strict(),
   strategic: z
     .object({
       durationDays: int(7, 366),
@@ -74,7 +81,7 @@ export type CommercialSettings = {
 };
 
 export const DEFAULT_COMMERCIAL_SETTINGS: CommercialSettings = {
-  trials: { shortDays: 7, longDays: 30 },
+  trials: { shortDays: 7, longDays: 30, rules: "" },
   strategic: { durationDays: 90, slotCapacity: 1, activationLimitTotal: 3 },
   founding_commercial: {
     durationDays: 180,
@@ -106,7 +113,7 @@ export const DEFAULT_COMMERCIAL_SETTINGS: CommercialSettings = {
 };
 
 export const COMMERCIAL_SETTING_LABELS: Record<CommercialSettingKey, string> = {
-  trials: "Public trial durations",
+  trials: "Public trial durations and rules",
   strategic: "Strategic Individual trial",
   founding_commercial: "Founding Commercial Partner (dealerships)",
   founding_organisation: "Founding Organisation Programme",

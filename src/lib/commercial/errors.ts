@@ -45,6 +45,11 @@ const COMMERCIAL_ERRORS: ReadonlyArray<{ code: string; status: number; message: 
   { code: "CONTRACT_ADMIN_LIMIT", status: 409, message: "Administrator limit reached." },
   { code: "ORGANISATION_ADMIN_LIMIT", status: 409, message: "Administrator limit reached." },
   {
+    code: "ORGANISATION_ADMIN_UNVERIFIED",
+    status: 409,
+    message: "Organisation administrators must complete VerifyMzansi identity verification first.",
+  },
+  {
     code: "AFFILIATION_NOT_OWNER",
     status: 403,
     message: "You can only request affiliation for your own business.",

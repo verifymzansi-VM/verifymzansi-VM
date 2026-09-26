@@ -383,5 +383,76 @@ UPDATE public.commercial_settings SET value = value || '{"storageQuotaMb":500}':
  description = 'Media limits: photos/videos per paid post; upload size ceilings (cannot exceed 5 MB images, 50 MB videos); storage quota per account.'
 WHERE key = 'media' AND NOT value ? 'storageQuotaMb';
 
+UPDATE public.commercial_settings SET value = value || '{"rules":""}'::jsonb,
+ description = 'Public introductory trial durations and extra rules shown with the trial policy. Capacity and toggles live in intro_trial_campaigns.'
+WHERE key = 'trials' AND NOT value ? 'rules';
+
+-- ── Start notices: public trial and invitation programmes ─────────────────
+CREATE FUNCTION public.notify_trial_started() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
+BEGIN
+ IF NEW.user_id IS NULL OR NEW.activated_at IS NULL
+  OR (TG_OP = 'UPDATE' AND OLD.activated_at IS NOT NULL) THEN RETURN NULL; END IF;
+ INSERT INTO public.notifications(user_id,type,title,message,href) VALUES (NEW.user_id,'success',
+  CASE WHEN NEW.admin_granted THEN 'Your free post is live' ELSE 'Your introductory trial has started' END,
+  'Your post is visible' || COALESCE(' until ' || to_char(NEW.expires_at AT TIME ZONE 'Africa/Johannesburg','DD Mon YYYY'),'')
+   || '. Nothing is charged automatically; afterwards it stays saved in your dashboard.','/dashboard/listings');
+ RETURN NULL;
+END;
+$$;
+CREATE TRIGGER intro_trial_started_notice AFTER INSERT OR UPDATE OF activated_at ON public.intro_trial_claims
+ FOR EACH ROW EXECUTE FUNCTION public.notify_trial_started();
+
+CREATE FUNCTION public.notify_programme_started() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
+BEGIN
+ IF NEW.user_id IS NULL OR NEW.status <> 'active'
+  OR NEW.source NOT IN ('STRATEGIC_INDIVIDUAL','FOUNDING_COMMERCIAL_PARTNER') THEN RETURN NULL; END IF;
+ INSERT INTO public.notifications(user_id,type,title,message,href) VALUES (NEW.user_id,'success',
+  CASE WHEN NEW.source = 'STRATEGIC_INDIVIDUAL' THEN 'Your VerifyMzansi Strategic Trial has started'
+   ELSE 'Your Founding Commercial Partner programme has started' END,
+  NEW.slot_capacity || ' active posting slot' || CASE WHEN NEW.slot_capacity = 1 THEN '' ELSE 's' END
+   || ' until ' || to_char(NEW.expires_at AT TIME ZONE 'Africa/Johannesburg','DD Mon YYYY')
+   || '. Invitation only; it does not renew automatically.','/dashboard/listings');
+ RETURN NULL;
+END;
+$$;
+CREATE TRIGGER slot_entitlement_programme_started AFTER INSERT ON public.slot_entitlements
+ FOR EACH ROW EXECUTE FUNCTION public.notify_programme_started();
+REVOKE ALL ON FUNCTION public.notify_trial_started(), public.notify_programme_started() FROM PUBLIC, anon, authenticated;
+
+-- ── Owner traffic sources (aggregate counts only, never viewer identities) ─
+CREATE FUNCTION public.content_traffic_sources(p_user uuid, p_days integer DEFAULT 30)
+RETURNS TABLE(traffic_source text, events bigint)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public AS $$
+ WITH owned AS (
+  SELECT 'listings'::text t, id FROM public.listings WHERE owner_id = p_user
+  UNION ALL SELECT 'businesses', id FROM public.businesses WHERE owner_id = p_user
+  UNION ALL SELECT 'promotions', id FROM public.promotions WHERE owner_id = p_user)
+ SELECT COALESCE(e.traffic_source,'direct'), count(*)
+ FROM public.analytics_events e JOIN owned o ON o.id = e.content_id AND o.t = e.content_table
+ WHERE e.event_type = 'detail_view' AND e.created_at > now() - make_interval(days => least(greatest(p_days,1),90))
+ GROUP BY 1 ORDER BY 2 DESC;
+$$;
+REVOKE ALL ON FUNCTION public.content_traffic_sources(uuid,integer) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.content_traffic_sources(uuid,integer) TO service_role;
+
+-- ── Step-up verification: organisation representatives ────────────────────
+-- Organisation administrators decide affiliations and sponsorship, so they must
+-- hold VerifyMzansi identity verification (ORGANISATION_REPRESENTATIVE_VERIFIED).
+CREATE FUNCTION public.require_verified_organisation_admin() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
+BEGIN
+ IF NOT EXISTS (SELECT 1 FROM public.account_profiles
+  WHERE user_id = NEW.user_id AND account_verification_status::text = 'verified') THEN
+  RAISE EXCEPTION 'ORGANISATION_ADMIN_UNVERIFIED: Organisation administrators must complete VerifyMzansi identity verification';
+ END IF;
+ RETURN NEW;
+END;
+$$;
+CREATE TRIGGER organisation_admins_require_verified BEFORE INSERT ON public.organisation_admins
+ FOR EACH ROW EXECUTE FUNCTION public.require_verified_organisation_admin();
+REVOKE ALL ON FUNCTION public.require_verified_organisation_admin() FROM PUBLIC, anon, authenticated;
+
 COMMIT;
 NOTIFY pgrst, 'reload schema';

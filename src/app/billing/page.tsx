@@ -4,6 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { getCommercialCatalog } from "@/lib/commercial/plans";
+import { getCommercialSettings } from "@/lib/commercial/settings";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { RetailPricing } from "@/components/billing/retail-pricing";
@@ -17,8 +19,16 @@ export const metadata = {
 
 export const dynamic = "force-dynamic";
 
+async function loadTrialSettings() {
+  try {
+    return (await getCommercialSettings(createAdminClient() as never)).trials;
+  } catch {
+    return undefined;
+  }
+}
+
 export default async function BillingPage() {
-  const catalog = await getCommercialCatalog();
+  const [catalog, trials] = await Promise.all([getCommercialCatalog(), loadTrialSettings()]);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -40,7 +50,8 @@ export default async function BillingPage() {
                   <Gift className="mr-1.5 h-3.5 w-3.5 shrink-0" /> Free
                 </Badge>
                 <span className="text-xs font-medium leading-tight text-foreground/90">
-                  One introductory choice: 7 days or limited 30 days.
+                  One introductory choice: {trials?.shortDays ?? 7} days or limited{" "}
+                  {trials?.longDays ?? 30} days.
                 </span>
               </div>
               <Button
@@ -63,7 +74,7 @@ export default async function BillingPage() {
             more at once. Paid visibility does not bypass moderation.
           </p>
 
-          <TrialPolicy />
+          <TrialPolicy trials={trials} />
         </div>
       </main>
       <Footer />

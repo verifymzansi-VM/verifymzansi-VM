@@ -20,23 +20,125 @@ const ENGAGEMENT_METRICS: ReadonlyArray<[string, string]> = [
   ["website_click", "Website clicks"],
   ["showroom_appearance", "Showroom appearances"],
   ["organisation_directory_appearance", "Organisation directory"],
+  ["search_appearance", "Search appearances"],
+  ["homepage_appearance", "Homepage appearances"],
   ["share", "Shares"],
+  ["save", "Saves"],
 ];
 
-/** Per-type totals of commercial analytics for the owner's posts (best effort). */
-async function loadEngagement(ownerId: string): Promise<Map<string, number>> {
-  const totals = new Map<string, number>();
+const SOURCE_LABELS: Record<string, string> = {
+  direct: "Direct or unknown",
+  internal: "Within VerifyMzansi",
+  search: "Search engines",
+  social: "Social media",
+  referral: "Other websites",
+};
+
+const CONTENT_TITLE: Record<string, { column: string; label: string }> = {
+  listings: { column: "title", label: "Mzansi Market" },
+  businesses: { column: "business_name", label: "Mzansi Business" },
+  promotions: { column: "title", label: "Tourism & Events" },
+};
+
+type PostEngagement = {
+  key: string;
+  title: string;
+  area: string;
+  impressions: number;
+  views: number;
+  uniqueViewers: number;
+  contacts: number;
+  saves: number;
+  shares: number;
+};
+
+type Engagement = {
+  totals: Map<string, number>;
+  uniqueViewers: number;
+  posts: PostEngagement[];
+  sources: Array<{ source: string; events: number }>;
+};
+
+const IMPRESSION_TYPES = new Set([
+  "impression",
+  "search_appearance",
+  "homepage_appearance",
+  "showroom_appearance",
+  "organisation_directory_appearance",
+]);
+const CONTACT_TYPES = new Set(["whatsapp_click", "phone_click", "website_click"]);
+
+/** Commercial analytics for the owner's posts (best effort; aggregates only). */
+async function loadEngagement(ownerId: string): Promise<Engagement> {
+  const result: Engagement = { totals: new Map(), uniqueViewers: 0, posts: [], sources: [] };
   try {
     const admin = tryCreateAdminClient();
-    if (!admin) return totals;
-    const { data } = await admin.rpc("content_analytics_summary", { p_user: ownerId, p_days: 30 });
-    for (const row of (data ?? []) as Array<{ event_type: string; events: number }>) {
-      totals.set(row.event_type, (totals.get(row.event_type) ?? 0) + Number(row.events));
+    if (!admin) return result;
+    const [summary, sources] = await Promise.all([
+      admin.rpc("content_analytics_summary", { p_user: ownerId, p_days: 30 }),
+      admin.rpc("content_traffic_sources", { p_user: ownerId, p_days: 30 }),
+    ]);
+    const rows = (summary.data ?? []) as Array<{
+      content_table: string;
+      content_id: string;
+      event_type: string;
+      events: number;
+      unique_viewers: number;
+    }>;
+    const posts = new Map<string, PostEngagement>();
+    for (const row of rows) {
+      const events = Number(row.events);
+      result.totals.set(row.event_type, (result.totals.get(row.event_type) ?? 0) + events);
+      const key = `${row.content_table}:${row.content_id}`;
+      const post = posts.get(key) ?? {
+        key,
+        title: "",
+        area: CONTENT_TITLE[row.content_table]?.label ?? "",
+        impressions: 0,
+        views: 0,
+        uniqueViewers: 0,
+        contacts: 0,
+        saves: 0,
+        shares: 0,
+      };
+      if (IMPRESSION_TYPES.has(row.event_type)) post.impressions += events;
+      if (CONTACT_TYPES.has(row.event_type)) post.contacts += events;
+      if (row.event_type === "detail_view") {
+        post.views += events;
+        post.uniqueViewers += Number(row.unique_viewers);
+        result.uniqueViewers += Number(row.unique_viewers);
+      }
+      if (row.event_type === "save") post.saves += events;
+      if (row.event_type === "share") post.shares += events;
+      posts.set(key, post);
     }
+
+    const top = [...posts.values()]
+      .sort(
+        (a, b) => b.views + b.contacts - (a.views + a.contacts) || b.impressions - a.impressions
+      )
+      .slice(0, 10);
+    await Promise.all(
+      Object.entries(CONTENT_TITLE).map(async ([table, { column }]) => {
+        const ids = top
+          .filter((post) => post.key.startsWith(`${table}:`))
+          .map((post) => post.key.slice(table.length + 1));
+        if (ids.length === 0) return;
+        const { data } = await admin.from(table).select(`id, ${column}`).in("id", ids);
+        for (const row of (data ?? []) as unknown as Array<Record<string, string | null>>) {
+          const post = top.find((item) => item.key === `${table}:${row.id}`);
+          if (post) post.title = row[column] ?? "";
+        }
+      })
+    );
+    result.posts = top;
+    result.sources = (
+      (sources.data ?? []) as Array<{ traffic_source: string; events: number }>
+    ).map((row) => ({ source: row.traffic_source, events: Number(row.events) }));
   } catch {
     // Analytics are informational only.
   }
-  return totals;
+  return result;
 }
 
 export default async function MetricsPage() {
@@ -90,7 +192,7 @@ export default async function MetricsPage() {
     totalViews > 0 ? (((leadCount || 0) / totalViews) * 100).toFixed(1) : "0.0";
 
   const engagement = await loadEngagement(ownerId);
-  const engagementTotal = [...engagement.values()].reduce((sum, n) => sum + n, 0);
+  const engagementTotal = [...engagement.totals.values()].reduce((sum, n) => sum + n, 0);
 
   const stats = [
     {
@@ -168,16 +270,75 @@ export default async function MetricsPage() {
               </div>
             </div>
           ) : (
-            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {ENGAGEMENT_METRICS.map(([key, label]) => (
-                <div key={key} className="rounded-lg border p-3">
-                  <dt className="text-xs text-muted-foreground">{label}</dt>
+            <div className="space-y-6">
+              <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {ENGAGEMENT_METRICS.map(([key, label]) => (
+                  <div key={key} className="rounded-lg border p-3">
+                    <dt className="text-xs text-muted-foreground">{label}</dt>
+                    <dd className="font-display text-xl font-semibold tabular-nums">
+                      {(engagement.totals.get(key) ?? 0).toLocaleString("en-ZA")}
+                    </dd>
+                  </div>
+                ))}
+                <div className="rounded-lg border p-3">
+                  <dt className="text-xs text-muted-foreground">Unique viewers</dt>
                   <dd className="font-display text-xl font-semibold tabular-nums">
-                    {(engagement.get(key) ?? 0).toLocaleString("en-ZA")}
+                    {engagement.uniqueViewers.toLocaleString("en-ZA")}
                   </dd>
                 </div>
-              ))}
-            </dl>
+              </dl>
+
+              {engagement.posts.length > 0 ? (
+                <section aria-labelledby="per-post-heading">
+                  <h3 id="per-post-heading" className="mb-2 text-sm font-semibold">
+                    By post
+                  </h3>
+                  <ul className="grid gap-3 md:grid-cols-2">
+                    {engagement.posts.map((post) => (
+                      <li key={post.key} className="rounded-lg border p-3">
+                        <p className="truncate font-medium">{post.title || "Untitled post"}</p>
+                        <p className="text-xs text-muted-foreground">{post.area}</p>
+                        <dl className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                          {(
+                            [
+                              ["Appearances", post.impressions],
+                              ["Views", post.views],
+                              ["Unique", post.uniqueViewers],
+                              ["Contacts", post.contacts],
+                              ["Saves", post.saves],
+                              ["Shares", post.shares],
+                            ] as const
+                          ).map(([label, value]) => (
+                            <div key={label}>
+                              <dt className="text-muted-foreground">{label}</dt>
+                              <dd className="font-semibold tabular-nums">
+                                {value.toLocaleString("en-ZA")}
+                              </dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+
+              {engagement.sources.length > 0 ? (
+                <section aria-labelledby="traffic-heading">
+                  <h3 id="traffic-heading" className="mb-2 text-sm font-semibold">
+                    Where detail views came from
+                  </h3>
+                  <ul className="space-y-1 text-sm">
+                    {engagement.sources.map((row) => (
+                      <li key={row.source} className="flex justify-between gap-3 border-b py-1">
+                        <span>{SOURCE_LABELS[row.source] ?? row.source}</span>
+                        <span className="tabular-nums">{row.events.toLocaleString("en-ZA")}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+            </div>
           )}
         </CardContent>
       </Card>

@@ -44,7 +44,8 @@ export default async function CommercialSettingsPage() {
           <Link className="underline" href="/admin/trials">
             Free Posts &amp; Trials
           </Link>
-          .
+          . Event price: <strong>Free</strong> by policy — events never use paid slots or trials;
+          control them with the free event fair-use limits and per-account allowances.
         </p>
       </div>
       <CommercialSettingsPanel

@@ -82,7 +82,7 @@ export default async function PricingPage() {
             and can be reactivated.
           </p>
 
-          <TrialPolicy />
+          <TrialPolicy trials={settings?.trials} />
 
           <EnterprisePricing
             plans={catalog.enterprise}

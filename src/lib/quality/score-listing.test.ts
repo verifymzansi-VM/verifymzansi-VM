@@ -74,6 +74,20 @@ describe("scoreListingQuality", () => {
     );
   });
 
+  it("sends prohibited-item wording to review without false positives", () => {
+    const codes = (description: string) =>
+      scoreListingQuality({ ...good, description }).issues.map((issue) => issue.code);
+    expect(codes(`${good.description} Counterfeit sneakers available.`)).toContain(
+      "prohibited_content"
+    );
+    expect(codes(`${good.description} Unlicensed pistol for sale.`)).toContain(
+      "prohibited_content"
+    );
+    expect(codes(`${good.description} Ivory lace wedding dress, not stolen.`)).not.toContain(
+      "prohibited_content"
+    );
+  });
+
   it("normalises titles for duplicate detection", () => {
     expect(normaliseTitle("  Samsung 55-inch  Smart TV! ")).toBe("samsung 55 inch smart tv");
   });

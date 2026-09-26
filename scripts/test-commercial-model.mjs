@@ -230,6 +230,11 @@ await test("ordinary user: 7-day trial → expiry → R50 → reactivation", asy
   await setStatus(id, "live");
   const claim = await scalar(`SELECT * FROM intro_trial_claims WHERE content_id=$1`, [id]);
   assert(claim.activated_at);
+  const started = await scalar(
+    `SELECT count(*)::int AS n FROM notifications WHERE user_id=$1 AND title='Your introductory trial has started'`,
+    [u]
+  );
+  assert.equal(started.n, 1);
   assert.equal((await scalar(`SELECT trial_entitlement_for($1) AS k`, [u])).k, "PUBLIC_7_DAY");
   await setStatus(id, "expired");
   assert.equal(await statusOf(id), "expired");
@@ -282,6 +287,14 @@ await test("strategic trial: one slot, three activations, no public trial afterw
   );
   const e = await scalar(`SELECT * FROM slot_entitlements WHERE user_id=$1`, [u]);
   assert.equal(e.slot_capacity, 1);
+  assert(
+    (
+      await scalar(
+        `SELECT count(*)::int AS n FROM notifications WHERE user_id=$1 AND title LIKE '%Strategic Trial has started'`,
+        [u]
+      )
+    ).n === 1
+  );
   assert.equal(e.activation_limit_total, 3);
   assert(new Date(e.expires_at) - new Date(e.starts_at) >= 89 * 864e5);
   const a = await post(u);
@@ -862,7 +875,7 @@ await test("analytics dedupes impressions and feeds the organisation report", as
   const batch = [
     { table: "businesses", id: biz, type: "impression", surface: "search" },
     { table: "businesses", id: biz, type: "impression", surface: "search" },
-    { table: "businesses", id: biz, type: "detail_view" },
+    { table: "businesses", id: biz, type: "detail_view", source: "search" },
     { table: "businesses", id: biz, type: "whatsapp_click" },
     { table: "nope", id: biz, type: "impression" },
   ];
@@ -886,6 +899,11 @@ await test("analytics dedupes impressions and feeds the organisation report", as
       orgId,
     ]),
     /Organisation access required/
+  );
+  const sources = (await db.query(`SELECT * FROM content_traffic_sources($1)`, [owner])).rows;
+  assert.deepEqual(
+    sources.map((r) => [r.traffic_source, Number(r.events)]),
+    [["search", 1]]
   );
   await db.query(`SELECT rollup_analytics_daily()`);
 });
@@ -1287,6 +1305,22 @@ await test("storage usage is summed per account", async () => {
   const u = await user();
   await db.query(`INSERT INTO media_uploads(user_id,file_size) VALUES ($1,1000),($1,2500)`, [u]);
   assert.equal(Number((await scalar(`SELECT media_storage_used($1) AS n`, [u])).n), 3500);
+});
+
+await test("organisation administrators need identity verification (step-up)", async () => {
+  const unverified = await user();
+  await db.query(
+    `UPDATE account_profiles SET account_verification_status='pending' WHERE user_id=$1`,
+    [unverified]
+  );
+  await rejects(
+    db.query(`SELECT admin_manage_organisation($1,$2,'add_admin',$3,'Unverified nominee')`, [
+      admin,
+      orgId,
+      { userId: unverified },
+    ]),
+    /ORGANISATION_ADMIN_UNVERIFIED/
+  );
 });
 
 console.log(`${checks} commercial model checks passed`);

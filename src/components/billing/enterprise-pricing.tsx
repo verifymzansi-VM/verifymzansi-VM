@@ -27,8 +27,9 @@ export function EnterprisePricing({
 
   return (
     <section
+      id="enterprise"
       aria-labelledby="enterprise-pricing-title"
-      className="mx-auto max-w-5xl rounded-2xl border border-border/70 bg-card p-5 sm:p-7"
+      className="mx-auto max-w-5xl scroll-mt-24 rounded-2xl border border-border/70 bg-card p-5 sm:p-7"
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="max-w-2xl">

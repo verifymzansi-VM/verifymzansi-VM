@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getCommercialSettings } from "@/lib/commercial/settings";
 import { PageHeader } from "@/components/layout/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -23,7 +24,6 @@ const date = new Intl.DateTimeFormat("en-ZA", {
   dateStyle: "long",
   timeZone: "Africa/Johannesburg",
 });
-const ALERT_DAYS = [60, 30, 14, 7];
 
 type Summary = {
   programmeStatus: string;
@@ -80,7 +80,7 @@ export default async function OrganisationDashboardPage({
   if (isAdmin !== true) notFound();
 
   const window = reportWindow(org.trial_starts_at);
-  const [summary, applications, members, admins, report] = await Promise.all([
+  const [summary, applications, members, admins, report, settings] = await Promise.all([
     db.rpc("organisation_admin_summary", { p_user: user.id, p_org: org.id }),
     db.rpc("org_list_applications", { p_user: user.id, p_org: org.id, p_status: null }),
     db.rpc("org_list_members", { p_user: user.id, p_org: org.id }),
@@ -91,6 +91,7 @@ export default async function OrganisationDashboardPage({
       p_from: window.from,
       p_to: window.to,
     }),
+    getCommercialSettings(db as never),
   ]);
   const s = (summary.data ?? {}) as Partial<Summary>;
   const adminIds = (admins.data ?? []).map((a) => a.user_id);
@@ -98,10 +99,15 @@ export default async function OrganisationDashboardPage({
     ? await db.from("account_profiles").select("user_id, display_name").in("user_id", adminIds)
     : { data: [] as Array<{ user_id: string; display_name: string | null }> };
   const parsedReport = parsePerformanceReport(report.data);
+  // Alerts start at the earliest configured threshold (default 60/30/14/7 days).
+  const alertFrom = Math.max(...settings.founding_organisation.alertDays);
   const showAlert =
     s.programmeStatus === "founding_trial" &&
     typeof s.daysRemaining === "number" &&
-    s.daysRemaining <= ALERT_DAYS[0]!;
+    s.daysRemaining <= alertFrom;
+  // Trial expiry moves the organisation to affiliation-only (see organisation_lifecycle).
+  const pilotEnded =
+    s.programmeStatus === "affiliation_only" && Boolean(s.trialEndsAt) && s.daysRemaining === 0;
 
   return (
     <div className="min-w-0 space-y-6">
@@ -133,11 +139,43 @@ export default async function OrganisationDashboardPage({
         </div>
       ) : null}
 
+      {pilotEnded ? (
+        <section className="rounded-xl border bg-card p-4 text-sm">
+          <h2 className="font-semibold">Your founding pilot has ended</h2>
+          <p className="mt-1 text-muted-foreground">
+            Nothing renews automatically. Confirmed affiliations stay on business profiles;
+            sponsored visibility has ended. Review the performance report, then choose a 3, 6 or
+            12-month organisation plan or ask for a custom enterprise quotation.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link
+              className="inline-flex min-h-11 items-center rounded-md border px-3 font-medium"
+              href="/pricing#enterprise"
+            >
+              See 3, 6 and 12-month plans
+            </Link>
+            <Link
+              className="inline-flex min-h-11 items-center rounded-md bg-brand-green px-3 font-medium text-white"
+              href="/contact?topic=organisation_proposal"
+            >
+              Request a custom quotation
+            </Link>
+          </div>
+        </section>
+      ) : null}
+
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
-          ["Pending requests", (s.pending ?? 0) + (s.moreInfo ?? 0)],
+          ["Pending requests", s.pending ?? 0],
+          ["More information required", s.moreInfo ?? 0],
+          ["Approved", s.approved ?? 0],
+          ["Declined", s.declined ?? 0],
           ["Affiliated businesses", s.affiliated ?? 0],
           ["Sponsored positions", `${s.sponsored ?? 0} / ${s.sponsoredCapacity ?? 0}`],
+          [
+            "Available sponsored slots",
+            Math.max(0, (s.sponsoredCapacity ?? 0) - (s.sponsored ?? 0)),
+          ],
           ["Waiting list", s.waitlisted ?? 0],
         ].map(([name, value]) => (
           <div key={String(name)} className="rounded-xl border p-3">

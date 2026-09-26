@@ -82,6 +82,20 @@ function SettingForm({ settingKey, value }: { settingKey: CommercialSettingKey; 
           </label>
         );
       }
+      if (typeof current === "string") {
+        return (
+          <label key={name} className="col-span-full block text-sm">
+            <span>{humanize(field)}</span>
+            <textarea
+              name={name}
+              defaultValue={current}
+              maxLength={600}
+              rows={3}
+              className="mt-1 block w-full rounded-md border bg-background p-2"
+            />
+          </label>
+        );
+      }
       return (
         <label key={name} className="block text-sm">
           <span>{humanize(field)}</span>
