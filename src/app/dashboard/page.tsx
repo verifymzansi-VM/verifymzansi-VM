@@ -329,10 +329,15 @@ export default async function DashboardPage() {
           </h1>
           {/* Inline verification indicator */}
           {isVerified ? (
-            <Badge className="mt-1.5 gap-1 bg-brand-green-50 text-brand-green border-brand-green-200 dark:bg-brand-green-950 dark:border-brand-green-800 text-xs">
-              <BadgeCheck className="h-3 w-3" />
-              {VERIFICATION_LEVEL_LABELS[verificationLevel]}
-            </Badge>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              <Badge className="gap-1 bg-brand-green-50 text-brand-green border-brand-green-200 dark:bg-brand-green-950 dark:border-brand-green-800 text-xs">
+                <BadgeCheck className="h-3 w-3" />
+                Verified
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                {VERIFICATION_LEVEL_LABELS[verificationLevel]}
+              </span>
+            </div>
           ) : verStatus === "pending_review" ? (
             <Link
               href="/verification"
