@@ -74,7 +74,7 @@ export default async function PricingPage() {
         </section>
 
         <div className="container-page space-y-8 py-8 sm:py-10">
-          <RetailPricing offers={catalog.retail} />
+          <RetailPricing offers={catalog.retail} trialDays={settings?.trials} />
 
           <p className="mx-auto max-w-2xl text-center text-xs text-muted-foreground">
             Plans are prepaid for a fixed period and never renew automatically. Nothing is visible

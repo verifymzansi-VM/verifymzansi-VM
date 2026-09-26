@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, CalendarDays, Check, Crown, Sparkles } from "lucide-react";
+import { ArrowRight, CalendarDays, Check, Crown, Gift, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -80,12 +80,47 @@ function OfferFeatures({ offer, area }: { offer: RetailPricingOffer; area: Marke
  * The public retail ladder: R50 / R250 / R450 and free Events. The same price
  * applies in every section; the section picker only chooses where the slot is used.
  */
+/** Tourism leads with the free introductory trial before the paid ladder. */
+function TourismTrialCard({ shortDays, longDays }: { shortDays: number; longDays: number }) {
+  return (
+    <Card
+      data-testid="tourism-free-trial"
+      className="border-brand-green/50 bg-brand-green/5 ring-1 ring-brand-green/15"
+    >
+      <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+        <div className="space-y-1">
+          <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-brand-green">
+            <Gift aria-hidden="true" className="h-4 w-4" />
+            Free trial — Tourism
+          </p>
+          <p className="font-display text-2xl font-bold tracking-tight">
+            Start free: {shortDays} days, or a limited {longDays}-day launch trial
+          </p>
+          <p className="text-sm text-muted-foreground">
+            One introductory choice per verified person. {longDays}-day places are limited and
+            confirmed on approval. No payment details, no automatic charge — your listing stays
+            saved in your dashboard when the trial ends.
+          </p>
+        </div>
+        <Button asChild className="h-11 shrink-0 gap-2 rounded-full font-semibold">
+          <Link href="/post/create-tourism?type=tourism">
+            Start free trial
+            <ArrowRight aria-hidden="true" className="h-4 w-4" />
+          </Link>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function RetailPricing({
   offers,
   defaultArea = "MZANSI_MARKET",
+  trialDays = { shortDays: 7, longDays: 30 },
 }: {
   offers: RetailPricingOffer[];
   defaultArea?: MarketplaceArea;
+  trialDays?: { shortDays: number; longDays: number };
 }) {
   const [area, setArea] = useState<MarketplaceArea>(defaultArea);
 
@@ -117,6 +152,10 @@ export function RetailPricing({
       <p className="text-center text-xs text-muted-foreground">
         One price in every section. Choose where your slot will be used.
       </p>
+
+      {area === "PROMOTIONS_EVENTS" ? (
+        <TourismTrialCard shortDays={trialDays.shortDays} longDays={trialDays.longDays} />
+      ) : null}
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {offers.map((offer) => {

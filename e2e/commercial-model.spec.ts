@@ -37,6 +37,22 @@ test.describe("Commercial model", () => {
     await expect(main.getByTestId("retail-offer-month")).toContainText("R50");
   });
 
+  test("tourism leads with the free trial above the paid plans", async ({ page }) => {
+    await page.goto("/pricing", { waitUntil: "domcontentloaded" });
+    const main = page.locator("main");
+    await expect(main.getByTestId("tourism-free-trial")).toHaveCount(0);
+    await main.getByRole("radio", { name: /tourism/i }).click();
+    const trial = main.getByTestId("tourism-free-trial");
+    await expect(trial).toBeVisible();
+    await expect(trial.getByRole("link", { name: /start free trial/i })).toHaveAttribute(
+      "href",
+      "/post/create-tourism?type=tourism"
+    );
+    const trialBox = await trial.boundingBox();
+    const planBox = await main.getByTestId("retail-offer-month").boundingBox();
+    expect(trialBox!.y).toBeLessThan(planBox!.y);
+  });
+
   test("pricing has no horizontal overflow on phones", async ({ page }) => {
     await page.setViewportSize({ width: 360, height: 780 });
     await page.goto("/pricing", { waitUntil: "domcontentloaded" });

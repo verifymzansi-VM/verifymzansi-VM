@@ -807,7 +807,7 @@ function PlanPickerWithTrial({
             </p>
           </div>
         )}
-      {/* ── Section 2: Monthly Plans ─── */}
+      {/* ── Section 2: Paid plans (R50 / R250 / R450) ─── */}
       <div className="space-y-2">
         <h3 className="font-display text-sm font-bold flex items-center gap-2">
           <Crown className="h-4 w-4 text-brand-gold" />
@@ -820,7 +820,7 @@ function PlanPickerWithTrial({
       </div>
 
       <p className="text-center text-xs text-muted-foreground">
-        All plans include verification badge • Cancel anytime •{" "}
+        Prepaid • No automatic renewal • Reuse your slot when an item sells •{" "}
         <Link href="/billing" className="text-brand-green underline">
           View full plan details
         </Link>

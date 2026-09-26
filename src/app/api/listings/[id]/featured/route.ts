@@ -6,7 +6,7 @@ import { createListingAddonCheckoutRoute } from "../_lib/create-addon-checkout-r
  * POST /api/listings/[id]/featured
  *
  * Create an Ozow checkout session to feature a listing.
- * Requires authenticated user who owns the listing, on Pro plan.
+ * Requires an authenticated owner with a paid plan (R50 / R250 / R450 or bulk).
  */
 export const POST = createListingAddonCheckoutRoute({
   loggerName: "FeaturedCheckout",

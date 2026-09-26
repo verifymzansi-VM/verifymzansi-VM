@@ -67,7 +67,7 @@ export default async function BillingPage() {
             </div>
           </div>
 
-          <RetailPricing offers={catalog.retail} />
+          <RetailPricing offers={catalog.retail} trialDays={trials} />
 
           <p className="mx-auto max-w-2xl text-center text-xs text-muted-foreground">
             Plans are prepaid and never renew automatically. Buy another slot at any time to post

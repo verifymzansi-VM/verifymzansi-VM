@@ -148,7 +148,7 @@ export function canBoost(
 
 /**
  * Check whether an account holder's plan allows featuring listings.
- * Only available on Pro plans.
+ * Available on paid plans (retail and bulk).
  */
 export function canFeatured(
   tier: PlanTier,
@@ -168,7 +168,7 @@ export function canFeatured(
 
 /**
  * Check whether an account holder's plan allows marking listings as urgent.
- * Only available on Pro plans.
+ * Available on paid plans (retail and bulk).
  */
 export function canUrgent(
   tier: PlanTier,
