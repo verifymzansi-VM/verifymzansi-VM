@@ -11,6 +11,10 @@ and not a security company.
 
 ## Principles
 
+0. **Less text.** Say it in as few words as possible. One short line under a
+   heading at most; prefer icons, images, badges and labels over paragraphs. Cut
+   anything a visitor wouldn't miss.
+
 1. **Explain first, then browse.** Every entry page answers: what is this, what
    can I find, why trust it, how do I start.
 2. **Trust is visible but light.** Use the shield-check mark, the `VerifiedTick`
@@ -21,9 +25,10 @@ and not a security company.
 4. **Mobile first.** 16px gutters (`container-page`), 44px minimum touch
    targets, bottom tab bar on discovery pages, sticky action bars on detail
    pages.
-5. **South African, not flag-coloured.** Local imagery (showroom artwork), SA
-   copy ("bakkies", "Mzansi"), a subtle Ndebele-inspired pattern
-   (`.mzansi-pattern`), marigold sunshine accents.
+5. **South African, not flag-coloured.** The logo is the one place the flag
+   appears — keep it exactly as is. Local imagery (showroom artwork), SA copy
+   ("bakkies", "Mzansi"), a subtle Ndebele-inspired pattern (`.mzansi-pattern`),
+   marigold sunshine accents.
 
 ## Colour
 
@@ -87,19 +92,19 @@ Area identity helpers: `.area-market-tile`, `.area-business-tile`,
 
 ## Components
 
-| Component                                      | Use                                                                                                                                                   |
-| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Button` (`@/components/ui/button`)            | variants: default, `trust-verified` (primary emerald), `outline`, `ghost`, `ink` (dark neutral), `trust-gold`, `destructive`. Sizes sm/default/lg/xl. |
-| `Badge`                                        | adds `variant="verified"`.                                                                                                                            |
-| `BrandLogo`, `BrandMark` (`shared/brand-logo`) | vector logo; `tone="inverse"` on dark backgrounds.                                                                                                    |
-| `BrandShield` / `BrandShieldAlert`             | outline shield-check icon (currentColor, lucide-compatible).                                                                                          |
-| `TrustBadge` (`trust/trust-badge`)             | labelled trust tier pill (legal wording from `trust-scale`).                                                                                          |
-| `VerifiedTick` (`trust/verified-tick`)         | compact emerald shield tick beside names; `decorative` when text already says it; `pro` for tier 4.                                                   |
-| `PageHeader` (`layout/page-header`)            | h1 + description + breadcrumbs + actions for secondary pages.                                                                                         |
-| `AreaHero` (`layout/area-hero`)                | colour-coded intro for the three product areas.                                                                                                       |
-| `HeaderSearch` (`layout/header-search`)        | GET form to `/search`; `size="lg"` for heroes.                                                                                                        |
-| `PosterCardShell` (immersive)                  | feed card: 4:5 media, status chip, details below media.                                                                                               |
-| `.pill-link`, `.chip`                          | quick-filter pills and meta chips.                                                                                                                    |
+| Component                               | Use                                                                                                                                                                         |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Button` (`@/components/ui/button`)     | variants: default, `trust-verified` (primary emerald), `outline`, `ghost`, `ink` (dark neutral), `trust-gold`, `destructive`. Sizes sm/default/lg/xl.                       |
+| `Badge`                                 | adds `variant="verified"`.                                                                                                                                                  |
+| `BrandLogo` (`shared/brand-logo`)       | **The owner's original logo artwork — never redraw or restyle it.** Default `tone="auto"` swaps to the original inverse file in dark mode; `tone="inverse"` on dark panels. |
+| `BrandShield` / `BrandShieldAlert`      | The original shield artwork, used as an icon.                                                                                                                               |
+| `TrustBadge` (`trust/trust-badge`)      | labelled trust tier pill (legal wording from `trust-scale`).                                                                                                                |
+| `VerifiedTick` (`trust/verified-tick`)  | compact emerald shield tick beside names; `decorative` when text already says it; `pro` for tier 4.                                                                         |
+| `PageHeader` (`layout/page-header`)     | h1 + description + breadcrumbs + actions for secondary pages.                                                                                                               |
+| `AreaHero` (`layout/area-hero`)         | colour-coded intro for the three product areas.                                                                                                                             |
+| `HeaderSearch` (`layout/header-search`) | GET form to `/search`; `size="lg"` for heroes.                                                                                                                              |
+| `PosterCardShell` (immersive)           | feed card: 4:5 media, status chip, details below media.                                                                                                                     |
+| `.pill-link`, `.chip`                   | quick-filter pills and meta chips.                                                                                                                                          |
 
 Global chrome: sticky two-row `Header` (logo · search · actions / area tabs ·
 help links), dark `Footer` with a post-for-free call-to-action band, and

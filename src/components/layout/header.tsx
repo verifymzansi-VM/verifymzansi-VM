@@ -84,8 +84,8 @@ export function Header(props: HeaderProps) {
       fallback={
         <header className="glass-panel sticky top-0 z-50 w-full">
           <div className="container-page flex h-16 items-center">
-            <Link href="/" prefetch={false} className="font-display text-lg font-extrabold">
-              Verify<span className="text-brand-green-600">Mzansi</span>
+            <Link href="/" prefetch={false} className="text-lg font-bold">
+              VerifyMzansi
             </Link>
           </div>
         </header>
@@ -213,7 +213,7 @@ function HeaderInner({
           <BrandLogo
             size="md"
             priority
-            imageClassName="transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105"
+            imageClassName="drop-shadow-[0_10px_20px_rgba(15,23,42,0.08)] transition-transform duration-200 group-hover:scale-[1.03]"
           />
         </Link>
 
