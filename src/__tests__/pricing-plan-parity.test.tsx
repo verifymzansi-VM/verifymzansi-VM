@@ -120,8 +120,10 @@ describe("Active-area pricing parity", () => {
 
   it("billing page keeps the introductory trial copy", async () => {
     render(await BillingPage());
+    // The trial rules now live once, in the "How billing works" FAQ.
+    expect(screen.getByText("How does the free introductory post work?")).toBeInTheDocument();
     expect(
-      screen.getByText(/One introductory choice: 7 days or limited 30 days/)
+      screen.getByText(/choose one post for\s+7\s+days, or a 30-day launch trial/)
     ).toBeInTheDocument();
     expect(
       screen.getByText(/Strategic, founding partner and organisation-sponsored/)

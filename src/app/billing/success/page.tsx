@@ -20,7 +20,10 @@ export default async function BillingSuccessPage({
     <div className="flex min-h-screen flex-col">
       <Header isAuthenticated />
 
-      <main id="main-content" className="flex flex-1 items-center justify-center py-4 scroll-mt-24">
+      <main
+        id="main-content"
+        className="bg-hero-mesh flex flex-1 scroll-mt-24 items-center justify-center py-10 sm:py-16"
+      >
         <PaymentStatusPanel initialStatus={status} paymentId={payment} />
       </main>
 

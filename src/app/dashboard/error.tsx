@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import Link from "next/link";
 
+/**
+ * Renders inside the dashboard layout (header and navigation stay in place),
+ * so it must not add its own header or <main>.
+ */
 export default function DashboardError({
   error,
   reset,
@@ -17,43 +21,36 @@ export default function DashboardError({
   }, [error]);
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-50 w-full border-b bg-background">
-        <div className="container-page flex h-16 items-center">
-          <Link href="/" className="text-lg font-bold">
-            VerifyMzansi
-          </Link>
-        </div>
-      </header>
-      <main
-        id="main-content"
-        className="flex-1 flex flex-col items-center justify-center gap-6 px-4 text-center"
+    <div className="mx-auto flex max-w-md flex-col items-center gap-5 py-16 text-center">
+      <span
+        aria-hidden="true"
+        className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-red-100 text-brand-red-700 dark:bg-brand-red-500/15 dark:text-brand-red-300"
       >
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
-          <AlertTriangle className="h-7 w-7 text-destructive" />
-        </div>
-        <div className="max-w-md space-y-2">
-          <h1 className="text-lg sm:text-xl font-display font-bold">Dashboard Error</h1>
-          <p className="text-sm text-muted-foreground">
-            We couldn&apos;t load your dashboard summary. Retry the page or reload the dashboard
-            shell.
-          </p>
-        </div>
-        <div className="flex flex-wrap justify-center gap-3">
-          <Button variant="outline" asChild>
-            <Link href="/">Go to homepage</Link>
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() =>
-              window.location.assign(new URL("/dashboard", window.location.origin).toString())
-            }
-          >
-            Reload Dashboard
-          </Button>
-          <Button onClick={() => reset()}>Try again</Button>
-        </div>
-      </main>
+        <AlertTriangle className="h-7 w-7" />
+      </span>
+      <div className="space-y-1.5">
+        <h1 className="font-display text-xl font-bold sm:text-2xl">This page didn&apos;t load</h1>
+        <p className="text-sm text-muted-foreground">
+          Something went wrong on our side. Try again, or reload your dashboard.
+        </p>
+      </div>
+      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+        <Button onClick={() => reset()} variant="trust-verified" className="h-11 rounded-full px-5">
+          Try again
+        </Button>
+        <Button
+          variant="outline"
+          className="h-11 rounded-full px-5"
+          onClick={() =>
+            window.location.assign(new URL("/dashboard", window.location.origin).toString())
+          }
+        >
+          Reload dashboard
+        </Button>
+      </div>
+      <Link href="/help" className="text-sm text-muted-foreground underline underline-offset-4">
+        Get help
+      </Link>
     </div>
   );
 }

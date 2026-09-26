@@ -82,18 +82,22 @@ export function GoogleOAuthButton({ mode }: GoogleOAuthButtonProps) {
     }
   }
 
+  const label = mode === "login" ? "Continue with Google" : "Sign up with Google";
+
   return (
     <Button
       type="button"
       variant="outline"
-      className="w-full gap-3"
+      size="lg"
+      className="h-12 w-full gap-3 bg-card text-[15px] font-semibold"
       disabled={isLoading}
+      aria-busy={isLoading || undefined}
       onClick={handleGoogleSignIn}
     >
       {isLoading ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
+        <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
       ) : (
-        <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
+        <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
           <path
             d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
             fill="#4285F4"
@@ -112,7 +116,7 @@ export function GoogleOAuthButton({ mode }: GoogleOAuthButtonProps) {
           />
         </svg>
       )}
-      {mode === "login" ? "Continue with Google" : "Sign up with Google"}
+      {isLoading ? "Connecting to Google…" : label}
     </Button>
   );
 }

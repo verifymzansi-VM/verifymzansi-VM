@@ -96,6 +96,17 @@ vi.mock("@/components/billing/plan-gate", () => ({
 }));
 
 vi.mock("@/components/post/post-form-scaffold", () => ({
+  PostDraftStatus: ({ onDiscard }: { onDiscard: () => void }) => (
+    <button type="button" onClick={onDiscard}>
+      Discard draft
+    </button>
+  ),
+  PostFormSection: ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <section>
+      <h3>{title}</h3>
+      {children}
+    </section>
+  ),
   PostFormScaffold: ({
     children,
     footer,

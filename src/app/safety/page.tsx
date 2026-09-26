@@ -1,10 +1,20 @@
-import { BrandShieldAlert as ShieldAlert } from "@/components/shared/brand-shield";
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, Ban, FileWarning, Gavel, MapPin } from "lucide-react";
+import {
+  ArrowRight,
+  Flag,
+  FolderLock,
+  Gavel,
+  MessageSquareWarning,
+  Phone,
+  Users,
+  Wallet,
+} from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
-import { PageHeader } from "@/components/layout/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { BrandShield, BrandShieldAlert } from "@/components/shared/brand-shield";
+import { InfoHero, SectionHeading } from "@/components/safety/info-hero";
+import { Button } from "@/components/ui/button";
+import { SAFETY_RULES as safetyRules } from "@/lib/constants/safety-rules";
 
 export const metadata = {
   title: "Safety Centre",
@@ -12,24 +22,44 @@ export const metadata = {
     "Buyer and seller safety guidance for VerifyMzansi users in South Africa, including scam warnings, safe meetings, disputes, reports, and appeals.",
 };
 
-import { SAFETY_RULES as safetyRules } from "@/lib/constants/safety-rules";
+/** Icons for each canonical safety rule, in SAFETY_RULES order. */
+const TIP_ICONS = [Wallet, Users, MessageSquareWarning, FolderLock, Flag] as const;
+
+const GUIDES = [
+  {
+    href: "/safety/scam-alerts",
+    icon: BrandShieldAlert,
+    title: "Scam alerts",
+    body: "Red flags to watch for",
+    tile: "bg-brand-red/10 text-brand-red-700 dark:bg-brand-red/15 dark:text-brand-red-300",
+  },
+  {
+    href: "/safety/meeting-checklist",
+    icon: Users,
+    title: "Meeting checklist",
+    body: "Before, during and after",
+    tile: "bg-brand-gold/15 text-brand-gold-800 dark:text-brand-gold-300",
+  },
+  {
+    href: "/verify-buyer",
+    icon: BrandShield,
+    title: "Verify a buyer",
+    body: "Check a buyer token",
+    tile: "area-market-tile",
+  },
+  {
+    href: "/trust-safety",
+    icon: BrandShield,
+    title: "How verification works",
+    body: "What badges mean",
+    tile: "area-business-tile",
+  },
+] as const;
 
 const responseSteps = [
-  {
-    title: "Report suspicious listings",
-    description:
-      "Use the contact form with listing links, screenshots, user handles, and payment references.",
-  },
-  {
-    title: "Moderation review",
-    description:
-      "VerifyMzansi can review reports, remove fraudulent content, restrict accounts, and request more evidence.",
-  },
-  {
-    title: "Appeals",
-    description:
-      "If a verification or moderation decision looks wrong, users should provide fresh evidence for review.",
-  },
+  { title: "Report suspicious listings", description: "Use Report on the post, or contact us." },
+  { title: "Moderation review", description: "We can remove posts and restrict accounts." },
+  { title: "Appeals", description: "Think we got it wrong? Send fresh evidence." },
 ] as const;
 
 export default function SafetyCentrePage() {
@@ -38,117 +68,156 @@ export default function SafetyCentrePage() {
       <Header />
 
       <main id="main-content" className="flex-1">
-        <div className="container-page py-4 space-y-5">
-          <PageHeader
-            title="Safety Centre"
-            description="Practical guidance for safer buying, selling, scam reports, and moderation."
-            breadcrumbs={[{ label: "Safety Centre" }]}
-          />
+        <InfoHero
+          title="Safety Centre"
+          description="Buy, sell and meet safely, and get help when something goes wrong."
+          breadcrumbs={[{ label: "Safety Centre" }]}
+          actions={
+            <>
+              <Button asChild variant="trust-verified" size="lg">
+                <Link href="/contact?topic=fraud_report">Report a problem</Link>
+              </Button>
+              <Button asChild variant="outline" size="lg">
+                <a href="#emergency">Emergency numbers</a>
+              </Button>
+            </>
+          }
+        />
 
-          <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 elev-xs dark:border-amber-900/60 dark:bg-amber-950/40">
-            <div className="flex items-start gap-3.5">
-              <span className="icon-tile bg-amber-500/15 text-amber-700 dark:text-amber-300">
-                <AlertTriangle className="h-5 w-5" />
+        <div className="container-page space-y-14 py-10 sm:space-y-16 sm:py-14">
+          {/* ── Guides ───────────────────────────────────────────── */}
+          <section aria-labelledby="guides-title">
+            <h2 id="guides-title" className="sr-only">
+              Safety guides
+            </h2>
+            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {GUIDES.map(({ href, icon: Icon, title, body, tile }) => (
+                <li key={href}>
+                  <Link
+                    href={href}
+                    className="group surface-card flex h-full items-center gap-4 p-4 transition-shadow duration-200 hover:elev-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:p-5"
+                  >
+                    <span className={`icon-tile h-11 w-11 ${tile}`}>
+                      <Icon className="h-5 w-5" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-body text-base font-semibold text-foreground">
+                        {title}
+                      </span>
+                      <span className="block text-sm text-muted-foreground">{body}</span>
+                    </span>
+                    <ArrowRight
+                      className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-foreground"
+                      aria-hidden="true"
+                    />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          {/* ── Tips ─────────────────────────────────────────────── */}
+          <section aria-labelledby="tips-title">
+            <SectionHeading id="tips-title" title="Buyer and seller rules" />
+            <ul className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              {safetyRules.map((rule, index) => {
+                const Icon = TIP_ICONS[index] ?? Flag;
+                return (
+                  <li key={rule} className="surface-card flex gap-3 p-4 lg:flex-col lg:p-5">
+                    <span className="icon-tile area-market-tile">
+                      <Icon className="h-5 w-5" aria-hidden="true" />
+                    </span>
+                    <p className="text-sm font-medium leading-6 text-foreground">{rule}</p>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+
+          {/* ── Report path ──────────────────────────────────────── */}
+          <section
+            aria-labelledby="report-title"
+            className="hero-panel grid gap-8 p-5 sm:p-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-12"
+          >
+            <div>
+              <span className="icon-tile bg-brand-red/10 text-brand-red-700 dark:bg-brand-red/15 dark:text-brand-red-300">
+                <Flag className="h-5 w-5" aria-hidden="true" />
               </span>
-              <div className="space-y-1">
-                <h2 className="font-display text-lg font-semibold text-amber-900 dark:text-amber-100">
-                  Verification reduces risk. It does not remove the need for safe trading.
-                </h2>
-                <p className="text-sm leading-6 text-amber-800 dark:text-amber-200">
-                  Inspect goods, confirm details, avoid pressure, and walk away from unsafe deals.
-                </p>
+              <h2 id="report-title" className="mt-4 section-title">
+                Reports, disputes, and appeals
+              </h2>
+              <p className="section-lede">Something not right? Tell us.</p>
+              <div className="mt-5 flex flex-wrap gap-2.5">
+                <Button asChild variant="trust-verified">
+                  <Link href="/contact?topic=fraud_report">Report a problem</Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link href="/contact?topic=verification_appeal">Appeal a decision</Link>
+                </Button>
               </div>
             </div>
-          </section>
 
-          <section className="grid gap-4 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <ShieldAlert className="h-4 w-4 text-brand-green" />
-                  Buyer and seller rules
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  {safetyRules.map((rule) => (
-                    <li key={rule} className="flex gap-2">
-                      <Ban className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
-                      <span>{rule}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <FileWarning className="h-4 w-4 text-brand-green" />
-                  Reports, disputes, and appeals
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {responseSteps.map((step) => (
-                  <div
-                    key={step.title}
-                    className="rounded-xl border border-border/60 bg-muted/40 p-3.5"
+            <ol className="space-y-3">
+              {responseSteps.map((step, index) => (
+                <li
+                  key={step.title}
+                  className="flex items-center gap-4 rounded-2xl border border-border/60 bg-background/60 p-4"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-green-600 text-sm font-bold text-white dark:bg-brand-green-500 dark:text-brand-green-950"
                   >
-                    <h3 className="text-sm font-semibold">{step.title}</h3>
-                    <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                      {step.description}
-                    </p>
+                    {index + 1}
+                  </span>
+                  <div>
+                    <h3 className="font-body text-sm font-semibold text-foreground">
+                      {step.title}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">{step.description}</p>
                   </div>
-                ))}
-              </CardContent>
-            </Card>
+                </li>
+              ))}
+            </ol>
           </section>
 
-          <section className="grid gap-4 md:grid-cols-2">
-            <Link
-              href="/safety/scam-alerts"
-              className="group surface-card p-5 transition-all duration-200 hover:-translate-y-0.5 hover:elev-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
-              <div className="flex items-center justify-between gap-3">
+          {/* ── Emergency ────────────────────────────────────────── */}
+          <section
+            id="emergency"
+            aria-labelledby="emergency-title"
+            className="scroll-mt-32 rounded-3xl border border-brand-red/25 bg-brand-red-50 p-5 dark:border-brand-red/30 dark:bg-brand-red-950/30 sm:p-8"
+          >
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+              <div className="flex items-start gap-4">
+                <span className="icon-tile bg-brand-red/15 text-brand-red-700 dark:text-brand-red-300">
+                  <Gavel className="h-5 w-5" aria-hidden="true" />
+                </span>
                 <div>
-                  <h2 className="font-display text-base font-semibold">Scam Alerts</h2>
-                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                    Learn common marketplace scam patterns and warning signs.
+                  <h2
+                    id="emergency-title"
+                    className="font-display text-xl font-bold text-foreground sm:text-2xl"
+                  >
+                    Crime? Report it to SAPS.
+                  </h2>
+                  <p className="mt-1 text-sm leading-6 text-foreground/80">
+                    We can remove content, but can&apos;t recover money or goods.
                   </p>
                 </div>
-                <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-foreground" />
               </div>
-            </Link>
-
-            <Link
-              href="/safety/meeting-checklist"
-              className="group surface-card p-5 transition-all duration-200 hover:-translate-y-0.5 hover:elev-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="font-display text-base font-semibold">Meeting Safety</h2>
-                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                    Use a simple checklist before meeting someone from a listing.
-                  </p>
-                </div>
-                <MapPin className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" />
-              </div>
-            </Link>
-          </section>
-
-          <section className="surface-card p-5">
-            <div className="flex items-start gap-3.5">
-              <span className="icon-tile bg-brand-green/10 text-brand-green dark:text-brand-green-300">
-                <Gavel className="h-5 w-5" />
-              </span>
-              <div className="space-y-1">
-                <h2 className="font-display text-base font-semibold">
-                  Criminal matters should be reported to SAPS.
-                </h2>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  VerifyMzansi can moderate platform content, but cannot recover money, goods, or
-                  identity documents.
-                </p>
+              <div className="flex flex-col gap-2.5 sm:flex-row">
+                <a
+                  href="tel:10111"
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-brand-red-600 px-5 text-sm font-semibold text-white transition-colors hover:bg-brand-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <Phone className="h-4 w-4" aria-hidden="true" />
+                  Call SAPS 10111
+                </a>
+                <a
+                  href="tel:112"
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-brand-red/30 bg-card px-5 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <Phone className="h-4 w-4" aria-hidden="true" />
+                  Call 112
+                </a>
               </div>
             </div>
           </section>

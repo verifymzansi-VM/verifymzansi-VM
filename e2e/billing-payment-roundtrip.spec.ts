@@ -58,7 +58,7 @@ test.describe("Billing payment round-trip", () => {
     await page.waitForURL("**/billing/success?payment=*", { timeout: 30000 });
 
     await expect(page).toHaveURL(/\/billing\/success\?payment=/);
-    await expect(page.getByRole("heading", { name: "Payment Confirmed" })).toBeVisible({
+    await expect(page.getByRole("heading", { name: "Payment confirmed" })).toBeVisible({
       timeout: 30000,
     });
     await expect(

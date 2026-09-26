@@ -38,8 +38,8 @@ export const PROMOTION_FILTER_TYPE_PRESENTATIONS: Record<
       "border-sunset-600 bg-sunset-600 text-white shadow-[0_12px_24px_-16px_rgba(228,88,28,0.72)]",
     inactiveClassName:
       "border-sunset-300 bg-sunset-50 text-sunset-700 hover:border-sunset-500 hover:bg-sunset-100 dark:border-sunset-700/70 dark:bg-sunset-950/45 dark:text-sunset-100 dark:hover:border-sunset-500 dark:hover:bg-sunset-900/60",
-    cardBadgeClassName: "bg-sunset-600/95 text-white border border-white/10",
-    cardTagClassName: "bg-sunset-600 text-white",
+    cardBadgeClassName: "bg-sunset-700 text-white border border-white/10",
+    cardTagClassName: "bg-sunset-700 text-white",
     cardAccentClassName: "hover:border-sunset-600/60",
   },
 };

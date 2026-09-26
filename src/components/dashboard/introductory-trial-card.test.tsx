@@ -43,15 +43,15 @@ describe("account grants on the dashboard", () => {
       offer: { eligible: true, adminFreePostsRemaining: 3 },
     });
     render(<IntroductoryTrialCard />);
-    expect(await screen.findByText(/3 extra free posts remaining/)).toHaveTextContent(
+    expect(await screen.findByText(/3 extra free posts left/)).toHaveTextContent(
       "30 days from approval"
     );
-    expect(screen.queryByText("Your Free Launch Offer")).not.toBeInTheDocument();
+    expect(screen.queryByText(/your free launch offer/i)).not.toBeInTheDocument();
   });
   it("does not offer to downgrade an account grant to seven days", async () => {
     render(<IntroductoryTrialCard />);
     expect(await screen.findByText("Your 30-day free post")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Switch pending/ })).not.toBeInTheDocument();
-    expect(screen.queryByText(/capacity is checked/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/trial starts when approved/)).not.toBeInTheDocument();
   });
 });

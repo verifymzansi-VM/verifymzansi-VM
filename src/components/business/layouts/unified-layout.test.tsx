@@ -155,8 +155,8 @@ describe("UnifiedLayout", () => {
       );
       expect(screen.getByText("12 Main Road")).toBeVisible();
       expect(screen.getByText("08:00 - 17:00")).toBeVisible();
-      expect(screen.getByText("cash")).toBeVisible();
-      expect(screen.getByText(/Delivery options: courier/)).toBeVisible();
+      expect(screen.getByText("Cash")).toBeVisible();
+      expect(screen.getByText(/Delivery options: courier/i)).toBeVisible();
       expect(screen.getByRole("link", { name: "hello@example.com" })).toHaveAttribute(
         "href",
         "mailto:hello@example.com"
@@ -167,7 +167,7 @@ describe("UnifiedLayout", () => {
     }
   );
 
-  it("does not render the profile identity overlay on the video slide", () => {
+  it("keeps the video slide free of overlaid identity text", () => {
     render(
       <UnifiedLayout
         family="showroom"
@@ -182,7 +182,6 @@ describe("UnifiedLayout", () => {
       />
     );
 
-    expect(screen.queryByAltText("Unified Studio logo")).not.toBeInTheDocument();
     expect(screen.queryByText("Featured Profile")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Unified Studio video")).toHaveAttribute(
       "data-poster-priority",
@@ -194,7 +193,7 @@ describe("UnifiedLayout", () => {
     );
   });
 
-  it("keeps the profile identity overlay on photo slides", () => {
+  it("shows the business name and logo beside the media on every slide", () => {
     render(
       <UnifiedLayout
         family="showroom"
@@ -209,10 +208,56 @@ describe("UnifiedLayout", () => {
       />
     );
 
+    expect(screen.getByRole("heading", { level: 1, name: "Unified Studio" })).toBeInTheDocument();
+    expect(screen.getByAltText("Unified Studio logo")).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: "View cover photo" }));
 
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     expect(screen.getByAltText("Unified Studio logo")).toBeInTheDocument();
-    expect(screen.getByText("Featured Profile")).toBeInTheDocument();
+  });
+
+  it("explains the representative's trust status with an extra-care note when not ID reviewed", () => {
+    render(
+      <UnifiedLayout
+        family="showroom"
+        business={business}
+        trustLevel={0}
+        ownerProfile={{ display_name: "Aphiwe" }}
+        promotions={[] as BusinessPromotionRecord[]}
+        showPromotions={false}
+        showPublicActions
+        galleryPhotos={[]}
+        deliveryAvailable={false}
+      />
+    );
+
+    expect(screen.getByRole("heading", { name: "Represented by" })).toBeInTheDocument();
+    expect(screen.getByText("Aphiwe")).toBeInTheDocument();
+    expect(screen.getByText(/Not ID reviewed yet/i)).toBeInTheDocument();
+  });
+
+  it("labels tourism profiles as hosted and confirms ID review in plain language", () => {
+    render(
+      <UnifiedLayout
+        family="tourism"
+        business={business}
+        trustLevel={3}
+        ownerProfile={{ display_name: "Aphiwe" }}
+        promotions={[] as BusinessPromotionRecord[]}
+        showPromotions={false}
+        showPublicActions
+        galleryPhotos={[]}
+        deliveryAvailable={false}
+      />
+    );
+
+    expect(screen.getByRole("heading", { name: "Hosted by" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "What this means" })).toHaveAttribute(
+      "href",
+      "/trust-safety"
+    );
+    expect(screen.queryByText(/Not ID reviewed yet/i)).not.toBeInTheDocument();
   });
 
   it("keeps the cover photo as a distinct media step alongside the video and gallery photos", () => {

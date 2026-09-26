@@ -105,10 +105,10 @@ export function MediaCropPreview({
 
   return (
     <div className={cn("space-y-2", className)}>
-      <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-        <Move className="h-4 w-4" />
-        Adjust how your image appears on cards
-      </div>
+      <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+        <Move className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        Drag to frame your cover
+      </p>
 
       <div className={cn("flex items-start gap-4", focalPositionClassName)}>
         {/* Crop preview container */}
@@ -116,7 +116,7 @@ export function MediaCropPreview({
           type="button"
           ref={containerRef}
           className={cn(
-            "relative w-40 cursor-grab overflow-hidden rounded-lg border-2 border-brand-green/40 touch-none select-none",
+            "relative w-40 cursor-grab touch-none select-none overflow-hidden rounded-xl border-2 border-brand-green-500/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
             isDragging && "cursor-grabbing"
           )}
           onPointerDown={handlePointerDown}
@@ -148,30 +148,27 @@ export function MediaCropPreview({
 
           {/* Overlay badge */}
           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-2 py-1">
-            <p className="text-[10px] font-medium text-white">{overlayLabel}</p>
+            <p className="text-[11px] font-medium text-white">{overlayLabel}</p>
           </div>
         </button>
 
         {/* Full image reference (dimmed) */}
         {naturalSize && (
           <div className="space-y-1">
-            <div className="relative w-28 overflow-hidden rounded-lg border border-warm-200 opacity-60 dark:border-warm-700">
+            <div className="relative w-28 overflow-hidden rounded-xl border border-border opacity-70">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={imageUrl} alt="Full image" className="w-full" draggable={false} />
               {/* Focal point indicator */}
-              <div className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-brand-green shadow left-[var(--focal-pos-x)] top-[var(--focal-pos-y)]" />
+              <div className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-brand-green-600 shadow left-[var(--focal-pos-x)] top-[var(--focal-pos-y)]" />
             </div>
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               {naturalSize.w}×{naturalSize.h}px
             </p>
           </div>
         )}
       </div>
 
-      <p className="text-[10px] leading-relaxed text-muted-foreground">
-        Drag the image to position what&apos;s visible. The green box shows how your photo will
-        appear on listing cards.
-      </p>
+      <p className="text-xs text-muted-foreground">Arrow keys work too.</p>
     </div>
   );
 }

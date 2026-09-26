@@ -41,6 +41,7 @@ import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provi
 import { summarizeVerification } from "@/lib/account/verification-summary";
 import { profileUpdateSchema } from "@/lib/validations/profile";
 import { ACCOUNT_PHONE_IN_USE_ERROR, sanitizeSaPhoneInput } from "@/lib/utils/phone";
+import { formatSaLongDate, formatSaShortDate } from "@/lib/utils/format";
 import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
 import {
   checkCooldown,
@@ -573,17 +574,13 @@ export default function ProfilePage() {
   function getVerificationBadge() {
     switch (verificationStatus) {
       case "verified":
-        return (
-          <Badge variant="default" className="bg-green-600">
-            Verified
-          </Badge>
-        );
+        return <Badge variant="verified">Verified</Badge>;
       case "pending_review":
-        return <Badge variant="secondary">Pending Review</Badge>;
+        return <Badge variant="pending">In review</Badge>;
       case "rejected":
-        return <Badge variant="destructive">Rejected</Badge>;
+        return <Badge variant="rejected">Needs fixing</Badge>;
       default:
-        return <Badge variant="outline">Incomplete</Badge>;
+        return <Badge variant="draft">Not verified</Badge>;
     }
   }
 
@@ -596,18 +593,20 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="mx-auto max-w-xl space-y-4">
-      {/* Compact header — no breadcrumbs on mobile */}
-      <div>
-        <h1 className="text-xl font-display font-bold">My Profile</h1>
-        <p className="text-sm text-muted-foreground">
-          Manage your details, security, and account settings.
-        </p>
+    <div className="max-w-2xl space-y-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="font-display text-[1.75rem] font-bold leading-tight tracking-tight sm:text-[2.25rem]">
+            My Profile
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">Your details, security and account.</p>
+        </div>
+        <div className="shrink-0 pt-2">{getVerificationBadge()}</div>
       </div>
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <TabsList className="grid h-12 w-full grid-cols-3 p-1">
+        <TabsList className="grid h-auto w-full grid-cols-3 rounded-2xl p-1">
           <TabsTrigger value="profile" className="h-11 gap-1.5 text-xs sm:text-sm">
             <User className="h-3.5 w-3.5" />
             Profile
@@ -638,7 +637,7 @@ export default function ProfilePage() {
                     {avatarUrl ? (
                       <AvatarImage src={avatarUrl} alt={displayName || "Avatar"} />
                     ) : null}
-                    <AvatarFallback className="bg-brand-gold text-amber-950 text-lg font-bold">
+                    <AvatarFallback className="bg-brand-gold text-brand-gold-950 text-lg font-bold">
                       {initials}
                     </AvatarFallback>
                   </Avatar>
@@ -749,21 +748,13 @@ export default function ProfilePage() {
                     className={phoneCooldownUntil ? "bg-muted cursor-not-allowed" : undefined}
                   />
                   {phoneCooldownUntil ? (
-                    <p className="text-xs text-amber-600 flex items-center gap-1">
-                      <AlertCircle className="h-3 w-3" />
-                      Phone changes unlock on{" "}
-                      {phoneCooldownUntil.toLocaleDateString("en-ZA", {
-                        day: "numeric",
-                        month: "long",
-                        year: "numeric",
-                      })}
-                      .
+                    <p className="flex items-center gap-1 text-xs text-brand-gold-800 dark:text-brand-gold-300">
+                      <AlertCircle aria-hidden="true" className="h-3 w-3" />
+                      Phone changes unlock on {formatSaLongDate(phoneCooldownUntil)}.
                     </p>
                   ) : (
                     <p className="text-xs text-muted-foreground">
-                      SA mobile: 0XX XXX XXXX or +27XX XXX XXXX. Save and verify this number before
-                      using it for listing calls or WhatsApp. Enable WhatsApp on each listing only
-                      if this number has an active WhatsApp account.
+                      SA mobile number. Verify it before using it for calls or WhatsApp.
                     </p>
                   )}
                 </div>
@@ -836,7 +827,7 @@ export default function ProfilePage() {
                   ) : (
                     <Save className="h-4 w-4" />
                   )}
-                  {isSaving ? "Saving..." : "Save Profile"}
+                  {isSaving ? "Saving…" : "Save profile"}
                 </Button>
               </form>
             </CardContent>
@@ -1019,10 +1010,7 @@ export default function ProfilePage() {
                       <div className="text-right shrink-0 ml-3">
                         <p className="text-xs text-muted-foreground">Change available</p>
                         <p className="text-xs font-medium">
-                          {emailCooldownUntil.toLocaleDateString("en-ZA", {
-                            day: "numeric",
-                            month: "short",
-                          })}
+                          {formatSaShortDate(emailCooldownUntil).split(" ").slice(1).join(" ")}
                         </p>
                       </div>
                     ) : (
@@ -1111,7 +1099,7 @@ export default function ProfilePage() {
                   ) : (
                     <LogOut className="h-4 w-4" />
                   )}
-                  {isSigningOut ? "Signing out…" : "Sign Out"}
+                  {isSigningOut ? "Signing out…" : "Sign out"}
                 </Button>
               </div>
 
@@ -1122,7 +1110,7 @@ export default function ProfilePage() {
                 <div>
                   <p className="text-sm font-medium text-destructive">Delete account</p>
                   <p className="text-xs text-muted-foreground">
-                    Permanently delete your account and all personal data. This cannot be undone.
+                    Removes your account and personal data for good.
                   </p>
                 </div>
                 <Button
@@ -1197,7 +1185,7 @@ export default function ProfilePage() {
                       ) : (
                         <Trash2 className="h-3.5 w-3.5" />
                       )}
-                      {isDeleteVerifying ? "Verifying..." : "Continue"}
+                      {isDeleteVerifying ? "Verifying…" : "Continue"}
                     </Button>
                   </DialogFooter>
                 </DialogContent>

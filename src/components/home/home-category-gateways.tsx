@@ -8,7 +8,6 @@ const GATEWAYS = [
     href: "/mzansi-market",
     title: "Mzansi Market",
     tagline: "Buy & sell locally",
-    description: "Phones, cars, furniture, property and everyday finds from reviewed sellers.",
     image: "/images/showrooms/market-v2-mobile.avif",
     icon: ShoppingBag,
     accent: "bg-brand-green-600",
@@ -18,7 +17,6 @@ const GATEWAYS = [
     href: "/mzansi-business",
     title: "Mzansi Business",
     tagline: "Hire & support local",
-    description: "Shops, trades, services and professionals with accountable representatives.",
     image: "/images/showrooms/business-v2-mobile.avif",
     icon: Building2,
     accent: "bg-brand-blue-600",
@@ -28,7 +26,6 @@ const GATEWAYS = [
     href: "/tourism-events",
     title: "Tourism & Events",
     tagline: "Stay, explore & go out",
-    description: "Guesthouses, tours, venues and live events hosted across South Africa.",
     image: "/images/showrooms/tourism-v2-mobile.avif",
     icon: TreePalm,
     accent: "bg-sunset-600",
@@ -43,14 +40,7 @@ const GATEWAYS = [
 export function HomeCategoryGateways() {
   return (
     <nav aria-label="VerifyMzansi primary categories" className="container-page py-10 sm:py-14">
-      <div className="mb-6 flex items-end justify-between gap-4">
-        <div>
-          <h2 className="section-title">Explore Mzansi</h2>
-          <p className="section-lede">
-            Three places to find what you need, all under one trust layer.
-          </p>
-        </div>
-      </div>
+      <h2 className="section-title mb-5">Explore Mzansi</h2>
       <ul className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 scrollbar-hide sm:mx-0 sm:grid sm:grid-cols-3 sm:gap-5 sm:overflow-visible sm:px-0 sm:pb-0">
         {GATEWAYS.map((gateway) => {
           const Icon = gateway.icon;
@@ -91,9 +81,6 @@ export function HomeCategoryGateways() {
                   <span className={cn("mb-3 block h-1 w-10 rounded-full", gateway.accent)} />
                   <span className="block font-display text-2xl font-bold tracking-tight">
                     {gateway.title}
-                  </span>
-                  <span className="mt-1.5 block text-sm leading-6 text-white/80">
-                    {gateway.description}
                   </span>
                 </span>
               </Link>

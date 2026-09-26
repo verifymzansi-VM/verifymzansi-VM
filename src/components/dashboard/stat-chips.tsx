@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShoppingBag, MessageSquare, Building2, Megaphone } from "lucide-react";
+import { ShoppingBag, MessageSquare, Building2, TreePalm } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface StatChip {
@@ -8,7 +8,7 @@ export interface StatChip {
   href: string;
   icon: React.ElementType;
   toneClassName: string;
-  /** Show a red notification dot when true */
+  /** Highlight the chip (e.g. unread leads waiting) */
   notify?: boolean;
 }
 
@@ -23,19 +23,19 @@ const defaultChips = (counts: {
   activePromos: number;
 }): StatChip[] => [
   {
-    label: "Live Posts",
+    label: "Live posts",
     value: counts.liveListings,
     href: "/dashboard/listings",
     icon: ShoppingBag,
-    toneClassName:
-      "bg-brand-green-50 text-brand-green dark:bg-brand-green-950 dark:text-brand-green-100",
+    toneClassName: "area-market-tile",
   },
   {
-    label: "New Leads",
+    label: "New leads",
     value: counts.unreadLeads,
     href: "/dashboard/leads",
     icon: MessageSquare,
-    toneClassName: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-100",
+    toneClassName:
+      "bg-brand-gold-100 text-brand-gold-900 dark:bg-brand-gold-400/15 dark:text-brand-gold-200",
     notify: counts.unreadLeads > 0,
   },
   {
@@ -43,14 +43,14 @@ const defaultChips = (counts: {
     value: counts.businesses,
     href: "/dashboard/businesses",
     icon: Building2,
-    toneClassName: "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-100",
+    toneClassName: "area-business-tile",
   },
   {
     label: "Tourism & Events",
     value: counts.activePromos,
     href: "/dashboard/tourism-events",
-    icon: Megaphone,
-    toneClassName: "bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-100",
+    icon: TreePalm,
+    toneClassName: "area-tourism-tile",
   },
 ];
 
@@ -58,47 +58,45 @@ export { defaultChips };
 
 export function StatChips({ chips }: StatChipsProps) {
   return (
-    <nav
-      className="flex gap-3 overflow-x-auto pb-1 scrollbar-none snap-x snap-mandatory sm:grid sm:grid-cols-4 sm:overflow-visible sm:pb-0"
-      aria-label="Account stats"
-    >
-      {chips.map((chip) => {
-        const Icon = chip.icon;
-        return (
-          <Link
-            key={chip.href}
-            href={chip.href}
-            className={cn(
-              "relative flex min-w-[7rem] snap-start items-center gap-2.5 rounded-xl border border-border/60 bg-card px-3.5 py-3 transition-all",
-              "hover:border-foreground/15 hover:shadow-md active:scale-[0.97]",
-              "sm:min-w-0"
-            )}
-          >
-            {/* Notification dot */}
-            {chip.notify && (
-              <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-brand-red ring-2 ring-card" />
-            )}
-
-            <div
-              className={cn(
-                "inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg",
-                chip.toneClassName
-              )}
-            >
-              <Icon className="h-4 w-4" />
-            </div>
-
-            <div className="min-w-0">
-              <p className="font-display text-lg font-bold leading-tight tracking-tight">
-                {chip.value}
-              </p>
-              <p className="text-[11px] font-medium text-muted-foreground leading-tight">
-                {chip.label}
-              </p>
-            </div>
-          </Link>
-        );
-      })}
-    </nav>
+    <section aria-label="Account stats">
+      <ul className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {chips.map((chip) => {
+          const Icon = chip.icon;
+          return (
+            <li key={chip.href}>
+              <Link
+                href={chip.href}
+                className={cn(
+                  "group flex h-full items-center gap-3 rounded-2xl border bg-card p-3.5 elev-xs transition-colors duration-200 sm:p-4",
+                  "hover:border-foreground/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  chip.notify ? "border-brand-gold-400/70" : "border-border/70"
+                )}
+              >
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+                    chip.toneClassName
+                  )}
+                >
+                  <Icon className="h-5 w-5" />
+                  {chip.notify ? (
+                    <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-brand-gold-500 ring-2 ring-card" />
+                  ) : null}
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-display text-xl font-bold leading-none tracking-tight tabular-nums text-foreground sm:text-2xl">
+                    {chip.value}
+                  </span>
+                  <span className="mt-1 block truncate text-xs font-medium text-muted-foreground sm:text-sm">
+                    {chip.label}
+                  </span>
+                </span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }

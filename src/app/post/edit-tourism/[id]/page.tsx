@@ -5,13 +5,11 @@ import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import { Megaphone, ArrowLeft, Loader2, X, Building2, Plus } from "lucide-react";
+import { Loader2, X, Building2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
@@ -500,8 +498,13 @@ export default function EditPromotionPage() {
     return (
       <div className="flex min-h-screen flex-col">
         <Header isAuthenticated />
-        <main id="main-content" className="flex-1 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <main
+          id="main-content"
+          aria-busy="true"
+          className="flex flex-1 flex-col items-center justify-center gap-3"
+        >
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden="true" />
+          <p className="text-sm text-muted-foreground">Loading your post…</p>
         </main>
         <Footer />
       </div>
@@ -513,9 +516,9 @@ export default function EditPromotionPage() {
       <Header isAuthenticated />
 
       <main id="main-content" className="flex-1">
-        <div className="container-page py-4 space-y-4 max-w-3xl">
+        <div className="container-page max-w-3xl space-y-5 py-6">
           <PageHeader
-            title="Edit Event"
+            title="Edit event"
             breadcrumbs={[
               { label: "Dashboard", href: "/dashboard" },
               { label: "Tourism & Events", href: "/dashboard/tourism-events" },
@@ -524,13 +527,16 @@ export default function EditPromotionPage() {
           />
 
           {error && (
-            <div className="bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-400 p-4 rounded-lg text-sm">
+            <div
+              role="alert"
+              className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+            >
               {error}
             </div>
           )}
 
-          <Card>
-            <CardContent className="p-5 space-y-5">
+          <div className="surface-card">
+            <div className="space-y-5 p-4 sm:p-6">
               <div className="space-y-2">
                 <Label htmlFor="title">Event Title</Label>
                 <Input
@@ -694,7 +700,7 @@ export default function EditPromotionPage() {
               </div>
 
               {/* ── Event Details ─────────────────────────── */}
-              <div className="space-y-4 rounded-lg border bg-muted/30 p-4">
+              <div className="space-y-4 rounded-2xl border border-border bg-muted/30 p-4">
                 <p className="text-sm font-medium">Event Details (optional)</p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -908,17 +914,20 @@ export default function EditPromotionPage() {
 
                 <div className="space-y-1">
                   <Label>Accessibility</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Select all accessibility features available at the venue.
-                  </p>
+
                   <div className="flex flex-wrap gap-2">
                     {EVENT_ACCESSIBILITY_OPTIONS.map((opt) => {
                       const active = accessibility.includes(opt);
                       return (
-                        <Badge
+                        <button
                           key={opt}
-                          variant={active ? "default" : "outline"}
-                          className="cursor-pointer"
+                          type="button"
+                          aria-pressed={active}
+                          className={
+                            active
+                              ? "inline-flex min-h-9 items-center rounded-full border border-sunset-600 bg-sunset-50 px-3 text-xs font-semibold text-sunset-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-sunset-400 dark:bg-sunset-950/40 dark:text-sunset-200"
+                              : "inline-flex min-h-9 items-center rounded-full border border-border bg-card px-3 text-xs font-medium text-foreground/80 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          }
                           onClick={() =>
                             setAccessibility((prev) =>
                               active ? prev.filter((a) => a !== opt) : [...prev, opt]
@@ -926,7 +935,7 @@ export default function EditPromotionPage() {
                           }
                         >
                           {opt}
-                        </Badge>
+                        </button>
                       );
                     })}
                   </div>
@@ -1125,43 +1134,42 @@ export default function EditPromotionPage() {
                   },
                 ]}
               />
+            </div>
+          </div>
 
-              <div className="flex justify-between">
-                <Button variant="outline" asChild className="h-11 gap-1">
-                  <Link href="/dashboard/tourism-events">
-                    <ArrowLeft className="h-4 w-4" />
-                    Cancel
-                  </Link>
-                </Button>
-                <Button
-                  onClick={handleSubmit}
-                  disabled={
-                    isSubmitting ||
-                    !hasAnyMedia ||
-                    title.trim().length < 5 ||
-                    title.trim().length > 120 ||
-                    description.trim().length < 20 ||
-                    description.trim().length > 5000 ||
-                    !province ||
-                    !city
-                  }
-                  className="h-11 gap-1"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      {submitProgress || "Saving..."}
-                    </>
-                  ) : (
-                    <>
-                      <Megaphone className="h-4 w-4" />
-                      Save Changes
-                    </>
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="sticky bottom-0 z-30 -mx-4 flex items-center gap-3 border-t border-border/70 bg-background/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:bottom-4 sm:mx-0 sm:rounded-2xl sm:border sm:bg-card/95 sm:py-3 sm:elev-md">
+            <Button variant="outline" asChild className="h-11 rounded-full px-5">
+              <Link href="/dashboard/tourism-events">Cancel</Link>
+            </Button>
+            <p className="hidden flex-1 text-sm text-muted-foreground sm:block">
+              Changes are checked before they go live.
+            </p>
+            <Button
+              onClick={handleSubmit}
+              disabled={
+                isSubmitting ||
+                !hasAnyMedia ||
+                title.trim().length < 5 ||
+                title.trim().length > 120 ||
+                description.trim().length < 20 ||
+                description.trim().length > 5000 ||
+                !province ||
+                !city
+              }
+              variant="trust-verified"
+              aria-busy={isSubmitting}
+              className="h-11 min-w-36 flex-1 gap-2 rounded-full px-6 font-semibold sm:flex-none"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  {submitProgress || "Saving..."}
+                </>
+              ) : (
+                "Save changes"
+              )}
+            </Button>
+          </div>
         </div>
       </main>
 

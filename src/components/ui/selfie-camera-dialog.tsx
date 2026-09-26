@@ -23,9 +23,9 @@ export function SelfieCameraDialog({
       }}
     >
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[200] bg-slate-950" />
+        <Dialog.Overlay className="fixed inset-0 z-[200] bg-[#07130f]" />
         <Dialog.Content
-          className="fixed inset-0 z-[201] flex h-[100dvh] w-full flex-col overflow-y-auto bg-slate-950 text-white outline-none [@media(max-height:500px)]:grid [@media(max-height:500px)]:grid-cols-2 [@media(max-height:500px)]:grid-rows-[auto_minmax(0,1fr)]"
+          className="fixed inset-0 z-[201] flex h-[100dvh] w-full flex-col overflow-y-auto bg-[#07130f] text-white outline-none [@media(max-height:500px)]:grid [@media(max-height:500px)]:grid-cols-2 [@media(max-height:500px)]:grid-rows-[auto_minmax(0,1fr)]"
           onInteractOutside={(event) => event.preventDefault()}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
@@ -33,18 +33,22 @@ export function SelfieCameraDialog({
           }}
         >
           <header className="col-span-2 flex shrink-0 items-center gap-3 px-5 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-            <ShieldCheck className="h-5 w-5 text-emerald-300" aria-hidden />
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-green-500/15">
+              <ShieldCheck className="h-5 w-5 text-brand-green-300" aria-hidden />
+            </span>
             <div className="flex-1">
-              <Dialog.Title className="text-base font-semibold">Selfie verification</Dialog.Title>
-              <Dialog.Description className="text-xs text-slate-300">
+              <Dialog.Title className="font-body text-base font-semibold">
+                Selfie verification
+              </Dialog.Title>
+              <Dialog.Description className="text-xs text-white/70">
                 Follow the guide. Your photo is taken automatically.
               </Dialog.Description>
             </div>
             <Dialog.Close
               aria-label="Close camera"
-              className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 transition-colors hover:bg-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
             >
-              <X className="h-5 w-5" />
+              <X className="h-5 w-5" aria-hidden="true" />
             </Dialog.Close>
           </header>
           {children}

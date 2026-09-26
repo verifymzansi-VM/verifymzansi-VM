@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
-import { AlertTriangle } from "lucide-react";
+import { CloudOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Header } from "@/components/layout/header";
-import { Footer } from "@/components/layout/footer";
+import { StatePanel, StatePanelPage } from "@/components/shared/state-panel";
 
 export default function MarketplaceError({
   error,
@@ -18,30 +17,22 @@ export default function MarketplaceError({
   }, [error]);
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <Header />
-      <main
-        id="main-content"
-        className="flex-1 flex flex-col items-center justify-center gap-4 px-4 text-center"
-      >
-        <AlertTriangle className="h-8 w-8 text-destructive" />
-        <div className="space-y-2">
-          <h1 className="text-xl font-display font-bold">Failed to load marketplace</h1>
-          <p className="text-muted-foreground max-w-md">
-            We couldn&apos;t load the page. This may be a temporary issue — please try again.
-          </p>
-        </div>
-        <div className="flex gap-3">
-          <Button
-            variant="outline"
-            onClick={() => window.location.assign(new URL("/", window.location.origin).toString())}
-          >
-            Go to homepage
-          </Button>
-          <Button onClick={() => reset()}>Retry</Button>
-        </div>
-      </main>
-      <Footer />
-    </div>
+    <StatePanelPage withinLayoutMain>
+      <StatePanel
+        tone="error"
+        icon={<CloudOff />}
+        title="This page didn't load"
+        description="It's usually temporary. Please try again."
+        actions={
+          <>
+            <Button variant="trust-verified" onClick={() => reset()}>
+              Try again
+            </Button>
+          </>
+        }
+        showNextSteps
+        footnote={error.digest ? <>Error reference: {error.digest}</> : undefined}
+      />
+    </StatePanelPage>
   );
 }

@@ -127,8 +127,8 @@ export function ReportDialog({
           size={size}
           className={`gap-1.5 text-muted-foreground hover:text-destructive ${className || ""}`}
         >
-          <Flag className="h-3.5 w-3.5" />
-          {size !== "icon" && triggerLabel}
+          <Flag className="h-3.5 w-3.5" aria-hidden="true" />
+          {size !== "icon" ? triggerLabel : <span className="sr-only">{triggerLabel}</span>}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
@@ -137,46 +137,55 @@ export function ReportDialog({
             <div className="empty-state-icon">
               <CheckCircle2 className="h-7 w-7" aria-hidden="true" />
             </div>
-            <DialogTitle className="font-display text-lg tracking-tight">
-              Report Submitted
+            <DialogTitle className="font-display text-xl tracking-tight">
+              Thanks, report sent
             </DialogTitle>
-            <DialogDescription>
-              Our moderation team will review this within 24 hours.
+            <DialogDescription className="mx-auto max-w-xs leading-6">
+              Our moderation team will review it. If it breaks our rules, we can remove the content
+              or restrict the account.
             </DialogDescription>
-            <Button
-              variant="outline"
-              className="rounded-full"
-              onClick={() => handleOpenChange(false)}
-            >
+            <Button variant="outline" className="h-11" onClick={() => handleOpenChange(false)}>
               Close
             </Button>
           </div>
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle>Report {targetName || "Content"}</DialogTitle>
-              <DialogDescription>
+              <DialogTitle className="font-display text-xl tracking-tight">
+                Report {targetName || `this ${targetType}`}
+              </DialogTitle>
+              <DialogDescription className="leading-6">
                 Help keep VerifyMzansi safe. Tell us what&apos;s wrong with this {targetType}.
               </DialogDescription>
             </DialogHeader>
-            <form noValidate onSubmit={handleSubmit} className="space-y-4 pt-2">
+            <form noValidate onSubmit={handleSubmit} className="space-y-5 pt-1">
               <div className="space-y-2">
-                <Label>Reason</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {REPORT_REASONS.map((r) => (
-                    <button
-                      key={r.value}
-                      type="button"
-                      onClick={() => setReason(r.value)}
-                      className={`rounded-xl border p-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
-                        reason === r.value
-                          ? "border-destructive bg-destructive/5 font-medium"
-                          : "border-muted hover:border-foreground/20"
-                      }`}
-                    >
-                      {r.label}
-                    </button>
-                  ))}
+                <p id="report-reason-label" className="text-sm font-medium leading-none">
+                  Reason
+                </p>
+                <div
+                  role="group"
+                  aria-labelledby="report-reason-label"
+                  className="grid grid-cols-2 gap-2"
+                >
+                  {REPORT_REASONS.map((r) => {
+                    const selected = reason === r.value;
+                    return (
+                      <button
+                        key={r.value}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => setReason(r.value)}
+                        className={`min-h-11 rounded-xl border px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
+                          selected
+                            ? "border-brand-red-600 bg-brand-red-50 font-semibold text-brand-red-800 ring-1 ring-brand-red-600 dark:border-brand-red-400 dark:bg-brand-red-950/40 dark:text-brand-red-200 dark:ring-brand-red-400"
+                            : "border-border text-foreground hover:border-foreground/25 hover:bg-muted/50"
+                        }`}
+                      >
+                        {r.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -184,12 +193,21 @@ export function ReportDialog({
                 <Label htmlFor="report-desc">Details (min 10 characters)</Label>
                 <textarea
                   id="report-desc"
-                  className="flex min-h-[80px] w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="flex min-h-[96px] w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe the issue..."
+                  placeholder="What happened? Include dates, amounts or chat details if you have them."
                   maxLength={2000}
+                  aria-describedby="report-desc-count"
                 />
+                <p
+                  id="report-desc-count"
+                  className="text-right text-xs tabular-nums text-muted-foreground"
+                >
+                  {description.length < 10
+                    ? `${10 - description.length} more characters needed`
+                    : `${description.length}/2000`}
+                </p>
               </div>
 
               <TurnstileWidget
@@ -201,16 +219,23 @@ export function ReportDialog({
               <Button
                 type="submit"
                 variant="destructive"
-                className="w-full gap-2 rounded-full font-semibold"
+                className="h-11 w-full"
                 disabled={submitting || !reason || description.length < 10}
               >
                 {submitting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                 ) : (
-                  <Flag className="h-4 w-4" />
+                  <Flag className="h-4 w-4" aria-hidden="true" />
                 )}
-                Submit Report
+                Send report
               </Button>
+              <p className="text-center text-xs leading-5 text-muted-foreground">
+                In danger right now? Call SAPS on{" "}
+                <a href="tel:10111" className="font-semibold underline underline-offset-4">
+                  10111
+                </a>
+                .
+              </p>
             </form>
           </>
         )}

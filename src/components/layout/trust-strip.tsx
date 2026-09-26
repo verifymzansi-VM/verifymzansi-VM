@@ -1,34 +1,51 @@
+import { Clock3, Flag, LockKeyhole, Smartphone } from "lucide-react";
+import { cn } from "@/lib/utils";
+
 interface TrustStripProps {
   variant?: "green" | "blue";
+  /** Accessible heading for the strip (visually hidden). */
   title?: string;
+  className?: string;
 }
 
+const POINTS = [
+  { icon: Smartphone, label: "Phone & ID checked" },
+  { icon: Clock3, label: "Posts reviewed first" },
+  { icon: LockKeyhole, label: "Secure Ozow payments" },
+  { icon: Flag, label: "Easy reporting" },
+] as const;
+
 /**
- * Editorial section divider between the showroom and the browse grid.
- * Kept intentionally quiet: a small label and a hairline, not a banner.
+ * Quiet band of the checks behind every post. Describes what we check, never
+ * a guarantee. Wraps to two columns on phones.
  */
 export function TrustStrip({
   variant = "green",
-  title = "Latest on Mzansi Market",
+  title = "Why people trust posts here",
+  className,
 }: TrustStripProps) {
-  const titleClass =
+  const iconClass =
     variant === "green"
-      ? "text-brand-green-700 dark:text-brand-green-300"
-      : "text-brand-blue dark:text-brand-blue-200";
+      ? "bg-brand-green/10 text-brand-green-700 dark:bg-brand-green/15 dark:text-brand-green-300"
+      : "bg-brand-blue/10 text-brand-blue-700 dark:bg-brand-blue/20 dark:text-brand-blue-300";
 
   return (
-    <section className="hidden sm:block border-b border-border/60">
-      <div className="container-page flex items-center gap-4 py-4">
-        <h2
-          className={`shrink-0 font-display text-[11px] font-bold uppercase tracking-[0.26em] ${titleClass}`}
-        >
-          {title}
-        </h2>
-        <div
-          className="h-px flex-1 bg-gradient-to-r from-border/80 via-border/40 to-transparent"
-          aria-hidden="true"
-        />
-      </div>
+    <section aria-label={title} className={cn("border-y border-border/60 bg-card/60", className)}>
+      <ul className="container-page grid grid-cols-2 gap-x-4 gap-y-3 py-4 text-[13px] font-medium text-foreground/80 sm:text-sm lg:grid-cols-4">
+        {POINTS.map(({ icon: Icon, label }) => (
+          <li key={label} className="flex items-center gap-2.5">
+            <span
+              className={cn(
+                "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+                iconClass
+              )}
+            >
+              <Icon className="h-4 w-4" aria-hidden="true" />
+            </span>
+            {label}
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

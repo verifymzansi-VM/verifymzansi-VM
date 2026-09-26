@@ -57,21 +57,36 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       }
 
       return (
-        <div className="flex flex-col items-center justify-center gap-3 py-8 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-destructive/20 bg-destructive/10">
-            <AlertTriangle className="h-6 w-6 text-destructive" aria-hidden="true" />
+        <div
+          role="alert"
+          className="mx-auto flex max-w-md flex-col items-center gap-3 rounded-2xl border border-border/70 bg-card px-5 py-7 text-center elev-xs"
+        >
+          <div
+            aria-hidden="true"
+            className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-red/10 text-brand-red-700 dark:bg-brand-red/15 dark:text-brand-red-300"
+          >
+            <AlertTriangle className="h-6 w-6" />
           </div>
           <div className="space-y-1">
             <h3 className="font-display text-base font-semibold tracking-tight">
-              Something went wrong
+              This section didn&apos;t load
             </h3>
-            <p className="mx-auto max-w-md text-sm leading-6 text-muted-foreground">
-              {this.state.error?.message || "An unexpected error occurred."}
+            <p className="text-sm leading-6 text-muted-foreground">
+              Something went wrong while showing it. Give it another go, or refresh the page if the
+              problem continues.
             </p>
           </div>
-          <Button variant="outline" className="rounded-full" onClick={this.handleReset}>
+          <Button variant="outline" className="h-11 rounded-full px-5" onClick={this.handleReset}>
             Try again
           </Button>
+          {this.state.error?.message ? (
+            <details className="w-full text-left text-xs text-muted-foreground">
+              <summary className="cursor-pointer py-1 text-center font-medium">
+                Technical details
+              </summary>
+              <p className="mt-1 break-all">{this.state.error.message}</p>
+            </details>
+          ) : null}
         </div>
       );
     }

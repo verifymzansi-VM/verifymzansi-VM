@@ -46,17 +46,16 @@ export async function HomeBusinessShowcase() {
     return (
       <HomeShowcaseShell
         badge="Mzansi Business"
-        title="Local businesses you can check"
-        description="Shops, trades and services run by accountable, identity-reviewed representatives."
+        title="Local businesses"
         href="/mzansi-business"
         ctaLabel="See all businesses"
         tone="blue"
       >
         <HomeShowcaseEmptyState
-          title="No representative profiles yet."
-          description="Put your business on the map with photos, services, hours and contact details. Profiles are free to start."
+          title="No business profiles yet"
+          description="Verified local businesses will show here. Profiles are free to start."
           ctaHref="/post/create-business"
-          ctaLabel="Create First Profile"
+          ctaLabel="Add your business"
           tone="blue"
           icon={<Building2 className="h-7 w-7" />}
         />
@@ -73,8 +72,7 @@ export async function HomeBusinessShowcase() {
   return (
     <HomeShowcaseShell
       badge="Mzansi Business"
-      title="Local businesses you can check"
-      description="Shops, trades and services run by accountable, identity-reviewed representatives."
+      title="Local businesses"
       href="/mzansi-business"
       ctaLabel="See all businesses"
       tone="blue"

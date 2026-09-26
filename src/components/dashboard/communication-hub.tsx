@@ -44,7 +44,7 @@ const EMAIL_TEMPLATE_CATALOG = [
   { key: "verification_outcomes", label: "Verification outcomes", channel: "Email" },
   { key: "lead_alerts", label: "Lead alerts", channel: "Email" },
   { key: "payment_status", label: "Payment success/failure", channel: "Email" },
-  { key: "dsar_lifecycle", label: "DSAR lifecycle", channel: "Email" },
+  { key: "dsar_lifecycle", label: "Personal data requests", channel: "Email" },
   { key: "enforcement_actions", label: "Account enforcement actions", channel: "Email" },
 ] as const;
 
@@ -234,10 +234,8 @@ export function CommunicationHub() {
           <CardHeader className="pb-3">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <CardTitle>Communication Activity</CardTitle>
-                <CardDescription>
-                  Realtime in-app notifications and account updates.
-                </CardDescription>
+                <CardTitle className="text-lg">Recent activity</CardTitle>
+                <CardDescription>In-app updates about your account.</CardDescription>
               </div>
               <Badge variant={unreadCount > 0 ? "destructive" : "outline"}>
                 {unreadCount} unread
@@ -295,11 +293,8 @@ export function CommunicationHub() {
       <TabsContent value="emails" className="space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle>Transactional Email Coverage</CardTitle>
-            <CardDescription>
-              These critical communications are automatically sent when related platform events
-              occur.
-            </CardDescription>
+            <CardTitle className="text-lg">Account emails</CardTitle>
+            <CardDescription>Sent automatically when something important happens.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {loadingEmailActivity ? (
@@ -355,7 +350,7 @@ export function CommunicationHub() {
                   <p className="text-sm font-medium">{template.label}</p>
                   <p className="text-xs text-muted-foreground">{template.channel}</p>
                 </div>
-                <Badge className="bg-emerald-600 text-white">Active</Badge>
+                <Badge variant="live">Active</Badge>
               </div>
             ))}
             <p className="text-xs text-muted-foreground pt-1">
@@ -369,10 +364,8 @@ export function CommunicationHub() {
       <TabsContent value="preferences" className="space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle>Optional Communication Preferences</CardTitle>
-            <CardDescription>
-              Manage non-essential communication channels and data usage preferences.
-            </CardDescription>
+            <CardTitle className="text-lg">Your preferences</CardTitle>
+            <CardDescription>Optional messages and data use.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {loadingPreferences ? (

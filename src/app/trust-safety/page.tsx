@@ -1,26 +1,33 @@
 import Link from "next/link";
 import type React from "react";
 import {
-  ArrowRight,
   BadgeCheck,
-  Ban,
   Building2,
-  CheckCircle2,
+  Check,
   CreditCard,
   FileLock2,
+  Fingerprint,
   LifeBuoy,
   Mail,
+  MapPin,
   Scale,
-  Siren,
+  Smartphone,
 } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
-import { PageHeader } from "@/components/layout/page-header";
+import { BrandShield } from "@/components/shared/brand-shield";
+import { InfoHero, SectionHeading } from "@/components/safety/info-hero";
+import { TrustBadge } from "@/components/trust/trust-badge";
+import { VerifiedTick } from "@/components/trust/verified-tick";
+import { Button } from "@/components/ui/button";
+import { SAFETY_RULES as safetyRules } from "@/lib/constants/safety-rules";
+import { TRUST_TIERS } from "@/lib/constants/trust-scale";
 import {
   getConfiguredContactRows,
   getConfiguredLegalIdentityRows,
   getTrustPublicConfig,
 } from "@/lib/trust-public-config";
+import type { TrustLevel } from "@/types/enums";
 
 export const metadata = {
   title: "Trust & Safety",
@@ -28,94 +35,87 @@ export const metadata = {
     "How VerifyMzansi protects identity data, explains verification, handles payments, and helps South Africans trade more safely.",
 };
 
-const verificationLevels = [
+const journeySteps = [
+  { icon: Smartphone, title: "Phone confirmed", body: "One-time code to an SA number." },
   {
-    name: "Phone verified",
-    meaning: "The account has confirmed access to a South African mobile number.",
+    icon: Fingerprint,
+    title: "ID & selfie reviewed",
+    body: "Checked by our team, then encrypted.",
   },
-  {
-    name: "Email verified",
-    meaning: "The account has confirmed access to its email address.",
-  },
-  {
-    name: "ID evidence reviewed",
-    meaning: "The person posting submitted ID evidence and a selfie for review.",
-  },
-  {
-    name: "Location verified",
-    meaning: "The user saved a South African location and may have matched it with device GPS.",
-  },
-  {
-    name: "Official representative reviewed",
-    meaning: "The person posting for a business completed representative review.",
-  },
-  {
-    name: "Payment verified",
-    meaning: "A paid feature was processed through the platform's payment flow.",
-  },
+  { icon: MapPin, title: "Location checked", body: "GPS or manual check of where they trade." },
+  { icon: BrandShield, title: "Badge shown", body: "On their profile and posts." },
 ] as const;
 
-import { SAFETY_RULES as safetyRules } from "@/lib/constants/safety-rules";
-
-const dataPractices = [
-  "Identity, phone, and location data is collected for verification, fraud prevention, safety, and legal compliance.",
-  "Verification files are encrypted and stored with restricted reviewer access.",
-  "Trusted service providers may process data where needed to run the service.",
-  "Users can request access, correction, deletion, or objection through the POPIA process.",
+const otherSignals = [
+  "Email confirmed",
+  "Official representative reviewed",
+  "Payment processed",
 ] as const;
+
+const tierOrder: TrustLevel[] = [3, 4, 2, 1, 0];
 
 const reportSteps = [
-  {
-    title: "Stop the deal",
-    description: "Do not send more money, codes, documents, or private banking details.",
-  },
-  {
-    title: "Keep evidence",
-    description: "Save listing links, chats, screenshots, payment references, and profile names.",
-  },
-  {
-    title: "Report it",
-    description: "Send the evidence to VerifyMzansi and report criminal matters to SAPS.",
-  },
+  { title: "Stop the deal", description: "No more money, codes or documents." },
+  { title: "Keep evidence", description: "Save chats, links and payment references." },
+  { title: "Report it", description: "Tell us, and SAPS for crimes." },
 ] as const;
 
-function SafetyPanel({
+const textLink =
+  "font-semibold text-brand-green-700 underline underline-offset-4 hover:text-brand-green-800 dark:text-brand-green-300 dark:hover:text-brand-green-200";
+
+function InfoCard({
   title,
   icon: Icon,
-  tone = "default",
   children,
 }: {
   title: string;
   icon: React.ComponentType<{ className?: string }>;
-  tone?: "default" | "warning" | "secure";
   children: React.ReactNode;
 }) {
-  const toneClasses = {
-    default: "border-border/60 bg-card elev-xs",
-    warning: "border-amber-200 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/30 elev-xs",
-    secure: "border-brand-green/25 bg-brand-green/5 dark:bg-brand-green/10 elev-xs",
-  }[tone];
-
   return (
-    <section
-      className={`rounded-2xl border p-5 transition-shadow duration-200 hover:elev-sm sm:p-6 ${toneClasses}`}
-    >
-      <div className="space-y-3">
-        <h2 className="flex items-center gap-2.5 font-display text-base font-semibold sm:text-lg">
-          <span
-            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-              tone === "warning"
-                ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
-                : "bg-brand-green/10 text-brand-green dark:text-brand-green-300"
-            }`}
-          >
-            <Icon className="h-4 w-4" aria-hidden="true" />
-          </span>
-          {title}
-        </h2>
-        <div className="space-y-3 text-sm leading-6 text-muted-foreground">{children}</div>
+    <section className="surface-card flex flex-col p-5">
+      <span className="icon-tile area-market-tile">
+        <Icon className="h-5 w-5" aria-hidden="true" />
+      </span>
+      <h3 className="mt-4 font-body text-base font-semibold text-foreground">{title}</h3>
+      <div className="mt-1.5 flex-1 space-y-2 text-sm leading-6 text-muted-foreground">
+        {children}
       </div>
     </section>
+  );
+}
+
+function ExampleProfileCard() {
+  return (
+    <div className="hero-panel p-6">
+      <p className="text-xs font-medium text-muted-foreground">How your reviewed profile looks</p>
+      <div className="mt-4 flex items-center gap-3">
+        <span
+          aria-hidden="true"
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-gold-100 font-display text-lg font-bold text-brand-gold-900 dark:bg-brand-gold-900/40 dark:text-brand-gold-200"
+        >
+          You
+        </span>
+        <div className="min-w-0">
+          <p className="flex items-center gap-1.5 font-semibold text-foreground">
+            Your name
+            <VerifiedTick />
+          </p>
+          <p className="text-sm text-muted-foreground">Your town</p>
+        </div>
+      </div>
+      <TrustBadge level={3} size="lg" className="mt-4" />
+      <ul className="mt-5 space-y-2.5 border-t border-border/60 pt-4">
+        {journeySteps.slice(0, 3).map(({ title }) => (
+          <li key={title} className="flex items-center gap-2.5 text-sm text-foreground/85">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-green/15 text-brand-green-700 dark:text-brand-green-300">
+              <Check className="h-3.5 w-3.5" aria-hidden="true" />
+            </span>
+            {title}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -129,211 +129,243 @@ export default function TrustSafetyPage() {
       <Header />
 
       <main id="main-content" className="flex-1">
-        <div className="container-page space-y-6 py-4 sm:py-6">
-          <PageHeader
-            title="Trust & Safety"
-            description="Verification helps reduce risk, but it does not replace your own checks before you meet, pay, share documents, or trust a badge."
-            breadcrumbs={[{ label: "Trust & Safety" }]}
-          />
+        <InfoHero
+          title="Trust & Safety"
+          description="Verification helps reduce risk, but it does not replace your own checks."
+          breadcrumbs={[{ label: "Trust & Safety" }]}
+          actions={
+            <>
+              <Button asChild variant="trust-verified" size="lg">
+                <Link href="/safety">Safety tips</Link>
+              </Button>
+              <Button asChild variant="outline" size="lg">
+                <Link href="/contact?topic=fraud_report">Report a concern</Link>
+              </Button>
+            </>
+          }
+          aside={<ExampleProfileCard />}
+        />
 
-          <section className="overflow-hidden rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30">
-            <div className="grid gap-0 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-              <div className="space-y-5 p-5 sm:p-6">
-                <div className="flex max-w-3xl items-start gap-3">
-                  <Siren
-                    className="mt-1 h-6 w-6 shrink-0 text-amber-700 dark:text-amber-300"
+        <div className="container-page space-y-14 py-10 sm:space-y-20 sm:py-14">
+          {/* ── Verification journey ─────────────────────────────── */}
+          <section aria-labelledby="journey-title">
+            <SectionHeading
+              id="journey-title"
+              title="How someone gets verified"
+              lede="VerifyMzansi verifies people who post. Badges are signals, not promises."
+            />
+
+            <ol className="mt-8 grid gap-4 lg:grid-cols-4 lg:gap-6">
+              {journeySteps.map(({ icon: Icon, title, body }, index) => (
+                <li key={title} className="relative flex gap-4 lg:flex-col lg:gap-0">
+                  {index < journeySteps.length - 1 && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute -bottom-4 left-6 top-14 w-px bg-brand-green/30 lg:-right-6 lg:bottom-auto lg:left-16 lg:top-6 lg:h-px lg:w-auto"
+                    />
+                  )}
+                  <span className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-green-600 text-white elev-sm dark:bg-brand-green-500 dark:text-brand-green-950">
+                    <Icon className="h-6 w-6" aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0 pb-4 lg:mt-4 lg:pb-0">
+                    <p className="text-xs font-semibold text-brand-green-700 dark:text-brand-green-300">
+                      Step {index + 1}
+                    </p>
+                    <h3 className="mt-0.5 font-body text-base font-semibold text-foreground">
+                      {title}
+                    </h3>
+                    <p className="mt-0.5 text-sm leading-6 text-muted-foreground">{body}</p>
+                    {index === journeySteps.length - 1 && (
+                      <p className="mt-2.5 flex flex-wrap items-center gap-2">
+                        <TrustBadge level={3} />
+                        <VerifiedTick decorative />
+                      </p>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ol>
+
+            <div className="mt-6 flex flex-wrap items-center gap-2">
+              <span className="text-sm text-muted-foreground">Also shown:</span>
+              {otherSignals.map((signal) => (
+                <span key={signal} className="chip">
+                  <BadgeCheck
+                    className="h-3.5 w-3.5 text-brand-green-700 dark:text-brand-green-300"
                     aria-hidden="true"
                   />
-                  <div className="space-y-2">
-                    <h2 className="font-display text-2xl font-semibold tracking-normal text-amber-950 dark:text-amber-100 sm:text-3xl">
-                      Stay safe before you continue a deal.
-                    </h2>
-                    <p className="max-w-2xl text-sm leading-6 text-amber-900 dark:text-amber-100">
-                      Verification reduces risk, but it does not guarantee a product, seller, buyer,
-                      rental, job, business, or event. If a deal feels rushed, private, or
-                      confusing, pause first.
-                    </p>
+                  {signal}
+                </span>
+              ))}
+            </div>
+          </section>
+
+          {/* ── Badge levels ─────────────────────────────────────── */}
+          <section
+            aria-labelledby="badges-title"
+            className="grid gap-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-14"
+          >
+            <div>
+              <SectionHeading
+                id="badges-title"
+                title="What each badge means"
+                lede="Badges describe account checks. They are not a guarantee."
+              />
+              <ul className="mt-6 space-y-2.5 text-sm text-foreground/85">
+                <li className="flex items-center gap-2.5">
+                  <VerifiedTick className="h-5 w-5" decorative />
+                  Green tick: ID Reviewed
+                </li>
+                <li className="flex items-center gap-2.5">
+                  <VerifiedTick className="h-5 w-5" pro decorative />
+                  Marigold tick: ID Reviewed Pro
+                </li>
+              </ul>
+            </div>
+
+            <ul className="divide-y divide-border/70 overflow-hidden rounded-3xl border border-border/70 bg-card elev-xs">
+              {tierOrder.map((level) => (
+                <li
+                  key={level}
+                  className="grid gap-2 px-5 py-4 sm:grid-cols-[11rem_minmax(0,1fr)] sm:items-center sm:gap-5"
+                >
+                  <div>
+                    <TrustBadge level={level} size="lg" />
                   </div>
-                </div>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    {TRUST_TIERS[level].description}.
+                    {level === 4 && " Pro adds visibility, not a higher safety rating."}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </section>
 
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {safetyRules.map((rule) => (
-                    <div key={rule} className="flex gap-2 rounded-md bg-background/70 p-3">
-                      <Ban className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden="true" />
-                      <p className="text-sm leading-5 text-foreground">{rule}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
+          {/* ── Safe dealing ─────────────────────────────────────── */}
+          <section aria-labelledby="deal-title">
+            <SectionHeading id="deal-title" title="Before you continue a deal" />
+            <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+              <ul className="surface-card divide-y divide-border/60">
+                {safetyRules.map((rule) => (
+                  <li key={rule} className="flex items-center gap-3 px-4 py-3.5">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-gold/15 text-brand-gold-800 dark:text-brand-gold-300">
+                      <BrandShield className="h-4 w-4" aria-hidden="true" />
+                    </span>
+                    <p className="text-sm leading-6 text-foreground">{rule}</p>
+                  </li>
+                ))}
+              </ul>
 
-              <div className="border-t border-amber-200 bg-background p-5 dark:border-amber-900 lg:border-l lg:border-t-0">
-                <h3 className="font-display text-base font-semibold">If something feels wrong</h3>
-                <ol className="mt-4 space-y-4">
+              <div className="rounded-3xl bg-warm-900 p-6 text-white dark:bg-card dark:text-foreground dark:ring-1 dark:ring-border">
+                <h3 className="font-display text-xl font-bold">If something feels wrong</h3>
+                <ol className="mt-5 space-y-4">
                   {reportSteps.map((step, index) => (
-                    <li key={step.title} className="grid grid-cols-[2rem_minmax(0,1fr)] gap-3">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-sm font-semibold text-amber-900 dark:bg-amber-900 dark:text-amber-100">
+                    <li key={step.title} className="flex gap-3.5">
+                      <span
+                        aria-hidden="true"
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-gold text-sm font-bold text-brand-gold-950"
+                      >
                         {index + 1}
                       </span>
                       <div>
                         <h4 className="text-sm font-semibold">{step.title}</h4>
-                        <p className="mt-1 text-sm leading-5 text-muted-foreground">
+                        <p className="text-sm leading-6 text-white/75 dark:text-muted-foreground">
                           {step.description}
                         </p>
                       </div>
                     </li>
                   ))}
                 </ol>
-                <div className="mt-5 flex flex-wrap gap-3">
-                  <Link
-                    href="/safety"
-                    className="inline-flex min-h-10 items-center gap-2 rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-green/90"
+                <div className="mt-6 flex flex-wrap gap-2.5">
+                  <Button asChild variant="trust-gold">
+                    <Link href="/contact?topic=fraud_report">Report a concern</Link>
+                  </Button>
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="border-white/25 bg-transparent text-white hover:bg-white/10 dark:border-input dark:text-foreground dark:hover:bg-muted"
                   >
-                    Open Safety Centre
-                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    <Link href="/safety/scam-alerts">Common scams</Link>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* ── Data, rights & payments ─────────────────────────── */}
+          <section aria-labelledby="data-title">
+            <SectionHeading id="data-title" title="Your data, rights and payments" />
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <InfoCard title="Identity data" icon={FileLock2}>
+                <p>Used only for verification, fraud prevention and the law. Stored encrypted.</p>
+                <p className="flex flex-col gap-1">
+                  <Link href="/privacy" className={textLink}>
+                    Privacy Policy
                   </Link>
+                  <Link href="/dsar" className={textLink}>
+                    POPIA request form
+                  </Link>
+                </p>
+              </InfoCard>
+
+              <InfoCard title="PAIA and POPIA" icon={Scale}>
+                <p>Request, correct or delete your data. Escalate to the Information Regulator.</p>
+                <Link href="/paia" className={`block ${textLink}`}>
+                  PAIA manual
+                </Link>
+              </InfoCard>
+
+              <InfoCard title="Payments" icon={CreditCard}>
+                <p>
+                  Secure hosted checkout in rand. Expect VerifyMzansi
+                  {trustConfig.ozowMerchantName ? ` or ${trustConfig.ozowMerchantName}` : ""} as the
+                  merchant.
+                </p>
+                {trustConfig.vatStatus && <p>VAT status: {trustConfig.vatStatus}</p>}
+              </InfoCard>
+
+              <InfoCard title="Support channels" icon={LifeBuoy}>
+                <div className="grid gap-1">
                   <a
                     href={`mailto:${trustConfig.supportEmail}`}
-                    className="inline-flex min-h-10 items-center gap-2 rounded-md border px-4 py-2 text-sm font-semibold transition-colors hover:bg-muted"
+                    className="inline-flex min-h-10 items-center gap-2 break-all font-medium text-foreground hover:text-brand-green-700 dark:hover:text-brand-green-300"
                   >
-                    Report concern
+                    <Mail className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    {trustConfig.supportEmail}
+                  </a>
+                  <a
+                    href={`mailto:${trustConfig.securityEmail}`}
+                    className="inline-flex min-h-10 items-center gap-2 break-all font-medium text-foreground hover:text-brand-green-700 dark:hover:text-brand-green-300"
+                  >
+                    <Scale className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    {trustConfig.securityEmail}
                   </a>
                 </div>
-              </div>
+              </InfoCard>
             </div>
           </section>
 
-          <section className="space-y-3">
-            <div className="max-w-3xl space-y-1">
-              <h2 className="font-display text-xl font-semibold">What verification means</h2>
-              <p className="text-sm leading-6 text-muted-foreground">
-                VerifyMzansi verifies people who post and badges show completed platform checks.
-                They are signals to consider, not promises that a deal is safe.
-              </p>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-              {verificationLevels.map((level) => (
-                <div key={level.name} className="rounded-lg border bg-background p-4">
-                  <h3 className="flex items-center gap-2 text-sm font-semibold">
-                    <BadgeCheck className="h-4 w-4 shrink-0 text-brand-green" aria-hidden="true" />
-                    {level.name}
-                  </h3>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{level.meaning}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-            <SafetyPanel title="Payments and refunds" icon={CreditCard}>
-              <p>
-                Paid visibility is processed through secure hosted checkout in South African rand.
-                The checkout should show VerifyMzansi
-                {trustConfig.ozowMerchantName ? ` or ${trustConfig.ozowMerchantName}` : ""} as the
-                expected merchant name.
-              </p>
-              <p>
-                Listings remain subject to moderation. Refund handling follows the Terms of Service,
-                consumer law, and the payment provider record.
-              </p>
-              {trustConfig.vatStatus && <p>VAT status: {trustConfig.vatStatus}</p>}
-            </SafetyPanel>
-
-            <SafetyPanel title="Accountability channels" icon={LifeBuoy} tone="secure">
-              <p>
-                Send fraud reports, data-rights requests, verification appeals, and security
-                concerns through the correct support channel.
-              </p>
-              <div className="grid gap-2">
-                <a
-                  href={`mailto:${trustConfig.supportEmail}`}
-                  className="inline-flex items-center gap-2"
-                >
-                  <Mail className="h-3.5 w-3.5" />
-                  {trustConfig.supportEmail}
-                </a>
-                <a
-                  href={`mailto:${trustConfig.securityEmail}`}
-                  className="inline-flex items-center gap-2"
-                >
-                  <Scale className="h-3.5 w-3.5" />
-                  {trustConfig.securityEmail}
-                </a>
-              </div>
-            </SafetyPanel>
-          </div>
-
-          <section className="grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-            <SafetyPanel title="POPIA and identity data" icon={FileLock2}>
-              <ul className="space-y-2">
-                {dataPractices.map((practice) => (
-                  <li key={practice} className="flex gap-2">
-                    <CheckCircle2
-                      className="mt-0.5 h-4 w-4 shrink-0 text-brand-green"
-                      aria-hidden="true"
-                    />
-                    <span>{practice}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="flex flex-wrap gap-3 pt-1">
-                <Link href="/privacy" className="text-brand-green underline">
-                  Read the Privacy Policy
-                </Link>
-                <Link href="/dsar" className="text-brand-green underline">
-                  Open the POPIA request form
-                </Link>
-              </div>
-            </SafetyPanel>
-
-            <SafetyPanel title="PAIA and POPIA process" icon={Scale}>
-              <p>
-                Users can request access, correction, deletion, objection, recipient information, or
-                account-data export.
-              </p>
-              <p>
-                The PAIA manual explains record requests, data-subject requests, and escalation
-                routes.
-              </p>
-              <Link href="/paia" className="block text-brand-green underline">
-                Open the PAIA manual
-              </Link>
-              <p>
-                If a POPIA issue is not resolved through VerifyMzansi first, users may escalate to
-                the Information Regulator South Africa.
-              </p>
-            </SafetyPanel>
-          </section>
-
-          <section className="surface-card p-5 sm:p-6">
-            <div className="grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-              <div className="space-y-2">
-                <h2 className="flex items-center gap-2.5 font-display text-lg font-semibold">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-green/10 text-brand-green dark:text-brand-green-300">
-                    <Building2 className="h-4 w-4" aria-hidden="true" />
-                  </span>
-                  Company and platform transparency
+          {/* ── Company transparency ─────────────────────────────── */}
+          <section aria-labelledby="company-title" className="hero-panel p-5 sm:p-8">
+            <div className="grid gap-8 lg:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)] lg:gap-12">
+              <div>
+                <span className="icon-tile area-market-tile">
+                  <Building2 className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <h2 id="company-title" className="mt-4 section-title">
+                  Who runs VerifyMzansi
                 </h2>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  These details help users check who operates the service after they understand the
-                  immediate safety guidance.
-                </p>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  You can independently verify our registration on CIPC using registration number{" "}
-                  {trustConfig.cipcNumber}.
-                </p>
+                <p className="section-lede">Check us on CIPC: {trustConfig.cipcNumber}.</p>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-6 md:grid-cols-2">
                 <div>
-                  <h3 className="text-sm font-semibold">Business identity</h3>
-                  <dl className="mt-3 grid gap-2">
+                  <h3 className="text-sm font-semibold text-foreground">Business identity</h3>
+                  <dl className="mt-3 divide-y divide-border/60 rounded-2xl border border-border/60 bg-background/60">
                     {legalIdentityRows.map((row) => (
-                      <div
-                        key={row.label}
-                        className="rounded-xl border border-border/60 bg-background/70 px-3.5 py-2.5"
-                      >
-                        <dt className="text-xs font-medium text-foreground">{row.label}</dt>
-                        <dd className="mt-1 break-words text-sm text-muted-foreground">
+                      <div key={row.label} className="px-4 py-3">
+                        <dt className="text-xs font-medium text-muted-foreground">{row.label}</dt>
+                        <dd className="mt-0.5 break-words text-sm font-medium text-foreground">
                           {row.value}
                         </dd>
                       </div>
@@ -342,15 +374,12 @@ export default function TrustSafetyPage() {
                 </div>
 
                 <div>
-                  <h3 className="text-sm font-semibold">Contact details</h3>
-                  <dl className="mt-3 grid gap-2">
+                  <h3 className="text-sm font-semibold text-foreground">Contact details</h3>
+                  <dl className="mt-3 divide-y divide-border/60 rounded-2xl border border-border/60 bg-background/60">
                     {contactRows.map((row) => (
-                      <div
-                        key={row.label}
-                        className="rounded-xl border border-border/60 bg-background/70 px-3.5 py-2.5"
-                      >
-                        <dt className="text-xs font-medium text-foreground">{row.label}</dt>
-                        <dd className="mt-1 break-words text-sm text-muted-foreground">
+                      <div key={row.label} className="px-4 py-3">
+                        <dt className="text-xs font-medium text-muted-foreground">{row.label}</dt>
+                        <dd className="mt-0.5 break-words text-sm font-medium text-foreground">
                           {row.value}
                         </dd>
                       </div>

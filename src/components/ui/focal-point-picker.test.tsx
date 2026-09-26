@@ -41,7 +41,7 @@ describe("FocalPointPicker", () => {
 
   it("renders the instruction text", () => {
     render(<FocalPointPicker {...defaultProps} />);
-    expect(screen.getByText(/tap on the image to set the focal point/i)).toBeInTheDocument();
+    expect(screen.getByText("Tap the part to keep in view")).toBeInTheDocument();
   });
 
   it("renders the image with correct src", () => {

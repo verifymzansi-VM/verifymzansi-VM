@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -38,7 +38,8 @@ const toneStyles: Record<
 interface HomeShowcaseShellProps {
   badge: string;
   title: string;
-  description: string;
+  /** Optional short line under the title. Keep it to a few words, or leave it out. */
+  description?: string;
   href: string;
   ctaLabel: string;
   tone: ShowcaseTone;
@@ -59,17 +60,15 @@ export function HomeShowcaseShell({
   className,
 }: HomeShowcaseShellProps) {
   const styles = toneStyles[tone];
+  const headingId = useId();
 
   return (
-    <section className={cn("relative py-8 sm:py-10", className)}>
+    <section aria-labelledby={headingId} className={cn("relative py-8 sm:py-10", className)}>
       <div className="container-page">
         <div className="mb-5 flex items-end justify-between gap-4 sm:mb-6">
           <div className="min-w-0 max-w-2xl">
             <p
-              className={cn(
-                "flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em]",
-                styles.badgeClassName
-              )}
+              className={cn("flex items-center gap-2 text-sm font-semibold", styles.badgeClassName)}
             >
               <span
                 aria-hidden="true"
@@ -78,8 +77,10 @@ export function HomeShowcaseShell({
               {icon ? <span className="flex items-center justify-center">{icon}</span> : null}
               <span>{badge}</span>
             </p>
-            <h2 className="section-title mt-2">{title}</h2>
-            <p className="section-lede">{description}</p>
+            <h2 id={headingId} className="section-title mt-2">
+              {title}
+            </h2>
+            {description ? <p className="section-lede">{description}</p> : null}
           </div>
 
           <Link
@@ -91,7 +92,10 @@ export function HomeShowcaseShell({
             )}
           >
             {ctaLabel}
-            <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover/link:translate-x-0.5" />
+            <ArrowRight
+              aria-hidden="true"
+              className="h-4 w-4 transition-transform duration-200 group-hover/link:translate-x-0.5 motion-reduce:transition-none"
+            />
           </Link>
         </div>
 

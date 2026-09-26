@@ -1,45 +1,33 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
+/** Shaped like the billing page: header, free-post banner, plan picker and four plan cards. */
 export default function BillingLoading() {
   return (
-    <div className="container-page py-6 space-y-4" aria-busy="true" aria-label="Loading">
-      <div className="space-y-2">
-        <Skeleton className="h-8 w-32" />
-        <Skeleton className="h-4 w-64" />
+    <div className="container-page space-y-8 py-8" aria-busy="true" aria-label="Loading billing">
+      <div className="space-y-3">
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-9 w-64" />
+        <Skeleton className="h-4 w-full max-w-lg" />
       </div>
 
-      {/* Current plan skeleton */}
-      <div className="rounded-xl border border-warm-200 dark:border-warm-700 p-6 space-y-4">
-        <Skeleton className="h-6 w-32" />
-        <div className="flex items-baseline gap-2">
-          <Skeleton className="h-10 w-24" />
-          <Skeleton className="h-4 w-16" />
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <Skeleton className="h-4 w-4 rounded" />
-              <Skeleton className="h-4 w-32" />
-            </div>
-          ))}
-        </div>
+      <Skeleton className="mx-auto h-20 w-full max-w-5xl rounded-2xl" />
+
+      <div className="flex flex-col items-center gap-2">
+        <Skeleton className="h-4 w-36" />
+        <Skeleton className="h-12 w-full max-w-lg rounded-full" />
       </div>
 
-      {/* Plans grid skeleton */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div
-            key={i}
-            className="rounded-xl border border-warm-200 dark:border-warm-700 p-6 space-y-4"
-          >
-            <Skeleton className="h-6 w-24" />
-            <Skeleton className="h-10 w-32" />
-            <div className="space-y-2">
-              {Array.from({ length: 5 }).map((_, j) => (
+      <div className="mx-auto grid max-w-6xl grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="space-y-4 rounded-3xl border border-border/70 bg-card p-6">
+            <Skeleton className="h-5 w-24" />
+            <Skeleton className="h-10 w-28" />
+            <div className="space-y-2.5 border-t border-border/60 pt-5">
+              {Array.from({ length: 4 }).map((_, j) => (
                 <Skeleton key={j} className="h-4 w-full" />
               ))}
             </div>
-            <Skeleton className="h-10 w-full rounded-md" />
+            <Skeleton className="h-11 w-full rounded-full" />
           </div>
         ))}
       </div>

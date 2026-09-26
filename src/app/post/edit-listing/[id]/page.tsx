@@ -9,8 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { PostEditActionBar, PostFormSection } from "@/components/post/post-form-scaffold";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
@@ -540,8 +539,13 @@ export default function EditListingPage() {
     return (
       <div className="flex min-h-screen flex-col">
         <Header isAuthenticated />
-        <main id="main-content" className="flex-1 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <main
+          id="main-content"
+          aria-busy="true"
+          className="flex flex-1 flex-col items-center justify-center gap-3"
+        >
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden="true" />
+          <p className="text-sm text-muted-foreground">Loading your listing…</p>
         </main>
       </div>
     );
@@ -552,15 +556,20 @@ export default function EditListingPage() {
       <div className="flex min-h-screen flex-col">
         <Header isAuthenticated />
         <main id="main-content" className="flex flex-1 items-center justify-center px-4">
-          <Card className="w-full max-w-md">
-            <CardContent className="space-y-3 p-6 text-center">
-              <h1 className="text-lg font-semibold">Unable to load listing</h1>
-              <p className="text-sm text-muted-foreground">
-                We could not load this listing safely. Please reopen it from your dashboard.
-              </p>
-              <Button onClick={() => router.push("/dashboard/listings")}>Back to listings</Button>
-            </CardContent>
-          </Card>
+          <div className="surface-card w-full max-w-md space-y-4 p-6 text-center">
+            <span className="empty-state-icon">
+              <X className="h-6 w-6" aria-hidden="true" />
+            </span>
+            <h1 className="font-display text-xl font-bold">Unable to load listing</h1>
+            <p className="text-sm text-muted-foreground">Please reopen it from your dashboard.</p>
+            <Button
+              variant="trust-verified"
+              className="h-11 rounded-full px-6"
+              onClick={() => router.push("/dashboard/listings")}
+            >
+              Back to listings
+            </Button>
+          </div>
         </main>
         <Footer />
       </div>
@@ -573,9 +582,9 @@ export default function EditListingPage() {
 
       <main id="main-content" className="flex-1">
         <div className="container-page py-6">
-          <div className="max-w-2xl mx-auto space-y-4">
+          <div className="mx-auto max-w-3xl space-y-5">
             <PageHeader
-              title="Edit Listing"
+              title="Edit listing"
               breadcrumbs={[
                 { label: "Dashboard", href: "/dashboard" },
                 { label: "My Listings", href: "/dashboard/listings" },
@@ -583,20 +592,21 @@ export default function EditListingPage() {
               ]}
             />
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Badge className="bg-brand-green text-white">Mzansi Market</Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <form noValidate onSubmit={handleSubmit} className="space-y-5">
-                  {formError && (
-                    <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-                      {formError}
-                    </div>
-                  )}
+            <form noValidate onSubmit={handleSubmit} className="space-y-4">
+              <div className="surface-card space-y-6 p-4 sm:p-6">
+                <span className="inline-flex items-center rounded-full border border-brand-green-200 bg-brand-green-50 px-2.5 py-0.5 text-xs font-semibold text-brand-green-800 dark:border-brand-green-800 dark:bg-brand-green-950/60 dark:text-brand-green-200">
+                  Mzansi Market
+                </span>
+                {formError && (
+                  <div
+                    role="alert"
+                    className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+                  >
+                    {formError}
+                  </div>
+                )}
 
+                <PostFormSection title="Details">
                   {/* ── Category Picker ────────────────────────── */}
                   <CategoryPicker
                     value={category}
@@ -614,7 +624,7 @@ export default function EditListingPage() {
                     <select
                       id="condition"
                       aria-label="Condition"
-                      className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm"
+                      className="flex h-11 w-full rounded-xl border border-input bg-card px-3.5 py-2 text-base shadow-xs transition-colors hover:border-foreground/30 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 sm:h-10 sm:text-sm"
                       value={condition}
                       onChange={(e) => setCondition(e.target.value as ListingCondition | "")}
                     >
@@ -667,7 +677,9 @@ export default function EditListingPage() {
                       <p className="inline-form-error">{fieldErrors.description}</p>
                     )}
                   </div>
+                </PostFormSection>
 
+                <PostFormSection title="Price and area">
                   {/* ── Price ──────────────────────────────────── */}
                   <div className="space-y-2">
                     <Label htmlFor="price">Price (ZAR) *</Label>
@@ -689,24 +701,16 @@ export default function EditListingPage() {
                       />
                       <button
                         type="button"
+                        aria-pressed={negotiable}
                         onClick={() => setNegotiable((v) => !v)}
                         className={cn(
-                          "flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-all",
+                          "flex min-h-11 items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                           negotiable
-                            ? "border-brand-green bg-brand-green/10 text-brand-green"
-                            : "border-input text-muted-foreground hover:border-brand-green/50"
+                            ? "border-brand-green-600 bg-brand-green-50 text-brand-green-800 dark:border-brand-green-400 dark:bg-brand-green-950/50 dark:text-brand-green-200"
+                            : "border-input bg-card text-foreground/80 hover:border-foreground/30"
                         )}
                       >
-                        <div
-                          className={cn(
-                            "h-4 w-4 rounded-full border-2 flex items-center justify-center transition-all",
-                            negotiable
-                              ? "border-brand-green bg-brand-green"
-                              : "border-muted-foreground/40"
-                          )}
-                        >
-                          {negotiable && <Check className="h-2.5 w-2.5 text-white" />}
-                        </div>
+                        {negotiable && <Check className="h-4 w-4" aria-hidden="true" />}
                         Negotiable
                       </button>
                     </div>
@@ -734,9 +738,11 @@ export default function EditListingPage() {
                     showAddress={true}
                     errors={fieldErrors}
                   />
+                </PostFormSection>
 
+                <PostFormSection title="Photos and video">
                   <div className="space-y-2">
-                    <Label>Listing Logo</Label>
+                    <p className="text-sm font-medium">Listing Logo</p>
                     {previewLogo ? (
                       <div className="flex items-start gap-3">
                         <div className="relative h-20 w-20 overflow-hidden rounded-2xl border bg-muted">
@@ -761,9 +767,7 @@ export default function EditListingPage() {
                           >
                             Remove logo
                           </Button>
-                          <p className="text-xs text-muted-foreground">
-                            This logo is shown on listing cards across the marketplace.
-                          </p>
+                          <p className="text-xs text-muted-foreground">Shown on listing cards.</p>
                         </div>
                       </div>
                     ) : (
@@ -786,12 +790,12 @@ export default function EditListingPage() {
                   {/* ── Existing Images ──────────────────────── */}
                   {existingPhotos.length > 0 && (
                     <div className="space-y-2">
-                      <Label>Current Photos</Label>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      <p className="text-sm font-medium">Current Photos</p>
+                      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                         {existingPhotos.map((url, i) => (
                           <div
                             key={url}
-                            className="relative group rounded-md overflow-hidden border"
+                            className="group relative overflow-hidden rounded-xl border border-border"
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
@@ -802,6 +806,7 @@ export default function EditListingPage() {
                             <button
                               type="button"
                               title="Remove photo"
+                              aria-label={`Remove photo ${i + 1}`}
                               onClick={() => {
                                 if (!window.confirm("Remove this photo?")) return;
                                 setExistingPhotos((prev) => prev.filter((_, idx) => idx !== i));
@@ -844,12 +849,12 @@ export default function EditListingPage() {
                   {/* ── Existing Videos ──────────────────────── */}
                   {existingVideos.length > 0 && (
                     <div className="space-y-2">
-                      <Label>Current Video</Label>
+                      <p className="text-sm font-medium">Current Video</p>
                       <div className="flex gap-2">
                         {existingVideos.map((url, i) => (
                           <div
                             key={url}
-                            className="relative group rounded-md overflow-hidden border w-48"
+                            className="group relative w-48 overflow-hidden rounded-xl border border-border"
                           >
                             <video
                               src={displayExistingVideos[i] || normalizeMediaUrl(url)}
@@ -858,6 +863,7 @@ export default function EditListingPage() {
                             <button
                               type="button"
                               title="Remove video"
+                              aria-label={`Remove video ${i + 1}`}
                               onClick={() => {
                                 if (!window.confirm("Remove this video?")) return;
                                 setExistingVideos((prev) => prev.filter((_, idx) => idx !== i));
@@ -906,148 +912,146 @@ export default function EditListingPage() {
                       accept="image/*"
                     />
                   )}
+                </PostFormSection>
 
-                  {/* ── Contact Methods ──────────────────────── */}
-                  <div className="space-y-3">
-                    <Label className="text-base font-semibold">Contact Methods *</Label>
-                    <p className="text-xs text-muted-foreground">How can buyers reach you?</p>
-                    <div
-                      role="group"
-                      aria-label="Contact methods"
-                      className="grid grid-cols-1 xs:grid-cols-3 gap-2"
-                    >
-                      {CONTACT_OPTIONS.map((opt) => {
-                        const Icon = opt.icon;
-                        const isSelected = contactMethods.includes(opt.id);
-                        return (
-                          <button
-                            key={opt.id}
-                            type="button"
-                            onClick={() => toggleContact(opt.id)}
-                            className={cn(
-                              "flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 text-xs font-medium transition-all",
-                              isSelected
-                                ? "border-brand-green bg-brand-green/10 text-brand-green shadow-sm"
-                                : "border-input text-muted-foreground hover:border-brand-green/40 hover:bg-muted/50"
-                            )}
-                          >
-                            <Icon className="h-5 w-5" />
-                            {opt.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {fieldErrors.contactMethods && (
-                      <p className="inline-form-error">{fieldErrors.contactMethods}</p>
-                    )}
+                {/* ── Contact Methods ──────────────────────── */}
+                <PostFormSection title="How buyers reach you *">
+                  <div
+                    role="group"
+                    aria-label="Contact methods"
+                    className="grid grid-cols-2 gap-2 sm:grid-cols-4"
+                  >
+                    {CONTACT_OPTIONS.map((opt) => {
+                      const Icon = opt.icon;
+                      const isSelected = contactMethods.includes(opt.id);
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          aria-pressed={isSelected}
+                          onClick={() => toggleContact(opt.id)}
+                          className={cn(
+                            "flex min-h-[4.5rem] flex-col items-center justify-center gap-1.5 rounded-2xl border p-3 text-center text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                            isSelected
+                              ? "border-brand-green-600 bg-brand-green-50 text-brand-green-800 ring-1 ring-brand-green-600 dark:border-brand-green-400 dark:bg-brand-green-950/50 dark:text-brand-green-200 dark:ring-brand-green-400"
+                              : "border-border bg-card text-foreground/80 hover:border-foreground/25 hover:bg-muted/50"
+                          )}
+                        >
+                          <Icon className="h-5 w-5" aria-hidden="true" />
+                          {opt.label}
+                        </button>
+                      );
+                    })}
                   </div>
+                  {fieldErrors.contactMethods && (
+                    <p className="inline-form-error">{fieldErrors.contactMethods}</p>
+                  )}
+                </PostFormSection>
+              </div>
 
-                  <div className="space-y-3 rounded-xl border border-dashed border-brand-green/30 bg-brand-green/5 p-4">
-                    <div className="text-sm font-medium text-muted-foreground">Listing preview</div>
-                    <div className="max-w-[264px]">
-                      <ListingCard
-                        id={id}
-                        title={title || "Your listing title"}
-                        price={price ? Math.round(parseFloat(price || "0") * 100) : 0}
-                        imageUrl={previewVideos[0] || previewPhotos[0]}
-                        posterUrl={previewVideoThumbnail || previewPhotos[0] || undefined}
-                        isVideo={previewVideos.length > 0}
-                        fitStrategy="contain"
-                        logoUrl={previewLogo}
-                        province={province || "Province"}
-                        city={city || "City"}
-                        category={category || "property"}
-                        attributes={normalizedPreviewAttributes}
-                        condition={condition || undefined}
-                        createdAt={new Date().toISOString()}
-                      />
-                    </div>
-                    <ListingDetailContent
-                      listing={{
-                        id,
-                        owner_id: "preview-seller",
-                        title: title || "Your listing title",
-                        description: description || "Your listing description will appear here.",
-                        price_cents: price ? Math.round(parseFloat(price || "0") * 100) : 0,
-                        price_negotiable: negotiable,
-                        category: category || null,
-                        condition: condition || null,
-                        attributes: normalizedPreviewAttributes,
-                        photos: previewPhotos,
-                        videos: previewVideos,
-                        video_thumbnail: previewVideoThumbnail,
-                        logo_url: previewLogo,
-                        location_province: province || null,
-                        location_city: city || null,
-                        location_suburb: town || null,
-                        location_address: locationAddress || null,
-                        contact_methods: contactMethods,
-                        created_at: new Date().toISOString(),
-                      }}
-                      seller={{
-                        display_name: "You",
-                        location_province: province || null,
-                        location_city: city || null,
-                        account_verification_status: null,
-                        phone: null,
-                        masked_phone_public: null,
-                      }}
-                      similarItems={[]}
-                      similarSellers={new Map()}
-                      showContactActions={false}
-                      showSimilarListings={false}
-                      photoCount={previewPhotos.length}
-                      layoutMode="review"
-                    />
-                  </div>
-
-                  <UploadProgressPanel
-                    visible={isSubmitting}
-                    slots={[
-                      {
-                        key: "logo",
-                        label: "Uploading logo...",
-                        doneLabel: "Logo uploaded",
-                        status: newLogoFile.length > 0 ? uploadStatuses.logo : "skipped",
-                      },
-                      {
-                        key: "photos",
-                        label: "Uploading photos...",
-                        doneLabel: "Photos uploaded",
-                        status: newPhotoFiles.length > 0 ? uploadStatuses.photos : "skipped",
-                      },
-                      {
-                        key: "video",
-                        label: "Preparing and verifying video...",
-                        doneLabel: "Video verified",
-                        status: newVideoFile.length > 0 ? uploadStatuses.video : "skipped",
-                      },
-                      {
-                        key: "saving",
-                        label: "Saving listing...",
-                        doneLabel: "Listing saved",
-                        status: uploadStatuses.saving,
-                      },
-                    ]}
+              <section
+                aria-labelledby="edit-listing-preview-heading"
+                className="space-y-3 rounded-2xl border border-dashed border-border bg-muted/30 p-4"
+              >
+                <h2
+                  id="edit-listing-preview-heading"
+                  className="text-base font-semibold text-foreground"
+                >
+                  Listing preview
+                </h2>
+                <div className="max-w-[264px]">
+                  <ListingCard
+                    id={id}
+                    title={title || "Your listing title"}
+                    price={price ? Math.round(parseFloat(price || "0") * 100) : 0}
+                    imageUrl={previewVideos[0] || previewPhotos[0]}
+                    posterUrl={previewVideoThumbnail || previewPhotos[0] || undefined}
+                    isVideo={previewVideos.length > 0}
+                    fitStrategy="contain"
+                    logoUrl={previewLogo}
+                    province={province || "Province"}
+                    city={city || "City"}
+                    category={category || "property"}
+                    attributes={normalizedPreviewAttributes}
+                    condition={condition || undefined}
+                    createdAt={new Date().toISOString()}
                   />
+                </div>
+                <ListingDetailContent
+                  listing={{
+                    id,
+                    owner_id: "preview-seller",
+                    title: title || "Your listing title",
+                    description: description || "Your listing description will appear here.",
+                    price_cents: price ? Math.round(parseFloat(price || "0") * 100) : 0,
+                    price_negotiable: negotiable,
+                    category: category || null,
+                    condition: condition || null,
+                    attributes: normalizedPreviewAttributes,
+                    photos: previewPhotos,
+                    videos: previewVideos,
+                    video_thumbnail: previewVideoThumbnail,
+                    logo_url: previewLogo,
+                    location_province: province || null,
+                    location_city: city || null,
+                    location_suburb: town || null,
+                    location_address: locationAddress || null,
+                    contact_methods: contactMethods,
+                    created_at: new Date().toISOString(),
+                  }}
+                  seller={{
+                    display_name: "You",
+                    location_province: province || null,
+                    location_city: city || null,
+                    account_verification_status: null,
+                    phone: null,
+                    masked_phone_public: null,
+                  }}
+                  similarItems={[]}
+                  similarSellers={new Map()}
+                  showContactActions={false}
+                  showSimilarListings={false}
+                  photoCount={previewPhotos.length}
+                  layoutMode="review"
+                />
+              </section>
 
-                  <div className="flex gap-3">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => router.back()}
-                      className="h-11 flex-1"
-                    >
-                      Cancel
-                    </Button>
-                    <Button type="submit" className="h-11 flex-1" disabled={isSubmitting}>
-                      {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      {isSubmitting ? submitProgress || "Saving..." : "Save Changes"}
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
+              <UploadProgressPanel
+                visible={isSubmitting}
+                slots={[
+                  {
+                    key: "logo",
+                    label: "Uploading logo...",
+                    doneLabel: "Logo uploaded",
+                    status: newLogoFile.length > 0 ? uploadStatuses.logo : "skipped",
+                  },
+                  {
+                    key: "photos",
+                    label: "Uploading photos...",
+                    doneLabel: "Photos uploaded",
+                    status: newPhotoFiles.length > 0 ? uploadStatuses.photos : "skipped",
+                  },
+                  {
+                    key: "video",
+                    label: "Preparing and verifying video...",
+                    doneLabel: "Video verified",
+                    status: newVideoFile.length > 0 ? uploadStatuses.video : "skipped",
+                  },
+                  {
+                    key: "saving",
+                    label: "Saving listing...",
+                    doneLabel: "Listing saved",
+                    status: uploadStatuses.saving,
+                  },
+                ]}
+              />
+
+              <PostEditActionBar
+                onCancel={() => router.back()}
+                isSubmitting={isSubmitting}
+                submittingLabel={submitProgress || "Saving..."}
+              />
+            </form>
           </div>
         </div>
       </main>

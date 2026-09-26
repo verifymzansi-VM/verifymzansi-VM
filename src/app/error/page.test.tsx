@@ -8,6 +8,9 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+vi.mock("@/components/layout/header", () => ({ Header: () => <header /> }));
+vi.mock("@/components/layout/footer", () => ({ Footer: () => <footer /> }));
+
 describe("App error page", () => {
   it("renders the recovery copy for account verification outages", async () => {
     render(await ErrorPage({ searchParams: Promise.resolve({ reason: "unavailable" }) }));

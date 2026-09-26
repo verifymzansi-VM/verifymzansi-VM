@@ -2,8 +2,10 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, CreditCard, Loader2 } from "lucide-react";
+import { AlertCircle, CalendarClock, Loader2, LockKeyhole, ReceiptText } from "lucide-react";
+import { BrandLogo } from "@/components/shared/brand-logo";
 import { Button } from "@/components/ui/button";
+import { formatSaLongDate } from "@/lib/utils/format";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { getFriendlyCheckoutError } from "@/lib/billing/checkout-copy";
 import { formatPlanPrice } from "@/lib/constants/pricing";
@@ -26,18 +28,11 @@ interface PendingPayment {
   canCancel?: boolean;
 }
 
-const dateFormat = new Intl.DateTimeFormat("en-ZA", {
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-  timeZone: "Africa/Johannesburg",
-});
-
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-start justify-between gap-4 py-2 text-sm">
+    <div className="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-4 py-2.5 text-sm">
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className="text-right font-medium">{value}</dd>
+      <dd className="text-right font-medium text-foreground">{value}</dd>
     </div>
   );
 }
@@ -51,7 +46,8 @@ export function CheckoutConfirm({ summary }: { summary: CheckoutSummary | null }
   const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const pending = useRef(false);
-  const start = new Date();
+  // Dates use the deterministic SA formatter so server and browser render the same text.
+  const [start] = useState(() => new Date());
   const expiry = summary ? new Date(start.getTime() + summary.durationDays * 86_400_000) : null;
 
   async function pay() {
@@ -111,107 +107,164 @@ export function CheckoutConfirm({ summary }: { summary: CheckoutSummary | null }
   }
 
   return (
-    <main
-      id="main-content"
-      className="flex min-h-screen items-center justify-center bg-background px-4 py-10 scroll-mt-24"
-    >
-      <div className="w-full max-w-md rounded-3xl border border-border/70 bg-card p-6 shadow-sm">
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted">
-          {error && !summary ? (
-            <AlertCircle aria-hidden="true" className="h-6 w-6 text-destructive" />
-          ) : (
-            <CreditCard aria-hidden="true" className="h-6 w-6 text-brand-green" />
-          )}
+    <div className="flex min-h-screen flex-col bg-background">
+      <header className="border-b border-border/60 bg-card/80">
+        <div className="container-page flex h-16 items-center justify-between gap-4">
+          <Link
+            href="/"
+            aria-label="VerifyMzansi home"
+            className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <BrandLogo size="sm" />
+          </Link>
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground sm:text-sm">
+            <LockKeyhole
+              aria-hidden="true"
+              className="h-4 w-4 text-brand-green-700 dark:text-brand-green-300"
+            />
+            Secure checkout
+          </span>
         </div>
-        <h1 className="text-center font-display text-xl font-bold">Confirm your plan</h1>
+      </header>
 
-        {summary && expiry ? (
-          <>
-            <p className="mt-1 text-center text-sm text-muted-foreground">{summary.name}</p>
-            <p className="mt-4 text-center font-display text-4xl font-bold">
-              {formatPlanPrice(summary.priceCents)}
-            </p>
-            <dl className="mt-5 divide-y divide-border/60 border-y border-border/60">
-              <SummaryRow label="Section" value={summary.areaLabel} />
-              <SummaryRow label="Duration" value={summary.durationLabel} />
-              <SummaryRow label="Starts" value={`${dateFormat.format(start)} (on payment)`} />
-              <SummaryRow label="Expires" value={dateFormat.format(expiry)} />
-              <SummaryRow
-                label="Active posting slots"
-                value={`${summary.slotCapacity} at a time — reusable when a post sells or ends`}
-              />
-              {summary.monthlyActivationLimit ? (
-                <SummaryRow
-                  label="Fair-use activations"
-                  value={`Up to ${summary.monthlyActivationLimit} per 30 days`}
-                />
-              ) : null}
-              <SummaryRow label="Renewal" value="Does not renew automatically" />
-              <SummaryRow
-                label="After expiry"
-                value="Posts become inactive and stay saved in your dashboard for reactivation"
-              />
-            </dl>
-            <p className="mt-4 text-xs text-muted-foreground">
-              Visibility starts only after Ozow confirms your payment. Paid posts are still
-              moderated.
-            </p>
-          </>
-        ) : null}
+      <main
+        id="main-content"
+        className="bg-hero-mesh flex flex-1 scroll-mt-24 justify-center px-4 py-8 sm:items-center sm:py-12"
+      >
+        <div className="w-full max-w-md">
+          <div className="rounded-3xl border border-border/70 bg-card p-5 pb-1 elev-md sm:p-7">
+            {summary && expiry ? (
+              <>
+                <p className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-semibold text-foreground/80">
+                  <ReceiptText aria-hidden="true" className="h-3.5 w-3.5" />
+                  Review before you pay
+                </p>
+                <h1 className="mt-4 font-display text-2xl font-bold tracking-tight text-foreground">
+                  Confirm your plan
+                </h1>
+                <p className="mt-1 text-sm text-muted-foreground">{summary.name}</p>
+                <div className="mt-5 flex items-end justify-between gap-3 rounded-2xl bg-muted/60 px-4 py-3.5">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">Total today</p>
+                    <p className="font-display text-4xl font-extrabold leading-none tracking-tight text-foreground">
+                      {formatPlanPrice(summary.priceCents)}
+                    </p>
+                  </div>
+                  <p className="pb-0.5 text-right text-xs font-medium text-muted-foreground">
+                    Once-off, in rand
+                  </p>
+                </div>
+                <dl className="mt-4 divide-y divide-border/60">
+                  <SummaryRow label="Section" value={summary.areaLabel} />
+                  <SummaryRow label="Duration" value={summary.durationLabel} />
+                  <SummaryRow label="Starts" value={`${formatSaLongDate(start)} (on payment)`} />
+                  <SummaryRow label="Expires" value={formatSaLongDate(expiry)} />
+                  <SummaryRow
+                    label="Active posting slots"
+                    value={`${summary.slotCapacity} at a time, reusable when a post sells or ends`}
+                  />
+                  {summary.monthlyActivationLimit ? (
+                    <SummaryRow
+                      label="Fair-use activations"
+                      value={`Up to ${summary.monthlyActivationLimit} per 30 days`}
+                    />
+                  ) : null}
+                  <SummaryRow label="Renewal" value="Does not renew automatically" />
+                  <SummaryRow
+                    label="After expiry"
+                    value="Posts become inactive and stay saved in your dashboard for reactivation"
+                  />
+                </dl>
+              </>
+            ) : (
+              <div className="text-center">
+                <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+                  <AlertCircle aria-hidden="true" className="h-7 w-7" />
+                </span>
+                <h1 className="mt-4 font-display text-2xl font-bold tracking-tight text-foreground">
+                  Confirm your plan
+                </h1>
+              </div>
+            )}
 
-        {error ? (
-          <p role="alert" className="mt-4 text-center text-sm text-destructive">
-            {error}
-          </p>
-        ) : null}
-
-        {pendingPayment ? (
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-center">
-            {pendingPayment.checkoutUrl ? (
-              <Button asChild variant="outline" className="h-11 rounded-full">
-                <a href={pendingPayment.checkoutUrl}>Continue payment</a>
-              </Button>
-            ) : null}
-            {pendingPayment.statusUrl ? (
-              <Button asChild variant="ghost" className="h-11 rounded-full">
-                <Link href={pendingPayment.statusUrl}>Check status</Link>
-              </Button>
-            ) : null}
-            {pendingPayment.canCancel ? (
-              <Button
-                variant="outline"
-                className="h-11 rounded-full"
-                disabled={cancelling}
-                onClick={cancelPending}
+            {error ? (
+              <p
+                role="alert"
+                className="mt-4 rounded-xl border border-destructive/30 bg-destructive/5 px-3.5 py-3 text-sm text-destructive"
               >
-                {cancelling ? "Cancelling…" : "Cancel pending payment"}
-              </Button>
+                {error}
+              </p>
             ) : null}
-          </div>
-        ) : null}
 
-        <div className="mt-6 flex flex-col gap-2">
+            {pendingPayment ? (
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                {pendingPayment.checkoutUrl ? (
+                  <Button asChild variant="outline" className="h-11 flex-1 rounded-full">
+                    <a href={pendingPayment.checkoutUrl}>Continue payment</a>
+                  </Button>
+                ) : null}
+                {pendingPayment.statusUrl ? (
+                  <Button asChild variant="ghost" className="h-11 flex-1 rounded-full">
+                    <Link href={pendingPayment.statusUrl}>Check status</Link>
+                  </Button>
+                ) : null}
+                {pendingPayment.canCancel ? (
+                  <Button
+                    variant="outline"
+                    className="h-11 flex-1 rounded-full"
+                    disabled={cancelling}
+                    onClick={cancelPending}
+                  >
+                    {cancelling ? "Cancelling…" : "Cancel pending payment"}
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="sticky bottom-0 -mx-5 mt-4 flex flex-col gap-1 border-t border-border/60 bg-card/95 px-5 pb-4 pt-3 backdrop-blur sm:static sm:mx-0 sm:mt-6 sm:gap-2 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
+              {summary ? (
+                <Button
+                  variant="trust-verified"
+                  size="lg"
+                  className="h-12 rounded-full"
+                  disabled={state !== "idle"}
+                  onClick={pay}
+                >
+                  {state === "idle" ? (
+                    <>
+                      <LockKeyhole aria-hidden="true" className="h-4 w-4" />
+                      {`Pay ${formatPlanPrice(summary.priceCents)} securely`}
+                    </>
+                  ) : (
+                    <>
+                      <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
+                      {state === "redirecting"
+                        ? "Redirecting to Ozow…"
+                        : "Opening secure checkout…"}
+                    </>
+                  )}
+                </Button>
+              ) : null}
+              <Button asChild variant="ghost" className="h-11 rounded-full">
+                <Link href="/pricing">Back to pricing</Link>
+              </Button>
+            </div>
+          </div>
+
           {summary ? (
-            <Button
-              className="h-11 rounded-full font-semibold"
-              disabled={state !== "idle"}
-              onClick={pay}
-            >
-              {state === "idle" ? (
-                `Pay ${formatPlanPrice(summary.priceCents)} securely`
-              ) : (
-                <>
-                  <Loader2 aria-hidden="true" className="mr-2 h-4 w-4 animate-spin" />
-                  {state === "redirecting" ? "Redirecting to Ozow…" : "Opening secure checkout…"}
-                </>
-              )}
-            </Button>
+            <ul className="mt-5 space-y-2.5 px-1 text-xs leading-5 text-muted-foreground">
+              <li className="flex gap-2.5">
+                <LockKeyhole aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+                You&apos;ll pay on Ozow&apos;s secure page.
+              </li>
+              <li className="flex gap-2.5">
+                <CalendarClock aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+                Posts go live once payment is confirmed and they pass review.
+              </li>
+            </ul>
           ) : null}
-          <Button asChild variant="outline" className="h-11 rounded-full font-semibold">
-            <Link href="/pricing">Back to pricing</Link>
-          </Button>
         </div>
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }

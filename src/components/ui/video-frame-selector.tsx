@@ -129,10 +129,10 @@ export function VideoFrameSelector({ file, onFrameSelect, className }: VideoFram
 
   return (
     <div className={cn("space-y-3", className)}>
-      <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-        <Camera className="h-4 w-4" />
+      <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+        <Camera className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         Choose video cover frame
-      </div>
+      </p>
 
       {/* Hidden video element for seeking */}
       <video
@@ -159,7 +159,7 @@ export function VideoFrameSelector({ file, onFrameSelect, className }: VideoFram
             step={0.1}
             value={currentTime}
             onChange={handleScrub}
-            className="h-2 w-full cursor-pointer appearance-none rounded-full bg-warm-200 accent-brand-green dark:bg-warm-700"
+            className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-brand-green-600"
             aria-label="Scrub video timeline to select poster frame"
           />
           <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -173,7 +173,7 @@ export function VideoFrameSelector({ file, onFrameSelect, className }: VideoFram
       {previewUrl && previewForKey === fileKey && (
         <div className="flex items-start gap-3">
           {/* 9:16 card preview */}
-          <div className="relative w-32 overflow-hidden rounded-lg border border-warm-200 dark:border-warm-700">
+          <div className="relative w-32 overflow-hidden rounded-xl border border-border">
             <div className="aspect-[9/16]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -186,7 +186,7 @@ export function VideoFrameSelector({ file, onFrameSelect, className }: VideoFram
               />
             </div>
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-2 py-1">
-              <p className="text-[10px] font-medium text-white">Card preview</p>
+              <p className="text-[11px] font-medium text-white">Card preview</p>
             </div>
           </div>
 
@@ -195,16 +195,12 @@ export function VideoFrameSelector({ file, onFrameSelect, className }: VideoFram
             <button
               type="button"
               onClick={handleAutoSelect}
-              className="inline-flex items-center gap-1.5 rounded-md border border-warm-200 bg-white px-3 py-1.5 text-xs font-medium text-warm-700 shadow-sm transition-colors hover:bg-warm-50 dark:border-warm-700 dark:bg-warm-800 dark:text-warm-200 dark:hover:bg-warm-700"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-input bg-card px-3 text-sm font-medium text-foreground shadow-xs transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <RotateCcw className="h-3 w-3" />
+              <RotateCcw className="h-4 w-4" aria-hidden="true" />
               Auto-select
             </button>
-            <p className="text-[10px] leading-relaxed text-muted-foreground">
-              Drag the slider to pick the
-              <br />
-              best frame for your cover.
-            </p>
+            <p className="text-xs text-muted-foreground">Or drag the slider.</p>
           </div>
         </div>
       )}

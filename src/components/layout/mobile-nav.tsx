@@ -56,7 +56,7 @@ const NAV_EXACT_PATHS = new Set([
   "/contact",
 ]);
 
-export function shouldShowMobileNav(pathname: string | null): boolean {
+function shouldShowMobileNav(pathname: string | null): boolean {
   if (!pathname) return false;
   if (NAV_EXACT_PATHS.has(pathname)) return true;
   return pathname === "/safety" || pathname.startsWith("/safety/");

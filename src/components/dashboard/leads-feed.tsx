@@ -1,15 +1,24 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { MessageSquare } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatRelativeTime } from "@/lib/utils/format";
 import { useRealtime } from "@/hooks/use-realtime";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { createClient } from "@/lib/supabase/client";
 import { whatsappLink } from "@/lib/utils/contact-links";
+import { cn } from "@/lib/utils";
+
+const STATUS_TONES: Record<string, string> = {
+  new: "bg-brand-gold-100 text-brand-gold-900 dark:bg-brand-gold-400/15 dark:text-brand-gold-200",
+  read: "bg-muted text-muted-foreground",
+  contacted:
+    "bg-brand-green-50 text-brand-green-700 dark:bg-brand-green-500/15 dark:text-brand-green-300",
+  closed: "bg-muted text-muted-foreground",
+};
 
 export interface LeadRow {
   id: string;
@@ -35,7 +44,9 @@ function humanStatus(status: string): string {
   if (status === "read") return "Read";
   if (status === "contacted") return "Contacted";
   if (status === "closed") return "Closed";
-  return status;
+  // Never show a raw enum key (e.g. "spam_flagged") to members.
+  const words = status.replace(/_/g, " ").trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : "Unknown";
 }
 
 export function LeadsFeed({ initialLeads, ownerColumn, ownerId }: LeadsFeedProps) {
@@ -151,117 +162,164 @@ export function LeadsFeed({ initialLeads, ownerColumn, ownerId }: LeadsFeedProps
 
   if (!leads.length) {
     return (
-      <div className="text-center py-6 space-y-3">
-        <MessageSquare className="h-8 w-8 mx-auto text-muted-foreground" />
-        <p className="text-lg font-medium">No leads yet</p>
-        <p className="text-sm text-muted-foreground">
-          Leads will appear here when buyers contact you about a listing.
+      <div className="rounded-2xl border border-dashed border-border bg-card/60 px-5 py-10 text-center">
+        <span aria-hidden="true" className="empty-state-icon">
+          <MessageSquare className="h-6 w-6" />
+        </span>
+        <p className="mt-3 font-display text-base font-semibold text-foreground">No leads yet</p>
+        <p className="mx-auto mt-1 max-w-xs text-sm text-muted-foreground">
+          Buyer enquiries on your posts show up here.
         </p>
+        <Button asChild variant="outline" className="mt-4 h-11 rounded-full px-5">
+          <Link href="/dashboard/listings">View my posts</Link>
+        </Button>
       </div>
     );
   }
 
+  const newCount = leads.filter((lead) => lead.status === "new").length;
+
   return (
     <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">
+        {leads.length} lead{leads.length === 1 ? "" : "s"}
+        {newCount > 0 ? `, ${newCount} new` : ""}
+      </p>
       {statusError && (
         <p role="alert" className="text-sm text-destructive">
           {statusError}
         </p>
       )}
-      {leads.map((lead) => (
-        <Card key={lead.id}>
-          <CardContent className="py-4 space-y-2">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium truncate">
-                  Re: {lead.listings?.title || "Listing"}
-                </p>
-                <Badge variant="outline" className="text-xs mt-1">
-                  {humanStatus(lead.status)}
-                </Badge>
-              </div>
-              <span className="text-xs text-muted-foreground whitespace-nowrap">
-                {formatRelativeTime(lead.created_at)}
-              </span>
-            </div>
-            {lead.message && (
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words">
-                {lead.message}
-              </p>
-            )}
-            <div className="flex flex-wrap gap-2">
-              {lead.buyer_name && <p className="w-full text-sm">From: {lead.buyer_name}</p>}
-              {lead.buyer_email && (
-                <Button asChild variant="outline" size="sm">
-                  <a
-                    href={`mailto:${encodeURIComponent(lead.buyer_email)}?subject=${encodeURIComponent(`Re: ${lead.listings?.title || "Your enquiry"}`)}`}
-                  >
-                    Reply by email
-                  </a>
-                </Button>
-              )}
-              {whatsappLink(
-                lead.buyer_phone,
-                lead.listings?.title || "your enquiry",
-                `/${lead.target_type === "promotion" ? "tourism-events" : "listing"}/${lead.target_id}`
-              ) && (
-                <Button asChild variant="outline" size="sm">
-                  <a
-                    href={whatsappLink(
-                      lead.buyer_phone,
-                      lead.listings?.title || "your enquiry",
-                      `/${lead.target_type === "promotion" ? "tourism-events" : "listing"}/${lead.target_id}`,
-                      "Hi, thanks for your enquiry about"
-                    )!}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Reply on WhatsApp
-                  </a>
-                </Button>
-              )}
-              {lead.status === "new" && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    void updateLeadStatus(lead.id, "read");
-                  }}
-                >
-                  Mark as read
-                </Button>
-              )}
+      <ul className="space-y-3">
+        {leads.map((lead) => {
+          const title = lead.listings?.title || "your post";
+          const postPath = `/${lead.target_type === "promotion" ? "tourism-events" : "listing"}/${lead.target_id}`;
+          const whatsappHref = whatsappLink(
+            lead.buyer_phone,
+            lead.listings?.title || "your enquiry",
+            postPath,
+            "Hi, thanks for your enquiry about"
+          );
+          const isNew = lead.status === "new";
+          return (
+            <li key={lead.id}>
+              <Card
+                className={cn(isNew && "border-brand-gold-400/70 dark:border-brand-gold-400/40")}
+              >
+                <CardContent className="space-y-3 p-4 sm:p-5">
+                  <div className="flex items-start gap-3">
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold",
+                        isNew
+                          ? "bg-brand-gold-100 text-brand-gold-900 dark:bg-brand-gold-400/15 dark:text-brand-gold-200"
+                          : "bg-muted text-muted-foreground"
+                      )}
+                    >
+                      {(lead.buyer_name || "?").trim().charAt(0).toUpperCase() || "?"}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <p className="truncate text-sm font-semibold text-foreground">
+                          {lead.buyer_name || "A buyer"}
+                        </p>
+                        <span
+                          className={cn(
+                            "rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                            STATUS_TONES[lead.status] ?? STATUS_TONES.read
+                          )}
+                        >
+                          {humanStatus(lead.status)}
+                        </span>
+                        <span
+                          className="ml-auto whitespace-nowrap text-xs text-muted-foreground"
+                          suppressHydrationWarning
+                        >
+                          {formatRelativeTime(lead.created_at)}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                        Re: {lead.listings?.title || "Listing"}
+                      </p>
+                    </div>
+                  </div>
+                  {lead.message && (
+                    <p className="whitespace-pre-wrap break-words rounded-xl bg-muted/60 px-3.5 py-3 text-sm text-foreground/90">
+                      {lead.message}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {whatsappHref && (
+                      <Button asChild variant="trust-verified" size="sm" className="h-11 px-4">
+                        <a href={whatsappHref} target="_blank" rel="noopener noreferrer">
+                          Reply on WhatsApp
+                        </a>
+                      </Button>
+                    )}
+                    {lead.buyer_email && (
+                      <Button asChild variant="outline" size="sm" className="h-11 px-4">
+                        <a
+                          href={`mailto:${encodeURIComponent(lead.buyer_email)}?subject=${encodeURIComponent(`Re: ${lead.listings?.title || "Your enquiry"}`)}`}
+                        >
+                          Reply by email
+                        </a>
+                      </Button>
+                    )}
+                    <div
+                      className="flex flex-wrap gap-1 sm:ml-auto"
+                      role="group"
+                      aria-label={`Update status for ${title}`}
+                    >
+                      {lead.status === "new" && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-11 px-3"
+                          onClick={() => {
+                            void updateLeadStatus(lead.id, "read");
+                          }}
+                        >
+                          Mark as read
+                        </Button>
+                      )}
 
-              {lead.status !== "contacted" && lead.status !== "closed" && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    void updateLeadStatus(lead.id, "contacted");
-                  }}
-                >
-                  Mark contacted
-                </Button>
-              )}
+                      {lead.status !== "contacted" && lead.status !== "closed" && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-11 px-3"
+                          onClick={() => {
+                            void updateLeadStatus(lead.id, "contacted");
+                          }}
+                        >
+                          Mark contacted
+                        </Button>
+                      )}
 
-              {lead.status !== "closed" && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    void updateLeadStatus(lead.id, "closed");
-                  }}
-                >
-                  Close lead
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+                      {lead.status !== "closed" && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-11 px-3 text-muted-foreground"
+                          onClick={() => {
+                            void updateLeadStatus(lead.id, "closed");
+                          }}
+                        >
+                          Close lead
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

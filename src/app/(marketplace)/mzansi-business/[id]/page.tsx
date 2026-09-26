@@ -7,8 +7,7 @@ import { ContactActionTracker } from "@/components/analytics/contact-action-trac
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
-import { PageHeader } from "@/components/layout/page-header";
-import { ContentViewCountText } from "@/components/listings/content-view-count-text";
+import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -349,41 +348,10 @@ export async function BusinessDetailPageContent({
   const businessViewCount = businessViewSummary.ok
     ? (businessViewSummary.data.get(business.id) ?? 0)
     : (business.view_count ?? 0);
-  const businessProfileDescription = `${
-    resolvedSection === "tourism" ? "tourism" : "business"
-  } profile.`;
-  const businessViewDescription = (
-    <ContentViewCountText
-      targetId={business.id}
-      targetType="business"
-      initialCount={businessViewCount}
-    />
-  );
-
   return (
-    <div className="bg-muted/30">
-      <div className="container-page space-y-5 py-4">
-        <PageHeader
-          title={business.business_name}
-          description={
-            isOwnerPreview ? (
-              <>
-                {businessViewDescription}
-                {" · "}
-                {`Previewing a representative-managed ${
-                  resolvedSection === "tourism" ? "tourism" : "business"
-                } profile that is still pending moderation.`}
-              </>
-            ) : (
-              <>
-                {businessViewDescription}
-                {" · "}
-                {businessProfileDescription}
-              </>
-            )
-          }
-          breadcrumbs={breadcrumbs}
-        />
+    <div>
+      <div className="container-page space-y-5 py-5 lg:space-y-6 lg:py-8">
+        <Breadcrumbs items={breadcrumbs} />
 
         {isOwnerPreview && (
           <Alert variant="warning">

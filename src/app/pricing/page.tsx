@@ -1,16 +1,22 @@
-import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
+import { CalendarDays, LockKeyhole, ReceiptText, ShieldCheck } from "lucide-react";
+
 import { TrialPolicy } from "@/components/billing/trial-policy";
+import { BillingFaq } from "@/components/billing/billing-faq";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
-import { PageHeader } from "@/components/layout/page-header";
-import { CreditCard } from "lucide-react";
+import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { RetailPricing } from "@/components/billing/retail-pricing";
 import { EnterprisePricing } from "@/components/billing/enterprise-pricing";
 import { getCommercialCatalog } from "@/lib/commercial/plans";
 import { getCommercialSettings } from "@/lib/commercial/settings";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getTrustPublicConfig } from "@/lib/trust-public-config";
-import { HELLO_CONTACT_EMAIL } from "@/lib/contact-email";
+
+const HERO_POINTS = [
+  { icon: ReceiptText, label: "Never renews" },
+  { icon: LockKeyhole, label: "Secure Ozow checkout" },
+  { icon: CalendarDays, label: "Events always free" },
+] as const;
 
 export const metadata = {
   title: "Pricing",
@@ -62,80 +68,104 @@ export default async function PricingPage() {
       />
 
       <main id="main-content" className="flex-1 scroll-mt-24">
-        {/* ── Hero band ─────────────────────────────────── */}
-        <section className="border-b border-warm-200/70 bg-hero-mesh dark:border-warm-800/60">
-          <div className="container-page py-6 sm:py-8">
-            <PageHeader
-              title="Pricing"
-              description="One simple price in every section. R50 for 30 days, R250 for 6 months, R450 for 12 months — and events are free."
-              breadcrumbs={[{ label: "Pricing" }]}
-            />
+        <section
+          aria-labelledby="pricing-title"
+          className="bg-hero-mesh relative overflow-hidden border-b border-border/60"
+        >
+          <div
+            aria-hidden="true"
+            className="mzansi-pattern pointer-events-none absolute inset-0 opacity-[0.03] dark:opacity-[0.05] dark:invert [mask-image:linear-gradient(to_bottom,black,transparent_85%)]"
+          />
+          <div className="container-page relative grid items-center gap-8 pb-10 pt-6 sm:pt-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:gap-14 lg:pb-14 lg:pt-10">
+            <div className="min-w-0">
+              <Breadcrumbs items={[{ label: "Pricing" }]} />
+              <h1
+                id="pricing-title"
+                className="mt-4 font-display text-[2.2rem] font-extrabold leading-[1.05] tracking-[-0.03em] text-foreground sm:text-5xl"
+              >
+                Start free. Then one simple price.
+              </h1>
+              <p className="mt-4 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">
+                Your first post is free. After that, the same price in every section.
+              </p>
+              <ul className="mt-6 flex flex-wrap gap-x-6 gap-y-3 text-sm font-medium text-foreground/85">
+                {HERO_POINTS.map(({ icon: Icon, label }) => (
+                  <li key={label} className="flex items-center gap-2.5">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-green/10 text-brand-green-700 dark:text-brand-green-300">
+                      <Icon className="h-4 w-4" aria-hidden="true" />
+                    </span>
+                    {label}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <TrialPolicy trials={settings?.trials} className="w-full lg:ml-auto lg:max-w-md" />
           </div>
         </section>
 
-        <div className="container-page space-y-8 py-8 sm:py-10">
+        <section
+          id="plans"
+          aria-labelledby="plans-title"
+          className="container-page scroll-mt-28 py-10 sm:py-14"
+        >
+          <div className="mx-auto mb-7 max-w-2xl text-center">
+            <h2 id="plans-title" className="section-title">
+              Plans
+            </h2>
+            <p className="section-lede mx-auto">One posting slot, paid once.</p>
+          </div>
           <RetailPricing offers={catalog.retail} />
+        </section>
 
-          <p className="mx-auto max-w-2xl text-center text-xs text-muted-foreground">
-            Plans are prepaid for a fixed period and never renew automatically. Nothing is visible
-            until payment is confirmed. When a plan ends, your posts stay saved in your dashboard
-            and can be reactivated.
-          </p>
+        <section aria-label="Paying safely" className="container-page pb-10 sm:pb-14">
+          <ul className="mx-auto grid max-w-6xl gap-4 rounded-3xl bg-muted/60 p-4 text-sm sm:grid-cols-3 sm:p-5">
+            {[
+              {
+                icon: LockKeyhole,
+                title: "Secure Ozow checkout",
+                text: "Pay on Ozow's hosted page.",
+              },
+              {
+                icon: ReceiptText,
+                title: "Clear rand pricing",
+                text: trustConfig.ozowMerchantName
+                  ? `Shows as ${trustConfig.ozowMerchantName}.`
+                  : "Prices shown in ZAR.",
+              },
+              {
+                icon: ShieldCheck,
+                title: "Still moderated",
+                text: "Support helps if a post is rejected.",
+              },
+            ].map(({ icon: Icon, title, text }) => (
+              <li key={title} className="flex items-center gap-3">
+                <span className="icon-tile area-market-tile">
+                  <Icon className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <p className="leading-5 text-muted-foreground">
+                  <span className="block font-semibold text-foreground">{title}</span>
+                  {text}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
 
-          <TrialPolicy trials={settings?.trials} />
-
+        <div className="container-page pb-12 sm:pb-16">
           <EnterprisePricing
             plans={catalog.enterprise}
             checkoutEnabled={settings?.features.enterpriseCheckout ?? true}
           />
+        </div>
 
-          <section className="mx-auto grid max-w-5xl gap-4 md:grid-cols-2">
-            <div className="surface-card p-5 transition-shadow duration-200 hover:elev-sm sm:p-6">
-              <div className="flex items-center gap-3">
-                <span className="icon-tile bg-brand-green/10 text-brand-green dark:text-brand-green-300">
-                  <CreditCard className="h-[18px] w-[18px]" aria-hidden="true" />
-                </span>
-                <h2 className="font-display text-base font-semibold text-foreground">
-                  Payment transparency
-                </h2>
-              </div>
-              <p className="mt-2.5 text-sm leading-6 text-muted-foreground">
-                Paid features are processed in ZAR through secure hosted checkout.{" "}
-                {trustConfig.ozowMerchantName
-                  ? `Your bank or Ozow record may show ${trustConfig.ozowMerchantName}.`
-                  : "Your bank record should identify VerifyMzansi or its checkout provider."}
-              </p>
-            </div>
-            <div className="surface-card p-5 transition-shadow duration-200 hover:elev-sm sm:p-6">
-              <div className="flex items-center gap-3">
-                <span className="icon-tile bg-brand-green/10 text-brand-green dark:text-brand-green-300">
-                  <ShieldCheck className="h-[18px] w-[18px]" aria-hidden="true" />
-                </span>
-                <h2 className="font-display text-base font-semibold text-foreground">
-                  Moderation and refunds
-                </h2>
-              </div>
-              <p className="mt-2.5 text-sm leading-6 text-muted-foreground">
-                Paid visibility does not bypass moderation. If paid content is rejected, support can
-                review correction, credit, or refund options.
-              </p>
-              {trustConfig.vatStatus && (
-                <p className="mt-2 text-sm text-muted-foreground">
-                  VAT status: {trustConfig.vatStatus}
-                </p>
-              )}
-            </div>
-          </section>
-
-          <p className="text-center text-sm text-muted-foreground">
-            Have questions?{" "}
-            <a
-              href={`mailto:${HELLO_CONTACT_EMAIL}`}
-              className="text-brand-green underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
-            >
-              Contact us
-            </a>
-          </p>
+        <div className="border-t border-border/60 bg-card/50">
+          <div className="container-page py-12 sm:py-16">
+            <BillingFaq
+              trials={settings?.trials}
+              merchantName={trustConfig.ozowMerchantName}
+              vatStatus={trustConfig.vatStatus}
+            />
+          </div>
         </div>
       </main>
 

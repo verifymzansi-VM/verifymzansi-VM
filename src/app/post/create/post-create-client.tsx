@@ -2,66 +2,95 @@
 
 import { BrandShieldAlert as ShieldAlert } from "@/components/shared/brand-shield";
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Building2, Loader2, TreePalm, ShoppingBag } from "lucide-react";
+import {
+  Building2,
+  Camera,
+  ClipboardCheck,
+  Loader2,
+  ShoppingBag,
+  TreePalm,
+  type LucideIcon,
+} from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Card, CardContent } from "@/components/ui/card";
 import { buildPostCategoryHref } from "@/app/post/_lib/post-access";
 import { normalizeAccountVerificationStatus } from "@/lib/account/compat";
+import { cn } from "@/lib/utils";
 import type { AccountVerificationStatus } from "@/types/enums";
 
-const POST_OPTIONS = [
+interface PostOption {
+  title: string;
+  tagline: string;
+  examples: readonly string[];
+  cta: string;
+  icon: LucideIcon;
+  href: string;
+  image: string;
+  tile: string;
+  accent: string;
+  ring: string;
+  ctaColor: string;
+}
+
+const POST_OPTIONS: readonly PostOption[] = [
   {
     title: "Mzansi Market",
-    tagline: "Sell, buy, or rent a single item.",
-    bullets: [
-      "Cars, bakkies & vehicles",
-      "Property for sale or to rent",
-      "Electronics, spare parts & everyday classifieds",
-    ],
+    tagline: "Sell or rent out one item.",
+    examples: ["Cars & bakkies", "Phones", "Property"],
+    cta: "Post an item",
     icon: ShoppingBag,
     href: "/post/create-listing",
-    iconColor: "text-brand-green",
-    iconBg: "bg-brand-green/10",
+    image: "/images/showrooms/market-v2-mobile.avif",
+    tile: "area-market-tile",
+    accent: "bg-brand-green-600 dark:bg-brand-green-400",
+    ring: "hover:border-brand-green-400/70 focus-visible:ring-brand-green-500/50 dark:hover:border-brand-green-600",
+    ctaColor: "text-brand-green-700 dark:text-brand-green-300",
   },
   {
     title: "Mzansi Business",
-    tagline: "Create your full business profile.",
-    bullets: [
-      "Services, hours & location",
-      "Contact details in one place",
-      "Long-term presence on the platform",
-    ],
+    tagline: "Create a profile for your business.",
+    examples: ["Salons", "Trades", "Restaurants"],
+    cta: "Create a business profile",
     icon: Building2,
     href: "/post/create-business",
-    iconColor: "text-brand-blue",
-    iconBg: "bg-brand-blue/10",
+    image: "/images/showrooms/business-v2-mobile.avif",
+    tile: "area-business-tile",
+    accent: "bg-brand-blue-600 dark:bg-brand-blue-400",
+    ring: "hover:border-brand-blue-400/70 focus-visible:ring-brand-blue-500/50 dark:hover:border-brand-blue-600",
+    ctaColor: "text-brand-blue-700 dark:text-brand-blue-300",
   },
   {
     title: "Tourism & Events",
-    tagline: "List accommodation, attractions, or events.",
-    bullets: [
-      "Hotels, lodges & guest houses",
-      "Tours, attractions & experiences",
-      "Festivals, concerts & community events",
-    ],
+    tagline: "List a stay, experience or event.",
+    examples: ["Guest houses", "Tours", "Festivals"],
+    cta: "List a stay or event",
     icon: TreePalm,
     href: "/post/create-tourism",
-    iconColor: "text-sunset-600",
-    iconBg: "bg-sunset-600/10",
+    image: "/images/showrooms/tourism-v2-mobile.avif",
+    tile: "area-tourism-tile",
+    accent: "bg-sunset-600 dark:bg-sunset-400",
+    ring: "hover:border-sunset-400/70 focus-visible:ring-sunset-500/50 dark:hover:border-sunset-600",
+    ctaColor: "text-sunset-700 dark:text-sunset-300",
   },
-] as const;
+];
+
+const HOW_IT_WORKS: readonly { icon: LucideIcon; title: string }[] = [
+  { icon: ShoppingBag, title: "Choose an area" },
+  { icon: Camera, title: "Add details and photos" },
+  { icon: ClipboardCheck, title: "We check it, then it goes live" },
+];
 
 function getVerificationNote(status: AccountVerificationStatus | null | undefined) {
   switch (status) {
     case "pending_review":
-      return "Your verification is under review. You can browse categories, but approval is needed before posting.";
+      return "Your verification is being reviewed. You can post once it's approved.";
     case "rejected":
-      return "Your verification was rejected. Review the feedback and resubmit the required steps before posting.";
+      return "Your verification wasn't approved. Check the feedback and try again.";
     case "incomplete":
     default:
-      return "Verification is required before you can post. Browse the categories, then continue to verification.";
+      return "Finish verification to start posting.";
   }
 }
 
@@ -150,19 +179,43 @@ export function PostCreateClient({
     router.push(href);
   }
 
+  const showVerificationCta = verificationStatus !== "pending_review";
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {hasConfirmedAuth && !canPost && (
-        <Alert className="border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-          <ShieldAlert className="mt-0.5 h-4 w-4 flex-shrink-0" />
-          <div>
-            <AlertTitle>Verification required before posting</AlertTitle>
-            <AlertDescription>{getVerificationNote(verificationStatus)}</AlertDescription>
+        <Alert
+          hideIcon
+          className="border-brand-gold-300/70 bg-brand-gold-50 text-foreground dark:border-brand-gold-700/50 dark:bg-brand-gold-950/30"
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-gold-100 text-brand-gold-800 dark:bg-brand-gold-900/50 dark:text-brand-gold-200">
+                <ShieldAlert className="h-5 w-5" />
+              </span>
+              <div>
+                <AlertTitle className="leading-snug">
+                  Verification required before posting
+                </AlertTitle>
+                <AlertDescription className="mt-1 text-muted-foreground">
+                  {getVerificationNote(verificationStatus)}
+                </AlertDescription>
+              </div>
+            </div>
+            {showVerificationCta ? (
+              <Link
+                href="/verification?returnUrl=%2Fpost%2Fcreate"
+                prefetch={false}
+                className="inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-foreground px-5 text-sm font-semibold text-background transition-colors hover:bg-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                Continue verification
+              </Link>
+            ) : null}
           </div>
         </Alert>
       )}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-5">
         {POST_OPTIONS.map((option) => {
           const Icon = option.icon;
           const href = buildPostCategoryHref(option.href, verificationStatus);
@@ -175,64 +228,113 @@ export function PostCreateClient({
               type="button"
               onClick={() => handleCategoryClick(option.href)}
               disabled={isDisabled}
-              className="group block h-full w-full rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/50 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-100"
+              className={cn(
+                "group relative flex h-full w-full flex-col overflow-hidden rounded-3xl border border-border/70 bg-card text-left elev-xs transition-all duration-200 ease-out hover:-translate-y-0.5 hover:elev-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-wait motion-reduce:transition-none motion-reduce:hover:translate-y-0",
+                option.ring,
+                isPending && "ring-2 ring-offset-2",
+                isDisabled && !isPending && "opacity-60"
+              )}
             >
-              <Card
-                className={`h-full transition-all duration-200 ${
-                  isPending
-                    ? "border-brand-green/50 bg-brand-green/5"
-                    : "cursor-pointer hover:border-brand-green/40 hover:bg-accent/30"
-                } ${isDisabled && !isPending ? "opacity-75" : ""}`}
-              >
-                <CardContent className="flex h-full flex-col gap-4 p-5">
-                  <div className={`w-fit rounded-xl p-3 ${option.iconBg}`}>
-                    <Icon className={`h-7 w-7 ${option.iconColor}`} />
-                  </div>
+              <span aria-hidden="true" className={cn("h-1.5 w-full md:hidden", option.accent)} />
+              <span className="relative hidden aspect-[16/9] w-full overflow-hidden md:block">
+                <Image
+                  src={option.image}
+                  alt=""
+                  fill
+                  sizes="(min-width: 1280px) 400px, 33vw"
+                  className="object-cover transition-transform duration-500 group-hover:scale-[1.03] motion-reduce:transition-none"
+                />
+                <span
+                  aria-hidden="true"
+                  className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent"
+                />
+              </span>
 
-                  <div>
-                    <h2 className="font-display text-lg font-semibold">{option.title}</h2>
-                    <p className="mt-0.5 text-sm text-muted-foreground">{option.tagline}</p>
-                  </div>
+              <span className="flex flex-1 flex-col gap-4 p-5">
+                <span className="flex items-start gap-3.5">
+                  <span
+                    aria-hidden="true"
+                    className="relative z-10 shrink-0 rounded-[1.1rem] md:-mt-12 md:bg-card md:p-1 md:elev-sm"
+                  >
+                    <span
+                      className={cn(
+                        "flex h-12 w-12 items-center justify-center rounded-2xl md:h-14 md:w-14",
+                        option.tile
+                      )}
+                    >
+                      <Icon className="h-6 w-6" />
+                    </span>
+                  </span>
+                  <span className="min-w-0 pt-0.5 md:pt-0">
+                    <span className="block font-display text-xl font-bold leading-tight tracking-tight text-foreground">
+                      {option.title}
+                    </span>
+                    <span className="mt-1 block text-sm font-medium text-foreground/80">
+                      {option.tagline}
+                    </span>
+                  </span>
+                </span>
 
-                  <ul className="space-y-1.5 text-sm text-muted-foreground">
-                    {option.bullets.map((bullet) => (
-                      <li key={bullet} className="flex items-start gap-2">
-                        <span
-                          aria-hidden="true"
-                          className="mt-2 h-1 w-1 flex-shrink-0 rounded-full bg-muted-foreground/50"
-                        />
-                        {bullet}
-                      </li>
-                    ))}
-                  </ul>
+                <span className="flex flex-wrap gap-1.5">
+                  {option.examples.map((example) => (
+                    <span key={example} className="chip py-0.5">
+                      {example}
+                    </span>
+                  ))}
+                </span>
 
-                  <div className="mt-auto flex items-center gap-1 text-sm font-medium text-brand-green">
-                    {isPending ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Loading...
-                      </>
-                    ) : (
-                      <>
-                        Get Started
-                        <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
-                      </>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+                <span
+                  className={cn(
+                    "mt-auto flex min-h-11 items-center justify-between gap-2 border-t border-border/60 pt-3 text-sm font-semibold",
+                    option.ctaColor
+                  )}
+                >
+                  {isPending ? (
+                    <span className="inline-flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                      Loading...
+                    </span>
+                  ) : (
+                    <span className="underline-offset-4 group-hover:underline">{option.cta}</span>
+                  )}
+                </span>
+              </span>
             </button>
           );
         })}
       </div>
 
+      <section
+        aria-labelledby="post-how-it-works"
+        className="surface-card grid gap-4 p-5 sm:grid-cols-[auto_1fr] sm:items-center sm:gap-8"
+      >
+        <h2
+          id="post-how-it-works"
+          className="font-display text-lg font-bold tracking-tight text-foreground"
+        >
+          How posting works
+        </h2>
+        <ol className="grid gap-4 sm:grid-cols-3">
+          {HOW_IT_WORKS.map((item, index) => {
+            const StepIcon = item.icon;
+            return (
+              <li key={item.title} className="flex items-center gap-3">
+                <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground/80">
+                  <StepIcon className="h-5 w-5" aria-hidden="true" />
+                  <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-brand-green-600 text-[11px] font-bold text-white dark:bg-brand-green-400 dark:text-brand-green-950">
+                    {index + 1}
+                  </span>
+                </span>
+                <span className="min-w-0 text-sm font-semibold text-foreground">{item.title}</span>
+              </li>
+            );
+          })}
+        </ol>
+      </section>
+
       <p className="text-sm text-muted-foreground">
         Need more visibility after launch?{" "}
-        <Link
-          href="/advertise"
-          prefetch={false}
-          className="font-medium text-brand-green underline-offset-4 transition-colors hover:text-brand-green-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        >
+        <Link href="/advertise" prefetch={false} className="link-arrow inline">
           See advertising options
         </Link>
       </p>

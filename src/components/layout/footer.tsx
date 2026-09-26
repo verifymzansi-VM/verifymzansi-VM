@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { BrandLogo } from "../shared/brand-logo";
-import { ArrowRight, Check } from "lucide-react";
 import { BrandShield } from "@/components/shared/brand-shield";
 import { getServerPublicRuntimeConfig } from "@/lib/public-runtime-config";
 import { OfficialSocialLinks } from "@/components/shared/official-social-links";
@@ -83,9 +82,8 @@ export function Footer() {
             <p className="font-display text-2xl font-bold leading-tight tracking-tight sm:text-3xl">
               Got something to sell, share or host?
             </p>
-            <p className="mt-2 text-sm leading-6 text-white/65 sm:text-base">
-              Get verified once, then post to Mzansi Market, Mzansi Business or Tourism &amp;
-              Events. Your first post is free.
+            <p className="mt-2 text-sm text-white/70 sm:text-base">
+              Get verified once, post anywhere.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -95,7 +93,6 @@ export function Footer() {
               className="inline-flex h-12 items-center gap-2 rounded-full bg-brand-green-500 px-6 text-sm font-semibold text-brand-green-950 transition-colors hover:bg-brand-green-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#07130f]"
             >
               Post for free
-              <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
             <Link
               href="/trust-safety"
@@ -118,28 +115,14 @@ export function Footer() {
             <Link href="/" prefetch={false} className="inline-flex items-center">
               <BrandLogo size="sm" tone="inverse" />
             </Link>
-            <p className="max-w-xs text-sm leading-6 text-white/60">
-              South Africa&apos;s trust-first marketplace. Buy, sell and discover local businesses,
-              stays and events with people whose identity has been reviewed.
+            <p className="max-w-xs text-sm text-white/70">
+              South Africa&apos;s trust-first marketplace.
             </p>
-            <ul className="flex flex-wrap gap-2 text-xs text-white/70">
-              {["ID-reviewed members", "Moderated posts", "POPIA-aligned"].map((item) => (
-                <li
-                  key={item}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1"
-                >
-                  <Check className="h-3 w-3 text-brand-green-300" aria-hidden="true" />
-                  {item}
-                </li>
-              ))}
-            </ul>
           </div>
 
           {footerSections.map((section) => (
             <div key={section.title} className="space-y-3">
-              <h3 className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
-                {section.title}
-              </h3>
+              <h3 className="text-sm font-semibold text-white/85">{section.title}</h3>
               <nav aria-label={section.title} className="flex flex-col">
                 {section.links.map((link) => (
                   <Link
@@ -158,7 +141,7 @@ export function Footer() {
           <OfficialSocialLinks
             links={runtimeConfig.officialSocialLinks}
             className="space-y-2"
-            titleClassName="text-xs font-semibold uppercase tracking-[0.16em] text-white/45"
+            titleClassName="text-sm font-semibold text-white/85"
             linkClassName="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-white/75 transition-colors duration-200 hover:border-white/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
           />
         </div>

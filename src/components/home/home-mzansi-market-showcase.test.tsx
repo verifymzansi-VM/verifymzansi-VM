@@ -177,8 +177,8 @@ describe("HomeMzansiMarketShowcase", () => {
     const ui = await HomeMzansiMarketShowcase();
     render(ui);
 
-    expect(screen.getByText("No listings yet.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /post first listing/i })).toHaveAttribute(
+    expect(screen.getByText("No listings yet")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /post an item/i })).toHaveAttribute(
       "href",
       "/post/create-listing"
     );

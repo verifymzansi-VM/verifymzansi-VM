@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { ArrowLeft, KeyRound, Loader2, MailCheck } from "lucide-react";
 import { useCallback, useState, useEffect, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
 import { AuthEmailField } from "@/components/auth/auth-email-field";
 import { AuthTurnstileFeedback } from "@/components/auth/auth-turnstile-feedback";
+import { AuthIconTile, AuthPageHeader } from "@/components/auth/auth-ui";
 import {
   TURNSTILE_DOMAIN_MISCONFIGURED_MESSAGE,
   TURNSTILE_UNAVAILABLE_MESSAGE,
@@ -18,9 +19,11 @@ import {
 import { forgotPasswordSchema, type ForgotPasswordInput } from "@/lib/validations/auth";
 import { useToast } from "@/hooks/use-toast";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
+import { useHydrated } from "@/hooks/use-hydrated";
 
 export default function ForgotPasswordPage() {
   const [sent, setSent] = useState(false);
+  const [sentTo, setSentTo] = useState("");
   const [turnstileError, setTurnstileError] = useState(false);
   const [turnstileLoaded, setTurnstileLoaded] = useState(false);
   const [turnstileRetryToken, setTurnstileRetryToken] = useState(0);
@@ -29,6 +32,9 @@ export default function ForgotPasswordPage() {
   );
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { toast } = useToast();
+  // Keep the form inert until hydrated so a pre-hydration submit cannot fall
+  // back to a native GET that would put the email address in the URL.
+  const isInteractive = useHydrated();
 
   const {
     register,
@@ -112,6 +118,16 @@ export default function ForgotPasswordPage() {
 
   async function onSubmit(data: ForgotPasswordInput) {
     try {
+      const csrfToken = await ensureCsrfTokenReady();
+      if (!csrfToken) {
+        toast({
+          title: "Security check failed",
+          description: "Please refresh the page and try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const response = await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
@@ -121,6 +137,8 @@ export default function ForgotPasswordPage() {
       const result = await response.json().catch(() => ({}));
 
       if (!response.ok) {
+        // Turnstile tokens are single-use: get a fresh one for the next attempt.
+        if (turnstileState.mode === "configured") handleRetry();
         toast({
           title: "Reset request failed",
           description:
@@ -130,60 +148,79 @@ export default function ForgotPasswordPage() {
         return;
       }
 
+      setSentTo(data.email);
       setSent(true);
     } catch {
       toast({
         title: "Something went wrong",
+        description: "We couldn't send your request. Check your connection and try again.",
         variant: "destructive",
       });
     }
   }
 
+  function handleTryAgain() {
+    // The previous Turnstile token was consumed by the first request.
+    setValue("turnstileToken", "", { shouldValidate: false });
+    setTurnstileLoaded(false);
+    setTurnstileError(false);
+    setSent(false);
+  }
+
   if (sent) {
     return (
-      <div className="space-y-4 text-center">
-        <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-brand-green-50 dark:bg-brand-green-950 text-brand-green mx-auto">
-          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-            />
-          </svg>
+      <div className="space-y-6">
+        <AuthPageHeader
+          icon={
+            <AuthIconTile>
+              <MailCheck />
+            </AuthIconTile>
+          }
+          title="Check your email"
+          description={
+            <>
+              If <span className="break-all font-semibold text-foreground">{sentTo}</span> has an
+              account, a reset link is on its way.
+            </>
+          }
+        />
+
+        <div className="flex flex-col gap-3">
+          <Button asChild variant="trust-verified" size="lg" className="h-12 w-full text-[15px]">
+            <Link href="/login">Back to sign in</Link>
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="lg"
+            className="h-12 w-full text-[15px]"
+            onClick={handleTryAgain}
+          >
+            Use a different email
+          </Button>
         </div>
-        <h1 className="font-display text-2xl font-bold">Check your email</h1>
-        <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-          We&apos;ve sent a password reset link to your email. It may take a few minutes to arrive.
-        </p>
-        <button
-          type="button"
-          onClick={() => setSent(false)}
-          className="text-sm text-brand-green hover:underline"
-        >
-          Didn&apos;t receive it? Try again
-        </button>
-        <Button asChild variant="outline" className="gap-2">
-          <Link href="/login">
-            <ArrowLeft className="h-4 w-4" />
-            Back to sign in
-          </Link>
-        </Button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-1">
-        <h1 className="font-display text-2xl font-bold tracking-tight">Forgot your password?</h1>
-        <p className="text-sm text-muted-foreground">
-          Enter your email and we&apos;ll send you a reset link.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <AuthPageHeader
+        icon={
+          <AuthIconTile>
+            <KeyRound />
+          </AuthIconTile>
+        }
+        title="Forgot your password?"
+        description="We'll email you a link to reset it."
+      />
 
-      <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        <AuthEmailField inputProps={register("email")} errorMessage={errors.email?.message} />
+      <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+        <AuthEmailField
+          inputProps={register("email")}
+          errorMessage={errors.email?.message}
+          disabled={!isInteractive}
+        />
 
         <TurnstileWidget
           retryToken={turnstileRetryToken}
@@ -203,21 +240,23 @@ export default function ForgotPasswordPage() {
 
         <Button
           type="submit"
-          className="h-11 w-full rounded-full text-[15px] font-semibold"
+          size="lg"
+          className="h-12 w-full text-[15px]"
           variant="trust-verified"
-          disabled={isSubmitting || captchaUnavailable}
+          disabled={!isInteractive || isSubmitting || captchaUnavailable}
+          aria-busy={isSubmitting || undefined}
         >
-          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {isSubmitting ? "Sending..." : "Send Reset Link"}
+          {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+          {isSubmitting ? "Sending link…" : "Send reset link"}
         </Button>
       </form>
 
-      <p className="text-center text-sm text-muted-foreground">
+      <p className="text-center">
         <Link
           href="/login"
-          className="font-medium text-brand-green underline inline-flex items-center gap-1"
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-[15px] font-semibold text-brand-green-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-brand-green-300"
         >
-          <ArrowLeft className="h-3 w-3" />
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           Back to sign in
         </Link>
       </p>

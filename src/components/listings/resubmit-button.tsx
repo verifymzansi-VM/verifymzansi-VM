@@ -10,14 +10,14 @@ import type { MarketplaceArea } from "@/types/enums";
 interface ResubmitButtonProps {
   itemId: string;
   area: MarketplaceArea;
-  /** Optional label override (default: "Resubmit for Review") */
+  /** Optional label override (default: "Resubmit for review") */
   label?: string;
 }
 
 export function ResubmitButton({
   itemId,
   area,
-  label = "Resubmit for Review",
+  label = "Resubmit for review",
 }: ResubmitButtonProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,18 +54,22 @@ export function ResubmitButton({
       <Button
         variant="outline"
         size="sm"
-        className="gap-1.5 border-brand-green text-brand-green hover:bg-brand-green/10"
+        className="h-11 gap-1.5 border-brand-green-600 px-4 text-brand-green-700 hover:bg-brand-green/10 dark:border-brand-green-400 dark:text-brand-green-300"
         onClick={handleResubmit}
         disabled={loading}
       >
         {loading ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />
         ) : (
-          <RotateCcw className="h-3.5 w-3.5" />
+          <RotateCcw aria-hidden="true" className="h-3.5 w-3.5" />
         )}
         {label}
       </Button>
-      {error && <p className="inline-form-error">{error}</p>}
+      {error && (
+        <p role="alert" className="inline-form-error">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

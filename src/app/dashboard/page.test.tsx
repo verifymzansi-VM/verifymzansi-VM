@@ -252,10 +252,9 @@ describe("DashboardPage", () => {
     expect(screen.getByText("needs:verified:0")).toBeInTheDocument();
     expect(screen.getAllByText(/Verified/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("dashboard-onboarding:true:false:false")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Create Post|Post/i })).toHaveAttribute(
-      "href",
-      "/post/create"
-    );
+    expect(screen.getByRole("link", { name: /new post/i })).toHaveAttribute("href", "/post/create");
+    // Verified members get a badge, not the verification prompt card.
+    expect(screen.queryByTestId("dashboard-verification-card")).not.toBeInTheDocument();
   });
 
   it("calculates the real number of steps remaining for incomplete verification", async () => {
@@ -272,7 +271,13 @@ describe("DashboardPage", () => {
 
     expect(screen.getByText("needs:incomplete:2")).toBeInTheDocument();
     expect(screen.getByText("dashboard-onboarding:false:false:false")).toBeInTheDocument();
-    expect(screen.getByText(/2 steps to verify/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /2 steps to verify/i })).toBeInTheDocument();
+    // The next step is named and linked.
+    expect(screen.getByText(/Next: take a selfie/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Continue verification" })).toHaveAttribute(
+      "href",
+      "/verification"
+    );
   });
 
   it("shows the listing manager once the account has content", async () => {

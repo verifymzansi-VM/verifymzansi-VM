@@ -15,6 +15,12 @@ import { triggerHaptic } from "@/lib/utils/haptics";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { ListingAttributeFilters } from "./listing-attribute-filters";
 import { ActiveFilterChips, type FilterChip } from "./active-filter-chips";
+import {
+  FilterChoiceChip,
+  describeAttributeFilter,
+  filterSelectClass,
+  formatPriceRangeLabel,
+} from "./filter-controls";
 
 function countActiveFilters(
   filters: Pick<
@@ -54,8 +60,7 @@ export function ListingFilterDrawer() {
   const appliedFilterCount = countActiveFilters(filters);
   const draftFilterCount = countActiveFilters(draftFilters);
 
-  const selectClass =
-    "h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-colors hover:border-brand-green/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+  const selectClass = filterSelectClass;
 
   function updateDraftFilter<K extends keyof MarketplaceFilters>(
     key: K,
@@ -111,7 +116,7 @@ export function ListingFilterDrawer() {
     });
   }
   if (filters.province) {
-    const locLabel = filters.city ? `${filters.province} › ${filters.city}` : filters.province;
+    const locLabel = filters.city ? `${filters.city}, ${filters.province}` : filters.province;
     activeChips.push({
       key: "location",
       label: locLabel,
@@ -128,7 +133,7 @@ export function ListingFilterDrawer() {
   if (filters.priceMin !== undefined || filters.priceMax !== undefined) {
     activeChips.push({
       key: "price",
-      label: `R${filters.priceMin || 0} – R${filters.priceMax || "∞"}`,
+      label: formatPriceRangeLabel(filters.priceMin, filters.priceMax),
       onRemove: () => replaceFilters({ ...filters, priceMin: undefined, priceMax: undefined }),
     });
   }
@@ -136,7 +141,7 @@ export function ListingFilterDrawer() {
     if (val !== undefined && val !== "") {
       activeChips.push({
         key: `attr-${name}`,
-        label: typeof val === "boolean" ? name.replace(/_/g, " ") : String(val),
+        label: describeAttributeFilter(filters.category, name, val),
         onRemove: () => {
           const next = { ...filters.attributes };
           delete next[name];
@@ -173,7 +178,7 @@ export function ListingFilterDrawer() {
         <SheetTrigger asChild>
           <button
             type="button"
-            className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 z-40 inline-flex h-11 -translate-x-1/2 items-center justify-center gap-2 rounded-full bg-foreground px-5 text-sm font-semibold text-background shadow-xl shadow-black/20 ring-1 ring-white/10 transition-all hover:bg-foreground/90 active:scale-95 md:hidden motion-reduce:transition-none motion-reduce:active:scale-100"
+            className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 z-40 inline-flex h-11 -translate-x-1/2 items-center justify-center gap-2 rounded-full bg-foreground px-5 text-sm font-semibold text-background shadow-xl shadow-black/20 ring-1 ring-white/10 transition-all hover:bg-foreground/90 active:scale-[0.98] lg:hidden motion-reduce:transition-none motion-reduce:active:scale-100"
             aria-label="Open listing filters"
           >
             <SlidersHorizontal className="h-4 w-4 shrink-0" />
@@ -188,7 +193,7 @@ export function ListingFilterDrawer() {
       ) : (
         <button
           type="button"
-          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 z-40 inline-flex h-11 -translate-x-1/2 items-center justify-center gap-2 rounded-full bg-foreground px-5 text-sm font-semibold text-background opacity-50 shadow-xl md:hidden"
+          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 z-40 inline-flex h-11 -translate-x-1/2 items-center justify-center gap-2 rounded-full bg-foreground px-5 text-sm font-semibold text-background opacity-50 shadow-xl lg:hidden"
           aria-label="Open listing filters"
           disabled
         >
@@ -220,15 +225,15 @@ export function ListingFilterDrawer() {
 
         <div className="space-y-3 pb-20">
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">Search</Label>
+            <Label className="text-sm font-medium">Search</Label>
             <div className="relative" role="search">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 type="search"
-                placeholder="Search listings..."
+                placeholder="Search listings"
                 aria-label="Search listings"
                 enterKeyHint="search"
-                className="rounded-xl pl-9"
+                className="h-11 rounded-xl pl-9"
                 value={draftFilters.query || ""}
                 onChange={(event) => updateDraftFilter("query", event.target.value || undefined)}
               />
@@ -236,14 +241,14 @@ export function ListingFilterDrawer() {
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">Category</Label>
+            <Label className="text-sm font-medium">Category</Label>
             <select
               aria-label="Category"
               className={selectClass}
               value={draftFilters.category || ""}
               onChange={(event) => updateDraftFilter("category", event.target.value || undefined)}
             >
-              <option value="">All Categories</option>
+              <option value="">All categories</option>
               {CATEGORIES.map((cat) => (
                 <option key={cat.value} value={cat.value}>
                   {cat.label}
@@ -260,7 +265,7 @@ export function ListingFilterDrawer() {
           />
 
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">Location</Label>
+            <Label className="text-sm font-medium">Location</Label>
             <select
               aria-label="Province"
               className={selectClass}
@@ -282,7 +287,7 @@ export function ListingFilterDrawer() {
               disabled={!draftFilters.province}
             >
               <option value="">
-                {draftFilters.province ? "All cities" : "Select province first"}
+                {draftFilters.province ? "All cities" : "Choose a province first"}
               </option>
               {draftFilters.province &&
                 getCitiesForProvince(draftFilters.province).map((city) => (
@@ -294,7 +299,7 @@ export function ListingFilterDrawer() {
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">Price range (ZAR)</Label>
+            <Label className="text-sm font-medium">Price (R)</Label>
             <div className="flex items-center gap-2">
               <Input
                 type="number"
@@ -331,27 +336,21 @@ export function ListingFilterDrawer() {
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">Condition</Label>
+            <Label className="text-sm font-medium">Condition</Label>
             <div className="flex flex-wrap gap-2">
               {LISTING_CONDITIONS.map((condition) => (
-                <button
+                <FilterChoiceChip
                   key={condition.value}
-                  type="button"
+                  selected={draftFilters.condition === condition.value}
                   onClick={() =>
                     updateDraftFilter(
                       "condition",
                       draftFilters.condition === condition.value ? undefined : condition.value
                     )
                   }
-                  className={cn(
-                    "rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all active:scale-[0.97] motion-reduce:transition-none",
-                    draftFilters.condition === condition.value
-                      ? "border-brand-green bg-brand-green/10 text-brand-green shadow-xs"
-                      : "border-border/80 text-muted-foreground hover:text-foreground hover:border-brand-green/40 hover:bg-brand-green/5"
-                  )}
                 >
                   {condition.label}
-                </button>
+                </FilterChoiceChip>
               ))}
             </div>
           </div>

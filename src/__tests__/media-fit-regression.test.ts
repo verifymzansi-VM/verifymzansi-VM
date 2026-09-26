@@ -11,6 +11,9 @@ const ALLOWLIST = new Set([
   // Decorative, platform-owned artwork (not user uploads) may crop freely.
   path.join("components", "home", "home-category-gateways.tsx"),
   path.join("components", "home", "home-hero.tsx"),
+  path.join("app", "advertise", "page.tsx"),
+  // Post chooser cards use the platform showroom artwork as decorative headers.
+  path.join("app", "post", "create", "post-create-client.tsx"),
   path.join("components", "ui", "focal-point-picker.tsx"),
   path.join("components", "ui", "media-crop-preview.tsx"),
   path.join("components", "ui", "media-upload.tsx"),

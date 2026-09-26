@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type EmptyStateTone = "green" | "blue" | "teal";
@@ -55,13 +54,12 @@ export function HomeShowcaseEmptyState({
         {icon}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="font-body text-base font-semibold text-foreground">{title}</p>
+        <h3 className="font-body text-base font-semibold text-foreground">{title}</h3>
         <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">{description}</p>
       </div>
       <Button asChild className={`h-11 shrink-0 rounded-full px-5 ${styles.buttonClassName}`}>
         <Link href={ctaHref} prefetch={false}>
           {ctaLabel}
-          <ArrowRight className="h-4 w-4" />
         </Link>
       </Button>
     </div>

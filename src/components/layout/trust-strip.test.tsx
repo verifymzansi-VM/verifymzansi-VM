@@ -3,15 +3,18 @@ import { describe, expect, it } from "vitest";
 import { TrustStrip } from "./trust-strip";
 
 describe("TrustStrip", () => {
-  it("keeps the market label as the default", () => {
+  it("labels the band and lists what is checked, without promising safety", () => {
     render(<TrustStrip />);
 
-    expect(screen.getByRole("heading", { name: "Latest on Mzansi Market" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Why people trust posts here" })).toBeInTheDocument();
+    expect(screen.getByText("Phone & ID checked")).toBeInTheDocument();
+    expect(screen.getByText("Posts reviewed first")).toBeInTheDocument();
+    expect(screen.queryByText(/guarantee/i)).not.toBeInTheDocument();
   });
 
-  it("renders context-specific marketplace labels", () => {
-    render(<TrustStrip variant="blue" title="Latest Mzansi Businesses" />);
+  it("accepts a context-specific accessible label", () => {
+    render(<TrustStrip variant="blue" title="Trusted posting categories" />);
 
-    expect(screen.getByRole("heading", { name: "Latest Mzansi Businesses" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Trusted posting categories" })).toBeInTheDocument();
   });
 });

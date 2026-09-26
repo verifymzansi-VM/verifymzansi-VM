@@ -262,10 +262,10 @@ test.describe("Platform Smoke", () => {
       .toBeFalsy();
   });
 
-  test("@smoke mobile footer and marketplace tabs stay clear with home-only bottom nav", async ({
+  test("@smoke mobile footer and marketplace tabs stay clear of the bottom tab bar", async ({
     page,
   }) => {
-    test.skip((page.viewportSize()?.width ?? 1280) >= 1024, "Mobile-only layout check");
+    test.skip((page.viewportSize()?.width ?? 1280) >= 768, "Mobile-only layout check");
 
     await page.goto("/mzansi-business");
 
@@ -279,28 +279,42 @@ test.describe("Platform Smoke", () => {
     await expect(tourismTab).toBeVisible();
     await expect(marketTab).toContainText("Market");
     await expect(businessTab).toContainText("Business");
-    await expect(tourismTab).toContainText(/Tourism/i);
+    // The Tourism & Events area keeps its combined label on every screen size.
+    await expect(tourismTab).toContainText("Tourism & Events");
 
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    // Browse pages are discovery surfaces, so the tab bar shows here too.
+    const bottomNav = page.getByRole("navigation", { name: "Main", exact: true });
+    await expect(bottomNav).toBeVisible();
+    await expect(bottomNav.getByRole("link", { name: "Search", exact: true })).toHaveAttribute(
+      "href",
+      "/search"
+    );
 
-    const footerLink = page.getByRole("link", { name: "Privacy Policy" });
-    const bottomNav = page.getByRole("navigation", { name: "Main" });
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
 
+    const footerLink = page.locator("footer").getByRole("link", { name: "Privacy Policy" });
+    await footerLink.scrollIntoViewIfNeeded();
     await expect(footerLink).toBeVisible();
-    await expect(bottomNav).toHaveCount(0);
+    const [footerBox, navBox] = await Promise.all([
+      footerLink.boundingBox(),
+      bottomNav.boundingBox(),
+    ]);
+    expect(footerBox).not.toBeNull();
+    expect(navBox).not.toBeNull();
+    expect(footerBox!.y + footerBox!.height).toBeLessThanOrEqual(navBox!.y);
 
     await page.goto("/");
     await expect(bottomNav).toBeVisible();
-    await expect(bottomNav.getByRole("link", { name: "Search" })).toHaveAttribute(
-      "href",
-      "/search"
+    await expect(bottomNav.getByRole("link", { name: "Home", exact: true })).toHaveAttribute(
+      "aria-current",
+      "page"
     );
   });
 
   test("@smoke marketplace mobile pages avoid bootstrap errors and overlapping chrome", async ({
     page,
   }) => {
-    test.skip((page.viewportSize()?.width ?? 1280) >= 1024, "Mobile-only marketplace check");
+    test.skip((page.viewportSize()?.width ?? 1280) >= 768, "Mobile-only marketplace check");
 
     const { consoleErrors, pageErrors, failedApiResponses } = collectMarketplacePageErrors(page);
     const pageChecks: Array<{ path: string; filterButtonName?: string }> = [
@@ -327,7 +341,20 @@ test.describe("Platform Smoke", () => {
           .locator(`button[aria-label="${check.filterButtonName}"]:visible`)
           .last();
         await expect(filterButton).toBeVisible();
-        await expect(page.getByRole("navigation", { name: "Main" })).toHaveCount(0);
+        await expect(filterButton).toContainText("Filters");
+
+        // The labelled filter pill floats above the tab bar rather than covering it.
+        const bottomNav = page.getByRole("navigation", { name: "Main", exact: true });
+        await expect(bottomNav).toBeVisible();
+        const [filterBox, navBox] = await Promise.all([
+          filterButton.boundingBox(),
+          bottomNav.boundingBox(),
+        ]);
+        expect(filterBox).not.toBeNull();
+        expect(navBox).not.toBeNull();
+        expect(filterBox!.height).toBeGreaterThanOrEqual(44);
+        expect(filterBox!.y + filterBox!.height).toBeLessThanOrEqual(navBox!.y);
+
         await filterButton.click();
         await expect(page.getByRole("dialog").first()).toBeVisible();
       }

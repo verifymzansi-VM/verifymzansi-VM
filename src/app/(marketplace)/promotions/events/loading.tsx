@@ -1,30 +1,23 @@
-import { Skeleton } from "@/components/ui/skeleton";
+import { Bone, LoadingRegion } from "@/components/shared/page-skeletons";
+import { ListingCardSkeleton } from "@/components/listings/listing-skeleton";
 
 export default function EventsLoading() {
   return (
-    <div className="container-page py-6 space-y-4" aria-busy="true" aria-label="Loading">
-      <div className="space-y-2">
-        <Skeleton className="h-7 w-32" />
-        <Skeleton className="h-4 w-80" />
+    <LoadingRegion label="Loading events" className="container-page space-y-6 py-6 sm:py-9">
+      <div className="space-y-2.5">
+        <Bone className="h-8 w-40 rounded-lg sm:h-10" />
+        <Bone className="h-4 w-full max-w-md rounded-full" />
       </div>
-
-      {/* Event cards skeleton */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-5 xl:gap-6">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <div
-            key={i}
-            className="rounded-xl border border-warm-200 dark:border-warm-700 p-3 space-y-3"
-          >
-            <Skeleton className="h-40 w-full rounded-lg" />
-            <Skeleton className="h-5 w-3/4" />
-            <Skeleton className="h-4 w-1/2" />
-            <div className="flex gap-2">
-              <Skeleton className="h-5 w-16 rounded-full" />
-              <Skeleton className="h-5 w-20 rounded-full" />
-            </div>
-          </div>
+      <div className="flex gap-2 overflow-hidden">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Bone key={i} className="h-9 w-24 shrink-0 rounded-full" />
         ))}
       </div>
-    </div>
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-5 xl:gap-6">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <ListingCardSkeleton key={i} />
+        ))}
+      </div>
+    </LoadingRegion>
   );
 }

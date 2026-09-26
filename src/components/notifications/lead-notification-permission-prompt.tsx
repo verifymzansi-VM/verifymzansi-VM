@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Bell, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -39,22 +39,19 @@ export function LeadNotificationPermissionPrompt({
   enabled,
 }: LeadNotificationPermissionPromptProps) {
   const { toast } = useToast();
-  const [dismissed, setDismissed] = useState(
-    () => safeGetLocalStorageItem(DISMISSED_STORAGE_KEY) === "true"
-  );
+  // Start hidden on both server and client; storage and the Notification API
+  // only exist in the browser, so reading them during render caused a
+  // hydration mismatch in the header on every page.
+  const [dismissed, setDismissed] = useState(true);
+  const [permissionIsDefault, setPermissionIsDefault] = useState(false);
   const [requesting, setRequesting] = useState(false);
 
-  const shouldShow = useMemo(() => {
-    if (!enabled || dismissed) {
-      return false;
-    }
+  useEffect(() => {
+    setDismissed(safeGetLocalStorageItem(DISMISSED_STORAGE_KEY) === "true");
+    setPermissionIsDefault("Notification" in window && Notification.permission === "default");
+  }, []);
 
-    if (typeof window === "undefined" || !("Notification" in window)) {
-      return false;
-    }
-
-    return Notification.permission === "default";
-  }, [dismissed, enabled]);
+  const shouldShow = enabled && !dismissed && permissionIsDefault;
 
   async function handleEnable() {
     if (typeof window === "undefined" || !("Notification" in window)) {

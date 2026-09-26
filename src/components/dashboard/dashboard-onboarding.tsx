@@ -1,14 +1,12 @@
-import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
+import { BrandShield } from "@/components/shared/brand-shield";
 import Link from "next/link";
-import { PlusCircle, Building2, CheckCircle2, ArrowRight } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Check, Building2, ChevronRight, ImagePlus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { AccountVerificationStatus } from "@/types/enums";
 
 interface OnboardingStep {
   label: string;
-  description: string;
   href: string;
   icon: React.ElementType;
   completed: boolean;
@@ -21,6 +19,7 @@ interface DashboardOnboardingProps {
   hasBusinesses: boolean;
 }
 
+/** Empty-account state: no posts yet, so show the path to a first post. */
 export function DashboardOnboarding({
   isVerified,
   verificationStatus,
@@ -34,27 +33,20 @@ export function DashboardOnboarding({
       label: isVerified
         ? "Verification approved"
         : verificationSubmitted
-          ? "Verification under review"
+          ? "Verification in review"
           : "Complete your verification",
-      description: isVerified
-        ? "Your identity is verified. You can review it any time."
-        : verificationSubmitted
-          ? "Admin is reviewing your submitted documents."
-          : "Build trust with buyers by verifying your identity",
       href: "/verification",
-      icon: ShieldCheck,
+      icon: BrandShield,
       completed: verificationSubmitted,
     },
     {
-      label: "Post your first listing",
-      description: "Create a listing so buyers can start contacting you",
+      label: "Post your first item",
       href: "/post/create",
-      icon: PlusCircle,
+      icon: ImagePlus,
       completed: hasListings,
     },
     {
       label: "Add your business profile",
-      description: "Showcase your brand and connect it to your listings",
       href: "/post/create-business",
       icon: Building2,
       completed: hasBusinesses,
@@ -62,62 +54,82 @@ export function DashboardOnboarding({
   ];
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base font-display">Next steps</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Finish the basics once, then come back here to manage your account faster.
-        </p>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {steps.map((step) => {
+    <section
+      aria-labelledby="onboarding-title"
+      className="rounded-2xl border border-border/70 bg-card elev-xs"
+    >
+      <div className="flex flex-col gap-4 border-b border-border/60 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+        <div className="flex items-start gap-4">
+          <span aria-hidden="true" className="empty-state-icon mx-0 h-12 w-12 shrink-0">
+            <ImagePlus className="h-6 w-6" />
+          </span>
+          <div>
+            <h2
+              id="onboarding-title"
+              className="font-display text-lg font-bold tracking-tight text-foreground"
+            >
+              You haven&apos;t posted yet
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              Three steps to your first post.
+            </p>
+          </div>
+        </div>
+        <Button
+          asChild
+          variant="trust-verified"
+          className="h-11 w-full shrink-0 rounded-full px-5 sm:w-auto"
+        >
+          <Link href="/post/create">
+            <Plus aria-hidden="true" className="h-4 w-4" />
+            Create your first post
+          </Link>
+        </Button>
+      </div>
+
+      <ol aria-label="Getting started" className="space-y-1 p-2 sm:p-3">
+        {steps.map((step, index) => {
           const Icon = step.icon;
           return (
-            <Link
-              key={step.label}
-              href={step.href}
-              className={cn(
-                "flex items-center gap-4 rounded-lg border p-4 transition-colors",
-                step.completed
-                  ? "bg-brand-green-50/50 border-brand-green-200 dark:bg-brand-green-950/30 dark:border-brand-green-800"
-                  : "hover:bg-muted/50"
-              )}
-            >
-              <div
-                className={cn(
-                  "inline-flex items-center justify-center w-10 h-10 rounded-full flex-shrink-0",
-                  step.completed
-                    ? "bg-brand-green-100 text-brand-green dark:bg-brand-green-900"
-                    : "bg-warm-100 text-warm-500 dark:bg-warm-800"
-                )}
+            <li key={step.href}>
+              <Link
+                href={step.href}
+                className="group flex min-h-14 items-center gap-4 rounded-xl px-3 py-3 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                {step.completed ? (
-                  <CheckCircle2 className="h-5 w-5" />
-                ) : (
-                  <Icon className="h-5 w-5" />
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p
+                <span
+                  aria-hidden="true"
                   className={cn(
-                    "text-sm font-medium",
-                    step.completed && "text-brand-green-800 dark:text-brand-green-100"
+                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold",
+                    step.completed
+                      ? "bg-brand-green-600 text-white dark:bg-brand-green-500"
+                      : "border border-border bg-background text-foreground"
                   )}
                 >
-                  {step.label}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">{step.description}</p>
-              </div>
-              {!step.completed && (
-                <Button variant="ghost" size="sm" className="flex-shrink-0 gap-1" tabIndex={-1}>
-                  Start
-                  <ArrowRight className="h-3 w-3" />
-                </Button>
-              )}
-            </Link>
+                  {step.completed ? <Check className="h-5 w-5" /> : index + 1}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span
+                    className={cn(
+                      "flex items-center gap-2 text-sm font-semibold",
+                      step.completed
+                        ? "text-brand-green-700 dark:text-brand-green-300"
+                        : "text-foreground"
+                    )}
+                  >
+                    <Icon aria-hidden="true" className="h-4 w-4 shrink-0 opacity-70" />
+                    {step.label}
+                    {step.completed ? <span className="sr-only">(done)</span> : null}
+                  </span>
+                </span>
+                <ChevronRight
+                  aria-hidden="true"
+                  className="h-4 w-4 shrink-0 text-muted-foreground"
+                />
+              </Link>
+            </li>
           );
         })}
-      </CardContent>
-    </Card>
+      </ol>
+    </section>
   );
 }

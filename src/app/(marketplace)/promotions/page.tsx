@@ -229,8 +229,8 @@ export default async function PromotionsPage() {
         <AreaHero
           area="tourism"
           title="Tourism & Events"
-          description="Stays, tours, experiences, venues and live events across South Africa."
-          trustLine="Hosts and organisers complete ID review before posting"
+          description="Stays, tours, venues and live events."
+          trustLine="ID-reviewed hosts and organisers"
           ctaHref="/post/create-tourism"
           ctaLabel="List a stay or event"
           quickLinks={TOURISM_QUICK_LINKS}

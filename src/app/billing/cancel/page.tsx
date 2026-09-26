@@ -1,5 +1,9 @@
 import { AlertCircle, Clock3, CheckCircle2, XCircle } from "lucide-react";
-import { PaymentStatusResult } from "@/components/billing/payment-status-result";
+import type { ReactNode } from "react";
+import {
+  PaymentStatusResult,
+  type PaymentStatusTone,
+} from "@/components/billing/payment-status-result";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { resolveCurrentUserPaymentStatus } from "@/lib/payments/resolve-payment-status";
@@ -11,40 +15,49 @@ export const metadata = {
   description: "Review the current status of your VerifyMzansi payment.",
 };
 
-function getCopy(status: PaymentStatusView) {
+function getCopy(status: PaymentStatusView): {
+  icon: ReactNode;
+  title: string;
+  description: string;
+  tone: PaymentStatusTone;
+} {
   switch (status) {
     case "complete":
       return {
-        icon: <CheckCircle2 className="h-6 w-6 text-brand-green" />,
+        icon: <CheckCircle2 aria-hidden="true" />,
         title: "Payment complete",
         description: "Your payment went through and your plan is now active.",
+        tone: "success",
       };
     case "pending":
       return {
-        icon: <Clock3 className="h-6 w-6 text-brand-green" />,
+        icon: <Clock3 aria-hidden="true" />,
         title: "Payment still processing",
-        description:
-          "We're still waiting for final confirmation from the payment provider. Check again in 30 seconds or return to billing.",
+        description: "We're waiting for Ozow to confirm. Check again in 30 seconds.",
+        tone: "pending",
       };
     case "failed":
       return {
-        icon: <XCircle className="h-6 w-6 text-destructive" />,
+        icon: <XCircle aria-hidden="true" />,
         title: "Payment not completed",
         description:
-          "Your payment was not completed. This could be because you cancelled, or because there was a processing issue. No charge was made.",
+          "The payment was cancelled or didn't go through. No charge was made, so you can try again.",
+        tone: "error",
       };
     case "expired":
       return {
-        icon: <AlertCircle className="h-6 w-6 text-destructive" />,
-        title: "Payment expired",
+        icon: <AlertCircle aria-hidden="true" />,
+        title: "Checkout expired",
         description: "This checkout session expired. Start a new payment to continue.",
+        tone: "error",
       };
     default:
       return {
-        icon: <AlertCircle className="h-6 w-6 text-muted-foreground" />,
+        icon: <AlertCircle aria-hidden="true" />,
         title: "Payment not found",
         description:
-          "We couldn't find this payment. It may have already been processed. Check your plans or contact support.",
+          "We couldn't find this payment. Check your plans, or contact support if you were charged.",
+        tone: "neutral",
       };
   }
 }
@@ -62,19 +75,31 @@ export default async function BillingCancelPage({
     <div className="flex min-h-screen flex-col">
       <Header isAuthenticated />
 
-      <main id="main-content" className="flex flex-1 items-center justify-center py-4 scroll-mt-24">
+      <main
+        id="main-content"
+        className="bg-hero-mesh flex flex-1 scroll-mt-24 items-center justify-center py-10 sm:py-16"
+      >
         <PaymentStatusResult
           icon={copy.icon}
           title={copy.title}
           description={copy.description}
-          primaryAction={{ href: "/billing", label: "View Plans" }}
-          secondaryAction={{ href: "/dashboard", label: "Back to Dashboard" }}
+          tone={copy.tone}
+          primaryAction={
+            status === "complete"
+              ? { href: "/dashboard", label: "Go to dashboard" }
+              : { href: "/billing", label: "View plans" }
+          }
+          secondaryAction={
+            status === "complete"
+              ? { href: "/billing", label: "View billing" }
+              : { href: "/dashboard", label: "Back to dashboard" }
+          }
         >
           <p className="text-xs text-muted-foreground">
             Need help? Contact{" "}
             <a
               href={`mailto:${SUPPORT_CONTACT_EMAIL}`}
-              className="rounded-sm text-brand-green underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="rounded-sm font-medium text-brand-green-700 underline dark:text-brand-green-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               {SUPPORT_CONTACT_EMAIL}
             </a>

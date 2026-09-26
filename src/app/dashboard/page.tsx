@@ -1,4 +1,3 @@
-import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import { getVerificationLevel, VERIFICATION_LEVEL_LABELS } from "@/lib/account/verification-level";
 import { PLAN_TIER_LABELS, type PlanTier } from "@/types/enums";
 import { IntroductoryTrialCard } from "@/components/dashboard/introductory-trial-card";
@@ -6,9 +5,9 @@ import { createClient } from "@/lib/supabase/server";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Plus, BadgeCheck, ChevronRight } from "lucide-react";
+import { Plus, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { VerifiedTick } from "@/components/trust/verified-tick";
 import {
   ACCOUNT_PROFILE_TABLE,
   applyOwnerFilter,
@@ -27,6 +26,8 @@ import {
 import { QuickLinks } from "@/components/dashboard/quick-links";
 import { DashboardLiveLeadAlerts } from "@/components/dashboard/dashboard-live-lead-alerts";
 import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
+import { RecentLeads, type RecentLead } from "@/components/dashboard/recent-leads";
+import { VerificationStatusCard } from "@/components/dashboard/verification-status-card";
 
 /** Safely resolve owner column — fall back to "owner_id" on error. */
 async function safeGetOwnerColumn(
@@ -59,7 +60,7 @@ function settled<T>(result: PromiseSettledResult<T>, fallback: T): T {
 
 export const metadata = {
   title: "Dashboard",
-  description: "Your VerifyMzansi dashboard — manage posts, leads, and businesses in one place.",
+  description: "Your VerifyMzansi dashboard: manage posts, leads and businesses in one place.",
 };
 
 export default async function DashboardPage() {
@@ -201,6 +202,16 @@ export default async function DashboardPage() {
       .from("organisation_admins")
       .select("organisation_id", { count: "exact", head: true })
       .eq("user_id", user.id),
+    /* 14 — latest enquiries for the recent leads card */
+    applyOwnerFilter(
+      supabase
+        .from("leads")
+        .select("id, target_id, target_type, message, status, buyer_name, created_at")
+        .order("created_at", { ascending: false })
+        .limit(3),
+      leadsOwnerColumn,
+      user.id
+    ),
   ]);
 
   const profileResult = settled(results[0], EMPTY_OK);
@@ -317,63 +328,87 @@ export default async function DashboardPage() {
   const hasAnyPosts = posts.length > 0;
   const showDashboardOnboarding = !hasAnyPosts && businessCount === 0 && tourismEventsCount === 0;
 
+  // Recent leads — titles resolved in one query per content type
+  const recentLeadRows = (
+    (settled(results[14], EMPTY_LIST_OK).data ?? []) as Array<
+      Omit<RecentLead, "title"> & { target_id: string }
+    >
+  ).slice(0, 3);
+  const leadTitles = new Map<string, string>();
+  await Promise.all(
+    (["listing", "promotion"] as const).map(async (type) => {
+      const ids = [
+        ...new Set(
+          recentLeadRows.filter((row) => row.target_type === type).map((row) => row.target_id)
+        ),
+      ];
+      if (ids.length === 0) return;
+      try {
+        const { data } = await supabase
+          .from(type === "promotion" ? "promotions" : "listings")
+          .select("id, title")
+          .in("id", ids);
+        for (const item of (data ?? []) as Array<{ id: string; title: string | null }>) {
+          if (item.title) leadTitles.set(`${type}:${item.id}`, item.title);
+        }
+      } catch {
+        // Titles are a nicety; the card still works without them.
+      }
+    })
+  );
+  const recentLeads: RecentLead[] = recentLeadRows.map((row) => ({
+    ...row,
+    title: leadTitles.get(`${row.target_type}:${row.target_id}`) ?? null,
+  }));
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <EmailConfirmedToast />
 
-      {/* ───── Compact header ───── */}
-      <div className="flex items-center justify-between gap-3 border-b border-border/60 pb-4">
+      {/* ───── Greeting + primary actions ───── */}
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
+          <h1 className="font-display text-[1.75rem] font-bold leading-tight tracking-tight text-foreground sm:text-[2.25rem]">
             Hi, {firstName}
           </h1>
-          {/* Inline verification indicator */}
           {isVerified ? (
-            <div className="mt-1.5 flex flex-wrap items-center gap-2">
-              <Badge className="gap-1 bg-brand-green-50 text-brand-green border-brand-green-200 dark:bg-brand-green-950 dark:border-brand-green-800 text-xs">
-                <BadgeCheck className="h-3 w-3" />
-                Verified
-              </Badge>
-              <span className="text-xs text-muted-foreground">
+            <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-green-50 py-1 pl-1.5 pr-2.5 font-semibold text-brand-green-700 ring-1 ring-inset ring-brand-green/20 dark:bg-brand-green-500/15 dark:text-brand-green-300">
+                <VerifiedTick decorative className="h-4 w-4" />
+                <span>Verified</span>
+              </span>
+              <span className="text-muted-foreground">
                 {VERIFICATION_LEVEL_LABELS[verificationLevel]}
               </span>
-            </div>
-          ) : verStatus === "pending_review" ? (
-            <Link
-              href="/verification"
-              className="-mx-2 mt-1.5 inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 text-xs text-amber-600 dark:text-amber-400 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
-              <ShieldCheck className="h-3.5 w-3.5" />
-              Verification under review
-              <ChevronRight className="h-3 w-3" />
-            </Link>
-          ) : (
-            <Link
-              href="/verification"
-              className="-mx-2 mt-1.5 inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
-              <ShieldCheck className="h-3.5 w-3.5" />
-              {stepsRemaining > 0
-                ? `${stepsRemaining} step${stepsRemaining > 1 ? "s" : ""} to verify`
-                : "Complete verification"}
-              <ChevronRight className="h-3 w-3" />
-            </Link>
-          )}
+            </p>
+          ) : null}
         </div>
 
-        <Button
-          asChild
-          size="sm"
-          variant="trust-verified"
-          className="h-11 gap-1.5 flex-shrink-0 rounded-full px-5 font-semibold shadow-sm"
-        >
-          <Link href="/post/create">
-            <Plus className="h-4 w-4" />
-            <span className="hidden xs:inline">Create Post</span>
-            <span className="xs:hidden">New Post</span>
-          </Link>
-        </Button>
-      </div>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
+          <Button
+            asChild
+            variant="trust-verified"
+            className="h-11 gap-1.5 rounded-full px-5 font-semibold"
+          >
+            <Link href="/post/create">
+              <Plus aria-hidden="true" className="h-4 w-4" />
+              New post
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="h-11 gap-1.5 rounded-full px-5">
+            <Link href="/dashboard/listings">
+              <Zap aria-hidden="true" className="h-4 w-4 text-brand-gold-600" />
+              Boost a post
+            </Link>
+          </Button>
+        </div>
+      </header>
+
+      <VerificationStatusCard
+        status={verStatus}
+        stepsRemaining={stepsRemaining}
+        steps={verificationSteps}
+      />
 
       <DashboardLiveLeadAlerts
         liveListings={activeListings}
@@ -386,25 +421,31 @@ export default async function DashboardPage() {
         expiringPromoCount={expiringPromoCount}
         verificationStatus={verificationSummary.accountVerificationStatus}
         stepsRemaining={stepsRemaining}
+        includeVerification={false}
       />
 
-      {/* ───── Main content — responsive grid ───── */}
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
-        {/* Left: Fresh-start onboarding or listing manager */}
-        {showDashboardOnboarding ? (
-          <DashboardOnboarding
-            isVerified={isVerified}
-            verificationStatus={verificationSummary.accountVerificationStatus}
-            hasListings={hasAnyPosts}
-            hasBusinesses={businessCount > 0}
-          />
-        ) : (
-          <ListingManagerMini posts={posts} />
-        )}
+      {/* ───── Main content ───── */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="min-w-0 space-y-6">
+          {showDashboardOnboarding ? (
+            <DashboardOnboarding
+              isVerified={isVerified}
+              verificationStatus={verificationSummary.accountVerificationStatus}
+              hasListings={hasAnyPosts}
+              hasBusinesses={businessCount > 0}
+            />
+          ) : (
+            <ListingManagerMini posts={posts} />
+          )}
+          {showDashboardOnboarding && recentLeads.length === 0 ? null : (
+            <RecentLeads leads={recentLeads} hasPosts={hasAnyPosts} />
+          )}
+        </div>
 
-        {/* Right: Quick links (stacks below on mobile) */}
-        <IntroductoryTrialCard />
-        <QuickLinks planLabel={planLabel} />
+        <aside aria-label="More for your account" className="min-w-0 space-y-6">
+          <IntroductoryTrialCard />
+          <QuickLinks planLabel={planLabel} />
+        </aside>
       </div>
     </div>
   );

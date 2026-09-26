@@ -1,46 +1,65 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AlertCircle, CheckCircle2, Clock3, Loader2, XCircle } from "lucide-react";
-import { PaymentStatusResult } from "@/components/billing/payment-status-result";
+import {
+  PaymentStatusResult,
+  type PaymentStatusTone,
+} from "@/components/billing/payment-status-result";
 import type { PaymentStatusView } from "@/lib/payments/status-view";
 
 const PAYMENT_POLL_INTERVAL_MS = 4000;
 const PAYMENT_POLL_MAX_MS = 30 * 60 * 1000;
 
-function getCopy(status: PaymentStatusView) {
+function getCopy(status: PaymentStatusView): {
+  icon: ReactNode;
+  title: string;
+  description: string;
+  tone: PaymentStatusTone;
+  nextSteps?: readonly string[];
+} {
   switch (status) {
     case "complete":
       return {
-        icon: <CheckCircle2 className="h-6 w-6 text-brand-green" />,
-        title: "Payment Confirmed",
+        icon: <CheckCircle2 aria-hidden="true" />,
+        title: "Payment confirmed",
         description: "Your payment has been confirmed and your paid features are now active.",
+        tone: "success",
+        nextSteps: [
+          "Create or reactivate a post from your dashboard.",
+          "Nothing renews automatically.",
+        ],
       };
     case "pending":
       return {
-        icon: <Clock3 className="h-6 w-6 text-brand-green" />,
-        title: "Payment Pending",
-        description:
-          "Your redirect completed, but we are still waiting for the payment provider to confirm your payment.",
+        icon: <Clock3 aria-hidden="true" />,
+        title: "Payment pending",
+        description: "We're waiting for Ozow to confirm. Your plan activates as soon as it does.",
+        tone: "pending",
       };
     case "failed":
       return {
-        icon: <XCircle className="h-6 w-6 text-destructive" />,
-        title: "Payment Failed",
-        description: "The payment did not complete. You can return to billing and try again.",
+        icon: <XCircle aria-hidden="true" />,
+        title: "Payment didn't go through",
+        description:
+          "The payment did not complete, so no plan was activated. You can return to billing and try again.",
+        tone: "error",
       };
     case "expired":
       return {
-        icon: <AlertCircle className="h-6 w-6 text-destructive" />,
-        title: "Payment Expired",
+        icon: <AlertCircle aria-hidden="true" />,
+        title: "Checkout expired",
         description:
-          "This checkout session expired before confirmation arrived. Please start a new payment.",
+          "This checkout session expired before confirmation arrived. Start a new payment from billing to continue.",
+        tone: "error",
       };
     default:
       return {
-        icon: <AlertCircle className="h-6 w-6 text-muted-foreground" />,
-        title: "Payment Not Found",
-        description: "We could not find a payment matching this request.",
+        icon: <AlertCircle aria-hidden="true" />,
+        title: "Payment not found",
+        description:
+          "We couldn't find a payment matching this link. Check billing for your plans, or contact support if you were charged.",
+        tone: "neutral",
       };
   }
 }
@@ -168,19 +187,34 @@ export default function PaymentStatusPanel({
       icon={copy.icon}
       title={copy.title}
       description={copy.description}
-      primaryAction={{ href: "/dashboard", label: "Go to Dashboard" }}
-      secondaryAction={{ href: "/billing", label: "View Billing" }}
+      tone={copy.tone}
+      nextSteps={copy.nextSteps}
+      primaryAction={
+        status === "complete" || status === "pending"
+          ? { href: "/dashboard", label: "Go to dashboard" }
+          : { href: "/billing", label: "Back to billing" }
+      }
+      secondaryAction={
+        status === "complete" || status === "pending"
+          ? { href: "/billing", label: "View billing" }
+          : { href: "/dashboard", label: "Go to dashboard" }
+      }
     >
-      <p className="text-xs text-muted-foreground">
-        Payment status is driven by your internal VerifyMzansi payment record, not only the redirect
-        URL.
-      </p>
       {status === "pending" && isRefreshing ? (
-        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        <p className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+          <Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />
           Refreshing payment status while confirmation completes.
-        </div>
+        </p>
       ) : null}
+      <p className="text-xs leading-5 text-muted-foreground">
+        Status from our payment records.
+        {paymentId && status !== "missing" ? (
+          <>
+            {" "}
+            Reference: <span className="font-mono text-foreground/80">{paymentId}</span>
+          </>
+        ) : null}
+      </p>
     </PaymentStatusResult>
   );
 }

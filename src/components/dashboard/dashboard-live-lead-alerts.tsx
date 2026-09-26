@@ -16,6 +16,8 @@ interface DashboardLiveLeadAlertsProps {
   expiringPromoCount: number;
   verificationStatus: AccountVerificationStatus;
   stepsRemaining: number;
+  /** Repeat verification reminders in the attention list (off when a verification card is shown). */
+  includeVerification?: boolean;
 }
 
 export function DashboardLiveLeadAlerts({
@@ -29,6 +31,7 @@ export function DashboardLiveLeadAlerts({
   expiringPromoCount,
   verificationStatus,
   stepsRemaining,
+  includeVerification = true,
 }: DashboardLiveLeadAlertsProps) {
   const { unreadCount, isLoading } = useLeadsUnread();
   const unreadLeadCount = isLoading ? initialUnreadLeadCount : unreadCount;
@@ -51,6 +54,7 @@ export function DashboardLiveLeadAlerts({
         expiringPromoCount={expiringPromoCount}
         verificationStatus={verificationStatus}
         stepsRemaining={stepsRemaining}
+        includeVerification={includeVerification}
       />
     </>
   );

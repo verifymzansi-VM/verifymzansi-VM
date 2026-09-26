@@ -1,31 +1,36 @@
 "use client";
 
-import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
+  AlertTriangle,
   ArrowLeft,
-  ArrowRight,
-  Camera,
   CheckCircle2,
   Clock3,
-  FileCheck,
+  FileImage,
+  IdCard,
   Loader2,
+  MailCheck,
   MapPin,
-  Phone,
+  MessageSquareText,
   Navigation,
-  AlertTriangle,
+  ScanFace,
+  ShieldCheck,
+  Smartphone,
 } from "lucide-react";
 import { Header } from "@/components/layout/header";
-import { PageHeader } from "@/components/layout/page-header";
-import { VerificationProgress } from "@/components/trust/verification-progress";
-import { Badge } from "@/components/ui/badge";
+import { Breadcrumbs } from "@/components/layout/breadcrumbs";
+import {
+  VerificationProgress,
+  type VerificationReviewState,
+} from "@/components/trust/verification-progress";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 import {
   validateSaIdChecksum,
   extractDobFromSaId,
@@ -50,6 +55,18 @@ import {
 import { LocationSelector } from "@/components/ui/location-selector";
 import { CameraCapture } from "@/components/ui/camera-capture";
 import { isValidSaPhone, sanitizeSaPhoneInput } from "@/lib/utils/phone";
+import {
+  FieldGroupHeading,
+  HelpLinkCard,
+  OverallStatusPill,
+  PrivacyPanel,
+  StatusCallout,
+  StepActions,
+  StepCard,
+  WhatHappensNextPanel,
+  type CalloutTone,
+  type OverallVerificationState,
+} from "./verification-ui";
 
 type WizardStep = "phone" | "id_doc" | "selfie" | "location" | "complete";
 type UploadReceipt = { name: string; sizeBytes: number; uploadedAtIso: string };
@@ -74,7 +91,6 @@ type StepStatusEntry = {
   gps_confidence?: string | null;
 };
 
-const STEP_ORDER: Exclude<WizardStep, "complete">[] = ["phone", "id_doc", "selfie", "location"];
 const REVIEWABLE_STEP_ORDER: VerificationStepType[] = ["phone", "id_doc", "selfie", "location"];
 const STEP_STATUS_PRIORITY: Record<VerificationStatus, number> = {
   rejected: 4,
@@ -118,13 +134,36 @@ type VerificationApiResponse = {
 
 type OtpSendResponse = VerificationApiResponse;
 
-const STEP_COPY: Record<Exclude<WizardStep, "complete">, string> = {
-  phone: "Enter your SA mobile number. We'll send a verification code via SMS.",
-  id_doc: "Enter your 13-digit SA ID and take a clear photo of your ID. Max 5 MB.",
-  selfie: "Take a live selfie using your camera. Max 5 MB.",
-  location:
-    "Select your province and city, optionally use GPS to confirm your device location matches, then save your address.",
+/** One short reassurance line per step. */
+const STEP_WHY: Record<Exclude<WizardStep, "complete">, string> = {
+  phone: "We'll SMS you a 6-digit code to confirm it's you.",
+  id_doc: "Encrypted, and never shown publicly.",
+  selfie: "Matched to your ID photo. Only our review team sees it.",
+  location: "Province and city only, never your street address.",
 };
+
+/** Human labels for step rows (never show raw enum keys like "id_doc"). */
+const STEP_DISPLAY_LABELS: Record<VerificationStepType, string> = {
+  phone: "Phone",
+  id_doc: "ID document",
+  selfie: "Selfie",
+  location: "Location",
+};
+
+const SA_MONTHS_LONG = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
 
 const GEOLOCATION_PERMISSION_DENIED = 1;
 const COARSE_FIX_TIMEOUT_MS = 5000;
@@ -355,9 +394,9 @@ function formatStatusLabel(status: VerificationStatus): string {
     case "approved":
       return "Approved";
     case "pending":
-      return "Pending Review";
+      return "Pending review";
     case "rejected":
-      return "Rejected";
+      return "Not accepted";
     case "needs_resubmission":
       return "Needs resubmission";
     default:
@@ -405,19 +444,30 @@ function getStepStatusDetail(entry: StepStatusEntry | null | undefined): string 
   return null;
 }
 
-function getStatusBannerClasses(status: VerificationStatus): string {
+function getStatusTone(status: VerificationStatus): CalloutTone {
   switch (status) {
     case "approved":
-      return "border-brand-green/30 bg-brand-green-50 text-brand-green-900";
+      return "success";
     case "pending":
-      return "border-brand-gold/30 bg-brand-gold-50 text-brand-gold-900";
+      return "pending";
     case "rejected":
     case "needs_resubmission":
-      return "border-destructive/30 bg-destructive/5 text-destructive";
+      return "attention";
     default:
-      return "border-warm-200/70 bg-background text-foreground";
+      return "neutral";
   }
 }
+
+const STATUS_CHIP_CLASSES: Record<VerificationStatus, string> = {
+  approved:
+    "bg-brand-green-50 text-brand-green-800 ring-brand-green-600/20 dark:bg-brand-green-500/10 dark:text-brand-green-200 dark:ring-brand-green-400/25",
+  pending:
+    "bg-brand-gold-50 text-brand-gold-900 ring-brand-gold-400/40 dark:bg-brand-gold-400/10 dark:text-brand-gold-100 dark:ring-brand-gold-400/25",
+  rejected:
+    "bg-brand-red-50 text-brand-red-800 ring-brand-red-600/20 dark:bg-brand-red-500/10 dark:text-brand-red-200 dark:ring-brand-red-400/25",
+  needs_resubmission:
+    "bg-brand-red-50 text-brand-red-800 ring-brand-red-600/20 dark:bg-brand-red-500/10 dark:text-brand-red-200 dark:ring-brand-red-400/25",
+};
 
 function shouldReplaceStepStatus(
   current: VerificationStatus | undefined,
@@ -521,11 +571,21 @@ function formatFileSize(sizeBytes: number): string {
   return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+const SAST_OFFSET_MS = 2 * 60 * 60 * 1000;
+
+/** HH:mm in South African time, identical on every device (no Intl/locale APIs). */
 function formatUploadedTime(isoDate: string): string {
-  return new Date(isoDate).toLocaleTimeString("en-ZA", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) return "";
+  const sast = new Date(date.getTime() + SAST_OFFSET_MS);
+  const hours = String(sast.getUTCHours()).padStart(2, "0");
+  const minutes = String(sast.getUTCMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+/** Date of birth from the ID digits (a UTC-midnight Date), read in UTC so it never shifts a day. */
+function formatDateOfBirth(date: Date): string {
+  return `${date.getUTCDate()} ${SA_MONTHS_LONG[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
 }
 
 function formatLocationSummary(
@@ -549,14 +609,14 @@ function validateFile(file: File | null, allowPdf = false): string | null {
 
 function getCompletionCtaLabel(completionHref: string): string {
   if (completionHref === "/dashboard") {
-    return "Go to Dashboard";
+    return "Go to dashboard";
   }
 
   if (completionHref.startsWith("/post/")) {
-    return "Return to Posting";
+    return "Return to posting";
   }
 
-  return "Continue";
+  return "Continue where you left off";
 }
 
 function formatCountdown(totalSeconds: number): string {
@@ -611,6 +671,8 @@ export default function VerificationPage() {
   const [idNumber, setIdNumber] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  // Name errors wait until the member has left the field, so a fresh form is not shouting.
+  const [nameFieldsTouched, setNameFieldsTouched] = useState({ first: false, last: false });
   const [idFile, setIdFile] = useState<File | null>(null);
   const [selfieFile, setSelfieFile] = useState<File | null>(null);
   const [idCaptureMethod, setIdCaptureMethod] = useState<"camera" | "file_upload">("camera");
@@ -689,6 +751,12 @@ export default function VerificationPage() {
       : normalizedLastName.length > 100
         ? "Surname cannot exceed 100 characters"
         : null;
+  const showFirstNameError = Boolean(
+    firstNameError && (nameFieldsTouched.first || normalizedFirstName.length > 0)
+  );
+  const showLastNameError = Boolean(
+    lastNameError && (nameFieldsTouched.last || normalizedLastName.length > 0)
+  );
   const isPhoneValid = isValidSaPhone(phone);
   const isOtpValid = otp.length === 6;
   const isIdFormReady =
@@ -979,15 +1047,7 @@ export default function VerificationPage() {
         if (valid) {
           const dob = extractDobFromSaId(idNumber);
           const gender = extractGenderFromSaId(idNumber);
-          setIdDob(
-            dob
-              ? dob.toLocaleDateString("en-ZA", {
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })
-              : null
-          );
+          setIdDob(dob ? formatDateOfBirth(dob) : null);
           setIdGender(gender);
           // Age gate: must be 18+
           const under18 = isUnder18FromSaId(idNumber);
@@ -1751,38 +1811,129 @@ export default function VerificationPage() {
     return entries;
   }, [accountVerified, completedSteps, serverStepMap, step]);
 
-  const currentStepNumber = step === "complete" ? 4 : STEP_ORDER.indexOf(step) + 1;
   const currentStepStatus = step === "complete" ? null : serverStepMap.get(step);
   const idDocumentStatus = serverStepMap.get("id_doc")?.status;
   const selfieStatus = serverStepMap.get("selfie")?.status;
   const locationStatus = serverStepMap.get("location")?.status;
   const currentStepStatusDetail = getStepStatusDetail(currentStepStatus);
 
+  const doneStepCount = accountVerified
+    ? REVIEWABLE_STEP_ORDER.length
+    : REVIEWABLE_STEP_ORDER.filter((stepType) => {
+        const status = serverStepMap.get(stepType)?.status;
+        return status === "approved" || status === "pending" || completedSteps.includes(stepType);
+      }).length;
+  const overallState: OverallVerificationState = accountVerified
+    ? "verified"
+    : reviewAttentionStep
+      ? "attention"
+      : verificationInAdminReview || step === "complete"
+        ? "pending"
+        : step !== "phone" || otpSent || completedSteps.length > 0 || serverSteps.length > 0
+          ? "in_progress"
+          : "not_started";
+  const reviewState: VerificationReviewState =
+    overallState === "verified"
+      ? "approved"
+      : overallState === "attention"
+        ? "attention"
+        : overallState === "pending"
+          ? "pending"
+          : "not_started";
+  // A verified account has nothing left to submit, so an unavailable
+  // verification service is not worth alarming them about.
+  const showBlockedNotice =
+    verificationSubmissionBlocked && !verificationInAdminReview && !accountVerified;
+  const heroTitle = accountVerified
+    ? "You're verified"
+    : step === "complete" || verificationInAdminReview
+      ? "Your details are with our review team"
+      : "Get verified";
+  const heroDescription = accountVerified
+    ? "Keep your details current if anything changes."
+    : step === "complete" || verificationInAdminReview
+      ? "We'll let you know if anything needs fixing."
+      : reviewAttentionStep
+        ? "One check needs another look."
+        : "Four quick checks. Your details stay private.";
+  const breadcrumbs = [{ label: "Dashboard", href: "/dashboard" }, { label: "Verification" }];
+  const inAdminReviewMessage =
+    "Your verification is in admin review. We will notify you if anything needs to be resubmitted.";
+
+  const renderStepStatusNotice = (showHelp: boolean) =>
+    currentStepStatus ? (
+      <StatusCallout
+        tone={getStatusTone(currentStepStatus.status)}
+        title={formatStatusLabel(currentStepStatus.status)}
+      >
+        {currentStepStatusDetail && <p>{currentStepStatusDetail}</p>}
+        {showHelp &&
+          (currentStepStatus.status === "rejected" ||
+            currentStepStatus.status === "needs_resubmission") && (
+            <Link
+              href="/help/verification"
+              prefetch={false}
+              className="inline-flex min-h-11 items-center font-semibold underline underline-offset-4"
+            >
+              Need help?
+            </Link>
+          )}
+      </StatusCallout>
+    ) : null;
+
   if (_sessionLoading) {
     return (
-      <div className="flex min-h-screen flex-col bg-warm-50/30 dark:bg-background">
+      <div className="flex min-h-screen flex-col bg-background">
         <Header isAuthenticated />
         <main id="main-content" className="flex-1">
-          <div className="container-page py-6">
-            <div className="mx-auto w-full max-w-4xl space-y-6">
-              <PageHeader
-                title="Checking verification status"
-                description="Loading your latest verification details before showing the next step."
-                breadcrumbs={[
-                  { label: "Dashboard", href: "/dashboard" },
-                  { label: "Verification" },
-                ]}
-              />
-
-              <Card
-                className="border-warm-200/70 bg-background/95 dark:border-warm-700/70"
-                aria-busy="true"
+          <div className="container-page py-5 sm:py-8">
+            <div className="mx-auto w-full max-w-5xl space-y-5" aria-busy="true">
+              <section className="hero-panel p-5 sm:p-7">
+                <Breadcrumbs items={breadcrumbs} />
+                <h1 className="mt-4 font-display text-[1.75rem] font-bold leading-[1.1] tracking-tight sm:text-[2.25rem]">
+                  Checking verification status
+                </h1>
+                <p
+                  role="status"
+                  className="mt-2 flex items-center gap-2 text-sm leading-6 text-muted-foreground sm:text-base"
+                >
+                  <Loader2
+                    className="h-4 w-4 shrink-0 animate-spin text-brand-green-700 motion-reduce:animate-none dark:text-brand-green-300"
+                    aria-hidden="true"
+                  />
+                  Loading your latest verification status...
+                </p>
+                <div className="mt-6 grid grid-cols-5 gap-2" aria-hidden="true">
+                  {Array.from({ length: 5 }, (_, index) => (
+                    <div key={index} className="flex flex-col items-center gap-2">
+                      <Skeleton className="h-9 w-9 rounded-full" />
+                      <Skeleton className="h-3 w-12" />
+                    </div>
+                  ))}
+                </div>
+              </section>
+              <div
+                className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-6"
+                aria-hidden="true"
               >
-                <CardContent className="flex items-center gap-3 p-4 text-sm text-muted-foreground sm:p-5">
-                  <Loader2 className="h-4 w-4 animate-spin text-brand-green" />
-                  <span>Loading your latest verification status...</span>
-                </CardContent>
-              </Card>
+                <div className="surface-card space-y-4 p-5 sm:p-6">
+                  <div className="flex items-center gap-4">
+                    <Skeleton className="h-12 w-12 rounded-2xl" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-3 w-20" />
+                      <Skeleton className="h-6 w-48" />
+                    </div>
+                  </div>
+                  <Skeleton className="h-14 w-full rounded-xl" />
+                  <Skeleton className="h-12 w-full rounded-xl" />
+                  <Skeleton className="h-12 w-40 rounded-xl" />
+                </div>
+                <div className="surface-card hidden space-y-3 p-5 lg:block">
+                  <Skeleton className="h-5 w-40" />
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                </div>
+              </div>
             </div>
           </div>
         </main>
@@ -1791,583 +1942,567 @@ export default function VerificationPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-warm-50/30 dark:bg-background">
+    <div className="flex min-h-screen flex-col bg-background">
       <Header isAuthenticated />
       <main id="main-content" className="flex-1">
-        <div className="container-page py-6">
-          <div className="mx-auto w-full max-w-4xl space-y-6">
-            <PageHeader
-              title={
-                accountVerified
-                  ? "Verification Approved"
-                  : verificationInAdminReview
-                    ? "Verification Submitted"
-                    : "Get Verified"
-              }
-              description={
-                accountVerified
-                  ? "Your account is verified. Keep these details current if anything changes."
-                  : verificationInAdminReview
-                    ? "Your application is pending admin review."
-                    : "Complete each check once. Saving your address sends the verification to admin."
-              }
-              breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Verification" }]}
-            />
-
-            <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95">
-              <CardContent className="space-y-3 p-4 sm:p-5">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium">Verification progress</p>
-                  <Badge variant="secondary">
-                    {accountVerified
-                      ? "Approved"
-                      : verificationInAdminReview
-                        ? "Pending Review"
-                        : step === "complete"
-                          ? "Submitted"
-                          : `Step ${currentStepNumber} of 4`}
-                  </Badge>
-                </div>
-                <VerificationProgress steps={progressSteps} />
-                <p className="text-xs text-muted-foreground">
-                  {progressSteps.length} of 4 steps{" "}
-                  {step === "complete" || allStepsResolved ? "submitted" : "captured"}
-                </p>
-              </CardContent>
-            </Card>
-
-            {reviewAttentionStep && (
-              <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95">
-                <CardContent className="space-y-2 p-4 text-sm">
-                  <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-destructive">
-                    <p className="font-medium">
-                      Action needed on {getStepLabel(reviewAttentionStep)}.
+        <div className="container-page py-5 sm:py-8">
+          <div className="mx-auto w-full max-w-5xl space-y-5 sm:space-y-6">
+            <section aria-labelledby="verification-title" className="hero-panel">
+              <div
+                aria-hidden="true"
+                className="mzansi-pattern pointer-events-none absolute inset-0 opacity-[0.035] [mask-image:linear-gradient(to_left,black,transparent_65%)] dark:opacity-[0.05] dark:invert"
+              />
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute -right-24 -top-28 h-72 w-72 rounded-full bg-brand-green-400/15 blur-3xl dark:bg-brand-green-500/15"
+              />
+              <div className="relative p-5 sm:p-7">
+                <Breadcrumbs items={breadcrumbs} />
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+                  <div className="min-w-0">
+                    <h1
+                      id="verification-title"
+                      className="font-display text-[1.75rem] font-bold leading-[1.1] tracking-tight text-foreground sm:text-[2.25rem]"
+                    >
+                      {heroTitle}
+                    </h1>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base sm:leading-7">
+                      {heroDescription}
                     </p>
-                    {getStepStatusDetail(serverStepMap.get(reviewAttentionStep)) && (
-                      <p className="mt-1 text-xs">
-                        {getStepStatusDetail(serverStepMap.get(reviewAttentionStep))}
-                      </p>
-                    )}
-                    <p className="mt-1 text-xs">
+                  </div>
+                  <OverallStatusPill state={overallState} className="shrink-0 self-start" />
+                </div>
+
+                <div className="mt-5 rounded-2xl border border-border/60 bg-card/70 p-3 pb-4 sm:mt-6 sm:p-5">
+                  <div className="mb-4 flex items-baseline justify-between gap-3 px-1">
+                    <p className="text-sm font-semibold text-foreground">Your progress</p>
+                    <p className="text-xs text-muted-foreground">
+                      {doneStepCount} of 4 steps{" "}
+                      {step === "complete" || allStepsResolved ? "submitted" : "done"}
+                    </p>
+                  </div>
+                  <VerificationProgress
+                    steps={progressSteps}
+                    currentStep={step === "complete" ? null : step}
+                    reviewState={reviewState}
+                  />
+                </div>
+              </div>
+            </section>
+
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-6">
+              <div className="min-w-0 space-y-5">
+                {reviewAttentionStep && (
+                  <StatusCallout
+                    tone="attention"
+                    title={`Action needed on ${getStepLabel(reviewAttentionStep)}.`}
+                  >
+                    {/* The open step repeats the reviewer's note, so only show it here
+                        when the member is looking at a different step. */}
+                    {step !== reviewAttentionStep &&
+                      getStepStatusDetail(serverStepMap.get(reviewAttentionStep)) && (
+                        <p>{getStepStatusDetail(serverStepMap.get(reviewAttentionStep))}</p>
+                      )}
+                    <p>
                       Review the notes on that step, replace the document if needed, and submit
                       again.
                     </p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+                  </StatusCallout>
+                )}
 
-            {!reviewAttentionStep && accountVerificationStatus === "verified" && (
-              <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95">
-                <CardContent className="space-y-2 p-4 text-sm">
-                  <div className="rounded-md border border-brand-green/30 bg-brand-green-50 p-3 text-brand-green-900">
-                    Your verification is approved. You can still review the submitted details below.
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+                {!reviewAttentionStep &&
+                  accountVerificationStatus === "verified" &&
+                  step !== "complete" && (
+                    <StatusCallout tone="success">
+                      <p>
+                        Your verification is approved. You can still review the submitted details
+                        below.
+                      </p>
+                    </StatusCallout>
+                  )}
 
-            {!reviewAttentionStep &&
-              accountVerificationStatus === "pending_review" &&
-              allStepsResolved && (
-                <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95">
-                  <CardContent className="space-y-2 p-4 text-sm">
-                    <div className="rounded-md border border-brand-gold/30 bg-brand-gold-50 p-3 text-brand-gold-900">
-                      Your verification is in admin review. We will notify you if anything needs to
-                      be resubmitted.
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+                {/* On the complete screen the submitted card carries this message,
+                    so it is only shown here while a step is still open. */}
+                {verificationInAdminReview && step !== "complete" && (
+                  <StatusCallout tone="pending">
+                    <p>{inAdminReviewMessage}</p>
+                  </StatusCallout>
+                )}
 
-            {/* When verification is in admin review the gold banner above
-                already communicates the state — rendering this card too would
-                duplicate the same message on the complete screen. */}
-            {verificationSubmissionBlocked && !verificationInAdminReview && (
-              <Card className="border-amber-300/70 bg-amber-50/80 dark:border-amber-700/70 dark:bg-amber-950/20">
-                <CardContent className="space-y-2 p-4 text-sm">
-                  <div className="rounded-md border border-amber-400/40 bg-amber-50 p-3 text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
-                    <p className="font-medium">
-                      {verificationUnavailable
+                {showBlockedNotice && (
+                  <StatusCallout
+                    tone="pending"
+                    icon={verificationUnavailable ? AlertTriangle : MailCheck}
+                    title={
+                      verificationUnavailable
                         ? "Verification temporarily unavailable."
-                        : "Confirm your email before submitting documents and location."}
-                    </p>
-                    <p className="mt-1 text-xs">
+                        : "Confirm your email before submitting documents and location."
+                    }
+                  >
+                    <p>
                       {verificationUnavailable
                         ? VERIFICATION_TEMPORARILY_UNAVAILABLE_DESCRIPTION
                         : EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION}
                     </p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+                  </StatusCallout>
+                )}
 
-            {step === "phone" && (
-              <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base font-display">
-                    <Phone className="h-5 w-5 text-brand-green" />
-                    Step 1: Phone + OTP
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground">{STEP_COPY.phone}</p>
+                {step === "phone" && (
+                  <StepCard
+                    id="verification-step-phone"
+                    stepNumber={1}
+                    title="Phone + OTP"
+                    icon={Smartphone}
+                    why={STEP_WHY.phone}
+                  >
+                    {renderStepStatusNotice(false)}
 
-                  {currentStepStatus && (
-                    <div
-                      className={`rounded-md border p-3 text-sm ${getStatusBannerClasses(currentStepStatus.status)}`}
-                    >
-                      <p className="font-medium">{formatStatusLabel(currentStepStatus.status)}</p>
-                      {currentStepStatusDetail && (
-                        <p className="mt-1 text-xs">{currentStepStatusDetail}</p>
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">SA mobile number</Label>
+                      <Input
+                        id="phone"
+                        type="tel"
+                        inputMode="tel"
+                        autoComplete="tel"
+                        placeholder="071 234 5678"
+                        value={phone}
+                        onChange={(e) => handlePhoneChange(e.target.value)}
+                        pattern="^(\\+27|0)[6-8][0-9]{8}$"
+                        title="Enter a valid SA mobile number (e.g. 071 234 5678)"
+                        disabled={phoneVerified || verificationUnavailable}
+                        className="h-12 text-base sm:h-12 sm:text-base"
+                      />
+                    </div>
+
+                    {!phoneVerified && (
+                      <div className="space-y-2">
+                        <Button
+                          onClick={handleSendOtp}
+                          disabled={
+                            isLoading ||
+                            !isPhoneValid ||
+                            otpRetryAfterSeconds > 0 ||
+                            verificationUnavailable
+                          }
+                          variant={otpSent ? "outline" : "trust-verified"}
+                          size="lg"
+                          className="w-full sm:w-auto"
+                        >
+                          {isLoading ? (
+                            <Loader2
+                              className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            <MessageSquareText className="h-4 w-4" aria-hidden="true" />
+                          )}
+                          {isLoading ? "Sending code..." : otpSent ? "Resend code" : "Send code"}
+                        </Button>
+                        {otpRetryAfterSeconds > 0 && (
+                          <p className="text-xs text-muted-foreground" aria-live="polite">
+                            You can resend a new code in {formatCountdown(otpRetryAfterSeconds)}.
+                          </p>
+                        )}
+                        {otpSupportMessage && !otpSent && (
+                          <p className="rounded-xl bg-muted/70 px-3.5 py-3 text-xs leading-5 text-muted-foreground">
+                            {otpSupportMessage}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {otpSent && !phoneVerified && (
+                      <div className="space-y-4 rounded-2xl border border-border bg-muted/40 p-4 sm:p-5">
+                        {otpExpirySeconds > 0 ? (
+                          <p className="text-sm leading-6 text-muted-foreground">
+                            Enter the 6-digit code sent to {formattedPhone}. Code expires in{" "}
+                            <span className="font-semibold tabular-nums text-foreground">
+                              {formatCountdown(otpExpirySeconds)}
+                            </span>
+                            .
+                          </p>
+                        ) : (
+                          <p className="text-sm font-semibold text-destructive" role="alert">
+                            Your code has expired. Please request a new one.
+                          </p>
+                        )}
+                        {otpSupportMessage && (
+                          <p className="rounded-xl bg-card px-3.5 py-3 text-xs leading-5 text-muted-foreground">
+                            {otpSupportMessage}
+                          </p>
+                        )}
+                        <div className="space-y-2">
+                          <Label htmlFor="otp">6-digit code</Label>
+                          <Input
+                            id="otp"
+                            maxLength={6}
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
+                            value={otp}
+                            onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                            className="h-14 max-w-xs text-center font-display text-2xl font-semibold tracking-[0.4em] sm:h-14 sm:text-2xl"
+                          />
+                        </div>
+                        <Button
+                          onClick={handleVerifyOtp}
+                          disabled={isLoading || !isOtpValid || otpExpirySeconds === 0}
+                          variant="trust-verified"
+                          size="lg"
+                          className="w-full sm:w-auto"
+                        >
+                          {isLoading && (
+                            <Loader2
+                              className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                              aria-hidden="true"
+                            />
+                          )}
+                          {isLoading ? "Verifying code..." : "Verify code"}
+                        </Button>
+                      </div>
+                    )}
+
+                    {phoneVerified && (
+                      <>
+                        <StatusCallout tone="success">
+                          <p className="font-semibold">Phone number verified: {formattedPhone}</p>
+                        </StatusCallout>
+                        <StepActions>
+                          <Button
+                            variant="ghost"
+                            className="h-11"
+                            disabled={isLoading}
+                            onClick={() => {
+                              setPhoneVerified(false);
+                              setOtpSent(false);
+                              setOtp("");
+                              setOtpExpirySeconds(0);
+                              setOtpRetryAfterSeconds(0);
+                              setOtpSupportMessage(null);
+                              clearStepCompletion("phone");
+                            }}
+                          >
+                            Change phone number
+                          </Button>
+                          <Button
+                            variant="trust-verified"
+                            size="lg"
+                            className="w-full sm:w-auto"
+                            onClick={() => setStep("id_doc")}
+                          >
+                            Next: ID details
+                          </Button>
+                        </StepActions>
+                      </>
+                    )}
+                  </StepCard>
+                )}
+
+                {step === "id_doc" && (
+                  <StepCard
+                    id="verification-step-id"
+                    stepNumber={2}
+                    title="ID details"
+                    icon={IdCard}
+                    why={STEP_WHY.id_doc}
+                  >
+                    {renderStepStatusNotice(true)}
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="firstName">First name (as shown on ID)</Label>
+                        <Input
+                          id="firstName"
+                          maxLength={100}
+                          autoComplete="given-name"
+                          value={firstName}
+                          disabled={verificationSubmissionBlocked}
+                          aria-invalid={showFirstNameError || undefined}
+                          aria-describedby={showFirstNameError ? "firstName-error" : undefined}
+                          onBlur={() => setNameFieldsTouched((prev) => ({ ...prev, first: true }))}
+                          onChange={(e) => {
+                            setFirstName(e.target.value);
+                            setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
+                            clearStepCompletion("id_doc");
+                          }}
+                          className="h-12 sm:h-12"
+                        />
+                        {showFirstNameError && (
+                          <p id="firstName-error" className="inline-form-error">
+                            {firstNameError}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="lastName">Surname (as shown on ID)</Label>
+                        <Input
+                          id="lastName"
+                          maxLength={100}
+                          autoComplete="family-name"
+                          value={lastName}
+                          disabled={verificationSubmissionBlocked}
+                          aria-invalid={showLastNameError || undefined}
+                          aria-describedby={showLastNameError ? "lastName-error" : undefined}
+                          onBlur={() => setNameFieldsTouched((prev) => ({ ...prev, last: true }))}
+                          onChange={(e) => {
+                            setLastName(e.target.value);
+                            setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
+                            clearStepCompletion("id_doc");
+                          }}
+                          className="h-12 sm:h-12"
+                        />
+                        {showLastNameError && (
+                          <p id="lastName-error" className="inline-form-error">
+                            {lastNameError}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="idNumber">13-digit SA ID number</Label>
+                      <Input
+                        id="idNumber"
+                        maxLength={13}
+                        inputMode="numeric"
+                        autoComplete="off"
+                        value={idNumber}
+                        disabled={verificationSubmissionBlocked}
+                        aria-invalid={idChecksumValid === false || Boolean(idAgeError) || undefined}
+                        aria-describedby={
+                          idNumber.length === 13 && idChecksumValid !== null
+                            ? "idNumber-feedback"
+                            : undefined
+                        }
+                        onChange={(e) => {
+                          setIdNumber(e.target.value.replace(/\D/g, ""));
+                          setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
+                          clearStepCompletion("id_doc");
+                        }}
+                        className="h-12 font-medium tabular-nums tracking-wide sm:h-12"
+                      />
+                      {idNumber.length === 13 && idChecksumValid !== null && (
+                        <div
+                          id="idNumber-feedback"
+                          className={cn(
+                            "rounded-xl border px-3.5 py-3 text-sm",
+                            idChecksumValid && !idAgeError
+                              ? "border-brand-green-600/20 bg-brand-green-50 text-brand-green-900 dark:border-brand-green-400/20 dark:bg-brand-green-500/10 dark:text-brand-green-100"
+                              : "border-brand-red-600/20 bg-brand-red-50 text-brand-red-800 dark:border-brand-red-400/25 dark:bg-brand-red-500/10 dark:text-brand-red-100"
+                          )}
+                        >
+                          {idChecksumValid ? (
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1.5 font-semibold">
+                                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                                ID number valid
+                              </div>
+                              {(idDob || idGender) && (
+                                <dl className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
+                                  {idDob && (
+                                    <div className="flex gap-1">
+                                      <dt>Date of birth:</dt>
+                                      <dd className="font-medium">{idDob}</dd>
+                                    </div>
+                                  )}
+                                  {idGender && (
+                                    <div className="flex gap-1">
+                                      <dt>Gender:</dt>
+                                      <dd className="font-medium">{idGender}</dd>
+                                    </div>
+                                  )}
+                                </dl>
+                              )}
+                              {idAgeError && (
+                                <div className="flex items-center gap-1.5 pt-1 font-semibold text-brand-red-700 dark:text-brand-red-300">
+                                  <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                                  {idAgeError}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 font-medium">
+                              <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                              Invalid ID number — please check and re-enter
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
-                  )}
 
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">SA mobile number</Label>
-                    <Input
-                      id="phone"
-                      type="tel"
-                      inputMode="tel"
-                      autoComplete="tel"
-                      placeholder="071 234 5678"
-                      value={phone}
-                      onChange={(e) => handlePhoneChange(e.target.value)}
-                      pattern="^(\\+27|0)[6-8][0-9]{8}$"
-                      title="Enter a valid SA mobile number (e.g. 071 234 5678)"
-                      disabled={phoneVerified || verificationUnavailable}
-                    />
-                  </div>
+                    <div className="space-y-3">
+                      <FieldGroupHeading title="Photo of your ID" />
+                      <CameraCapture
+                        facingMode="environment"
+                        telemetryContext="id_doc"
+                        documentGuide
+                        onReset={() => {
+                          setIdFile(null);
+                          setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
+                          clearStepCompletion("id_doc");
+                        }}
+                        disabled={verificationSubmissionBlocked}
+                        onCapture={(file) => {
+                          setIdFile(file);
+                          setIdCaptureMethod("camera");
+                          setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
+                          clearStepCompletion("id_doc");
+                        }}
+                        onFallback={() => setIdCaptureMethod("file_upload")}
+                      />
+                      {idFileError && idFile && (
+                        <p className="inline-form-error" role="alert">
+                          {idFileError}
+                        </p>
+                      )}
+                    </div>
 
-                  {!phoneVerified && (
-                    <div className="space-y-2">
+                    {idFile && <SelectedFileRow name={idFile.name} sizeBytes={idFile.size} />}
+
+                    {idPreviewUrl && idCaptureMethod === "file_upload" && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={idPreviewUrl}
+                        alt="ID preview"
+                        className="max-h-80 w-full rounded-2xl border border-border bg-muted object-contain"
+                      />
+                    )}
+
+                    <StepActions>
                       <Button
-                        onClick={handleSendOtp}
+                        variant="outline"
+                        size="lg"
+                        onClick={() => setStep("phone")}
+                        className="w-full sm:w-auto"
+                      >
+                        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                        Back
+                      </Button>
+                      <Button
+                        onClick={goToSelfieStep}
+                        disabled={!isIdReady || isUploadingId || verificationSubmissionBlocked}
+                        variant="trust-verified"
+                        size="lg"
+                        className="w-full sm:w-auto sm:min-w-40"
+                      >
+                        {isUploadingId ? (
+                          <>
+                            <Loader2
+                              className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                              aria-hidden="true"
+                            />
+                            Uploading…
+                          </>
+                        ) : (
+                          "Continue"
+                        )}
+                      </Button>
+                    </StepActions>
+                  </StepCard>
+                )}
+
+                {step === "selfie" && (
+                  <StepCard
+                    id="verification-step-selfie"
+                    stepNumber={3}
+                    title="Selfie check"
+                    icon={ScanFace}
+                    why={STEP_WHY.selfie}
+                  >
+                    {renderStepStatusNotice(true)}
+
+                    <div className="space-y-3">
+                      <FieldGroupHeading title="Live selfie" />
+                      <CameraCapture
+                        facingMode="user"
+                        telemetryContext="selfie"
+                        disabled={verificationSubmissionBlocked}
+                        requireLiveness
+                        onReset={() => {
+                          setSelfieFile(null);
+                          setSelfieLivenessPassed(false);
+                          setUploadReceipts((prev) => ({ ...prev, selfie: undefined }));
+                          clearStepCompletion("selfie");
+                        }}
+                        onCapture={(file, meta) => {
+                          setSelfieFile(file);
+                          setSelfieCaptureMethod("camera");
+                          setSelfieLivenessPassed(meta?.livenessPassed ?? false);
+                          setUploadReceipts((prev) => ({ ...prev, selfie: undefined }));
+                          clearStepCompletion("selfie");
+                        }}
+                        onFallback={() => {
+                          setSelfieCaptureMethod("file_upload");
+                          setSelfieLivenessPassed(false);
+                        }}
+                      />
+                      {selfieFileError && selfieFile && (
+                        <p className="inline-form-error" role="alert">
+                          {selfieFileError}
+                        </p>
+                      )}
+                    </div>
+
+                    {selfieFile && (
+                      <SelectedFileRow name={selfieFile.name} sizeBytes={selfieFile.size} />
+                    )}
+
+                    {selfiePreviewUrl && selfieCaptureMethod === "file_upload" && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={selfiePreviewUrl}
+                        alt="Selfie preview"
+                        className="max-h-80 w-full rounded-2xl border border-border bg-muted object-contain"
+                      />
+                    )}
+
+                    <StepActions>
+                      <Button
+                        variant="outline"
+                        size="lg"
+                        onClick={() => setStep("id_doc")}
+                        className="w-full sm:w-auto"
+                      >
+                        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                        Back
+                      </Button>
+                      <Button
+                        onClick={goToLocationStep}
                         disabled={
-                          isLoading ||
-                          !isPhoneValid ||
-                          otpRetryAfterSeconds > 0 ||
-                          verificationUnavailable
+                          !isSelfieReady || isUploadingSelfie || verificationSubmissionBlocked
                         }
                         variant="trust-verified"
-                        className="gap-2"
+                        size="lg"
+                        className="w-full sm:w-auto sm:min-w-40"
                       >
-                        {isLoading ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
+                        {isUploadingSelfie ? (
+                          <>
+                            <Loader2
+                              className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                              aria-hidden="true"
+                            />
+                            Uploading…
+                          </>
                         ) : (
-                          <ArrowRight className="h-4 w-4" />
+                          "Continue"
                         )}
-                        {isLoading ? "Sending code..." : otpSent ? "Resend code" : "Send code"}
                       </Button>
-                      {otpRetryAfterSeconds > 0 && (
-                        <p className="text-xs text-muted-foreground">
-                          You can resend a new code in {formatCountdown(otpRetryAfterSeconds)}.
-                        </p>
-                      )}
-                      {otpSupportMessage && !otpSent && (
-                        <div className="rounded-md border border-warm-200/70 bg-warm-50/80 p-3 text-xs text-muted-foreground dark:border-warm-700/70 dark:bg-warm-950/20">
-                          {otpSupportMessage}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                    </StepActions>
+                  </StepCard>
+                )}
 
-                  {otpSent && !phoneVerified && (
-                    <div className="space-y-3 rounded-md border border-warm-200/70 dark:border-warm-700/70 p-3">
-                      {otpExpirySeconds > 0 ? (
-                        <p className="text-xs text-muted-foreground">
-                          Enter the 6-digit code sent to {formattedPhone}. Code expires in{" "}
-                          <span className="font-medium text-foreground">
-                            {formatCountdown(otpExpirySeconds)}
-                          </span>
-                          .
-                        </p>
-                      ) : (
-                        <p className="text-xs text-destructive font-medium">
-                          Your code has expired. Please request a new one.
-                        </p>
-                      )}
-                      {otpSupportMessage && (
-                        <div className="rounded-md border border-warm-200/70 bg-warm-50/80 p-3 text-xs text-muted-foreground dark:border-warm-700/70 dark:bg-warm-950/20">
-                          {otpSupportMessage}
-                        </div>
-                      )}
-                      <div className="space-y-2">
-                        <Label htmlFor="otp">6-digit code</Label>
-                        <Input
-                          id="otp"
-                          maxLength={6}
-                          value={otp}
-                          onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-                        />
-                      </div>
-                      <Button
-                        onClick={handleVerifyOtp}
-                        disabled={isLoading || !isOtpValid || otpExpirySeconds === 0}
-                        variant="trust-verified"
-                        className="gap-2"
-                      >
-                        {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-                        {isLoading ? "Verifying code..." : "Verify code"}
-                      </Button>
-                    </div>
-                  )}
+                {step === "location" && (
+                  <StepCard
+                    id="verification-step-location"
+                    stepNumber={4}
+                    title="Verify your address"
+                    icon={MapPin}
+                    why={STEP_WHY.location}
+                  >
+                    {renderStepStatusNotice(true)}
 
-                  {phoneVerified && (
-                    <div className="space-y-2">
-                      <div className="rounded-md border border-brand-green/30 bg-brand-green-50 p-3 text-sm text-brand-green-900">
-                        Phone number verified: {formattedPhone}
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-11 text-sm text-muted-foreground sm:text-xs"
-                        disabled={isLoading}
-                        onClick={() => {
-                          setPhoneVerified(false);
-                          setOtpSent(false);
-                          setOtp("");
-                          setOtpExpirySeconds(0);
-                          setOtpRetryAfterSeconds(0);
-                          setOtpSupportMessage(null);
-                          clearStepCompletion("phone");
-                        }}
-                      >
-                        Change phone number
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
-            {step === "id_doc" && (
-              <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base font-display">
-                    <FileCheck className="h-5 w-5 text-brand-blue" />
-                    Step 2: ID details
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground">{STEP_COPY.id_doc}</p>
-
-                  {currentStepStatus && (
-                    <div
-                      className={`rounded-md border p-3 text-sm ${getStatusBannerClasses(currentStepStatus.status)}`}
-                    >
-                      <p className="font-medium">{formatStatusLabel(currentStepStatus.status)}</p>
-                      {currentStepStatusDetail && (
-                        <p className="mt-1 text-xs">{currentStepStatusDetail}</p>
-                      )}
-                      {(currentStepStatus.status === "rejected" ||
-                        currentStepStatus.status === "needs_resubmission") && (
-                        <Link
-                          href="/help/verification"
-                          className="mt-1 inline-block text-xs underline"
-                        >
-                          Need help?
-                        </Link>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName">First name (as shown on ID)</Label>
-                    <Input
-                      id="firstName"
-                      maxLength={100}
-                      value={firstName}
-                      disabled={verificationSubmissionBlocked}
-                      onChange={(e) => {
-                        setFirstName(e.target.value);
-                        setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
-                        clearStepCompletion("id_doc");
-                      }}
-                    />
-                    {firstNameError && <p className="inline-form-error">{firstNameError}</p>}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="lastName">Surname (as shown on ID)</Label>
-                    <Input
-                      id="lastName"
-                      maxLength={100}
-                      value={lastName}
-                      disabled={verificationSubmissionBlocked}
-                      onChange={(e) => {
-                        setLastName(e.target.value);
-                        setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
-                        clearStepCompletion("id_doc");
-                      }}
-                    />
-                    {lastNameError && <p className="inline-form-error">{lastNameError}</p>}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="idNumber">13-digit SA ID number</Label>
-                    <Input
-                      id="idNumber"
-                      maxLength={13}
-                      value={idNumber}
-                      disabled={verificationSubmissionBlocked}
-                      onChange={(e) => {
-                        setIdNumber(e.target.value.replace(/\D/g, ""));
-                        setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
-                        clearStepCompletion("id_doc");
-                      }}
-                    />
-                    {idNumber.length === 13 && idChecksumValid !== null && (
-                      <div
-                        className={`rounded-md border p-3 text-xs ${
-                          idChecksumValid
-                            ? "border-brand-green/30 bg-brand-green-50 text-brand-green-900"
-                            : "border-destructive/30 bg-destructive/5 text-destructive"
-                        }`}
-                      >
-                        {idChecksumValid ? (
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1 font-medium">
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                              ID number valid
-                            </div>
-                            {idDob && <p>Date of birth: {idDob}</p>}
-                            {idGender && <p>Gender: {idGender}</p>}
-                            {idAgeError && (
-                              <div className="flex items-center gap-1 text-red-600 font-medium">
-                                <AlertTriangle className="h-3.5 w-3.5" />
-                                {idAgeError}
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1">
-                            <AlertTriangle className="h-3.5 w-3.5" />
-                            Invalid ID number — please check and re-enter
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>ID document photo</Label>
-                    <CameraCapture
-                      facingMode="environment"
-                      telemetryContext="id_doc"
-                      documentGuide
-                      onReset={() => {
-                        setIdFile(null);
-                        setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
-                        clearStepCompletion("id_doc");
-                      }}
-                      disabled={verificationSubmissionBlocked}
-                      onCapture={(file) => {
-                        setIdFile(file);
-                        setIdCaptureMethod("camera");
-                        setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
-                        clearStepCompletion("id_doc");
-                      }}
-                      onFallback={() => setIdCaptureMethod("file_upload")}
-                    />
-                    {idFileError && idFile && <p className="inline-form-error">{idFileError}</p>}
-                  </div>
-
-                  {idFile && (
-                    <div className="rounded-md border border-warm-200/70 dark:border-warm-700/70 p-3 text-xs text-muted-foreground">
-                      {idFile.name} ({formatFileSize(idFile.size)})
-                    </div>
-                  )}
-
-                  {idPreviewUrl && idCaptureMethod === "file_upload" && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={idPreviewUrl}
-                      alt="ID preview"
-                      className="max-h-80 w-full rounded-md border object-contain"
-                    />
-                  )}
-
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => setStep("phone")}
-                      className="h-11 gap-1"
-                    >
-                      <ArrowLeft className="h-4 w-4" />
-                      Back
-                    </Button>
-                    <Button
-                      onClick={goToSelfieStep}
-                      disabled={!isIdReady || isUploadingId || verificationSubmissionBlocked}
-                      variant="trust-verified"
-                      className="h-11 gap-1"
-                    >
-                      {isUploadingId ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Uploading…
-                        </>
-                      ) : (
-                        <>
-                          Continue
-                          <ArrowRight className="h-4 w-4" />
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {step === "selfie" && (
-              <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base font-display">
-                    <Camera className="h-5 w-5 text-brand-gold" />
-                    Step 3: Selfie
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground">{STEP_COPY.selfie}</p>
-
-                  {currentStepStatus && (
-                    <div
-                      className={`rounded-md border p-3 text-sm ${getStatusBannerClasses(currentStepStatus.status)}`}
-                    >
-                      <p className="font-medium">{formatStatusLabel(currentStepStatus.status)}</p>
-                      {currentStepStatusDetail && (
-                        <p className="mt-1 text-xs">{currentStepStatusDetail}</p>
-                      )}
-                      {(currentStepStatus.status === "rejected" ||
-                        currentStepStatus.status === "needs_resubmission") && (
-                        <Link
-                          href="/help/verification"
-                          className="mt-1 inline-block text-xs underline"
-                        >
-                          Need help?
-                        </Link>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="space-y-2">
-                    <Label>Selfie image</Label>
-                    <CameraCapture
-                      facingMode="user"
-                      telemetryContext="selfie"
-                      disabled={verificationSubmissionBlocked}
-                      requireLiveness
-                      onReset={() => {
-                        setSelfieFile(null);
-                        setSelfieLivenessPassed(false);
-                        setUploadReceipts((prev) => ({ ...prev, selfie: undefined }));
-                        clearStepCompletion("selfie");
-                      }}
-                      onCapture={(file, meta) => {
-                        setSelfieFile(file);
-                        setSelfieCaptureMethod("camera");
-                        setSelfieLivenessPassed(meta?.livenessPassed ?? false);
-                        setUploadReceipts((prev) => ({ ...prev, selfie: undefined }));
-                        clearStepCompletion("selfie");
-                      }}
-                      onFallback={() => {
-                        setSelfieCaptureMethod("file_upload");
-                        setSelfieLivenessPassed(false);
-                      }}
-                    />
-                    {selfieFileError && selfieFile && (
-                      <p className="inline-form-error">{selfieFileError}</p>
-                    )}
-                  </div>
-
-                  {selfieFile && (
-                    <div className="rounded-md border border-warm-200/70 dark:border-warm-700/70 p-3 text-xs text-muted-foreground">
-                      {selfieFile.name} ({formatFileSize(selfieFile.size)})
-                    </div>
-                  )}
-
-                  {selfiePreviewUrl && selfieCaptureMethod === "file_upload" && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={selfiePreviewUrl}
-                      alt="Selfie preview"
-                      className="max-h-80 w-full rounded-md border object-contain"
-                    />
-                  )}
-
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => setStep("id_doc")}
-                      className="h-11 gap-1"
-                    >
-                      <ArrowLeft className="h-4 w-4" />
-                      Back
-                    </Button>
-                    <Button
-                      onClick={goToLocationStep}
-                      disabled={
-                        !isSelfieReady || isUploadingSelfie || verificationSubmissionBlocked
-                      }
-                      variant="trust-verified"
-                      className="h-11 gap-1"
-                    >
-                      {isUploadingSelfie ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Uploading…
-                        </>
-                      ) : (
-                        <>
-                          Continue
-                          <ArrowRight className="h-4 w-4" />
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {step === "location" && (
-              <div className="grid gap-6 lg:grid-cols-5">
-                <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95 lg:col-span-3">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-base font-display">
-                      <MapPin className="h-5 w-5 text-brand-red" />
-                      Step 4: Verify Your Address
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <p className="text-sm text-muted-foreground">{STEP_COPY.location}</p>
-
-                    {currentStepStatus && (
-                      <div
-                        className={`rounded-md border p-3 text-sm ${getStatusBannerClasses(currentStepStatus.status)}`}
-                      >
-                        <p className="font-medium">{formatStatusLabel(currentStepStatus.status)}</p>
-                        {currentStepStatusDetail && (
-                          <p className="mt-1 text-xs">{currentStepStatusDetail}</p>
-                        )}
-                        {(currentStepStatus.status === "rejected" ||
-                          currentStepStatus.status === "needs_resubmission") && (
-                          <Link
-                            href="/help/verification"
-                            className="mt-1 inline-block text-xs underline"
-                          >
-                            Need help?
-                          </Link>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Manual Province + City Selection */}
-                    <div className="space-y-3 rounded-md border border-warm-200/70 p-4 dark:border-warm-700/70">
-                      <h4 className="flex items-center gap-2 text-sm font-medium">
-                        <MapPin className="h-4 w-4 text-brand-red" />
-                        Select Your Location
-                      </h4>
+                    <div className="space-y-3">
+                      <FieldGroupHeading title="Select your location" />
 
                       {!locationSubmissionLocked && (
                         <LocationSelector
@@ -2394,22 +2529,25 @@ export default function VerificationPage() {
                       )}
 
                       {locationSaved && locationSummary && (
-                        <div className="rounded-md border border-warm-200/70 bg-warm-50/50 p-3 text-sm dark:border-warm-700/70 dark:bg-warm-950/20">
+                        <div className="rounded-2xl border border-border bg-muted/50 p-4 text-sm">
                           <div className="flex items-center gap-2 text-foreground">
-                            <CheckCircle2 className="h-4 w-4 text-brand-green" />
-                            <span className="font-medium">
+                            <CheckCircle2
+                              className="h-4 w-4 text-brand-green-700 dark:text-brand-green-300"
+                              aria-hidden="true"
+                            />
+                            <span className="font-semibold">
                               {locationVerified ? "GPS-verified address" : "Saved address"}
                             </span>
                           </div>
                           <p className="mt-1 text-muted-foreground">{locationSummary}</p>
                           {!locationVerified && (
-                            <p className="mt-2 text-xs text-muted-foreground">
+                            <p className="mt-2 text-xs leading-5 text-muted-foreground">
                               Your selected address is saved and the verification is ready for admin
                               review.
                             </p>
                           )}
                           {locationSubmissionLocked && (
-                            <p className="mt-2 text-xs text-muted-foreground">
+                            <p className="mt-2 text-xs leading-5 text-muted-foreground">
                               This address has already been submitted and cannot be submitted again.
                             </p>
                           )}
@@ -2417,49 +2555,59 @@ export default function VerificationPage() {
                       )}
                     </div>
 
-                    {/* GPS Confirmation (Recommended) */}
                     {!locationSubmissionLocked && !locationSaved && !locationVerified && (
-                      <div className="space-y-3 rounded-md border border-dashed border-brand-blue/40 p-4 bg-brand-blue/5">
-                        <h4 className="flex items-center gap-2 text-sm font-medium">
-                          <Navigation className="h-4 w-4 text-brand-blue" />
-                          Verify with GPS (Recommended)
-                        </h4>
-                        <p className="text-xs text-muted-foreground">
-                          {hasSelectedLocation
-                            ? "Use GPS to confirm the province and city you selected match your device location before saving."
-                            : "Use GPS to estimate your province and city, then review the address before saving."}
-                        </p>
+                      <div className="space-y-3 rounded-2xl border border-brand-green-600/20 bg-brand-green-50/60 p-4 dark:border-brand-green-400/20 dark:bg-brand-green-500/[0.07]">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="flex items-center gap-2 font-body text-sm font-semibold text-foreground">
+                            <Navigation
+                              className="h-4 w-4 text-brand-green-700 dark:text-brand-green-300"
+                              aria-hidden="true"
+                            />
+                            Confirm with GPS
+                          </h3>
+                          <span className="rounded-full bg-brand-green-600/10 px-2 py-0.5 text-[11px] font-semibold text-brand-green-800 dark:bg-brand-green-400/15 dark:text-brand-green-200">
+                            Recommended
+                          </span>
+                        </div>
 
                         {gpsFeatureAvailable && gpsStatus === "idle" && (
                           <Button
                             onClick={handleRequestGps}
                             variant="outline"
-                            className="h-11 gap-2"
-                            size="sm"
+                            className="h-11 w-full sm:w-auto"
                             disabled={verificationSubmissionBlocked}
                           >
-                            <Navigation className="h-4 w-4" />
+                            <Navigation className="h-4 w-4" aria-hidden="true" />
                             {hasSelectedLocation
-                              ? "Verify Address with GPS"
-                              : "Estimate Address with GPS"}
+                              ? "Verify address with GPS"
+                              : "Estimate address with GPS"}
                           </Button>
                         )}
 
                         {gpsStatus === "requesting" && (
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Loader2 className="h-4 w-4 animate-spin" />
+                          <p
+                            className="flex items-center gap-2 text-sm text-muted-foreground"
+                            role="status"
+                          >
+                            <Loader2
+                              className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                              aria-hidden="true"
+                            />
                             Requesting GPS access…
-                          </div>
+                          </p>
                         )}
 
                         {(gpsStatus === "denied" || gpsStatus === "error") && (
                           <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <AlertTriangle className="h-3.5 w-3.5" />
+                            <p className="flex items-start gap-2 text-sm leading-6 text-muted-foreground">
+                              <AlertTriangle
+                                className="mt-1 h-4 w-4 shrink-0 text-brand-gold-700 dark:text-brand-gold-300"
+                                aria-hidden="true"
+                              />
                               {gpsStatus === "denied"
                                 ? "GPS permission denied. You can still save the selected address without GPS."
                                 : "GPS unavailable. You can still save the selected address without GPS."}
-                            </div>
+                            </p>
                             <Button
                               onClick={() => {
                                 setGpsStatus("idle");
@@ -2472,17 +2620,16 @@ export default function VerificationPage() {
                                 setGpsMismatch(null);
                               }}
                               variant="ghost"
-                              size="sm"
-                              className="h-11 gap-2 text-sm sm:text-xs"
+                              className="h-11"
                             >
-                              <Navigation className="h-3.5 w-3.5" />
-                              Try Again
+                              <Navigation className="h-4 w-4" aria-hidden="true" />
+                              Try GPS again
                             </Button>
                           </div>
                         )}
 
                         {!gpsFeatureAvailable && (
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-sm leading-6 text-muted-foreground">
                             GPS is not available on this device. You can still save the selected
                             address without GPS confirmation.
                           </p>
@@ -2490,264 +2637,325 @@ export default function VerificationPage() {
                       </div>
                     )}
 
-                    {/* GPS Confirmation Result */}
                     {gpsStatus === "success" && gpsCoords && (
                       <div
-                        className={`space-y-2 rounded-md border p-4 ${
+                        className={cn(
+                          "space-y-2 rounded-2xl border p-4 text-sm",
                           locationVerified
-                            ? "border-brand-green/30 bg-brand-green-50/30 dark:bg-brand-green-950/20"
-                            : "border-amber-400/30 bg-amber-50/60 dark:bg-amber-950/20"
-                        }`}
+                            ? "border-brand-green-600/20 bg-brand-green-50 text-brand-green-900 dark:border-brand-green-400/20 dark:bg-brand-green-500/10 dark:text-brand-green-100"
+                            : "border-brand-gold-300/70 bg-brand-gold-50 text-brand-gold-900 dark:border-brand-gold-400/25 dark:bg-brand-gold-400/10 dark:text-brand-gold-100"
+                        )}
+                        role="status"
                       >
-                        <div
-                          className={`flex items-center gap-2 text-sm ${
-                            locationVerified
-                              ? "text-brand-green"
-                              : "text-amber-700 dark:text-amber-300"
-                          }`}
-                        >
+                        <div className="flex items-start gap-2 font-semibold">
                           {locationVerified ? (
-                            <CheckCircle2 className="h-4 w-4" />
+                            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                           ) : (
-                            <Navigation className="h-4 w-4" />
+                            <Navigation className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                           )}
                           {locationVerified
                             ? `Address verified by GPS (accuracy: within ${Math.round(gpsCoords.accuracy)} metres)`
                             : `GPS checked the selected address (accuracy: within ${Math.round(gpsCoords.accuracy)} metres)`}
                         </div>
                         {gpsMismatch?.province && (
-                          <div className="rounded-md border border-amber-500/30 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/20 dark:text-amber-400">
+                          <p className="text-[13px] leading-5">
                             GPS detected a different province ({gpsProvince}). The selected address
                             was not GPS-verified.
-                          </div>
+                          </p>
                         )}
                         {gpsMismatch && !gpsMismatch.province && gpsMismatch.city && (
-                          <div className="rounded-md border border-yellow-300/50 bg-yellow-50 px-3 py-2 text-xs text-yellow-700 dark:bg-yellow-950/20 dark:text-yellow-400">
+                          <p className="text-[13px] leading-5">
                             GPS detected a different city. The selected address was not
                             GPS-verified.
-                          </div>
+                          </p>
                         )}
                         {!gpsMismatch && !locationVerified && (
-                          <div className="text-xs text-amber-700 dark:text-amber-300">
+                          <p className="text-[13px] leading-5">
                             GPS captured your location, but it did not match the province and city
                             you selected closely enough to add GPS verification.
-                          </div>
+                          </p>
                         )}
                         {locationVerified && (
-                          <div className="text-xs text-brand-green">
+                          <p className="text-[13px] leading-5">
                             {hasSelectedLocation
                               ? "GPS matches the province and city you selected."
                               : "GPS estimated your province and city. Review the details before saving."}
-                          </div>
+                          </p>
                         )}
                         {gpsConfidence && (
-                          <div className="text-xs text-muted-foreground">
+                          <p className="text-xs opacity-80">
                             Confidence:{" "}
-                            <span className="font-medium capitalize">{gpsConfidence}</span>
-                          </div>
+                            <span className="font-semibold capitalize">{gpsConfidence}</span>
+                          </p>
                         )}
                       </div>
                     )}
 
-                    {!locationSubmissionLocked && (
-                      <Button
-                        onClick={handleManualLocationSubmit}
-                        disabled={
-                          !province || !city || manualSubmitting || verificationSubmissionBlocked
-                        }
-                        variant="default"
-                        size="sm"
-                        className="h-11 gap-2"
-                      >
-                        {manualSubmitting ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <MapPin className="h-4 w-4" />
-                        )}
-                        Save Address & Finish
-                      </Button>
-                    )}
-
-                    <div className="flex gap-2">
+                    <StepActions>
                       <Button
                         variant="outline"
+                        size="lg"
                         onClick={() => setStep("selfie")}
                         disabled={manualSubmitting}
-                        className="h-11 gap-1"
+                        className="w-full sm:w-auto"
                       >
-                        <ArrowLeft className="h-4 w-4" />
+                        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
                         Back
                       </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95 lg:col-span-2">
-                  <CardHeader>
-                    <CardTitle className="text-base font-display">Review Before Saving</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3 text-sm">
-                    <div className="rounded-md border border-warm-200/70 dark:border-warm-700/70 p-3">
-                      <p className="font-medium">Phone</p>
-                      {phoneVerified ? (
-                        <div className="mt-1 flex items-center gap-1 text-brand-green">
-                          <CheckCircle2 className="h-4 w-4" />
-                          <span>Verified</span>
-                        </div>
-                      ) : (
-                        <div className="mt-1 flex items-center gap-1 text-muted-foreground">
-                          <Clock3 className="h-4 w-4" />
-                          <span>Pending</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="rounded-md border border-warm-200/70 dark:border-warm-700/70 p-3">
-                      <p className="font-medium">ID Document</p>
-                      {uploadReceipts.id_doc ? (
-                        <p className="mt-1 text-muted-foreground">
-                          {idDocumentStatus ? `${formatStatusLabel(idDocumentStatus)} - ` : ""}
-                          Uploaded at {formatUploadedTime(uploadReceipts.id_doc.uploadedAtIso)}
-                        </p>
-                      ) : (
-                        <p className="mt-1 text-muted-foreground">
-                          Not yet uploaded — go to the ID step above to upload your document
-                        </p>
-                      )}
-                      {idChecksumValid && idDob && (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          DOB: {idDob}
-                          {idGender ? ` · ${idGender}` : ""}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="rounded-md border border-warm-200/70 dark:border-warm-700/70 p-3">
-                      <p className="font-medium">Selfie</p>
-                      {uploadReceipts.selfie ? (
-                        <p className="mt-1 text-muted-foreground">
-                          {selfieStatus ? `${formatStatusLabel(selfieStatus)} - ` : ""}
-                          Uploaded at {formatUploadedTime(uploadReceipts.selfie.uploadedAtIso)}
-                        </p>
-                      ) : (
-                        <p className="mt-1 text-muted-foreground">
-                          Not yet uploaded — go to the Selfie step above to take your photo
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="rounded-md border border-warm-200/70 dark:border-warm-700/70 p-3">
-                      <p className="font-medium">Location</p>
-                      {locationSaved && locationSummary ? (
-                        <div className="mt-1 space-y-1">
-                          <p className="text-muted-foreground">{locationSummary}</p>
-                          <div className="flex items-center gap-1 text-xs">
-                            <span className="text-brand-green flex items-center gap-1">
-                              <CheckCircle2 className="h-3 w-3" />
-                              {locationVerified
-                                ? "GPS verified"
-                                : locationStatus
-                                  ? formatStatusLabel(locationStatus)
-                                  : "Address saved"}
-                              {locationVerified && gpsConfidence ? ` (GPS: ${gpsConfidence})` : ""}
-                            </span>
-                          </div>
-                        </div>
-                      ) : hasSelectedLocation ? (
-                        // Selected or GPS-estimated but not saved yet — show the
-                        // address so the review panel never says "Not set" while
-                        // a verified address is sitting in the form.
-                        <div className="mt-1 space-y-1">
-                          <p className="text-muted-foreground">{locationSummary}</p>
-                          <div className="flex items-center gap-1 text-xs">
-                            {locationVerified ? (
-                              <span className="text-brand-green flex items-center gap-1">
-                                <CheckCircle2 className="h-3 w-3" />
-                                GPS verified — not saved yet
-                                {gpsConfidence ? ` (GPS: ${gpsConfidence})` : ""}
-                              </span>
-                            ) : (
-                              <span className="flex items-center gap-1 text-muted-foreground">
-                                <Clock3 className="h-3 w-3" />
-                                Selected — not saved yet
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="mt-1 flex items-center gap-1 text-muted-foreground">
-                          <Clock3 className="h-4 w-4" />
-                          <span>Not set</span>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            {step === "complete" && (
-              <Card
-                className={
-                  accountVerified
-                    ? "border-brand-green/40 bg-brand-green-50/30 dark:bg-brand-green-950/30"
-                    : "border-brand-gold/40 bg-brand-gold-50/40 dark:bg-brand-gold-950/20"
-                }
-              >
-                <CardContent className="space-y-3 py-6 text-center">
-                  <div className="mx-auto inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand-green-100 text-brand-green dark:bg-brand-green-900">
-                    <ShieldCheck className="h-5 w-5" />
-                  </div>
-                  <h2 className="font-display text-xl font-bold">
-                    {accountVerificationStatus === "verified"
-                      ? "Verification Approved"
-                      : "Verification Submitted"}
-                  </h2>
-                  <p className="mx-auto max-w-sm text-sm text-muted-foreground">
-                    {accountVerificationStatus === "verified"
-                      ? "Your account is verified."
-                      : "Everything was submitted to admin. Your application is pending review."}
-                  </p>
-                  <div className="mx-auto w-full max-w-lg space-y-2 text-left">
-                    {REVIEWABLE_STEP_ORDER.map((stepType) => {
-                      const statusEntry = serverStepMap.get(stepType);
-                      const displayStatus = accountVerified
-                        ? "approved"
-                        : stepType === "phone" && isPhoneReady
-                          ? "approved"
-                          : (statusEntry?.status ?? "pending");
-                      return (
-                        <div
-                          key={stepType}
-                          className="rounded-md border border-warm-200/70 dark:border-warm-700/70 bg-background/80 px-3 py-2 text-sm"
+                      {!locationSubmissionLocked && (
+                        <Button
+                          onClick={handleManualLocationSubmit}
+                          disabled={
+                            !province || !city || manualSubmitting || verificationSubmissionBlocked
+                          }
+                          variant="trust-verified"
+                          size="lg"
+                          className="w-full sm:w-auto"
                         >
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="font-medium capitalize">
-                              {stepType.replace("_", " ")}
-                            </span>
-                            <Badge variant="outline">{formatStatusLabel(displayStatus)}</Badge>
-                          </div>
-                          {getStepStatusDetail(statusEntry) && (
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {getStepStatusDetail(statusEntry)}
-                            </p>
+                          {manualSubmitting ? (
+                            <Loader2
+                              className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            <MapPin className="h-4 w-4" aria-hidden="true" />
                           )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <Button variant="trust-verified" asChild className="h-11 gap-2">
-                    <Link href={completionHref}>
-                      {getCompletionCtaLabel(completionHref)}
-                      <ArrowRight className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
+                          Save address & finish
+                        </Button>
+                      )}
+                    </StepActions>
+                  </StepCard>
+                )}
+
+                {step === "complete" && (
+                  <section
+                    aria-labelledby="verification-complete-title"
+                    className="surface-card overflow-hidden"
+                  >
+                    <div
+                      className={cn(
+                        "bg-gradient-to-b to-transparent px-5 pb-6 pt-8 text-center sm:px-8",
+                        accountVerified
+                          ? "from-brand-green-50 dark:from-brand-green-500/10"
+                          : "from-brand-gold-50 dark:from-brand-gold-400/10"
+                      )}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          "mx-auto flex h-14 w-14 items-center justify-center rounded-2xl",
+                          accountVerified
+                            ? "bg-brand-green-600 text-white dark:bg-brand-green-500 dark:text-brand-green-950"
+                            : "bg-brand-gold-400 text-brand-gold-950"
+                        )}
+                      >
+                        {accountVerified ? (
+                          <ShieldCheck className="h-7 w-7" />
+                        ) : (
+                          <Clock3 className="h-7 w-7" />
+                        )}
+                      </span>
+                      <h2
+                        id="verification-complete-title"
+                        className="mt-4 font-display text-2xl font-bold tracking-tight text-foreground"
+                      >
+                        {accountVerificationStatus === "verified"
+                          ? "Verification approved"
+                          : "Verification submitted"}
+                      </h2>
+                      <p className="mx-auto mt-1.5 max-w-md text-sm leading-6 text-muted-foreground sm:text-base">
+                        {accountVerificationStatus === "verified"
+                          ? "Your account is verified."
+                          : "Everything was submitted to admin. Your application is pending review."}
+                      </p>
+                      {verificationInAdminReview && (
+                        <StatusCallout tone="pending" className="mx-auto mt-5 max-w-lg text-left">
+                          <p>{inAdminReviewMessage}</p>
+                        </StatusCallout>
+                      )}
+                    </div>
+
+                    <ul className="divide-y divide-border/70 border-t border-border/70">
+                      {REVIEWABLE_STEP_ORDER.map((stepType) => {
+                        const statusEntry = serverStepMap.get(stepType);
+                        const displayStatus: VerificationStatus = accountVerified
+                          ? "approved"
+                          : stepType === "phone" && isPhoneReady
+                            ? "approved"
+                            : (statusEntry?.status ?? "pending");
+                        const detail = getStepStatusDetail(statusEntry);
+                        return (
+                          <li key={stepType} className="px-5 py-3.5 sm:px-8">
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-sm font-semibold text-foreground">
+                                {STEP_DISPLAY_LABELS[stepType]}
+                              </span>
+                              <span
+                                className={cn(
+                                  "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset",
+                                  STATUS_CHIP_CLASSES[displayStatus]
+                                )}
+                              >
+                                {formatStatusLabel(displayStatus)}
+                              </span>
+                            </div>
+                            {detail && (
+                              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                {detail}
+                              </p>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+
+                    <div className="border-t border-border/70 px-5 py-5 sm:px-8">
+                      <Button
+                        variant="trust-verified"
+                        size="lg"
+                        asChild
+                        className="w-full sm:w-auto"
+                      >
+                        <Link href={completionHref}>{getCompletionCtaLabel(completionHref)}</Link>
+                      </Button>
+                    </div>
+                  </section>
+                )}
+              </div>
+
+              <aside aria-label="About verification" className="space-y-4 lg:sticky lg:top-32">
+                {step === "location" ? (
+                  <section
+                    aria-labelledby="verification-review-title"
+                    className="surface-card p-4 sm:p-5"
+                  >
+                    <h2
+                      id="verification-review-title"
+                      className="font-body text-base font-bold text-foreground"
+                    >
+                      Review before saving
+                    </h2>
+                    <ul className="mt-3 divide-y divide-border/70 text-sm">
+                      <ReviewRow
+                        label="Phone"
+                        done={phoneVerified}
+                        value={phoneVerified ? "Verified" : "Pending"}
+                      />
+                      <ReviewRow
+                        label="ID document"
+                        done={Boolean(uploadReceipts.id_doc)}
+                        value={
+                          uploadReceipts.id_doc
+                            ? `${idDocumentStatus ? `${formatStatusLabel(idDocumentStatus)} - ` : ""}Uploaded at ${formatUploadedTime(uploadReceipts.id_doc.uploadedAtIso)}`
+                            : "Not yet uploaded — go back to the ID step to add your document"
+                        }
+                        detail={
+                          idChecksumValid && idDob
+                            ? `Date of birth: ${idDob}${idGender ? `, ${idGender}` : ""}`
+                            : null
+                        }
+                      />
+                      <ReviewRow
+                        label="Selfie"
+                        done={Boolean(uploadReceipts.selfie)}
+                        value={
+                          uploadReceipts.selfie
+                            ? `${selfieStatus ? `${formatStatusLabel(selfieStatus)} - ` : ""}Uploaded at ${formatUploadedTime(uploadReceipts.selfie.uploadedAtIso)}`
+                            : "Not yet uploaded — go back to the selfie step to take your photo"
+                        }
+                      />
+                      <ReviewRow
+                        label="Location"
+                        done={Boolean((locationSaved && locationSummary) || hasSelectedLocation)}
+                        value={locationSummary || "Not set"}
+                        detail={
+                          locationSaved && locationSummary
+                            ? `${
+                                locationVerified
+                                  ? "GPS verified"
+                                  : locationStatus
+                                    ? formatStatusLabel(locationStatus)
+                                    : "Address saved"
+                              }${locationVerified && gpsConfidence ? ` (GPS: ${gpsConfidence})` : ""}`
+                            : hasSelectedLocation
+                              ? locationVerified
+                                ? `GPS verified — not saved yet${gpsConfidence ? ` (GPS: ${gpsConfidence})` : ""}`
+                                : "Selected — not saved yet"
+                              : null
+                        }
+                        detailTone={
+                          locationVerified || (locationSaved && locationSummary) ? "good" : "muted"
+                        }
+                      />
+                    </ul>
+                  </section>
+                ) : (
+                  step !== "complete" && <WhatHappensNextPanel />
+                )}
+                {step === "complete" && accountVerified && <WhatHappensNextPanel verified />}
+                <PrivacyPanel />
+                <HelpLinkCard />
+              </aside>
+            </div>
           </div>
         </div>
       </main>
     </div>
+  );
+}
+
+function SelectedFileRow({ name, sizeBytes }: { name: string; sizeBytes: number }) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/40 px-3.5 py-2.5 text-sm">
+      <FileImage className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <span className="min-w-0 flex-1 truncate font-medium text-foreground">{name}</span>
+      <span className="shrink-0 text-xs text-muted-foreground">{formatFileSize(sizeBytes)}</span>
+    </div>
+  );
+}
+
+function ReviewRow({
+  label,
+  done,
+  value,
+  detail,
+  detailTone = "muted",
+}: {
+  label: string;
+  done: boolean;
+  value: string;
+  detail?: string | null;
+  detailTone?: "good" | "muted";
+}) {
+  return (
+    <li className="flex items-start gap-3 py-3 first:pt-1 last:pb-0">
+      <span
+        aria-hidden="true"
+        className={cn(
+          "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
+          done
+            ? "bg-brand-green-600 text-white dark:bg-brand-green-500 dark:text-brand-green-950"
+            : "bg-muted text-muted-foreground"
+        )}
+      >
+        {done ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold text-foreground">{label}</p>
+        <p className="mt-0.5 text-[13px] leading-5 text-muted-foreground">{value}</p>
+        {detail && (
+          <p
+            className={cn(
+              "mt-0.5 text-xs leading-5",
+              detailTone === "good"
+                ? "font-medium text-brand-green-700 dark:text-brand-green-300"
+                : "text-muted-foreground"
+            )}
+          >
+            {detail}
+          </p>
+        )}
+      </div>
+    </li>
   );
 }

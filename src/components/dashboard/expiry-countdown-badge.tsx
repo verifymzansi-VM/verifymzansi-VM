@@ -32,21 +32,28 @@ export function ExpiryCountdownBadge({
   return (
     <div className={cn("inline-flex items-center gap-1", className)}>
       <Clock3 className={cn("h-3.5 w-3.5", iconClassName)} />
-      <span>{exactDate ? formatExpiryLabel(label, exactDate) : label}</span>
+      <span suppressHydrationWarning>
+        {exactDate ? formatExpiryLabel(label, exactDate) : label}
+      </span>
     </div>
   );
 }
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** South Africa Standard Time is UTC+2 all year. */
+const SAST_OFFSET_MS = 2 * 60 * 60 * 1000;
+
+/**
+ * Deterministic "07 Mar 2026" in South African time. `Intl` output differs between
+ * Node and browsers (and by device time zone), which caused hydration mismatches.
+ */
 function formatExpiryDate(expiresAt: string | null | undefined) {
   if (!expiresAt) return null;
-  const date = new Date(expiresAt);
-  if (!Number.isFinite(date.getTime())) return null;
-
-  return new Intl.DateTimeFormat("en-ZA", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(date);
+  const time = new Date(expiresAt).getTime();
+  if (!Number.isFinite(time)) return null;
+  const sast = new Date(time + SAST_OFFSET_MS);
+  const day = String(sast.getUTCDate()).padStart(2, "0");
+  return `${day} ${MONTHS[sast.getUTCMonth()]} ${sast.getUTCFullYear()}`;
 }
 
 function formatExpiryLabel(label: string, exactDate: string) {

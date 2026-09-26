@@ -45,6 +45,13 @@ describe("public trust pages", () => {
     expect(screen.getByText("privacy@verifymzansi.com")).toBeInTheDocument();
     expect(screen.getAllByText("security@verifymzansi.com").length).toBeGreaterThan(0);
     expect(screen.getByText(/VerifyMzansi verifies people who post/i)).toBeInTheDocument();
+    // The verification journey and every trust tier label are explained.
+    for (const step of ["Phone confirmed", "ID & selfie reviewed", "Location checked"]) {
+      expect(screen.getByRole("heading", { name: step })).toBeInTheDocument();
+    }
+    for (const label of ["Pending Review", "Incomplete", "Unregistered", "ID Reviewed Pro"]) {
+      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
+    }
   });
 
   it("renders configured legal details on Trust & Safety", () => {
@@ -64,7 +71,13 @@ describe("public trust pages", () => {
 
     expect(screen.getByRole("heading", { name: "Safety Centre" })).toBeInTheDocument();
     expect(screen.getByText(/Never pay deposits/i)).toBeInTheDocument();
-    expect(screen.getByText("Reports, disputes, and appeals")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Reports, disputes, and appeals" })
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: /Report a problem/i })[0]).toHaveAttribute(
+      "href",
+      "/contact?topic=fraud_report"
+    );
     expect(screen.getByRole("link", { name: /Scam Alerts/i })).toHaveAttribute(
       "href",
       "/safety/scam-alerts"
@@ -74,10 +87,13 @@ describe("public trust pages", () => {
   it("renders specific POPIA and verification data language", () => {
     render(<PrivacyPolicyPage />);
 
-    expect(screen.getByText("How Verification Data Is Used")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "How verification data is used" })
+    ).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "On this page" })).toBeInTheDocument();
     expect(screen.getByText(/ID numbers, ID document images, selfies/i)).toBeInTheDocument();
-    expect(screen.getByText("Sensitive Data Handling")).toBeInTheDocument();
-    expect(screen.getByText("Third Parties")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Sensitive data handling" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Third parties" })).toBeInTheDocument();
     expect(screen.getByText(/If we discover a data breach/i)).toBeInTheDocument();
     expect(screen.getByText(/targeted for deletion within 30 days/i)).toBeInTheDocument();
   });
@@ -85,9 +101,9 @@ describe("public trust pages", () => {
   it("renders payment and verification disclaimers in terms", () => {
     render(<TermsPage />);
 
-    expect(screen.getByText("Verification Signals")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Verification signals" })).toBeInTheDocument();
     expect(screen.getByText(/does not guarantee that a user/i)).toBeInTheDocument();
-    expect(screen.getByText("Payments & Billing")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Payments & billing" })).toBeInTheDocument();
     expect(screen.getByText(/paid content is rejected/i)).toBeInTheDocument();
     expect(screen.getByText(/Plans do not auto-renew/i)).toBeInTheDocument();
   });
@@ -95,16 +111,20 @@ describe("public trust pages", () => {
   it("renders payment transparency on pricing", async () => {
     render(await PricingPage());
 
-    expect(screen.getByRole("heading", { name: "Pricing" })).toBeInTheDocument();
-    expect(screen.getByText("Payment transparency")).toBeInTheDocument();
-    expect(screen.getByText("Moderation and refunds")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Start free. Then one simple price." })
+    ).toBeInTheDocument();
+    // Payment and refund transparency now lives in the "How billing works" FAQ.
+    expect(screen.getByText("How billing works")).toBeInTheDocument();
+    expect(screen.getByText("How do I pay?")).toBeInTheDocument();
+    expect(screen.getByText("What if my paid post is rejected?")).toBeInTheDocument();
   });
 
   it("renders PAIA request guidance", () => {
     render(<PaiaManualPage />);
 
     expect(screen.getByRole("heading", { name: "PAIA Manual" })).toBeInTheDocument();
-    expect(screen.getByText("Legal Identity")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Legal identity" })).toBeInTheDocument();
     expect(screen.getByText("2026/155305/07")).toBeInTheDocument();
     expect(screen.getByText(/Information Regulator South Africa/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Open data-subject request form/i })).toHaveAttribute(

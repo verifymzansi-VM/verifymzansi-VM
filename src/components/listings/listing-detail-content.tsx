@@ -1,21 +1,24 @@
 "use client";
 
-import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Calendar, Eye, MapPin, Phone, MessageCircle } from "lucide-react";
+import { ArrowRight, Calendar, Eye, MapPin, Phone, MessageCircle } from "lucide-react";
 import { contactPhone, whatsappLink } from "@/lib/utils/contact-links";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { TrustBadge } from "@/components/trust/trust-badge";
-import { VerifiedTick } from "@/components/trust/verified-tick";
+import {
+  DetailSection,
+  FactGrid,
+  PosterTrustCard,
+  SafetyTipsCard,
+  type DetailFact,
+} from "@/components/listings/detail-panels";
+import { cn } from "@/lib/utils";
 import { ListingCard } from "@/components/listings/listing-card";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import { readOwnerId } from "@/lib/account/compat";
-import { formatSaLongDate, formatZAR } from "@/lib/utils/format";
+import { formatRandAmount, formatSaLongDate, formatZARShort } from "@/lib/utils/format";
 import { CATEGORIES } from "@/lib/constants/categories";
 import { ListingDetailClient } from "@/app/listing/[id]/client";
 import { ListingContactActions } from "@/app/listing/[id]/listing-contact-actions";
@@ -100,9 +103,26 @@ interface FactItem {
   value: string;
 }
 
-function formatFactValue(value: unknown, unit?: string) {
+type AttributeOption = string | { value: string; label: string };
+
+/** Turn a stored key such as `like_new` into readable text ("Like new"). */
+function humanizeKey(value: string) {
+  const text = value.replace(/_/g, " ").trim();
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+}
+
+function optionLabel(item: unknown, options?: AttributeOption[]) {
+  const raw = String(item);
+  const match = options?.find((option) =>
+    typeof option === "string" ? option === raw : option.value === raw
+  );
+  if (match) return typeof match === "string" ? match : match.label;
+  return /^[a-z0-9]+(_[a-z0-9]+)+$/.test(raw) ? humanizeKey(raw) : raw;
+}
+
+function formatFactValue(value: unknown, unit?: string, options?: AttributeOption[]) {
   if (Array.isArray(value)) {
-    return value.map((item) => String(item).replace(/_/g, " ")).join(", ");
+    return value.map((item) => optionLabel(item, options)).join(", ");
   }
   if (typeof value === "boolean") {
     return value ? "Yes" : "No";
@@ -110,7 +130,12 @@ function formatFactValue(value: unknown, unit?: string) {
   if (value == null) {
     return "";
   }
-  return unit ? `${String(value)} ${unit}` : String(value).replace(/_/g, " ");
+  if (typeof value === "number") {
+    // Group digits for measured values (mileage, size) but never for years or counts.
+    return unit ? `${formatRandAmount(value)} ${unit}` : String(value);
+  }
+  const label = optionLabel(value, options);
+  return unit ? `${label} ${unit}` : label;
 }
 
 function buildListingFacts(listing: ListingDetailRecord) {
@@ -128,7 +153,7 @@ function buildListingFacts(listing: ListingDetailRecord) {
         }
         return {
           label: field.label,
-          value: formatFactValue(rawValue, field.unit),
+          value: formatFactValue(rawValue, field.unit, field.options),
         };
       })
       .filter((fact): fact is FactItem => Boolean(fact)) ?? [];
@@ -138,7 +163,7 @@ function buildListingFacts(listing: ListingDetailRecord) {
       if (value === "" || value == null || (Array.isArray(value) && value.length === 0)) {
         return null;
       }
-      return { label: key.replace(/_/g, " "), value: formatFactValue(value) };
+      return { label: humanizeKey(key), value: formatFactValue(value) };
     })
     .filter((fact): fact is FactItem => Boolean(fact));
 
@@ -151,23 +176,20 @@ function getVariantCopy(category: string | null | undefined) {
   );
   switch (variant) {
     case "property":
-      return {
-        detailsHeading: "Property details",
-      };
+      return { aboutHeading: "About this property", detailsHeading: "Property details" };
     case "motors":
-      return {
-        detailsHeading: "Vehicle details",
-      };
+      return { aboutHeading: "About this vehicle", detailsHeading: "Vehicle details" };
     case "services":
-      return {
-        detailsHeading: "Service details",
-      };
+      return { aboutHeading: "About this service", detailsHeading: "Service details" };
     default:
-      return {
-        detailsHeading: "Listing details",
-      };
+      return { aboutHeading: "About this item", detailsHeading: "Item details" };
   }
 }
+
+const PUBLIC_GRID =
+  "grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:grid-rows-[auto_1fr] lg:gap-x-8 xl:grid-cols-[minmax(0,1fr)_24rem]";
+const REVIEW_GRID =
+  "grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-rows-[auto_1fr] 2xl:gap-x-8";
 
 export function ListingDetailContent({
   listing,
@@ -191,13 +213,16 @@ export function ListingDetailContent({
   layoutMode?: "public" | "review";
 }) {
   const isReviewLayout = layoutMode === "review";
-  const trustLevel = seller ? computeTrustLevel(seller.account_verification_status ?? null) : null;
+  // Previews show the poster's own name ("You"); the trust note only makes sense publicly.
+  const trustLevel =
+    seller && !isReviewLayout
+      ? computeTrustLevel(seller.account_verification_status ?? null)
+      : null;
   const createdAt = formatSaLongDate(listing.created_at);
   const categoryLabel =
     CATEGORIES.find((item) => item.value === listing.category)?.label ??
     listing.category?.replace(/_/g, " ");
   const variantCopy = getVariantCopy(listing.category);
-  const sellerInitial = seller?.display_name?.charAt(0)?.toUpperCase() || "S";
   const sellerPhone = contactPhone(seller?.phone);
   const sellerWhatsappUrl = whatsappLink(seller?.phone, listing.title, `/listing/${listing.id}`);
   const canCall =
@@ -211,211 +236,215 @@ export function ListingDetailContent({
   const showStickyBar = layoutMode === "public" && (canCall || canWhatsapp);
   const facts = useMemo(() => buildListingFacts(listing), [listing]);
   const [viewCount, setViewCount] = useState(listing.view_count ?? 0);
-  const quickFacts = facts.slice(0, 6);
-  const detailFacts = facts.slice(6);
   const handleViewRecorded = useCallback(() => {
     setViewCount((currentCount) => currentCount + 1);
   }, []);
+  const locationLabel = [listing.location_suburb, listing.location_city, listing.location_province]
+    .filter(Boolean)
+    .join(", ");
+  const detailFacts: DetailFact[] = [
+    ...facts.map((fact) => ({ label: fact.label, value: fact.value })),
+    ...(listing.location_address
+      ? [{ label: "Address", value: listing.location_address, wide: true }]
+      : []),
+  ];
+  const TitleTag = isReviewLayout ? "h2" : "h1";
+  const similarHref = listing.category
+    ? `/mzansi-market?category=${encodeURIComponent(listing.category)}`
+    : "/mzansi-market";
+
+  const summary = (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        {categoryLabel ? (
+          <Badge variant="secondary" className="text-xs">
+            {categoryLabel}
+          </Badge>
+        ) : null}
+        {listing.condition ? (
+          <Badge variant="outline" className="text-xs">
+            {getListingConditionLabel(listing.condition)}
+          </Badge>
+        ) : null}
+      </div>
+
+      <TitleTag className="font-display text-[1.6rem] font-bold leading-[1.15] tracking-tight text-foreground sm:text-[2rem]">
+        {listing.title}
+      </TitleTag>
+
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        {listing.price_cents != null && listing.price_cents > 0 ? (
+          <p className="font-display text-[2rem] font-extrabold leading-none tracking-tight text-foreground">
+            {formatZARShort(listing.price_cents)}
+          </p>
+        ) : (
+          <p className="font-display text-2xl font-bold leading-none text-foreground">
+            Price on request
+          </p>
+        )}
+        {listing.price_negotiable ? <Badge variant="verified">Negotiable</Badge> : null}
+      </div>
+
+      <ul className="space-y-1.5 text-sm text-muted-foreground">
+        {locationLabel ? (
+          <li className="flex items-center gap-2">
+            <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>{locationLabel}</span>
+          </li>
+        ) : null}
+        <li className="flex items-center gap-2">
+          <Calendar className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>
+            Listed <time dateTime={listing.created_at}>{createdAt}</time>
+          </span>
+        </li>
+        <li className="flex items-center gap-2">
+          <Eye className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>
+            {viewCount} {viewCount === 1 ? "view" : "views"}
+          </span>
+        </li>
+      </ul>
+    </div>
+  );
+
+  const contactBlock = showContactActions ? (
+    <ListingContactActions
+      listingId={listing.id}
+      listingTitle={listing.title}
+      contactMethods={listing.contact_methods}
+      sellerPhone={listing.contact_methods?.includes("call") ? (seller?.phone ?? null) : null}
+      sellerWhatsapp={
+        listing.contact_methods?.includes("whatsapp") ? (seller?.phone ?? null) : null
+      }
+    />
+  ) : seller?.phone === null && seller?.masked_phone_public === null ? (
+    <div className="space-y-1 text-sm text-muted-foreground">
+      <p className="font-medium text-foreground">Contact seller</p>
+      <p>
+        <a
+          href="/login"
+          className="font-medium text-brand-green-700 underline dark:text-brand-green-300"
+        >
+          Sign in
+        </a>{" "}
+        to contact the seller.
+      </p>
+    </div>
+  ) : (
+    <div className="space-y-1 text-sm text-muted-foreground">
+      <p className="font-medium text-foreground">Preview mode</p>
+      <p>Contact buttons appear once approved.</p>
+    </div>
+  );
 
   return (
     <>
       <article
         data-layout-mode={layoutMode}
-        className={
-          isReviewLayout
-            ? "grid grid-cols-1 gap-6"
-            : showStickyBar
-              ? "grid grid-cols-1 gap-6 pb-24 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)_minmax(18rem,21rem)] lg:items-start lg:pb-0"
-              : "grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)_minmax(18rem,21rem)] lg:items-start"
-        }
+        className={cn(isReviewLayout ? REVIEW_GRID : PUBLIC_GRID, showStickyBar && "pb-24 lg:pb-0")}
       >
         <div
-          className={
-            isReviewLayout
-              ? "space-y-6 2xl:grid 2xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] 2xl:items-start 2xl:gap-8 2xl:space-y-0"
-              : "space-y-6 lg:col-span-2 lg:grid lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:items-start lg:gap-8 lg:space-y-0"
-          }
+          className={cn(
+            "min-w-0",
+            isReviewLayout ? "2xl:col-start-1 2xl:row-start-1" : "lg:col-start-1 lg:row-start-1"
+          )}
         >
-          <div
-            className={`mx-auto w-full max-w-[340px] sm:max-w-[380px] ${
-              isReviewLayout ? "2xl:max-w-none" : "lg:max-w-none"
-            }`}
+          <ErrorBoundary
+            label="ListingDetailClient"
+            fallback={
+              <div className="flex aspect-[4/5] items-center justify-center rounded-3xl bg-muted sm:aspect-[4/3]">
+                <p className="text-sm text-muted-foreground">Image failed to load</p>
+              </div>
+            }
           >
-            <ErrorBoundary
-              label="ListingDetailClient"
-              fallback={
-                <div className="aspect-[9/16] rounded-[28px] bg-muted flex items-center justify-center">
-                  <p className="text-sm text-muted-foreground">Image failed to load</p>
-                </div>
+            <ListingDetailClient
+              photos={listing.photos ?? []}
+              videos={listing.videos ?? []}
+              title={listing.title}
+              listingId={listing.id}
+              videoThumbnail={listing.video_thumbnail}
+              photoCount={photoCount}
+              heroAspectClassName="aspect-[4/5] sm:aspect-[4/3]"
+              heroMediaClassName="object-contain"
+              trackView={trackView}
+              onViewRecorded={handleViewRecorded}
+            />
+          </ErrorBoundary>
+        </div>
+
+        <aside
+          className={cn(
+            "min-w-0",
+            isReviewLayout
+              ? "2xl:col-start-2 2xl:row-span-2 2xl:row-start-1"
+              : "lg:col-start-2 lg:row-span-2 lg:row-start-1"
+          )}
+        >
+          <div className={cn("space-y-4", !isReviewLayout && "lg:sticky lg:top-32")}>
+            {summary}
+
+            <PosterTrustCard
+              area="market"
+              roleLabel="Sold by"
+              name={seller?.display_name}
+              trustLevel={trustLevel}
+              avatar={
+                listing.logo_url ? (
+                  <Image
+                    src={normalizeMediaUrl(listing.logo_url)}
+                    alt={`${listing.title} logo`}
+                    width={48}
+                    height={48}
+                    className="h-full w-full rounded-full object-contain"
+                  />
+                ) : undefined
               }
             >
-              <ListingDetailClient
-                photos={listing.photos ?? []}
-                videos={listing.videos ?? []}
-                title={listing.title}
-                listingId={listing.id}
-                videoThumbnail={listing.video_thumbnail}
-                photoCount={photoCount}
-                heroAspectClassName="aspect-[9/16]"
-                heroMediaClassName="bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.22),_rgba(15,23,42,0.96))] object-contain transition-transform duration-500"
-                trackView={trackView}
-                onViewRecorded={handleViewRecorded}
-              />
-            </ErrorBoundary>
+              {contactBlock}
+            </PosterTrustCard>
+
+            <SafetyTipsCard
+              area="market"
+              className={isReviewLayout ? "hidden" : "hidden lg:block"}
+            />
           </div>
+        </aside>
 
-          <div className="space-y-5">
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center gap-2">
-                {categoryLabel ? (
-                  <Badge variant="secondary" className="text-xs">
-                    {categoryLabel}
-                  </Badge>
-                ) : null}
-                {listing.condition ? (
-                  <Badge variant="outline" className="text-xs">
-                    {getListingConditionLabel(listing.condition)}
-                  </Badge>
-                ) : null}
-              </div>
-
-              <div className="flex flex-wrap items-end gap-3">
-                {listing.price_cents != null ? (
-                  <p className="font-display text-[2.25rem] font-extrabold leading-none tracking-tight text-foreground">
-                    {formatZAR(listing.price_cents)}
-                  </p>
-                ) : null}
-                {listing.price_negotiable ? <Badge variant="verified">Negotiable</Badge> : null}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <Calendar className="h-4 w-4" />
-                  Listed <time dateTime={listing.created_at}>{createdAt}</time>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <Eye className="h-4 w-4" />
-                  {viewCount} {viewCount === 1 ? "view" : "views"}
-                </span>
-                {listing.contact_methods && listing.contact_methods.length > 0 ? (
-                  <span className="flex items-center gap-1.5 capitalize">
-                    <MessageCircle className="h-4 w-4" />
-                    {listing.contact_methods.join(" · ")}
-                  </span>
-                ) : null}
-              </div>
-            </div>
-
-            {quickFacts.length > 0 ? (
-              <Card className="surface-card elev-sm">
-                <CardContent className="space-y-4 p-5">
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                      Quick Facts
-                    </p>
-                    <h3 className="font-display text-xl font-semibold">
-                      {variantCopy.detailsHeading}
-                    </h3>
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    {quickFacts.map((fact) => (
-                      <div
-                        key={`${fact.label}-${fact.value}`}
-                        className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]"
-                      >
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                          {fact.label}
-                        </p>
-                        <p className="mt-1 text-sm font-medium">{fact.value}</p>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            ) : null}
-
-            {listing.description ? (
-              <Card className="surface-card elev-sm">
-                <CardContent className="space-y-3 p-5">
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                      Description
-                    </p>
-                    <h3 className="font-display text-xl font-semibold">About this listing</h3>
-                  </div>
-                  <p className="whitespace-pre-wrap leading-relaxed text-muted-foreground">
-                    {listing.description}
-                  </p>
-                </CardContent>
-              </Card>
-            ) : null}
-
-            {(listing.location_province ||
-              listing.location_city ||
-              listing.location_suburb ||
-              listing.location_address) && (
-              <Card className="surface-card elev-sm">
-                <CardContent className="space-y-3 p-5">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-brand-green" />
-                    <div>
-                      <p className="font-medium">
-                        {[listing.location_suburb, listing.location_city, listing.location_province]
-                          .filter(Boolean)
-                          .join(", ")}
-                      </p>
-                      <p className="text-xs text-muted-foreground">Listed location</p>
-                    </div>
-                  </div>
-                  {listing.location_address ? (
-                    <p className="text-sm text-muted-foreground">{listing.location_address}</p>
-                  ) : null}
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {detailFacts.length > 0 ? (
-            <Card className="surface-card elev-sm lg:col-span-2">
-              <CardContent className="space-y-4 p-5">
-                <div className="space-y-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                    More Details
-                  </p>
-                  <h3 className="font-display text-xl font-semibold">Full listing breakdown</h3>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {detailFacts.map((fact) => (
-                    <div
-                      key={`${fact.label}-${fact.value}`}
-                      className="flex items-start justify-between gap-3 rounded-2xl bg-muted/40 px-3 py-2"
-                    >
-                      <p className="text-sm text-muted-foreground">{fact.label}</p>
-                      <p className="text-right text-sm font-medium">{fact.value}</p>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+        <div
+          className={cn(
+            "min-w-0 space-y-6",
+            isReviewLayout ? "2xl:col-start-1 2xl:row-start-2" : "lg:col-start-1 lg:row-start-2"
+          )}
+        >
+          {listing.description ? (
+            <DetailSection title={variantCopy.aboutHeading}>
+              <p className="whitespace-pre-wrap text-[15px] leading-7 text-foreground/85">
+                {listing.description}
+              </p>
+            </DetailSection>
           ) : null}
 
+          {detailFacts.length > 0 ? (
+            <DetailSection title={variantCopy.detailsHeading}>
+              <FactGrid facts={detailFacts} />
+            </DetailSection>
+          ) : null}
+
+          {!isReviewLayout ? <SafetyTipsCard area="market" className="lg:hidden" /> : null}
+
           {showSimilarListings && similarItems.length > 0 ? (
-            <div className="space-y-3 lg:col-span-2">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                    Keep Browsing
-                  </p>
-                  <h3 className="font-display text-xl font-semibold">Similar listings</h3>
-                </div>
-                <Link
-                  href="/mzansi-market"
-                  className="text-sm font-medium text-brand-green hover:underline"
-                >
-                  View all
+            <section className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="font-display text-xl font-semibold tracking-tight">
+                  More like this
+                </h2>
+                <Link href={similarHref} className="link-arrow min-h-11 px-1">
+                  See all
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </Link>
               </div>
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-[repeat(auto-fill,minmax(0,15rem))]">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
                 {similarItems.map((item) => {
                   const sellerRow = similarSellers.get(readOwnerId(item) ?? "");
                   const videoUrl = item.videos?.[0];
@@ -449,137 +478,7 @@ export function ListingDetailContent({
                   );
                 })}
               </div>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="space-y-4 lg:sticky lg:top-32">
-          <Card className="surface-card elev-sm">
-            <CardContent className="space-y-4 p-5">
-              <h3 className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                Sold by
-              </h3>
-
-              <div className="flex items-center gap-3">
-                <div className="relative shrink-0">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-green-600 text-lg font-bold text-white">
-                    {sellerInitial}
-                  </div>
-                  {trustLevel && trustLevel >= 3 ? (
-                    <VerifiedTick
-                      pro={trustLevel === 4}
-                      className="absolute -bottom-0.5 -right-0.5 h-5 w-5 rounded-full bg-card p-px"
-                    />
-                  ) : null}
-                </div>
-                <div className="min-w-0">
-                  <p className="break-words font-semibold">
-                    {seller?.display_name || "Account name unavailable"}
-                  </p>
-                  {trustLevel ? <TrustBadge level={trustLevel} size="sm" /> : null}
-                </div>
-              </div>
-
-              {trustLevel && trustLevel >= 3 ? (
-                <p className="rounded-2xl bg-brand-green-50 px-3.5 py-2.5 text-xs leading-5 text-brand-green-900 dark:bg-brand-green/10 dark:text-brand-green-200">
-                  This seller&apos;s identity evidence was reviewed by VerifyMzansi. The badge
-                  refers to account checks, not the item itself.{" "}
-                  <Link href="/trust-safety" prefetch={false} className="font-semibold underline">
-                    What this means
-                  </Link>
-                </p>
-              ) : seller ? (
-                <p className="rounded-2xl bg-brand-gold-50 px-3.5 py-2.5 text-xs leading-5 text-brand-gold-900 dark:bg-brand-gold/10 dark:text-brand-gold-200">
-                  This seller has not completed ID review yet. Take extra care and never pay before
-                  you have seen the item.
-                </p>
-              ) : null}
-
-              {seller?.location_city || seller?.location_province ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <MapPin className="h-4 w-4" />
-                  <span>
-                    {[seller.location_city, seller.location_province].filter(Boolean).join(", ")}
-                  </span>
-                </div>
-              ) : null}
-
-              <Separator />
-
-              {showContactActions ? (
-                <ListingContactActions
-                  listingId={listing.id}
-                  listingTitle={listing.title}
-                  contactMethods={listing.contact_methods}
-                  sellerPhone={
-                    listing.contact_methods?.includes("call") ? (seller?.phone ?? null) : null
-                  }
-                  sellerWhatsapp={
-                    listing.contact_methods?.includes("whatsapp") ? (seller?.phone ?? null) : null
-                  }
-                />
-              ) : seller?.phone === null && seller?.masked_phone_public === null ? (
-                <div className="space-y-2 text-sm text-muted-foreground">
-                  <p className="font-medium text-foreground">Contact seller</p>
-                  <p>
-                    <a href="/login" className="font-medium text-brand-green hover:underline">
-                      Sign in
-                    </a>{" "}
-                    to reveal contact options for this listing.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2 text-sm text-muted-foreground">
-                  <p className="font-medium text-foreground">Preview mode</p>
-                  <p>Contact buttons will appear publicly after approval.</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="surface-card elev-sm">
-            <CardContent className="space-y-3 p-5">
-              <div className="flex items-center gap-3">
-                <span className="icon-tile bg-brand-green/10 text-brand-green dark:text-brand-green-300">
-                  <ShieldCheck className="h-5 w-5" aria-hidden="true" />
-                </span>
-                <h3 className="font-display text-base font-semibold">Stay safe when you meet</h3>
-              </div>
-              <p className="text-sm leading-6 text-muted-foreground">
-                Meet in a public place, check the item before paying, and never share OTPs or
-                upfront deposits with strangers.
-              </p>
-              <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-                <Link href="/safety/meeting-checklist" prefetch={false} className="link-arrow">
-                  Meeting checklist
-                </Link>
-                <Link href="/safety/scam-alerts" prefetch={false} className="link-arrow">
-                  Scam alerts
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-
-          {listing.logo_url ? (
-            <Card className="surface-card elev-sm">
-              <CardContent className="flex items-center gap-3 p-5">
-                <div className="h-12 w-12 overflow-hidden rounded-2xl border bg-white p-1 dark:bg-warm-900">
-                  <Image
-                    src={normalizeMediaUrl(listing.logo_url)}
-                    alt={`${listing.title} logo`}
-                    width={48}
-                    height={48}
-                    className="h-full w-full rounded-xl object-contain"
-                  />
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                    Brand
-                  </p>
-                  <p className="font-medium">Seller brand logo</p>
-                </div>
-              </CardContent>
-            </Card>
+            </section>
           ) : null}
         </div>
       </article>
@@ -594,7 +493,7 @@ export function ListingDetailContent({
               asChild
             >
               <a href={`tel:${sellerPhone}`}>
-                <Phone className="h-4 w-4" /> Call seller
+                <Phone className="h-4 w-4" aria-hidden="true" /> Call seller
               </a>
             </Button>
           ) : null}
@@ -604,10 +503,10 @@ export function ListingDetailContent({
               asChild
               size="lg"
               variant="outline"
-              className="h-12 flex-1 gap-2 rounded-full border-green-500/30 font-semibold"
+              className="h-12 flex-1 gap-2 rounded-full border-brand-green/30 font-semibold"
             >
               <a href={sellerWhatsappUrl!} target="_blank" rel="noopener noreferrer nofollow ugc">
-                <MessageCircle className="h-4 w-4 text-green-600" />
+                <MessageCircle className="h-4 w-4 text-brand-green-600" aria-hidden="true" />
                 WhatsApp
               </a>
             </Button>

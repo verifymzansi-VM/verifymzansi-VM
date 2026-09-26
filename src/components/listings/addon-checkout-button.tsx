@@ -16,7 +16,7 @@ type AddonCheckoutButtonProps = {
   errorFallbackDescription: string;
   hoverClassName: string;
   activeIconClassName: string;
-  Icon: ComponentType<{ className?: string }>;
+  Icon: ComponentType<{ className?: string; "aria-hidden"?: boolean | "true" | "false" }>;
 };
 
 export function AddonCheckoutButton({
@@ -40,12 +40,12 @@ export function AddonCheckoutButton({
       <Button
         variant="ghost"
         size="icon"
-        className="h-9 w-9"
+        className="h-11 w-11 rounded-full"
         disabled
         title={activeTitle}
         aria-label={activeTitle}
       >
-        <Icon className={`h-3.5 w-3.5 ${activeIconClassName}`} />
+        <Icon aria-hidden="true" className={`h-4 w-4 ${activeIconClassName}`} />
       </Button>
     );
   }
@@ -55,12 +55,12 @@ export function AddonCheckoutButton({
       <Button
         variant="ghost"
         size="icon"
-        className="h-9 w-9"
+        className="h-11 w-11 rounded-full"
         disabled
         title={unavailableTitle}
         aria-label={unavailableTitle}
       >
-        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+        <Icon aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
       </Button>
     );
   }
@@ -101,13 +101,16 @@ export function AddonCheckoutButton({
     <Button
       variant="ghost"
       size="icon"
-      className={`h-9 w-9 transition-colors ${hoverClassName}`}
+      className={`h-11 w-11 rounded-full transition-colors ${hoverClassName}`}
       onClick={handleCheckout}
       disabled={loading}
       title={actionTitle}
       aria-label={actionTitle}
     >
-      <Icon className={`h-3.5 w-3.5 ${loading ? "animate-pulse" : ""}`} />
+      <Icon
+        aria-hidden="true"
+        className={`h-4 w-4 ${loading ? "animate-pulse motion-reduce:animate-none" : ""}`}
+      />
     </Button>
   );
 }

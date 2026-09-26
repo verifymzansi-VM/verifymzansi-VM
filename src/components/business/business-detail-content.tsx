@@ -599,14 +599,12 @@ export function TourismDetailsCard({ details }: { details: TourismCategoryDetail
     : null;
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <BedDouble className="h-4 w-4 text-muted-foreground" />
-          Tourism &amp; Hospitality Details
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4 text-sm">
+    <section className="surface-card elev-xs rounded-2xl p-5 sm:p-6">
+      <h2 className="mb-4 flex items-center gap-2 font-display text-lg font-semibold tracking-tight">
+        <BedDouble className="h-4 w-4 text-sunset-700 dark:text-sunset-300" aria-hidden="true" />
+        Stay and visit details
+      </h2>
+      <div className="space-y-4 text-sm">
         {subcategoryLabel && (
           <div className="flex items-start justify-between gap-4">
             <span className="text-muted-foreground">Type</span>
@@ -617,9 +615,13 @@ export function TourismDetailsCard({ details }: { details: TourismCategoryDetail
         {typeof details.star_rating === "number" && details.star_rating > 0 && (
           <div className="flex items-start justify-between gap-4">
             <span className="text-muted-foreground">Rating</span>
-            <span className="flex gap-0.5">
+            <span className="flex gap-0.5" role="img" aria-label={`${details.star_rating} stars`}>
               {Array.from({ length: details.star_rating }).map((_, i) => (
-                <Star key={i} className="h-4 w-4 fill-amber-400 text-amber-400" />
+                <Star
+                  key={i}
+                  className="h-4 w-4 fill-brand-gold-400 text-brand-gold-400"
+                  aria-hidden="true"
+                />
               ))}
             </span>
           </div>
@@ -746,7 +748,7 @@ export function TourismDetailsCard({ details }: { details: TourismCategoryDetail
               rel="noopener noreferrer nofollow ugc"
             >
               <Globe className="h-4 w-4" />
-              Book Online
+              Book online
             </a>
           </Button>
         )}
@@ -925,8 +927,8 @@ export function TourismDetailsCard({ details }: { details: TourismCategoryDetail
             )}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }
 

@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BrandLogo } from "@/components/shared/brand-logo";
 import Link from "next/link";
 
 export default function PostError({
@@ -17,40 +18,53 @@ export default function PostError({
   }, [error]);
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-50 w-full border-b bg-background">
+    <div className="flex min-h-screen flex-col bg-background">
+      <header className="sticky top-0 z-50 w-full border-b border-border/60 bg-background">
         <div className="container-page flex h-16 items-center">
-          <Link href="/" className="text-lg font-bold">
-            VerifyMzansi
+          <Link
+            href="/"
+            aria-label="VerifyMzansi home"
+            className="rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <BrandLogo />
           </Link>
         </div>
       </header>
       <main
         id="main-content"
-        className="flex-1 flex flex-col items-center justify-center gap-6 px-4 text-center"
+        className="flex flex-1 flex-col items-center justify-center gap-5 px-4 py-12 text-center"
       >
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
-          <AlertTriangle className="h-7 w-7 text-destructive" />
-        </div>
-        <div className="max-w-md space-y-2">
-          <h1 className="text-lg sm:text-xl font-display font-bold">Something went wrong</h1>
+        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+          <AlertTriangle className="h-7 w-7" aria-hidden="true" />
+        </span>
+        <div className="max-w-sm space-y-2">
+          <h1 className="font-display text-2xl font-bold tracking-tight">
+            We couldn&apos;t load this form
+          </h1>
           <p className="text-sm text-muted-foreground">
-            We couldn&apos;t load the form. Please try again or return to your dashboard.
+            Something went wrong on our side. Please try again.
           </p>
         </div>
-        <div className="flex flex-wrap justify-center gap-3">
-          <Button variant="outline" asChild>
-            <Link href="/">Go to homepage</Link>
+        <div className="flex w-full max-w-xs flex-col gap-2 sm:max-w-none sm:flex-row sm:justify-center">
+          <Button
+            variant="trust-verified"
+            className="h-11 rounded-full px-6"
+            onClick={() => reset()}
+          >
+            Try again
           </Button>
           <Button
             variant="outline"
+            className="h-11 rounded-full px-6"
             onClick={() =>
               window.location.assign(new URL("/dashboard", window.location.origin).toString())
             }
           >
             Dashboard
           </Button>
-          <Button onClick={() => reset()}>Try again</Button>
+          <Button variant="ghost" className="h-11 rounded-full px-6" asChild>
+            <Link href="/">Go to homepage</Link>
+          </Button>
         </div>
       </main>
     </div>

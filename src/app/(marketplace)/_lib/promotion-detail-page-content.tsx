@@ -2,8 +2,7 @@ import { notFound } from "next/navigation";
 import { ContactActionTracker } from "@/components/analytics/contact-action-tracker";
 import type { Metadata } from "next";
 
-import { PageHeader } from "@/components/layout/page-header";
-import { ContentViewCountText } from "@/components/listings/content-view-count-text";
+import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
 import { ACCOUNT_PROFILE_TABLE, normalizeOwnerRecord, readOwnerId } from "@/lib/account/compat";
 import { getOptionalContentViewCountMap } from "@/lib/engagement-server";
@@ -101,18 +100,9 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/<\//g, "<\\/") }}
       />
 
-      <div className="container-page py-4 space-y-5">
-        <PageHeader
-          title={promotion.title}
-          description={
-            <ContentViewCountText
-              targetId={promotion.id}
-              targetType="promotion"
-              initialCount={promotionViewCount}
-            />
-          }
-          breadcrumbs={[
-            { label: "Home", href: "/" },
+      <div className="container-page space-y-5 py-5 lg:space-y-6 lg:py-8">
+        <Breadcrumbs
+          items={[
             { label: "Tourism & Events", href: "/tourism-events" },
             { label: promotion.title },
           ]}

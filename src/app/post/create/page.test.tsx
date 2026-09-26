@@ -97,11 +97,14 @@ describe("CreatePostPage", () => {
     expect(screen.getAllByText("Mzansi Market").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Mzansi Business").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Tourism & Events").length).toBeGreaterThan(0);
-    expect(screen.getByText("Pick a category to start posting.")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "What would you like to post?" })
+    ).toBeInTheDocument();
     expect(screen.getByText("Need more visibility after launch?")).toBeInTheDocument();
-    expect(screen.getByText("Sell, buy, or rent a single item.")).toBeInTheDocument();
-    expect(screen.getByText("Create your full business profile.")).toBeInTheDocument();
-    expect(screen.getByText("List accommodation, attractions, or events.")).toBeInTheDocument();
+    expect(screen.getByText("Sell or rent out one item.")).toBeInTheDocument();
+    expect(screen.getByText("Create a profile for your business.")).toBeInTheDocument();
+    expect(screen.getByText("List a stay, experience or event.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "How posting works" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Mzansi Market/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Mzansi Business/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Tourism & Events/i })).toBeInTheDocument();
@@ -174,9 +177,7 @@ describe("CreatePostPage", () => {
     await waitFor(() => {
       expect(screen.getByText("Verification required before posting")).toBeInTheDocument();
       expect(
-        screen.getByText(
-          "Your verification is under review. You can browse categories, but approval is needed before posting."
-        )
+        screen.getByText("Your verification is being reviewed. You can post once it's approved.")
       ).toBeInTheDocument();
     });
 

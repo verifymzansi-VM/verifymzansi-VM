@@ -1,30 +1,31 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
+/**
+ * Rendered inside the auth layout's form card, so it only mirrors the form:
+ * heading, Google button, two fields and the submit button.
+ */
 export default function AuthLoading() {
   return (
-    <div
-      className="flex min-h-screen items-center justify-center p-4"
-      aria-busy="true"
-      aria-label="Loading"
-    >
-      <div className="w-full max-w-md space-y-4">
-        <div className="text-center space-y-2">
-          <Skeleton className="h-10 w-10 rounded-full mx-auto" />
-          <Skeleton className="h-7 w-48 mx-auto" />
-          <Skeleton className="h-4 w-64 mx-auto" />
+    <div aria-busy="true">
+      <span className="sr-only" role="status">
+        Loading…
+      </span>
+      <div aria-hidden="true" className="space-y-6">
+        <div className="space-y-3">
+          <Skeleton className="h-8 w-60" />
+          <Skeleton className="h-4 w-full max-w-xs" />
         </div>
-        <div className="rounded-xl border border-warm-200 dark:border-warm-700 p-6 space-y-4">
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-16" />
-            <Skeleton className="h-10 w-full rounded-md" />
-          </div>
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-16" />
-            <Skeleton className="h-10 w-full rounded-md" />
-          </div>
-          <Skeleton className="h-10 w-full rounded-md" />
-          <Skeleton className="h-4 w-48 mx-auto" />
+        <Skeleton className="h-12 w-full rounded-xl" />
+        <Skeleton className="mx-auto h-3 w-40" />
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-16" />
+          <Skeleton className="h-12 w-full rounded-xl" />
         </div>
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-20" />
+          <Skeleton className="h-12 w-full rounded-xl" />
+        </div>
+        <Skeleton className="h-12 w-full rounded-xl" />
       </div>
     </div>
   );

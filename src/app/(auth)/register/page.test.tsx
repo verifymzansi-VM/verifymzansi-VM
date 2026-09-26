@@ -47,4 +47,16 @@ describe("RegisterPage", () => {
     expect(screen.getByTestId("turnstile-widget")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Sign in/i })).toHaveAttribute("href", "/login");
   });
+
+  it("links the phone hint and password rules to their inputs", () => {
+    render(<RegisterPage />);
+
+    expect(screen.getByLabelText("SA mobile number")).toHaveAccessibleDescription(/one-time code/i);
+    expect(screen.getByLabelText("Password")).toHaveAttribute(
+      "aria-describedby",
+      "password-requirements"
+    );
+    expect(screen.getByText("8+ characters")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show password confirmation" })).toBeInTheDocument();
+  });
 });

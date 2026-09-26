@@ -1,4 +1,9 @@
 import Link from "next/link";
+import { CloudOff } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Header } from "@/components/layout/header";
+import { Footer } from "@/components/layout/footer";
+import { StatePanel, StatePanelPage } from "@/components/shared/state-panel";
 
 type ErrorPageSearchParams = {
   reason?: string;
@@ -9,13 +14,12 @@ function getMessage(reason?: string) {
     case "unavailable":
       return {
         title: "Service temporarily unavailable",
-        description:
-          "We couldn't verify your account details right now. Please try again from your dashboard in a moment.",
+        description: "We couldn't verify your account details right now. Please try again shortly.",
       };
     default:
       return {
         title: "Something went wrong",
-        description: "We hit an unexpected problem. Please try again.",
+        description: "Please try again in a moment.",
       };
   }
 }
@@ -29,36 +33,28 @@ export default async function ErrorPage({
   const message = getMessage(params?.reason);
 
   return (
-    <main
-      id="main-content"
-      className="container-page flex min-h-[70vh] max-w-2xl flex-col items-center justify-center gap-6 py-12 text-center"
-    >
-      <div className="space-y-3">
-        <p className="text-sm font-medium uppercase tracking-[0.2em] text-muted-foreground">
-          VerifyMzansi
-        </p>
-        <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
-          {message.title}
-        </h1>
-        <p className="mx-auto max-w-xl text-sm text-muted-foreground sm:text-base">
-          {message.description}
-        </p>
-      </div>
-
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center justify-center rounded-md bg-brand-green px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-green/90"
-        >
-          Go to dashboard
-        </Link>
-        <Link
-          href="/"
-          className="inline-flex items-center justify-center rounded-md border border-border px-5 py-2.5 text-sm font-medium transition-colors hover:bg-muted"
-        >
-          Go to homepage
-        </Link>
-      </div>
-    </main>
+    <div className="flex min-h-screen flex-col bg-hero-mesh">
+      <Header />
+      <StatePanelPage>
+        <StatePanel
+          tone="error"
+          icon={<CloudOff />}
+          title={message.title}
+          description={message.description}
+          actions={
+            <>
+              <Button asChild variant="trust-verified">
+                <Link href="/dashboard">Go to dashboard</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/">Go to homepage</Link>
+              </Button>
+            </>
+          }
+          showNextSteps
+        />
+      </StatePanelPage>
+      <Footer />
+    </div>
   );
 }

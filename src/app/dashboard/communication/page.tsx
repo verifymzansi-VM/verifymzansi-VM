@@ -19,9 +19,9 @@ export default async function CommunicationPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Communication"
-        description="Track account communication and manage optional preferences."
-        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Communication" }]}
+        title="Notifications"
+        description="Updates and what we may send you."
+        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Notifications" }]}
       />
       <CommunicationHub />
     </div>

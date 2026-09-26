@@ -74,39 +74,36 @@ export function OperatingHoursInput({
   selectClassName,
 }: OperatingHoursInputProps) {
   const baseSelect = cn(
-    "flex h-10 w-full rounded-md border border-input bg-background px-2 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-normal",
+    "flex h-11 w-full rounded-xl border border-input bg-card px-2.5 py-2 text-base shadow-xs transition-colors hover:border-foreground/30 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:text-sm",
     selectClassName
   );
 
   return (
-    <div className="space-y-1.5">
-      <Label
-        htmlFor={`${id}-open`}
-        className={cn("text-xs text-muted-foreground", closed && "line-through opacity-60")}
-      >
-        {label}
-        {closed && (
-          <span className="ml-1.5 no-underline text-xs font-normal text-destructive/70">
-            Closed
-          </span>
-        )}
-      </Label>
-
-      {!hideClosed && (
-        <label
-          htmlFor={`${id}-closed`}
-          className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer"
+    <div className="space-y-2 rounded-xl border border-border bg-card p-3">
+      <div className="flex min-h-6 items-center justify-between gap-2">
+        <Label
+          htmlFor={`${id}-open`}
+          className={cn("text-sm font-semibold", closed && "text-muted-foreground")}
         >
-          <input
-            id={`${id}-closed`}
-            type="checkbox"
-            checked={closed}
-            onChange={(e) => onClosedChange(e.target.checked)}
-            className="rounded"
-          />
-          Closed
-        </label>
-      )}
+          {label}
+        </Label>
+
+        {!hideClosed && (
+          <label
+            htmlFor={`${id}-closed`}
+            className="-my-2 flex min-h-11 cursor-pointer items-center gap-2 text-xs font-medium text-muted-foreground"
+          >
+            <input
+              id={`${id}-closed`}
+              type="checkbox"
+              checked={closed}
+              onChange={(e) => onClosedChange(e.target.checked)}
+              className="h-4 w-4 rounded accent-foreground"
+            />
+            Closed
+          </label>
+        )}
+      </div>
 
       {!closed && (
         <div className="flex items-center gap-2">
@@ -124,7 +121,9 @@ export function OperatingHoursInput({
               </option>
             ))}
           </select>
-          <span className="text-xs text-muted-foreground">to</span>
+          <span className="text-xs text-muted-foreground" aria-hidden="true">
+            to
+          </span>
           <select
             id={`${id}-close`}
             aria-label={`${label} closing time`}

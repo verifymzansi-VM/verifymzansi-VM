@@ -26,9 +26,9 @@ export function TrustBadge({ level, showLabel = true, size = "md", className }: 
   const IconComponent = ICONS[tier.iconName as keyof typeof ICONS];
 
   const sizeClasses = {
-    sm: "text-xs px-1.5 py-0.5 gap-0.5",
+    sm: "text-xs px-1.5 py-0.5 gap-1",
     md: "text-xs px-2 py-0.5 gap-1",
-    lg: "text-sm px-3 py-1 gap-1.5",
+    lg: "text-sm px-3 py-1.5 gap-1.5",
   };
 
   const iconSizes = {
@@ -37,17 +37,16 @@ export function TrustBadge({ level, showLabel = true, size = "md", className }: 
     lg: "h-4 w-4",
   };
 
+  // Badges stay still: ambient pulsing on every pending badge competes with
+  // real content, so tier.glowAnimation is intentionally not rendered.
   return (
     <span
-      className={cn(
-        tier.badgeClass,
-        sizeClasses[size],
-        tier.glowAnimation && level === 2 && "animate-pulse-soft",
-        className
-      )}
+      className={cn(tier.badgeClass, sizeClasses[size], className)}
       title={tier.description}
+      role={showLabel ? undefined : "img"}
+      aria-label={showLabel ? undefined : tier.label}
     >
-      <IconComponent className={iconSizes[size]} />
+      <IconComponent className={cn("shrink-0", iconSizes[size])} aria-hidden="true" />
       {showLabel && <span>{tier.label}</span>}
     </span>
   );

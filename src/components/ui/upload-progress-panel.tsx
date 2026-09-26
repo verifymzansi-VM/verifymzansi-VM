@@ -41,16 +41,22 @@ export function UploadProgressPanel({ slots, visible }: UploadProgressPanelProps
             key={slot.key}
             className={cn(
               "grid grid-cols-[1.5rem_1fr] items-start gap-2",
-              isWaiting && "opacity-65"
+              isWaiting && "opacity-70"
             )}
           >
             <div className="relative flex h-5 w-5 items-center justify-center">
               {isActive ? (
-                <Loader2 className="h-4 w-4 animate-spin text-brand-green" />
+                <Loader2
+                  className="h-4 w-4 animate-spin text-brand-green-700 motion-reduce:animate-none dark:text-brand-green-300"
+                  aria-hidden="true"
+                />
               ) : isDone ? (
-                <CheckCircle2 className="h-4 w-4 text-brand-green" />
+                <CheckCircle2
+                  className="h-4 w-4 text-brand-green-700 dark:text-brand-green-300"
+                  aria-hidden="true"
+                />
               ) : (
-                <CircleDashed className="h-4 w-4 text-muted-foreground/70" />
+                <CircleDashed className="h-4 w-4 text-muted-foreground/70" aria-hidden="true" />
               )}
             </div>
             <div className="min-w-0">

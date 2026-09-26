@@ -6,9 +6,9 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
+  BedDouble,
+  CalendarDays,
   Camera,
-  ChevronLeft,
-  ChevronRight,
   ClipboardList,
   Eye,
   MapPin,
@@ -53,9 +53,12 @@ import {
   EVENT_ACCESSIBILITY_OPTIONS,
 } from "@/lib/constants/categories";
 import { cn } from "@/lib/utils";
+import { PhotoOrderList } from "@/components/post/photo-order-list";
 import {
+  PostDraftStatus,
   PostFormFooter,
   PostFormScaffold,
+  PostFormSection,
   type PostFormStep,
 } from "@/components/post/post-form-scaffold";
 import {
@@ -100,15 +103,15 @@ const STEPS: PostFormStep[] = [
   {
     label: "Type & Basics",
     icon: TreePalm,
-    description: "Choose listing type, title, and category",
+    description: "Type, name and category",
   },
-  { label: "Details", icon: ClipboardList, description: "Industry-specific details and features" },
+  { label: "Details", icon: ClipboardList, description: "What guests should know" },
   {
     label: "Location & Contact",
     icon: MapPin,
-    description: "Address, contact info, and operating hours",
+    description: "Address, contact and hours",
   },
-  { label: "Media & Review", icon: Camera, description: "Photos, video, and final review" },
+  { label: "Media & Review", icon: Camera, description: "Photos, video and review" },
 ];
 
 const FIELD_IDS: Record<string, string> = {
@@ -1699,11 +1702,11 @@ function CreateTourismContent() {
     };
 
     return (
-      <div className="rounded-xl border border-dashed border-brand-green/30 bg-brand-green/5 p-4">
-        <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-          <Eye className="h-4 w-4" />
+      <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-4">
+        <h3 className="mb-3 flex items-center gap-2 text-base font-semibold text-foreground">
+          <Eye className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           Event preview
-        </div>
+        </h3>
 
         <div className="mb-4 max-w-[264px]">
           <PromotionCard
@@ -1756,12 +1759,12 @@ function CreateTourismContent() {
             <form noValidate onSubmit={handleSubmit}>
               <PostFormScaffold
                 title={
-                  listingType === "tourism_business" ? "List a Tourism Business" : "Create an Event"
+                  listingType === "tourism_business" ? "List a stay or experience" : "Add an event"
                 }
                 description={
                   listingType === "tourism_business"
-                    ? "Register your accommodation, tour, attraction, or tourism service."
-                    : "Publish a festival, conference, market, or community event."
+                    ? "Stays, tours, attractions and experiences."
+                    : "Festivals, gigs, markets and community events."
                 }
                 breadcrumbs={[
                   { label: "Dashboard", href: "/dashboard" },
@@ -1769,8 +1772,8 @@ function CreateTourismContent() {
                   { label: "Tourism & Events" },
                 ]}
                 badgeLabel="Tourism & Events"
-                badgeClassName="bg-sunset-600 text-white"
-                guideDescription="Fill in the details, location, and media — then submit for review."
+                area="tourism"
+                guideDescription="Choose a place or an event first. The form adapts to it."
                 steps={STEPS}
                 currentStep={step}
                 error={formError}
@@ -1792,20 +1795,7 @@ function CreateTourismContent() {
                 footer={
                   <>
                     {user?.id && !isSubmitting && (
-                      <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-xs text-muted-foreground">
-                        <p>
-                          {lastSavedAt
-                            ? `Draft saved locally at ${new Date(lastSavedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-                            : "Changes are saved locally while you fill this form."}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={handleDiscardDraft}
-                          className="font-medium text-amber-700 hover:underline"
-                        >
-                          Discard draft
-                        </button>
-                      </div>
+                      <PostDraftStatus lastSavedAt={lastSavedAt} onDiscard={handleDiscardDraft} />
                     )}
                     <UploadProgressPanel
                       visible={isSubmitting}
@@ -1882,23 +1872,30 @@ function CreateTourismContent() {
               >
                 {/* ── Step 0: Type & Basics ── */}
                 {step === 0 && (
-                  <div className="space-y-5 animate-in fade-in-0 duration-300">
-                    <p className="text-xs text-muted-foreground">Fields marked * are required.</p>
+                  <div className="space-y-6">
                     {/* Listing type selector */}
-                    <fieldset id="listing-type-group">
-                      <legend className="mb-3 text-sm font-medium">What are you listing? *</legend>
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <fieldset
+                      id="listing-type-group"
+                      tabIndex={-1}
+                      className="rounded-2xl focus:outline-none"
+                    >
+                      <legend className="mb-3 text-base font-semibold">
+                        What are you listing? *
+                      </legend>
+                      <div className="grid grid-cols-2 gap-2.5">
                         {(
                           [
                             {
                               value: "tourism_business" as const,
                               label: "Tourism Business",
-                              desc: "Accommodation, tours, attractions",
+                              desc: "Stays, tours, attractions",
+                              icon: BedDouble,
                             },
                             {
                               value: "event" as const,
                               label: "Event",
-                              desc: "Festival, conference, market, show",
+                              desc: "Festivals, gigs, markets",
+                              icon: CalendarDays,
                             },
                           ] as const
                         ).map((opt) => (
@@ -1906,15 +1903,31 @@ function CreateTourismContent() {
                             key={opt.value}
                             type="button"
                             onClick={() => handleListingTypeChange(opt.value)}
+                            aria-pressed={listingType === opt.value}
                             className={cn(
-                              "flex flex-col items-start rounded-lg border p-4 text-left transition-colors",
+                              "flex min-h-[5.5rem] flex-col items-start gap-2 rounded-2xl border p-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                               listingType === opt.value
-                                ? "border-sunset-600 bg-sunset-50 ring-2 ring-sunset-600 dark:bg-sunset-950/20"
-                                : "hover:border-muted-foreground/30"
+                                ? "border-sunset-600 bg-sunset-50 ring-1 ring-sunset-600 dark:border-sunset-400 dark:bg-sunset-950/40 dark:ring-sunset-400"
+                                : "border-border bg-card hover:border-foreground/25 hover:bg-muted/50"
                             )}
                           >
-                            <span className="font-medium">{opt.label}</span>
-                            <span className="text-xs text-muted-foreground">{opt.desc}</span>
+                            <span
+                              aria-hidden="true"
+                              className={cn(
+                                "flex h-9 w-9 items-center justify-center rounded-xl",
+                                listingType === opt.value
+                                  ? "bg-sunset-600 text-white dark:bg-sunset-400 dark:text-sunset-950"
+                                  : "bg-muted text-foreground/70"
+                              )}
+                            >
+                              <opt.icon className="h-[18px] w-[18px]" />
+                            </span>
+                            <span>
+                              <span className="block text-sm font-semibold">{opt.label}</span>
+                              <span className="block text-xs text-muted-foreground">
+                                {opt.desc}
+                              </span>
+                            </span>
                           </button>
                         ))}
                       </div>
@@ -1943,7 +1956,7 @@ function CreateTourismContent() {
                         aria-invalid={!!fieldErrors.title}
                       />
                       {fieldErrors.title && (
-                        <p className="text-sm text-destructive">{fieldErrors.title}</p>
+                        <p className="inline-form-error">{fieldErrors.title}</p>
                       )}
                     </div>
 
@@ -1971,7 +1984,7 @@ function CreateTourismContent() {
                         aria-invalid={!!fieldErrors.description}
                       />
                       {fieldErrors.description && (
-                        <p className="text-sm text-destructive">{fieldErrors.description}</p>
+                        <p className="inline-form-error">{fieldErrors.description}</p>
                       )}
                     </div>
 
@@ -1997,7 +2010,7 @@ function CreateTourismContent() {
                           ))}
                         </select>
                         {fieldErrors.subcategory && (
-                          <p className="text-sm text-destructive">{fieldErrors.subcategory}</p>
+                          <p className="inline-form-error">{fieldErrors.subcategory}</p>
                         )}
                       </div>
                     )}
@@ -2024,7 +2037,7 @@ function CreateTourismContent() {
                           ))}
                         </select>
                         {fieldErrors.eventType && (
-                          <p className="text-sm text-destructive">{fieldErrors.eventType}</p>
+                          <p className="inline-form-error">{fieldErrors.eventType}</p>
                         )}
                       </div>
                     )}
@@ -2033,8 +2046,7 @@ function CreateTourismContent() {
 
                 {/* ── Step 1: Details ── */}
                 {step === 1 && (
-                  <div className="space-y-5 animate-in fade-in-0 duration-300">
-                    <p className="text-xs text-muted-foreground">Fields marked * are required.</p>
+                  <div className="space-y-6">
                     {listingType === "tourism_business" ? (
                       <>
                         {!fieldGroup && (
@@ -2068,7 +2080,7 @@ function CreateTourismContent() {
                                 ))}
                               </select>
                               {fieldErrors.starRating && (
-                                <p className="text-sm text-destructive">{fieldErrors.starRating}</p>
+                                <p className="inline-form-error">{fieldErrors.starRating}</p>
                               )}
                             </div>
 
@@ -2087,9 +2099,7 @@ function CreateTourismContent() {
                                 placeholder="e.g. 24"
                               />
                               {fieldErrors.numberOfRooms && (
-                                <p className="text-sm text-destructive">
-                                  {fieldErrors.numberOfRooms}
-                                </p>
+                                <p className="inline-form-error">{fieldErrors.numberOfRooms}</p>
                               )}
                             </div>
 
@@ -2643,7 +2653,7 @@ function CreateTourismContent() {
                                 aria-invalid={!!fieldErrors.bookingUrl}
                               />
                               {fieldErrors.bookingUrl && (
-                                <p className="text-sm text-destructive">{fieldErrors.bookingUrl}</p>
+                                <p className="inline-form-error">{fieldErrors.bookingUrl}</p>
                               )}
                             </div>
 
@@ -2745,7 +2755,7 @@ function CreateTourismContent() {
                               aria-invalid={!!fieldErrors.startDate}
                             />
                             {fieldErrors.startDate && (
-                              <p className="text-sm text-destructive">{fieldErrors.startDate}</p>
+                              <p className="inline-form-error">{fieldErrors.startDate}</p>
                             )}
                           </div>
                           <div className="space-y-2">
@@ -2764,7 +2774,7 @@ function CreateTourismContent() {
                               aria-invalid={!!fieldErrors.endDate}
                             />
                             {fieldErrors.endDate && (
-                              <p className="text-sm text-destructive">{fieldErrors.endDate}</p>
+                              <p className="inline-form-error">{fieldErrors.endDate}</p>
                             )}
                           </div>
                         </div>
@@ -2797,9 +2807,7 @@ function CreateTourismContent() {
                               placeholder="e.g. 5000"
                             />
                             {fieldErrors.venueCapacity && (
-                              <p className="text-sm text-destructive">
-                                {fieldErrors.venueCapacity}
-                              </p>
+                              <p className="inline-form-error">{fieldErrors.venueCapacity}</p>
                             )}
                           </div>
                         </div>
@@ -2825,7 +2833,7 @@ function CreateTourismContent() {
                               aria-invalid={!!fieldErrors.priceZar}
                             />
                             {fieldErrors.priceZar && (
-                              <p className="text-sm text-destructive">{fieldErrors.priceZar}</p>
+                              <p className="inline-form-error">{fieldErrors.priceZar}</p>
                             )}
                           </div>
                           <div className="flex items-end pb-1">
@@ -2920,7 +2928,7 @@ function CreateTourismContent() {
                             aria-invalid={!!fieldErrors.ticketsUrl}
                           />
                           {fieldErrors.ticketsUrl && (
-                            <p className="text-sm text-destructive">{fieldErrors.ticketsUrl}</p>
+                            <p className="inline-form-error">{fieldErrors.ticketsUrl}</p>
                           )}
                         </div>
 
@@ -3101,8 +3109,7 @@ function CreateTourismContent() {
 
                 {/* ── Step 2: Location & Contact ── */}
                 {step === 2 && (
-                  <div className="space-y-5 animate-in fade-in-0 duration-300">
-                    <p className="text-xs text-muted-foreground">Fields marked * are required.</p>
+                  <div className="space-y-6">
                     <LocationSelector
                       value={locationValue}
                       onChange={(v: LocationValue) => {
@@ -3148,7 +3155,7 @@ function CreateTourismContent() {
                         ))}
                       </div>
                       {fieldErrors.contactMethods && (
-                        <p className="text-sm text-destructive">{fieldErrors.contactMethods}</p>
+                        <p className="inline-form-error">{fieldErrors.contactMethods}</p>
                       )}
                     </fieldset>
 
@@ -3168,7 +3175,7 @@ function CreateTourismContent() {
                           aria-invalid={!!fieldErrors.phone}
                         />
                         {fieldErrors.phone && (
-                          <p className="text-sm text-destructive">{fieldErrors.phone}</p>
+                          <p className="inline-form-error">{fieldErrors.phone}</p>
                         )}
                       </div>
                       <div className="space-y-2">
@@ -3185,7 +3192,7 @@ function CreateTourismContent() {
                           aria-invalid={!!fieldErrors.whatsapp}
                         />
                         {fieldErrors.whatsapp && (
-                          <p className="text-sm text-destructive">{fieldErrors.whatsapp}</p>
+                          <p className="inline-form-error">{fieldErrors.whatsapp}</p>
                         )}
                       </div>
                     </div>
@@ -3206,7 +3213,7 @@ function CreateTourismContent() {
                           aria-invalid={!!fieldErrors.email}
                         />
                         {fieldErrors.email && (
-                          <p className="text-sm text-destructive">{fieldErrors.email}</p>
+                          <p className="inline-form-error">{fieldErrors.email}</p>
                         )}
                       </div>
                       <div className="space-y-2">
@@ -3223,7 +3230,7 @@ function CreateTourismContent() {
                           aria-invalid={!!fieldErrors.website}
                         />
                         {fieldErrors.website && (
-                          <p className="text-sm text-destructive">{fieldErrors.website}</p>
+                          <p className="inline-form-error">{fieldErrors.website}</p>
                         )}
                       </div>
                     </div>
@@ -3264,7 +3271,7 @@ function CreateTourismContent() {
                             aria-invalid={!!fieldErrors[key]}
                           />
                           {fieldErrors[key] && (
-                            <p className="text-sm text-destructive">{fieldErrors[key]}</p>
+                            <p className="inline-form-error">{fieldErrors[key]}</p>
                           )}
                         </div>
                       ))}
@@ -3324,264 +3331,193 @@ function CreateTourismContent() {
 
                 {/* ── Step 3: Media & Review ── */}
                 {step === 3 && (
-                  <div className="space-y-5 animate-in fade-in-0 duration-300">
-                    <p className="text-xs text-muted-foreground">Fields marked * are required.</p>
-                    {/* Logo */}
-                    <div className="space-y-2">
-                      <Label>
-                        {listingType === "tourism_business" ? "Business Logo" : "Event Logo"}
-                      </Label>
-                      <MediaUpload
-                        id="tourism-logo-input"
-                        label="Upload logo"
-                        description="Optional logo shown beside the tourism business or event name."
-                        error={fieldErrors.logo_url}
-                        maxFiles={1}
-                        files={logoFiles}
-                        onChange={(files) => {
-                          setLogoFiles(files);
-                          clearErrors("logo_url");
-                        }}
-                        accept="image/*"
-                        recommendedAspect="Recommended: square image, at least 96 x 96."
-                      />
-                    </div>
-
-                    {/* Photos */}
-                    <div className="space-y-2">
-                      <Label>{listingType === "event" ? "Photos or video *" : "Photos *"}</Label>
-                      <p className="text-xs text-muted-foreground">
-                        Up to {maxPhotos} photos. The first photo becomes the public hero image.
-                        Portrait 9:16 photos are recommended for tourism stays, destinations, and
-                        events.
-                      </p>
-                      <MediaUpload
-                        id="tourism-images-input"
-                        label="Upload photos"
-                        description="Required for tourism businesses. For events, add at least one photo or video."
-                        error={fieldErrors.images}
-                        maxFiles={maxPhotos}
-                        files={photoFiles}
-                        onChange={(files) => {
-                          setPhotoFiles(files);
-                          clearErrors("images");
-                        }}
-                        accept="image/*"
-                      />
-                      {photoFiles.length > 1 && (
-                        <div className="space-y-1">
-                          <p className="text-xs font-medium text-muted-foreground">
-                            Reorder photos. The first image appears as the cover.
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {photoFiles.map((file, index) => (
-                              <div
-                                key={`${file.name}-${index}`}
-                                className="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs"
-                              >
-                                <span className="max-w-[100px] truncate font-medium">
-                                  {file.name}
-                                </span>
-                                <button
-                                  type="button"
-                                  disabled={index === 0}
-                                  onClick={() => {
-                                    const reordered = [...photoFiles];
-                                    [reordered[index - 1], reordered[index]] = [
-                                      reordered[index],
-                                      reordered[index - 1],
-                                    ];
-                                    setPhotoFiles(reordered);
-                                  }}
-                                  className="rounded p-0.5 hover:bg-background disabled:opacity-30"
-                                  aria-label="Move photo left"
-                                >
-                                  <ChevronLeft className="h-3 w-3" />
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={index === photoFiles.length - 1}
-                                  onClick={() => {
-                                    const reordered = [...photoFiles];
-                                    [reordered[index], reordered[index + 1]] = [
-                                      reordered[index + 1],
-                                      reordered[index],
-                                    ];
-                                    setPhotoFiles(reordered);
-                                  }}
-                                  className="rounded p-0.5 hover:bg-background disabled:opacity-30"
-                                  aria-label="Move photo right"
-                                >
-                                  <ChevronRight className="h-3 w-3" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Focal point */}
-                    {photoFiles.length > 0 && (
+                  <div className="space-y-6">
+                    <PostFormSection
+                      title="Photos and video"
+                      description="The first photo is the cover."
+                    >
+                      {/* Photos */}
                       <div className="space-y-2">
-                        <Label>Cover Crop Position</Label>
-                        <p className="text-xs text-muted-foreground">
-                          This controls how your lead photo is framed when it appears as the public
-                          hero.
+                        <p className="text-sm font-medium">
+                          {listingType === "event" ? "Photos or video *" : "Photos *"}
                         </p>
-                        <MediaCropPreview
-                          file={photoFiles[0]}
-                          aspectRatio={4 / 1}
-                          value={focalPoint}
-                          onChange={setFocalPoint}
-                        />
-                      </div>
-                    )}
-
-                    {/* Visual placement preview */}
-                    {(photoPreviewUrls.length > 0 || logoPreviewUrl) && (
-                      <div className="rounded-xl border border-dashed border-brand-green/20 bg-brand-green/5 p-4 space-y-2">
-                        <p className="text-xs font-medium text-muted-foreground">
-                          How your logo and cover will appear:
-                        </p>
-                        <div className="relative rounded-lg overflow-hidden border bg-muted">
-                          <div className="aspect-[4/1] bg-gradient-to-r from-brand-green/30 to-brand-green/10 flex items-center justify-center">
-                            {photoPreviewUrls[0] ? (
-                              /* eslint-disable-next-line @next/next/no-img-element */
-                              <img
-                                src={photoPreviewUrls[0]}
-                                alt="Cover preview"
-                                className="w-full h-full bg-muted object-contain"
-                                width={600}
-                                height={150}
-                              />
-                            ) : (
-                              <span className="text-xs text-muted-foreground">
-                                Cover photo area
-                              </span>
-                            )}
-                          </div>
-                          <div className="absolute bottom-2 left-4 h-12 w-12 rounded-lg bg-white dark:bg-warm-900 p-1 shadow-md border overflow-hidden">
-                            {logoPreviewUrl ? (
-                              /* eslint-disable-next-line @next/next/no-img-element */
-                              <img
-                                src={logoPreviewUrl}
-                                alt="Logo preview"
-                                className="w-full h-full object-contain rounded-md"
-                                width={48}
-                                height={48}
-                              />
-                            ) : (
-                              <div className="w-full h-full rounded-md bg-muted flex items-center justify-center">
-                                <TreePalm className="h-5 w-5 text-muted-foreground" />
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex gap-4 text-[10px] text-muted-foreground">
-                          <span>
-                            ← <strong>Logo</strong> (small square icon)
-                          </span>
-                          <span>
-                            ↑ <strong>Cover</strong> (wide banner behind logo)
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Video */}
-                    <div className="space-y-2">
-                      <Label>
-                        Video (optional)
-                        {!videoAllowed ? " — Upgrade to unlock" : ""}
-                      </Label>
-                      <p className="text-xs text-muted-foreground">
-                        Up to {maxVideos} video{maxVideos > 1 ? "s" : ""}. A single portrait 9:16
-                        clip works best for the event or tourism hero.
-                      </p>
-                      <MediaUpload
-                        id="tourism-videos-input"
-                        label="Upload video"
-                        description="Optional. Upload clips that clearly show the destination, venue, or experience."
-                        error={fieldErrors.videos}
-                        maxFiles={maxVideos}
-                        files={videoFiles}
-                        onChange={(files) => {
-                          setVideoFiles(files);
-                          prewarmVideosForFastUpload(files);
-                          setVideoThumbnailFile([]);
-                          clearErrors("videos");
-                        }}
-                        accept="video/*"
-                        disabled={!videoAllowed}
-                      />
-                      {!videoAllowed && (
-                        <p className="text-xs">
-                          <Link
-                            href="/billing"
-                            className="font-medium text-brand-green underline underline-offset-2 hover:text-brand-green/80"
-                          >
-                            Upgrade your plan
-                          </Link>{" "}
-                          <span className="text-muted-foreground">
-                            to add a video and make your listing stand out.
-                          </span>
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Video thumbnail */}
-                    {videoFiles.length > 0 && (
-                      <div
-                        id="tourism-video-thumbnail"
-                        tabIndex={-1}
-                        className="space-y-2 rounded-lg"
-                      >
-                        <Label>Video Thumbnail</Label>
-                        <p className="text-xs text-muted-foreground">
-                          Choose the poster frame people see before the video starts.
-                        </p>
-                        <VideoFrameSelector
-                          file={videoFiles[0]}
-                          onFrameSelect={(f) => {
-                            setVideoThumbnailFile(f ? [f] : []);
-                            clearErrors("video_thumbnail");
+                        <MediaUpload
+                          id="tourism-images-input"
+                          label="Upload photos"
+                          description={`Up to ${maxPhotos}. Portrait 9:16 works best.`}
+                          error={fieldErrors.images}
+                          maxFiles={maxPhotos}
+                          files={photoFiles}
+                          onChange={(files) => {
+                            setPhotoFiles(files);
+                            clearErrors("images");
                           }}
+                          accept="image/*"
                         />
-                        {fieldErrors.video_thumbnail && (
-                          <p className="text-sm text-destructive">{fieldErrors.video_thumbnail}</p>
+                        <PhotoOrderList files={photoFiles} onReorder={setPhotoFiles} />
+                      </div>
+
+                      {/* Focal point */}
+                      {photoFiles.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium">Cover crop</p>
+                          <MediaCropPreview
+                            file={photoFiles[0]}
+                            aspectRatio={4 / 1}
+                            value={focalPoint}
+                            onChange={setFocalPoint}
+                          />
+                        </div>
+                      )}
+
+                      {/* Video */}
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium">
+                          Video (optional)
+                          {!videoAllowed ? " — Upgrade to unlock" : ""}
+                        </p>
+                        <MediaUpload
+                          id="tourism-videos-input"
+                          label="Upload video"
+                          description={`Up to ${maxVideos}. One portrait 9:16 clip works best.`}
+                          error={fieldErrors.videos}
+                          maxFiles={maxVideos}
+                          files={videoFiles}
+                          onChange={(files) => {
+                            setVideoFiles(files);
+                            prewarmVideosForFastUpload(files);
+                            setVideoThumbnailFile([]);
+                            clearErrors("videos");
+                          }}
+                          accept="video/*"
+                          disabled={!videoAllowed}
+                        />
+                        {!videoAllowed && (
+                          <p className="text-xs">
+                            <Link
+                              href="/billing"
+                              className="font-semibold text-sunset-700 underline underline-offset-2 dark:text-sunset-300"
+                            >
+                              Upgrade your plan
+                            </Link>{" "}
+                            <span className="text-muted-foreground">to add a video.</span>
+                          </p>
                         )}
                       </div>
-                    )}
 
-                    <label className="flex items-start gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
-                      <input
-                        id="tourism-terms-checkbox"
-                        type="checkbox"
-                        checked={termsAccepted}
-                        onChange={(event) => {
-                          setTermsAccepted(event.target.checked);
-                          clearErrors("termsAccepted");
-                        }}
-                        className="mt-1 rounded"
-                        aria-invalid={!!fieldErrors.termsAccepted}
-                      />
-                      <span>
-                        I accept the VerifyMzansi posting terms, including the free-post visibility
-                        period and my responsibility for the accuracy and legality of this tourism
-                        or event post.{" "}
-                        <a className="font-medium text-brand-green underline" href="/terms">
-                          View terms
-                        </a>
-                        .
-                        {fieldErrors.termsAccepted && (
-                          <span className="mt-1 block text-destructive">
-                            {fieldErrors.termsAccepted}
-                          </span>
-                        )}
-                      </span>
-                    </label>
+                      {/* Video thumbnail */}
+                      {videoFiles.length > 0 && (
+                        <div
+                          id="tourism-video-thumbnail"
+                          tabIndex={-1}
+                          className="space-y-2 rounded-lg"
+                        >
+                          <p className="text-sm font-medium">Video thumbnail</p>
+                          <VideoFrameSelector
+                            file={videoFiles[0]}
+                            onFrameSelect={(f) => {
+                              setVideoThumbnailFile(f ? [f] : []);
+                              clearErrors("video_thumbnail");
+                            }}
+                          />
+                          {fieldErrors.video_thumbnail && (
+                            <p className="inline-form-error">{fieldErrors.video_thumbnail}</p>
+                          )}
+                        </div>
+                      )}
+                    </PostFormSection>
+                    <PostFormSection title="Logo" optional>
+                      {/* Logo */}
+                      <div className="space-y-2">
+                        <MediaUpload
+                          id="tourism-logo-input"
+                          label="Upload logo"
+                          description="Square image shown beside your name."
+                          error={fieldErrors.logo_url}
+                          maxFiles={1}
+                          files={logoFiles}
+                          onChange={(files) => {
+                            setLogoFiles(files);
+                            clearErrors("logo_url");
+                          }}
+                          accept="image/*"
+                          recommendedAspect="Recommended: square image, at least 96 x 96."
+                        />
+                      </div>
 
+                      {/* Visual placement preview */}
+                      {(photoPreviewUrls.length > 0 || logoPreviewUrl) && (
+                        <div className="space-y-2 rounded-2xl border border-dashed border-border bg-muted/30 p-4">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            How they appear together
+                          </p>
+                          <div className="relative overflow-hidden rounded-xl border border-border bg-muted">
+                            <div className="flex aspect-[4/1] items-center justify-center bg-gradient-to-r from-sunset-200/70 to-sunset-50 dark:from-sunset-900/60 dark:to-sunset-950/40">
+                              {photoPreviewUrls[0] ? (
+                                /* eslint-disable-next-line @next/next/no-img-element */
+                                <img
+                                  src={photoPreviewUrls[0]}
+                                  alt="Cover preview"
+                                  className="w-full h-full bg-muted object-contain"
+                                  width={600}
+                                  height={150}
+                                />
+                              ) : (
+                                <span className="text-xs text-muted-foreground">Cover</span>
+                              )}
+                            </div>
+                            <div className="absolute bottom-2 left-4 h-12 w-12 overflow-hidden rounded-xl border border-border bg-card p-1 shadow-md">
+                              {logoPreviewUrl ? (
+                                /* eslint-disable-next-line @next/next/no-img-element */
+                                <img
+                                  src={logoPreviewUrl}
+                                  alt="Logo preview"
+                                  className="w-full h-full object-contain rounded-md"
+                                  width={48}
+                                  height={48}
+                                />
+                              ) : (
+                                <div className="w-full h-full rounded-md bg-muted flex items-center justify-center">
+                                  <TreePalm className="h-5 w-5 text-muted-foreground" />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </PostFormSection>
+                    <PostFormSection title="Final check">
+                      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border bg-muted/30 p-4 text-sm leading-6">
+                        <input
+                          id="tourism-terms-checkbox"
+                          type="checkbox"
+                          checked={termsAccepted}
+                          onChange={(event) => {
+                            setTermsAccepted(event.target.checked);
+                            clearErrors("termsAccepted");
+                          }}
+                          className="mt-1 h-4 w-4 shrink-0 rounded accent-sunset-600"
+                          aria-invalid={!!fieldErrors.termsAccepted}
+                        />
+                        <span>
+                          I accept the VerifyMzansi posting terms, including the free-post
+                          visibility period and my responsibility for the accuracy and legality of
+                          this tourism or event post.{" "}
+                          <a
+                            className="font-semibold text-sunset-700 underline underline-offset-2 dark:text-sunset-300"
+                            href="/terms"
+                          >
+                            View terms
+                          </a>
+                          .
+                          {fieldErrors.termsAccepted && (
+                            <span className="mt-1 block text-destructive">
+                              {fieldErrors.termsAccepted}
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    </PostFormSection>
                     {renderPreview()}
                   </div>
                 )}

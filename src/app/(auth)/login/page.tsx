@@ -5,14 +5,19 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Eye, EyeOff, MailCheck, Send } from "lucide-react";
+import { Loader2, Mail, MailCheck, Send } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
 import { GoogleOAuthButton } from "@/components/ui/google-oauth-button";
 import { AuthEmailField } from "@/components/auth/auth-email-field";
+import { AuthPasswordField } from "@/components/auth/auth-password-field";
+import {
+  AuthDivider,
+  AuthNotice,
+  AuthPageHeader,
+  AuthReassurance,
+} from "@/components/auth/auth-ui";
 import { AuthTurnstileFeedback } from "@/components/auth/auth-turnstile-feedback";
 import { loginSchema, type LoginInput } from "@/lib/validations/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -28,6 +33,29 @@ import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("AuthLoginPage");
+
+const DEFAULT_SIGN_IN_DESCRIPTION = "Welcome back.";
+
+/** Where people land after signing in, in words, keyed by route prefix. */
+const RETURN_DESTINATIONS: ReadonlyArray<readonly [prefix: string, label: string]> = [
+  ["/post", "your post"],
+  ["/verification", "your verification"],
+  ["/dashboard", "your dashboard"],
+  ["/billing", "billing"],
+];
+
+function describeSignIn(returnUrl: string | null): string {
+  if (!returnUrl) return DEFAULT_SIGN_IN_DESCRIPTION;
+
+  const safeUrl = sanitizeReturnUrl(returnUrl);
+  if (safeUrl === "/") return DEFAULT_SIGN_IN_DESCRIPTION;
+
+  const match = RETURN_DESTINATIONS.find(
+    ([prefix]) =>
+      safeUrl === prefix || safeUrl.startsWith(`${prefix}/`) || safeUrl.startsWith(`${prefix}?`)
+  );
+  return `Welcome back. We'll take you to ${match ? match[1] : "the page you were on"} next.`;
+}
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -70,6 +98,7 @@ export default function LoginPage() {
           emailConfirmed: params.get("confirmed") === "true",
           error: params.get("error"),
           reason: params.get("reason"),
+          returnUrl: params.get("returnUrl"),
         };
       })()
     : {
@@ -77,9 +106,11 @@ export default function LoginPage() {
         emailConfirmed: false,
         error: null as string | null,
         reason: null as string | null,
+        returnUrl: null as string | null,
       };
   const justRegistered = resendPromptVisible || loginPageFlags.justRegistered;
   const emailConfirmed = emailConfirmedVisible || loginPageFlags.emailConfirmed;
+  const headerDescription = describeSignIn(loginPageFlags.returnUrl);
 
   // Read query params client-side to avoid useSearchParams + Suspense,
   // ensuring the full form renders on first paint for Playwright assertions.
@@ -364,107 +395,65 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {emailConfirmed && (
-        <div className="flex items-start gap-3 rounded-lg border border-brand-green/30 bg-brand-green/5 p-4">
-          <MailCheck className="mt-0.5 h-5 w-5 shrink-0 text-brand-green" />
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-foreground">Email confirmed!</p>
-            <p className="text-sm text-muted-foreground">
-              Your email address has been verified. You can now sign in to your account.
-            </p>
-          </div>
-        </div>
+        <AuthNotice tone="success" icon={<MailCheck />} title="Email confirmed!" role="status">
+          <p>Your email address has been verified. You can now sign in to your account.</p>
+        </AuthNotice>
       )}
 
       {justRegistered && !emailConfirmed && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="flex items-start gap-3 rounded-lg border border-brand-green/30 bg-brand-green/5 p-4"
-        >
-          <MailCheck className="mt-0.5 h-5 w-5 shrink-0 text-brand-green" />
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-foreground">Check your email</p>
-            <p className="text-sm text-muted-foreground">
-              We&apos;ve sent a confirmation link to your email address. Please click the link to
-              verify your account before signing in.
-            </p>
-            <button
-              type="button"
-              onClick={handleResendConfirmation}
-              disabled={resendingEmail || resendCooldown > 0}
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-green underline hover:text-brand-green/80 disabled:opacity-50 disabled:no-underline"
-            >
-              {resendingEmail ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Send className="h-3.5 w-3.5" />
-              )}
-              {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend confirmation"}
-            </button>
-          </div>
-        </div>
+        <AuthNotice tone="info" icon={<Mail />} title="Check your email" role="status">
+          <p>We&apos;ve sent a confirmation link to your email address.</p>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 gap-2 bg-card px-4"
+            onClick={handleResendConfirmation}
+            disabled={resendingEmail || resendCooldown > 0}
+          >
+            {resendingEmail ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Send className="h-4 w-4" aria-hidden="true" />
+            )}
+            {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend confirmation"}
+          </Button>
+        </AuthNotice>
       )}
 
-      <div className="space-y-1">
-        <h1 className="font-display text-2xl font-bold tracking-tight">Sign in to your account</h1>
-      </div>
+      <AuthPageHeader title="Sign in to your account" description={headerDescription} />
 
       <GoogleOAuthButton mode="login" />
 
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <span className="w-full border-t" />
-        </div>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-background px-2 text-muted-foreground">or continue with email</span>
-        </div>
-      </div>
+      <AuthDivider>or</AuthDivider>
 
-      <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-5">
         <AuthEmailField
           inputProps={register("email")}
           errorMessage={errors.email?.message}
           disabled={!isInteractive}
         />
 
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="password">Password</Label>
-            <Link href="/forgot-password" className="text-xs text-brand-green underline">
+        <AuthPasswordField
+          id="password"
+          label="Password"
+          placeholder="Enter your password"
+          autoComplete="current-password"
+          inputProps={register("password")}
+          errorMessage={errors.password?.message}
+          shown={showPassword}
+          onToggleShown={() => setShowPassword(!showPassword)}
+          disabled={!isInteractive}
+          labelAction={
+            <Link
+              href="/forgot-password"
+              className="-my-2 inline-flex min-h-9 items-center rounded-md text-sm font-medium text-brand-green-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-brand-green-300"
+            >
               Forgot password?
             </Link>
-          </div>
-          <div className="relative">
-            <Input
-              id="password"
-              type={showPassword ? "text" : "password"}
-              placeholder="••••••••"
-              autoComplete="current-password"
-              spellCheck={false}
-              autoCapitalize="none"
-              disabled={!isInteractive}
-              aria-invalid={!!errors.password}
-              aria-describedby={errors.password ? "password-error" : undefined}
-              {...register("password")}
-            />
-            <button
-              type="button"
-              className="absolute right-1 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              onClick={() => setShowPassword(!showPassword)}
-              disabled={!isInteractive}
-              aria-label={showPassword ? "Hide password" : "Show password"}
-            >
-              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </button>
-          </div>
-          {errors.password && (
-            <p id="password-error" className="inline-form-error" role="alert">
-              {errors.password.message}
-            </p>
-          )}
-        </div>
+          }
+        />
 
         <TurnstileWidget
           retryToken={turnstileRetryToken}
@@ -485,21 +474,28 @@ export default function LoginPage() {
 
         <Button
           type="submit"
-          className="h-11 w-full rounded-full text-[15px] font-semibold"
+          size="lg"
+          className="h-12 w-full text-[15px]"
           variant="trust-verified"
           disabled={!isInteractive || isSubmitting || captchaUnavailable || turnstileError}
+          aria-busy={isSubmitting || undefined}
         >
-          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
           Sign in
         </Button>
       </form>
 
-      <p className="text-center text-sm text-muted-foreground">
-        Don&apos;t have an account?{" "}
-        <Link href="/register" className="font-medium text-brand-green underline">
-          Create one
+      <p className="text-center text-[15px] text-muted-foreground">
+        New here?{" "}
+        <Link
+          href="/register"
+          className="font-semibold text-brand-green-700 underline underline-offset-4 hover:text-brand-green-800 dark:text-brand-green-300 dark:hover:text-brand-green-200"
+        >
+          Create an account
         </Link>
       </p>
+
+      <AuthReassurance />
     </div>
   );
 }

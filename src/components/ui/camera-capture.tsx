@@ -1,11 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 
-import { Camera, Loader2, RefreshCw, ScanFace, VideoOff } from "lucide-react";
+import {
+  Camera,
+  CheckCircle2,
+  Glasses,
+  IdCard,
+  Loader2,
+  RefreshCw,
+  ScanFace,
+  Sun,
+  VideoOff,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import { useFaceLiveness } from "./use-face-liveness";
 import { SelfieCameraDialog } from "./selfie-camera-dialog";
 import { SelfieFaceGuide } from "./selfie-face-guide";
@@ -125,6 +136,7 @@ export function CameraCapture({
   const streamRef = useRef<MediaStream | null>(null);
   const streamContainerRef = useRef<HTMLDivElement>(null);
   const takePhotoButtonRef = useRef<HTMLButtonElement>(null);
+  const fileInputId = useId();
   const [state, setState] = useState<CameraState>("idle");
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [capturedUrl, setCapturedUrl] = useState<string>("");
@@ -623,46 +635,61 @@ export function CameraCapture({
 
   if (state === "error") {
     return (
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200">
-          <VideoOff className="h-4 w-4 shrink-0" />
-          <p role="alert">{errorMessage}</p>
+      <div className="space-y-4">
+        <div className="flex items-start gap-3 rounded-2xl border border-brand-gold-300/70 bg-brand-gold-50 p-3.5 text-sm leading-6 text-brand-gold-900 dark:border-brand-gold-400/25 dark:bg-brand-gold-400/10 dark:text-brand-gold-100">
+          <VideoOff className="mt-1 h-4 w-4 shrink-0" aria-hidden="true" />
+          <div className="min-w-0 space-y-1">
+            <p role="alert">{errorMessage}</p>
+            <p className="text-xs leading-5 opacity-90">
+              No camera prompt? Open{" "}
+              <Link
+                href="/help/verification"
+                className="font-semibold underline underline-offset-2"
+              >
+                verification help
+              </Link>{" "}
+              for desktop and mobile permission reset steps.
+            </p>
+          </div>
         </div>
-        <p className="text-xs text-muted-foreground">
-          No camera prompt? Open{" "}
-          <Link href="/help/verification" className="underline">
-            verification help
-          </Link>{" "}
-          for desktop and mobile permission reset steps.
-        </p>
         <Button
           type="button"
           ref={openButtonRef}
           variant="outline"
+          size="lg"
           onClick={() => void startCamera()}
           disabled={disabled || isStartingCamera}
-          className="w-full gap-2"
+          className="w-full"
         >
           {isStartingCamera ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2
+              className="h-4 w-4 animate-spin motion-reduce:animate-none"
+              aria-hidden="true"
+            />
           ) : (
-            <RefreshCw className="h-4 w-4" />
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />
           )}
-          {isStartingCamera ? "Trying..." : "Try Again"}
+          {isStartingCamera ? "Trying..." : "Try again"}
         </Button>
-        <div className="space-y-2">
+        <div className="space-y-2 rounded-2xl border border-dashed border-border bg-muted/30 p-3.5">
+          <label htmlFor={fileInputId} className="block text-sm font-semibold text-foreground">
+            Or upload a photo
+          </label>
           {requireLiveness && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs leading-5 text-muted-foreground">
               Uploading a file does not complete the live face check. A moderator may ask you to try
               again on another device.
             </p>
           )}
           <Input
+            id={fileInputId}
             type="file"
             accept="image/jpeg,image/png,image/webp"
             disabled={disabled}
             onChange={handleFileFallback}
+            className="h-auto cursor-pointer py-2.5 file:mr-3 file:rounded-lg file:bg-muted file:px-3 file:py-1.5 file:text-foreground sm:h-auto"
           />
+          <p className="text-xs text-muted-foreground">JPG, PNG or WebP, up to 5 MB.</p>
         </div>
       </div>
     );
@@ -671,21 +698,23 @@ export function CameraCapture({
   if (state === "captured" && capturedUrl) {
     return (
       <div className="space-y-3">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={capturedUrl}
-          alt="Captured photo"
-          className="max-h-80 w-full rounded-md border object-contain"
-        />
+        <div className="relative overflow-hidden rounded-2xl border border-border bg-muted">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={capturedUrl} alt="Captured photo" className="max-h-80 w-full object-contain" />
+          <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-brand-green-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
+            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+            Photo captured
+          </span>
+        </div>
         <Button
           type="button"
           variant="outline"
           onClick={retake}
           ref={openButtonRef}
           disabled={disabled}
-          className="gap-1"
+          className="h-11 w-full sm:w-auto"
         >
-          <RefreshCw className="h-4 w-4" />
+          <RefreshCw className="h-4 w-4" aria-hidden="true" />
           Retake
         </Button>
       </div>
@@ -699,8 +728,10 @@ export function CameraCapture({
           className="col-span-2 flex flex-1 flex-col items-center justify-center gap-4 p-6"
           role="status"
         >
-          <Loader2 className="h-8 w-8 animate-spin" aria-hidden />
-          <p>Opening camera... Allow camera access when prompted.</p>
+          <Loader2 className="h-8 w-8 animate-spin motion-reduce:animate-none" aria-hidden />
+          <p className="text-center text-sm">
+            Opening camera... Allow camera access when prompted.
+          </p>
         </div>
       )}
       {state === "streaming" && (
@@ -710,7 +741,7 @@ export function CameraCapture({
             className={
               requireLiveness
                 ? "relative min-h-[180px] flex-1 overflow-hidden bg-black [@media(max-height:500px)]:min-h-0 [@media(max-height:500px)]:h-full"
-                : "relative scroll-mt-24 overflow-hidden rounded-xl border bg-black"
+                : "relative scroll-mt-32 overflow-hidden rounded-2xl border border-border bg-black"
             }
           >
             <video
@@ -739,8 +770,8 @@ export function CameraCapture({
                     vectorEffect="non-scaling-stroke"
                   />
                 </svg>
-                <span className="absolute left-3 top-2 rounded bg-black/80 px-2 py-0.5 text-[10px] font-medium text-white">
-                  {documentFormat === "card" ? "SMART ID · FRONT" : "ID BOOK · PHOTO PAGE"}
+                <span className="absolute left-3 top-2 rounded-full bg-black/75 px-2.5 py-1 text-[11px] font-semibold text-white">
+                  {documentFormat === "card" ? "Smart ID card, front" : "ID book, photo page"}
                 </span>
               </div>
             )}
@@ -751,7 +782,7 @@ export function CameraCapture({
           <div
             className={
               requireLiveness
-                ? "shrink-0 space-y-3 bg-slate-950 px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] [@media(max-height:500px)]:min-h-0 [@media(max-height:500px)]:overflow-y-auto"
+                ? "shrink-0 space-y-3 bg-[#07130f] px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] [@media(max-height:500px)]:min-h-0 [@media(max-height:500px)]:overflow-y-auto"
                 : "space-y-3"
             }
           >
@@ -761,11 +792,14 @@ export function CameraCapture({
                   {[0, 1].map((step) => (
                     <span
                       key={step}
-                      className={`h-1.5 w-16 rounded-full ${livenessStatus.completedSteps > step ? "bg-emerald-400" : "bg-slate-600"}`}
+                      className={cn(
+                        "h-1.5 w-16 rounded-full transition-colors duration-300",
+                        livenessStatus.completedSteps > step ? "bg-brand-green-400" : "bg-white/20"
+                      )}
                     />
                   ))}
                 </div>
-                <p className="text-xs uppercase tracking-wider text-emerald-300">
+                <p className="text-xs font-semibold text-brand-green-300">
                   {livenessStatus.phase === "loading"
                     ? "Getting ready"
                     : `Movement ${Math.min((livenessStatus.completedSteps ?? 0) + 1, 2)} of 2`}
@@ -778,14 +812,14 @@ export function CameraCapture({
                   <ScanFace className="h-5 w-5 shrink-0" aria-hidden />
                   {livenessStatus.instruction}
                 </p>
-                <p className="mt-1 text-xs text-slate-300">
+                <p className="mt-1 text-xs text-white/70">
                   Keep your face inside the oval in even light.
                 </p>
               </div>
             )}
             {requireLiveness && !livenessStatus.supported && (
               <div
-                className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
+                className="rounded-2xl border border-brand-gold-300/40 bg-brand-gold-400/10 p-3.5 text-xs leading-5 text-brand-gold-100"
                 role="status"
               >
                 <p>
@@ -795,8 +829,8 @@ export function CameraCapture({
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button
                     type="button"
-                    size="sm"
                     variant="outline"
+                    className="h-11 border-white/25 bg-white/10 text-white hover:bg-white/20 hover:text-white"
                     disabled={disabled}
                     onClick={() => {
                       setManualCapture(false);
@@ -807,8 +841,8 @@ export function CameraCapture({
                   </Button>
                   <Button
                     type="button"
-                    size="sm"
                     variant="outline"
+                    className="h-11 border-white/25 bg-white/10 text-white hover:bg-white/20 hover:text-white"
                     disabled={disabled || manualCapture}
                     onClick={() => setManualCapture(true)}
                   >
@@ -823,19 +857,26 @@ export function CameraCapture({
               onClick={takePhoto}
               disabled={disabled || !captureAllowed || isCapturing}
               variant="trust-verified"
-              className="w-full gap-2"
+              size="lg"
+              className="w-full"
             >
-              <Camera className="h-4 w-4" />
+              <Camera className="h-4 w-4" aria-hidden="true" />
               {isCapturing
                 ? "Saving photo..."
                 : requireLiveness && !captureAllowed
-                  ? "Complete Liveness Check"
+                  ? "Complete liveness check"
                   : manualCapture
-                    ? "Take Photo for Manual Review"
-                    : "Take Photo"}
+                    ? "Take photo for manual review"
+                    : "Take photo"}
             </Button>
             {captureError && (
-              <p role="alert" className="text-center text-sm text-red-300">
+              <p
+                role="alert"
+                className={cn(
+                  "text-center text-sm",
+                  requireLiveness ? "text-brand-red-300" : "text-destructive"
+                )}
+              >
                 {captureError}
               </p>
             )}
@@ -849,51 +890,90 @@ export function CameraCapture({
     <div className="space-y-3">
       {documentGuide && (
         <fieldset className="space-y-2" disabled={disabled}>
-          <legend className="mb-2 text-sm font-medium">South African ID format</legend>
-          <div className="grid grid-cols-2 gap-2">
+          <legend className="mb-2 text-sm font-medium text-foreground">
+            Which ID do you have?
+          </legend>
+          <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">
             {(["card", "book"] as const).map((format) => (
               <Button
                 key={format}
                 type="button"
-                variant={documentFormat === format ? "default" : "outline"}
+                variant="ghost"
                 aria-pressed={documentFormat === format}
                 onClick={() => setDocumentFormat(format)}
+                className={cn(
+                  "h-11 rounded-lg",
+                  documentFormat === format
+                    ? "bg-card text-foreground shadow-sm hover:bg-card"
+                    : "text-muted-foreground"
+                )}
               >
                 {format === "card" ? "Smart ID card" : "Green ID book"}
               </Button>
             ))}
           </div>
-          <p className="text-xs text-muted-foreground">
-            {documentFormat === "card"
-              ? "Use the front of your Smart ID card, with your photo and details visible."
-              : "Open your green ID book to the page with your photo and personal details."}{" "}
-            Fit all four corners inside the guide. Avoid glare and keep every detail readable.
+          <p className="text-xs leading-5 text-muted-foreground">
+            {documentFormat === "card" ? "Photo side up." : "Open at the photo page."} Fit all four
+            corners in the guide and avoid glare.
           </p>
         </fieldset>
       )}
-      {requireLiveness && state === "idle" && (
-        <p className="text-sm text-muted-foreground">
-          Use good light, remove sunglasses and keep your whole face visible. Follow two short
-          movements, then look straight at the camera. We will take your photo automatically. Your
-          selfie will be reviewed with your ID.
-        </p>
-      )}
       {state === "idle" && (
-        <Button
-          type="button"
-          ref={openButtonRef}
-          variant="outline"
-          onClick={() => void startCamera()}
-          disabled={disabled || isStartingCamera}
-          className="w-full gap-2"
-        >
-          {isStartingCamera ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+        <div className="rounded-2xl border-2 border-dashed border-border bg-muted/30 p-4 sm:p-5">
+          {requireLiveness ? (
+            <ul className="mb-4 space-y-2.5 text-sm text-foreground/85">
+              {[
+                { icon: Sun, text: "Good, even light" },
+                {
+                  icon: Glasses,
+                  text: "No sunglasses or hats",
+                },
+                { icon: ScanFace, text: "Follow two short moves. We snap the photo." },
+              ].map(({ icon: TipIcon, text }) => (
+                <li key={text} className="flex items-start gap-2.5">
+                  <TipIcon
+                    className="mt-0.5 h-4 w-4 shrink-0 text-brand-green-700 dark:text-brand-green-300"
+                    aria-hidden="true"
+                  />
+                  <span>{text}</span>
+                </li>
+              ))}
+            </ul>
           ) : (
-            <Camera className="h-4 w-4" />
+            <div className="mb-4 flex items-center gap-3 text-sm text-muted-foreground">
+              <span
+                aria-hidden="true"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-card text-brand-green-700 dark:text-brand-green-300"
+              >
+                {documentGuide ? <IdCard className="h-5 w-5" /> : <Camera className="h-5 w-5" />}
+              </span>
+              <span>
+                {documentGuide
+                  ? "Lay your ID flat in good light."
+                  : "Use your camera to take the photo."}
+              </span>
+            </div>
           )}
-          {isStartingCamera ? "Opening Camera..." : "Open Camera"}
-        </Button>
+          <Button
+            type="button"
+            ref={openButtonRef}
+            variant="trust-verified"
+            size="lg"
+            onClick={() => void startCamera()}
+            disabled={disabled || isStartingCamera}
+            className="w-full"
+          >
+            {isStartingCamera ? (
+              <Loader2
+                className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                aria-hidden="true"
+              />
+            ) : (
+              <Camera className="h-4 w-4" aria-hidden="true" />
+            )}
+            {isStartingCamera ? "Opening camera..." : "Open camera"}
+          </Button>
+        </div>
       )}
 
       {requireLiveness && (state === "streaming" || isStartingCamera) ? (

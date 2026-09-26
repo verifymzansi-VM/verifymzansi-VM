@@ -1,14 +1,21 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { AlertCircle, CheckCircle2, Loader2, type LucideIcon } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { useEffect, useId, useRef, useState } from "react";
+import {
+  AlertCircle,
+  Building2,
+  Check,
+  CloudUpload,
+  Lightbulb,
+  Loader2,
+  ShoppingBag,
+  TreePalm,
+  type LucideIcon,
+} from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { PageHeader } from "@/components/layout/page-header";
+import { Breadcrumbs, type BreadcrumbItem } from "@/components/layout/breadcrumbs";
 import { cn } from "@/lib/utils";
-import type { BreadcrumbItem } from "@/components/layout/breadcrumbs";
 
 export interface PostFormStep {
   label: string;
@@ -16,12 +23,68 @@ export interface PostFormStep {
   icon: LucideIcon;
 }
 
+export type PostFormArea = "market" | "business" | "tourism";
+
+interface AreaStyle {
+  icon: LucideIcon;
+  tile: string;
+  pill: string;
+  bar: string;
+}
+
+const AREA_STYLES: Record<PostFormArea, AreaStyle> = {
+  market: {
+    icon: ShoppingBag,
+    tile: "area-market-tile",
+    pill: "border-brand-green-200 bg-brand-green-50 text-brand-green-800 dark:border-brand-green-800 dark:bg-brand-green-950/60 dark:text-brand-green-200",
+    bar: "bg-brand-green-600 dark:bg-brand-green-400",
+  },
+  business: {
+    icon: Building2,
+    tile: "area-business-tile",
+    pill: "border-brand-blue-200 bg-brand-blue-50 text-brand-blue-800 dark:border-brand-blue-800 dark:bg-brand-blue-950/60 dark:text-brand-blue-200",
+    bar: "bg-brand-blue-600 dark:bg-brand-blue-400",
+  },
+  tourism: {
+    icon: TreePalm,
+    tile: "area-tourism-tile",
+    pill: "border-sunset-200 bg-sunset-50 text-sunset-800 dark:border-sunset-800 dark:bg-sunset-950/60 dark:text-sunset-200",
+    bar: "bg-sunset-600 dark:bg-sunset-400",
+  },
+};
+
+function inferArea(badgeLabel: string): PostFormArea {
+  const label = badgeLabel.toLowerCase();
+  if (label.includes("business")) return "business";
+  if (label.includes("tourism") || label.includes("event")) return "tourism";
+  return "market";
+}
+
+/** True on wide (lg+) screens. Always false on the server and first render. */
+function useWideLayout(): boolean {
+  const [isWide, setIsWide] = useState(false);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const mql = window.matchMedia("(min-width: 1024px)");
+    const update = () => setIsWide(mql.matches);
+    update();
+    mql.addEventListener?.("change", update);
+    return () => mql.removeEventListener?.("change", update);
+  }, []);
+
+  return isWide;
+}
+
 interface PostFormScaffoldProps {
   title: string;
   description: string;
   breadcrumbs: BreadcrumbItem[];
   badgeLabel: string;
-  badgeClassName: string;
+  /** @deprecated Colour now comes from `area`; kept for call-site compatibility. */
+  badgeClassName?: string;
+  /** Product area colour. Inferred from `badgeLabel` when omitted. */
+  area?: PostFormArea;
   guideTitle?: string;
   guideDescription: string;
   steps: readonly PostFormStep[];
@@ -31,7 +94,7 @@ interface PostFormScaffoldProps {
   fieldErrors?: Record<string, string>;
   /** Human-readable labels keyed by field name, used to prefix error messages. */
   fieldLabels?: Record<string, string>;
-  /** Label like "Step 1 \u2014 Details" shown in the error alert heading. */
+  /** Label like "Step 1 — Details" shown in the error alert heading. */
   errorStepLabel?: string;
   /** Per-step boolean: true if that step currently has validation errors. */
   stepHasErrors?: boolean[];
@@ -40,6 +103,11 @@ interface PostFormScaffoldProps {
   footer?: React.ReactNode;
   /** Optional completeness percentage (0-100). Shows a progress bar when provided. */
   completeness?: number;
+  /**
+   * Optional side panel (live preview, tips). Rendered beside the form on wide
+   * screens only, so mobile keeps a single focused column.
+   */
+  aside?: React.ReactNode;
 }
 
 function formatFieldSummaryLabel(fieldKey: string, fieldLabels?: Record<string, string>): string {
@@ -56,12 +124,22 @@ function formatFieldSummaryLabel(fieldKey: string, fieldLabels?: Record<string, 
     .replace(/(^|\s)\S/g, (character) => character.toUpperCase());
 }
 
+function completenessTone(value: number): { bar: string; label: string } {
+  if (value >= 80) {
+    return { bar: "bg-brand-green-600 dark:bg-brand-green-400", label: "Looking strong" };
+  }
+  if (value >= 50) {
+    return { bar: "bg-brand-gold-500 dark:bg-brand-gold-400", label: "Getting there" };
+  }
+  return { bar: "bg-muted-foreground/50", label: "Just started" };
+}
+
 export function PostFormScaffold({
   title,
   description,
   breadcrumbs,
   badgeLabel,
-  badgeClassName,
+  area: areaProp,
   guideTitle = "Quick guide",
   guideDescription,
   steps,
@@ -75,8 +153,21 @@ export function PostFormScaffold({
   children,
   footer,
   completeness,
+  aside,
 }: PostFormScaffoldProps) {
   const errorRef = useRef<HTMLDivElement>(null);
+  const headingId = useId();
+  const area = areaProp ?? inferArea(badgeLabel);
+  const styles = AREA_STYLES[area];
+  const AreaIcon = styles.icon;
+  const isWide = useWideLayout();
+  const showAside = Boolean(aside) && isWide;
+  const safeStep = Math.min(Math.max(currentStep, 0), steps.length - 1);
+  const activeStep = steps[safeStep];
+  const StepIcon = activeStep.icon;
+  const roundedCompleteness =
+    completeness != null ? Math.min(Math.max(Math.round(completeness), 0), 100) : null;
+  const tone = roundedCompleteness != null ? completenessTone(roundedCompleteness) : null;
 
   useEffect(() => {
     if (error && errorRef.current) {
@@ -85,165 +176,340 @@ export function PostFormScaffold({
   }, [error]);
 
   return (
-    <div id="post-form-top" className="max-w-3xl mx-auto space-y-4">
-      <PageHeader title={title} description={description} breadcrumbs={breadcrumbs} />
-
-      <Alert variant="info" hideIcon className="border-foreground/10 bg-muted/40 text-foreground">
-        <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
-        <div>
-          <AlertTitle>{guideTitle}</AlertTitle>
-          <AlertDescription>{guideDescription}</AlertDescription>
-        </div>
-      </Alert>
-
-      <Card>
-        <CardHeader className="space-y-5">
-          <div className="flex items-center justify-between gap-3">
-            <Badge className={badgeClassName}>{badgeLabel}</Badge>
-            <span className="text-sm text-muted-foreground">
-              Step {currentStep + 1} of {steps.length}
+    <div
+      id="post-form-top"
+      className={cn("mx-auto space-y-5", showAside ? "max-w-6xl" : "max-w-3xl")}
+    >
+      <header>
+        <div className="relative space-y-4">
+          <Breadcrumbs items={breadcrumbs} />
+          <div className="flex items-start gap-4">
+            <span
+              aria-hidden="true"
+              className={cn(
+                "hidden h-14 w-14 shrink-0 items-center justify-center rounded-2xl sm:flex",
+                styles.tile
+              )}
+            >
+              <AreaIcon className="h-7 w-7" />
             </span>
+            <div className="min-w-0 space-y-2">
+              <h1 className="font-display text-[1.75rem] font-bold leading-[1.1] tracking-tight text-foreground sm:text-[2.25rem]">
+                {title}
+              </h1>
+              <p className="max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base sm:leading-7">
+                {description}
+              </p>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {error && (
+        <Alert ref={errorRef} variant="destructive">
+          <div>
+            <AlertTitle>
+              {errorStepLabel ? `Please review ${errorStepLabel}` : "Please review this form"}
+            </AlertTitle>
+            <AlertDescription>
+              <p>{error}</p>
+              {fieldErrors && Object.keys(fieldErrors).length > 0 && (
+                <ul className="mt-2 list-disc space-y-0.5 pl-4 text-[13px]">
+                  {Object.entries(fieldErrors).map(([key, msg], i) => {
+                    const label = formatFieldSummaryLabel(key, fieldLabels);
+                    return (
+                      <li key={i}>
+                        <strong>{label}:</strong> {msg}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </AlertDescription>
+            {onRetry && (
+              <Button type="button" variant="outline" size="sm" className="mt-2" onClick={onRetry}>
+                Try again
+              </Button>
+            )}
+          </div>
+        </Alert>
+      )}
+
+      <div
+        className={cn(
+          showAside && "grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)]"
+        )}
+      >
+        <div className="min-w-0 space-y-4">
+          <div className="surface-card overflow-hidden">
+            <div className="space-y-3 border-b border-border/60 bg-muted/30 px-4 pb-4 pt-4 sm:px-6">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <p className="text-sm font-semibold text-foreground">
+                  Step {safeStep + 1} of {steps.length}
+                </p>
+                {roundedCompleteness != null && tone ? (
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {roundedCompleteness}% complete
+                  </p>
+                ) : null}
+              </div>
+
+              <nav aria-label={`${badgeLabel} creation steps`}>
+                <ol className={cn("grid gap-2", steps.length > 3 ? "grid-cols-4" : "grid-cols-3")}>
+                  {steps.map((step, index) => {
+                    const ItemIcon = step.icon;
+                    const isCompleted = index < safeStep;
+                    const isCurrent = index === safeStep;
+                    const hasError = stepHasErrors?.[index] ?? false;
+
+                    return (
+                      <li
+                        key={step.label}
+                        className="min-w-0"
+                        aria-current={isCurrent ? "step" : undefined}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "block h-1.5 rounded-full transition-colors duration-300 motion-reduce:transition-none",
+                            hasError
+                              ? "bg-destructive"
+                              : isCompleted || isCurrent
+                                ? styles.bar
+                                : "bg-muted"
+                          )}
+                        />
+                        <span
+                          className={cn(
+                            "mt-2 min-w-0 items-center gap-1.5 text-xs font-semibold sm:flex sm:text-[13px]",
+                            steps.length > 3 && !isCurrent ? "hidden" : "flex",
+                            hasError
+                              ? "text-destructive"
+                              : isCurrent
+                                ? "text-foreground"
+                                : "text-muted-foreground"
+                          )}
+                        >
+                          <span
+                            aria-hidden="true"
+                            className={cn(
+                              "hidden h-5 w-5 shrink-0 items-center justify-center rounded-full sm:flex",
+                              hasError
+                                ? "bg-destructive/10"
+                                : isCompleted
+                                  ? cn(styles.bar, "text-white dark:text-background")
+                                  : "bg-muted"
+                            )}
+                          >
+                            {hasError ? (
+                              <AlertCircle className="h-3 w-3" />
+                            ) : isCompleted ? (
+                              <Check className="h-3 w-3" strokeWidth={3} />
+                            ) : (
+                              <ItemIcon className="h-3 w-3" />
+                            )}
+                          </span>
+                          <span className="truncate">{step.label}</span>
+                          {hasError ? <span className="sr-only">(needs attention)</span> : null}
+                          {isCompleted && !hasError ? (
+                            <span className="sr-only">(done)</span>
+                          ) : null}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </nav>
+            </div>
+            <div className="flex items-center gap-3 px-4 pt-5 sm:px-6">
+              <span
+                aria-hidden="true"
+                className={cn(
+                  "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+                  styles.tile
+                )}
+              >
+                <StepIcon className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <h2
+                  id={headingId}
+                  className="font-display text-lg font-bold leading-tight tracking-tight text-foreground sm:text-xl"
+                >
+                  {activeStep.label}
+                </h2>
+                <p className="text-sm text-muted-foreground">{activeStep.description}</p>
+              </div>
+            </div>
+            <div className="space-y-6 px-4 pb-6 pt-5 sm:px-6">
+              {safeStep === 0 ? (
+                <div className="flex items-start gap-2.5 rounded-xl bg-muted/60 px-3 py-2.5 text-sm">
+                  <Lightbulb
+                    className="mt-0.5 h-4 w-4 shrink-0 text-brand-gold-700 dark:text-brand-gold-300"
+                    aria-hidden="true"
+                  />
+                  <p className="leading-6 text-muted-foreground">
+                    <span className="font-semibold text-foreground">{guideTitle}</span>
+                    <span aria-hidden="true">: </span>
+                    <span className="sr-only">. </span>
+                    {guideDescription}
+                  </p>
+                </div>
+              ) : null}
+              {children}
+            </div>
           </div>
 
-          <nav aria-label={`${badgeLabel} creation steps`}>
-            <ol className="flex items-center justify-between gap-2">
-              {steps.map((step, index) => {
-                const Icon = step.icon;
-                const isCompleted = index < currentStep;
-                const isCurrent = index === currentStep;
-                const hasError = stepHasErrors?.[index] ?? false;
-
-                return (
-                  <li
-                    key={step.label}
-                    className="flex min-w-0 flex-1 items-center last:flex-initial"
-                  >
-                    <div
-                      className={cn(
-                        "flex min-w-0 items-center gap-2 text-sm",
-                        hasError && "text-destructive",
-                        !hasError && isCurrent && "text-foreground",
-                        !hasError && isCompleted && "text-brand-green",
-                        !hasError && !isCurrent && !isCompleted && "text-muted-foreground"
-                      )}
-                      aria-current={isCurrent ? "step" : undefined}
-                    >
-                      <div
-                        className={cn(
-                          "relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border-2 transition-all duration-300",
-                          hasError && "border-destructive bg-destructive/10 text-destructive",
-                          !hasError &&
-                            isCurrent &&
-                            "border-brand-green bg-brand-green text-white shadow-lg shadow-brand-green/20",
-                          !hasError &&
-                            isCompleted &&
-                            "border-brand-green bg-brand-green/10 text-brand-green",
-                          !hasError &&
-                            !isCurrent &&
-                            !isCompleted &&
-                            "border-muted-foreground/30 text-muted-foreground"
-                        )}
-                      >
-                        {hasError ? (
-                          <AlertCircle className="h-4 w-4" />
-                        ) : (
-                          <Icon className="h-4 w-4" />
-                        )}
-                      </div>
-                      <div className="hidden min-w-0 sm:block">
-                        <p className="truncate text-xs font-semibold">{step.label}</p>
-                        <p className="truncate text-[10px] text-muted-foreground">
-                          {step.description}
-                        </p>
-                      </div>
-                    </div>
-
-                    {index < steps.length - 1 && (
-                      <div
-                        aria-hidden="true"
-                        className={cn(
-                          "mx-3 h-0.5 flex-1 rounded-full transition-colors duration-300",
-                          index < currentStep ? "bg-brand-green" : "bg-muted"
-                        )}
-                      />
-                    )}
-                  </li>
-                );
-              })}
-            </ol>
-            {/* Mobile: show current step label below circles */}
-            <p className="sm:hidden text-center text-xs font-semibold mt-2 text-foreground">
-              {steps[currentStep].label}
-              <span className="block text-[10px] font-normal text-muted-foreground">
-                {steps[currentStep].description}
-              </span>
-            </p>
-          </nav>
-
-          {/* Completeness score */}
-          {completeness != null && (
-            <div className="space-y-1">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Listing completeness</span>
-                <span className="font-medium">{Math.round(completeness)}%</span>
-              </div>
-              <progress
-                max={100}
-                value={Math.min(Math.max(Math.round(completeness), 0), 100)}
-                className={cn(
-                  "h-2 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:rounded-full [&::-moz-progress-bar]:rounded-full",
-                  completeness >= 80
-                    ? "[&::-webkit-progress-value]:bg-brand-green [&::-moz-progress-bar]:bg-brand-green"
-                    : completeness >= 50
-                      ? "[&::-webkit-progress-value]:bg-amber-500 [&::-moz-progress-bar]:bg-amber-500"
-                      : "[&::-webkit-progress-value]:bg-muted-foreground/40 [&::-moz-progress-bar]:bg-muted-foreground/40"
-                )}
-              />
-            </div>
-          )}
-
-          {error && (
-            <Alert ref={errorRef} variant="destructive">
-              <div>
-                <AlertTitle>
-                  {errorStepLabel ? `Please review ${errorStepLabel}` : "Please review this form"}
-                </AlertTitle>
-                <AlertDescription>
-                  <p>{error}</p>
-                  {fieldErrors && Object.keys(fieldErrors).length > 0 && (
-                    <ul className="mt-2 list-disc pl-4 space-y-0.5 text-[13px]">
-                      {Object.entries(fieldErrors).map(([key, msg], i) => {
-                        const label = formatFieldSummaryLabel(key, fieldLabels);
-                        return (
-                          <li key={i}>
-                            <strong>{label}:</strong> {msg}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </AlertDescription>
-                {onRetry && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="mt-2"
-                    onClick={onRetry}
-                  >
-                    Try again
-                  </Button>
-                )}
-              </div>
-            </Alert>
-          )}
-        </CardHeader>
-
-        <CardContent className="space-y-6">
-          {children}
           {footer}
-        </CardContent>
-      </Card>
+        </div>
+
+        {showAside ? (
+          <aside aria-label="Preview" className="sticky top-32 space-y-4">
+            {aside}
+          </aside>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+interface PostFormSectionProps {
+  title: string;
+  description?: React.ReactNode;
+  icon?: LucideIcon;
+  /** Shows a small "Optional" tag beside the title. */
+  optional?: boolean;
+  id?: string;
+  className?: string;
+  children: React.ReactNode;
+}
+
+/**
+ * Groups related fields inside a step with a short heading and helper line.
+ * Consecutive sections are separated by a hairline. The section deliberately
+ * has no accessible name so label-based lookups only ever resolve to inputs.
+ */
+export function PostFormSection({
+  title,
+  description,
+  icon: Icon,
+  optional = false,
+  id,
+  className,
+  children,
+}: PostFormSectionProps) {
+  const generatedId = useId();
+  const headingId = `${id ?? generatedId}-heading`;
+
+  return (
+    <section
+      className={cn(
+        "space-y-4 border-t border-border/60 pt-6 first:border-t-0 first:pt-0",
+        className
+      )}
+    >
+      <div className="flex items-start gap-2.5">
+        {Icon ? (
+          <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        ) : null}
+        <div className="min-w-0">
+          <h3 id={headingId} className="text-base font-semibold leading-6 text-foreground">
+            {title}
+            {optional ? (
+              <span className="ml-2 rounded-full bg-muted px-2 py-0.5 align-middle text-[11px] font-medium text-muted-foreground">
+                Optional
+              </span>
+            ) : null}
+          </h3>
+          {description ? (
+            <p className="mt-0.5 text-sm leading-6 text-muted-foreground">{description}</p>
+          ) : null}
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function formatClockTime(value: number | string | Date): string {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+interface PostDraftStatusProps {
+  lastSavedAt: number | string | Date | null | undefined;
+  onDiscard: () => void;
+}
+
+/** Quiet "draft saved" line with a discard action, shown under the form. */
+export function PostDraftStatus({ lastSavedAt, onDiscard }: PostDraftStatusProps) {
+  const savedTime = lastSavedAt ? formatClockTime(lastSavedAt) : "";
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-1 text-xs text-muted-foreground">
+      <p className="inline-flex items-center gap-1.5" aria-live="polite">
+        <CloudUpload className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        {savedTime
+          ? `Draft saved on this device at ${savedTime}`
+          : "We save a draft on this device as you type."}
+      </p>
+      <button
+        type="button"
+        onClick={onDiscard}
+        className="inline-flex min-h-11 items-center rounded-lg px-1 font-semibold text-foreground/80 underline-offset-4 transition-colors hover:text-destructive hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        Discard draft
+      </button>
+    </div>
+  );
+}
+
+const ACTION_BAR_CLASS =
+  "sticky bottom-0 z-30 -mx-4 flex items-center gap-3 border-t border-border/70 bg-background/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:bottom-4 sm:mx-0 sm:rounded-2xl sm:border sm:bg-card/95 sm:py-3 sm:elev-md";
+
+interface PostEditActionBarProps {
+  onCancel: () => void;
+  isSubmitting?: boolean;
+  submittingLabel?: string;
+  submitDisabled?: boolean;
+  saveLabel?: string;
+}
+
+/** Sticky Cancel / Save bar for the edit forms (submits the enclosing form). */
+export function PostEditActionBar({
+  onCancel,
+  isSubmitting = false,
+  submittingLabel = "Saving...",
+  submitDisabled = false,
+  saveLabel = "Save changes",
+}: PostEditActionBarProps) {
+  return (
+    <div className={ACTION_BAR_CLASS}>
+      <Button type="button" variant="outline" onClick={onCancel} className="h-11 rounded-full px-5">
+        Cancel
+      </Button>
+      <p className="hidden flex-1 text-sm text-muted-foreground sm:block">
+        Changes are checked before they go live.
+      </p>
+      <Button
+        type="submit"
+        variant="trust-verified"
+        disabled={isSubmitting || submitDisabled}
+        aria-busy={isSubmitting}
+        className="h-11 min-w-36 flex-1 gap-2 rounded-full px-6 font-semibold sm:flex-none"
+      >
+        {isSubmitting ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            <span>{submittingLabel}</span>
+          </>
+        ) : (
+          saveLabel
+        )}
+      </Button>
     </div>
   );
 }
@@ -276,18 +542,23 @@ export function PostFormFooter({
   onSubmitClick,
 }: PostFormFooterProps) {
   const isLastStep = currentStep === totalSteps - 1;
+  const isFirstStep = currentStep === 0;
 
   return (
-    <div className="sticky bottom-0 -mx-6 -mb-6 border-t bg-background/95 px-6 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:static sm:mx-0 sm:mb-0 sm:bg-transparent sm:px-0 sm:backdrop-blur-none flex items-center justify-between">
+    <div className={ACTION_BAR_CLASS}>
       <Button
         type="button"
-        variant="ghost"
+        variant="outline"
         onClick={onBack}
-        disabled={currentStep === 0}
-        className={cn(currentStep === 0 && "invisible")}
+        disabled={isFirstStep}
+        className={cn("h-11 rounded-full px-5", isFirstStep && "hidden")}
       >
         Back
       </Button>
+
+      <p className="hidden flex-1 text-sm text-muted-foreground sm:block">
+        {isLastStep ? "Nothing goes live until our team has checked it." : null}
+      </p>
 
       {isLastStep ? (
         <Button
@@ -297,7 +568,7 @@ export function PostFormFooter({
           onClick={submitType === "button" ? onSubmitClick : undefined}
           disabled={submitDisabled || isSubmitting}
           aria-busy={isSubmitting}
-          className="min-w-36 gap-2 rounded-full font-semibold"
+          className="h-11 min-w-36 flex-1 gap-2 rounded-full px-6 font-semibold sm:flex-none"
         >
           {isSubmitting ? (
             <>
@@ -315,7 +586,7 @@ export function PostFormFooter({
           variant="trust-verified"
           onClick={onNext}
           disabled={nextDisabled}
-          className="rounded-full px-6 font-semibold"
+          className="h-11 flex-1 rounded-full px-8 font-semibold sm:flex-none"
         >
           Next
         </Button>

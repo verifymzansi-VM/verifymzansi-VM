@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
+import { CloudOff } from "lucide-react";
+import { SUPPORT_CONTACT_EMAIL } from "@/lib/contact-email";
+// The root layout (and its stylesheet) is not rendered when this boundary is.
+import "@/styles/globals.css";
 
 /**
  * Report to Sentry lazily: a static `@sentry/nextjs` import here pins the
@@ -40,34 +44,44 @@ export default function GlobalError({
   }, [error]);
   return (
     <html lang="en">
-      <body className="flex min-h-screen items-center justify-center bg-white dark:bg-neutral-950 text-gray-900 dark:text-gray-100">
-        <div className="max-w-md text-center px-6">
-          <h1 className="text-2xl font-bold mb-4">Something went wrong</h1>
-          <p className="text-gray-600 dark:text-gray-400 mb-6">
-            An unexpected error occurred. Please try refreshing the page.
-          </p>
-          {error.digest && (
-            <p className="text-xs text-gray-400 dark:text-gray-500 mb-4">
-              Error reference: {error.digest}
+      <body className="flex min-h-screen items-center justify-center bg-background px-4 py-12 font-body text-foreground antialiased">
+        <main id="main-content" className="w-full max-w-md">
+          <div className="hero-panel px-6 py-10 text-center sm:px-10">
+            <div
+              aria-hidden="true"
+              className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-red/10 text-brand-red-700"
+            >
+              <CloudOff className="h-7 w-7" />
+            </div>
+            <h1 className="mt-5 font-display text-2xl font-bold tracking-tight">
+              Something went wrong
+            </h1>
+            <p className="mt-2 text-[15px] leading-6 text-muted-foreground">
+              It&apos;s usually temporary. Please try again.
             </p>
-          )}
-          <div className="flex justify-center gap-3">
-            <button
-              onClick={() =>
-                window.location.assign(new URL("/", window.location.origin).toString())
-              }
-              className="rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-            >
-              Go to homepage
-            </button>
-            <button
-              onClick={reset}
-              className="rounded-md bg-brand-green px-4 py-2 text-sm font-medium text-white hover:bg-brand-green/90 transition-colors"
-            >
-              Try again
-            </button>
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:justify-center">
+              <button
+                type="button"
+                onClick={reset}
+                className="inline-flex h-11 items-center justify-center rounded-full bg-brand-green-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-brand-green-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                Try again
+              </button>
+            </div>
+            <p className="mt-6 text-sm text-muted-foreground">
+              Need help?{" "}
+              <a
+                href={`mailto:${SUPPORT_CONTACT_EMAIL}`}
+                className="font-semibold text-brand-green-700 underline underline-offset-4"
+              >
+                Email support
+              </a>
+            </p>
+            {error.digest && (
+              <p className="mt-2 text-xs text-muted-foreground">Error reference: {error.digest}</p>
+            )}
           </div>
-        </div>
+        </main>
       </body>
     </html>
   );

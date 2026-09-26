@@ -1,7 +1,8 @@
+import Link from "next/link";
 import { Mail } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
-import Link from "next/link";
+import { LegalBlocks, LegalDocument, type LegalSection } from "@/components/safety/legal-document";
 import { getTrustPublicConfig } from "@/lib/trust-public-config";
 
 export const metadata = {
@@ -65,9 +66,11 @@ export default function PrivacyPolicyPage() {
       deletion: "Handled under provider rules and platform legal/accounting obligations",
     },
   ] as const;
-  const sections = [
+  const textSections = [
     {
-      title: "1. Information We Collect",
+      id: "information-we-collect",
+      navLabel: "What we collect",
+      title: "Information we collect",
       content: [
         "We collect information you provide directly:",
         "• Account information (name, email, phone number)",
@@ -78,7 +81,9 @@ export default function PrivacyPolicyPage() {
       ],
     },
     {
-      title: "2. How Verification Data Is Used",
+      id: "verification-data",
+      navLabel: "Verification data",
+      title: "How verification data is used",
       content: [
         "ID numbers, ID document images, selfies, phone numbers, and location data are used to run verification checks, reduce fraud, review account safety, and support legal compliance.",
         "Verification may include internal review, automated validation checks, SMS delivery providers, secure file storage, and third-party KYC or infrastructure providers where needed to deliver the service.",
@@ -87,7 +92,9 @@ export default function PrivacyPolicyPage() {
       ],
     },
     {
-      title: "3. Data Retention and Deletion",
+      id: "retention",
+      navLabel: "Retention & deletion",
+      title: "Data retention and deletion",
       content: [
         "We retain account and listing data while your account is active. After account deletion, some records may be retained for fraud prevention, accounting, dispute handling, legal obligations, or platform integrity before deletion or anonymisation.",
         "Successful ID/selfie verification evidence is targeted for deletion within 30 days after review, while failed or appealed verification evidence may be retained for up to 90 days for appeal, abuse, and duplicate-account checks unless a fraud, dispute, security, accounting, or legal hold applies.",
@@ -95,7 +102,9 @@ export default function PrivacyPolicyPage() {
       ],
     },
     {
-      title: "4. Your Rights Under POPIA",
+      id: "popia-rights",
+      navLabel: "Your POPIA rights",
+      title: "Your rights under POPIA",
       content: [
         "As a data subject in South Africa, you have the right to:",
         "• Access your personal information we hold",
@@ -107,7 +116,9 @@ export default function PrivacyPolicyPage() {
       ],
     },
     {
-      title: "5. Data Security and Access",
+      id: "security",
+      navLabel: "Security & access",
+      title: "Data security and access",
       content: [
         "We use encryption in transit, restricted verification storage, signed access paths, audit controls, and operational access limits for sensitive verification files.",
         "Only authorised personnel with a platform safety, support, verification, legal, or security reason should access ID, selfie, or location evidence.",
@@ -115,11 +126,85 @@ export default function PrivacyPolicyPage() {
       ],
     },
     {
-      title: "6. Third Parties",
+      id: "third-parties",
+      navLabel: "Third parties",
+      title: "Third parties",
       content: [
         "We may use trusted providers for hosting, storage, identity/KYC workflows, SMS delivery, email, payments, security tooling, analytics, and operational support.",
         "Providers should receive only the information needed to deliver their service and are expected to protect it under appropriate contractual, security, and POPIA-aligned obligations.",
       ],
+    },
+  ] as const;
+
+  const sections: LegalSection[] = [
+    ...textSections.map((section) => ({
+      id: section.id,
+      navLabel: section.navLabel,
+      title: section.title,
+      content: <LegalBlocks paragraphs={section.content} />,
+    })),
+    {
+      id: "sensitive-data",
+      navLabel: "Sensitive data table",
+      title: "Sensitive data handling",
+      content: (
+        <div className="space-y-4">
+          <ul className="grid gap-3" aria-label="Sensitive data handling">
+            {dataHandlingRows.map((row) => (
+              <li key={row.dataType} className="surface-card p-4 sm:p-5">
+                <h3 className="font-body text-base font-semibold text-foreground">
+                  {row.dataType}
+                </h3>
+                <dl className="mt-3 grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+                  {[
+                    ["Why collected", row.purpose],
+                    ["Who receives it", row.recipients],
+                    ["Storage period", row.retention],
+                    ["Deletion process", row.deletion],
+                  ].map(([label, value]) => (
+                    <div key={label}>
+                      <dt className="text-xs font-semibold text-muted-foreground">{label}</dt>
+                      <dd className="mt-1 leading-6 text-foreground/85">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </li>
+            ))}
+          </ul>
+          <p className="max-w-prose text-[15px] leading-7 text-foreground/80">
+            Selfie and ID-image processing may involve biometric-style comparison. Any such
+            processing is used for verification and fraud prevention, not for public display.
+          </p>
+        </div>
+      ),
+    },
+    {
+      id: "contact",
+      navLabel: "Contact the Information Officer",
+      title: "Data subjects & contact",
+      content: (
+        <div className="max-w-prose space-y-4">
+          <p className="text-[15px] leading-7 text-foreground/80">
+            To exercise your rights under POPIA, contact our Information Officer first. If needed,
+            you can continue with the signed-in data rights form.
+          </p>
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap">
+            <a
+              href={`mailto:${trustConfig.informationOfficerEmail}`}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-green-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-green-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:bg-brand-green-500 dark:text-brand-green-950 dark:hover:bg-brand-green-400"
+            >
+              <Mail className="h-4 w-4" aria-hidden="true" />
+              {trustConfig.informationOfficerEmail}
+            </a>
+            <Link
+              href="/dsar"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-input bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              Open signed-in data rights form
+            </Link>
+          </div>
+        </div>
+      ),
     },
   ];
 
@@ -127,124 +212,14 @@ export default function PrivacyPolicyPage() {
     <div className="flex min-h-screen flex-col">
       <Header />
 
-      <main id="main-content" className="flex-1 bg-gradient-to-b from-muted/30 to-background">
-        <div className="bg-brand-green-950/20 dark:bg-black py-4 sm:py-5 border-b">
-          <div className="container-page text-center max-w-3xl space-y-1">
-            <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight">
-              Privacy Policy
-            </h1>
-            <p className="text-xs sm:text-sm text-muted-foreground">
-              Last updated: March 2026 · POPIA compliant
-            </p>
-          </div>
-        </div>
-
-        <div className="container-page py-4 max-w-4xl">
-          <div className="space-y-4">
-            <div className="space-y-4">
-              {sections.map((section, index) => (
-                <section key={index} className="space-y-1.5 group">
-                  <h2 className="font-display text-base font-bold flex items-center gap-2">
-                    <span className="text-brand-green text-sm font-mono" aria-hidden="true">
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
-                    {section.title.replace(/^\d+\.\s*/, "")}
-                  </h2>
-                  <div className="space-y-1 pl-6 text-muted-foreground leading-snug">
-                    {section.content.map((paragraph, pIdx) =>
-                      paragraph.startsWith("•") ? (
-                        <div key={pIdx} className="flex gap-2 text-sm">
-                          <span className="text-brand-green mt-0.5" aria-hidden="true">
-                            •
-                          </span>
-                          <span>{paragraph.replace("• ", "")}</span>
-                        </div>
-                      ) : (
-                        <p key={pIdx} className="text-sm">
-                          {paragraph}
-                        </p>
-                      )
-                    )}
-                  </div>
-                </section>
-              ))}
-
-              <section className="space-y-2 pt-1">
-                <h2 className="font-display text-base font-bold flex items-center gap-2">
-                  <span className="text-brand-green text-sm font-mono" aria-hidden="true">
-                    07
-                  </span>
-                  Sensitive Data Handling
-                </h2>
-                <div
-                  className="overflow-x-auto pl-0 sm:pl-6"
-                  role="region"
-                  aria-label="Sensitive data handling table"
-                  tabIndex={0}
-                >
-                  <table className="w-full min-w-[720px] border-collapse text-left text-xs">
-                    <thead>
-                      <tr className="border-b bg-muted/50 text-foreground">
-                        <th className="p-2 font-semibold">Data type</th>
-                        <th className="p-2 font-semibold">Why collected</th>
-                        <th className="p-2 font-semibold">Who receives it</th>
-                        <th className="p-2 font-semibold">Storage period</th>
-                        <th className="p-2 font-semibold">Deletion process</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {dataHandlingRows.map((row) => (
-                        <tr key={row.dataType} className="border-b align-top text-muted-foreground">
-                          <td className="p-2 font-medium text-foreground">{row.dataType}</td>
-                          <td className="p-2">{row.purpose}</td>
-                          <td className="p-2">{row.recipients}</td>
-                          <td className="p-2">{row.retention}</td>
-                          <td className="p-2">{row.deletion}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="pl-0 text-sm text-muted-foreground sm:pl-6">
-                  Selfie and ID-image processing may involve biometric-style comparison. Any such
-                  processing is used for verification and fraud prevention, not for public display.
-                </p>
-              </section>
-
-              <section className="space-y-1.5 pt-1">
-                <h2 className="font-display text-base font-bold flex items-center gap-2">
-                  <span className="text-brand-green text-sm font-mono" aria-hidden="true">
-                    08
-                  </span>
-                  Data Subjects & Contact
-                </h2>
-                <div className="pl-6 space-y-2">
-                  <p className="text-sm text-muted-foreground leading-snug">
-                    To exercise your rights under POPIA, contact our Information Officer first. If
-                    needed, you can continue with the signed-in data rights form.
-                  </p>
-
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <a
-                      href={`mailto:${trustConfig.informationOfficerEmail}`}
-                      className="group flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-green/10 hover:bg-brand-green/20 text-brand-green transition-colors text-sm font-medium w-fit border border-brand-green/20"
-                    >
-                      <Mail className="h-4 w-4" />
-                      {trustConfig.informationOfficerEmail}
-                    </a>
-
-                    <Link
-                      href="/dsar"
-                      className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground w-fit self-center sm:self-auto"
-                    >
-                      Open signed-in data rights form
-                    </Link>
-                  </div>
-                </div>
-              </section>
-            </div>
-          </div>
-        </div>
+      <main id="main-content" className="flex-1">
+        <LegalDocument
+          title="Privacy Policy"
+          meta="Updated March 2026"
+          description="How we collect, use and protect your personal information under POPIA."
+          breadcrumbs={[{ label: "Privacy Policy" }]}
+          sections={sections}
+        />
       </main>
 
       <Footer />

@@ -31,7 +31,7 @@ export function PromotionContactActions({
         contactPayloadKey: "promotionId",
         contactErrorFallback: "Failed to send enquiry",
         reportTargetType: "promotion",
-        reportTitle: "Report Event",
+        reportTitle: "Report event",
         reportPlaceholder: "Please describe what's wrong with this event...",
         reportSuccessCopy: "Thank you. Our team will review this event.",
         reportOptions: [
@@ -42,11 +42,11 @@ export function PromotionContactActions({
           { value: "spam", label: "Spam" },
           { value: "other", label: "Other" },
         ],
-        messageTitle: "Send a Message",
+        messageTitle: "Message the host",
         messageDescription:
           "Your enquiry is saved in the advertiser’s inbox with your reply details.",
         messagePlaceholder: "Hi, I'm interested in this event...",
-        messageSubmitLabel: "Send message",
+        messageSubmitLabel: "Send enquiry",
         messageSuccessCopy: "Your enquiry is in the advertiser’s inbox with your reply details.",
       }}
     />

@@ -5,14 +5,16 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, AlertTriangle, ArrowLeft } from "lucide-react";
+import { ArrowLeft, KeyRound, Loader2, TimerOff } from "lucide-react";
 
 import { AuthPasswordField } from "@/components/auth/auth-password-field";
 import {
   getPasswordRequirements,
   PasswordRequirements,
 } from "@/components/auth/password-requirements";
+import { AuthIconTile, AuthPageHeader } from "@/components/auth/auth-ui";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { resetPasswordSchema, type ResetPasswordInput } from "@/lib/validations/auth";
 import { useToast } from "@/hooks/use-toast";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
@@ -51,11 +53,19 @@ export default function ResetPasswordPage() {
   });
 
   const password = useWatch({ control, name: "password", defaultValue: "" });
-  const requirements = getPasswordRequirements(password, "Lowercase letter", "Uppercase letter");
+  const requirements = getPasswordRequirements(password);
 
   async function onSubmit(data: ResetPasswordInput) {
     try {
-      await ensureCsrfTokenReady();
+      const csrfToken = await ensureCsrfTokenReady();
+      if (!csrfToken) {
+        toast({
+          title: "Security check failed",
+          description: "Please refresh the page and try again.",
+          variant: "destructive",
+        });
+        return;
+      }
       const res = await fetch("/api/auth/reset-password", {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
@@ -95,33 +105,53 @@ export default function ResetPasswordPage() {
     }
   }
 
-  // Loading state while checking session
+  // Loading state while checking the recovery session
   if (sessionValid === null) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      <div aria-busy="true">
+        <span className="sr-only" role="status">
+          Checking your reset link…
+        </span>
+        <div aria-hidden="true" className="space-y-6">
+          <div className="space-y-3">
+            <Skeleton className="h-14 w-14 rounded-2xl" />
+            <Skeleton className="h-8 w-56" />
+            <Skeleton className="h-4 w-full max-w-xs" />
+          </div>
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-28" />
+            <Skeleton className="h-12 w-full rounded-xl" />
+          </div>
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-12 w-full rounded-xl" />
+          </div>
+          <Skeleton className="h-12 w-full rounded-xl" />
+        </div>
       </div>
     );
   }
 
-  // No valid session — show helpful message
+  // No valid session: the link expired, was already used, or was opened elsewhere
   if (!sessionValid) {
     return (
-      <div className="space-y-4 text-center">
-        <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-amber-500/10 text-amber-600 mx-auto">
-          <AlertTriangle className="h-5 w-5" />
-        </div>
-        <h1 className="font-display text-2xl font-bold">Reset link expired</h1>
-        <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-          This password reset link has expired or is invalid. Please request a new one.
-        </p>
+      <div className="space-y-6">
+        <AuthPageHeader
+          icon={
+            <AuthIconTile tone="gold">
+              <TimerOff />
+            </AuthIconTile>
+          }
+          title="Reset link expired"
+          description="Request a new link to reset your password."
+        />
         <div className="flex flex-col gap-3">
-          <Button asChild variant="trust-verified">
-            <Link href="/forgot-password">Request new reset link</Link>
+          <Button asChild variant="trust-verified" size="lg" className="h-12 w-full text-[15px]">
+            <Link href="/forgot-password">Request a new link</Link>
           </Button>
-          <Button asChild variant="outline" className="gap-2">
+          <Button asChild variant="ghost" size="lg" className="h-12 w-full gap-2 text-[15px]">
             <Link href="/login">
-              <ArrowLeft className="h-4 w-4" />
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               Back to sign in
             </Link>
           </Button>
@@ -131,12 +161,18 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-1">
-        <h1 className="font-display text-2xl font-bold tracking-tight">Set a new password</h1>
-      </div>
+    <div className="space-y-6">
+      <AuthPageHeader
+        icon={
+          <AuthIconTile>
+            <KeyRound />
+          </AuthIconTile>
+        }
+        title="Set a new password"
+        description="Use one you don't use anywhere else."
+      />
 
-      <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-5">
         <AuthPasswordField
           id="password"
           label="New password"
@@ -146,13 +182,14 @@ export default function ResetPasswordPage() {
           shown={showPassword}
           onToggleShown={() => setShowPassword(!showPassword)}
           describedBy="password-requirements"
-        />
-        <PasswordRequirements id="password-requirements" requirements={requirements} />
+        >
+          <PasswordRequirements id="password-requirements" requirements={requirements} />
+        </AuthPasswordField>
 
         <AuthPasswordField
           id="confirmPassword"
           label="Confirm password"
-          placeholder="Confirm your password"
+          placeholder="Type your new password again"
           inputProps={register("confirmPassword")}
           errorMessage={errors.confirmPassword?.message}
           shown={showConfirmPassword}
@@ -162,12 +199,14 @@ export default function ResetPasswordPage() {
 
         <Button
           type="submit"
-          className="h-11 w-full rounded-full text-[15px] font-semibold"
+          size="lg"
+          className="h-12 w-full text-[15px]"
           variant="trust-verified"
           disabled={isSubmitting}
+          aria-busy={isSubmitting || undefined}
         >
-          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {isSubmitting ? "Updating..." : "Update Password"}
+          {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+          {isSubmitting ? "Saving…" : "Save password"}
         </Button>
       </form>
     </div>

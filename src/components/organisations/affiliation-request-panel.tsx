@@ -1,5 +1,6 @@
 "use client";
 
+import { formatSaLongDate } from "@/lib/utils/format";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -43,10 +44,8 @@ const STATUS_LABELS: Record<string, string> = {
   withdrawn: "Withdrawn",
 };
 
-const date = new Intl.DateTimeFormat("en-ZA", {
-  dateStyle: "medium",
-  timeZone: "Africa/Johannesburg",
-});
+// Deterministic SA date (Intl output differs between server and browser → hydration errors).
+const date = { format: (value: Date) => formatSaLongDate(value) };
 const field = "mt-1 block h-11 w-full rounded-md border bg-background px-3 text-sm";
 
 async function post(body: unknown) {

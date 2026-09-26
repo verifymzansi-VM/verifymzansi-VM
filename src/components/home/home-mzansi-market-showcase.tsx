@@ -49,17 +49,16 @@ export async function HomeMzansiMarketShowcase() {
     return (
       <HomeShowcaseShell
         badge="Mzansi Market"
-        title="Fresh on Mzansi Market"
-        description="Just listed by ID-reviewed sellers across South Africa."
+        title="Just listed"
         href="/mzansi-market"
         ctaLabel="See all listings"
         tone="green"
       >
         <HomeShowcaseEmptyState
-          title="No listings yet."
-          description="Be one of the first sellers on Mzansi Market. Your first post is free and shows up here for buyers nationwide."
+          title="No listings yet"
+          description="Items from verified sellers will show here. Your first post is free."
           ctaHref="/post/create-listing"
-          ctaLabel="Post First Listing"
+          ctaLabel="Post an item"
           tone="green"
           icon={<PackageOpen className="h-7 w-7" />}
         />
@@ -70,8 +69,7 @@ export async function HomeMzansiMarketShowcase() {
   return (
     <HomeShowcaseShell
       badge="Mzansi Market"
-      title="Fresh on Mzansi Market"
-      description="Just listed by ID-reviewed sellers across South Africa."
+      title="Just listed"
       href="/mzansi-market"
       ctaLabel="See all listings"
       tone="green"

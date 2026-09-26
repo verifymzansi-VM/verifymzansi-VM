@@ -58,8 +58,8 @@ export function SelfieFaceGuide({
           ry="197"
           fill="none"
           style={{ filter: "drop-shadow(0 0 2px black)" }}
-          stroke={passed ? "#34d399" : "white"}
-          strokeWidth="2"
+          stroke={passed ? "#72d2ab" : "white"}
+          strokeWidth={passed ? "3" : "2"}
           vectorEffect="non-scaling-stroke"
         />
       </svg>

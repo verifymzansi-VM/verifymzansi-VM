@@ -284,18 +284,25 @@ describe("VerificationPage", () => {
       ).toBeGreaterThan(0);
     });
 
-    expect(within(screen.getByText("id doc").closest("div")!).getByText("Approved")).toBeTruthy();
+    const summary = within(screen.getByRole("region", { name: /Verification submitted/i }));
     expect(
-      within(screen.getByText("selfie").closest("div")!).getByText("Pending Review")
+      within(summary.getByText("ID document").closest("div")!).getByText("Approved")
     ).toBeTruthy();
-    expect(within(screen.getByText("location").closest("div")!).getByText("Approved")).toBeTruthy();
+    expect(
+      within(summary.getByText("Selfie").closest("div")!).getByText("Pending review")
+    ).toBeTruthy();
+    expect(
+      within(summary.getByText("Location").closest("div")!).getByText("Approved")
+    ).toBeTruthy();
   });
 
   it("shows a neutral status check before rendering any verification step", async () => {
     render(<VerificationPage />);
 
     expect(screen.getByText(/Loading your latest verification status/i)).toBeInTheDocument();
-    expect(screen.queryByText(/Step 1: Phone \+ OTP/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: /Step 1: Phone \+ OTP/i })
+    ).not.toBeInTheDocument();
     expect(screen.queryByText(/Verification Submitted/i)).not.toBeInTheDocument();
 
     await waitFor(() => {
@@ -326,7 +333,9 @@ describe("VerificationPage", () => {
     });
     expect(screen.getByText(/Loading your latest verification status/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/SA mobile number/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Step 1: Phone \+ OTP/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: /Step 1: Phone \+ OTP/i })
+    ).not.toBeInTheDocument();
 
     slowStatus.resolve(statusResponse);
 
@@ -410,7 +419,9 @@ describe("VerificationPage", () => {
     expect(
       screen.getByText(/Everything was submitted to admin\. Your application is pending review\./i)
     ).toBeInTheDocument();
-    expect(screen.queryByText(/Step 1: Phone \+ OTP/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: /Step 1: Phone \+ OTP/i })
+    ).not.toBeInTheDocument();
   });
 
   it("does not reopen the location form when a finalized session has already saved location", async () => {
@@ -446,7 +457,9 @@ describe("VerificationPage", () => {
       ).toBeGreaterThan(0);
     });
 
-    expect(screen.queryByText(/Step 4: Verify Your Address/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: /Step 4: Verify Your Address/i })
+    ).not.toBeInTheDocument();
     expect(screen.queryByText(/Select Your Location/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Save Address/i })).not.toBeInTheDocument();
   });
@@ -495,7 +508,7 @@ describe("VerificationPage", () => {
       expect(screen.getByText(/Action needed on id doc/i)).toBeInTheDocument();
     });
     expect(screen.getAllByText(/Please upload a clearer ID photo/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Step 2: ID details/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Step 2: ID details/i })).toBeInTheDocument();
     expect(screen.queryByText(/Verification Approved/i)).not.toBeInTheDocument();
   });
 
@@ -522,13 +535,16 @@ describe("VerificationPage", () => {
     render(<VerificationPage />);
 
     await waitFor(() => {
-      expect(screen.getAllByRole("heading", { name: /Verification Approved/i }).length).toBe(2);
+      expect(screen.getAllByRole("heading", { name: /Verification Approved/i }).length).toBe(1);
+      expect(
+        screen.getByRole("heading", { level: 1, name: /You're verified/i })
+      ).toBeInTheDocument();
     });
 
     expect(screen.getAllByText(/Your account is verified/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/4 of 4 steps submitted/i)).toBeInTheDocument();
     expect(screen.getAllByText(/^Approved$/i).length).toBeGreaterThanOrEqual(4);
-    expect(screen.queryByText(/Step 2: ID details/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /Step 2: ID details/i })).not.toBeInTheDocument();
     expect(
       screen.queryByText(/First name as shown on your ID is required/i)
     ).not.toBeInTheDocument();
@@ -638,7 +654,7 @@ describe("VerificationPage", () => {
     render(<VerificationPage />);
 
     await waitFor(() => {
-      expect(screen.getByText(/Step 3: Selfie/i)).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: /Step 3: Selfie/i })).toBeInTheDocument();
     });
 
     statusResponse = jsonResponse(
@@ -665,7 +681,9 @@ describe("VerificationPage", () => {
     expect(screen.getByText(/Everything was submitted to admin/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Selfie: pending/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Location: approved/i)).toBeInTheDocument();
-    expect(screen.queryByText(/Step 4: Verify Your Address/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: /Step 4: Verify Your Address/i })
+    ).not.toBeInTheDocument();
   });
 
   it("never renders OTP helper hints after sending a real OTP", async () => {
@@ -982,7 +1000,7 @@ describe("VerificationPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Step 3: Selfie/i)).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: /Step 3: Selfie/i })).toBeInTheDocument();
     });
 
     await openCameraAndUseFileFallback(
@@ -992,7 +1010,9 @@ describe("VerificationPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Step 4: Verify Your Address/i)).toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { name: /Step 4: Verify Your Address/i })
+      ).toBeInTheDocument();
     });
 
     const verificationUploadCalls = fetchCalls().filter(([input]) =>
@@ -1048,7 +1068,7 @@ describe("VerificationPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Step 3: Selfie/i)).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: /Step 3: Selfie/i })).toBeInTheDocument();
     });
 
     expect(mockToast).toHaveBeenCalledWith(
@@ -1211,9 +1231,7 @@ describe("VerificationPage", () => {
     expect(gpsButton.compareDocumentPosition(saveButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     );
-    expect(
-      screen.getByText(/Saving your address sends the verification to admin/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Four quick checks/i)).toBeInTheDocument();
     expect(screen.getByText(/Review Before Saving/i)).toBeInTheDocument();
   });
 
@@ -1629,7 +1647,9 @@ describe("VerificationPage", () => {
     render(<VerificationPage />);
 
     await waitFor(() => {
-      expect(screen.getByText(/Step 4: Verify Your Address/i)).toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { name: /Step 4: Verify Your Address/i })
+      ).toBeInTheDocument();
     });
 
     fireEvent.change(screen.getByLabelText(/^Province$/i), {
@@ -1645,7 +1665,9 @@ describe("VerificationPage", () => {
         screen.getAllByRole("heading", { name: /Verification Submitted/i }).length
       ).toBeGreaterThan(0);
     });
-    expect(screen.queryByText(/Step 1: Phone \+ OTP/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: /Step 1: Phone \+ OTP/i })
+    ).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Submit Verification/i })).not.toBeInTheDocument();
   });
 });

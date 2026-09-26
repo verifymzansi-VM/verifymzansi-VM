@@ -48,7 +48,7 @@ export function ListingContactActions({
         contactPayloadKey: "listingId",
         contactErrorFallback: "Failed to send message",
         reportTargetType: "listing",
-        reportTitle: "Report Listing",
+        reportTitle: "Report listing",
         reportPlaceholder: "Please describe what's wrong with this listing...",
         reportSuccessCopy: "Thank you. Our team will review this listing.",
         reportOptions: [
@@ -60,10 +60,10 @@ export function ListingContactActions({
           { value: "spam", label: "Spam" },
           { value: "other", label: "Other" },
         ],
-        messageTitle: "Send a Message",
+        messageTitle: "Message the seller",
         messageDescription: "Your enquiry is saved in the seller’s inbox with your reply details.",
         messagePlaceholder: "Hi, I'm interested in this listing...",
-        messageSubmitLabel: "Send",
+        messageSubmitLabel: "Send enquiry",
         messageSuccessCopy:
           "Your enquiry is in the seller’s inbox. They can reply using the contact details you provided.",
       }}

@@ -46,7 +46,7 @@ describe("seller contact actions", () => {
       target: { value: "Is this still available?" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Complete CAPTCHA" }));
-    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send enquiry" }));
     await waitFor(() => expect(screen.getByText("Enquiry saved!")).toBeInTheDocument());
     const body = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
     expect(body).toMatchObject({

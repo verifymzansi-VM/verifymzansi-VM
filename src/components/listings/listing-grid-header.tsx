@@ -1,11 +1,15 @@
 "use client";
 
-import { ArrowUpDown, X } from "lucide-react";
+import { ArrowUpDown } from "lucide-react";
 import { useMarketplaceStore } from "@/stores";
-import { Badge } from "@/components/ui/badge";
 import { CATEGORIES, BUSINESS_CATEGORIES } from "@/lib/constants/categories";
 import { getListingConditionLabel } from "@/lib/constants/listing-condition";
 import { useHydrated } from "@/hooks/use-hydrated";
+import {
+  RemovableFilterChip,
+  describeAttributeFilter,
+  formatPriceRangeLabel,
+} from "./filter-controls";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,8 +23,8 @@ export function ListingGridHeader() {
 
   const sortOptions = [
     { value: "newest", label: "Recently posted" },
-    { value: "price_asc", label: "Price: Low → High" },
-    { value: "price_desc", label: "Price: High → Low" },
+    { value: "price_asc", label: "Lowest price" },
+    { value: "price_desc", label: "Highest price" },
     { value: "popular", label: "Most popular" },
   ];
   const currentSortLabel =
@@ -37,18 +41,21 @@ export function ListingGridHeader() {
     Object.values(filters.attributes).some((v) => v !== undefined && v !== "");
 
   return (
-    <div className="space-y-3 mb-5">
+    <div className="mb-5 space-y-3">
       {/* Toolbar row */}
       <div className="flex items-center justify-end gap-2">
         <div className="flex items-center gap-1.5 text-muted-foreground">
           {isHydrated ? (
             <DropdownMenu>
-              <DropdownMenuTrigger className="flex min-h-9 items-center gap-1.5 rounded-full border border-border/70 bg-card px-3.5 py-1.5 text-xs font-medium text-foreground shadow-xs outline-none transition-all hover:-translate-y-px hover:border-brand-green/50 hover:text-brand-green hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0">
-                <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
+              <DropdownMenuTrigger
+                aria-label={`Sort: ${currentSortLabel}`}
+                className="flex min-h-10 items-center gap-1.5 rounded-full border border-border bg-card px-3.5 text-sm font-medium text-foreground outline-none transition-colors hover:border-foreground/25 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <ArrowUpDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                 <span className="hidden sm:inline">{currentSortLabel}</span>
                 <span className="sm:hidden">Sort</span>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[160px]">
+              <DropdownMenuContent align="end" className="w-44">
                 {sortOptions.map((option) => (
                   <DropdownMenuItem
                     key={option.value}
@@ -68,10 +75,10 @@ export function ListingGridHeader() {
           ) : (
             <button
               type="button"
-              className="flex items-center gap-1.5 border-none bg-transparent text-xs font-medium text-foreground"
+              className="flex min-h-10 items-center gap-1.5 rounded-full border border-border bg-card px-3.5 text-sm font-medium text-foreground opacity-70"
               disabled
             >
-              <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
+              <ArrowUpDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
               <span className="hidden sm:inline">{currentSortLabel}</span>
               <span className="sm:hidden">Sort</span>
             </button>
@@ -81,114 +88,65 @@ export function ListingGridHeader() {
 
       {/* Active filter chips – hidden on mobile where ActiveFilterChips handles this */}
       {hasActiveFilters && (
-        <div className="hidden lg:flex flex-wrap items-center gap-1.5">
+        <div className="hidden flex-wrap items-center gap-1.5 lg:flex">
           {filters.query && (
-            <Badge
-              variant="secondary"
-              className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-green-200"
-            >
-              {filters.query}
-              <button
-                type="button"
-                className="rounded-full p-0.5 opacity-60 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label={`Remove query filter ${filters.query}`}
-                onClick={() => setFilter("query", undefined)}
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
+            <RemovableFilterChip
+              label={filters.query}
+              removeLabel={`Remove query filter ${filters.query}`}
+              onRemove={() => setFilter("query", undefined)}
+            />
           )}
           {filters.category && (
-            <Badge
-              variant="secondary"
-              className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-green-200"
-            >
-              {[...CATEGORIES, ...BUSINESS_CATEGORIES].find((c) => c.value === filters.category)
-                ?.label ||
-                filters.category.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
-              <button
-                type="button"
-                className="rounded-full p-0.5 opacity-60 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label="Remove category filter"
-                onClick={() => setFilter("category", undefined)}
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
+            <RemovableFilterChip
+              label={
+                [...CATEGORIES, ...BUSINESS_CATEGORIES].find((c) => c.value === filters.category)
+                  ?.label ||
+                filters.category.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+              }
+              removeLabel="Remove category filter"
+              onRemove={() => setFilter("category", undefined)}
+            />
           )}
           {filters.province && (
-            <Badge
-              variant="secondary"
-              className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-green-200"
-            >
-              {filters.province}
-              {filters.city && ` › ${filters.city}`}
-              <button
-                type="button"
-                className="rounded-full p-0.5 opacity-60 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label="Remove location filter"
-                onClick={() => setFilter("province", undefined)}
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
+            <RemovableFilterChip
+              label={filters.city ? `${filters.city}, ${filters.province}` : filters.province}
+              removeLabel="Remove location filter"
+              onRemove={() => {
+                setFilter("province", undefined);
+                setFilter("city", undefined);
+              }}
+            />
           )}
           {filters.condition && (
-            <Badge
-              variant="secondary"
-              className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-green-200"
-            >
-              {getListingConditionLabel(filters.condition)}
-              <button
-                type="button"
-                className="rounded-full p-0.5 opacity-60 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label="Remove condition filter"
-                onClick={() => setFilter("condition", undefined)}
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
+            <RemovableFilterChip
+              label={getListingConditionLabel(filters.condition)}
+              removeLabel="Remove condition filter"
+              onRemove={() => setFilter("condition", undefined)}
+            />
           )}
           {(filters.priceMin || filters.priceMax) && (
-            <Badge
-              variant="secondary"
-              className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-green-200"
-            >
-              R{filters.priceMin || 0} – R{filters.priceMax || "∞"}
-              <button
-                type="button"
-                className="rounded-full p-0.5 opacity-60 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label="Remove price filter"
-                onClick={() => {
-                  setFilter("priceMin", undefined);
-                  setFilter("priceMax", undefined);
-                }}
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
+            <RemovableFilterChip
+              label={formatPriceRangeLabel(filters.priceMin, filters.priceMax)}
+              removeLabel="Remove price filter"
+              onRemove={() => {
+                setFilter("priceMin", undefined);
+                setFilter("priceMax", undefined);
+              }}
+            />
           )}
           {Object.entries(filters.attributes)
             .filter(([, v]) => v !== undefined && v !== "")
             .map(([name, val]) => (
-              <Badge
+              <RemovableFilterChip
                 key={name}
-                variant="secondary"
-                className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium capitalize text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-green-200"
-              >
-                {typeof val === "boolean" ? name.replace(/_/g, " ") : String(val)}
-                <button
-                  type="button"
-                  className="rounded-full p-0.5 opacity-60 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={`Remove ${name.replace(/_/g, " ")} filter`}
-                  onClick={() => setAttribute(name, undefined)}
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
+                label={describeAttributeFilter(filters.category, name, val!)}
+                removeLabel={`Remove ${name.replace(/_/g, " ")} filter`}
+                onRemove={() => setAttribute(name, undefined)}
+              />
             ))}
           <button
-            className="text-xs text-muted-foreground hover:text-foreground underline ml-1 transition-colors"
+            type="button"
+            className="min-h-9 rounded-full px-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={resetFilters}
           >
             Clear all

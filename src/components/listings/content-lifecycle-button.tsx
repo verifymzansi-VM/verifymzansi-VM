@@ -78,7 +78,7 @@ export function ContentLifecycleButton({
         size="sm"
         className={`h-11 gap-1.5 px-3 ${
           action === "reactivate"
-            ? "border-brand-green text-brand-green hover:bg-brand-green/10"
+            ? "border-brand-green-600 text-brand-green-700 hover:bg-brand-green/10 dark:border-brand-green-400 dark:text-brand-green-300"
             : ""
         }`}
         onClick={run}

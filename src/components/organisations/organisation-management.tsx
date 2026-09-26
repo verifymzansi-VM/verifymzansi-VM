@@ -1,5 +1,6 @@
 "use client";
 
+import { formatSaLongDate } from "@/lib/utils/format";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -52,10 +53,8 @@ const AFFILIATION_TYPES: ReadonlyArray<[string, string]> = [
   ["affiliate", "Affiliated with"],
 ];
 
-const date = new Intl.DateTimeFormat("en-ZA", {
-  dateStyle: "medium",
-  timeZone: "Africa/Johannesburg",
-});
+// Deterministic SA date (Intl output differs between server and browser → hydration errors).
+const date = { format: (value: Date) => formatSaLongDate(value) };
 const label = (value: string | null) => (value ? value.replace(/_/g, " ") : "—");
 
 function useOrganisationAction(organisationId: string) {

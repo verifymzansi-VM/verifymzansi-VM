@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ArrowRight, Check, LayoutGrid, UserRoundCheck, BadgeCheck } from "lucide-react";
+import { ArrowRight, LayoutGrid, UserRoundCheck, BadgeCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
@@ -19,7 +19,6 @@ import { HELLO_CONTACT_EMAIL } from "@/lib/contact-email";
 import { DisableMobileAutoplay } from "@/contexts/autoplay-policy-context";
 import { getServerPublicRuntimeConfig } from "@/lib/public-runtime-config";
 import { getOfficialSocialSameAs } from "@/lib/official-social-links";
-import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import {
   VERIFY_MZANSI_CATEGORY_SEO,
   VERIFY_MZANSI_SITE_DESCRIPTION,
@@ -42,19 +41,16 @@ const START_STEPS = [
   {
     icon: UserRoundCheck,
     title: "Create your free account",
-    detail: "For yourself, your business, or the events you host.",
     tile: "area-market-tile",
   },
   {
     icon: BadgeCheck,
     title: "Complete verification",
-    detail: "Phone, ID evidence, selfie and location, reviewed once.",
     tile: "bg-brand-gold/15 text-brand-gold-800 dark:text-brand-gold-300",
   },
   {
     icon: LayoutGrid,
     title: "Choose where to post",
-    detail: "Mzansi Market, Mzansi Business, or Tourism & Events.",
     tile: "area-business-tile",
   },
 ] as const;
@@ -63,11 +59,6 @@ export default async function HomePage() {
   const runtimeConfig = getServerPublicRuntimeConfig();
   const url = runtimeConfig.appUrl || "https://verifymzansi.com";
   const sameAs = getOfficialSocialSameAs(runtimeConfig.officialSocialLinks);
-  const freePostHighlights = [
-    "One free introductory post: 7 or limited 30 days",
-    `${FREE_POST_CONFIG.maxPhotos} photos + ${FREE_POST_CONFIG.maxVideos} video`,
-    "Trust-first publishing",
-  ] as const;
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -159,14 +150,11 @@ export default async function HomePage() {
               heading={
                 <div className="container-page mb-5 flex items-end justify-between gap-4 pt-2">
                   <div>
-                    <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-brand-gold-700 dark:text-brand-gold-300">
+                    <p className="flex items-center gap-2 text-sm font-semibold text-brand-gold-800 dark:text-brand-gold-300">
                       <span aria-hidden="true" className="h-1.5 w-5 rounded-full bg-brand-gold" />
                       Spotlight
                     </p>
                     <h2 className="section-title mt-2">Trending across Mzansi</h2>
-                    <p className="section-lede">
-                      Boosted and newest posts. Swipe or use the arrows.
-                    </p>
                   </div>
                   <Link
                     href="/advertise"
@@ -203,26 +191,13 @@ export default async function HomePage() {
           <section aria-labelledby="home-start-title" className="container-page py-12 sm:py-16">
             <div className="grid gap-8 rounded-[32px] border border-border/70 bg-card p-6 elev-sm sm:p-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-center lg:gap-14 lg:p-14">
               <div>
-                <span className="section-kicker">Sell, list or host</span>
                 <h2
                   id="home-start-title"
-                  className="mt-4 font-display text-3xl font-bold leading-tight tracking-tight sm:text-4xl"
+                  className="font-display text-3xl font-bold leading-tight tracking-tight sm:text-4xl"
                 >
-                  Start in minutes. Your first post is free.
+                  Your first post is free.
                 </h2>
-                <p className="mt-3 max-w-lg text-base leading-7 text-muted-foreground">
-                  Marketplace items, business profiles, stays, venues and events. Verify once and
-                  your badge follows every post.
-                </p>
-                <div className="mt-5 flex flex-wrap gap-2">
-                  {freePostHighlights.map((highlight) => (
-                    <span key={highlight} className="chip">
-                      <Check className="h-3.5 w-3.5 text-brand-green-600" aria-hidden="true" />
-                      {highlight}
-                    </span>
-                  ))}
-                </div>
-                <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
                   <Button
                     asChild
                     variant="trust-verified"
@@ -230,18 +205,17 @@ export default async function HomePage() {
                     className="h-12 w-full rounded-full px-7 sm:w-auto"
                   >
                     <Link href="/post/create" prefetch={false}>
-                      Post for Free
-                      <ArrowRight className="h-5 w-5" />
+                      Post for free
                     </Link>
                   </Button>
                   <div className="flex items-center gap-5 px-1">
                     <Link href="/pricing" prefetch={false} className="link-arrow">
                       Pricing
-                      <ArrowRight className="h-4 w-4" />
+                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
                     </Link>
                     <Link href="/advertise" prefetch={false} className="link-arrow">
                       Advertise
-                      <ArrowRight className="h-4 w-4" />
+                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
                     </Link>
                   </div>
                 </div>
@@ -251,7 +225,7 @@ export default async function HomePage() {
                 {START_STEPS.map((step, index) => (
                   <li
                     key={step.title}
-                    className="flex items-start gap-4 rounded-2xl border border-border/70 bg-background/60 p-4 sm:p-5"
+                    className="flex items-center gap-4 rounded-2xl border border-border/70 bg-background/60 p-4"
                   >
                     <span
                       className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${step.tile}`}
@@ -259,17 +233,12 @@ export default async function HomePage() {
                     >
                       <step.icon className="h-5 w-5" />
                     </span>
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold tabular-nums text-muted-foreground">
-                        Step {index + 1}
-                      </p>
-                      <h3 className="font-body text-base font-semibold text-foreground">
-                        {step.title}
-                      </h3>
-                      <p className="mt-0.5 text-sm leading-6 text-muted-foreground">
-                        {step.detail}
-                      </p>
-                    </div>
+                    <h3 className="min-w-0 font-body text-base font-semibold text-foreground">
+                      <span aria-hidden="true" className="mr-2 tabular-nums text-muted-foreground">
+                        {index + 1}.
+                      </span>
+                      <span>{step.title}</span>
+                    </h3>
                   </li>
                 ))}
               </ol>

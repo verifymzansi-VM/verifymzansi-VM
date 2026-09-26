@@ -1,56 +1,61 @@
-import { Skeleton } from "@/components/ui/skeleton";
+import { Bone, LoadingRegion } from "@/components/shared/page-skeletons";
+import { ListingCardSkeleton } from "@/components/listings/listing-skeleton";
 
+/** Browse pages: area intro, showroom band, then filters beside the results grid. */
 export default function MarketplaceLoading() {
   return (
-    <div className="space-y-0" aria-busy="true" aria-label="Loading">
-      {/* Showroom hero skeleton — full width */}
-      <div className="relative w-full aspect-[21/9] md:aspect-[3/1] bg-warm-100 dark:bg-warm-900">
-        <div className="absolute inset-0 flex items-end p-6 md:p-10">
-          <div className="space-y-3 w-full max-w-lg">
-            <Skeleton className="h-4 w-24 rounded-full" />
-            <Skeleton className="h-7 w-3/4" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-9 w-32 rounded-lg" />
+    <LoadingRegion>
+      {/* AreaHero */}
+      <div className="border-b border-border/60">
+        <div className="container-page py-6 sm:py-9">
+          <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+            <div className="flex min-w-0 items-start gap-4">
+              <Bone className="hidden h-14 w-14 shrink-0 rounded-2xl sm:block" />
+              <div className="min-w-0 flex-1 space-y-2.5">
+                <Bone className="h-8 w-56 rounded-lg sm:h-10 sm:w-72" />
+                <Bone className="h-4 w-full max-w-md rounded-full" />
+                <Bone className="h-4 w-56 rounded-full" />
+              </div>
+            </div>
+            <Bone className="h-11 w-full shrink-0 rounded-full sm:w-40" />
+          </div>
+          <div className="mt-5 flex gap-2 overflow-hidden">
+            {Array.from({ length: 7 }).map((_, i) => (
+              <Bone key={i} className="h-9 w-28 shrink-0 rounded-full" />
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Trust strip skeleton */}
-      <div className="h-8 bg-warm-50 dark:bg-warm-900 border-y border-warm-200 dark:border-warm-800" />
+      {/* Showroom band */}
+      <div className="flex h-[420px] items-center justify-center gap-4 overflow-hidden bg-muted/50 sm:h-[480px]">
+        <Bone className="hidden h-[70%] w-44 rounded-[28px] opacity-60 sm:block" />
+        <Bone className="h-[88%] w-60 rounded-[28px] lg:w-72" />
+        <Bone className="hidden h-[70%] w-44 rounded-[28px] opacity-60 sm:block" />
+      </div>
 
-      {/* Main content area */}
-      <div className="container-page py-6 space-y-4">
-        {/* Page header skeleton */}
-        <div className="space-y-1">
-          <Skeleton className="h-6 w-48" />
-          <Skeleton className="h-4 w-72" />
+      {/* Filters + grid */}
+      <div className="container-page grid gap-6 py-8 lg:grid-cols-[260px_minmax(0,1fr)]">
+        <div className="surface-card hidden space-y-4 p-4 lg:block">
+          <Bone className="h-5 w-32 rounded-full" />
+          <Bone className="h-10 w-full rounded-xl" />
+          <Bone className="h-4 w-20 rounded-full" />
+          <Bone className="h-10 w-full rounded-xl" />
+          <Bone className="h-4 w-20 rounded-full" />
+          <Bone className="h-10 w-full rounded-xl" />
         </div>
-
-        {/* Category strip skeleton */}
-        <div className="flex gap-3 overflow-hidden">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="h-9 w-24 rounded-full shrink-0" />
-          ))}
-        </div>
-
-        {/* Grid skeleton */}
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-5 xl:gap-6">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div
-              key={i}
-              className="rounded-xl border border-warm-200 dark:border-warm-700 p-3 space-y-3"
-            >
-              <Skeleton className="h-44 w-full rounded-lg" />
-              <Skeleton className="h-5 w-3/4" />
-              <Skeleton className="h-4 w-1/2" />
-              <div className="flex justify-between items-center pt-1">
-                <Skeleton className="h-5 w-20" />
-                <Skeleton className="h-4 w-16" />
-              </div>
-            </div>
-          ))}
+        <div className="space-y-5">
+          <div className="space-y-2">
+            <Bone className="h-7 w-48 rounded-lg" />
+            <Bone className="h-4 w-64 rounded-full" />
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-5">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <ListingCardSkeleton key={i} />
+            ))}
+          </div>
         </div>
       </div>
-    </div>
+    </LoadingRegion>
   );
 }

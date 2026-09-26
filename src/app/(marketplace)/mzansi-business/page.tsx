@@ -122,8 +122,8 @@ export default async function MzansiBusinessPage() {
         <AreaHero
           area="business"
           title="Mzansi Business"
-          description="Find shops, trades, services and professionals, and see who represents them."
-          trustLine="Profiles are posted by ID-reviewed representatives"
+          description="Shops, trades and services near you."
+          trustLine="ID-reviewed representatives"
           ctaHref="/post/create-business"
           ctaLabel="Add your business"
           quickLinks={BUSINESS_QUICK_LINKS}

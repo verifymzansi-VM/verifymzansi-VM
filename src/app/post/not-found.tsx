@@ -6,28 +6,27 @@ import { Footer } from "@/components/layout/footer";
 
 export default function PostNotFound() {
   return (
-    <div className="flex min-h-screen flex-col pb-16 md:pb-0">
+    <div className="flex min-h-screen flex-col">
       <Header />
       <main
         id="main-content"
-        className="flex-1 flex flex-col items-center justify-center gap-6 px-4 text-center"
+        className="flex flex-1 flex-col items-center justify-center gap-5 px-4 py-12 text-center"
       >
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
-          <FileQuestion className="h-7 w-7 text-muted-foreground" />
-        </div>
-        <div className="max-w-md space-y-2">
-          <h1 className="text-lg sm:text-xl font-display font-bold">Post Not Found</h1>
+        <span className="empty-state-icon">
+          <FileQuestion className="h-7 w-7" aria-hidden="true" />
+        </span>
+        <div className="max-w-sm space-y-2">
+          <h1 className="font-display text-2xl font-bold tracking-tight">Post not found</h1>
           <p className="text-sm text-muted-foreground">
-            This post page doesn&apos;t exist. You can create a new post or return to your
-            dashboard.
+            It may have been removed, or the link is wrong.
           </p>
         </div>
-        <div className="flex flex-wrap justify-center gap-3">
-          <Button asChild variant="outline">
-            <Link href="/dashboard">Go to Dashboard</Link>
+        <div className="flex w-full max-w-xs flex-col gap-2 sm:max-w-none sm:flex-row sm:justify-center">
+          <Button asChild variant="trust-verified" className="h-11 rounded-full px-6">
+            <Link href="/post/create">Create a post</Link>
           </Button>
-          <Button asChild>
-            <Link href="/post/create">Create a Post</Link>
+          <Button asChild variant="outline" className="h-11 rounded-full px-6">
+            <Link href="/dashboard">Go to dashboard</Link>
           </Button>
         </div>
       </main>

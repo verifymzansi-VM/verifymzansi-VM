@@ -6,24 +6,11 @@ import { cn } from "@/lib/utils";
 type GridStateTone = "green" | "blue" | "teal";
 type GridStateKind = "empty" | "filtered-empty" | "error";
 
+// "teal" is the historical name for the Tourism & Events tone (now Sunset Coral).
 const toneTileClasses: Record<GridStateTone, string> = {
-  green:
-    "bg-brand-green-50 text-brand-green ring-brand-green/15 dark:bg-brand-green-950/60 dark:ring-brand-green/25",
-  blue: "bg-brand-blue/10 text-brand-blue ring-brand-blue/20 dark:bg-brand-blue/15 dark:ring-brand-blue/30",
-  teal: "bg-sunset-500/10 text-sunset-600 ring-sunset-500/20 dark:bg-sunset-500/15 dark:text-sunset-300 dark:ring-sunset-400/30",
-};
-
-const tonePanelClasses: Record<GridStateTone, string> = {
-  green:
-    "border-brand-green/25 bg-gradient-to-b from-brand-green-50/60 to-transparent dark:from-brand-green-950/30",
-  blue: "border-brand-blue/25 bg-gradient-to-b from-brand-blue/5 to-transparent dark:from-brand-blue/10",
-  teal: "border-sunset-500/25 bg-gradient-to-b from-sunset-500/5 to-transparent dark:from-sunset-500/10",
-};
-
-const toneIconClasses: Record<GridStateTone, string> = {
-  green: "text-brand-green",
-  blue: "text-brand-blue",
-  teal: "text-sunset-600 dark:text-sunset-300",
+  green: "area-market-tile",
+  blue: "area-business-tile",
+  teal: "area-tourism-tile",
 };
 
 interface GridStateMessageProps {
@@ -61,32 +48,27 @@ export function GridStateMessage({
 
   return (
     <div
-      className={cn(
-        "flex flex-col items-center justify-center space-y-5 rounded-3xl border border-dashed px-6 py-12 text-center sm:py-16",
-        isError
-          ? "border-destructive/30 bg-gradient-to-b from-destructive/5 to-transparent"
-          : tonePanelClasses[tone]
-      )}
+      className="flex flex-col items-center justify-center rounded-3xl border border-border/70 bg-card px-5 py-10 text-center elev-xs sm:px-8 sm:py-12"
       data-testid={testId}
       data-grid-state={state}
+      role={isError ? "alert" : undefined}
     >
       <div
+        aria-hidden="true"
         className={cn(
-          "flex h-16 w-16 items-center justify-center rounded-2xl ring-1 elev-xs",
-          isError ? "bg-amber-500/10 text-amber-500 ring-amber-500/25" : toneTileClasses[tone]
+          "flex h-14 w-14 items-center justify-center rounded-2xl [&_svg]:h-7 [&_svg]:w-7",
+          isError
+            ? "bg-brand-red/10 text-brand-red-700 dark:bg-brand-red/15 dark:text-brand-red-300"
+            : toneTileClasses[tone]
         )}
       >
-        {icon ? (
-          icon
-        ) : isError ? (
-          <AlertTriangle className="h-8 w-8" />
-        ) : (
-          <PackageOpen className={cn("h-8 w-8", toneIconClasses[tone])} />
-        )}
+        {icon ? icon : isError ? <AlertTriangle /> : <PackageOpen />}
       </div>
 
-      <div className="max-w-md space-y-1.5 text-center">
-        <p className="font-display text-lg font-semibold tracking-tight sm:text-xl">{title}</p>
+      <div className="mt-4 max-w-md space-y-1.5">
+        <p className="font-display text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+          {title}
+        </p>
         <p className="text-sm leading-6 text-muted-foreground">{body}</p>
         {isError && errorCode ? (
           <Badge variant="outline" className="mt-1 font-mono text-[10px]">
@@ -96,7 +78,9 @@ export function GridStateMessage({
       </div>
 
       {children ? (
-        <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">{children}</div>
+        <div className="mt-6 flex w-full flex-col items-stretch justify-center gap-2.5 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
+          {children}
+        </div>
       ) : null}
     </div>
   );

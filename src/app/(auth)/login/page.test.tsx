@@ -101,6 +101,37 @@ describe("LoginPage", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("tells people where they will land when a returnUrl is present", async () => {
+    window.history.pushState({}, "", "/login?returnUrl=%2Fverification");
+
+    render(<LoginPage />);
+
+    expect(
+      await screen.findByText(/We'll take you to your verification next/i)
+    ).toBeInTheDocument();
+  });
+
+  it("ignores unsafe returnUrl values in the page copy", async () => {
+    window.history.pushState({}, "", "/login?returnUrl=https%3A%2F%2Fevil.example");
+
+    render(<LoginPage />);
+
+    expect(await screen.findByText(/^Welcome back\.$/)).toBeInTheDocument();
+  });
+
+  it("links to password recovery and sign-up", async () => {
+    render(<LoginPage />);
+
+    expect(screen.getByRole("link", { name: /forgot password/i })).toHaveAttribute(
+      "href",
+      "/forgot-password"
+    );
+    expect(screen.getByRole("link", { name: /create an account/i })).toHaveAttribute(
+      "href",
+      "/register"
+    );
+  });
+
   it("enables the email and password fields after hydration", async () => {
     render(<LoginPage />);
 

@@ -3,11 +3,7 @@ import { organisationsPublicEnabled } from "@/lib/commercial/settings";
 import Link from "next/link";
 import { Landmark } from "lucide-react";
 import type { PublicAffiliation } from "@/lib/organisations/affiliations";
-
-const date = new Intl.DateTimeFormat("en-ZA", {
-  dateStyle: "long",
-  timeZone: "Africa/Johannesburg",
-});
+import { formatSaLongDate } from "@/lib/utils/format";
 
 /** Load a business's public affiliations; failures render nothing. */
 export async function loadBusinessAffiliations(
@@ -39,10 +35,10 @@ export function BusinessAffiliationsSection({
   const sponsored = affiliations.filter((row) => row.sponsored && row.sponsorship_label);
 
   return (
-    <section aria-labelledby="affiliations-title" className="container-page pb-8">
-      <div className="surface-card space-y-4 p-4 sm:p-5">
-        <h2 id="affiliations-title" className="font-display text-base font-semibold">
-          Organisation affiliations
+    <section aria-labelledby="affiliations-title">
+      <div className="surface-card elev-xs space-y-4 rounded-2xl p-5 sm:p-6">
+        <h2 id="affiliations-title" className="font-display text-lg font-semibold tracking-tight">
+          Programmes and memberships
         </h2>
         <ul className="space-y-3">
           {affiliations.map((row) => (
@@ -68,8 +64,10 @@ export function BusinessAffiliationsSection({
                 >
                   {row.programme_name ?? row.organisation_name}
                 </Link>
-                <p className="text-muted-foreground">
-                  {row.label} · Confirmed {date.format(new Date(row.confirmed_at))}
+                <p className="text-muted-foreground">{row.label}</p>
+                <p className="text-xs text-muted-foreground">
+                  Confirmed{" "}
+                  <time dateTime={row.confirmed_at}>{formatSaLongDate(row.confirmed_at)}</time>
                 </p>
               </div>
             </li>
@@ -87,8 +85,7 @@ export function BusinessAffiliationsSection({
           </div>
         ) : null}
         <p className="text-xs text-muted-foreground">
-          Affiliation means the organisation confirmed this business participates in its programme.
-          It is not a guarantee by the organisation.
+          Confirmed by the organisation. Not a guarantee.
         </p>
       </div>
     </section>

@@ -41,7 +41,7 @@ describe("MediaCropPreview", () => {
   it("renders header with Move icon text", () => {
     const onChange = vi.fn();
     render(<MediaCropPreview file={makeImageFile()} onChange={onChange} />);
-    expect(screen.getByText("Adjust how your image appears on cards")).toBeInTheDocument();
+    expect(screen.getByText("Drag to frame your cover")).toBeInTheDocument();
   });
 
   it("creates object URL from the image file", () => {
@@ -145,10 +145,10 @@ describe("MediaCropPreview", () => {
     expect(container.firstChild).toHaveClass("my-custom");
   });
 
-  it("shows instruction text", () => {
+  it("labels the draggable crop area for assistive tech", () => {
     const onChange = vi.fn();
     render(<MediaCropPreview file={makeImageFile()} onChange={onChange} />);
-    expect(screen.getByText(/Drag the image to position/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Drag to position crop")).toBeInTheDocument();
   });
 
   it("revokes object URL on unmount", () => {

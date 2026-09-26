@@ -8,11 +8,9 @@ import Link from "next/link";
 import {
   Building2,
   Camera,
-  ChevronLeft,
-  ChevronRight,
+  ChevronDown,
   CreditCard,
   FileText,
-  Film,
   Globe,
   Mail,
   MapPin,
@@ -22,12 +20,12 @@ import {
   Store,
   Truck,
   Wrench,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { useToast } from "@/hooks/use-toast";
@@ -46,9 +44,12 @@ import {
 } from "@/lib/forms/business-category-details";
 import { BUSINESS_CATEGORY_LABELS, type BusinessCategory, type BusinessType } from "@/types/enums";
 import { cn } from "@/lib/utils";
+import { PhotoOrderList } from "@/components/post/photo-order-list";
 import {
+  PostDraftStatus,
   PostFormFooter,
   PostFormScaffold,
+  PostFormSection,
   type PostFormStep,
 } from "@/components/post/post-form-scaffold";
 import {
@@ -72,6 +73,7 @@ import { BusinessTypeDetailsFields } from "@/components/business/business-type-d
 import type { BusinessDetails } from "@/types/business-details";
 import type { BusinessDetailRecord } from "@/components/business/business-detail-content";
 import { BusinessLayoutRouter } from "@/components/business/layouts/business-layout-router";
+import { BusinessCard } from "@/components/listings/business-card";
 import type { LayoutTemplate } from "@/lib/business/layout-templates";
 import type { BusinessDraftData } from "@/lib/post-drafts/storage";
 import {
@@ -84,11 +86,15 @@ import { checkUploadServiceReachable } from "@/lib/utils/upload-preflight";
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
 
 const SELECT_CLASS =
-  "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm";
+  "flex h-11 w-full rounded-xl border border-input bg-card px-3.5 py-2 text-base shadow-xs transition-colors hover:border-foreground/30 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 sm:h-10 sm:text-sm";
 const STEPS: PostFormStep[] = [
-  { label: "Details", icon: FileText, description: "Type, name, category, and overview" },
-  { label: "Location & Contact", icon: MapPin, description: "Address, contact, and hours" },
-  { label: "Media & Review", icon: Camera, description: "Media, extras, and final review" },
+  { label: "Details", icon: FileText, description: "How you trade, name and services" },
+  {
+    label: "Location & Contact",
+    icon: MapPin,
+    description: "Address, contact and hours",
+  },
+  { label: "Media & Review", icon: Camera, description: "Photos, video and review" },
 ];
 
 const PAYMENT_METHOD_OPTIONS = [
@@ -1237,11 +1243,17 @@ function CreateBusinessContent() {
     };
 
     return (
-      <div className="rounded-xl border border-dashed border-brand-green/30 bg-brand-green/5 p-4">
-        <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-          <Building2 className="h-4 w-4" />
+      <section
+        aria-labelledby="business-preview-heading"
+        className="rounded-2xl border border-dashed border-border bg-muted/30 p-4"
+      >
+        <h3
+          id="business-preview-heading"
+          className="mb-3 flex items-center gap-2 text-base font-semibold text-foreground"
+        >
+          <Building2 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           Profile preview
-        </div>
+        </h3>
         <BusinessLayoutRouter
           business={previewBusiness as BusinessDetailRecord}
           trustLevel={null}
@@ -1251,6 +1263,34 @@ function CreateBusinessContent() {
           showPublicActions={false}
           layoutMode="review"
         />
+      </section>
+    );
+  }
+
+  function renderPreviewAside() {
+    return (
+      <div className="surface-card space-y-3 p-4">
+        <div>
+          <p className="text-sm font-semibold text-foreground">Card preview</p>
+          <p className="text-xs text-muted-foreground">Updates as you type.</p>
+        </div>
+        <div className="pointer-events-none mx-auto max-w-[280px]" inert>
+          <BusinessCard
+            id="preview-business"
+            businessName={businessName || "Your business name"}
+            businessType={businessType || "standalone_shop"}
+            description={description || undefined}
+            coverPhoto={coverPreviewUrl}
+            coverVideo={promoVideoPreviewUrl}
+            videoThumbnail={videoThumbnailPreviewUrl}
+            logoUrl={logoPreviewUrl}
+            galleryPhotos={galleryPreviewUrls}
+            province={province || "Province"}
+            city={city || "City"}
+            category={(category || undefined) as BusinessCategory | undefined}
+            subcategory={subcategory || null}
+          />
+        </div>
       </div>
     );
   }
@@ -1263,16 +1303,17 @@ function CreateBusinessContent() {
           <PlanGate area="MZANSI_BUSINESS" onTrialSelected={setTrialDays}>
             <form noValidate onSubmit={handleSubmit}>
               <PostFormScaffold
-                title="Create a Mzansi Business Profile"
-                description="Set up a clear, professional business profile that helps customers trust and contact you."
+                title="Add your business"
+                description="Your services, hours and contact details in one place."
                 breadcrumbs={[
                   { label: "Dashboard", href: "/dashboard" },
                   { label: "Create Post", href: "/post/create" },
                   { label: "Mzansi Business" },
                 ]}
                 badgeLabel="Mzansi Business"
-                badgeClassName="bg-brand-blue text-white"
-                guideDescription="Choose your business type, add the key details customers need, and submit your profile for review."
+                area="business"
+                aside={renderPreviewAside()}
+                guideDescription="Start with how you trade. The form adapts to it."
                 steps={STEPS}
                 currentStep={step}
                 error={formError}
@@ -1294,20 +1335,7 @@ function CreateBusinessContent() {
                 footer={
                   <>
                     {user?.id && !isSubmitting && (
-                      <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-xs text-muted-foreground">
-                        <p>
-                          {lastSavedAt
-                            ? `Draft saved locally at ${new Date(lastSavedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-                            : "Changes are saved locally while you fill this form."}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={handleDiscardDraft}
-                          className="font-medium text-brand-blue hover:underline"
-                        >
-                          Discard draft
-                        </button>
-                      </div>
+                      <PostDraftStatus lastSavedAt={lastSavedAt} onDiscard={handleDiscardDraft} />
                     )}
 
                     <UploadProgressPanel
@@ -1358,361 +1386,413 @@ function CreateBusinessContent() {
                 }
               >
                 {step === 0 && (
-                  <div className="space-y-5 animate-in fade-in-0 duration-300">
-                    <div id="business-type-group" tabIndex={-1} className="space-y-3">
-                      <Label>Business Type *</Label>
+                  <div className="space-y-6">
+                    <PostFormSection title="How do you trade? *">
                       <div
-                        role="radiogroup"
-                        aria-label="Business type"
-                        className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+                        id="business-type-group"
+                        tabIndex={-1}
+                        className="space-y-3 rounded-2xl focus:outline-none"
                       >
-                        {BUSINESS_TYPE_OPTIONS.map((option) => {
-                          const Icon = option.icon;
-                          const isSelected = businessType === option.value;
-                          return (
-                            <label
-                              key={option.value}
-                              className={cn(
-                                "cursor-pointer rounded-xl border-2 p-4 text-left transition-all",
-                                isSelected
-                                  ? "border-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20"
-                                  : "border-border hover:border-brand-blue/30"
-                              )}
-                            >
-                              <input
-                                type="radio"
-                                name="business-type"
-                                value={option.value}
-                                checked={isSelected}
-                                onChange={() => {
-                                  setBusinessType(option.value);
-                                  setBusinessDetails(getDefaultBusinessDetails(option.value));
-                                  if (option.value !== "mall_store") {
-                                    setStoreNumber("");
-                                    setMallPhotoFiles([]);
-                                  }
-                                  if (option.value !== "mobile_service") {
-                                    setServiceAreasInput("");
-                                  }
-                                  if (
-                                    ![
-                                      "mall_store",
-                                      "standalone_shop",
-                                      "home_business",
-                                      "market_stall",
-                                    ].includes(option.value)
-                                  ) {
-                                    setMapDirections("");
-                                  }
-                                  clearErrors(
-                                    "business_type",
-                                    "store_number",
-                                    "service_areas",
-                                    "map_directions"
-                                  );
-                                  clearErrorPrefix("business_details.");
-                                  // Auto-focus the business name field after selecting a business type
-                                  requestAnimationFrame(() => {
-                                    const el = document.getElementById("businessName");
-                                    if (el) {
-                                      el.focus();
-                                      el.scrollIntoView({ behavior: "smooth", block: "center" });
-                                    }
-                                  });
-                                }}
-                                className="sr-only"
-                              />
-                              <Icon
+                        <div
+                          role="radiogroup"
+                          aria-label="Business type"
+                          className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+                        >
+                          {BUSINESS_TYPE_OPTIONS.map((option) => {
+                            const Icon = option.icon;
+                            const isSelected = businessType === option.value;
+                            return (
+                              <label
+                                key={option.value}
                                 className={cn(
-                                  "mb-2 h-6 w-6",
-                                  isSelected ? "text-brand-blue" : "text-muted-foreground"
+                                  "relative flex cursor-pointer items-start gap-3 rounded-2xl border p-3.5 text-left transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2",
+                                  isSelected
+                                    ? "border-brand-blue-600 bg-brand-blue-50 ring-1 ring-brand-blue-600 dark:border-brand-blue-400 dark:bg-brand-blue-950/40 dark:ring-brand-blue-400"
+                                    : "border-border bg-card hover:border-foreground/25 hover:bg-muted/50"
                                 )}
-                              />
-                              <p className="text-sm font-medium">{option.label}</p>
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {option.description}
-                              </p>
-                            </label>
-                          );
-                        })}
-                      </div>
-                      {fieldErrors.business_type && (
-                        <p className="inline-form-error">{fieldErrors.business_type}</p>
-                      )}
-                    </div>
-
-                    {businessType && businessDetails && (
-                      <BusinessTypeDetailsFields
-                        businessType={businessType}
-                        businessDetails={businessDetails}
-                        onBusinessDetailsChange={(name, value) => {
-                          setBusinessDetails((current) => {
-                            const next = coerceBusinessDetails(
-                              businessType,
-                              current ?? getDefaultBusinessDetails(businessType)
+                              >
+                                <input
+                                  type="radio"
+                                  name="business-type"
+                                  value={option.value}
+                                  checked={isSelected}
+                                  onChange={() => {
+                                    setBusinessType(option.value);
+                                    setBusinessDetails(getDefaultBusinessDetails(option.value));
+                                    if (option.value !== "mall_store") {
+                                      setStoreNumber("");
+                                      setMallPhotoFiles([]);
+                                    }
+                                    if (option.value !== "mobile_service") {
+                                      setServiceAreasInput("");
+                                    }
+                                    if (
+                                      ![
+                                        "mall_store",
+                                        "standalone_shop",
+                                        "home_business",
+                                        "market_stall",
+                                      ].includes(option.value)
+                                    ) {
+                                      setMapDirections("");
+                                    }
+                                    clearErrors(
+                                      "business_type",
+                                      "store_number",
+                                      "service_areas",
+                                      "map_directions"
+                                    );
+                                    clearErrorPrefix("business_details.");
+                                    // Auto-focus the business name field after selecting a business type
+                                    requestAnimationFrame(() => {
+                                      const el = document.getElementById("businessName");
+                                      if (el) {
+                                        el.focus();
+                                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                                      }
+                                    });
+                                  }}
+                                  className="sr-only"
+                                />
+                                <span
+                                  aria-hidden="true"
+                                  className={cn(
+                                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
+                                    isSelected
+                                      ? "bg-brand-blue-600 text-white dark:bg-brand-blue-400 dark:text-brand-blue-950"
+                                      : "bg-muted text-foreground/70"
+                                  )}
+                                >
+                                  <Icon className="h-[18px] w-[18px]" />
+                                </span>
+                                <span className="min-w-0">
+                                  <span className="block text-sm font-semibold text-foreground">
+                                    {option.label}
+                                  </span>
+                                  <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
+                                    {option.description}
+                                  </span>
+                                </span>
+                              </label>
                             );
-                            return { ...next, [name]: value } as BusinessDetails;
-                          });
-                          clearErrors(`business_details.${name}`);
-                        }}
-                        deliveryAvailable={deliveryOptions.length > 0}
-                        onDeliveryAvailableChange={(nextDeliveryAvailable) => {
-                          setDeliveryAvailable(nextDeliveryAvailable);
-                          if (!nextDeliveryAvailable) {
-                            clearOnlineOnlyDeliveryDetails();
-                          }
-                        }}
-                        storeNumber={storeNumber}
-                        onStoreNumberChange={(value) => {
-                          setStoreNumber(value);
-                          clearErrors("store_number");
-                        }}
-                        serviceAreasInput={serviceAreasInput}
-                        onServiceAreasChange={(value) => {
-                          setServiceAreasInput(value);
-                          clearErrors("service_areas");
-                        }}
-                        mapDirections={mapDirections}
-                        onMapDirectionsChange={(value) => {
-                          setMapDirections(value);
-                          clearErrors("map_directions");
-                        }}
-                        fieldErrors={fieldErrors}
-                        selectClassName={SELECT_CLASS}
-                      />
-                    )}
-
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor="businessName">Business Name *</Label>
-                        <span className="text-xs text-muted-foreground">
-                          {businessName.length}/100
-                        </span>
-                      </div>
-                      <Input
-                        id="businessName"
-                        value={businessName}
-                        onChange={(event) => {
-                          setBusinessName(event.target.value);
-                          clearErrors("business_name", "slug");
-                        }}
-                        placeholder="e.g. Nomsa's Fashion Boutique"
-                        maxLength={100}
-                        aria-invalid={!!fieldErrors.business_name}
-                        className={cn(fieldErrors.business_name && "border-destructive")}
-                      />
-                      {fieldErrors.business_name && (
-                        <p className="inline-form-error">{fieldErrors.business_name}</p>
-                      )}
-                    </div>
-
-                    <details className="rounded-lg border bg-muted/30 p-3">
-                      <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground">
-                        Advanced: customise your link
-                      </summary>
-                      <div className="mt-3 space-y-2">
-                        <Label htmlFor="slug">URL Slug</Label>
-                        <Input
-                          id="slug"
-                          value={slug}
-                          onChange={(event) => {
-                            setSlugManual(true);
-                            setSlug(generateSlug(event.target.value));
-                            clearErrors("slug");
-                          }}
-                          placeholder="your-business-name"
-                          maxLength={60}
-                          aria-invalid={!!fieldErrors.slug}
-                          className={cn(fieldErrors.slug && "border-destructive")}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          We create this automatically from your business name. Keep it short and
-                          readable — lowercase letters, numbers, and hyphens only.
-                        </p>
-                        {fieldErrors.slug && (
-                          <p className="inline-form-error">{fieldErrors.slug}</p>
+                          })}
+                        </div>
+                        {fieldErrors.business_type && (
+                          <p className="inline-form-error">{fieldErrors.business_type}</p>
                         )}
                       </div>
-                    </details>
 
-                    <div className="space-y-2">
-                      <Label>Category *</Label>
-                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                        {BUSINESS_CATEGORIES.map((item) => {
-                          const Icon = item.icon;
-                          const selected = category === item.value;
-                          return (
-                            <button
-                              key={item.value}
-                              type="button"
-                              onClick={() => {
-                                setCategory(item.value);
-                                setSubcategory("");
-                                setCategoryDetails(getDefaultCategoryDetails(item.value));
-                                clearErrors("category");
-                              }}
-                              className={cn(
-                                "flex flex-col items-center gap-1 rounded-lg border p-3 text-center text-xs transition-colors hover:bg-accent/50",
-                                selected
-                                  ? "border-primary bg-primary/5 ring-1 ring-primary"
-                                  : "border-border"
-                              )}
-                            >
-                              <Icon className="h-5 w-5 text-muted-foreground" />
-                              <span className="font-medium leading-tight">{item.label}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {fieldErrors.category && (
-                        <p className="inline-form-error">{fieldErrors.category}</p>
+                      {businessType && businessDetails && (
+                        <BusinessTypeDetailsFields
+                          businessType={businessType}
+                          businessDetails={businessDetails}
+                          onBusinessDetailsChange={(name, value) => {
+                            setBusinessDetails((current) => {
+                              const next = coerceBusinessDetails(
+                                businessType,
+                                current ?? getDefaultBusinessDetails(businessType)
+                              );
+                              return { ...next, [name]: value } as BusinessDetails;
+                            });
+                            clearErrors(`business_details.${name}`);
+                          }}
+                          deliveryAvailable={deliveryOptions.length > 0}
+                          onDeliveryAvailableChange={(nextDeliveryAvailable) => {
+                            setDeliveryAvailable(nextDeliveryAvailable);
+                            if (!nextDeliveryAvailable) {
+                              clearOnlineOnlyDeliveryDetails();
+                            }
+                          }}
+                          storeNumber={storeNumber}
+                          onStoreNumberChange={(value) => {
+                            setStoreNumber(value);
+                            clearErrors("store_number");
+                          }}
+                          serviceAreasInput={serviceAreasInput}
+                          onServiceAreasChange={(value) => {
+                            setServiceAreasInput(value);
+                            clearErrors("service_areas");
+                          }}
+                          mapDirections={mapDirections}
+                          onMapDirectionsChange={(value) => {
+                            setMapDirections(value);
+                            clearErrors("map_directions");
+                          }}
+                          fieldErrors={fieldErrors}
+                          selectClassName={SELECT_CLASS}
+                        />
                       )}
-                    </div>
+                    </PostFormSection>
 
-                    {/* Subcategory dropdown */}
-                    {category &&
-                      (() => {
-                        const catDef = BUSINESS_CATEGORIES.find((c) => c.value === category);
-                        if (!catDef || catDef.subcategories.length === 0) return null;
-                        return (
-                          <div className="space-y-2">
-                            <Label htmlFor="subcategory">Subcategory</Label>
-                            <select
-                              id="subcategory"
-                              aria-label="Subcategory"
-                              className={cn(SELECT_CLASS)}
-                              value={subcategory}
-                              onChange={(event) => setSubcategory(event.target.value)}
-                            >
-                              <option value="">Select a subcategory (optional)</option>
-                              {catDef.subcategories.map((sub) => (
-                                <option key={sub.value} value={sub.value}>
-                                  {sub.label}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        );
-                      })()}
+                    <PostFormSection title="Name and category">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="businessName">Business Name *</Label>
+                          <span className="text-xs text-muted-foreground">
+                            {businessName.length}/100
+                          </span>
+                        </div>
+                        <Input
+                          id="businessName"
+                          value={businessName}
+                          onChange={(event) => {
+                            setBusinessName(event.target.value);
+                            clearErrors("business_name", "slug");
+                          }}
+                          placeholder="e.g. Nomsa's Fashion Boutique"
+                          maxLength={100}
+                          aria-invalid={!!fieldErrors.business_name}
+                          className={cn(fieldErrors.business_name && "border-destructive")}
+                        />
+                        {fieldErrors.business_name && (
+                          <p className="inline-form-error">{fieldErrors.business_name}</p>
+                        )}
+                      </div>
 
-                    {/* Category-specific extra fields */}
-                    {category &&
-                      (() => {
-                        const fields = getCategoryDetailFields(category as BusinessCategory);
-                        if (fields.length === 0) return null;
-                        return (
-                          <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
-                            <p className="text-sm font-medium">
-                              Extra details for{" "}
-                              {BUSINESS_CATEGORIES.find((c) => c.value === category)?.label ??
-                                BUSINESS_CATEGORY_LABELS[
-                                  category as keyof typeof BUSINESS_CATEGORY_LABELS
-                                ] ??
-                                category}
-                            </p>
-                            {fields.map((field) => {
-                              const val = categoryDetails[field.name];
-                              if (field.kind === "checkbox") {
-                                return (
-                                  <label
-                                    key={field.name}
-                                    className="flex items-center gap-2 text-sm"
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={!!val}
-                                      onChange={(e) =>
-                                        setCategoryDetails((prev) => ({
-                                          ...prev,
-                                          [field.name]: e.target.checked,
-                                        }))
-                                      }
-                                      className="rounded"
-                                    />
-                                    {field.label}
-                                  </label>
-                                );
-                              }
-                              if (field.kind === "number") {
+                      <details className="rounded-xl border border-border bg-muted/30 px-3 py-1">
+                        <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium text-muted-foreground hover:text-foreground">
+                          Advanced: customise your link
+                        </summary>
+                        <div className="space-y-2 pb-3">
+                          <Label htmlFor="slug">URL Slug</Label>
+                          <Input
+                            id="slug"
+                            value={slug}
+                            onChange={(event) => {
+                              setSlugManual(true);
+                              setSlug(generateSlug(event.target.value));
+                              clearErrors("slug");
+                            }}
+                            placeholder="your-business-name"
+                            maxLength={60}
+                            aria-invalid={!!fieldErrors.slug}
+                            className={cn(fieldErrors.slug && "border-destructive")}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Made from your business name. Lowercase letters, numbers and hyphens
+                            only.
+                          </p>
+                          {fieldErrors.slug && (
+                            <p className="inline-form-error">{fieldErrors.slug}</p>
+                          )}
+                        </div>
+                      </details>
+
+                      <div className="space-y-2">
+                        <p id="business-category-label" className="text-sm font-medium">
+                          Category *
+                        </p>
+                        <div
+                          role="group"
+                          aria-labelledby="business-category-label"
+                          className="grid grid-cols-2 gap-2 sm:grid-cols-3"
+                        >
+                          {BUSINESS_CATEGORIES.map((item) => {
+                            const Icon = item.icon;
+                            const selected = category === item.value;
+                            return (
+                              <button
+                                key={item.value}
+                                type="button"
+                                aria-pressed={selected}
+                                onClick={() => {
+                                  setCategory(item.value);
+                                  setSubcategory("");
+                                  setCategoryDetails(getDefaultCategoryDetails(item.value));
+                                  clearErrors("category");
+                                }}
+                                className={cn(
+                                  "flex min-h-[4.25rem] items-center gap-2.5 rounded-2xl border p-3 text-left text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                                  selected
+                                    ? "border-brand-blue-600 bg-brand-blue-50 ring-1 ring-brand-blue-600 dark:border-brand-blue-400 dark:bg-brand-blue-950/40 dark:ring-brand-blue-400"
+                                    : "border-border bg-card hover:border-foreground/25 hover:bg-muted/50"
+                                )}
+                              >
+                                <Icon
+                                  aria-hidden="true"
+                                  className={cn(
+                                    "h-5 w-5 shrink-0",
+                                    selected
+                                      ? "text-brand-blue-700 dark:text-brand-blue-300"
+                                      : "text-muted-foreground"
+                                  )}
+                                />
+                                <span className="font-semibold leading-tight">{item.label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {fieldErrors.category && (
+                          <p className="inline-form-error">{fieldErrors.category}</p>
+                        )}
+                      </div>
+
+                      {/* Subcategory dropdown */}
+                      {category &&
+                        (() => {
+                          const catDef = BUSINESS_CATEGORIES.find((c) => c.value === category);
+                          if (!catDef || catDef.subcategories.length === 0) return null;
+                          return (
+                            <div className="space-y-2">
+                              <Label htmlFor="subcategory">Subcategory</Label>
+                              <select
+                                id="subcategory"
+                                aria-label="Subcategory"
+                                className={cn(SELECT_CLASS)}
+                                value={subcategory}
+                                onChange={(event) => setSubcategory(event.target.value)}
+                              >
+                                <option value="">Select a subcategory (optional)</option>
+                                {catDef.subcategories.map((sub) => (
+                                  <option key={sub.value} value={sub.value}>
+                                    {sub.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          );
+                        })()}
+
+                      {/* Category-specific extra fields */}
+                      {category &&
+                        (() => {
+                          const fields = getCategoryDetailFields(category as BusinessCategory);
+                          if (fields.length === 0) return null;
+                          return (
+                            <div className="space-y-3 rounded-2xl border border-border bg-muted/30 p-4">
+                              <p className="text-sm font-semibold">
+                                Extra details for{" "}
+                                {BUSINESS_CATEGORIES.find((c) => c.value === category)?.label ??
+                                  BUSINESS_CATEGORY_LABELS[
+                                    category as keyof typeof BUSINESS_CATEGORY_LABELS
+                                  ] ??
+                                  category}
+                              </p>
+                              {fields.map((field) => {
+                                const val = categoryDetails[field.name];
+                                if (field.kind === "checkbox") {
+                                  return (
+                                    <label
+                                      key={field.name}
+                                      className="flex items-center gap-2 text-sm"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={!!val}
+                                        onChange={(e) =>
+                                          setCategoryDetails((prev) => ({
+                                            ...prev,
+                                            [field.name]: e.target.checked,
+                                          }))
+                                        }
+                                        className="rounded"
+                                      />
+                                      {field.label}
+                                    </label>
+                                  );
+                                }
+                                if (field.kind === "number") {
+                                  return (
+                                    <div key={field.name} className="space-y-1">
+                                      <Label htmlFor={`cat-${field.name}`}>{field.label}</Label>
+                                      <Input
+                                        id={`cat-${field.name}`}
+                                        type="number"
+                                        min={field.min}
+                                        step={field.step}
+                                        value={val != null ? String(val) : ""}
+                                        onChange={(e) =>
+                                          setCategoryDetails((prev) => ({
+                                            ...prev,
+                                            [field.name]: e.target.value
+                                              ? Number(e.target.value)
+                                              : undefined,
+                                          }))
+                                        }
+                                        placeholder={field.placeholder}
+                                      />
+                                      {field.description && (
+                                        <p className="text-xs text-muted-foreground">
+                                          {field.description}
+                                        </p>
+                                      )}
+                                    </div>
+                                  );
+                                }
+                                if (field.kind === "list") {
+                                  const listVal = Array.isArray(val) ? (val as string[]) : [];
+                                  return (
+                                    <div key={field.name} className="space-y-1">
+                                      <Label htmlFor={`cat-${field.name}`}>{field.label}</Label>
+                                      <Input
+                                        id={`cat-${field.name}`}
+                                        value={listVal.join(", ")}
+                                        onChange={(e) =>
+                                          setCategoryDetails((prev) => ({
+                                            ...prev,
+                                            [field.name]: e.target.value
+                                              .split(",")
+                                              .map((s) => s.trim())
+                                              .filter(Boolean),
+                                          }))
+                                        }
+                                        placeholder={field.placeholder}
+                                      />
+                                      {field.description && (
+                                        <p className="text-xs text-muted-foreground">
+                                          {field.description}
+                                        </p>
+                                      )}
+                                    </div>
+                                  );
+                                }
+                                if (field.kind === "select" && field.options) {
+                                  return (
+                                    <div key={field.name} className="space-y-1">
+                                      <Label htmlFor={`cat-${field.name}`}>{field.label}</Label>
+                                      <select
+                                        id={`cat-${field.name}`}
+                                        className={SELECT_CLASS}
+                                        aria-label={field.label}
+                                        value={typeof val === "string" ? val : ""}
+                                        onChange={(e) =>
+                                          setCategoryDetails((prev) => ({
+                                            ...prev,
+                                            [field.name]: e.target.value || undefined,
+                                          }))
+                                        }
+                                      >
+                                        <option value="">
+                                          {field.placeholder ?? "Select\u2026"}
+                                        </option>
+                                        {field.options.map((opt) => (
+                                          <option key={opt.value} value={opt.value}>
+                                            {opt.label}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      {field.description && (
+                                        <p className="text-xs text-muted-foreground">
+                                          {field.description}
+                                        </p>
+                                      )}
+                                    </div>
+                                  );
+                                }
                                 return (
                                   <div key={field.name} className="space-y-1">
                                     <Label htmlFor={`cat-${field.name}`}>{field.label}</Label>
                                     <Input
                                       id={`cat-${field.name}`}
-                                      type="number"
-                                      min={field.min}
-                                      step={field.step}
-                                      value={val != null ? String(val) : ""}
-                                      onChange={(e) =>
-                                        setCategoryDetails((prev) => ({
-                                          ...prev,
-                                          [field.name]: e.target.value
-                                            ? Number(e.target.value)
-                                            : undefined,
-                                        }))
-                                      }
-                                      placeholder={field.placeholder}
-                                    />
-                                    {field.description && (
-                                      <p className="text-xs text-muted-foreground">
-                                        {field.description}
-                                      </p>
-                                    )}
-                                  </div>
-                                );
-                              }
-                              if (field.kind === "list") {
-                                const listVal = Array.isArray(val) ? (val as string[]) : [];
-                                return (
-                                  <div key={field.name} className="space-y-1">
-                                    <Label htmlFor={`cat-${field.name}`}>{field.label}</Label>
-                                    <Input
-                                      id={`cat-${field.name}`}
-                                      value={listVal.join(", ")}
-                                      onChange={(e) =>
-                                        setCategoryDetails((prev) => ({
-                                          ...prev,
-                                          [field.name]: e.target.value
-                                            .split(",")
-                                            .map((s) => s.trim())
-                                            .filter(Boolean),
-                                        }))
-                                      }
-                                      placeholder={field.placeholder}
-                                    />
-                                    {field.description && (
-                                      <p className="text-xs text-muted-foreground">
-                                        {field.description}
-                                      </p>
-                                    )}
-                                  </div>
-                                );
-                              }
-                              if (field.kind === "select" && field.options) {
-                                return (
-                                  <div key={field.name} className="space-y-1">
-                                    <Label htmlFor={`cat-${field.name}`}>{field.label}</Label>
-                                    <select
-                                      id={`cat-${field.name}`}
-                                      className={SELECT_CLASS}
-                                      aria-label={field.label}
                                       value={typeof val === "string" ? val : ""}
                                       onChange={(e) =>
                                         setCategoryDetails((prev) => ({
                                           ...prev,
-                                          [field.name]: e.target.value || undefined,
+                                          [field.name]: e.target.value,
                                         }))
                                       }
-                                    >
-                                      <option value="">
-                                        {field.placeholder ?? "Select\u2026"}
-                                      </option>
-                                      {field.options.map((opt) => (
-                                        <option key={opt.value} value={opt.value}>
-                                          {opt.label}
-                                        </option>
-                                      ))}
-                                    </select>
+                                      placeholder={field.placeholder}
+                                    />
                                     {field.description && (
                                       <p className="text-xs text-muted-foreground">
                                         {field.description}
@@ -1720,129 +1800,115 @@ function CreateBusinessContent() {
                                     )}
                                   </div>
                                 );
-                              }
-                              return (
-                                <div key={field.name} className="space-y-1">
-                                  <Label htmlFor={`cat-${field.name}`}>{field.label}</Label>
-                                  <Input
-                                    id={`cat-${field.name}`}
-                                    value={typeof val === "string" ? val : ""}
-                                    onChange={(e) =>
-                                      setCategoryDetails((prev) => ({
-                                        ...prev,
-                                        [field.name]: e.target.value,
-                                      }))
-                                    }
-                                    placeholder={field.placeholder}
-                                  />
-                                  {field.description && (
-                                    <p className="text-xs text-muted-foreground">
-                                      {field.description}
-                                    </p>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        );
-                      })()}
-
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor="description">About Your Business *</Label>
-                        <span className="text-xs text-muted-foreground">
-                          {description.length}/3000
-                        </span>
-                      </div>
-                      <Textarea
-                        id="description"
-                        value={description}
-                        onChange={(event) => {
-                          setDescription(event.target.value);
-                          clearErrors("description");
-                        }}
-                        placeholder="Describe what you offer, who you help, and what makes your business reliable."
-                        rows={5}
-                        maxLength={3000}
-                        aria-invalid={!!fieldErrors.description}
-                        className={cn(fieldErrors.description && "border-destructive")}
-                      />
-                      {fieldErrors.description && (
-                        <p className="inline-form-error">{fieldErrors.description}</p>
-                      )}
-                    </div>
-
-                    {/* Services Offered (moved from Step 2 optional extras) */}
-                    <div className="space-y-3">
-                      <Label className="flex items-center gap-2">
-                        <Wrench className="h-4 w-4 text-muted-foreground" />
-                        Services Offered
-                      </Label>
-                      {/* Category-based quick-add suggestions */}
-                      {category &&
-                        (() => {
-                          const catDef = BUSINESS_CATEGORIES.find((c) => c.value === category);
-                          const suggestions = catDef?.serviceSuggestions ?? [];
-                          const unselected = suggestions.filter((s) => !services.includes(s));
-                          if (unselected.length === 0) return null;
-                          return (
-                            <div className="flex flex-wrap gap-1.5">
-                              {unselected.map((sug) => (
-                                <button
-                                  key={sug}
-                                  type="button"
-                                  onClick={() => setServices((prev) => [...prev, sug])}
-                                  className="rounded-full border border-dashed border-primary/40 px-2.5 py-0.5 text-xs text-primary hover:bg-primary/5 transition-colors"
-                                >
-                                  + {sug}
-                                </button>
-                              ))}
+                              })}
                             </div>
                           );
                         })()}
-                      <div className="flex gap-2">
-                        <Input
-                          value={servicesInput}
-                          onChange={(event) => setServicesInput(event.target.value)}
-                          placeholder="Type a service and press Add"
-                          maxLength={200}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.preventDefault();
-                              addService();
-                            }
-                          }}
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-11 w-11"
-                          onClick={addService}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      {services.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {services.map((service, index) => (
-                            <Badge
-                              key={service}
-                              variant="secondary"
-                              className="cursor-pointer gap-1"
-                              onClick={() => removeService(index)}
-                            >
-                              {service}
-                            </Badge>
-                          ))}
+                    </PostFormSection>
+
+                    <PostFormSection title="What you offer">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="description">About Your Business *</Label>
+                          <span className="text-xs text-muted-foreground">
+                            {description.length}/3000
+                          </span>
                         </div>
-                      )}
-                    </div>
+                        <Textarea
+                          id="description"
+                          value={description}
+                          onChange={(event) => {
+                            setDescription(event.target.value);
+                            clearErrors("description");
+                          }}
+                          placeholder="Describe what you offer, who you help, and what makes your business reliable."
+                          rows={5}
+                          maxLength={3000}
+                          aria-invalid={!!fieldErrors.description}
+                          className={cn(fieldErrors.description && "border-destructive")}
+                        />
+                        {fieldErrors.description && (
+                          <p className="inline-form-error">{fieldErrors.description}</p>
+                        )}
+                      </div>
+
+                      {/* Services Offered (moved from Step 2 optional extras) */}
+                      <div className="space-y-3">
+                        <Label htmlFor="business-service-input" className="flex items-center gap-2">
+                          <Wrench className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                          Services Offered
+                        </Label>
+                        {/* Category-based quick-add suggestions */}
+                        {category &&
+                          (() => {
+                            const catDef = BUSINESS_CATEGORIES.find((c) => c.value === category);
+                            const suggestions = catDef?.serviceSuggestions ?? [];
+                            const unselected = suggestions.filter((s) => !services.includes(s));
+                            if (unselected.length === 0) return null;
+                            return (
+                              <div className="flex flex-wrap gap-1.5">
+                                {unselected.map((sug) => (
+                                  <button
+                                    key={sug}
+                                    type="button"
+                                    onClick={() => setServices((prev) => [...prev, sug])}
+                                    className="inline-flex min-h-9 items-center rounded-full border border-dashed border-brand-blue-400/60 px-3 text-xs font-medium text-brand-blue-700 transition-colors hover:bg-brand-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-brand-blue-300 dark:hover:bg-brand-blue-950/40"
+                                  >
+                                    + {sug}
+                                  </button>
+                                ))}
+                              </div>
+                            );
+                          })()}
+                        <div className="flex gap-2">
+                          <Input
+                            id="business-service-input"
+                            value={servicesInput}
+                            onChange={(event) => setServicesInput(event.target.value)}
+                            placeholder="Type a service and press Add"
+                            maxLength={200}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                addService();
+                              }
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-11 w-11 shrink-0"
+                            onClick={addService}
+                            aria-label="Add service"
+                          >
+                            <Plus className="h-4 w-4" aria-hidden="true" />
+                          </Button>
+                        </div>
+                        {services.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {services.map((service, index) => (
+                              <button
+                                key={service}
+                                type="button"
+                                onClick={() => removeService(index)}
+                                aria-label={`Remove ${service}`}
+                                className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-muted px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              >
+                                {service}
+                                <X
+                                  className="h-3.5 w-3.5 text-muted-foreground"
+                                  aria-hidden="true"
+                                />
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </PostFormSection>
 
                     {/* SA market fields */}
-                    <div className="space-y-4 rounded-lg border bg-muted/30 p-4">
-                      <p className="text-sm font-medium">Additional Business Details</p>
-
+                    <PostFormSection title="More about your business" optional>
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div className="space-y-1">
                           <Label htmlFor="yearEstablished">Year Established</Label>
@@ -1888,8 +1954,7 @@ function CreateBusinessContent() {
                             maxLength={30}
                           />
                           <p className="text-xs text-muted-foreground">
-                            Optional public business detail. This does not mean VerifyMzansi has
-                            verified the business or CIPC record; verification remains person-level.
+                            Shown as provided. We verify people, not company records.
                           </p>
                         </div>
 
@@ -1928,235 +1993,244 @@ function CreateBusinessContent() {
                         />
                       </div>
 
-                      <label className="flex items-center gap-2 text-sm">
+                      <label className="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-xl border border-input bg-card px-3 text-sm">
                         <input
                           type="checkbox"
                           checked={loadSheddingReady}
                           onChange={(e) => setLoadSheddingReady(e.target.checked)}
-                          className="rounded"
+                          className="h-4 w-4 rounded accent-brand-blue-600"
                         />
                         Load-shedding ready (generator / inverter / solar)
                       </label>
-                    </div>
+                    </PostFormSection>
                   </div>
                 )}
 
                 {step === 1 && (
-                  <div className="space-y-5 animate-in fade-in-0 duration-300">
-                    {businessType === "online_only" && (
-                      <p className="text-sm text-muted-foreground">
-                        Location is optional for online-only businesses. Add a province and city if
-                        you want to appear in local search results.
-                      </p>
-                    )}
-                    <LocationSelector
-                      value={locationValue}
-                      onChange={(v) => {
-                        setProvince(v.province);
-                        setCity(v.city);
-                        setLocationTown(v.town ?? "");
-                        setLocationAddress(v.address ?? "");
-                        clearErrors("location_province", "location_city");
-                      }}
-                      showTown
-                      showAddress
-                      errors={
+                  <div className="space-y-6">
+                    <PostFormSection
+                      title="Where to find you"
+                      optional={businessType === "online_only"}
+                      description={
                         businessType === "online_only"
-                          ? {}
-                          : {
-                              province: fieldErrors.location_province,
-                              city: fieldErrors.location_city,
-                            }
+                          ? "Add an area to show up in local searches."
+                          : undefined
                       }
-                    />
+                    >
+                      <LocationSelector
+                        value={locationValue}
+                        onChange={(v) => {
+                          setProvince(v.province);
+                          setCity(v.city);
+                          setLocationTown(v.town ?? "");
+                          setLocationAddress(v.address ?? "");
+                          clearErrors("location_province", "location_city");
+                        }}
+                        showTown
+                        showAddress
+                        errors={
+                          businessType === "online_only"
+                            ? {}
+                            : {
+                                province: fieldErrors.location_province,
+                                city: fieldErrors.location_city,
+                              }
+                        }
+                      />
+                    </PostFormSection>
 
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="phone" className="flex items-center gap-2">
-                          <Phone className="h-4 w-4 text-muted-foreground" />
-                          Phone Number
-                        </Label>
-                        <Input
-                          id="phone"
-                          inputMode="tel"
-                          autoComplete="tel"
-                          value={phone}
-                          onChange={(event) => {
-                            setPhone(event.target.value);
-                            clearErrors("phone");
-                          }}
-                          placeholder="082 000 0000"
-                          className={cn(fieldErrors.phone && "border-destructive")}
-                        />
-                        {fieldErrors.phone && (
-                          <p className="inline-form-error">{fieldErrors.phone}</p>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="whatsapp" className="flex items-center gap-2">
-                          <MessageCircle className="h-4 w-4 text-green-600" />
-                          WhatsApp
-                        </Label>
-                        <div className="flex gap-2">
+                    <PostFormSection title="How customers reach you">
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="phone" className="flex items-center gap-2">
+                            <Phone className="h-4 w-4 text-muted-foreground" />
+                            Phone Number
+                          </Label>
                           <Input
-                            id="whatsapp"
+                            id="phone"
                             inputMode="tel"
                             autoComplete="tel"
-                            value={whatsapp}
+                            value={phone}
                             onChange={(event) => {
-                              setWhatsapp(event.target.value);
-                              clearErrors("whatsapp");
+                              setPhone(event.target.value);
+                              clearErrors("phone");
                             }}
                             placeholder="082 000 0000"
-                            className={cn(fieldErrors.whatsapp && "border-destructive")}
+                            className={cn(fieldErrors.phone && "border-destructive")}
                           />
-                          {phone && !whatsapp && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setWhatsapp(phone);
-                                clearErrors("whatsapp");
-                              }}
-                              className="h-11 shrink-0 text-xs"
-                            >
-                              Copy from phone
-                            </Button>
+                          {fieldErrors.phone && (
+                            <p className="inline-form-error">{fieldErrors.phone}</p>
                           )}
                         </div>
-                        {fieldErrors.whatsapp && (
-                          <p className="inline-form-error">{fieldErrors.whatsapp}</p>
-                        )}
-                      </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="email" className="flex items-center gap-2">
-                          <Mail className="h-4 w-4 text-muted-foreground" />
-                          Email Address
-                        </Label>
-                        <Input
-                          id="email"
-                          type="email"
-                          inputMode="email"
-                          autoComplete="email"
-                          value={email}
-                          onChange={(event) => {
-                            setEmail(event.target.value);
-                            clearErrors("email");
-                          }}
-                          placeholder="contact@business.co.za"
-                          className={cn(fieldErrors.email && "border-destructive")}
-                        />
-                        {fieldErrors.email && (
-                          <p className="inline-form-error">{fieldErrors.email}</p>
-                        )}
-                      </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="whatsapp" className="flex items-center gap-2">
+                            <MessageCircle
+                              className="h-4 w-4 text-brand-green-700 dark:text-brand-green-300"
+                              aria-hidden="true"
+                            />
+                            WhatsApp
+                          </Label>
+                          <div className="flex gap-2">
+                            <Input
+                              id="whatsapp"
+                              inputMode="tel"
+                              autoComplete="tel"
+                              value={whatsapp}
+                              onChange={(event) => {
+                                setWhatsapp(event.target.value);
+                                clearErrors("whatsapp");
+                              }}
+                              placeholder="082 000 0000"
+                              className={cn(fieldErrors.whatsapp && "border-destructive")}
+                            />
+                            {phone && !whatsapp && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setWhatsapp(phone);
+                                  clearErrors("whatsapp");
+                                }}
+                                className="h-11 shrink-0 text-xs"
+                              >
+                                Copy from phone
+                              </Button>
+                            )}
+                          </div>
+                          {fieldErrors.whatsapp && (
+                            <p className="inline-form-error">{fieldErrors.whatsapp}</p>
+                          )}
+                        </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="website" className="flex items-center gap-2">
-                          <Globe className="h-4 w-4 text-muted-foreground" />
-                          Website
-                        </Label>
-                        <Input
-                          id="website"
-                          autoComplete="url"
-                          value={website}
-                          onChange={(event) => {
-                            setWebsite(event.target.value);
-                            clearErrors("website");
-                          }}
-                          placeholder="https://www.yourbusiness.co.za"
-                          className={cn(fieldErrors.website && "border-destructive")}
-                        />
-                        {fieldErrors.website && (
-                          <p className="inline-form-error">{fieldErrors.website}</p>
-                        )}
-                      </div>
-                    </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="email" className="flex items-center gap-2">
+                            <Mail className="h-4 w-4 text-muted-foreground" />
+                            Email Address
+                          </Label>
+                          <Input
+                            id="email"
+                            type="email"
+                            inputMode="email"
+                            autoComplete="email"
+                            value={email}
+                            onChange={(event) => {
+                              setEmail(event.target.value);
+                              clearErrors("email");
+                            }}
+                            placeholder="contact@business.co.za"
+                            className={cn(fieldErrors.email && "border-destructive")}
+                          />
+                          {fieldErrors.email && (
+                            <p className="inline-form-error">{fieldErrors.email}</p>
+                          )}
+                        </div>
 
-                    {businessType === "market_stall" ? (
-                      <div className="rounded-lg border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground">
-                        <p className="font-medium text-foreground">Operating Hours</p>
-                        <p className="mt-1">
-                          Your operating hours will be set from the trading days and hours you
-                          entered in the previous step.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <Label className="text-base font-semibold">Operating Hours</Label>
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                          <OperatingHoursInput
-                            id="hoursMonFri"
-                            label="Mon - Fri"
-                            open={hoursMonFri.open}
-                            close={hoursMonFri.close}
-                            closed={hoursMonFri.closed}
-                            onOpenChange={(v) => setHoursMonFri((p) => ({ ...p, open: v }))}
-                            onCloseChange={(v) => setHoursMonFri((p) => ({ ...p, close: v }))}
-                            onClosedChange={(v) => setHoursMonFri((p) => ({ ...p, closed: v }))}
+                        <div className="space-y-2">
+                          <Label htmlFor="website" className="flex items-center gap-2">
+                            <Globe className="h-4 w-4 text-muted-foreground" />
+                            Website
+                          </Label>
+                          <Input
+                            id="website"
+                            autoComplete="url"
+                            value={website}
+                            onChange={(event) => {
+                              setWebsite(event.target.value);
+                              clearErrors("website");
+                            }}
+                            placeholder="https://www.yourbusiness.co.za"
+                            className={cn(fieldErrors.website && "border-destructive")}
                           />
-                          <OperatingHoursInput
-                            id="hoursSat"
-                            label="Saturday"
-                            open={hoursSat.open}
-                            close={hoursSat.close}
-                            closed={hoursSat.closed}
-                            onOpenChange={(v) => setHoursSat((p) => ({ ...p, open: v }))}
-                            onCloseChange={(v) => setHoursSat((p) => ({ ...p, close: v }))}
-                            onClosedChange={(v) => setHoursSat((p) => ({ ...p, closed: v }))}
-                          />
-                          <OperatingHoursInput
-                            id="hoursSun"
-                            label="Sunday / Public Holidays"
-                            open={hoursSun.open}
-                            close={hoursSun.close}
-                            closed={hoursSun.closed}
-                            onOpenChange={(v) => setHoursSun((p) => ({ ...p, open: v }))}
-                            onCloseChange={(v) => setHoursSun((p) => ({ ...p, close: v }))}
-                            onClosedChange={(v) => setHoursSun((p) => ({ ...p, closed: v }))}
-                          />
+                          {fieldErrors.website && (
+                            <p className="inline-form-error">{fieldErrors.website}</p>
+                          )}
                         </div>
                       </div>
-                    )}
+                    </PostFormSection>
+
+                    <PostFormSection title="Operating hours">
+                      {businessType === "market_stall" ? (
+                        <p className="rounded-xl bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground">
+                          We use the trading days and hours from the previous step.
+                        </p>
+                      ) : (
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            <OperatingHoursInput
+                              id="hoursMonFri"
+                              label="Mon - Fri"
+                              open={hoursMonFri.open}
+                              close={hoursMonFri.close}
+                              closed={hoursMonFri.closed}
+                              onOpenChange={(v) => setHoursMonFri((p) => ({ ...p, open: v }))}
+                              onCloseChange={(v) => setHoursMonFri((p) => ({ ...p, close: v }))}
+                              onClosedChange={(v) => setHoursMonFri((p) => ({ ...p, closed: v }))}
+                            />
+                            <OperatingHoursInput
+                              id="hoursSat"
+                              label="Saturday"
+                              open={hoursSat.open}
+                              close={hoursSat.close}
+                              closed={hoursSat.closed}
+                              onOpenChange={(v) => setHoursSat((p) => ({ ...p, open: v }))}
+                              onCloseChange={(v) => setHoursSat((p) => ({ ...p, close: v }))}
+                              onClosedChange={(v) => setHoursSat((p) => ({ ...p, closed: v }))}
+                            />
+                            <OperatingHoursInput
+                              id="hoursSun"
+                              label="Sunday / Public Holidays"
+                              open={hoursSun.open}
+                              close={hoursSun.close}
+                              closed={hoursSun.closed}
+                              onOpenChange={(v) => setHoursSun((p) => ({ ...p, open: v }))}
+                              onCloseChange={(v) => setHoursSun((p) => ({ ...p, close: v }))}
+                              onClosedChange={(v) => setHoursSun((p) => ({ ...p, closed: v }))}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </PostFormSection>
 
                     {businessType !== "online_only" && (
                       <div className="space-y-3">
-                        <Label className="flex items-center gap-2">
-                          <Truck className="h-4 w-4 text-muted-foreground" />
+                        <p className="flex items-center gap-2 text-sm font-medium">
+                          <Truck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                           Delivery Service
-                        </Label>
-                        <div className="flex items-start gap-3 rounded-lg border bg-background px-3 py-3 text-sm">
+                        </p>
+                        <label
+                          htmlFor="delivery-available"
+                          className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-input bg-card px-3 py-2.5 text-sm"
+                        >
                           <input
                             id="delivery-available"
                             type="checkbox"
                             aria-label="Delivery available"
                             checked={deliveryOptions.length > 0}
                             onChange={(event) => setDeliveryAvailable(event.target.checked)}
-                            className="mt-0.5 rounded"
+                            className="h-4 w-4 rounded accent-brand-blue-600"
                           />
-                          <span className="space-y-1">
-                            <span className="block font-medium">Delivery available</span>
-                            <span className="block text-xs text-muted-foreground">
-                              Indicate whether you offer delivery to customers.
-                            </span>
-                          </span>
-                        </div>
+                          <span className="font-medium">Delivery available</span>
+                        </label>
                       </div>
                     )}
 
-                    <details className="rounded-xl border bg-muted/30 p-4">
-                      <summary className="cursor-pointer list-none font-medium">
+                    <details className="group rounded-2xl border border-border bg-muted/30 px-4">
+                      <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">
                         Optional extras
+                        <ChevronDown
+                          className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none"
+                          aria-hidden="true"
+                        />
                       </summary>
-                      <div className="mt-4 space-y-5">
+                      <div className="space-y-5 pb-4">
                         <div className="space-y-3">
                           <h3 className="text-sm font-medium">Social Links</h3>
                           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <Input
                               id="socialFacebook"
+                              aria-label="Facebook URL"
                               value={socialFacebook}
                               onChange={(event) => {
                                 setSocialFacebook(event.target.value);
@@ -2170,6 +2244,7 @@ function CreateBusinessContent() {
                             )}
                             <Input
                               id="socialInstagram"
+                              aria-label="Instagram URL"
                               value={socialInstagram}
                               onChange={(event) => {
                                 setSocialInstagram(event.target.value);
@@ -2183,6 +2258,7 @@ function CreateBusinessContent() {
                             )}
                             <Input
                               id="socialTwitter"
+                              aria-label="X (Twitter) URL"
                               value={socialTwitter}
                               onChange={(event) => {
                                 setSocialTwitter(event.target.value);
@@ -2196,6 +2272,7 @@ function CreateBusinessContent() {
                             )}
                             <Input
                               id="socialTiktok"
+                              aria-label="TikTok URL"
                               value={socialTiktok}
                               onChange={(event) => {
                                 setSocialTiktok(event.target.value);
@@ -2238,305 +2315,238 @@ function CreateBusinessContent() {
                 )}
 
                 {step === 2 && (
-                  <div className="space-y-5 animate-in fade-in-0 duration-300">
-                    <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                      <div id="business-logo" tabIndex={-1} className="space-y-2 rounded-lg">
+                  <div className="space-y-6">
+                    <PostFormSection
+                      title="Photos and video"
+                      description="Your first photo is the cover on cards."
+                    >
+                      <div id="business-gallery" className="space-y-2 rounded-lg">
                         <MediaUpload
-                          id="business-logo-input"
-                          label="Business logo (optional)"
-                          description="Optional square icon shown beside your business name in cards and search."
-                          error={fieldErrors.logo_url}
-                          maxFiles={1}
-                          files={logoFile}
+                          id="business-gallery-input"
+                          label={`Profile photos (up to ${maxPhotos})`}
+                          description="Products, premises, team or finished work."
+                          error={fieldErrors.gallery_photos}
+                          maxFiles={maxPhotos}
+                          files={galleryFiles}
                           onChange={(files) => {
-                            setLogoFile(files);
-                            clearErrors("logo_url");
+                            setGalleryFiles(files);
+                            clearErrors("gallery_photos");
                           }}
                           accept="image/*"
-                          recommendedAspect="Recommended: square image, at least 96 x 96."
                         />
-                        <p className="text-xs text-muted-foreground">
-                          Square icon (96×96) shown beside your business name on cards and search
-                          results.
-                        </p>
+
+                        <PhotoOrderList files={galleryFiles} onReorder={setGalleryFiles} />
                       </div>
-                      <div id="business-cover-photo" tabIndex={-1} className="space-y-2 rounded-lg">
-                        <MediaUpload
-                          id="business-cover-photo-input"
-                          label="Cover photo (optional)"
-                          description="Optional wide brand backdrop for your public profile."
-                          error={fieldErrors.cover_photo}
-                          maxFiles={1}
-                          files={coverFile}
-                          onChange={(files) => {
-                            setCoverFile(files);
-                            clearErrors("cover_photo");
-                          }}
-                          accept="image/*"
-                          recommendedAspect="Recommended: wide landscape image around 4:1."
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          This still supports a banner, but the public profile now gives stronger
-                          focus to portrait lead media. Use this for a broad brand backdrop only.
-                        </p>
-                      </div>
-                      {/* Crop preview for cover photo */}
-                      {coverFile.length > 0 && (
-                        <div className="space-y-2">
-                          <MediaCropPreview
-                            file={coverFile[0]}
-                            aspectRatio={4 / 1}
-                            value={focalPoint}
-                            onChange={setFocalPoint}
+
+                      {businessType === "mall_store" && (
+                        <div className="space-y-2 rounded-lg">
+                          <MediaUpload
+                            id="business-mall-photos-input"
+                            label="Mall photos (optional, up to 10)"
+                            description="Entrance or landmarks that help people find you."
+                            maxFiles={10}
+                            files={mallPhotoFiles}
+                            onChange={setMallPhotoFiles}
+                            accept="image/*"
                           />
                         </div>
                       )}
-                    </div>
 
-                    {/* Visual placement preview */}
-                    <div className="rounded-xl border border-dashed border-brand-blue/20 bg-brand-blue/5 p-4 space-y-2">
-                      <p className="text-xs font-medium text-muted-foreground">
-                        How your logo and cover will appear:
-                      </p>
-                      <div className="relative rounded-lg overflow-hidden border bg-muted">
-                        {/* Cover preview */}
-                        <div className="aspect-[4/1] bg-gradient-to-r from-brand-blue/30 to-brand-blue/10 flex items-center justify-center">
-                          {coverPreviewUrl ? (
-                            /* eslint-disable-next-line @next/next/no-img-element */
-                            <img
-                              src={coverPreviewUrl}
-                              alt="Cover preview"
-                              className="w-full h-full bg-muted object-contain"
-                              width={600}
-                              height={150}
-                            />
-                          ) : (
-                            <span className="text-xs text-muted-foreground">Cover photo area</span>
-                          )}
-                        </div>
-                        {/* Logo overlay */}
-                        <div className="absolute bottom-2 left-4 h-12 w-12 rounded-lg bg-white dark:bg-warm-900 p-1 shadow-md border overflow-hidden">
-                          {logoPreviewUrl ? (
-                            /* eslint-disable-next-line @next/next/no-img-element */
-                            <img
-                              src={logoPreviewUrl}
-                              alt="Logo preview"
-                              className="w-full h-full object-contain rounded-md"
-                              width={48}
-                              height={48}
-                            />
-                          ) : (
-                            <div className="w-full h-full rounded-md bg-muted flex items-center justify-center">
-                              <Store className="h-5 w-5 text-muted-foreground" />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex gap-4 text-[10px] text-muted-foreground">
-                        <span>
-                          ← <strong>Logo</strong> (small square icon)
-                        </span>
-                        <span>
-                          ↑ <strong>Cover</strong> (wide banner behind logo)
-                        </span>
-                      </div>
-                    </div>
-
-                    <div id="business-gallery" className="space-y-2 rounded-lg">
-                      <MediaUpload
-                        id="business-gallery-input"
-                        label={`Profile photos (up to ${maxPhotos})`}
-                        description="Optional but recommended. The first image appears on cards when no video is used."
-                        error={fieldErrors.gallery_photos}
-                        maxFiles={maxPhotos}
-                        files={galleryFiles}
-                        onChange={(files) => {
-                          setGalleryFiles(files);
-                          clearErrors("gallery_photos");
-                        }}
-                        accept="image/*"
-                      />
-                      <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Camera className="h-3 w-3" />
-                        Use clear portrait-led photos of your products, team, premises, or completed
-                        work. The first photo becomes the main public hero when no cover video is
-                        present.
-                      </p>
-                      {galleryFiles.length > 1 && (
-                        <div className="space-y-1">
-                          <p className="text-xs font-medium text-muted-foreground">
-                            Reorder photos. The first image appears on cards.
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {galleryFiles.map((file, index) => (
-                              <div
-                                key={`${file.name}-${index}`}
-                                className="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs"
-                              >
-                                <span className="max-w-[100px] truncate font-medium">
-                                  {file.name}
-                                </span>
-                                <button
-                                  type="button"
-                                  disabled={index === 0}
-                                  onClick={() => {
-                                    const reordered = [...galleryFiles];
-                                    [reordered[index - 1], reordered[index]] = [
-                                      reordered[index],
-                                      reordered[index - 1],
-                                    ];
-                                    setGalleryFiles(reordered);
-                                  }}
-                                  className="rounded p-0.5 hover:bg-background disabled:opacity-30"
-                                  aria-label="Move photo left"
-                                >
-                                  <ChevronLeft className="h-3 w-3" />
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={index === galleryFiles.length - 1}
-                                  onClick={() => {
-                                    const reordered = [...galleryFiles];
-                                    [reordered[index], reordered[index + 1]] = [
-                                      reordered[index + 1],
-                                      reordered[index],
-                                    ];
-                                    setGalleryFiles(reordered);
-                                  }}
-                                  className="rounded p-0.5 hover:bg-background disabled:opacity-30"
-                                  aria-label="Move photo right"
-                                >
-                                  <ChevronRight className="h-3 w-3" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {businessType === "mall_store" && (
-                      <div className="space-y-2 rounded-lg">
+                      <div id="business-cover-video" className="space-y-2 rounded-lg">
                         <MediaUpload
-                          id="business-mall-photos-input"
-                          label="Mall photos (optional, up to 10)"
-                          description="Optional wayfinding photos that help customers find your store."
-                          maxFiles={10}
-                          files={mallPhotoFiles}
-                          onChange={setMallPhotoFiles}
-                          accept="image/*"
-                        />
-                        <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Camera className="h-3 w-3" />
-                          Add optional photos of the mall entrance, corridors, or landmarks that
-                          help customers find you.
-                        </p>
-                      </div>
-                    )}
-
-                    <div id="business-cover-video" className="space-y-2 rounded-lg">
-                      <MediaUpload
-                        id="business-cover-video-input"
-                        label={`Video (optional)${!videoAllowed ? " — Upgrade to unlock" : ""}`}
-                        description="Optional single intro video. Business profiles support one cover video."
-                        error={fieldErrors.cover_video}
-                        maxFiles={1}
-                        files={promoVideoFile}
-                        onChange={(files) => {
-                          setPromoVideoFile(files);
-                          prewarmVideosForFastUpload(files);
-                          if (files.length === 0) setVideoThumbnailFile([]);
-                          clearErrors("cover_video", "video_thumbnail");
-                        }}
-                        accept="video/*"
-                        disabled={!videoAllowed}
-                      />
-                      {!videoAllowed ? (
-                        <p className="text-xs">
-                          <Link
-                            href="/billing"
-                            className="font-medium text-brand-green underline underline-offset-2 hover:text-brand-green/80"
-                          >
-                            Upgrade your plan
-                          </Link>{" "}
-                          <span className="text-muted-foreground">
-                            to add an intro video to your business profile.
-                          </span>
-                        </p>
-                      ) : (
-                        <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Film className="h-3 w-3" />A short intro video works best. Portrait 9:16
-                          is recommended because the public profile now uses a poster-style hero.
-                        </p>
-                      )}
-                    </div>
-
-                    {promoVideoFile.length > 0 && (
-                      <div
-                        id="business-video-thumbnail"
-                        tabIndex={-1}
-                        className="space-y-3 rounded-lg"
-                      >
-                        <VideoFrameSelector
-                          file={promoVideoFile[0]}
-                          onFrameSelect={(frame) => {
-                            setVideoThumbnailFile(frame ? [frame] : []);
-                            clearErrors("video_thumbnail");
+                          id="business-cover-video-input"
+                          label={`Video (optional)${!videoAllowed ? " — Upgrade to unlock" : ""}`}
+                          description="One short intro clip. Portrait 9:16 works best."
+                          error={fieldErrors.cover_video}
+                          maxFiles={1}
+                          files={promoVideoFile}
+                          onChange={(files) => {
+                            setPromoVideoFile(files);
+                            prewarmVideosForFastUpload(files);
+                            if (files.length === 0) setVideoThumbnailFile([]);
+                            clearErrors("cover_video", "video_thumbnail");
                           }}
+                          accept="video/*"
+                          disabled={!videoAllowed}
                         />
-                        <details className="group">
-                          <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-                            Or upload a custom thumbnail…
-                          </summary>
-                          <div className="mt-2">
-                            <MediaUpload
-                              id="business-video-thumbnail-input"
-                              label="Custom thumbnail"
-                              description="Optional poster image shown before the video starts."
-                              error={fieldErrors.video_thumbnail}
-                              maxFiles={1}
-                              files={videoThumbnailFile}
-                              onChange={(files) => {
-                                setVideoThumbnailFile(files);
-                                clearErrors("video_thumbnail");
-                              }}
-                              accept="image/*"
-                            />
-                            <p className="mt-2 text-xs text-muted-foreground">
-                              Use this when you want a cleaner poster image before the video starts.
-                            </p>
-                          </div>
-                        </details>
+                        {!videoAllowed ? (
+                          <p className="text-xs">
+                            <Link
+                              href="/billing"
+                              className="font-semibold text-brand-blue-700 underline underline-offset-2 dark:text-brand-blue-300"
+                            >
+                              Upgrade your plan
+                            </Link>{" "}
+                            <span className="text-muted-foreground">to add a video.</span>
+                          </p>
+                        ) : null}
                       </div>
-                    )}
 
-                    <label className="flex items-start gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
-                      <input
-                        id="business-terms-checkbox"
-                        type="checkbox"
-                        checked={termsAccepted}
-                        onChange={(event) => {
-                          setTermsAccepted(event.target.checked);
-                          clearErrors("termsAccepted");
-                        }}
-                        className="mt-1 rounded"
-                        aria-invalid={!!fieldErrors.termsAccepted}
-                      />
-                      <span>
-                        I accept the VerifyMzansi posting terms, including the free-post visibility
-                        period and my responsibility for the accuracy and legality of this business
-                        post.{" "}
-                        <a className="font-medium text-brand-green underline" href="/terms">
-                          View terms
-                        </a>
-                        .
-                        {fieldErrors.termsAccepted && (
-                          <span className="mt-1 block text-destructive">
-                            {fieldErrors.termsAccepted}
-                          </span>
+                      {promoVideoFile.length > 0 && (
+                        <div
+                          id="business-video-thumbnail"
+                          tabIndex={-1}
+                          className="space-y-3 rounded-lg"
+                        >
+                          <VideoFrameSelector
+                            file={promoVideoFile[0]}
+                            onFrameSelect={(frame) => {
+                              setVideoThumbnailFile(frame ? [frame] : []);
+                              clearErrors("video_thumbnail");
+                            }}
+                          />
+                          <details className="group">
+                            <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium text-muted-foreground hover:text-foreground">
+                              Or upload your own thumbnail
+                            </summary>
+                            <div className="mt-2">
+                              <MediaUpload
+                                id="business-video-thumbnail-input"
+                                label="Custom thumbnail"
+                                description="Optional poster image shown before the video starts."
+                                error={fieldErrors.video_thumbnail}
+                                maxFiles={1}
+                                files={videoThumbnailFile}
+                                onChange={(files) => {
+                                  setVideoThumbnailFile(files);
+                                  clearErrors("video_thumbnail");
+                                }}
+                                accept="image/*"
+                              />
+                            </div>
+                          </details>
+                        </div>
+                      )}
+                    </PostFormSection>
+
+                    <PostFormSection title="Logo and banner" optional>
+                      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                        <div id="business-logo" tabIndex={-1} className="space-y-2 rounded-lg">
+                          <MediaUpload
+                            id="business-logo-input"
+                            label="Business logo (optional)"
+                            description="Square icon shown beside your name."
+                            error={fieldErrors.logo_url}
+                            maxFiles={1}
+                            files={logoFile}
+                            onChange={(files) => {
+                              setLogoFile(files);
+                              clearErrors("logo_url");
+                            }}
+                            accept="image/*"
+                            recommendedAspect="Recommended: square image, at least 96 x 96."
+                          />
+                        </div>
+                        <div
+                          id="business-cover-photo"
+                          tabIndex={-1}
+                          className="space-y-2 rounded-lg"
+                        >
+                          <MediaUpload
+                            id="business-cover-photo-input"
+                            label="Cover photo (optional)"
+                            description="Wide banner for your profile page."
+                            error={fieldErrors.cover_photo}
+                            maxFiles={1}
+                            files={coverFile}
+                            onChange={(files) => {
+                              setCoverFile(files);
+                              clearErrors("cover_photo");
+                            }}
+                            accept="image/*"
+                            recommendedAspect="Recommended: wide landscape image around 4:1."
+                          />
+                        </div>
+                        {/* Crop preview for cover photo */}
+                        {coverFile.length > 0 && (
+                          <div className="space-y-2">
+                            <MediaCropPreview
+                              file={coverFile[0]}
+                              aspectRatio={4 / 1}
+                              value={focalPoint}
+                              onChange={setFocalPoint}
+                            />
+                          </div>
                         )}
-                      </span>
-                    </label>
+                      </div>
+
+                      {/* Visual placement preview */}
+                      <div className="space-y-2 rounded-2xl border border-dashed border-border bg-muted/30 p-4">
+                        <p className="text-xs font-medium text-muted-foreground">
+                          How they appear together
+                        </p>
+                        <div className="relative overflow-hidden rounded-xl border border-border bg-muted">
+                          {/* Cover preview */}
+                          <div className="flex aspect-[4/1] items-center justify-center bg-gradient-to-r from-brand-blue-200/70 to-brand-blue-50 dark:from-brand-blue-900/60 dark:to-brand-blue-950/40">
+                            {coverPreviewUrl ? (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img
+                                src={coverPreviewUrl}
+                                alt="Cover preview"
+                                className="w-full h-full bg-muted object-contain"
+                                width={600}
+                                height={150}
+                              />
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Banner</span>
+                            )}
+                          </div>
+                          {/* Logo overlay */}
+                          <div className="absolute bottom-2 left-4 h-12 w-12 overflow-hidden rounded-xl border border-border bg-card p-1 shadow-md">
+                            {logoPreviewUrl ? (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img
+                                src={logoPreviewUrl}
+                                alt="Logo preview"
+                                className="w-full h-full object-contain rounded-md"
+                                width={48}
+                                height={48}
+                              />
+                            ) : (
+                              <div className="w-full h-full rounded-md bg-muted flex items-center justify-center">
+                                <Store
+                                  className="h-5 w-5 text-muted-foreground"
+                                  aria-hidden="true"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </PostFormSection>
+
+                    <PostFormSection title="Final check">
+                      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border bg-muted/30 p-4 text-sm leading-6">
+                        <input
+                          id="business-terms-checkbox"
+                          type="checkbox"
+                          checked={termsAccepted}
+                          onChange={(event) => {
+                            setTermsAccepted(event.target.checked);
+                            clearErrors("termsAccepted");
+                          }}
+                          className="mt-1 h-4 w-4 shrink-0 rounded accent-brand-blue-600"
+                          aria-invalid={!!fieldErrors.termsAccepted}
+                        />
+                        <span>
+                          I accept the VerifyMzansi posting terms, including the free-post
+                          visibility period and my responsibility for the accuracy and legality of
+                          this business post.{" "}
+                          <a
+                            className="font-semibold text-brand-blue-700 underline underline-offset-2 dark:text-brand-blue-300"
+                            href="/terms"
+                          >
+                            View terms
+                          </a>
+                          .
+                          {fieldErrors.termsAccepted && (
+                            <span className="mt-1 block text-destructive">
+                              {fieldErrors.termsAccepted}
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    </PostFormSection>
 
                     {renderReview()}
                   </div>

@@ -2,7 +2,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { formatSaLongDate } from "@/lib/utils/format";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { getActiveFreePostUsage } from "@/lib/billing/free-posts";
 import { hasCapability } from "@/lib/auth/roles";
@@ -79,59 +81,86 @@ export function IntroductoryTrialCard() {
   if (!eligible && (!claim || claim.converted_at || (!claim.activated_at && claim.released_at)))
     return null;
   return (
-    <section className="rounded-xl border bg-card p-5 space-y-3" aria-label="Free posts and trials">
+    <section
+      className="rounded-2xl border border-brand-gold-300/70 bg-brand-gold-50/60 p-4 elev-xs dark:border-brand-gold-400/25 dark:bg-brand-gold-400/5 sm:p-5"
+      aria-label="Free posts and trials"
+    >
+      <div className="flex items-start gap-3">
+        <span
+          aria-hidden="true"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-gold-100 text-brand-gold-900 dark:bg-brand-gold-400/15 dark:text-brand-gold-200"
+        >
+          <Gift className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1 space-y-1">
+          {eligible ? (
+            <>
+              <h2 className="font-display text-base font-semibold text-foreground">
+                {freePostsRemaining > 0 ? "Your free posts" : "Your free launch offer"}
+              </h2>
+              <p className="text-sm leading-6 text-muted-foreground">
+                {freePostsRemaining > 0
+                  ? `${freePostsRemaining} extra free posts left. Each runs 30 days from approval. No automatic charge.`
+                  : `One free ${lengths.short}-day post or a ${lengths.long}-day launch trial. Events are always free. No automatic charge.`}
+              </p>
+            </>
+          ) : (
+            <>
+              <h2 className="font-display text-base font-semibold text-foreground">
+                Your{" "}
+                {claim?.admin_granted
+                  ? claim.duration_days
+                  : claim?.duration_days === 7
+                    ? lengths.short
+                    : lengths.long}
+                -day {claim?.admin_granted ? "free post" : "introductory trial"}
+              </h2>
+              <p className="text-sm leading-6 text-muted-foreground">
+                {claim?.activated_at
+                  ? `Visible until ${claim.expires_at ? formatSaLongDate(claim.expires_at) : "soon"}. Your post stays saved.`
+                  : claim?.admin_granted
+                    ? `In review. Your ${claim.duration_days} free days start when approved.`
+                    : "In review. The trial starts when approved."}
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+
       {eligible ? (
-        <>
-          <h2 className="font-semibold">
-            {freePostsRemaining > 0 ? "Your Free Posts" : "Your Free Launch Offer"}
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {freePostsRemaining > 0
-              ? `${freePostsRemaining} extra free posts remaining across all categories. Each lasts 30 days from approval. No automatic charge.`
-              : `Choose one free ${lengths.short}-day post or a limited ${lengths.long}-day launch trial across Mzansi Market, Mzansi Business and Tourism. Events are always free. Select your offer while posting. No automatic charge.`}
-          </p>
-          <Button asChild>
-            <Link href="/post/create">Choose a posting area</Link>
-          </Button>
-        </>
+        <Button asChild variant="trust-verified" className="mt-4 h-11 w-full rounded-full">
+          <Link href="/post/create">Choose a posting area</Link>
+        </Button>
       ) : (
-        <>
-          <h2 className="font-semibold">
-            Your{" "}
-            {claim?.admin_granted
-              ? claim.duration_days
-              : claim?.duration_days === 7
-                ? lengths.short
-                : lengths.long}
-            -day {claim?.admin_granted ? "free post" : "introductory trial"}
-          </h2>
-          <p className="text-sm">
-            {claim?.activated_at
-              ? `Trial visibility ends ${new Date(claim.expires_at!).toLocaleString("en-ZA")}. Your content stays saved for renewal.`
-              : claim?.admin_granted
-                ? `Your post is awaiting review. Your ${claim.duration_days} free days start when approved.`
-                : `Your post is awaiting review. The trial starts only when approved; ${lengths.long}-day capacity is checked then.`}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {!claim?.admin_granted && !claim?.activated_at && claim?.duration_days === 30 && (
-              <Button variant="outline" disabled={busy} onClick={() => update("choose_seven")}>
-                Switch pending post to {lengths.short} days
-              </Button>
-            )}
-            <Button asChild variant="outline">
-              <Link href="/billing">Choose a paid plan</Link>
+        <div className="mt-4 flex flex-col gap-2">
+          <Button
+            disabled={busy}
+            onClick={() => update("renew")}
+            variant="trust-verified"
+            className="h-11 rounded-full"
+          >
+            Renew using my paid plan
+          </Button>
+          {!claim?.admin_granted && !claim?.activated_at && claim?.duration_days === 30 && (
+            <Button
+              variant="outline"
+              disabled={busy}
+              onClick={() => update("choose_seven")}
+              className="h-11 rounded-full"
+            >
+              Switch pending post to {lengths.short} days
             </Button>
-            <Button disabled={busy} onClick={() => update("renew")}>
-              Renew using my paid plan
-            </Button>
-            <Button asChild variant="outline">
-              <Link href="/dashboard/listings">View my posts and results</Link>
-            </Button>
-          </div>
-        </>
+          )}
+          <Button asChild variant="outline" className="h-11 rounded-full">
+            <Link href="/billing">Choose a paid plan</Link>
+          </Button>
+          <Button asChild variant="ghost" className="h-11 rounded-full">
+            <Link href="/dashboard/listings">View my posts and results</Link>
+          </Button>
+        </div>
       )}
       {message && (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="mt-3 text-sm text-destructive">
           {message}
         </p>
       )}

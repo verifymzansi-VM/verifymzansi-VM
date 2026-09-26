@@ -48,25 +48,39 @@ export function DeletePostButton({ itemId, area, label = "Delete" }: DeletePostB
 
   if (confirming) {
     return (
-      <div className="flex items-center gap-1.5">
+      <div
+        className="flex flex-wrap items-center gap-1.5"
+        role="group"
+        aria-label="Delete this post?"
+      >
         <Button
           variant="destructive"
           size="sm"
-          className="gap-1.5"
+          className="h-11 gap-1.5 px-4"
           onClick={handleDelete}
           disabled={loading}
         >
           {loading ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />
           ) : (
-            <Trash2 className="h-3.5 w-3.5" />
+            <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
           )}
-          Confirm Delete
+          Yes, delete
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => setConfirming(false)} disabled={loading}>
-          Cancel
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-11 px-3"
+          onClick={() => setConfirming(false)}
+          disabled={loading}
+        >
+          Keep it
         </Button>
-        {error && <p className="inline-form-error">{error}</p>}
+        {error && (
+          <p role="alert" className="inline-form-error">
+            {error}
+          </p>
+        )}
       </div>
     );
   }
@@ -76,13 +90,17 @@ export function DeletePostButton({ itemId, area, label = "Delete" }: DeletePostB
       <Button
         variant="ghost"
         size="sm"
-        className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10"
+        className="h-11 gap-1.5 px-3 text-destructive hover:bg-destructive/10 hover:text-destructive"
         onClick={() => setConfirming(true)}
       >
-        <Trash2 className="h-3.5 w-3.5" />
+        <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
         {label}
       </Button>
-      {error && <p className="inline-form-error">{error}</p>}
+      {error && (
+        <p role="alert" className="inline-form-error">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

@@ -389,10 +389,10 @@ export function PromotionsExplorer() {
   const tabBaseClasses =
     "inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
   const tourismTabActiveClasses =
-    "border-sunset-600 bg-sunset-600 text-white shadow-sm shadow-sunset/30 dark:border-sunset-500 dark:bg-sunset-500";
+    "border-sunset-700 bg-sunset-700 text-white shadow-sm shadow-sunset/30 dark:border-sunset-600 dark:bg-sunset-700";
   const inactiveTabClasses = "border-transparent text-muted-foreground hover:bg-muted/60";
   const eventTabActiveClasses =
-    "border-sunset-600 bg-sunset-600 text-white shadow-sm shadow-sunset/30 hover:bg-sunset-700 dark:border-sunset-500 dark:bg-sunset-500";
+    "border-sunset-700 bg-sunset-700 text-white shadow-sm shadow-sunset/30 hover:bg-sunset-800 dark:border-sunset-600 dark:bg-sunset-700";
   // Keep Events visibly discoverable while Tourism is selected.
   const eventTabInactiveClasses =
     "border-sunset-300 bg-sunset-50 text-sunset-800 hover:border-sunset-400 hover:bg-sunset-100 dark:border-sunset-500/60 dark:bg-sunset-500/15 dark:text-sunset-200 dark:hover:bg-sunset-500/25";

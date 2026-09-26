@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShoppingBag, CreditCard, User } from "lucide-react";
+import { Building2, CreditCard, TreePalm, UserRound, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface QuickLink {
@@ -11,67 +11,87 @@ interface QuickLink {
 }
 
 interface QuickLinksProps {
-  /** Current plan tier label (e.g. "Growth") shown under Billing link */
+  /** Current plan tier label (e.g. "Growth plan") shown under the billing link */
   planLabel?: string;
 }
 
+/** Secondary shortcuts beside the overview (posting and boosting live in the page header). */
 export function QuickLinks({ planLabel }: QuickLinksProps) {
   const links: QuickLink[] = [
     {
-      label: "My Posts",
-      href: "/dashboard/listings",
-      icon: ShoppingBag,
-      toneClassName: "bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-300",
+      label: "Add your business",
+      href: "/post/create-business",
+      icon: Building2,
+      toneClassName: "area-business-tile",
     },
     {
-      label: "Billing",
-      subtitle: planLabel,
+      label: "Post a stay or event",
+      href: "/post/create-tourism",
+      icon: TreePalm,
+      toneClassName: "area-tourism-tile",
+    },
+    {
+      label: "Plans and billing",
+      subtitle: planLabel ?? "No paid plan yet",
       href: "/billing",
       icon: CreditCard,
       toneClassName:
-        "bg-brand-green-50 text-brand-green dark:bg-brand-green-950 dark:text-brand-green-300",
+        "bg-brand-gold-100 text-brand-gold-900 dark:bg-brand-gold-400/15 dark:text-brand-gold-200",
     },
     {
-      label: "Profile",
+      label: "Profile and settings",
       href: "/dashboard/profile",
-      icon: User,
-      toneClassName: "bg-warm-100 text-warm-600 dark:bg-warm-800 dark:text-warm-300",
+      icon: UserRound,
+      toneClassName: "bg-muted text-foreground/80",
     },
   ];
 
   return (
-    <section className="space-y-3" aria-label="Quick links">
-      <h2 className="font-display text-base font-semibold">Quick Links</h2>
-      <div className="grid grid-cols-2 gap-2.5">
+    <section
+      aria-labelledby="quick-links-title"
+      className="rounded-2xl border border-border/70 bg-card elev-xs"
+    >
+      <h2
+        id="quick-links-title"
+        className="px-4 pb-1 pt-4 font-display text-base font-semibold sm:px-5"
+      >
+        Shortcuts
+      </h2>
+      <ul className="px-2 pb-2 sm:px-3">
         {links.map((link) => {
           const Icon = link.icon;
           return (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={cn(
-                "flex items-center gap-3 rounded-xl border border-border/60 bg-card px-3.5 py-3.5 transition-all duration-200",
-                "hover:-translate-y-0.5 hover:border-foreground/20 hover:bg-accent/40 hover:shadow-md active:scale-[0.98] active:translate-y-0"
-              )}
-            >
-              <div
-                className={cn(
-                  "inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg",
-                  link.toneClassName
-                )}
+            <li key={link.href}>
+              <Link
+                href={link.href}
+                className="group flex min-h-12 items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <Icon className="h-4 w-4" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-medium leading-tight">{link.label}</p>
-                {link.subtitle && (
-                  <p className="text-[11px] text-muted-foreground leading-tight">{link.subtitle}</p>
-                )}
-              </div>
-            </Link>
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
+                    link.toneClassName
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-foreground">{link.label}</span>
+                  {link.subtitle ? (
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {link.subtitle}
+                    </span>
+                  ) : null}
+                </span>
+                <ChevronRight
+                  aria-hidden="true"
+                  className="h-4 w-4 shrink-0 text-muted-foreground"
+                />
+              </Link>
+            </li>
           );
         })}
-      </div>
+      </ul>
     </section>
   );
 }

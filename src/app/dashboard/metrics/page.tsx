@@ -196,91 +196,105 @@ export default async function MetricsPage() {
 
   const stats = [
     {
-      label: "Total Listings",
+      label: "Listings",
       value: totalListings || 0,
       icon: Package,
-      description: `${activeListings || 0} active`,
+      description: `${activeListings || 0} live`,
+      tone: "area-market-tile",
     },
     {
-      label: "Total Views",
-      value: totalViews.toLocaleString(),
+      label: "Views",
+      value: totalViews.toLocaleString("en-ZA"),
       icon: Eye,
-      description: "Across all listings",
+      description: "All listings",
+      tone: "area-business-tile",
     },
     {
-      label: "Leads Received",
+      label: "Leads",
       value: leadCount || 0,
       icon: MessageSquare,
       description: "Contact requests",
+      tone: "bg-brand-gold-100 text-brand-gold-900 dark:bg-brand-gold-400/15 dark:text-brand-gold-200",
     },
     {
-      label: "Conversion Rate",
+      label: "Lead rate",
       value: `${conversionRate}%`,
       icon: TrendingUp,
-      description: "Views → Leads",
+      description: "Leads per view",
+      tone: "area-tourism-tile",
     },
   ];
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Performance Metrics"
-        description="Track your listing performance."
-        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Metrics" }]}
+        title="Performance"
+        description="How your posts are doing."
+        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Performance" }]}
       />
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <ul className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {stats.map((stat) => {
           const Icon = stat.icon;
           return (
-            <Card key={stat.label}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
+            <li
+              key={stat.label}
+              className="flex items-center gap-3 rounded-2xl border border-border/70 bg-card p-3.5 elev-xs sm:p-4"
+            >
+              <span
+                aria-hidden="true"
+                className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${stat.tone}`}
+              >
+                <Icon className="h-5 w-5" />
+              </span>
+              <span className="min-w-0">
+                <span className="block font-display text-xl font-bold leading-none tabular-nums sm:text-2xl">
+                  {stat.value}
+                </span>
+                <span className="mt-1 block truncate text-xs font-medium text-muted-foreground sm:text-sm">
                   {stat.label}
-                </CardTitle>
-                <Icon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold font-display">{stat.value}</div>
-                <p className="text-xs text-muted-foreground">{stat.description}</p>
-              </CardContent>
-            </Card>
+                  <span className="hidden sm:inline"> ({stat.description.toLowerCase()})</span>
+                </span>
+              </span>
+            </li>
           );
         })}
-      </div>
+      </ul>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <BarChart3 className="h-5 w-5" />
-            Engagement — last 30 days
+        <CardHeader className="pb-4">
+          <CardTitle as="h2" className="flex items-center gap-2 text-lg">
+            <BarChart3 aria-hidden="true" className="h-5 w-5 text-muted-foreground" />
+            Last 30 days
           </CardTitle>
         </CardHeader>
         <CardContent>
           {engagementTotal === 0 ? (
-            <div className="flex h-32 items-center justify-center rounded-lg border text-muted-foreground">
-              <div className="text-center">
-                <BarChart3 className="mx-auto mb-3 h-8 w-8 opacity-50" />
-                <p className="text-sm font-medium">No analytics data yet</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Views and engagement trends will appear here once your posts start receiving
-                  traffic.
-                </p>
-              </div>
+            <div className="rounded-2xl border border-dashed border-border px-5 py-8 text-center">
+              <span aria-hidden="true" className="empty-state-icon">
+                <BarChart3 className="h-6 w-6" />
+              </span>
+              <p className="mt-3 text-sm font-semibold text-foreground">No activity yet</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Views and clicks show here once people find your posts.
+              </p>
             </div>
           ) : (
             <div className="space-y-6">
               <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {ENGAGEMENT_METRICS.map(([key, label]) => (
-                  <div key={key} className="rounded-lg border p-3">
+                  <div
+                    key={key}
+                    className="rounded-xl border border-border/70 bg-background/50 p-3"
+                  >
                     <dt className="text-xs text-muted-foreground">{label}</dt>
                     <dd className="font-display text-xl font-semibold tabular-nums">
                       {(engagement.totals.get(key) ?? 0).toLocaleString("en-ZA")}
                     </dd>
                   </div>
                 ))}
-                <div className="rounded-lg border p-3">
+                <div className="rounded-xl border border-border/70 bg-background/50 p-3">
                   <dt className="text-xs text-muted-foreground">Unique viewers</dt>
                   <dd className="font-display text-xl font-semibold tabular-nums">
                     {engagement.uniqueViewers.toLocaleString("en-ZA")}
@@ -295,7 +309,10 @@ export default async function MetricsPage() {
                   </h3>
                   <ul className="grid gap-3 md:grid-cols-2">
                     {engagement.posts.map((post) => (
-                      <li key={post.key} className="rounded-lg border p-3">
+                      <li
+                        key={post.key}
+                        className="rounded-xl border border-border/70 bg-background/50 p-3"
+                      >
                         <p className="truncate font-medium">{post.title || "Untitled post"}</p>
                         <p className="text-xs text-muted-foreground">{post.area}</p>
                         <dl className="mt-2 grid grid-cols-3 gap-2 text-xs">
@@ -330,7 +347,10 @@ export default async function MetricsPage() {
                   </h3>
                   <ul className="space-y-1 text-sm">
                     {engagement.sources.map((row) => (
-                      <li key={row.source} className="flex justify-between gap-3 border-b py-1">
+                      <li
+                        key={row.source}
+                        className="flex justify-between gap-3 border-b border-border/60 py-2"
+                      >
                         <span>{SOURCE_LABELS[row.source] ?? row.source}</span>
                         <span className="tabular-nums">{row.events.toLocaleString("en-ZA")}</span>
                       </li>

@@ -8,7 +8,7 @@ import { PostCreateClient } from "./post-create-client";
 
 export const metadata = {
   title: "Create a Post",
-  description: "Choose the right posting category on VerifyMzansi.",
+  description: "Post an item, a business profile, or a stay or event on VerifyMzansi.",
 };
 
 export default async function PostCreatePage() {
@@ -32,10 +32,10 @@ export default async function PostCreatePage() {
       <Header isAuthenticated />
 
       <main id="main-content" className="flex-1">
-        <div className="container-page py-6 space-y-4">
+        <div className="container-page space-y-6 py-6 sm:py-8">
           <PageHeader
-            title="Create a Post"
-            description="Pick a category to start posting."
+            title="What would you like to post?"
+            description="Pick an area to start. We check every post before it goes live."
             breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Create Post" }]}
           />
 

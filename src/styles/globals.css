@@ -599,6 +599,13 @@
     @apply inline-flex min-h-9 items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-card px-3.5 text-sm font-medium text-foreground/80 transition-colors hover:border-foreground/25 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
   }
 
+  /* Touch screens get the full 44px target for quick-filter pills. */
+  @media (pointer: coarse) {
+    .pill-link {
+      min-height: 2.75rem;
+    }
+  }
+
   /* Green-to-gold brand gradient text (headline accents) */
   .text-gradient-brand {
     @apply bg-gradient-to-r from-brand-green-600 via-brand-green-500 to-brand-gold-500 bg-clip-text text-transparent dark:from-brand-green-300 dark:via-brand-green-400 dark:to-brand-gold-300;

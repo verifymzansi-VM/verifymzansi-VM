@@ -104,8 +104,8 @@ describe("ListingsPage", () => {
 
     // Assertions
     expect(screen.getByRole("heading", { name: /My Posts/i })).toBeDefined();
-    expect(screen.getByText(/Active \(1\)/)).toBeDefined();
-    expect(screen.getByText(/Under Review \(1\)/)).toBeDefined();
+    expect(screen.getByText(/Live \(1\)/)).toBeDefined();
+    expect(screen.getByText(/In review \(1\)/)).toBeDefined();
   });
 
   it("[Edge Case] should not attempt to fetch listings with missing profile UUID", async () => {
@@ -128,7 +128,7 @@ describe("ListingsPage", () => {
     const ui = await ListingsPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
-    expect(screen.getByText(/Active \(0\)/)).toBeDefined();
+    expect(screen.getByText(/Live \(0\)/)).toBeDefined();
   });
 
   it("renders rejected listings when optional listing columns are missing", async () => {

@@ -260,7 +260,7 @@ export function ContentContactActions({
         )}
         {!whatsappUrl && !phoneNumber && (
           <p className="text-sm text-muted-foreground">
-            Direct phone contact is not available for this post.
+            {showMessageButton ? "No phone number shared." : "No contact details added."}
           </p>
         )}
 

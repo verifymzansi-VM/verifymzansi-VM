@@ -1,7 +1,8 @@
-import { Mail, ArrowRight } from "lucide-react";
+import Link from "next/link";
+import { Mail } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
-import Link from "next/link";
+import { LegalBlocks, LegalDocument, type LegalSection } from "@/components/safety/legal-document";
 import { getTrustPublicConfig } from "@/lib/trust-public-config";
 
 export const metadata = {
@@ -12,15 +13,19 @@ export const metadata = {
 
 export default function TermsPage() {
   const trustConfig = getTrustPublicConfig();
-  const sections = [
+  const textSections = [
     {
-      title: "1. Acceptance of Terms",
+      id: "acceptance",
+      navLabel: "Acceptance",
+      title: "Acceptance of terms",
       content: [
         'By accessing or using VerifyMzansi ("the Platform"), you agree to these Terms. We may modify terms at any time — continued use constitutes acceptance.',
       ],
     },
     {
-      title: "2. Account Registration",
+      id: "registration",
+      navLabel: "Account registration",
+      title: "Account registration",
       content: [
         "To post on VerifyMzansi, you must:",
         "• Be at least 18 years old",
@@ -31,7 +36,9 @@ export default function TermsPage() {
       ],
     },
     {
-      title: "3. Account Posting Obligations",
+      id: "posting-obligations",
+      navLabel: "Posting obligations",
+      title: "Account posting obligations",
       content: [
         "As an account holder, you agree to:",
         "• Post only items, businesses, offers, or events you legally own or are authorised to advertise",
@@ -42,7 +49,9 @@ export default function TermsPage() {
       ],
     },
     {
-      title: "4. Prohibited Content",
+      id: "prohibited-content",
+      navLabel: "Prohibited content",
+      title: "Prohibited content",
       content: [
         "Strictly prohibited on VerifyMzansi:",
         "• Fraudulent, misleading, or deceptive listings",
@@ -53,7 +62,9 @@ export default function TermsPage() {
       ],
     },
     {
-      title: "5. Verification Signals",
+      id: "verification-signals",
+      navLabel: "Verification signals",
+      title: "Verification signals",
       content: [
         "Verification badges and trust signals mean specific platform checks were completed, submitted, or reviewed for the person or account using the platform.",
         "VerifyMzansi does not verify that a business itself is official. A business profile may be posted by a person who submitted phone, ID, and selfie evidence, but that does not prove the business is officially claimed unless the page says an official representative was reviewed.",
@@ -62,7 +73,9 @@ export default function TermsPage() {
       ],
     },
     {
-      title: "6. Payments & Billing",
+      id: "payments",
+      navLabel: "Payments & billing",
+      title: "Payments & billing",
       content: [
         `Paid features are billed via secure hosted checkout in ZAR. ${
           trustConfig.ozowMerchantName
@@ -81,7 +94,9 @@ export default function TermsPage() {
       ],
     },
     {
-      title: "7. Introductory Trials & Visibility",
+      id: "trials",
+      navLabel: "Introductory trials",
+      title: "Introductory trials & visibility",
       content: [
         "Eligible verified members may activate one introductory post across all three posting areas: seven days, or a limited 30-Day Free Launch Trial. Previous free-post usage counts. Activation permanently consumes the introductory benefit for the verified identity; deleting content or an account does not reset it.",
         "A free post remains visible only for the free-post visibility period shown in the posting flow. After that period expires, VerifyMzansi may automatically mark the post as expired and remove it from public browsing, search, detail pages, and promotional surfaces.",
@@ -90,16 +105,56 @@ export default function TermsPage() {
       ],
     },
     {
-      title: "8. Promotion & Distribution Rights",
+      id: "promotion-rights",
+      navLabel: "Promotion rights",
+      title: "Promotion & distribution rights",
       content: [
         "When you create a promotion, advertisement, event, or campaign on VerifyMzansi, you confirm that you own it or are authorised to market it.",
       ],
     },
     {
-      title: "9. Limitation of Liability",
+      id: "liability",
+      navLabel: "Limitation of liability",
+      title: "Limitation of liability",
       content: [
         "VerifyMzansi connects buyers, account holders, businesses, and advertisers — we are not a party to transactions. We do not guarantee quality, safety, or legality of listed items or promotions. Liability is limited to the maximum extent permitted by SA law.",
       ],
+    },
+  ];
+
+  const sections: LegalSection[] = [
+    ...textSections.map((section) => ({
+      id: section.id,
+      navLabel: section.navLabel,
+      title: section.title,
+      content: <LegalBlocks paragraphs={section.content} />,
+    })),
+    {
+      id: "privacy-contact",
+      navLabel: "Privacy & contact",
+      title: "Privacy & contact",
+      content: (
+        <div className="max-w-prose space-y-4">
+          <p className="text-[15px] leading-7 text-foreground/80">
+            Your use of VerifyMzansi is also governed by our Privacy Policy.
+          </p>
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap">
+            <Link
+              href="/privacy"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-input bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              View Privacy Policy
+            </Link>
+            <a
+              href="mailto:legal@verifymzansi.com"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-green-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-green-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:bg-brand-green-500 dark:text-brand-green-950 dark:hover:bg-brand-green-400"
+            >
+              <Mail className="h-4 w-4" aria-hidden="true" />
+              legal@verifymzansi.com
+            </a>
+          </div>
+        </div>
+      ),
     },
   ];
 
@@ -107,82 +162,14 @@ export default function TermsPage() {
     <div className="flex min-h-screen flex-col">
       <Header />
 
-      <main id="main-content" className="flex-1 bg-gradient-to-b from-muted/30 to-background">
-        <div className="bg-brand-green-950/20 dark:bg-black py-4 sm:py-5 border-b">
-          <div className="container-page text-center max-w-3xl space-y-1">
-            <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight">
-              Terms of Service
-            </h1>
-            <p className="text-xs sm:text-sm text-muted-foreground">
-              Last updated: May 2026 · Governed by South African law
-            </p>
-          </div>
-        </div>
-
-        <div className="container-page py-4 max-w-4xl">
-          <div className="space-y-4">
-            <div className="space-y-4">
-              {sections.map((section, index) => (
-                <section key={index} className="space-y-1.5 group">
-                  <h2 className="font-display text-base font-bold flex items-center gap-2">
-                    <span className="text-brand-green text-sm font-mono" aria-hidden="true">
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
-                    {section.title.replace(/^\d+\.\s*/, "")}
-                  </h2>
-                  <div className="space-y-1 pl-6 text-muted-foreground leading-snug">
-                    {section.content.map((paragraph, pIdx) =>
-                      paragraph.startsWith("•") ? (
-                        <div key={pIdx} className="flex gap-2 text-sm">
-                          <span className="text-brand-green mt-0.5" aria-hidden="true">
-                            •
-                          </span>
-                          <span>{paragraph.replace("• ", "")}</span>
-                        </div>
-                      ) : (
-                        <p key={pIdx} className="text-sm">
-                          {paragraph}
-                        </p>
-                      )
-                    )}
-                  </div>
-                </section>
-              ))}
-
-              <section className="space-y-1.5 pt-1">
-                <h2 className="font-display text-base font-bold flex items-center gap-2">
-                  <span className="text-brand-green text-sm font-mono" aria-hidden="true">
-                    10
-                  </span>
-                  Privacy & Contact
-                </h2>
-                <div className="pl-6 space-y-2">
-                  <p className="text-sm text-muted-foreground leading-snug">
-                    Your use of VerifyMzansi is also governed by our Privacy Policy.
-                  </p>
-
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <Link
-                      href="/privacy"
-                      className="group flex items-center gap-2 px-4 py-2 rounded-lg bg-muted hover:bg-muted/80 transition-colors text-sm font-medium w-fit border text-foreground"
-                    >
-                      View Privacy Policy
-                      <ArrowRight className="h-4 w-4 text-foreground/70 group-hover:translate-x-1 transition-transform" />
-                    </Link>
-
-                    <a
-                      href="mailto:legal@verifymzansi.com"
-                      className="group flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-green/10 hover:bg-brand-green/20 text-brand-green transition-colors text-sm font-medium w-fit border border-brand-green/20"
-                    >
-                      <Mail className="h-4 w-4" />
-                      legal@verifymzansi.com
-                    </a>
-                  </div>
-                </div>
-              </section>
-            </div>
-          </div>
-        </div>
+      <main id="main-content" className="flex-1">
+        <LegalDocument
+          title="Terms of Service"
+          meta="Updated May 2026"
+          description="Governed by South African law."
+          breadcrumbs={[{ label: "Terms of Service" }]}
+          sections={sections}
+        />
       </main>
 
       <Footer />

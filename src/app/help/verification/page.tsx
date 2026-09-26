@@ -2,17 +2,22 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import {
   Camera,
+  CheckCircle2,
+  ChevronDown,
   FileText,
   MapPin,
+  Monitor,
   Phone,
-  AlertTriangle,
-  CheckCircle2,
-  ArrowLeft,
+  Smartphone,
 } from "lucide-react";
+import { Header } from "@/components/layout/header";
+import { Footer } from "@/components/layout/footer";
+import { InfoHero, SectionHeading } from "@/components/safety/info-hero";
+import { Button } from "@/components/ui/button";
 import { SUPPORT_CONTACT_EMAIL } from "@/lib/contact-email";
 
 export const metadata: Metadata = {
-  title: "Verification Help | VerifyMzansi",
+  title: "Verification Help",
   description: "Common reasons for verification rejection and how to fix them on VerifyMzansi.",
 };
 
@@ -31,7 +36,7 @@ interface RejectionEntry {
 const REJECTIONS: RejectionEntry[] = [
   {
     code: "blurry_image",
-    title: "Blurry Image",
+    title: "Blurry image",
     description: "Image too blurry to read. Clear text is required for verification.",
     tips: [
       "Use natural daylight or a well-lit room — avoid flash.",
@@ -41,7 +46,7 @@ const REJECTIONS: RejectionEntry[] = [
   },
   {
     code: "mismatch",
-    title: "Details Don't Match",
+    title: "Details don't match",
     description: "Name or ID number doesn't match your registration details.",
     tips: [
       "Check that your full legal name matches the document exactly.",
@@ -51,7 +56,7 @@ const REJECTIONS: RejectionEntry[] = [
   },
   {
     code: "expired_document",
-    title: "Expired Document",
+    title: "Expired document",
     description: "Document is past its expiry date.",
     tips: [
       "Apply for a renewal at your nearest Home Affairs office.",
@@ -60,7 +65,7 @@ const REJECTIONS: RejectionEntry[] = [
   },
   {
     code: "incomplete_info",
-    title: "Incomplete / Cut-off Document",
+    title: "Incomplete or cut-off document",
     description: "Part of the document is missing or cut off in the photo.",
     tips: [
       "Photograph the entire document from corner to corner.",
@@ -70,7 +75,7 @@ const REJECTIONS: RejectionEntry[] = [
   },
   {
     code: "wrong_document_type",
-    title: "Wrong Document Type",
+    title: "Wrong document type",
     description: "Uploaded file isn't a recognised SA identity document.",
     tips: [
       "We accept: SA Smart ID Card, SA Green ID Book, or SA Passport.",
@@ -79,7 +84,7 @@ const REJECTIONS: RejectionEntry[] = [
   },
   {
     code: "not_sa_document",
-    title: "Non-South-African Document",
+    title: "Non-South-African document",
     description: "Only SA identity documents are accepted.",
     tips: [
       "Upload your SA ID book, SA Smart ID card, or SA passport.",
@@ -88,7 +93,7 @@ const REJECTIONS: RejectionEntry[] = [
   },
   {
     code: "insufficient_face_visibility",
-    title: "Face Not Clearly Visible (Selfie)",
+    title: "Face not clearly visible (selfie)",
     description: "Selfie didn't show your face clearly enough.",
     tips: [
       "Face the camera directly — avoid angles.",
@@ -98,7 +103,7 @@ const REJECTIONS: RejectionEntry[] = [
   },
   {
     code: "location_mismatch",
-    title: "Location Mismatch",
+    title: "Location mismatch",
     description: "GPS coordinates don't match your selected province.",
     tips: [
       "Enable location services before verifying.",
@@ -108,7 +113,7 @@ const REJECTIONS: RejectionEntry[] = [
   },
   {
     code: "high_risk_override",
-    title: "Flagged for Additional Review",
+    title: "Flagged for additional review",
     description: "Flagged for closer inspection. Not necessarily a rejection — admin will review.",
     tips: [
       "No action needed from you right now.",
@@ -125,155 +130,204 @@ const REJECTIONS: RejectionEntry[] = [
 const STEPS = [
   {
     icon: Phone,
-    name: "Phone Verification",
-    description: "We send an OTP to your South African mobile number to confirm you own it.",
+    name: "Phone number",
+    description: "A one-time code to your SA mobile number.",
   },
   {
     icon: FileText,
-    name: "Identity Document",
-    description: "Upload a clear photo of your SA Smart ID card, green ID book, or passport.",
+    name: "Identity document",
+    description: "A clear photo of your Smart ID, green ID book or passport.",
   },
   {
     icon: Camera,
     name: "Selfie",
-    description: "Take a live selfie so we can match your face to the photo on your ID document.",
+    description: "A live selfie we match to your ID photo.",
   },
   {
     icon: MapPin,
     name: "Location",
-    description: "Confirm your location via GPS or manually select your province and town.",
+    description: "GPS, or pick your province and town.",
   },
 ];
 
+const CAMERA_HELP = [
+  {
+    icon: Monitor,
+    title: "On a computer",
+    subtitle: "Chrome, Edge, Firefox, Safari",
+    tips: [
+      "Open the lock icon next to the address bar and set Camera to Allow for this site.",
+      "If Camera was previously set to Block, Chrome may stop showing a new prompt until you reset permission to Ask or Allow in site settings.",
+      "Refresh the page and press Open Camera again.",
+      "If no prompt appears, close other apps or tabs using your camera and retry.",
+    ],
+  },
+  {
+    icon: Smartphone,
+    title: "On a phone",
+    subtitle: "Android and iPhone",
+    tips: [
+      "Make sure browser camera permission is enabled in your phone Settings.",
+      "On iPhone Safari: Settings > Safari > Camera > Allow.",
+      "On Android Chrome: Site settings > Camera > Allow for this site.",
+      "If you tapped Block before, Chrome will not re-prompt until you change this site back to Ask or Allow.",
+      "If the prompt still does not appear, restart the browser and try again.",
+    ],
+  },
+] as const;
+
 export default function VerificationHelpPage() {
   return (
-    <div className="container-page max-w-3xl py-10">
-      <Link
-        href="/verification"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Verification
-      </Link>
+    <div className="flex min-h-screen flex-col">
+      <Header />
 
-      <h1 className="text-2xl font-bold tracking-tight mb-2">Verification Help</h1>
-      <p className="text-muted-foreground mb-8">Fix common verification issues quickly.</p>
+      <main id="main-content" className="flex-1">
+        <InfoHero
+          title="Verification Help"
+          description="Fix common verification issues quickly."
+          breadcrumbs={[{ label: "Verification", href: "/verification" }, { label: "Help" }]}
+          actions={
+            <Button asChild variant="trust-verified" size="lg">
+              <Link href="/verification">Continue verification</Link>
+            </Button>
+          }
+        />
 
-      {/* ---------- Steps overview ---------- */}
-      <section className="mb-10">
-        <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          <CheckCircle2 className="h-5 w-5 text-brand-green" />
-          Verification steps
-        </h2>
-        <div className="grid gap-3">
-          {STEPS.map((step) => (
-            <div key={step.name} className="flex items-start gap-3 rounded-lg border p-3">
-              <step.icon className="h-5 w-5 mt-0.5 text-muted-foreground shrink-0" />
-              <div>
-                <p className="text-sm font-medium">{step.name}</p>
-                <p className="text-xs sm:text-sm text-muted-foreground">{step.description}</p>
-              </div>
+        <div className="container-page max-w-4xl space-y-14 py-10 sm:py-14">
+          {/* ---------- Steps overview ---------- */}
+          <section aria-labelledby="steps-title">
+            <SectionHeading
+              id="steps-title"
+              title="The four verification steps"
+              lede="Have your SA ID or passport ready."
+            />
+            <ol className="mt-6 grid gap-3 sm:grid-cols-2">
+              {STEPS.map((step, index) => (
+                <li key={step.name} className="surface-card flex gap-4 p-5">
+                  <span className="icon-tile area-market-tile">
+                    <step.icon className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <div>
+                    <p className="text-xs font-semibold text-brand-green-700 dark:text-brand-green-300">
+                      Step {index + 1}
+                    </p>
+                    <h3 className="font-body text-base font-semibold text-foreground">
+                      {step.name}
+                    </h3>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                      {step.description}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </section>
+
+          {/* ---------- Camera troubleshooting ---------- */}
+          <section aria-labelledby="camera-title">
+            <SectionHeading
+              id="camera-title"
+              title="Camera not opening?"
+              lede="Allow camera access in your browser."
+            />
+            <div className="mt-6 grid gap-3 md:grid-cols-2">
+              {CAMERA_HELP.map((group) => (
+                <div key={group.title} className="surface-card p-5">
+                  <div className="flex items-center gap-3">
+                    <span className="icon-tile bg-muted text-foreground/80">
+                      <group.icon className="h-5 w-5" aria-hidden="true" />
+                    </span>
+                    <div>
+                      <h3 className="font-body text-base font-semibold text-foreground">
+                        {group.title}
+                      </h3>
+                      <p className="text-xs text-muted-foreground">{group.subtitle}</p>
+                    </div>
+                  </div>
+                  <ul className="mt-4 space-y-2">
+                    {group.tips.map((tip) => (
+                      <li key={tip} className="flex gap-2.5 text-sm leading-6 text-foreground/85">
+                        <span
+                          aria-hidden="true"
+                          className="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-green-600 dark:bg-brand-green-400"
+                        />
+                        {tip}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
             </div>
-          ))}
+            <p className="mt-4 rounded-2xl bg-muted/70 px-4 py-3 text-sm leading-6 text-muted-foreground">
+              You can always continue verification by uploading a clear image file instead of using
+              the live camera.
+            </p>
+          </section>
+
+          {/* ---------- Rejection reasons ---------- */}
+          <section aria-labelledby="rejections-title">
+            <SectionHeading
+              id="rejections-title"
+              title="Common rejection reasons"
+              lede="Find your reason and follow the tips."
+            />
+            <div className="mt-6 divide-y divide-border/70 overflow-hidden rounded-2xl border border-border/70 bg-card elev-xs">
+              {REJECTIONS.map((entry) => (
+                <details key={entry.code} className="group">
+                  <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                    {entry.title}
+                    <ChevronDown
+                      className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none"
+                      aria-hidden="true"
+                    />
+                  </summary>
+                  <div className="px-5 pb-5">
+                    <p className="text-sm leading-6 text-muted-foreground">{entry.description}</p>
+                    <ul className="mt-3 space-y-2">
+                      {entry.tips.map((tip) => (
+                        <li key={tip} className="flex gap-2.5 text-sm leading-6 text-foreground/85">
+                          <CheckCircle2
+                            className="mt-1 h-4 w-4 shrink-0 text-brand-green-700 dark:text-brand-green-300"
+                            aria-hidden="true"
+                          />
+                          {tip}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </details>
+              ))}
+            </div>
+          </section>
+
+          {/* ---------- Still stuck? ---------- */}
+          <section
+            aria-labelledby="stuck-title"
+            className="hero-panel flex flex-col gap-5 p-6 sm:flex-row sm:items-center sm:justify-between sm:p-8"
+          >
+            <div>
+              <h2 id="stuck-title" className="font-display text-xl font-bold tracking-tight">
+                Still having trouble?
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                Email{" "}
+                <a
+                  href={`mailto:${SUPPORT_CONTACT_EMAIL}`}
+                  className="font-semibold text-brand-green-700 underline underline-offset-4 dark:text-brand-green-300"
+                >
+                  {SUPPORT_CONTACT_EMAIL}
+                </a>{" "}
+                and include your registered phone number.
+              </p>
+            </div>
+            <Button asChild variant="outline" size="lg" className="shrink-0">
+              <Link href="/contact?topic=verification_appeal">Appeal a decision</Link>
+            </Button>
+          </section>
         </div>
-      </section>
+      </main>
 
-      {/* ---------- Camera troubleshooting ---------- */}
-      <section className="mt-10">
-        <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          <Camera className="h-5 w-5 text-brand-red" />
-          Camera not opening?
-        </h2>
-        <div className="rounded-lg border p-4 space-y-4">
-          <div>
-            <p className="text-sm font-medium">Desktop (Chrome, Edge, Firefox, Safari)</p>
-            <ul className="list-disc list-inside mt-1 space-y-1">
-              <li className="text-xs sm:text-sm text-muted-foreground">
-                Open the lock icon next to the address bar and set Camera to Allow for this site.
-              </li>
-              <li className="text-xs sm:text-sm text-muted-foreground">
-                If Camera was previously set to Block, Chrome may stop showing a new prompt until
-                you reset permission to Ask or Allow in site settings.
-              </li>
-              <li className="text-xs sm:text-sm text-muted-foreground">
-                Refresh the page and press Open Camera again.
-              </li>
-              <li className="text-xs sm:text-sm text-muted-foreground">
-                If no prompt appears, close other apps/tabs using your camera and retry.
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <p className="text-sm font-medium">Mobile (Android / iPhone)</p>
-            <ul className="list-disc list-inside mt-1 space-y-1">
-              <li className="text-xs sm:text-sm text-muted-foreground">
-                Ensure browser camera permission is enabled in your phone Settings.
-              </li>
-              <li className="text-xs sm:text-sm text-muted-foreground">
-                On iPhone Safari: Settings {">"} Safari {">"} Camera {">"} Allow.
-              </li>
-              <li className="text-xs sm:text-sm text-muted-foreground">
-                On Android Chrome: Site settings {">"} Camera {">"} Allow for this site.
-              </li>
-              <li className="text-xs sm:text-sm text-muted-foreground">
-                If you tapped Block before, Chrome will not re-prompt until you change this site
-                back to Ask or Allow.
-              </li>
-              <li className="text-xs sm:text-sm text-muted-foreground">
-                If the prompt still does not appear, restart the browser and try again.
-              </li>
-            </ul>
-          </div>
-
-          <p className="text-xs text-muted-foreground">
-            You can always continue verification by uploading a clear image file instead of using
-            the live camera.
-          </p>
-        </div>
-      </section>
-
-      {/* ---------- Rejection reasons ---------- */}
-      <section>
-        <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          <AlertTriangle className="h-5 w-5 text-amber-500" />
-          Common rejection reasons
-        </h2>
-        <div className="space-y-4">
-          {REJECTIONS.map((entry) => (
-            <details
-              key={entry.code}
-              className="group rounded-lg border open:ring-1 open:ring-brand-green/20"
-            >
-              <summary className="cursor-pointer px-4 py-3 text-sm font-medium hover:bg-muted/50 rounded-lg">
-                {entry.title}
-              </summary>
-              <div className="px-4 pb-4 pt-1">
-                <p className="text-sm text-muted-foreground mb-2">{entry.description}</p>
-                <ul className="list-disc list-inside space-y-1">
-                  {entry.tips.map((tip) => (
-                    <li key={tip} className="text-xs sm:text-sm text-muted-foreground">
-                      {tip}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </details>
-          ))}
-        </div>
-      </section>
-
-      {/* ---------- Still stuck? ---------- */}
-      <section className="surface-card mt-10 p-5 text-center">
-        <p className="mb-1 font-display text-sm font-semibold">Still having trouble?</p>
-        <p className="text-xs text-muted-foreground">
-          Contact us at{" "}
-          <a href={`mailto:${SUPPORT_CONTACT_EMAIL}`} className="underline">
-            {SUPPORT_CONTACT_EMAIL}
-          </a>{" "}
-          and include your registered phone number.
-        </p>
-      </section>
+      <Footer />
     </div>
   );
 }

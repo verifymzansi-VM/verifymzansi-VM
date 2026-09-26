@@ -93,7 +93,7 @@ describe("HomePage", () => {
       "/search"
     );
     expect(
-      screen.getByRole("heading", { name: "Know who you're dealing with, before you meet." })
+      screen.getByRole("heading", { name: "Know who you're dealing with." })
     ).toBeInTheDocument();
     expect(screen.getByText("Create your free account")).toBeInTheDocument();
     expect(screen.getByText("Complete verification")).toBeInTheDocument();

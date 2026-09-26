@@ -17,6 +17,14 @@ import { AuthEmailField } from "@/components/auth/auth-email-field";
 import { AuthPasswordField } from "@/components/auth/auth-password-field";
 import { AuthTurnstileFeedback } from "@/components/auth/auth-turnstile-feedback";
 import {
+  AuthDivider,
+  AuthFieldError,
+  AuthFieldHint,
+  AuthPageHeader,
+  AuthReassurance,
+  authInputClassName,
+} from "@/components/auth/auth-ui";
+import {
   getPasswordRequirements,
   PasswordRequirements,
 } from "@/components/auth/password-requirements";
@@ -213,25 +221,21 @@ export default function RegisterPage() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <h1 className="font-display text-2xl font-bold tracking-tight">Create your account</h1>
-      </div>
+      <AuthPageHeader
+        title="Create your account"
+        description="Free to join. Verify your ID only when you post."
+      />
 
       <GoogleOAuthButton mode="register" />
 
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <span className="w-full border-t" />
-        </div>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-background px-2 text-muted-foreground">or continue with email</span>
-        </div>
-      </div>
+      <AuthDivider>or</AuthDivider>
 
-      <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-3">
-        <div className="grid gap-3 sm:grid-cols-2">
+      <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+        <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
-            <Label htmlFor="firstName">First name</Label>
+            <Label htmlFor="firstName" className="text-sm font-semibold text-foreground">
+              First name
+            </Label>
             <Input
               id="firstName"
               placeholder="Thabo"
@@ -240,16 +244,15 @@ export default function RegisterPage() {
               disabled={!isInteractive}
               aria-invalid={!!errors.firstName}
               aria-describedby={errors.firstName ? "firstName-error" : undefined}
+              className={authInputClassName}
               {...register("firstName")}
             />
-            {errors.firstName && (
-              <p id="firstName-error" className="inline-form-error" role="alert">
-                {errors.firstName.message}
-              </p>
-            )}
+            <AuthFieldError id="firstName-error" message={errors.firstName?.message} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="lastName">Last name</Label>
+            <Label htmlFor="lastName" className="text-sm font-semibold text-foreground">
+              Last name
+            </Label>
             <Input
               id="lastName"
               placeholder="Mokoena"
@@ -258,13 +261,10 @@ export default function RegisterPage() {
               disabled={!isInteractive}
               aria-invalid={!!errors.lastName}
               aria-describedby={errors.lastName ? "lastName-error" : undefined}
+              className={authInputClassName}
               {...register("lastName")}
             />
-            {errors.lastName && (
-              <p id="lastName-error" className="inline-form-error" role="alert">
-                {errors.lastName.message}
-              </p>
-            )}
+            <AuthFieldError id="lastName-error" message={errors.lastName?.message} />
           </div>
         </div>
 
@@ -275,7 +275,9 @@ export default function RegisterPage() {
         />
 
         <div className="space-y-2">
-          <Label htmlFor="phone">SA mobile number</Label>
+          <Label htmlFor="phone" className="text-sm font-semibold text-foreground">
+            SA mobile number
+          </Label>
           <Input
             id="phone"
             type="tel"
@@ -284,14 +286,14 @@ export default function RegisterPage() {
             autoComplete="tel"
             disabled={!isInteractive}
             aria-invalid={!!errors.phone}
-            aria-describedby={errors.phone ? "phone-error" : undefined}
+            aria-describedby={errors.phone ? "phone-hint phone-error" : "phone-hint"}
+            className={authInputClassName}
             {...register("phone")}
           />
-          {errors.phone && (
-            <p id="phone-error" className="inline-form-error" role="alert">
-              {errors.phone.message}
-            </p>
-          )}
+          <AuthFieldHint id="phone-hint">
+            We&apos;ll send a one-time code here when you verify.
+          </AuthFieldHint>
+          <AuthFieldError id="phone-error" message={errors.phone?.message} />
         </div>
 
         <AuthPasswordField
@@ -304,56 +306,62 @@ export default function RegisterPage() {
           onToggleShown={() => setShowPassword(!showPassword)}
           describedBy="password-requirements"
           disabled={!isInteractive}
-          toggleClassName="right-1 inline-flex h-11 w-11 items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        />
-        <PasswordRequirements id="password-requirements" requirements={requirements} />
+        >
+          <PasswordRequirements id="password-requirements" requirements={requirements} />
+        </AuthPasswordField>
 
         <AuthPasswordField
           id="confirmPassword"
           label="Confirm password"
-          placeholder="Confirm your password"
+          placeholder="Type your password again"
           inputProps={register("confirmPassword")}
           errorMessage={errors.confirmPassword?.message}
           shown={showConfirmPassword}
           onToggleShown={() => setShowConfirmPassword(!showConfirmPassword)}
           disabled={!isInteractive}
-          toggleClassName="right-1 inline-flex h-11 w-11 items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          toggleLabel={{
+            show: "Show password confirmation",
+            hide: "Hide password confirmation",
+          }}
         />
 
-        <div className="flex items-start gap-2">
-          <input
-            type="checkbox"
-            id="acceptTerms"
-            disabled={!isInteractive}
-            className="mt-1 h-4 w-4 rounded border-warm-300 text-brand-green focus:ring-brand-green dark:border-warm-600 dark:bg-warm-900"
-            {...register("acceptTerms")}
-          />
-          <Label htmlFor="acceptTerms" className="text-xs text-muted-foreground leading-tight">
-            I agree to the{" "}
-            <Link
-              href="/terms"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-brand-green underline"
+        <div className="space-y-2">
+          <div className="flex items-start gap-3 rounded-xl border border-border/80 bg-muted/40 p-3.5">
+            <input
+              type="checkbox"
+              id="acceptTerms"
+              disabled={!isInteractive}
+              aria-invalid={!!errors.acceptTerms}
+              aria-describedby={errors.acceptTerms ? "acceptTerms-error" : undefined}
+              className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer rounded border-input accent-brand-green-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:accent-brand-green-400"
+              {...register("acceptTerms")}
+            />
+            <Label
+              htmlFor="acceptTerms"
+              className="cursor-pointer text-sm font-normal leading-6 text-foreground/80"
             >
-              Terms of Service
-            </Link>{" "}
-            and{" "}
-            <Link
-              href="/privacy"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-brand-green underline"
-            >
-              Privacy Policy
-            </Link>
-          </Label>
+              I agree to the{" "}
+              <Link
+                href="/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-brand-green-700 underline underline-offset-2 dark:text-brand-green-300"
+              >
+                Terms of Service
+              </Link>{" "}
+              and{" "}
+              <Link
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-brand-green-700 underline underline-offset-2 dark:text-brand-green-300"
+              >
+                Privacy Policy
+              </Link>
+            </Label>
+          </div>
+          <AuthFieldError id="acceptTerms-error" message={errors.acceptTerms?.message} />
         </div>
-        {errors.acceptTerms && (
-          <p className="inline-form-error" role="alert">
-            {errors.acceptTerms.message}
-          </p>
-        )}
 
         <TurnstileWidget
           retryToken={turnstileRetryToken}
@@ -372,21 +380,28 @@ export default function RegisterPage() {
 
         <Button
           type="submit"
-          className="h-11 w-full rounded-full text-[15px] font-semibold"
+          size="lg"
+          className="h-12 w-full text-[15px]"
           variant="trust-verified"
           disabled={!isInteractive || isSubmitting || captchaUnavailable || Boolean(turnstileError)}
+          aria-busy={isSubmitting || undefined}
         >
-          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Create Account
+          {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+          Create account
         </Button>
       </form>
 
-      <p className="text-center text-sm text-muted-foreground">
-        Already have an account?{" "}
-        <Link href="/login" className="font-medium text-brand-green underline">
+      <p className="text-center text-[15px] text-muted-foreground">
+        Have an account?{" "}
+        <Link
+          href="/login"
+          className="font-semibold text-brand-green-700 underline underline-offset-4 hover:text-brand-green-800 dark:text-brand-green-300 dark:hover:text-brand-green-200"
+        >
           Sign in
         </Link>
       </p>
+
+      <AuthReassurance />
     </div>
   );
 }

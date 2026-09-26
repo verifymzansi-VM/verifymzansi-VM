@@ -3,13 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Pencil, Eye, Package, AlertTriangle, ArrowRight } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Pencil, Eye, Package, AlertTriangle, ChevronRight, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ExpiryCountdownBadge } from "@/components/dashboard/expiry-countdown-badge";
 import { cn } from "@/lib/utils";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
+import { formatSaShortDate } from "@/lib/utils/format";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -37,52 +37,25 @@ interface ListingManagerMiniProps {
 /*  Status config                                                      */
 /* ------------------------------------------------------------------ */
 
+const LIVE_TONE =
+  "bg-brand-green-50 text-brand-green-700 ring-brand-green/20 dark:bg-brand-green-500/15 dark:text-brand-green-300";
+const PENDING_TONE =
+  "bg-brand-gold-50 text-brand-gold-900 ring-brand-gold-400/40 dark:bg-brand-gold-400/15 dark:text-brand-gold-200";
+const REJECTED_TONE =
+  "bg-brand-red-50 text-brand-red-700 ring-brand-red-300 dark:bg-brand-red-500/15 dark:text-brand-red-300";
+const NEUTRAL_TONE = "bg-muted text-muted-foreground ring-border";
+
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
-  live: {
-    label: "Live",
-    className:
-      "bg-brand-green-50 text-brand-green border-brand-green-200 dark:bg-brand-green-950 dark:border-brand-green-800",
-  },
-  active: {
-    label: "Live",
-    className:
-      "bg-brand-green-50 text-brand-green border-brand-green-200 dark:bg-brand-green-950 dark:border-brand-green-800",
-  },
-  pending_moderation: {
-    label: "Pending",
-    className:
-      "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:border-amber-800",
-  },
-  pending_review: {
-    label: "Pending",
-    className:
-      "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:border-amber-800",
-  },
-  flagged_for_review: {
-    label: "Review",
-    className:
-      "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:border-amber-800",
-  },
-  rejected: {
-    label: "Rejected",
-    className: "bg-red-50 text-red-600 border-red-200 dark:bg-red-950 dark:border-red-800",
-  },
-  draft: {
-    label: "Draft",
-    className: "bg-warm-100 text-warm-600 border-warm-200 dark:bg-warm-800 dark:border-warm-700",
-  },
-  expired: {
-    label: "Expired",
-    className: "bg-warm-100 text-warm-500 border-warm-200 dark:bg-warm-800 dark:border-warm-700",
-  },
-  sold: {
-    label: "Sold",
-    className: "bg-warm-100 text-warm-500 border-warm-200 dark:bg-warm-800 dark:border-warm-700",
-  },
-  hidden: {
-    label: "Hidden",
-    className: "bg-warm-100 text-warm-500 border-warm-200 dark:bg-warm-800 dark:border-warm-700",
-  },
+  live: { label: "Live", className: LIVE_TONE },
+  active: { label: "Live", className: LIVE_TONE },
+  pending_moderation: { label: "In review", className: PENDING_TONE },
+  pending_review: { label: "In review", className: PENDING_TONE },
+  flagged_for_review: { label: "In review", className: PENDING_TONE },
+  rejected: { label: "Rejected", className: REJECTED_TONE },
+  draft: { label: "Draft", className: NEUTRAL_TONE },
+  expired: { label: "Expired", className: NEUTRAL_TONE },
+  sold: { label: "Sold", className: NEUTRAL_TONE },
+  hidden: { label: "Hidden", className: NEUTRAL_TONE },
 };
 
 /* ------------------------------------------------------------------ */
@@ -96,7 +69,7 @@ const TABS: { key: TabKey; label: string; statuses: string[] }[] = [
   { key: "live", label: "Live", statuses: ["live", "active"] },
   {
     key: "pending",
-    label: "Pending",
+    label: "In review",
     statuses: ["pending_moderation", "pending_review", "flagged_for_review"],
   },
   { key: "rejected", label: "Rejected", statuses: ["rejected"] },
@@ -125,7 +98,8 @@ function getRelativeDate(iso: string): string {
   if (days === 1) return "1d ago";
   if (days < 7) return `${days}d ago`;
   if (days < 30) return `${Math.floor(days / 7)}w ago`;
-  return new Date(iso).toLocaleDateString("en-ZA", { day: "numeric", month: "short" });
+  // Deterministic "Sat 15 Mar" → "15 Mar" (no locale drift between server and browser).
+  return formatSaShortDate(iso).split(" ").slice(1).join(" ");
 }
 
 function addDaysIso(value: string | null | undefined, days: number) {
@@ -190,43 +164,49 @@ export function ListingManagerMini({ posts, limit = 5 }: ListingManagerMiniProps
   /* ---- Empty state (entire section — no posts at all) ------------ */
   if (posts.length === 0) {
     return (
-      <section className="space-y-3" aria-label="My Posts">
-        <h2 className="font-display text-base font-semibold">My Posts</h2>
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 py-10 text-center">
-          <Package className="mb-2 h-8 w-8 text-muted-foreground/30" />
-          <p className="text-sm font-medium text-muted-foreground">No posts yet</p>
-          <p className="mt-0.5 text-xs text-muted-foreground/70">
-            Create a listing to start getting leads
-          </p>
-          <Button asChild size="sm" className="mt-4">
-            <Link href="/post/create">Create Post</Link>
-          </Button>
-        </div>
+      <section
+        aria-labelledby="my-posts-title"
+        className="rounded-2xl border border-border/70 bg-card p-5 text-center elev-xs"
+      >
+        <h2 id="my-posts-title" className="sr-only">
+          My posts
+        </h2>
+        <span aria-hidden="true" className="empty-state-icon">
+          <Package className="h-6 w-6" />
+        </span>
+        <p className="mt-3 font-display text-base font-semibold text-foreground">
+          You haven&apos;t posted yet
+        </p>
+        <Button asChild variant="trust-verified" className="mt-4 h-11 rounded-full px-5">
+          <Link href="/post/create">
+            <Plus aria-hidden="true" className="h-4 w-4" />
+            Create your first post
+          </Link>
+        </Button>
       </section>
     );
   }
 
   return (
-    <section className="space-y-3" aria-label="My Posts">
+    <section
+      aria-labelledby="my-posts-title"
+      className="rounded-2xl border border-border/70 bg-card elev-xs"
+    >
       {/* Header row */}
-      <div className="flex items-center justify-between">
-        <h2 className="font-display text-base font-semibold">My Posts</h2>
-        <Button
-          asChild
-          variant="ghost"
-          size="sm"
-          className="h-7 gap-1 text-xs text-muted-foreground"
-        >
-          <Link href="/dashboard/listings">
-            View all
-            <ArrowRight className="h-3 w-3" />
-          </Link>
-        </Button>
+      <div className="flex items-center justify-between gap-3 px-4 pt-4 sm:px-5">
+        <h2 id="my-posts-title" className="font-display text-base font-semibold">
+          My posts
+        </h2>
+        <Link href="/dashboard/listings" className="link-arrow min-h-11 px-1">
+          Manage all
+          <ChevronRight aria-hidden="true" className="h-4 w-4" />
+        </Link>
       </div>
 
-      {/* Tab pills — horizontally scrollable on mobile */}
+      {/* Status filter — horizontally scrollable on mobile */}
       <div
-        className="flex gap-1.5 overflow-x-auto scrollbar-none pb-0.5"
+        role="group"
+        className="flex gap-1.5 overflow-x-auto px-4 pb-3 pt-1 scrollbar-hide sm:px-5"
         aria-label="Filter posts by status"
       >
         {TABS.map((tab) => {
@@ -236,20 +216,22 @@ export function ListingManagerMini({ posts, limit = 5 }: ListingManagerMiniProps
             <button
               key={tab.key}
               type="button"
+              aria-pressed={isActive}
               data-state={isActive ? "active" : "inactive"}
               onClick={() => setActiveTab(tab.key)}
               className={cn(
-                "inline-flex flex-shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                "inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition-colors",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 isActive
-                  ? "border-foreground/20 bg-foreground text-background"
-                  : "border-border bg-card text-muted-foreground hover:border-foreground/15 hover:text-foreground"
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border bg-card text-muted-foreground hover:border-foreground/25 hover:text-foreground"
               )}
             >
               {tab.label}
               {count > 0 && (
                 <span
                   className={cn(
-                    "inline-flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none",
+                    "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold leading-none tabular-nums",
                     isActive ? "bg-background/20 text-background" : "bg-muted text-muted-foreground"
                   )}
                 >
@@ -262,62 +244,67 @@ export function ListingManagerMini({ posts, limit = 5 }: ListingManagerMiniProps
       </div>
 
       {/* Post list */}
-      <div className="rounded-xl border border-border/60 bg-card">
+      <div className="border-t border-border/60">
         {visible.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
-            <Package className="mb-1.5 h-6 w-6 opacity-20" />
-            <p className="text-sm">No {tabDef.label.toLowerCase()} posts</p>
+          <div className="flex flex-col items-center justify-center px-4 py-8 text-center">
+            <Package aria-hidden="true" className="mb-2 h-6 w-6 text-muted-foreground/60" />
+            <p className="text-sm text-muted-foreground">
+              No {tabDef.label.toLowerCase()} posts right now.
+            </p>
           </div>
         ) : (
-          <ul className="divide-y divide-border/50" aria-label="Posts">
+          <ul className="divide-y divide-border/60" aria-label="Posts">
             {visible.map((post) => {
               const status = STATUS_CONFIG[post.status] ?? STATUS_CONFIG.draft;
               const thumbnail = post.photos?.[0] ? normalizeMediaUrl(post.photos[0]) : null;
-              const title = post.title?.slice(0, 50) || "Untitled";
+              const title = post.title?.slice(0, 60) || "Untitled";
               const isRejected = post.status === "rejected";
               const dateStr = getRelativeDate(post.updated_at || post.created_at);
               const showExpiry = post.status === "live" || post.status === "active";
 
               return (
-                <li key={post.id} className="flex items-center gap-3 px-3.5 py-2.5 sm:px-4">
+                <li key={post.id} className="flex items-center gap-3 px-4 py-3 sm:px-5">
                   {/* Thumbnail */}
-                  <div className="h-11 w-11 flex-shrink-0 overflow-hidden rounded-lg bg-warm-100 dark:bg-warm-800">
+                  <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-muted">
                     {thumbnail ? (
                       <Image
                         src={thumbnail}
                         alt=""
-                        width={44}
-                        height={44}
-                        className="h-full w-full object-contain"
+                        width={56}
+                        height={56}
+                        className="h-full w-full bg-muted object-contain"
                       />
                     ) : (
                       <div className="flex h-full items-center justify-center">
-                        <Package className="h-4 w-4 text-warm-400" />
+                        <Package aria-hidden="true" className="h-5 w-5 text-muted-foreground/60" />
                       </div>
                     )}
                   </div>
 
                   {/* Title + meta */}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{title}</p>
-                    <div className="mt-0.5 flex items-center gap-2">
-                      <Badge
-                        variant="outline"
-                        className={cn("h-4 px-1.5 py-0 text-[10px] font-medium", status.className)}
+                    <p className="truncate text-sm font-semibold text-foreground">{title}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground">
+                      <span
+                        className={cn(
+                          "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
+                          status.className
+                        )}
                       >
                         {status.label}
-                      </Badge>
-                      <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                        <Eye className="h-3 w-3" />
-                        {post.view_count ?? 0}
                       </span>
-                      <span className="text-[10px] text-muted-foreground">{dateStr}</span>
+                      <span className="inline-flex items-center gap-1">
+                        <Eye aria-hidden="true" className="h-3.5 w-3.5" />
+                        <span>{post.view_count ?? 0}</span>
+                        <span className="sr-only">views</span>
+                      </span>
+                      <span suppressHydrationWarning>{dateStr}</span>
                     </div>
                     {showExpiry ? (
                       <ExpiryCountdownBadge
                         expiresAt={post.expires_at}
-                        className="mt-1 flex text-[10px] font-medium text-amber-700 dark:text-amber-400"
-                        iconClassName="h-3 w-3"
+                        className="mt-1 flex text-xs font-medium text-brand-gold-800 dark:text-brand-gold-300"
+                        iconClassName="h-3.5 w-3.5"
                       />
                     ) : null}
                   </div>
@@ -328,8 +315,8 @@ export function ListingManagerMini({ posts, limit = 5 }: ListingManagerMiniProps
                     variant={isRejected ? "destructive" : "ghost"}
                     size="sm"
                     className={cn(
-                      "h-8 flex-shrink-0",
-                      isRejected ? "gap-1 px-2.5 text-xs" : "w-8 p-0"
+                      "h-11 shrink-0 rounded-full",
+                      isRejected ? "gap-1.5 px-3.5" : "w-11 p-0"
                     )}
                   >
                     <Link
@@ -338,11 +325,11 @@ export function ListingManagerMini({ posts, limit = 5 }: ListingManagerMiniProps
                     >
                       {isRejected ? (
                         <>
-                          <AlertTriangle className="h-3 w-3" />
+                          <AlertTriangle aria-hidden="true" className="h-3.5 w-3.5" />
                           Fix
                         </>
                       ) : (
-                        <Pencil className="h-3.5 w-3.5" />
+                        <Pencil aria-hidden="true" className="h-4 w-4" />
                       )}
                     </Link>
                   </Button>

@@ -5,17 +5,7 @@ import { hasCapability } from "@/lib/auth/roles";
 import { useState, useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  AlertTriangle,
-  ArrowRight,
-  Loader2,
-  Sparkles,
-  Check,
-  X,
-  Crown,
-  Camera,
-  Video,
-} from "lucide-react";
+import { AlertTriangle, Loader2, Sparkles, Check, X, Crown, Camera, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -104,9 +94,9 @@ const AREA_LABELS: Record<MarketplaceArea, string> = {
 };
 
 const AREA_COLORS: Record<MarketplaceArea, string> = {
-  MZANSI_MARKET: "bg-brand-green text-white",
-  MZANSI_BUSINESS: "bg-brand-blue text-white",
-  PROMOTIONS_EVENTS: "bg-purple-600 text-white",
+  MZANSI_MARKET: "border-0 bg-brand-green-600 text-white hover:bg-brand-green-600",
+  MZANSI_BUSINESS: "border-0 bg-brand-blue-600 text-white hover:bg-brand-blue-600",
+  PROMOTIONS_EVENTS: "border-0 bg-sunset-600 text-white hover:bg-sunset-600",
 };
 
 const AREA_ITEM_LABELS: Record<MarketplaceArea, string> = {
@@ -184,27 +174,27 @@ function InlinePlanGrid({
         return (
           <Card
             key={`${plan.area}-${plan.tier}`}
-            className={`relative ${
+            className={`relative rounded-2xl ${
               isPopular
-                ? "border-brand-green shadow-md ring-1 ring-brand-green/20"
+                ? "border-brand-green-600/70 ring-4 ring-brand-green/10 elev-md dark:border-brand-green-500/70"
                 : isPremium
-                  ? "border-brand-gold/50"
-                  : ""
+                  ? "border-brand-gold/60"
+                  : "border-border/70"
             }`}
           >
             {isPopular && (
               <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                <Badge className="bg-brand-green text-white gap-1 text-[10px] px-2 py-0.5 whitespace-nowrap">
-                  <Sparkles className="h-3 w-3" />
-                  MOST POPULAR
+                <Badge className="gap-1 whitespace-nowrap border-0 bg-brand-green-600 px-2.5 py-0.5 text-xs font-bold text-white hover:bg-brand-green-600 dark:bg-brand-green-500 dark:text-brand-green-950">
+                  <Sparkles className="h-3 w-3" aria-hidden="true" />
+                  Most popular
                 </Badge>
               </div>
             )}
             {isPremium && (
               <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                <Badge className="bg-brand-gold text-amber-950 gap-1 text-[10px] px-2 py-0.5 whitespace-nowrap">
-                  <Crown className="h-3 w-3" />
-                  BEST VALUE
+                <Badge className="gap-1 whitespace-nowrap border-0 bg-brand-gold px-2.5 py-0.5 text-xs font-bold text-brand-gold-950 hover:bg-brand-gold">
+                  <Crown className="h-3 w-3" aria-hidden="true" />
+                  Best value
                 </Badge>
               </div>
             )}
@@ -212,7 +202,9 @@ function InlinePlanGrid({
             <CardContent className="p-4 pt-5 space-y-3">
               {/* Plan name + price */}
               <div className="text-center">
-                <h3 className="font-display text-base font-bold">{PLAN_TIER_LABELS[plan.tier]}</h3>
+                <h3 className="font-body text-base font-semibold text-foreground">
+                  {PLAN_TIER_LABELS[plan.tier]}
+                </h3>
                 <div className="mt-0.5">
                   <span className="font-display text-2xl font-bold">
                     {formatPlanPrice(plan.priceCents)}
@@ -230,11 +222,17 @@ function InlinePlanGrid({
                 {features.map((feat) => (
                   <li key={feat.text} className="flex items-center gap-1.5">
                     {feat.enabled ? (
-                      <Check className="h-4 w-4 text-brand-green flex-shrink-0" />
+                      <Check
+                        aria-hidden="true"
+                        className="h-4 w-4 flex-shrink-0 text-brand-green-700 dark:text-brand-green-300"
+                      />
                     ) : (
-                      <X className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
+                      <X
+                        aria-hidden="true"
+                        className="h-4 w-4 flex-shrink-0 text-muted-foreground/60"
+                      />
                     )}
-                    <span className={feat.enabled ? "" : "text-muted-foreground/60"}>
+                    <span className={feat.enabled ? "text-foreground/85" : "text-muted-foreground"}>
                       {feat.text}
                     </span>
                   </li>
@@ -243,9 +241,8 @@ function InlinePlanGrid({
 
               {/* Subscribe button */}
               <Button
-                className="w-full gap-1.5 text-sm"
-                size="sm"
-                variant={isPopular ? "default" : "outline"}
+                className="h-11 w-full gap-1.5 rounded-full text-sm"
+                variant={isPopular ? "trust-verified" : "outline"}
                 disabled={subscribing !== null}
                 onClick={() => onSubscribe(plan)}
               >
@@ -445,8 +442,13 @@ export function PlanGate({ area, children, onTrialSelected, freePosting = false 
     return (
       <div className="flex items-center justify-center py-8">
         <div className="text-center space-y-3">
-          <Loader2 className="h-8 w-8 animate-spin text-brand-green mx-auto" />
-          <p className="text-sm text-muted-foreground">Checking your plan</p>
+          <Loader2
+            aria-hidden="true"
+            className="mx-auto h-8 w-8 animate-spin text-brand-green-600 dark:text-brand-green-400"
+          />
+          <p role="status" className="text-sm text-muted-foreground">
+            Checking your plan…
+          </p>
         </div>
       </div>
     );
@@ -455,21 +457,22 @@ export function PlanGate({ area, children, onTrialSelected, freePosting = false 
   // Not authenticated
   if (error === "not_authenticated") {
     return (
-      <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900">
-        <CardContent className="p-6 text-center space-y-3">
-          <AlertTriangle className="h-8 w-8 text-amber-500 mx-auto" />
-          <h2 className="font-display text-xl font-bold">Sign in required</h2>
-          <p className="text-muted-foreground max-w-md mx-auto">
-            Sign in to choose a plan or use your free posts on VerifyMzansi.
+      <Card className="rounded-3xl border-border/70">
+        <CardContent className="space-y-3 p-6 text-center sm:p-8">
+          <span className="empty-state-icon">
+            <ShieldCheck className="h-7 w-7" aria-hidden="true" />
+          </span>
+          <h2 className="font-display text-xl font-bold">Sign in to post</h2>
+          <p className="mx-auto max-w-md text-muted-foreground">
+            Sign in to choose a plan or use your free post on VerifyMzansi. New here? Joining is
+            free.
           </p>
-          <div className="flex flex-wrap gap-3 justify-center">
-            <Button asChild variant="outline">
+          <div className="flex flex-col justify-center gap-2 sm:flex-row">
+            <Button asChild variant="trust-verified" className="h-11 rounded-full px-6">
               <Link href="/login">Sign in</Link>
             </Button>
-            <Button asChild className="gap-2">
-              <Link href="/register">
-                Register Free <ArrowRight className="h-4 w-4" />
-              </Link>
+            <Button asChild variant="outline" className="h-11 rounded-full px-6">
+              <Link href="/register">Create a free account</Link>
             </Button>
           </div>
         </CardContent>
@@ -480,17 +483,19 @@ export function PlanGate({ area, children, onTrialSelected, freePosting = false 
   // No account profile
   if (error === "no_profile") {
     return (
-      <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900">
-        <CardContent className="p-6 text-center space-y-3">
-          <ShieldCheck className="h-8 w-8 text-amber-500 mx-auto" />
-          <h2 className="font-display text-xl font-bold">Add Your Phone Number</h2>
-          <p className="text-muted-foreground max-w-md mx-auto">
-            Add your phone number before posting so buyers can trust your account and receive your
+      <Card className="rounded-3xl border-border/70">
+        <CardContent className="space-y-3 p-6 text-center sm:p-8">
+          <span className="empty-state-icon">
+            <ShieldCheck className="h-7 w-7" aria-hidden="true" />
+          </span>
+          <h2 className="font-display text-xl font-bold">Add your phone number</h2>
+          <p className="mx-auto max-w-md text-muted-foreground">
+            Add your phone number before posting so buyers can trust your account and you receive
             updates.
           </p>
-          <Button asChild className="gap-2">
+          <Button asChild variant="trust-verified" className="h-11 rounded-full px-6">
             <Link href={`/dashboard/complete-profile?returnUrl=${encodeURIComponent(pathname)}`}>
-              Add Phone Number <ArrowRight className="h-4 w-4" />
+              Add phone number
             </Link>
           </Button>
         </CardContent>
@@ -501,11 +506,20 @@ export function PlanGate({ area, children, onTrialSelected, freePosting = false 
   // Generic error
   if (error) {
     return (
-      <Card className="border-destructive/50">
-        <CardContent className="p-6 text-center space-y-3">
-          <AlertTriangle className="h-8 w-8 text-destructive mx-auto" />
-          <h2 className="font-display text-xl font-bold">We couldn't load your plan</h2>
-          <p className="text-muted-foreground">Try again in a moment.</p>
+      <Card className="rounded-3xl border-destructive/40">
+        <CardContent className="space-y-3 p-6 text-center sm:p-8">
+          <AlertTriangle className="mx-auto h-8 w-8 text-destructive" aria-hidden="true" />
+          <h2 className="font-display text-xl font-bold">We couldn&apos;t load your plan</h2>
+          <p className="text-muted-foreground">
+            This is usually a brief connection problem. Refresh the page to try again.
+          </p>
+          <Button
+            variant="outline"
+            className="h-11 rounded-full px-6"
+            onClick={() => window.location.reload()}
+          >
+            Refresh page
+          </Button>
         </CardContent>
       </Card>
     );
@@ -517,7 +531,7 @@ export function PlanGate({ area, children, onTrialSelected, freePosting = false 
   if (freePosting) {
     return (
       <div className="space-y-4">
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-brand-green/25 bg-brand-green/5 px-4 py-3 text-sm">
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-sunset/25 bg-sunset/5 px-4 py-3 text-sm text-foreground/90">
           <Badge className={AREA_COLORS[area]}>Events</Badge>
           <span>
             Events are <strong>free</strong> and stay visible until the event ends. They do not use
@@ -536,22 +550,23 @@ export function PlanGate({ area, children, onTrialSelected, freePosting = false 
   if (planInfo.tier === "free" && !planInfo.isTrial) {
     return (
       <div className="space-y-3">
-        <div className="bg-gradient-to-r from-brand-green to-emerald-600 rounded-lg p-4 text-white">
-          <div className="flex items-center gap-2 mb-1">
-            <Sparkles className="h-4 w-4" />
-            <h2 className="font-display text-base font-bold">Choose Your Plan to Start Posting</h2>
-          </div>
-          <p className="text-white/80 text-xs max-w-xl">
-            Your introductory offer is unavailable or awaiting review. Check your dashboard or
-            choose a paid plan. Select a plan below to continue posting.
+        <div className="rounded-2xl border border-brand-green/25 bg-brand-green/[0.06] p-4 dark:bg-brand-green/10">
+          <h2 className="font-display text-lg font-bold text-foreground">
+            Choose your plan to start posting
+          </h2>
+          <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+            Your free post is used or awaiting review.
           </p>
         </div>
 
         <InlinePlanGrid plans={areaPlans} onSubscribe={handleSubscribe} subscribing={subscribing} />
 
         <p className="text-center text-xs text-muted-foreground">
-          One reusable posting slot per plan • No automatic renewal •{" "}
-          <Link href="/billing" className="text-brand-green underline">
+          One reusable posting slot per plan, with no automatic renewal.{" "}
+          <Link
+            href="/billing"
+            className="rounded-sm font-medium text-brand-green-700 underline dark:text-brand-green-300"
+          >
             View full plan details
           </Link>
         </p>
@@ -567,10 +582,13 @@ export function PlanGate({ area, children, onTrialSelected, freePosting = false 
 
     return (
       <div className="space-y-6">
-        <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="h-8 w-8 text-amber-500 flex-shrink-0" />
+        <Card className="rounded-2xl border-brand-gold/40 bg-brand-gold/10 dark:bg-brand-gold/[0.07]">
+          <CardContent className="p-5 sm:p-6">
+            <div className="flex items-start gap-3">
+              <AlertTriangle
+                aria-hidden="true"
+                className="h-7 w-7 flex-shrink-0 text-brand-gold-700 dark:text-brand-gold-300"
+              />
               <div>
                 <h2 className="font-display text-lg font-bold">All posting slots in use</h2>
                 <p className="text-sm text-muted-foreground">
@@ -579,8 +597,10 @@ export function PlanGate({ area, children, onTrialSelected, freePosting = false 
                     {planInfo.currentCount}/{planInfo.maxAllowed}
                   </strong>{" "}
                   {AREA_ITEM_LABELS[area]} on your{" "}
-                  <Badge variant="outline" className="capitalize mx-1 text-xs">
-                    {planInfo.isTrial ? "Free Post" : planInfo.tier}
+                  <Badge variant="outline" className="mx-1 text-xs">
+                    {planInfo.isTrial
+                      ? "Free post"
+                      : (PLAN_TIER_LABELS[planInfo.tier as PlanTier] ?? "current")}
                   </Badge>{" "}
                   plan. Mark a sold item, deactivate a post from your dashboard, or add another slot
                   below.
@@ -620,7 +640,7 @@ export function PlanGate({ area, children, onTrialSelected, freePosting = false 
   // ── Has paid plan — show plan status bar + form directly ──
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/50 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border/70 bg-muted/50 px-4 py-3">
         <Badge className={AREA_COLORS[area]}>{AREA_LABELS[area]}</Badge>
 
         <Badge variant="outline">
@@ -633,8 +653,8 @@ export function PlanGate({ area, children, onTrialSelected, freePosting = false 
             {planInfo.maxPhotos} photos
           </span>
           {planInfo.videoAllowed && (
-            <span className="flex items-center gap-1 text-brand-green">
-              <Video className="h-3.5 w-3.5" />
+            <span className="flex items-center gap-1 text-brand-green-700 dark:text-brand-green-300">
+              <Video className="h-3.5 w-3.5" aria-hidden="true" />
               Video
             </span>
           )}
@@ -691,12 +711,15 @@ function PlanPickerWithTrial({
     return (
       <div className="space-y-4">
         {/* Free post status bar */}
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/50 px-4 py-3">
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border/70 bg-muted/50 px-4 py-3">
           <Badge className={AREA_COLORS[area]}>{AREA_LABELS[area]}</Badge>
 
           <div className="flex items-center gap-1.5 text-sm">
-            <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-            <span className="text-amber-600 dark:text-amber-400 font-medium">
+            <Sparkles
+              aria-hidden="true"
+              className="h-3.5 w-3.5 text-brand-gold-700 dark:text-brand-gold-300"
+            />
+            <span className="font-medium text-brand-gold-800 dark:text-brand-gold-200">
               {planInfo.postingLimitBypassEnabled
                 ? `Staff / testing access — Unlimited posts • ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`
                 : `${(planInfo.offer?.adminFreePostsRemaining ?? 0) > 0 ? "Account free post" : "Introductory trial"} — ${(planInfo.offer?.adminFreePostsRemaining ?? 0) > 0 ? 30 : trialLength(planInfo.offer, trialDays)} days • ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`}
@@ -708,8 +731,8 @@ function PlanPickerWithTrial({
               <Camera className="h-3.5 w-3.5" />
               {planInfo.maxPhotos} photos
             </span>
-            <span className="flex items-center gap-1 text-brand-green">
-              <Video className="h-3.5 w-3.5" />1 video
+            <span className="flex items-center gap-1 text-brand-green-700 dark:text-brand-green-300">
+              <Video className="h-3.5 w-3.5" aria-hidden="true" />1 video
             </span>
             <span>{usageText}</span>
           </div>
@@ -724,38 +747,35 @@ function PlanPickerWithTrial({
     <div className="space-y-3">
       {/* Header + Free Post Combined */}
       {planInfo.isTrial ? (
-        <div className="bg-gradient-to-r from-brand-green to-emerald-600 rounded-lg p-4 text-white shadow-md">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            <div className="flex-1 space-y-1">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-amber-300" />
-                <h2 className="font-display text-base font-bold">Choose How You Want to Post</h2>
-              </div>
+        <div className="rounded-2xl border border-brand-green/25 bg-brand-green/[0.06] p-4 dark:bg-brand-green/10 sm:p-5">
+          <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+            <div className="flex-1 space-y-1.5">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge
-                  variant="outline"
-                  className="text-xs font-normal border-white/30 text-white bg-white/10"
-                >
-                  {planInfo.postingLimitBypassEnabled ? "Testing Mode" : "Free Trial"}
+                <h2 className="font-display text-lg font-bold text-foreground">
+                  Choose how you want to post
+                </h2>
+                <Badge className="border-0 bg-brand-gold/20 text-xs font-semibold text-brand-gold-800 hover:bg-brand-gold/20 dark:text-brand-gold-200">
+                  {planInfo.postingLimitBypassEnabled ? "Testing mode" : "Free trial"}
                 </Badge>
-                <p className="text-xs text-amber-200">
-                  {planInfo.postingLimitBypassEnabled
-                    ? `Posting limits bypassed — ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`
-                    : (planInfo.offer?.adminFreePostsRemaining ?? 0) > 0
-                      ? `${planInfo.offer?.adminFreePostsRemaining} extra free posts remaining across all categories`
-                      : "One introductory post across all three areas"}
-                </p>
               </div>
-              <p className="text-white/70 text-xs">
+              <p className="text-sm font-medium text-foreground/85">
+                {planInfo.postingLimitBypassEnabled
+                  ? `Posting limits bypassed: ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video`
+                  : (planInfo.offer?.adminFreePostsRemaining ?? 0) > 0
+                    ? `${planInfo.offer?.adminFreePostsRemaining} extra free posts remaining across all categories`
+                    : "One introductory post across all three areas"}
+              </p>
+              <p className="text-xs leading-5 text-muted-foreground">
                 {planInfo.postingLimitBypassEnabled
                   ? `Each post still uses free-tier media limits: ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video.`
                   : (planInfo.offer?.adminFreePostsRemaining ?? 0) > 0
-                    ? "Your account has extra free posts. Each lasts 30 days from approval with standard placement."
-                    : `Choose ${trialLength(planInfo.offer, 7)} or ${trialLength(planInfo.offer, 30)} days once. Standard placement; no boosts, featured placement or urgent badges. Your trial starts on approval. ${trialLength(planInfo.offer, 30)}-day availability is checked again then.`}
+                    ? "Each lasts 30 days from approval."
+                    : `Choose ${trialLength(planInfo.offer, 7)} or ${trialLength(planInfo.offer, 30)} days, once. Starts on approval; standard placement.`}
               </p>
             </div>
             <Button
-              className="gap-2 bg-amber-500 hover:bg-amber-600 text-white shadow-sm border-0 whitespace-nowrap"
+              variant="trust-verified"
+              className="h-11 w-full whitespace-nowrap rounded-full px-6 sm:w-auto"
               disabled={
                 !planInfo.postingLimitBypassEnabled &&
                 !((planInfo.offer?.adminFreePostsRemaining ?? 0) > 0
@@ -766,24 +786,21 @@ function PlanPickerWithTrial({
                 selectTrial((planInfo.offer?.adminFreePostsRemaining ?? 0) > 0 ? 30 : 7)
               }
             >
-              <ArrowRight className="h-4 w-4" />
               {planInfo.postingLimitBypassEnabled
-                ? "Start Posting"
+                ? "Start posting"
                 : (planInfo.offer?.adminFreePostsRemaining ?? 0) > 0
-                  ? "Use 30-Day Free Post"
-                  : `Choose ${trialLength(planInfo.offer, 7)} Days Free`}
+                  ? "Use 30-day free post"
+                  : `Choose ${trialLength(planInfo.offer, 7)} days free`}
             </Button>
           </div>
         </div>
       ) : (
-        <div className="bg-gradient-to-r from-brand-green to-emerald-600 rounded-lg p-4 text-white shadow-md">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4" />
-            <h2 className="font-display text-base font-bold">Choose How You Want to Post</h2>
-          </div>
-          <p className="text-white/80 text-xs mt-1">
-            Choose a plan for {AREA_LABELS[area]}: R50 / 30 days, R250 / 6 months or R450 / 12
-            months (best value).
+        <div className="rounded-2xl border border-brand-green/25 bg-brand-green/[0.06] p-4 dark:bg-brand-green/10">
+          <h2 className="font-display text-lg font-bold text-foreground">
+            Choose how you want to post
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            R50 / 30 days, R250 / 6 months or R450 / 12 months.
           </p>
         </div>
       )}
@@ -792,36 +809,41 @@ function PlanPickerWithTrial({
         planInfo.isTrial &&
         !planInfo.postingLimitBypassEnabled &&
         !(planInfo.offer.adminFreePostsRemaining ?? 0) && (
-          <div className="rounded-lg border p-4 space-y-2">
-            <p className="font-semibold">{trialLength(planInfo.offer, 30)}-Day Free Launch Trial</p>
+          <div className="space-y-2 rounded-2xl border border-border/70 bg-card p-4">
+            <p className="font-semibold text-foreground">
+              {trialLength(planInfo.offer, 30)}-day free launch trial
+            </p>
             <p className="text-sm text-muted-foreground">
               {trialAvailabilityMessage(planInfo.offer)}
             </p>
-            <Button disabled={!planInfo.offer.thirtyDayAvailable} onClick={() => selectTrial(30)}>
-              Choose {trialLength(planInfo.offer, 30)} Days Free
+            <Button
+              variant="outline"
+              className="h-11 rounded-full px-5"
+              disabled={!planInfo.offer.thirtyDayAvailable}
+              onClick={() => selectTrial(30)}
+            >
+              Choose {trialLength(planInfo.offer, 30)} days free
             </Button>
             <p className="text-xs text-muted-foreground">
-              One post, one introductory choice. No automatic charge or free renewal. If capacity
-              fills before approval, your post stays pending; you can choose{" "}
-              {trialLength(planInfo.offer, 7)} days instead.
+              If spaces fill before approval, you can choose {trialLength(planInfo.offer, 7)} days
+              instead.
             </p>
           </div>
         )}
-      {/* ── Section 2: Monthly Plans ─── */}
+      {/* Paid plans */}
       <div className="space-y-2">
-        <h3 className="font-display text-sm font-bold flex items-center gap-2">
-          <Crown className="h-4 w-4 text-brand-gold" />
-          Add a Payment Plan
-          <Badge variant="outline" className="text-xs font-normal">
-            Best Value
-          </Badge>
+        <h3 className="pt-2 font-display text-base font-bold text-foreground">
+          Or choose a paid plan
         </h3>
         <InlinePlanGrid plans={areaPlans} onSubscribe={onSubscribe} subscribing={subscribing} />
       </div>
 
       <p className="text-center text-xs text-muted-foreground">
-        All plans include verification badge • Cancel anytime •{" "}
-        <Link href="/billing" className="text-brand-green underline">
+        Paid once, no automatic renewal.{" "}
+        <Link
+          href="/billing"
+          className="rounded-sm font-medium text-brand-green-700 underline dark:text-brand-green-300"
+        >
           View full plan details
         </Link>
       </p>

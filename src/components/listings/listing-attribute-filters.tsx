@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { CATEGORIES, type AttributeField } from "@/lib/constants/categories";
 import { getModelsForMake } from "@/lib/constants/sa-vehicles";
 import { cn } from "@/lib/utils";
+import { filterInputClass, filterSelectClass } from "./filter-controls";
 
 type AttributeFilterValue = string | boolean | string[] | undefined;
 
@@ -48,22 +49,19 @@ export function ListingAttributeFilters({
 }: ListingAttributeFiltersProps) {
   const selectedCategory = CATEGORIES.find((entry) => entry.value === category);
   const filterableAttributes = getFilterableAttributeFields(category);
-  const compact = density === "sidebar";
 
   if (!selectedCategory || filterableAttributes.length === 0) {
     return null;
   }
 
   return (
-    <div className="rounded-xl border border-brand-green/30 bg-brand-green/5 p-3 space-y-3 animate-in fade-in-0 slide-in-from-top-2 duration-300">
-      <p
-        className={cn(
-          "font-semibold text-brand-green flex items-center gap-1.5",
-          compact ? "text-xs" : "text-sm"
-        )}
-      >
-        <selectedCategory.icon className={cn(compact ? "h-3.5 w-3.5" : "h-4 w-4")} />
-        {selectedCategory.label} Filters
+    <div className="space-y-3 rounded-xl border border-border/70 bg-muted/40 p-3.5">
+      <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+        <selectedCategory.icon
+          className="h-4 w-4 text-brand-green-700 dark:text-brand-green-300"
+          aria-hidden="true"
+        />
+        {selectedCategory.label} filters
       </p>
 
       {filterableAttributes.map((field) => (
@@ -98,13 +96,9 @@ function FilterAttributeField({
   density: "drawer" | "sidebar";
   onChange: (value: AttributeFilterValue) => void;
 }) {
-  const compact = density === "sidebar";
-  const inputId = `listing-attr-${field.name}`;
-  const selectClass = cn(
-    "w-full rounded-md border border-input bg-background px-3 py-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-    compact ? "text-xs" : "text-sm"
-  );
-  const labelClassName = compact ? "text-xs" : "text-sm";
+  const inputId = `listing-attr-${density}-${field.name}`;
+  const selectClass = filterSelectClass;
+  const labelClassName = "text-sm font-medium";
 
   switch (field.type) {
     case "select": {
@@ -118,7 +112,7 @@ function FilterAttributeField({
       const isDisabled = field.dependsOn && !parentValue;
 
       return (
-        <div className={compact ? "space-y-1" : "space-y-1.5"}>
+        <div className="space-y-1.5">
           <Label htmlFor={inputId} className={labelClassName}>
             {field.label}
           </Label>
@@ -150,7 +144,7 @@ function FilterAttributeField({
       const rangeOptions = numberRangeOptions(field);
       if (rangeOptions) {
         return (
-          <div className={compact ? "space-y-1" : "space-y-1.5"}>
+          <div className="space-y-1.5">
             <Label htmlFor={inputId} className={labelClassName}>
               {field.label}
               {field.unit ? ` (${field.unit})` : ""}
@@ -174,7 +168,7 @@ function FilterAttributeField({
       }
 
       return (
-        <div className={compact ? "space-y-1" : "space-y-1.5"}>
+        <div className="space-y-1.5">
           <Label htmlFor={inputId} className={labelClassName}>
             {field.label}
             {field.unit ? ` (${field.unit})` : ""}
@@ -185,7 +179,7 @@ function FilterAttributeField({
             inputMode="numeric"
             min={0}
             placeholder={field.placeholder || "Any"}
-            className={compact ? "h-8 text-xs" : undefined}
+            className={filterInputClass}
             value={(value as string) || ""}
             onChange={(event) => onChange(event.target.value || undefined)}
           />
@@ -195,15 +189,12 @@ function FilterAttributeField({
 
     case "boolean":
       return (
-        <label className="flex items-center gap-2" htmlFor={inputId}>
+        <label className="flex min-h-11 items-center gap-2.5 lg:min-h-9" htmlFor={inputId}>
           <input
             id={inputId}
             type="checkbox"
             aria-label={field.label}
-            className={cn(
-              "rounded border-input text-brand-green focus:ring-brand-green",
-              compact ? "h-3.5 w-3.5" : "h-4 w-4"
-            )}
+            className="h-4 w-4 rounded border-input text-brand-green focus:ring-brand-green"
             checked={(value as boolean) || false}
             onChange={(event) => onChange(event.target.checked ? true : undefined)}
           />
@@ -213,7 +204,7 @@ function FilterAttributeField({
 
     case "text":
       return (
-        <div className={compact ? "space-y-1" : "space-y-1.5"}>
+        <div className="space-y-1.5">
           <Label htmlFor={inputId} className={labelClassName}>
             {field.label}
           </Label>
@@ -221,7 +212,7 @@ function FilterAttributeField({
             id={inputId}
             type="text"
             placeholder={field.placeholder || `Any ${field.label.toLowerCase()}`}
-            className={compact ? "h-8 text-xs" : undefined}
+            className={filterInputClass}
             value={(value as string) || ""}
             onChange={(event) => onChange(event.target.value || undefined)}
           />
@@ -240,35 +231,34 @@ function FilterAttributeField({
       }
 
       return (
-        <div className={compact ? "space-y-1" : "space-y-1.5"}>
-          <Label className={labelClassName}>{field.label}</Label>
+        <div className="space-y-1.5">
+          <p className={labelClassName}>{field.label}</p>
           <div className="flex flex-wrap gap-1.5">
             {options.map((opt) => {
               const optVal = typeof opt === "string" ? opt : opt.value;
-              const optLabel = typeof opt === "string" ? opt.replace(/_/g, " ") : opt.label;
+              const optLabel =
+                typeof opt === "string"
+                  ? opt.charAt(0).toUpperCase() + opt.slice(1).replace(/_/g, " ")
+                  : opt.label;
               const isChecked = selected.includes(optVal);
 
               return (
                 <label
                   key={optVal}
                   className={cn(
-                    "flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 transition-all",
-                    compact ? "text-[10px]" : "text-xs",
+                    "flex min-h-9 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors focus-within:ring-2 focus-within:ring-ring",
                     isChecked
-                      ? "border-brand-green bg-brand-green/10 text-brand-green"
-                      : "border-input text-muted-foreground hover:border-brand-green/40"
+                      ? "border-brand-green-600 bg-brand-green-50 text-brand-green-800 dark:bg-brand-green/15 dark:text-brand-green-200"
+                      : "border-border bg-card text-muted-foreground hover:border-foreground/25"
                   )}
                 >
                   <input
                     type="checkbox"
                     checked={isChecked}
                     onChange={() => toggleFilterItem(optVal)}
-                    className={cn(
-                      "rounded border-input text-brand-green focus:ring-brand-green",
-                      compact ? "h-3 w-3" : "h-3.5 w-3.5"
-                    )}
+                    className="h-3.5 w-3.5 rounded border-input text-brand-green focus:ring-brand-green"
                   />
-                  <span className="capitalize">{optLabel}</span>
+                  <span>{optLabel}</span>
                 </label>
               );
             })}

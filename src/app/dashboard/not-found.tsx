@@ -4,22 +4,22 @@ import { Button } from "@/components/ui/button";
 
 export default function DashboardNotFound() {
   return (
-    <div className="flex flex-col items-center justify-center gap-6 py-16 px-4 text-center">
-      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
-        <Search className="h-7 w-7 text-muted-foreground" />
-      </div>
-      <div className="max-w-md space-y-2">
-        <h1 className="text-lg sm:text-xl font-display font-bold">Page Not Found</h1>
+    <div className="mx-auto flex max-w-md flex-col items-center gap-5 py-16 text-center">
+      <span aria-hidden="true" className="empty-state-icon">
+        <Search className="h-6 w-6" />
+      </span>
+      <div className="space-y-1.5">
+        <h1 className="font-display text-xl font-bold sm:text-2xl">Page not found</h1>
         <p className="text-sm text-muted-foreground">
-          This dashboard page doesn&apos;t exist or has been moved.
+          This dashboard page doesn&apos;t exist or has moved.
         </p>
       </div>
-      <div className="flex flex-wrap justify-center gap-3">
-        <Button asChild variant="outline">
-          <Link href="/">Go to homepage</Link>
+      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+        <Button asChild variant="trust-verified" className="h-11 rounded-full px-5">
+          <Link href="/dashboard">Back to dashboard</Link>
         </Button>
-        <Button asChild>
-          <Link href="/dashboard">Back to Dashboard</Link>
+        <Button asChild variant="outline" className="h-11 rounded-full px-5">
+          <Link href="/">Go to homepage</Link>
         </Button>
       </div>
     </div>

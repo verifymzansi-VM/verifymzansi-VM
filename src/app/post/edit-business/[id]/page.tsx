@@ -7,11 +7,9 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import {
   Loader2,
-  ArrowLeft,
   Phone,
   Mail,
   MessageCircle,
-  Building2,
   CreditCard,
   Truck,
   Wrench,
@@ -26,7 +24,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
@@ -661,8 +658,13 @@ export default function EditBusinessPage() {
     return (
       <div className="flex min-h-screen flex-col">
         <Header isAuthenticated />
-        <main id="main-content" className="flex-1 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <main
+          id="main-content"
+          aria-busy="true"
+          className="flex flex-1 flex-col items-center justify-center gap-3"
+        >
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden="true" />
+          <p className="text-sm text-muted-foreground">Loading your business…</p>
         </main>
         <Footer />
       </div>
@@ -702,9 +704,9 @@ export default function EditBusinessPage() {
       <Header isAuthenticated />
 
       <main id="main-content" className="flex-1">
-        <div className="container-page py-4 space-y-4 max-w-3xl">
+        <div className="container-page max-w-3xl space-y-5 py-6">
           <PageHeader
-            title="Edit Business"
+            title="Edit business"
             breadcrumbs={[
               { label: "Dashboard", href: "/dashboard" },
               { label: "My Businesses", href: "/dashboard/businesses" },
@@ -713,26 +715,29 @@ export default function EditBusinessPage() {
           />
 
           {error && (
-            <div className="bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-400 p-4 rounded-lg text-sm">
+            <div
+              role="alert"
+              className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+            >
               {error}
             </div>
           )}
 
-          <Card>
-            <CardContent className="p-5 space-y-5">
+          <div className="surface-card">
+            <div className="space-y-5 p-4 sm:p-6">
               {/* Business Type (read-only display) */}
               <div className="space-y-2">
-                <Label>Business Type</Label>
+                <p className="text-sm font-medium">Business Type</p>
                 <div className="flex items-center gap-2">
                   {(() => {
                     const opt = BUSINESS_TYPE_OPTIONS.find((o) => o.value === businessType);
                     if (!opt) return <span className="text-sm">{businessType}</span>;
                     const Icon = opt.icon;
                     return (
-                      <Badge variant="outline" className="gap-1.5 py-1.5 px-3">
-                        <Icon className="h-4 w-4" />
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-blue-200 bg-brand-blue-50 px-3 py-1 text-sm font-medium text-brand-blue-800 dark:border-brand-blue-800 dark:bg-brand-blue-950/60 dark:text-brand-blue-200">
+                        <Icon className="h-4 w-4" aria-hidden="true" />
                         {opt.label}
-                      </Badge>
+                      </span>
                     );
                   })()}
                 </div>
@@ -772,8 +777,9 @@ export default function EditBusinessPage() {
 
               {/* Services Offered (with category suggestions) */}
               <div className="space-y-3">
-                <Label className="flex items-center gap-2">
-                  <Wrench className="h-4 w-4 text-muted-foreground" /> Services Offered
+                <Label htmlFor="edit-business-service-input" className="flex items-center gap-2">
+                  <Wrench className="h-4 w-4 text-muted-foreground" aria-hidden="true" /> Services
+                  Offered
                 </Label>
                 {category &&
                   (() => {
@@ -788,7 +794,7 @@ export default function EditBusinessPage() {
                             key={sug}
                             type="button"
                             onClick={() => setServices((prev) => [...prev, sug])}
-                            className="rounded-full border border-dashed border-primary/40 px-2.5 py-0.5 text-xs text-primary hover:bg-primary/5 transition-colors"
+                            className="inline-flex min-h-9 items-center rounded-full border border-dashed border-brand-blue-400/60 px-3 text-xs font-medium text-brand-blue-700 transition-colors hover:bg-brand-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-brand-blue-300 dark:hover:bg-brand-blue-950/40"
                           >
                             + {sug}
                           </button>
@@ -798,6 +804,7 @@ export default function EditBusinessPage() {
                   })()}
                 <div className="flex gap-2">
                   <Input
+                    id="edit-business-service-input"
                     value={servicesInput}
                     onChange={(e) => setServicesInput(e.target.value)}
                     placeholder="Type a service and press Add"
@@ -813,24 +820,26 @@ export default function EditBusinessPage() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="h-11 w-11"
+                    className="h-11 w-11 shrink-0"
                     onClick={addService}
+                    aria-label="Add service"
                   >
-                    <Plus className="h-4 w-4" />
+                    <Plus className="h-4 w-4" aria-hidden="true" />
                   </Button>
                 </div>
                 {services.length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {services.map((service, i) => (
-                      <Badge
+                      <button
                         key={i}
-                        variant="secondary"
-                        className="gap-1 cursor-pointer"
+                        type="button"
                         onClick={() => removeService(i)}
+                        aria-label={`Remove ${service}`}
+                        className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-muted px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         {service}
-                        <X className="h-3 w-3" />
-                      </Badge>
+                        <X className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                      </button>
                     ))}
                   </div>
                 )}
@@ -858,6 +867,7 @@ export default function EditBusinessPage() {
                         <button
                           key={item.value}
                           type="button"
+                          aria-pressed={selected}
                           onClick={() => {
                             setCategory(item.value);
                             setSubcategory("");
@@ -866,14 +876,22 @@ export default function EditBusinessPage() {
                             );
                           }}
                           className={cn(
-                            "flex flex-col items-center gap-1 rounded-lg border p-3 text-center text-xs transition-colors hover:bg-accent/50",
+                            "flex min-h-[4.25rem] items-center gap-2.5 rounded-2xl border p-3 text-left text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                             selected
-                              ? "border-primary bg-primary/5 ring-1 ring-primary"
-                              : "border-border"
+                              ? "border-brand-blue-600 bg-brand-blue-50 ring-1 ring-brand-blue-600 dark:border-brand-blue-400 dark:bg-brand-blue-950/40 dark:ring-brand-blue-400"
+                              : "border-border bg-card hover:border-foreground/25 hover:bg-muted/50"
                           )}
                         >
-                          <Icon className="h-5 w-5 text-muted-foreground" />
-                          <span className="font-medium leading-tight">{item.label}</span>
+                          <Icon
+                            aria-hidden="true"
+                            className={cn(
+                              "h-5 w-5 shrink-0",
+                              selected
+                                ? "text-brand-blue-700 dark:text-brand-blue-300"
+                                : "text-muted-foreground"
+                            )}
+                          />
+                          <span className="font-semibold leading-tight">{item.label}</span>
                         </button>
                       );
                     })}
@@ -1755,36 +1773,33 @@ export default function EditBusinessPage() {
                   },
                 ]}
               />
+            </div>
+          </div>
 
-              <div className="flex justify-between pt-4">
-                <Button variant="outline" asChild className="h-11 gap-1">
-                  <Link href="/dashboard/businesses">
-                    <ArrowLeft className="h-4 w-4" />
-                    Cancel
-                  </Link>
-                </Button>
-                <Button
-                  onClick={handleSubmit}
-                  disabled={
-                    isSubmitting || businessName.length < 2 || !category || !province || !city
-                  }
-                  className="h-11 gap-1"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      {submitProgress || "Saving..."}
-                    </>
-                  ) : (
-                    <>
-                      <Building2 className="h-4 w-4" />
-                      Save Changes
-                    </>
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="sticky bottom-0 z-30 -mx-4 flex items-center gap-3 border-t border-border/70 bg-background/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:bottom-4 sm:mx-0 sm:rounded-2xl sm:border sm:bg-card/95 sm:py-3 sm:elev-md">
+            <Button variant="outline" asChild className="h-11 rounded-full px-5">
+              <Link href="/dashboard/businesses">Cancel</Link>
+            </Button>
+            <p className="hidden flex-1 text-sm text-muted-foreground sm:block">
+              Changes are checked before they go live.
+            </p>
+            <Button
+              onClick={handleSubmit}
+              variant="trust-verified"
+              disabled={isSubmitting || businessName.length < 2 || !category || !province || !city}
+              aria-busy={isSubmitting}
+              className="h-11 min-w-36 flex-1 gap-2 rounded-full px-6 font-semibold sm:flex-none"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  {submitProgress || "Saving..."}
+                </>
+              ) : (
+                "Save changes"
+              )}
+            </Button>
+          </div>
         </div>
       </main>
 

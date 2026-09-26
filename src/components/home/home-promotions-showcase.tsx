@@ -128,18 +128,17 @@ export async function HomePromotionsShowcase() {
     return (
       <HomeShowcaseShell
         badge="Tourism & Events"
-        title="Stays, experiences & events"
-        description="Places to go and things to do, from hosts and organisers who have been checked."
+        title="Stays & events"
         href="/tourism-events"
-        ctaLabel="See all"
+        ctaLabel="See all stays & events"
         tone="teal"
         icon={<TreePalm className="h-3.5 w-3.5" />}
       >
         <HomeShowcaseEmptyState
-          title="No events yet."
-          description="List a guesthouse, tour, venue or event and reach visitors across Mzansi. Your first post is free."
+          title="No stays or events yet"
+          description="Verified hosts and organisers will show here. Your first post is free."
           ctaHref="/post/create-tourism"
-          ctaLabel="Create Event"
+          ctaLabel="List a stay or event"
           tone="teal"
           icon={<TreePalm className="h-7 w-7" />}
         />
@@ -150,10 +149,9 @@ export async function HomePromotionsShowcase() {
   return (
     <HomeShowcaseShell
       badge="Tourism & Events"
-      title="Stays, experiences & events"
-      description="Places to go and things to do, from hosts and organisers who have been checked."
+      title="Stays & events"
       href="/tourism-events"
-      ctaLabel="See all"
+      ctaLabel="See all stays & events"
       tone="teal"
       icon={<TreePalm className="h-3.5 w-3.5" />}
     >

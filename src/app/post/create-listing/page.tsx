@@ -6,18 +6,7 @@ import { ListingQualityHint } from "@/components/post/listing-quality-hint";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-  Camera,
-  ChevronLeft,
-  ChevronRight,
-  Eye,
-  FileText,
-  Inbox,
-  Mail,
-  MessageCircle,
-  Phone,
-  Tag,
-} from "lucide-react";
+import { Camera, Check, Eye, FileText, Inbox, Mail, MessageCircle, Phone, Tag } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -42,9 +31,12 @@ import type { ListingCategory, ListingCondition } from "@/types/enums";
 import { mapListingCategory } from "@/lib/utils/enum-compat";
 import { cn } from "@/lib/utils";
 import { ListingCard } from "@/components/listings/listing-card";
+import { PhotoOrderList } from "@/components/post/photo-order-list";
 import {
+  PostDraftStatus,
   PostFormFooter,
   PostFormScaffold,
+  PostFormSection,
   type PostFormStep,
 } from "@/components/post/post-form-scaffold";
 import {
@@ -67,19 +59,26 @@ import { ListingDetailContent } from "@/components/listings/listing-detail-conte
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
 
 const STEPS: PostFormStep[] = [
-  { label: "Details", icon: FileText, description: "Category, title, and description" },
-  { label: "Price & Location", icon: Tag, description: "Price, location, and contact" },
-  { label: "Media", icon: Camera, description: "Photos, video, and final review" },
+  { label: "Details", icon: FileText, description: "Category, title and description" },
+  {
+    label: "Price & Location",
+    icon: Tag,
+    description: "Price, area and contact",
+  },
+  { label: "Media", icon: Camera, description: "Photos, video and review" },
 ];
+
+const FIELD_SELECT_CLASS =
+  "flex h-11 w-full rounded-xl border border-input bg-card px-3.5 py-2 text-base shadow-xs transition-colors hover:border-foreground/30 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 sm:h-10 sm:text-sm";
 
 const TITLE_MAX = 100;
 const DESC_MAX = 5000;
 
 const CONTACT_OPTIONS = [
-  { id: "call", label: "Phone Call", icon: Phone },
+  { id: "call", label: "Phone call", icon: Phone },
   { id: "whatsapp", label: "WhatsApp", icon: MessageCircle },
-  { id: "form", label: "Contact Form", icon: Mail },
-  { id: "in_app", label: "In-App Chat", icon: Inbox },
+  { id: "form", label: "Contact form", icon: Mail },
+  { id: "in_app", label: "In-app chat", icon: Inbox },
 ] as const;
 
 const FIELD_IDS: Record<string, string> = {
@@ -837,7 +836,7 @@ export default function CreateListingPage() {
     });
   }
 
-  function renderPreview() {
+  function renderCardPreview() {
     const numericPrice = parseFloat(price);
     const normalizedAttributes = category
       ? coerceListingAttributes(category, categoryAttributes)
@@ -846,32 +845,63 @@ export default function CreateListingPage() {
     const cardPosterUrl = videoCoverPreviewUrl || photoPreviewUrls[0] || undefined;
 
     return (
-      <div className="rounded-xl border border-dashed border-brand-green/30 bg-brand-green/5 p-4">
-        <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-          <Eye className="h-4 w-4" />
-          Listing preview
-        </div>
+      <ListingCard
+        id="preview-listing"
+        title={title || "Your listing title"}
+        price={!Number.isNaN(numericPrice) && numericPrice > 0 ? Math.round(numericPrice * 100) : 0}
+        imageUrl={cardMediaUrl || undefined}
+        posterUrl={cardPosterUrl}
+        isVideo={videoFile.length > 0}
+        fitStrategy="contain"
+        logoUrl={logoPreviewUrl}
+        province={province || "Province"}
+        city={city || "City"}
+        category={category || "property"}
+        attributes={normalizedAttributes}
+        condition={condition || undefined}
+        createdAt={new Date().toISOString()}
+      />
+    );
+  }
 
-        <div className="mb-4 max-w-[264px]">
-          <ListingCard
-            id="preview-listing"
-            title={title || "Your listing title"}
-            price={
-              !Number.isNaN(numericPrice) && numericPrice > 0 ? Math.round(numericPrice * 100) : 0
-            }
-            imageUrl={cardMediaUrl || undefined}
-            posterUrl={cardPosterUrl}
-            isVideo={videoFile.length > 0}
-            fitStrategy="contain"
-            logoUrl={logoPreviewUrl}
-            province={province || "Province"}
-            city={city || "City"}
-            category={category || "property"}
-            attributes={normalizedAttributes}
-            condition={condition || undefined}
-            createdAt={new Date().toISOString()}
-          />
+  function renderPreviewAside() {
+    return (
+      <div className="surface-card space-y-3 p-4">
+        <div>
+          <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Eye className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            Card preview
+          </p>
+          <p className="mt-0.5 text-xs leading-5 text-muted-foreground">Updates as you type.</p>
         </div>
+        <div className="pointer-events-none mx-auto max-w-[280px]" inert>
+          {renderCardPreview()}
+        </div>
+      </div>
+    );
+  }
+
+  function renderPreview() {
+    const numericPrice = parseFloat(price);
+    const normalizedAttributes = category
+      ? coerceListingAttributes(category, categoryAttributes)
+      : {};
+
+    return (
+      <section
+        aria-labelledby="listing-preview-heading"
+        className="rounded-2xl border border-dashed border-border bg-muted/30 p-4"
+      >
+        <h3
+          id="listing-preview-heading"
+          className="mb-1 flex items-center gap-2 text-base font-semibold text-foreground"
+        >
+          <Eye className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          Listing preview
+        </h3>
+        <p className="mb-4 text-sm text-muted-foreground">What buyers see once it's approved.</p>
+
+        <div className="mb-4 max-w-[264px]">{renderCardPreview()}</div>
 
         <ListingDetailContent
           listing={{
@@ -908,7 +938,7 @@ export default function CreateListingPage() {
           trackView={false}
           layoutMode="review"
         />
-      </div>
+      </section>
     );
   }
 
@@ -921,19 +951,20 @@ export default function CreateListingPage() {
           <PlanGate area="MZANSI_MARKET" onTrialSelected={setTrialDays}>
             <form noValidate onSubmit={handleSubmit}>
               <PostFormScaffold
-                title="Create a Mzansi Market Listing"
-                description="Add your listing with a clear title, trusted details, and strong media."
+                title="Post an item"
+                description="Clear photos and honest details get more replies."
                 breadcrumbs={[
                   { label: "Dashboard", href: "/dashboard" },
                   { label: "Create Post", href: "/post/create" },
                   { label: "Mzansi Market" },
                 ]}
                 badgeLabel="Mzansi Market"
-                badgeClassName="bg-brand-green text-white"
-                guideDescription="Choose your category, complete the 3 guided steps, and submit your listing for review."
+                area="market"
+                guideDescription="Pick a category first. We only ask for what matters."
                 steps={STEPS}
                 currentStep={step}
                 completeness={listingCompleteness}
+                aside={renderPreviewAside()}
                 error={formError}
                 fieldErrors={fieldErrors}
                 fieldLabels={LISTING_FIELD_LABELS}
@@ -953,20 +984,7 @@ export default function CreateListingPage() {
                 footer={
                   <>
                     {user?.id && !isSubmitting && (
-                      <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-xs text-muted-foreground">
-                        <p>
-                          {lastSavedAt
-                            ? `Draft saved locally at ${new Date(lastSavedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-                            : "Changes are saved locally while you fill this form."}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={handleDiscardDraft}
-                          className="font-medium text-brand-green hover:underline"
-                        >
-                          Discard draft
-                        </button>
-                      </div>
+                      <PostDraftStatus lastSavedAt={lastSavedAt} onDiscard={handleDiscardDraft} />
                     )}
 
                     {isSubmitting && (
@@ -1035,155 +1053,160 @@ export default function CreateListingPage() {
                       <p className="inline-form-error">{fieldErrors.category}</p>
                     )}
 
-                    <div className="space-y-2">
-                      <Label htmlFor="condition">Condition</Label>
-                      <select
-                        id="condition"
-                        aria-label="Condition"
-                        className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm"
-                        value={condition}
-                        onChange={(event) => {
-                          setCondition(event.target.value as ListingCondition | "");
-                          // Auto-focus the title field after selecting condition
-                          requestAnimationFrame(() => {
-                            const el = document.getElementById("title");
-                            if (el) {
-                              el.focus();
-                              el.scrollIntoView({ behavior: "smooth", block: "center" });
-                            }
-                          });
-                        }}
-                      >
-                        <option value="">Condition not specified</option>
-                        {LISTING_CONDITIONS.map((item) => (
-                          <option key={item.value} value={item.value}>
-                            {item.label}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="text-xs text-muted-foreground">
-                        Optional, but recommended for buyers comparing similar listings.
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor="title">Title *</Label>
-                        <span
-                          className={cn(
-                            "text-xs",
-                            title.length > TITLE_MAX * 0.9
-                              ? "font-medium text-destructive"
-                              : "text-muted-foreground"
-                          )}
+                    <PostFormSection title="Describe it">
+                      <div className="space-y-2">
+                        <Label htmlFor="condition">Condition</Label>
+                        <select
+                          id="condition"
+                          aria-label="Condition"
+                          className={FIELD_SELECT_CLASS}
+                          value={condition}
+                          onChange={(event) => {
+                            setCondition(event.target.value as ListingCondition | "");
+                            // Auto-focus the title field after selecting condition
+                            requestAnimationFrame(() => {
+                              const el = document.getElementById("title");
+                              if (el) {
+                                el.focus();
+                                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                              }
+                            });
+                          }}
                         >
-                          {title.length}/{TITLE_MAX}
-                        </span>
+                          <option value="">Condition not specified</option>
+                          {LISTING_CONDITIONS.map((item) => (
+                            <option key={item.value} value={item.value}>
+                              {item.label}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-muted-foreground">Optional, but helpful.</p>
                       </div>
-                      <Input
-                        id="title"
-                        value={title}
-                        onChange={(event) => {
-                          setTitle(event.target.value.slice(0, TITLE_MAX));
-                          clearErrors("title");
-                        }}
-                        placeholder="e.g. iPhone 15 Pro Max 256GB"
-                        maxLength={TITLE_MAX}
-                        aria-invalid={!!fieldErrors.title}
-                        className={cn(fieldErrors.title && "border-destructive")}
-                      />
-                      {fieldErrors.title && (
-                        <p className="inline-form-error">{fieldErrors.title}</p>
-                      )}
-                    </div>
 
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor="description">Description *</Label>
-                        <span
-                          className={cn(
-                            "text-xs",
-                            description.length > DESC_MAX * 0.9
-                              ? "font-medium text-destructive"
-                              : "text-muted-foreground"
-                          )}
-                        >
-                          {description.length}/{DESC_MAX}
-                        </span>
-                      </div>
-                      <Textarea
-                        id="description"
-                        value={description}
-                        onChange={(event) => {
-                          setDescription(event.target.value.slice(0, DESC_MAX));
-                          clearErrors("description");
-                        }}
-                        placeholder="Describe the item, condition, included extras, and anything buyers should know."
-                        className={cn(
-                          "min-h-[120px]",
-                          fieldErrors.description && "border-destructive"
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="title">Title *</Label>
+                          <span
+                            className={cn(
+                              "text-xs",
+                              title.length > TITLE_MAX * 0.9
+                                ? "font-medium text-destructive"
+                                : "text-muted-foreground"
+                            )}
+                          >
+                            {title.length}/{TITLE_MAX}
+                          </span>
+                        </div>
+                        <Input
+                          id="title"
+                          value={title}
+                          onChange={(event) => {
+                            setTitle(event.target.value.slice(0, TITLE_MAX));
+                            clearErrors("title");
+                          }}
+                          placeholder="e.g. iPhone 15 Pro Max 256GB"
+                          maxLength={TITLE_MAX}
+                          aria-invalid={!!fieldErrors.title}
+                          className={cn(fieldErrors.title && "border-destructive")}
+                        />
+                        {fieldErrors.title && (
+                          <p className="inline-form-error">{fieldErrors.title}</p>
                         )}
-                        aria-invalid={!!fieldErrors.description}
-                      />
-                      {fieldErrors.description && (
-                        <p className="inline-form-error">{fieldErrors.description}</p>
-                      )}
-                    </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="description">Description *</Label>
+                          <span
+                            className={cn(
+                              "text-xs",
+                              description.length > DESC_MAX * 0.9
+                                ? "font-medium text-destructive"
+                                : "text-muted-foreground"
+                            )}
+                          >
+                            {description.length}/{DESC_MAX}
+                          </span>
+                        </div>
+                        <Textarea
+                          id="description"
+                          value={description}
+                          onChange={(event) => {
+                            setDescription(event.target.value.slice(0, DESC_MAX));
+                            clearErrors("description");
+                          }}
+                          placeholder="What is it, what condition is it in, what's included, and why are you selling?"
+                          className={cn(
+                            "min-h-[120px]",
+                            fieldErrors.description && "border-destructive"
+                          )}
+                          aria-invalid={!!fieldErrors.description}
+                        />
+                        {fieldErrors.description && (
+                          <p className="inline-form-error">{fieldErrors.description}</p>
+                        )}
+                      </div>
+                    </PostFormSection>
                   </div>
                 )}
 
                 {step === 1 && (
-                  <div className="space-y-5 animate-in fade-in-0 duration-300">
-                    <div className="space-y-2">
-                      <Label htmlFor="price">
-                        {isPropertyRentListing ? "Monthly Rent (ZAR) *" : "Asking Price (ZAR) *"}
-                      </Label>
-                      <div className="flex flex-col xs:flex-row gap-3">
-                        <div className="relative flex-1">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">
-                            R
-                          </span>
-                          <Input
-                            id="price"
-                            type="number"
-                            inputMode="decimal"
-                            min="0"
-                            step="0.01"
-                            value={price}
-                            onChange={(event) => {
-                              setPrice(event.target.value);
-                              clearErrors("price_zar");
-                            }}
-                            placeholder="0.00"
-                            className={cn("pl-8", fieldErrors.price_zar && "border-destructive")}
-                            aria-invalid={!!fieldErrors.price_zar}
-                          />
+                  <div className="space-y-6">
+                    <PostFormSection title="Price">
+                      <div className="space-y-2">
+                        <Label htmlFor="price">
+                          {isPropertyRentListing ? "Monthly Rent (ZAR) *" : "Asking Price (ZAR) *"}
+                        </Label>
+                        <div className="flex flex-col xs:flex-row gap-3">
+                          <div className="relative flex-1">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">
+                              R
+                            </span>
+                            <Input
+                              id="price"
+                              type="number"
+                              inputMode="decimal"
+                              min="0"
+                              step="0.01"
+                              value={price}
+                              onChange={(event) => {
+                                setPrice(event.target.value);
+                                clearErrors("price_zar");
+                              }}
+                              placeholder="0.00"
+                              className={cn("pl-8", fieldErrors.price_zar && "border-destructive")}
+                              aria-invalid={!!fieldErrors.price_zar}
+                            />
+                          </div>
+
+                          <label
+                            className={cn(
+                              "flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2",
+                              negotiable
+                                ? "border-brand-green-600 bg-brand-green-50 text-brand-green-800 dark:border-brand-green-400 dark:bg-brand-green-950/50 dark:text-brand-green-200"
+                                : "border-input bg-card text-foreground/80 hover:border-foreground/30"
+                            )}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={negotiable}
+                              onChange={(event) => setNegotiable(event.target.checked)}
+                              className="sr-only"
+                            />
+                            {negotiable ? <Check className="h-4 w-4" aria-hidden="true" /> : null}
+                            Negotiable
+                          </label>
                         </div>
-
-                        <label
-                          className={cn(
-                            "flex cursor-pointer items-center rounded-md border px-3 py-2 text-sm font-medium transition-all",
-                            negotiable
-                              ? "border-brand-green bg-brand-green/10 text-brand-green"
-                              : "border-input text-muted-foreground hover:border-brand-green/40"
-                          )}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={negotiable}
-                            onChange={(event) => setNegotiable(event.target.checked)}
-                            className="sr-only"
-                          />
-                          Negotiable
-                        </label>
+                        {fieldErrors.price_zar && (
+                          <p className="inline-form-error">{fieldErrors.price_zar}</p>
+                        )}
                       </div>
-                      {fieldErrors.price_zar && (
-                        <p className="inline-form-error">{fieldErrors.price_zar}</p>
-                      )}
-                    </div>
+                    </PostFormSection>
 
-                    <div className="space-y-3">
-                      <Label className="text-base font-semibold">Location</Label>
+                    <PostFormSection
+                      title="Where is it?"
+                      description="Your street address stays private."
+                    >
                       <LocationSelector
                         value={locationValue}
                         onChange={(v) => {
@@ -1201,265 +1224,229 @@ export default function CreateListingPage() {
                           city: fieldErrors.city,
                         }}
                       />
-                    </div>
+                    </PostFormSection>
 
-                    <div
-                      id="listing-contact-methods"
-                      tabIndex={-1}
-                      className="space-y-3 rounded-lg"
+                    <PostFormSection
+                      title="How buyers reach you *"
+                      description="Pick at least one."
                     >
-                      <Label className="text-base font-semibold">Contact Methods *</Label>
-                      <p className="text-xs text-muted-foreground">
-                        Choose how buyers should reach you.
-                      </p>
-                      <div className="grid grid-cols-2 xs:grid-cols-4 gap-2">
-                        {CONTACT_OPTIONS.map((option) => {
-                          const Icon = option.icon;
-                          const isSelected = contactMethods.includes(option.id);
+                      <div
+                        id="listing-contact-methods"
+                        tabIndex={-1}
+                        role="group"
+                        aria-label="Contact methods"
+                        className="rounded-xl focus:outline-none"
+                      >
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                          {CONTACT_OPTIONS.map((option) => {
+                            const Icon = option.icon;
+                            const isSelected = contactMethods.includes(option.id);
 
-                          return (
-                            <label
-                              key={option.id}
-                              className={cn(
-                                "flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border-2 p-3 text-xs font-medium transition-all",
-                                isSelected
-                                  ? "border-brand-green bg-brand-green/10 text-brand-green"
-                                  : "border-input text-muted-foreground hover:border-brand-green/40 hover:bg-muted/50",
-                                fieldErrors.contactMethods && !isSelected && "border-destructive/40"
-                              )}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => toggleContact(option.id)}
-                                className="sr-only"
-                              />
-                              <Icon className="h-5 w-5" />
-                              {option.label}
-                            </label>
-                          );
-                        })}
+                            return (
+                              <label
+                                key={option.id}
+                                className={cn(
+                                  "relative flex min-h-[4.5rem] cursor-pointer flex-col items-center justify-center gap-1.5 rounded-2xl border p-3 text-center text-xs font-semibold transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2",
+                                  isSelected
+                                    ? "border-brand-green-600 bg-brand-green-50 text-brand-green-800 ring-1 ring-brand-green-600 dark:border-brand-green-400 dark:bg-brand-green-950/50 dark:text-brand-green-200 dark:ring-brand-green-400"
+                                    : "border-border bg-card text-foreground/80 hover:border-foreground/25 hover:bg-muted/50",
+                                  fieldErrors.contactMethods &&
+                                    !isSelected &&
+                                    "border-destructive/50"
+                                )}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => toggleContact(option.id)}
+                                  className="sr-only"
+                                />
+                                <Icon className="h-5 w-5" />
+                                {option.label}
+                              </label>
+                            );
+                          })}
+                        </div>
+                        {fieldErrors.contactMethods && (
+                          <p className="inline-form-error mt-2">{fieldErrors.contactMethods}</p>
+                        )}
                       </div>
-                      {fieldErrors.contactMethods && (
-                        <p className="inline-form-error">{fieldErrors.contactMethods}</p>
-                      )}
-                    </div>
+                    </PostFormSection>
                   </div>
                 )}
 
                 {step === 2 && (
-                  <div className="space-y-5 animate-in fade-in-0 duration-300">
-                    <div className="space-y-2">
-                      <MediaUpload
-                        id="listing-logo-input"
-                        label="Listing logo (optional)"
-                        description="Optional brand mark shown on listing cards when available."
-                        maxFiles={1}
-                        files={logoFile}
-                        error={fieldErrors.logo_url}
-                        onChange={(files) => {
-                          setLogoFile(files);
-                          clearErrors("logo_url");
-                        }}
-                        accept="image/*"
-                        recommendedAspect="Recommended: square image, at least 96 x 96."
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        If present, this logo will be shown on listing cards across the marketplace.
-                      </p>
-                    </div>
+                  <div className="space-y-6">
+                    <PostFormSection
+                      title="Photos and video"
+                      description="Your first photo is the cover."
+                    >
+                      <div id="listing-images" tabIndex={-1} className="space-y-2 rounded-lg">
+                        <MediaUpload
+                          id="listing-images-input"
+                          label={`Photos (max ${maxPhotos})`}
+                          description="Required. Your first photo becomes the public hero image and marketplace card cover."
+                          error={fieldErrors.images}
+                          maxFiles={maxPhotos}
+                          files={photoFiles}
+                          onChange={(files) => {
+                            setPhotoFiles(files);
+                            clearErrors("images");
+                          }}
+                          accept="image/*"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Portrait photos around 1080 x 1920 fill the card best.
+                        </p>
+                        <PhotoOrderList files={photoFiles} onReorder={setPhotoFiles} />
+                      </div>
 
-                    <div id="listing-images" tabIndex={-1} className="space-y-2 rounded-lg">
-                      <MediaUpload
-                        id="listing-images-input"
-                        label={`Photos (max ${maxPhotos})`}
-                        description="Required. Your first photo becomes the public hero image and marketplace card cover."
-                        error={fieldErrors.images}
-                        maxFiles={maxPhotos}
-                        files={photoFiles}
-                        onChange={(files) => {
-                          setPhotoFiles(files);
-                          clearErrors("images");
-                        }}
-                        accept="image/*"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Your first photo becomes the hero image on the public listing page and the
-                        cover on cards. Portrait photos around 1080 x 1920 work best.
-                      </p>
-                      {photoFiles.length > 1 && (
-                        <div className="space-y-1">
-                          <p className="text-xs font-medium text-muted-foreground">
-                            Reorder photos. The first image appears on cards.
+                      {photoFiles.length > 0 && videoFile.length === 0 && (
+                        <MediaCropPreview
+                          file={photoFiles[0]}
+                          value={focalPoint}
+                          onChange={setFocalPoint}
+                        />
+                      )}
+
+                      <div id="listing-video" tabIndex={-1} className="space-y-2 rounded-lg">
+                        <MediaUpload
+                          id="listing-video-input"
+                          label={`Video (max ${maxVideos})${!videoAllowed ? " — Upgrade to unlock" : ""}`}
+                          description="Optional. Use clear portrait clips that show the item, property, or service honestly."
+                          error={fieldErrors.videos}
+                          maxFiles={maxVideos}
+                          files={videoFile}
+                          onChange={(files) => {
+                            setVideoFile(files);
+                            prewarmVideosForFastUpload(files);
+                            if (files.length === 0) setVideoCoverFile([]);
+                            clearErrors("videos");
+                          }}
+                          accept="video/*"
+                          disabled={!videoAllowed}
+                        />
+                        {!videoAllowed ? (
+                          <p className="text-xs">
+                            <Link
+                              href="/billing"
+                              className="font-medium text-brand-green underline underline-offset-2 hover:text-brand-green/80"
+                            >
+                              Upgrade your plan
+                            </Link>{" "}
+                            <span className="text-muted-foreground">
+                              to add a video and stand out in search results.
+                            </span>
                           </p>
-                          <div className="flex flex-wrap gap-2">
-                            {photoFiles.map((file, index) => (
-                              <div
-                                key={`${file.name}-${index}`}
-                                className="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs"
-                              >
-                                <span className="max-w-[100px] truncate font-medium">
-                                  {file.name}
-                                </span>
-                                <button
-                                  type="button"
-                                  disabled={index === 0}
-                                  onClick={() => {
-                                    const reordered = [...photoFiles];
-                                    [reordered[index - 1], reordered[index]] = [
-                                      reordered[index],
-                                      reordered[index - 1],
-                                    ];
-                                    setPhotoFiles(reordered);
-                                  }}
-                                  className="rounded p-0.5 hover:bg-background disabled:opacity-30"
-                                  aria-label="Move photo left"
-                                >
-                                  <ChevronLeft className="h-3 w-3" />
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={index === photoFiles.length - 1}
-                                  onClick={() => {
-                                    const reordered = [...photoFiles];
-                                    [reordered[index], reordered[index + 1]] = [
-                                      reordered[index + 1],
-                                      reordered[index],
-                                    ];
-                                    setPhotoFiles(reordered);
-                                  }}
-                                  className="rounded p-0.5 hover:bg-background disabled:opacity-30"
-                                  aria-label="Move photo right"
-                                >
-                                  <ChevronRight className="h-3 w-3" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            Use one clear vertical clip for the poster-style hero. Portrait 9:16
+                            video is the best fit.
+                          </p>
+                        )}
+                      </div>
+
+                      {videoFile.length > 0 && (
+                        <div className="space-y-3">
+                          <VideoFrameSelector
+                            file={videoFile[0]}
+                            onFrameSelect={(frame) => {
+                              setVideoCoverFile(frame ? [frame] : []);
+                              clearErrors("videoThumbnail");
+                            }}
+                          />
+                          <details
+                            className="group"
+                            open={fieldErrors.videoThumbnail ? true : undefined}
+                          >
+                            <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                              Or upload a custom cover image…
+                            </summary>
+                            <div className="mt-2">
+                              <MediaUpload
+                                id="listing-video-cover-input"
+                                label="Custom cover image"
+                                description="Optional poster image shown before the video plays."
+                                maxFiles={1}
+                                files={videoCoverFile}
+                                error={fieldErrors.videoThumbnail}
+                                onChange={(files) => {
+                                  setVideoCoverFile(files);
+                                  clearErrors("videoThumbnail");
+                                }}
+                                accept="image/*"
+                              />
+                              <p className="mt-2 text-xs text-muted-foreground">
+                                This image is shown before the video plays and may become the hero
+                                poster in previews.
+                              </p>
+                            </div>
+                          </details>
                         </div>
                       )}
-                    </div>
+                    </PostFormSection>
 
-                    {photoFiles.length > 0 && videoFile.length === 0 && (
-                      <MediaCropPreview
-                        file={photoFiles[0]}
-                        value={focalPoint}
-                        onChange={setFocalPoint}
-                      />
-                    )}
-
-                    <div id="listing-video" tabIndex={-1} className="space-y-2 rounded-lg">
-                      <MediaUpload
-                        id="listing-video-input"
-                        label={`Video (max ${maxVideos})${!videoAllowed ? " — Upgrade to unlock" : ""}`}
-                        description="Optional. Use clear portrait clips that show the item, property, or service honestly."
-                        error={fieldErrors.videos}
-                        maxFiles={maxVideos}
-                        files={videoFile}
-                        onChange={(files) => {
-                          setVideoFile(files);
-                          prewarmVideosForFastUpload(files);
-                          if (files.length === 0) setVideoCoverFile([]);
-                          clearErrors("videos");
-                        }}
-                        accept="video/*"
-                        disabled={!videoAllowed}
-                      />
-                      {!videoAllowed ? (
-                        <p className="text-xs">
-                          <Link
-                            href="/billing"
-                            className="font-medium text-brand-green underline underline-offset-2 hover:text-brand-green/80"
-                          >
-                            Upgrade your plan
-                          </Link>{" "}
-                          <span className="text-muted-foreground">
-                            to add a video and stand out in search results.
-                          </span>
-                        </p>
-                      ) : (
-                        <p className="text-xs text-muted-foreground">
-                          Use one clear vertical clip for the poster-style hero. Portrait 9:16 video
-                          is the best fit.
-                        </p>
-                      )}
-                    </div>
-
-                    {videoFile.length > 0 && (
-                      <div className="space-y-3">
-                        <VideoFrameSelector
-                          file={videoFile[0]}
-                          onFrameSelect={(frame) => {
-                            setVideoCoverFile(frame ? [frame] : []);
-                            clearErrors("videoThumbnail");
+                    <PostFormSection title="Brand logo" optional>
+                      <div className="space-y-2">
+                        <MediaUpload
+                          id="listing-logo-input"
+                          label="Listing logo (optional)"
+                          description="Square image, shown small on listing cards."
+                          maxFiles={1}
+                          files={logoFile}
+                          error={fieldErrors.logo_url}
+                          onChange={(files) => {
+                            setLogoFile(files);
+                            clearErrors("logo_url");
                           }}
+                          accept="image/*"
+                          recommendedAspect="Recommended: square image, at least 96 x 96."
                         />
-                        <details
-                          className="group"
-                          open={fieldErrors.videoThumbnail ? true : undefined}
-                        >
-                          <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-                            Or upload a custom cover image…
-                          </summary>
-                          <div className="mt-2">
-                            <MediaUpload
-                              id="listing-video-cover-input"
-                              label="Custom cover image"
-                              description="Optional poster image shown before the video plays."
-                              maxFiles={1}
-                              files={videoCoverFile}
-                              error={fieldErrors.videoThumbnail}
-                              onChange={(files) => {
-                                setVideoCoverFile(files);
-                                clearErrors("videoThumbnail");
-                              }}
-                              accept="image/*"
-                            />
-                            <p className="mt-2 text-xs text-muted-foreground">
-                              This image is shown before the video plays and may become the hero
-                              poster in previews.
-                            </p>
-                          </div>
-                        </details>
                       </div>
-                    )}
+                    </PostFormSection>
 
-                    <ListingQualityHint
-                      title={title}
-                      description={description}
-                      priceCents={price === "" ? null : Math.round(Number(price) * 100)}
-                      priceExpected
-                      category={category || null}
-                      location={city || null}
-                      pendingPhotoCount={photoFiles.length}
-                    />
-
-                    <label className="flex items-start gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
-                      <input
-                        id="listing-terms-checkbox"
-                        type="checkbox"
-                        checked={termsAccepted}
-                        onChange={(event) => {
-                          setTermsAccepted(event.target.checked);
-                          clearErrors("termsAccepted");
-                        }}
-                        className="mt-1 rounded"
-                        aria-invalid={!!fieldErrors.termsAccepted}
+                    <PostFormSection title="Final check">
+                      <ListingQualityHint
+                        title={title}
+                        description={description}
+                        priceCents={price === "" ? null : Math.round(Number(price) * 100)}
+                        priceExpected
+                        category={category || null}
+                        location={city || null}
+                        pendingPhotoCount={photoFiles.length}
                       />
-                      <span>
-                        I accept the VerifyMzansi posting terms, including the free-post visibility
-                        period and my responsibility for the accuracy and legality of this post.{" "}
-                        <a className="font-medium text-brand-green underline" href="/terms">
-                          View terms
-                        </a>
-                        .
-                        {fieldErrors.termsAccepted && (
-                          <span className="mt-1 block text-destructive">
-                            {fieldErrors.termsAccepted}
-                          </span>
-                        )}
-                      </span>
-                    </label>
+
+                      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border bg-muted/30 p-4 text-sm leading-6">
+                        <input
+                          id="listing-terms-checkbox"
+                          type="checkbox"
+                          checked={termsAccepted}
+                          onChange={(event) => {
+                            setTermsAccepted(event.target.checked);
+                            clearErrors("termsAccepted");
+                          }}
+                          className="mt-1 h-4 w-4 shrink-0 rounded accent-brand-green-600"
+                          aria-invalid={!!fieldErrors.termsAccepted}
+                        />
+                        <span>
+                          I accept the VerifyMzansi posting terms, including the free-post
+                          visibility period and my responsibility for the accuracy and legality of
+                          this post.{" "}
+                          <a
+                            className="font-semibold text-brand-green-700 underline underline-offset-2 dark:text-brand-green-300"
+                            href="/terms"
+                          >
+                            View terms
+                          </a>
+                          .
+                          {fieldErrors.termsAccepted && (
+                            <span className="mt-1 block text-destructive">
+                              {fieldErrors.termsAccepted}
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    </PostFormSection>
 
                     {renderPreview()}
                   </div>

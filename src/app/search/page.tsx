@@ -36,11 +36,7 @@ export default async function SearchPage({
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
-      <main id="main-content" className="container-page flex-1 py-8">
-        <h1 className="font-display text-3xl font-bold">Search VerifyMzansi</h1>
-        <p className="mt-2 text-muted-foreground">
-          Find listings, businesses, tourism, events and website pages.
-        </p>
+      <main id="main-content" className="flex-1">
         <SiteSearch key={`${query}:${city}:${org}`} query={query} city={city} org={org} />
       </main>
       <Footer />

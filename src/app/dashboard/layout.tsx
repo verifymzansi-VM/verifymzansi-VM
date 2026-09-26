@@ -9,6 +9,7 @@ import {
   DashboardSidebar,
   type DashboardSidebarBadges,
 } from "@/components/dashboard/dashboard-sidebar";
+import { DashboardMobileNav } from "@/components/dashboard/dashboard-mobile-nav";
 import { createClient } from "@/lib/supabase/client";
 import { useLeadsUnread } from "@/hooks/use-leads-unread";
 
@@ -121,18 +122,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [router]);
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col bg-background">
       <Header isAuthenticated />
+      <DashboardMobileNav badges={sidebarBadges} />
 
-      <div className="flex min-w-0 flex-1 overflow-x-hidden">
+      <div className="flex min-w-0 flex-1">
         <DashboardSidebar badges={sidebarBadges} onSignOut={handleSignOut} />
 
-        {/* Main content */}
-        <main
-          id="main-content"
-          className="w-0 min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto"
-        >
-          <div className="container-page min-w-0 max-w-full py-6">{children}</div>
+        <main id="main-content" className="w-0 min-w-0 max-w-full flex-1 overflow-x-hidden">
+          <div className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
+            {children}
+          </div>
         </main>
       </div>
     </div>

@@ -14,7 +14,7 @@ import { useNotificationStore, type Notification } from "@/stores/notification-s
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { useRealtime } from "@/hooks/use-realtime";
 import { cn } from "@/lib/utils";
-import { formatRelativeTime } from "@/lib/utils/format";
+import { formatRelativeTime, formatSaLongDate } from "@/lib/utils/format";
 
 const NOTIFICATION_REFRESH_INTERVAL_MS = 10_000;
 
@@ -323,9 +323,7 @@ export function NotificationBell({ userId }: { userId?: string }) {
               <Bell className="h-5 w-5" aria-hidden="true" />
             </div>
             <p className="font-medium text-foreground">No notifications yet</p>
-            <p className="mt-1 text-xs">
-              Verification, billing, content, and account updates will appear here.
-            </p>
+            <p className="mt-1 text-xs">Account and post updates show up here.</p>
           </div>
         ) : (
           <ScrollArea className="max-h-96">
@@ -398,7 +396,11 @@ function NotificationItem({
         <p className="mt-2 text-[11px] text-muted-foreground">
           <span>{typeLabel}</span>
           <span aria-hidden="true"> · </span>
-          <time dateTime={n.createdAt} title={new Date(n.createdAt).toLocaleString("en-ZA")}>
+          <time
+            dateTime={n.createdAt}
+            suppressHydrationWarning
+            title={formatSaLongDate(n.createdAt)}
+          >
             {timeAgo}
           </time>
         </p>

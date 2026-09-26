@@ -73,22 +73,6 @@ interface GridFetchError {
 
 type ViewMode = "grid" | "list";
 
-const STAGGER_DELAY_CLASSES = [
-  "[animation-delay:0ms]",
-  "[animation-delay:50ms]",
-  "[animation-delay:100ms]",
-  "[animation-delay:150ms]",
-  "[animation-delay:200ms]",
-  "[animation-delay:250ms]",
-  "[animation-delay:300ms]",
-  "[animation-delay:350ms]",
-  "[animation-delay:400ms]",
-] as const;
-
-function getStaggerDelayClass(index: number) {
-  return STAGGER_DELAY_CLASSES[Math.min(index, STAGGER_DELAY_CLASSES.length - 1)];
-}
-
 function getListingCardProps(listing: ListingRow) {
   const videoUrl = listing.videos?.[0];
   const seller = listing.seller;
@@ -321,7 +305,7 @@ export function MzansiMarketGrid() {
 
         {hasFilters && (
           <Button variant="outline" onClick={resetFilters}>
-            Clear Filters
+            Clear filters
           </Button>
         )}
 
@@ -329,7 +313,7 @@ export function MzansiMarketGrid() {
           <Button asChild size="lg">
             <Link href="/post/create">
               <Plus className="mr-1.5 h-4 w-4" />
-              Post Your First Ad
+              Post an item
             </Link>
           </Button>
         )}
@@ -349,12 +333,6 @@ export function MzansiMarketGrid() {
         <p className="text-sm text-muted-foreground" aria-live="polite" role="status">
           <span className="font-medium text-foreground">{totalCount}</span> listing
           {totalCount !== 1 ? "s" : ""} found
-          {activeFilterCount > 0 && (
-            <span className="ml-1.5">
-              · <span className="text-brand-green font-medium">{activeFilterCount}</span> filter
-              {activeFilterCount !== 1 ? "s" : ""} active
-            </span>
-          )}
         </p>
 
         {/* View mode toggle — segmented control */}
@@ -362,9 +340,9 @@ export function MzansiMarketGrid() {
           <button
             type="button"
             onClick={() => setViewMode("grid")}
-            className={`flex h-8 w-8 items-center justify-center rounded-full transition-all duration-200 ${
+            className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
               viewMode === "grid"
-                ? "bg-background text-brand-green shadow-sm ring-1 ring-black/5"
+                ? "bg-background text-brand-green-700 shadow-sm ring-1 ring-border dark:text-brand-green-300"
                 : "text-muted-foreground hover:text-foreground"
             }`}
             aria-label="Grid view"
@@ -375,9 +353,9 @@ export function MzansiMarketGrid() {
           <button
             type="button"
             onClick={() => setViewMode("list")}
-            className={`flex h-8 w-8 items-center justify-center rounded-full transition-all duration-200 ${
+            className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
               viewMode === "list"
-                ? "bg-background text-brand-green shadow-sm ring-1 ring-black/5"
+                ? "bg-background text-brand-green-700 shadow-sm ring-1 ring-border dark:text-brand-green-300"
                 : "text-muted-foreground hover:text-foreground"
             }`}
             aria-label="List view"
@@ -390,14 +368,11 @@ export function MzansiMarketGrid() {
 
       {viewMode === "grid" ? (
         <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-5 xl:gap-6">
-          {listings.map((listing, index) => {
+          {listings.map((listing) => {
             const cardProps = getListingCardProps(listing);
 
             return (
-              <div
-                key={listing.id}
-                className={`content-auto animate-in fade-in fill-mode-both [animation-duration:400ms] sm:slide-in-from-bottom-2 ${getStaggerDelayClass(index)}`}
-              >
+              <div key={listing.id} className="content-auto">
                 <ListingCard {...cardProps} />
               </div>
             );
@@ -405,14 +380,11 @@ export function MzansiMarketGrid() {
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {listings.map((listing, index) => {
+          {listings.map((listing) => {
             const cardProps = getListingCardProps(listing);
 
             return (
-              <div
-                key={listing.id}
-                className={`animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms] ${getStaggerDelayClass(index)}`}
-              >
+              <div key={listing.id}>
                 <ListingCardList
                   {...cardProps}
                   likeCount={

@@ -26,9 +26,9 @@ export function StickyContactBar({ business, ctaLabel }: StickyContactBarProps) 
       {hasPhone && (
         <a
           href={`tel:${business.phone}`}
-          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-primary text-sm font-semibold text-primary-foreground shadow-lg transition-all duration-200 hover:-translate-y-px active:bg-primary/90"
+          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-primary text-sm font-semibold text-primary-foreground shadow-md transition-colors duration-200 hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
-          <Phone className="h-4 w-4" />
+          <Phone className="h-4 w-4" aria-hidden="true" />
           {ctaLabel ?? "Call Now"}
         </a>
       )}
@@ -37,9 +37,9 @@ export function StickyContactBar({ business, ctaLabel }: StickyContactBarProps) 
           href={`https://wa.me/${business.whatsapp!.replace(/\D/g, "")}`}
           target="_blank"
           rel="noopener noreferrer nofollow ugc"
-          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-green-500 text-sm font-semibold text-white shadow-lg transition-all duration-200 hover:-translate-y-px active:bg-green-600"
+          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full border border-brand-green/30 bg-card text-sm font-semibold text-foreground shadow-md transition-colors duration-200 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
-          <MessageCircle className="h-4 w-4" />
+          <MessageCircle className="h-4 w-4 text-brand-green-600" aria-hidden="true" />
           WhatsApp
         </a>
       )}

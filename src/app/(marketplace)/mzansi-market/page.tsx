@@ -100,8 +100,8 @@ export default async function MzansiMarketPage() {
         <AreaHero
           area="market"
           title={categorySeo.searchName}
-          description="Buy and sell phones, cars, furniture, property and everyday finds from sellers near you."
-          trustLine="Every seller completes ID review before posting"
+          description="Buy and sell locally."
+          trustLine="ID-reviewed sellers"
           ctaHref="/post/create-listing"
           ctaLabel="Create a listing"
           quickLinks={MARKET_QUICK_LINKS}

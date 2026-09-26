@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Check, Clock3, Fingerprint, LockKeyhole, MapPin, Smartphone } from "lucide-react";
+import { Check, Fingerprint, MapPin, Smartphone } from "lucide-react";
 import { HeaderSearch } from "@/components/layout/header-search";
 import { VerifiedTick } from "@/components/trust/verified-tick";
 import { BrandShield } from "@/components/shared/brand-shield";
@@ -12,12 +12,6 @@ const QUICK_LINKS = [
   { label: "Trades & repairs", href: "/mzansi-business?category=trade_maintenance" },
   { label: "Food & dining", href: "/mzansi-business?category=food_dining" },
   { label: "Stays & events", href: "/tourism-events" },
-] as const;
-
-const TRUST_POINTS = [
-  { icon: Smartphone, label: "Phone & ID checks" },
-  { icon: Clock3, label: "Posts reviewed before going live" },
-  { icon: LockKeyhole, label: "POPIA-grade privacy" },
 ] as const;
 
 const CHECKLIST = [
@@ -51,32 +45,11 @@ export function HomeHero() {
             id="home-hero-title"
             className="mt-5 font-display text-[2.35rem] font-extrabold leading-[1.02] tracking-[-0.035em] text-foreground sm:text-5xl lg:text-[3.6rem]"
           >
-            Buy, sell and discover with{" "}
-            <span className="text-brand-green-600 dark:text-brand-green-400">
-              people you can{" "}
-              <span className="relative inline-block whitespace-nowrap">
-                trust.
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 200 16"
-                  preserveAspectRatio="none"
-                  className="absolute -bottom-1.5 left-0 h-3 w-full text-brand-gold sm:-bottom-2"
-                >
-                  <path
-                    d="M3 11C50 4 120 2 197 8"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="6"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </span>
-            </span>
+            Buy, sell and discover with people you can trust.
           </h1>
 
-          <p className="mt-4 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">
-            Local goods, trusted businesses, places to stay and things to do across Mzansi, from
-            members whose identity has been reviewed. Free to browse. Free to join.
+          <p className="mt-4 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg">
+            Everyone who posts here is ID-reviewed first.
           </p>
 
           <HeaderSearch
@@ -85,24 +58,17 @@ export function HomeHero() {
             placeholder="What are you looking for today?"
           />
 
-          <div className="mt-4 flex max-w-2xl flex-wrap gap-2" aria-label="Popular searches">
-            {QUICK_LINKS.map((link) => (
-              <Link key={link.href} href={link.href} prefetch={false} className="pill-link">
-                {link.label}
-              </Link>
-            ))}
-          </div>
-
-          <ul className="mt-7 flex flex-wrap gap-x-6 gap-y-2.5 text-sm text-muted-foreground">
-            {TRUST_POINTS.map(({ icon: Icon, label }) => (
-              <li key={label} className="inline-flex items-center gap-2">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-green/10 text-brand-green-700 dark:text-brand-green-300">
-                  <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                </span>
-                {label}
-              </li>
-            ))}
-          </ul>
+          <nav aria-label="Popular searches" className="mt-4 max-w-2xl">
+            <ul className="flex flex-wrap gap-2">
+              {QUICK_LINKS.map((link) => (
+                <li key={link.href}>
+                  <Link href={link.href} prefetch={false} className="pill-link">
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
         </div>
 
         {/* Visual: real South African settings with the trust layer on top */}
@@ -155,7 +121,6 @@ export function HomeHero() {
               </span>
               <div>
                 <p className="text-sm font-bold text-foreground">Seller checks</p>
-                <p className="text-xs text-muted-foreground">Before the badge is earned</p>
               </div>
             </div>
             <ul className="mt-3 space-y-2">
@@ -174,7 +139,7 @@ export function HomeHero() {
             </ul>
           </div>
 
-          <div className="absolute -bottom-5 right-6 flex animate-float items-center gap-2 rounded-full border border-border/70 bg-card/95 px-3.5 py-2 text-xs font-semibold shadow-xl backdrop-blur [animation-delay:1.5s] motion-reduce:animate-none">
+          <div className="absolute -bottom-5 right-6 flex items-center gap-2 rounded-full border border-border/70 bg-card/95 px-3.5 py-2 text-xs font-semibold shadow-xl backdrop-blur">
             <span className="h-2 w-2 rounded-full bg-brand-gold" />
             Every post is moderated
           </div>

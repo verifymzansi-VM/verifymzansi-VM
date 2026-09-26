@@ -3,34 +3,65 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>VerifyMzansi — Maintenance</title>
+  <meta name="robots" content="noindex" />
+  <meta name="color-scheme" content="light dark" />
+  <title>VerifyMzansi is down for maintenance</title>
   <style>
-    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-      background:#f8fafc;color:#1e293b;display:flex;align-items:center;justify-content:center;
-      min-height:100vh;padding:1.5rem;text-align:center}
-    .card{max-width:28rem;background:#fff;border-radius:0.75rem;padding:2.5rem 2rem;
-      box-shadow:0 1px 3px rgba(0,0,0,.1)}
-    h1{font-size:1.5rem;font-weight:700;margin-bottom:.5rem}
-    p{color:#64748b;line-height:1.6;margin-top:.75rem}
-    .icon{font-size:2.5rem;margin-bottom:1rem}
-    .status{display:inline-block;margin-top:1.25rem;padding:.5rem 1rem;border-radius:9999px;
-      background:#fef3c7;color:#92400e;font-size:.875rem;font-weight:500}
+    :root {
+      --bg: #f7f7f4; --card: #ffffff; --fg: #1c1b18; --muted: #5d5b54; --border: #e4e3dc;
+      --green: #0b7a55; --green-soft: rgba(11, 122, 85, 0.1); --gold: #f9a826; --gold-soft: #fff4dc; --gold-fg: #7a4a00;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0b1310; --card: #111b17; --fg: #eef2ef; --muted: #a3aea8; --border: #22302a;
+        --green: #34c48f; --green-soft: rgba(52, 196, 143, 0.14); --gold-soft: rgba(249, 168, 38, 0.14); --gold-fg: #fcd58a;
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg); color: var(--fg); min-height: 100vh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; padding: 24px 16px; text-align: center; line-height: 1.6;
+    }
+    .brand { display: block; margin: 0 auto 20px; }
+    .brand img { display: block; height: 48px; width: auto; margin: 0 auto; }
+    .card { width: 100%; max-width: 30rem; background: var(--card); border: 1px solid var(--border); border-radius: 24px; padding: 40px 24px 32px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 12px 32px -16px rgba(0,0,0,.12); }
+    .icon { width: 56px; height: 56px; margin: 0 auto 20px; border-radius: 16px; background: var(--green-soft); color: var(--green); display: flex; align-items: center; justify-content: center; }
+    .icon svg { width: 28px; height: 28px; }
+    h1 { font-size: 1.6rem; line-height: 1.2; letter-spacing: -0.02em; font-weight: 800; }
+    p { color: var(--muted); margin-top: 12px; font-size: 0.95rem; }
+    .status { display: inline-flex; align-items: center; gap: 8px; margin-top: 20px; padding: 6px 14px; border-radius: 999px; background: var(--gold-soft); color: var(--gold-fg); font-size: 0.85rem; font-weight: 600; }
+    .status::before { content: ""; width: 8px; height: 8px; border-radius: 999px; background: var(--gold); }
+    .actions { margin-top: 24px; display: flex; flex-direction: column; gap: 10px; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 20px; border-radius: 999px; font-weight: 600; font-size: 0.9rem; text-decoration: none; border: 1px solid var(--border); color: var(--fg); background: var(--card); cursor: pointer; font-family: inherit; }
+    .btn-primary { background: var(--green); border-color: var(--green); color: #fff; }
+    @media (prefers-color-scheme: dark) { .btn-primary { color: #06140e; } }
+    .btn:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+    a { color: var(--green); font-weight: 600; }
+    a.btn-primary { color: #fff; }
+    @media (prefers-color-scheme: dark) { a.btn-primary { color: #06140e; } }
+    @media (min-width: 480px) { .card { padding: 44px 40px 36px; } .actions { flex-direction: row; justify-content: center; } }
   </style>
 </head>
 <body>
-  <div class="card">
-    <div class="icon" aria-hidden="true">🔧</div>
-    <h1>We&rsquo;ll Be Right Back</h1>
-    <p>
-      VerifyMzansi is undergoing scheduled maintenance to improve
-      performance and security. We expect to be back shortly.
-    </p>
-    <span class="status">503 — Service Unavailable</span>
-    <p>
-      If the issue persists, please contact
-      <a href="mailto:support@verifymzansi.com">support@verifymzansi.com</a>.
-    </p>
-  </div>
+  <main id="main-content">
+    <picture class="brand">
+      <source srcset="/images/logo-inverse.png" media="(prefers-color-scheme: dark)" />
+      <img src="/images/logo-transparent.png" alt="VerifyMzansi logo" width="172" height="48" />
+    </picture>
+    <div class="card">
+      <div class="icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+        </svg>
+      </div>
+      <h1>Down for maintenance</h1>
+      <p>We&rsquo;re making improvements and will be back shortly.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="/">Check again</a>
+      </div>
+      <p>Need help? <a href="mailto:support@verifymzansi.com">Email support</a></p>
+    </div>
+  </main>
 </body>
 </html>

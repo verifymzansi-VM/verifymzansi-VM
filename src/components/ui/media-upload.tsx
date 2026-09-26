@@ -329,23 +329,23 @@ export function MediaUpload({
     <div className="space-y-2">
       <label
         htmlFor={inputId}
-        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+        className="block text-sm font-semibold leading-snug text-foreground peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
       >
         {label}
       </label>
       {description && (
-        <p id={descriptionId} className="text-xs text-muted-foreground">
+        <p id={descriptionId} className="text-xs leading-5 text-muted-foreground">
           {description}
         </p>
       )}
 
       {/* Preview grid */}
       {previews.length > 0 && (
-        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
           {previews.map((item, idx) => (
             <div
               key={`${item.file.name}-${idx}`}
-              className="relative group aspect-[9/16] rounded-lg overflow-hidden border bg-muted"
+              className="group relative aspect-[9/16] overflow-hidden rounded-xl border border-border bg-muted"
             >
               {item.isVideo ? (
                 <div className="relative w-full h-full">
@@ -382,8 +382,8 @@ export function MediaUpload({
                 />
               )}
               {idx === 0 && previews.length > 1 && (
-                <span className="absolute bottom-1 left-1 rounded bg-brand-green/90 px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-sm">
-                  Main
+                <span className="absolute bottom-1.5 left-1.5 rounded-full bg-brand-green-700 px-2 py-0.5 text-[11px] font-semibold text-white shadow-sm">
+                  Cover
                 </span>
               )}
               <div className="absolute right-1 top-1 flex gap-1">
@@ -392,20 +392,20 @@ export function MediaUpload({
                     type="button"
                     disabled={disabled}
                     onClick={() => inputRef.current?.click()}
-                    className="rounded-full bg-black/70 p-1 text-white transition-colors hover:bg-black/85 disabled:opacity-50"
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white transition-colors hover:bg-black/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50"
                     aria-label={`Replace ${item.file.name}`}
                   >
-                    <RotateCcw className="h-3.5 w-3.5" />
+                    <RotateCcw className="h-4 w-4" aria-hidden="true" />
                   </button>
                 )}
                 <button
                   type="button"
                   disabled={disabled}
                   onClick={() => removeFile(idx)}
-                  className="rounded-full bg-black/70 p-1 text-white transition-colors hover:bg-black/85 disabled:opacity-50 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white transition-colors hover:bg-black/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50 sm:opacity-0 sm:focus-visible:opacity-100 sm:group-hover:opacity-100"
                   aria-label={`Remove ${item.file.name}`}
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <X className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -435,36 +435,42 @@ export function MediaUpload({
             }
           }}
           className={cn(
-            "border-2 border-dashed rounded-lg p-4 text-center transition-colors",
-            disabled ? "opacity-50 cursor-not-allowed border-muted" : "cursor-pointer",
+            "rounded-2xl border-2 border-dashed px-4 py-5 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            disabled ? "cursor-not-allowed border-border bg-muted/40 opacity-60" : "cursor-pointer",
             isDragOver && !disabled
-              ? "border-brand-green bg-brand-green/5"
+              ? "border-brand-green-500 bg-brand-green-50 dark:bg-brand-green-950/40"
               : !disabled
-                ? "border-muted-foreground/25 hover:border-brand-green/50"
-                : ""
+                ? "border-border bg-muted/30 hover:border-brand-green-500/60 hover:bg-brand-green-50/50 dark:hover:bg-brand-green-950/20"
+                : "",
+            error && !isDragOver && "border-destructive/60"
           )}
         >
-          {accept?.startsWith("video/") ? (
-            <Film className="h-6 w-6 mx-auto mb-1.5 text-muted-foreground" />
-          ) : (
-            <ImagePlus className="h-6 w-6 mx-auto mb-1.5 text-muted-foreground" />
-          )}
-          <p className="text-sm font-medium text-muted-foreground">
+          <span
+            aria-hidden="true"
+            className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-card text-foreground/70 shadow-xs ring-1 ring-border"
+          >
+            {accept?.startsWith("video/") ? (
+              <Film className="h-5 w-5" />
+            ) : (
+              <ImagePlus className="h-5 w-5" />
+            )}
+          </span>
+          <p className="text-sm font-semibold text-foreground">
             {disabled
               ? "Uploads disabled for your current plan"
               : remaining > 0
-                ? "Drag & drop or click to browse"
+                ? "Tap to choose files, or drag them here"
                 : "Replace selected file"}
           </p>
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="mt-1 text-xs text-muted-foreground">
             {acceptedLabel ?? defaultAcceptedLabel}
             {maxSizeLabel ? `; ${maxSizeLabel}` : ""}
           </p>
-          <p id={countId} className="text-xs text-muted-foreground mt-0.5">
+          <p id={countId} className="mt-0.5 text-xs text-muted-foreground">
             {files.length} selected. {remaining} of {maxFiles} remaining.
           </p>
           {recommendedAspect && (
-            <p className="text-[10px] text-muted-foreground/70 mt-1.5">{recommendedAspect}</p>
+            <p className="mt-1.5 text-xs text-muted-foreground">{recommendedAspect}</p>
           )}
 
           <input
@@ -485,7 +491,7 @@ export function MediaUpload({
       {rejectedMessages.length > 0 && (
         <div
           id={rejectedId}
-          className="rounded-md border border-destructive/30 bg-destructive/5 p-2"
+          className="rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2"
         >
           <p className="text-xs font-medium text-destructive">Some files were not added</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-destructive">

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowRight, Building2, ShoppingBag, TreePalm } from "lucide-react";
+import { Building2, ShoppingBag, TreePalm } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BrandShield } from "@/components/shared/brand-shield";
 import { cn } from "@/lib/utils";
@@ -32,7 +32,7 @@ const AREA_STYLES: Record<
     tile: "area-tourism-tile",
     glow: "from-sunset-100/80 dark:from-sunset-950/50",
     button:
-      "bg-sunset-600 text-white hover:bg-sunset-700 dark:bg-sunset-500 dark:hover:bg-sunset-400",
+      "bg-sunset-700 text-white hover:bg-sunset-800 dark:bg-sunset-700 dark:hover:bg-sunset-600",
     kicker: "text-sunset-700 dark:text-sunset-300",
   },
 };
@@ -126,7 +126,6 @@ export function AreaHero({
           >
             <Link href={ctaHref} prefetch={false}>
               {ctaLabel}
-              <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>
         </div>

@@ -18,8 +18,10 @@ vi.mock("@/components/layout/header", () => ({
 vi.mock("@/components/layout/footer", () => ({
   Footer: () => <footer>Footer</footer>,
 }));
-vi.mock("@/components/layout/page-header", () => ({
-  PageHeader: ({ title }: { title: string }) => <div>{title}</div>,
+vi.mock("@/components/layout/breadcrumbs", () => ({
+  Breadcrumbs: ({ items }: { items: Array<{ label: string }> }) => (
+    <nav>{items[items.length - 1]?.label}</nav>
+  ),
 }));
 vi.mock("@/components/listings/listing-detail-content", () => ({
   ListingDetailContent: ({

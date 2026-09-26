@@ -124,9 +124,12 @@ export default async function OrganisationDashboardPage({
       {showAlert ? (
         <div
           role="status"
-          className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm dark:bg-amber-950/30"
+          className="flex items-start gap-3 rounded-xl border border-brand-gold-300 bg-brand-gold-50 p-4 text-sm dark:border-brand-gold-400/30 dark:bg-brand-gold-400/10"
         >
-          <AlertTriangle aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+          <AlertTriangle
+            aria-hidden="true"
+            className="mt-0.5 h-5 w-5 shrink-0 text-brand-gold-700 dark:text-brand-gold-300"
+          />
           <p>
             Your founding pilot ends in <strong>{s.daysRemaining} days</strong>
             {s.trialEndsAt ? ` (${date.format(new Date(s.trialEndsAt))})` : ""}. There is no

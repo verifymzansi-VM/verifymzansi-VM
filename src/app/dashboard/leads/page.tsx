@@ -67,7 +67,7 @@ export default async function LeadsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Leads"
-        description="Buyer enquiries for your listings."
+        description="Reply fast to win the sale."
         breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Leads" }]}
       />
 

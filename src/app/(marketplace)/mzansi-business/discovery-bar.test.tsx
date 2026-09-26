@@ -90,7 +90,7 @@ describe("BusinessDiscoveryBar", () => {
 
     render(<BusinessDiscoveryBar />);
 
-    expect(screen.getByText("Fashion & Accessories", { selector: "div" })).toBeInTheDocument();
+    expect(screen.getByText("Fashion & Accessories", { selector: "span" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /remove business category filter/i }));
     expect(setFilter).toHaveBeenCalledWith("businessCategory", undefined);

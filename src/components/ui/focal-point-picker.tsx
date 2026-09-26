@@ -77,16 +77,14 @@ export function FocalPointPicker({
 
   return (
     <div className={cn("space-y-1.5", className)}>
-      <p className="text-xs font-medium text-muted-foreground">
-        Tap on the image to set the focal point
-      </p>
+      <p className="text-xs font-medium text-muted-foreground">Tap the part to keep in view</p>
       <div
         ref={containerRef}
         role="button"
         tabIndex={0}
         aria-label="Click to set focal point on image"
         className={cn(
-          "relative cursor-crosshair overflow-hidden rounded-lg border border-warm-200 dark:border-warm-700",
+          "relative cursor-crosshair overflow-hidden rounded-xl border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
           focalPositionClassName
         )}
         onClick={handleClick}
@@ -128,7 +126,7 @@ export function FocalPointPicker({
         <div className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 transition-all duration-150 left-[var(--focal-pos-x)] top-[var(--focal-pos-y)]">
           <div className="relative">
             <Crosshair className="h-8 w-8 text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]" />
-            <div className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-green shadow-sm" />
+            <div className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-green-600 shadow-sm" />
           </div>
         </div>
 

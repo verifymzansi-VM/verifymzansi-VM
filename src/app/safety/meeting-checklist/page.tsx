@@ -1,10 +1,9 @@
-import { BrandShield as Shield } from "@/components/shared/brand-shield";
-import { CheckCircle2, MapPin, Users, Clock, Phone, Car, AlertTriangle } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
+import { Phone, TriangleAlert } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
-import { PageHeader } from "@/components/layout/page-header";
+import { InfoHero } from "@/components/safety/info-hero";
+import { MeetingChecklist } from "./meeting-checklist";
 
 export const metadata = {
   title: "Meeting Safety Checklist",
@@ -12,134 +11,67 @@ export const metadata = {
     "Your checklist for safe in-person meetups when buying or selling on VerifyMzansi. Stay safe in South Africa.",
 };
 
-const BEFORE_MEETING = [
-  {
-    icon: Shield,
-    text: "Verify the account's trust badge and profile",
-  },
-  {
-    icon: Phone,
-    text: "Have a phone/video call to confirm identity",
-  },
-  {
-    icon: Users,
-    text: "Tell someone where you're going & share live location",
-  },
-  {
-    icon: Clock,
-    text: "Schedule during daylight hours",
-  },
-  {
-    icon: MapPin,
-    text: "Choose a public location — mall, police station, petrol station",
-  },
-  {
-    icon: Car,
-    text: "Use your own transport",
-  },
-];
-
-const DURING_MEETING = [
-  "Meet in the open, not inside a car or private space",
-  "Inspect the item thoroughly before payment",
-  "Count money privately before handing it over",
-  "Factory-reset devices in front of buyer",
-  "Keep your phone charged and accessible",
-  "Trust your gut — leave if something feels wrong",
-];
-
-const AFTER_MEETING = [
-  "Leave before counting your money again",
-  "Confirm with your contact that you're safe",
-  "Rate the other account on VerifyMzansi",
-  "Report suspicious behaviour",
-];
-
 export default function MeetingChecklistPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
 
       <main id="main-content" className="flex-1">
-        <div className="container-page py-6 space-y-5">
-          <PageHeader
-            title="Meeting Safety Checklist"
-            description="Stay safe when meeting buyers or sellers."
-            breadcrumbs={[{ label: "Safety" }, { label: "Meeting Checklist" }]}
-          />
+        <InfoHero
+          title="Meeting Safety Checklist"
+          description="Stay safe when meeting buyers or sellers."
+          breadcrumbs={[{ label: "Safety", href: "/safety" }, { label: "Meeting Checklist" }]}
+        />
 
-          {/* Before Meeting */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2">
-                <Badge className="bg-brand-gold text-amber-950 text-xs">Before</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {BEFORE_MEETING.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <div key={item.text} className="flex items-start gap-2">
-                      <div className="rounded-md bg-muted p-1.5 flex-shrink-0">
-                        <Icon className="h-3.5 w-3.5 text-brand-green" />
-                      </div>
-                      <p className="text-xs">{item.text}</p>
-                    </div>
-                  );
-                })}
+        <div className="container-page space-y-8 py-8 sm:py-12">
+          <MeetingChecklist />
+
+          <section
+            aria-labelledby="emergency-title"
+            className="rounded-3xl border border-brand-red/25 bg-brand-red-50 p-5 dark:border-brand-red/30 dark:bg-brand-red-950/30 sm:p-7"
+          >
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+              <div className="flex items-start gap-4">
+                <span className="icon-tile bg-brand-red/15 text-brand-red-700 dark:text-brand-red-300">
+                  <TriangleAlert className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <div>
+                  <h2
+                    id="emergency-title"
+                    className="font-display text-lg font-bold text-foreground sm:text-xl"
+                  >
+                    Feel unsafe? Call for help.
+                  </h2>
+                  <p className="mt-1 text-sm leading-6 text-foreground/80">
+                    Then{" "}
+                    <Link
+                      href="/contact?topic=fraud_report"
+                      className="font-semibold text-brand-red-700 underline underline-offset-4 dark:text-brand-red-300"
+                    >
+                      report the account to us
+                    </Link>
+                    .
+                  </p>
+                </div>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* During & After Meeting */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2">
-                <Badge className="bg-brand-green text-white text-xs">During</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-                {DURING_MEETING.map((tip) => (
-                  <li key={tip} className="flex items-start gap-1.5 text-xs">
-                    <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 text-brand-green flex-shrink-0" />
-                    {tip}
-                  </li>
-                ))}
-              </ul>
-
-              <div>
-                <h3 className="flex items-center gap-2 mb-1.5">
-                  <Badge variant="secondary" className="text-xs">
-                    After
-                  </Badge>
-                </h3>
-                <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-                  {AFTER_MEETING.map((tip) => (
-                    <li key={tip} className="flex items-start gap-1.5 text-xs">
-                      <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 text-muted-foreground flex-shrink-0" />
-                      {tip}
-                    </li>
-                  ))}
-                </ul>
+              <div className="flex flex-col gap-2.5 sm:flex-row">
+                <a
+                  href="tel:10111"
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-brand-red-600 px-5 text-sm font-semibold text-white transition-colors hover:bg-brand-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <Phone className="h-4 w-4" aria-hidden="true" />
+                  Call SAPS 10111
+                </a>
+                <a
+                  href="tel:112"
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-brand-red/30 bg-card px-5 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <Phone className="h-4 w-4" aria-hidden="true" />
+                  Call 112
+                </a>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Emergency */}
-          <div className="flex items-start gap-3.5 rounded-2xl border border-destructive/30 bg-destructive/5 p-5 elev-xs">
-            <span className="icon-tile bg-destructive/10 text-destructive">
-              <AlertTriangle className="h-5 w-5" />
-            </span>
-            <div>
-              <p className="font-display text-sm font-semibold text-destructive">Emergency</p>
-              <p className="mt-0.5 text-sm leading-6 text-muted-foreground">
-                Call <strong>10111</strong> (SAPS) or <strong>112</strong> (any cellphone)
-                immediately if you feel unsafe.
-              </p>
             </div>
-          </div>
+          </section>
         </div>
       </main>
 

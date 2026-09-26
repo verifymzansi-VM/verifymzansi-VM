@@ -239,9 +239,10 @@ describe("HomePromotionsShowcase", () => {
 
     const ui = await HomePromotionsShowcase();
     render(ui as React.ReactElement);
-    expect(screen.getByRole("heading", { name: /Tourism & Events/i })).toBeInTheDocument();
-    expect(screen.getByText("No events yet.")).toBeTruthy();
-    expect(screen.getByRole("link", { name: /Create Event/i })).toHaveAttribute(
+    expect(screen.getByText("Tourism & Events")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Stays & events" })).toBeInTheDocument();
+    expect(screen.getByText("No stays or events yet")).toBeTruthy();
+    expect(screen.getByRole("link", { name: /List a stay or event/i })).toHaveAttribute(
       "href",
       "/post/create-tourism"
     );
@@ -363,7 +364,7 @@ describe("HomePromotionsShowcase", () => {
     const ui = await HomePromotionsShowcase();
     render(ui);
 
-    expect(screen.queryByText("No events yet.")).not.toBeInTheDocument();
+    expect(screen.queryByText("No stays or events yet")).not.toBeInTheDocument();
     expect(screen.getByTestId("business-preview-card")).toBeInTheDocument();
   });
 

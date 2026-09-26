@@ -21,7 +21,7 @@ describe("PaymentStatusPanel", () => {
   it("polls pending payments and updates the UI when they complete", async () => {
     render(<PaymentStatusPanel initialStatus="pending" paymentId="pay-1" />);
 
-    expect(screen.getByText("Payment Pending")).toBeInTheDocument();
+    expect(screen.getByText("Payment pending")).toBeInTheDocument();
 
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -34,7 +34,7 @@ describe("PaymentStatusPanel", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText("Payment Confirmed")).toBeInTheDocument();
+      expect(screen.getByText("Payment confirmed")).toBeInTheDocument();
     });
 
     expect(screen.queryByText(/Refreshing payment status/i)).not.toBeInTheDocument();

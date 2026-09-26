@@ -164,7 +164,7 @@ describe("PromotionCard", () => {
     render(<PromotionCard {...defaultProps} promotionType="event" boosted immersive={false} />);
 
     expect(screen.getByText("Event ★")).toBeTruthy();
-    expect(screen.getByText("Event ★")).toHaveClass("bg-sunset-600");
+    expect(screen.getByText("Event ★")).toHaveClass("bg-sunset-700");
   });
 
   it("renders the linked business logo when provided", () => {

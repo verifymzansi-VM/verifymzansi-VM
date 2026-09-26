@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Building2, Landmark } from "lucide-react";
+import { ArrowRight, Building2, Landmark } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { resolveCommercialSettings } from "@/lib/commercial/settings";
 import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
@@ -89,19 +89,22 @@ export async function HomeProgrammeShowcase({
           <div className="container-page space-y-4">
             <div className="flex flex-wrap items-end justify-between gap-2">
               <div>
-                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  <Landmark aria-hidden="true" className="h-3.5 w-3.5" />
+                <p className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
+                  <Landmark aria-hidden="true" className="h-4 w-4" />
                   Programme spotlight
                 </p>
-                <h2 id={`programme-${showcase.id}`} className="font-display text-xl font-semibold">
+                <h2 id={`programme-${showcase.id}`} className="section-title mt-1">
                   {showcase.title}
                 </h2>
               </div>
               <Link
                 href={`/organisation/${showcase.organisations!.slug}`}
-                className="text-sm underline"
+                prefetch={false}
+                className="link-arrow"
               >
-                View all
+                See all
+                <span className="sr-only"> {showcase.organisations!.name} businesses</span>
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
             </div>
             <ul className="-mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
@@ -109,6 +112,7 @@ export async function HomeProgrammeShowcase({
                 <li key={row.business_id} className="w-60 shrink-0 snap-start">
                   <Link
                     href={`/mzansi-business/${row.business_id}`}
+                    prefetch={false}
                     className="surface-card block h-full overflow-hidden transition-shadow hover:elev-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <span className="relative block aspect-[4/3] bg-muted">
@@ -132,9 +136,13 @@ export async function HomeProgrammeShowcase({
                       <span className="block truncate font-semibold">{row.business_name}</span>
                       <span className="block truncate text-xs text-muted-foreground">
                         {BUSINESS_CATEGORY_LABELS[row.category as BusinessCategory] ?? "Business"}
-                        {row.city ? ` · ${row.city}` : ""}
                       </span>
-                      <span className="block truncate text-[11px] text-muted-foreground">
+                      {row.city ? (
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {row.city}
+                        </span>
+                      ) : null}
+                      <span className="block truncate pt-1 text-xs text-muted-foreground">
                         {row.sponsored
                           ? `Supported by ${showcase.organisations!.name}`
                           : `Participant — ${showcase.organisations!.name}`}

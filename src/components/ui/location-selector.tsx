@@ -11,6 +11,9 @@ import {
 } from "@/lib/constants/sa-provinces";
 import { cn } from "@/lib/utils";
 
+const SELECT_CLASS =
+  "flex h-11 w-full rounded-xl border border-input bg-card px-3.5 py-2 text-base shadow-xs transition-colors hover:border-foreground/30 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:text-sm";
+
 export interface LocationValue {
   province: string;
   city: string;
@@ -76,83 +79,99 @@ export function LocationSelector({
   const townId = idPrefix ? `${idPrefix}-town` : "town";
   const addressId = idPrefix ? `${idPrefix}-address` : "address";
 
-  return (
-    <div className={cn("space-y-3", className)}>
-      {/* ── Province ─────────────────────────────────────── */}
-      <div className="space-y-1.5">
-        <Label htmlFor={provinceId} className="text-xs">
-          {provinceLabel}{" "}
-          <span aria-hidden="true" className="text-destructive">
-            *
-          </span>
-        </Label>
-        <select
-          id={provinceId}
-          title="Province"
-          aria-label={provinceLabel}
-          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-normal"
-          value={value.province}
-          disabled={disabled}
-          onChange={(e) => {
-            onChange({ province: e.target.value, city: "", town: "", address: "" });
-            if (e.target.value) {
-              requestAnimationFrame(() => document.getElementById(cityId)?.focus());
-            }
-          }}
-        >
-          <option value="">Select province…</option>
-          {provinces.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </select>
-        {errors?.province && <p className="text-xs text-destructive">{errors.province}</p>}
-      </div>
+  const errorId = (field: string) => `${uid}-${field}-error`;
 
-      {/* ── City ─────────────────────────────────────────── */}
-      <div className="space-y-1.5">
-        <Label htmlFor={cityId} className="text-xs">
-          {cityLabel}{" "}
-          <span aria-hidden="true" className="text-destructive">
-            *
-          </span>
-        </Label>
-        <select
-          id={cityId}
-          title="City"
-          aria-label={cityLabel}
-          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-normal"
-          value={value.city}
-          disabled={disabled || !value.province}
-          onChange={(e) => {
-            onChange({ ...value, city: e.target.value, town: "", address: value.address ?? "" });
-            if (e.target.value && showTown) {
-              requestAnimationFrame(() => document.getElementById(townId)?.focus());
-            }
-          }}
-        >
-          <option value="">{value.province ? "Select city…" : "Select province first"}</option>
-          {cities.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-        {errors?.city && <p className="text-xs text-destructive">{errors.city}</p>}
+  return (
+    <div className={cn("space-y-4", className)}>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {/* ── Province ─────────────────────────────────────── */}
+        <div className="space-y-1.5">
+          <Label htmlFor={provinceId} className="text-sm">
+            {provinceLabel}{" "}
+            <span aria-hidden="true" className="text-destructive">
+              *
+            </span>
+          </Label>
+          <select
+            id={provinceId}
+            title="Province"
+            aria-label={provinceLabel}
+            aria-invalid={errors?.province ? true : undefined}
+            aria-describedby={errors?.province ? errorId("province") : undefined}
+            className={cn(SELECT_CLASS, errors?.province && "border-destructive")}
+            value={value.province}
+            disabled={disabled}
+            onChange={(e) => {
+              onChange({ province: e.target.value, city: "", town: "", address: "" });
+              if (e.target.value) {
+                requestAnimationFrame(() => document.getElementById(cityId)?.focus());
+              }
+            }}
+          >
+            <option value="">Select province…</option>
+            {provinces.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+          {errors?.province && (
+            <p id={errorId("province")} className="inline-form-error">
+              {errors.province}
+            </p>
+          )}
+        </div>
+
+        {/* ── City ─────────────────────────────────────────── */}
+        <div className="space-y-1.5">
+          <Label htmlFor={cityId} className="text-sm">
+            {cityLabel}{" "}
+            <span aria-hidden="true" className="text-destructive">
+              *
+            </span>
+          </Label>
+          <select
+            id={cityId}
+            title="City"
+            aria-label={cityLabel}
+            aria-invalid={errors?.city ? true : undefined}
+            aria-describedby={errors?.city ? errorId("city") : undefined}
+            className={cn(SELECT_CLASS, errors?.city && "border-destructive")}
+            value={value.city}
+            disabled={disabled || !value.province}
+            onChange={(e) => {
+              onChange({ ...value, city: e.target.value, town: "", address: value.address ?? "" });
+              if (e.target.value && showTown) {
+                requestAnimationFrame(() => document.getElementById(townId)?.focus());
+              }
+            }}
+          >
+            <option value="">{value.province ? "Select city…" : "Select province first"}</option>
+            {cities.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          {errors?.city && (
+            <p id={errorId("city")} className="inline-form-error">
+              {errors.city}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* ── Town / Suburb (combobox with datalist) ────────── */}
       {showTown && (
         <div className="space-y-1.5">
-          <Label htmlFor={townId} className="text-xs">
+          <Label htmlFor={townId} className="text-sm">
             Town / Suburb{" "}
             {townRequired ? (
               <span aria-hidden="true" className="text-destructive">
                 *
               </span>
             ) : (
-              <span aria-hidden="true" className="text-muted-foreground">
+              <span aria-hidden="true" className="font-normal text-muted-foreground">
                 (optional)
               </span>
             )}
@@ -160,6 +179,7 @@ export function LocationSelector({
           <Input
             id={townId}
             aria-label="Town / Suburb"
+            aria-describedby={errors?.town ? errorId("town") : undefined}
             list={suggestTownOptions ? townListId : undefined}
             placeholder={value.city ? "Enter your town or suburb" : "Select city first"}
             value={value.town ?? ""}
@@ -174,21 +194,25 @@ export function LocationSelector({
               ))}
             </datalist>
           )}
-          {errors?.town && <p className="text-xs text-destructive">{errors.town}</p>}
+          {errors?.town && (
+            <p id={errorId("town")} className="inline-form-error">
+              {errors.town}
+            </p>
+          )}
         </div>
       )}
 
       {/* ── Detailed Address ─────────────────────────────── */}
       {showAddress && (
         <div className="space-y-1.5">
-          <Label htmlFor={addressId} className="text-xs">
+          <Label htmlFor={addressId} className="text-sm">
             Detailed Address{" "}
             {addressRequired ? (
               <span aria-hidden="true" className="text-destructive">
                 *
               </span>
             ) : (
-              <span aria-hidden="true" className="text-muted-foreground">
+              <span aria-hidden="true" className="font-normal text-muted-foreground">
                 (optional)
               </span>
             )}
@@ -196,6 +220,7 @@ export function LocationSelector({
           <Textarea
             id={addressId}
             aria-label="Detailed Address"
+            aria-describedby={errors?.address ? errorId("address") : undefined}
             placeholder="e.g. 123 Main Street, Corner of 5th Avenue"
             value={value.address ?? ""}
             disabled={disabled || !value.city}
@@ -204,7 +229,11 @@ export function LocationSelector({
             className="resize-none"
             onChange={(e) => onChange({ ...value, address: e.target.value })}
           />
-          {errors?.address && <p className="text-xs text-destructive">{errors.address}</p>}
+          {errors?.address && (
+            <p id={errorId("address")} className="inline-form-error">
+              {errors.address}
+            </p>
+          )}
         </div>
       )}
     </div>

@@ -100,7 +100,7 @@ export function PromotionFilterDrawer({
     });
   }
   if (filters.province) {
-    const locLabel = filters.city ? `${filters.province} › ${filters.city}` : filters.province;
+    const locLabel = filters.city ? `${filters.city}, ${filters.province}` : filters.province;
     activeChips.push({
       key: "location",
       label: locLabel,
@@ -142,7 +142,7 @@ export function PromotionFilterDrawer({
         <SheetTrigger asChild>
           <button
             type="button"
-            className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 z-40 inline-flex h-11 -translate-x-1/2 items-center justify-center gap-2 rounded-full bg-foreground px-5 text-sm font-semibold text-background shadow-xl shadow-black/20 ring-1 ring-white/10 transition-all hover:bg-foreground/90 active:scale-95 md:hidden motion-reduce:transition-none motion-reduce:active:scale-100"
+            className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 z-40 inline-flex h-11 -translate-x-1/2 items-center justify-center gap-2 rounded-full bg-foreground px-5 text-sm font-semibold text-background shadow-xl shadow-black/20 ring-1 ring-white/10 transition-all hover:bg-foreground/90 active:scale-[0.98] lg:hidden motion-reduce:transition-none motion-reduce:active:scale-100"
             aria-label="Open tourism and events filters"
           >
             <SlidersHorizontal className="h-4 w-4 shrink-0" />
@@ -157,7 +157,7 @@ export function PromotionFilterDrawer({
       ) : (
         <button
           type="button"
-          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 z-40 inline-flex h-11 -translate-x-1/2 items-center justify-center gap-2 rounded-full bg-foreground px-5 text-sm font-semibold text-background opacity-50 shadow-xl md:hidden"
+          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 z-40 inline-flex h-11 -translate-x-1/2 items-center justify-center gap-2 rounded-full bg-foreground px-5 text-sm font-semibold text-background opacity-50 shadow-xl lg:hidden"
           aria-label="Open tourism and events filters"
           disabled
         >
@@ -173,7 +173,7 @@ export function PromotionFilterDrawer({
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <SheetHeader className="flex flex-row items-center justify-between pb-3">
-          <SheetTitle>Filter Tourism &amp; Events</SheetTitle>
+          <SheetTitle>Filters</SheetTitle>
           {activeFilterCount > 0 && (
             <Button
               variant="ghost"
