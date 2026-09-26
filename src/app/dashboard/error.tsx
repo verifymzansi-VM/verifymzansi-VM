@@ -48,7 +48,11 @@ export default function DashboardError({
           Reload dashboard
         </Button>
       </div>
-      <Link href="/help" className="text-sm text-muted-foreground underline underline-offset-4">
+      <Link
+        href="/contact"
+        prefetch={false}
+        className="text-sm text-muted-foreground underline underline-offset-4"
+      >
         Get help
       </Link>
     </div>

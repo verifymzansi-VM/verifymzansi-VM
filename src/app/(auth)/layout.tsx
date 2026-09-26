@@ -39,7 +39,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             <BrandLogo size="md" priority />
           </Link>
           <Link
-            href="/help"
+            href="/contact"
+            prefetch={false}
             className="inline-flex min-h-11 items-center gap-2 rounded-full px-3.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <LifeBuoy className="h-4 w-4" aria-hidden="true" />
