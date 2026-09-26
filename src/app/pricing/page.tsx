@@ -114,7 +114,7 @@ export default async function PricingPage() {
             </h2>
             <p className="section-lede mx-auto">One posting slot, paid once.</p>
           </div>
-          <RetailPricing offers={catalog.retail} />
+          <RetailPricing offers={catalog.retail} trialDays={settings?.trials} />
         </section>
 
         <section aria-label="Paying safely" className="container-page pb-10 sm:pb-14">

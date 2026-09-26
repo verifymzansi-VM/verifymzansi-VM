@@ -43,6 +43,31 @@ interface PlanGateProps {
   children: ReactNode;
   /** Free events: no trial or plan required (fair use is enforced on the server). */
   freePosting?: boolean;
+  /** Tourism & Events: offer the free event path while a plan or trial is still needed. */
+  onChooseFreeEvent?: () => void;
+}
+
+/** Events never need a plan or trial, so the gate always offers them. */
+function FreeEventOption({ onChoose }: { onChoose: () => void }) {
+  return (
+    <div
+      data-testid="free-event-option"
+      className="flex flex-col gap-3 rounded-2xl border border-sunset/30 bg-sunset-50 p-4 sm:flex-row sm:items-center sm:justify-between dark:bg-sunset/10"
+    >
+      <div>
+        <p className="font-semibold">Post an event — Free</p>
+        <p className="text-sm text-muted-foreground">No plan or trial needed.</p>
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        className="h-11 shrink-0 rounded-full"
+        onClick={onChoose}
+      >
+        Create a free event
+      </Button>
+    </div>
+  );
 }
 
 type AllowanceResponse = {
@@ -266,7 +291,13 @@ function InlinePlanGrid({
 /* ─────────────────────────────────────────────────────────────
    PlanGate — main component
    ───────────────────────────────────────────────────────────── */
-export function PlanGate({ area, children, onTrialSelected, freePosting = false }: PlanGateProps) {
+export function PlanGate({
+  area,
+  children,
+  onTrialSelected,
+  freePosting = false,
+  onChooseFreeEvent,
+}: PlanGateProps) {
   const pathname = usePathname();
   const [loading, setLoading] = useState(true);
   const [planInfo, setPlanInfo] = useState<PlanInfo | null>(null);
@@ -559,6 +590,8 @@ export function PlanGate({ area, children, onTrialSelected, freePosting = false 
           </p>
         </div>
 
+        {onChooseFreeEvent ? <FreeEventOption onChoose={onChooseFreeEvent} /> : null}
+
         <InlinePlanGrid plans={areaPlans} onSubscribe={handleSubscribe} subscribing={subscribing} />
 
         <p className="text-center text-xs text-muted-foreground">
@@ -610,6 +643,8 @@ export function PlanGate({ area, children, onTrialSelected, freePosting = false 
           </CardContent>
         </Card>
 
+        {onChooseFreeEvent ? <FreeEventOption onChoose={onChooseFreeEvent} /> : null}
+
         {upgradePlans.length > 0 && (
           <InlinePlanGrid
             plans={upgradePlans}
@@ -626,6 +661,7 @@ export function PlanGate({ area, children, onTrialSelected, freePosting = false 
     return (
       <PlanPickerWithTrial
         onTrialSelected={onTrialSelected}
+        onChooseFreeEvent={onChooseFreeEvent}
         area={area}
         planInfo={planInfo}
         areaPlans={areaPlans}
@@ -680,6 +716,7 @@ export function PlanGate({ area, children, onTrialSelected, freePosting = false 
    ───────────────────────────────────────────────────────────── */
 function PlanPickerWithTrial({
   onTrialSelected,
+  onChooseFreeEvent,
   area,
   planInfo,
   areaPlans,
@@ -688,6 +725,7 @@ function PlanPickerWithTrial({
   children,
 }: {
   onTrialSelected?: (days: 7 | 30) => void;
+  onChooseFreeEvent?: () => void;
   area: MarketplaceArea;
   planInfo: PlanInfo;
   areaPlans: PlanDefinition[];
@@ -830,6 +868,8 @@ function PlanPickerWithTrial({
             </p>
           </div>
         )}
+      {onChooseFreeEvent ? <FreeEventOption onChoose={onChooseFreeEvent} /> : null}
+
       {/* Paid plans */}
       <div className="space-y-2">
         <h3 className="pt-2 font-display text-base font-bold text-foreground">

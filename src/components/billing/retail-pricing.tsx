@@ -7,6 +7,7 @@ import {
   CalendarDays,
   Check,
   Crown,
+  Gift,
   ShoppingBag,
   Sparkles,
   TreePalm,
@@ -111,12 +112,41 @@ function FeatureItem({ children, strong }: { children: ReactNode; strong?: boole
  * applies in every section; the section picker only chooses where the slot is used.
  * Billing rules (renewal, expiry, refunds) live once in `BillingFaq`, not in each card.
  */
+/** Tourism leads with the free introductory trial before the paid ladder. */
+function TourismTrialCard({ shortDays, longDays }: { shortDays: number; longDays: number }) {
+  return (
+    <div
+      data-testid="tourism-free-trial"
+      className="mt-8 flex flex-col gap-4 rounded-3xl border border-brand-green/30 bg-brand-green-50 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6 dark:bg-brand-green/10"
+    >
+      <div className="flex items-start gap-3">
+        <span className="area-market-tile flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
+          <Gift aria-hidden="true" className="h-5 w-5" />
+        </span>
+        <div>
+          <p className="font-display text-xl font-bold tracking-tight">
+            Start free: {shortDays} days, or {longDays} days while places last
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            One free trial per verified person. No payment, nothing renews.
+          </p>
+        </div>
+      </div>
+      <Button asChild variant="trust-verified" className="h-11 shrink-0 rounded-full px-5">
+        <Link href="/post/create-tourism?type=tourism">Start free trial</Link>
+      </Button>
+    </div>
+  );
+}
+
 export function RetailPricing({
   offers,
   defaultArea = "MZANSI_MARKET",
+  trialDays = { shortDays: 7, longDays: 30 },
 }: {
   offers: RetailPricingOffer[];
   defaultArea?: MarketplaceArea;
+  trialDays?: { shortDays: number; longDays: number };
 }) {
   const [area, setArea] = useState<MarketplaceArea>(defaultArea);
   const areaLabel = AREA_OPTIONS.find((o) => o.value === area)?.label ?? "";
@@ -161,7 +191,11 @@ export function RetailPricing({
         </div>
       </div>
 
-      <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
+      {area === "PROMOTIONS_EVENTS" ? (
+        <TourismTrialCard shortDays={trialDays.shortDays} longDays={trialDays.longDays} />
+      ) : null}
+
+      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
         {offers.map((offer) => {
           const highlighted = offer.tier === "half_year";
           const best = offer.tier === "year";
