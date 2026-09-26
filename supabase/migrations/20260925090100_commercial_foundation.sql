@@ -545,7 +545,8 @@ DO $$ DECLARE r record; BEGIN
  END LOOP;
 END $$;
 ALTER TABLE public.promotions ADD CONSTRAINT promotions_status_check CHECK (status IN
- ('draft','pending_moderation','flagged_for_review','live','hidden','expired','rejected','sold','suspended','archived'));
+ ('draft','pending_moderation','flagged_for_review','live','hidden','expired','rejected','sold','suspended','archived'))
+ NOT VALID; -- enforce for new writes without failing on any unexpected historical row
 
 CREATE OR REPLACE FUNCTION public.validate_listing_status_transition()
 RETURNS TRIGGER LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
