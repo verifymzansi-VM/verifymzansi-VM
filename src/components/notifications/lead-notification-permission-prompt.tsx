@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Bell, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -100,7 +101,9 @@ export function LeadNotificationPermissionPrompt({
     return null;
   }
 
-  return (
+  // Portal to <body>: the sticky header uses backdrop-filter, which would
+  // otherwise become the containing block and pin this banner to the header.
+  return createPortal(
     <div className="fixed bottom-24 left-4 right-4 z-50 md:hidden animate-in slide-in-from-bottom flex justify-center pb-safe">
       <div className="bg-background/95 backdrop-blur-md border shadow-lg rounded-xl p-3 flex items-center justify-between gap-3 w-full max-w-sm relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-brand-green/10 to-transparent pointer-events-none" />
@@ -118,19 +121,26 @@ export function LeadNotificationPermissionPrompt({
         </div>
 
         <div className="flex items-center gap-1 relative z-10">
-          <Button size="sm" onClick={() => void handleEnable()} disabled={requesting}>
+          <Button
+            size="sm"
+            variant="trust-verified"
+            className="h-10 rounded-full"
+            onClick={() => void handleEnable()}
+            disabled={requesting}
+          >
             {requesting ? "Enabling..." : "Enable"}
           </Button>
           <button
             type="button"
             onClick={handleDismiss}
-            className="p-1 rounded-full text-muted-foreground hover:bg-muted/50 transition-colors"
+            className="flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Dismiss notification prompt"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
