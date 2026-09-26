@@ -3,8 +3,8 @@ import { expect, test } from "@playwright/test";
 test.describe("Contact Form", () => {
   test("@smoke contact page loads", async ({ page }) => {
     await page.goto("/contact");
-    // Should show the contact form
-    await expect(page.locator("form, [data-testid='contact-form']").first()).toBeVisible({
+    // Target the contact form itself: the site header also contains a search form.
+    await expect(page.getByTestId("contact-form")).toBeVisible({
       timeout: 10000,
     });
   });
@@ -12,7 +12,7 @@ test.describe("Contact Form", () => {
   test("@smoke contact form rejects empty submission", async ({ page }) => {
     await page.goto("/contact");
 
-    const submitBtn = page.locator("button[type='submit']").first();
+    const submitBtn = page.getByTestId("contact-form").locator("button[type='submit']");
     if (await submitBtn.isVisible()) {
       await submitBtn.click();
       // Should show validation errors (required fields)
@@ -26,9 +26,10 @@ test.describe("Contact Form", () => {
     await page.goto("/contact");
 
     // Fill in required fields
-    const nameInput = page.locator("input[name='name']").first();
-    const emailInput = page.locator("input[name='email'], input[type='email']").first();
-    const messageInput = page.locator("textarea[name='message'], textarea").first();
+    const form = page.getByTestId("contact-form");
+    const nameInput = form.locator("input[name='name']").first();
+    const emailInput = form.locator("input[name='email'], input[type='email']").first();
+    const messageInput = form.locator("textarea[name='message'], textarea").first();
 
     if (await nameInput.isVisible()) {
       await nameInput.fill("Test User");
