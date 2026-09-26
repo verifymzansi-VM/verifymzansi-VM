@@ -80,6 +80,7 @@ docs/*
 !docs/domain-email-gmail-setup.md
 !.github/**/*.md
 !docs/RUNBOOK.md
+!docs/DESIGN-SYSTEM.md
 !docs/playbooks/
 !docs/playbooks/sentry-bug-finding.md
 
