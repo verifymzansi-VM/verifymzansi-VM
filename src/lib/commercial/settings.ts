@@ -46,6 +46,7 @@ export const COMMERCIAL_SETTING_SCHEMAS = {
       maxImageMb: int(1, 5),
       maxVideos: int(0, 27),
       maxVideoMb: int(5, 50),
+      storageQuotaMb: int(50, 100000),
     })
     .strict(),
   events: z
@@ -91,7 +92,7 @@ export const DEFAULT_COMMERCIAL_SETTINGS: CommercialSettings = {
   },
   retail: { activationsPerPeriod: 10 },
   partner: { commissionBps: 2000, pendingDays: 30, enabled: true },
-  media: { maxPhotos: 10, maxImageMb: 5, maxVideos: 1, maxVideoMb: 50 },
+  media: { maxPhotos: 10, maxImageMb: 5, maxVideos: 1, maxVideoMb: 50, storageQuotaMb: 500 },
   events: {
     maxActivePerAccount: 5,
     maxCreatedPer30Days: 10,
@@ -168,9 +169,14 @@ const PLATFORM_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const PLATFORM_MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 
 /** Upload ceilings: admin settings may lower, never raise, the platform limits. */
-export async function getMediaUploadLimits(
-  client: SettingsReader
-): Promise<{ imageBytes: number; videoBytes: number; imageMb: number; videoMb: number }> {
+export async function getMediaUploadLimits(client: SettingsReader): Promise<{
+  imageBytes: number;
+  videoBytes: number;
+  imageMb: number;
+  videoMb: number;
+  quotaBytes: number;
+  quotaMb: number;
+}> {
   let media = DEFAULT_COMMERCIAL_SETTINGS.media;
   try {
     media = (await getCommercialSettings(client)).media;
@@ -184,7 +190,33 @@ export async function getMediaUploadLimits(
     videoBytes,
     imageMb: Math.round(imageBytes / 1024 / 1024),
     videoMb: Math.round(videoBytes / 1024 / 1024),
+    quotaBytes: media.storageQuotaMb * 1024 * 1024,
+    quotaMb: media.storageQuotaMb,
   };
+}
+
+/**
+ * Per-account storage quota. Returns an error message when the new upload
+ * would exceed it; fails open if usage cannot be read (uploads are still
+ * size-limited and cleaned up as orphans).
+ */
+export async function checkStorageQuota(
+  admin: { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown }> },
+  userId: string,
+  incomingBytes: number,
+  quotaBytes: number,
+  quotaMb: number
+): Promise<string | null> {
+  try {
+    const { data } = await admin.rpc("media_storage_used", { p_user: userId });
+    const used = typeof data === "number" ? data : Number(data ?? 0);
+    if (Number.isFinite(used) && used + incomingBytes > quotaBytes) {
+      return `Your media storage allowance (${quotaMb} MB) is full. Remove unused posts or contact VerifyMzansi.`;
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 /** Kill switch for every public organisation surface (pages, badges, filters, showrooms). */

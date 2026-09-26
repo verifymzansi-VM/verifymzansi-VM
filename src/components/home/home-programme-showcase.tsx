@@ -10,6 +10,7 @@ interface Showcase {
   id: string;
   title: string;
   max_cards: number;
+  province: string | null;
   city: string | null;
   sponsored_only: boolean;
   organisations: { id: string; slug: string; name: string } | null;
@@ -40,7 +41,7 @@ export async function HomeProgrammeShowcase({
   const [{ data: showcases }, { data: settingsRows }] = await Promise.all([
     supabase
       .from("programme_showcases")
-      .select("id, title, max_cards, city, sponsored_only, organisations(id, slug, name)")
+      .select("id, title, max_cards, province, city, sponsored_only, organisations(id, slug, name)")
       .eq("enabled", true)
       .eq("placement", placement)
       .lte("starts_at", nowIso)
@@ -60,6 +61,7 @@ export async function HomeProgrammeShowcase({
       const { data } = await supabase.rpc("organisation_directory", {
         p_org: showcase.organisations.id,
         p_city: showcase.city,
+        p_province: showcase.province,
         p_sponsored: showcase.sponsored_only ? true : null,
         p_limit: Math.min(showcase.max_cards, settings.showroom.programmeMaxCards),
         p_offset: 0,

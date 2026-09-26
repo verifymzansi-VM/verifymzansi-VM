@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
 import Link from "next/link";
 import { Building2, Plus } from "lucide-react";
 import { GridStateMessage } from "@/components/listings/grid-state-message";
@@ -217,6 +218,10 @@ export function MzansiBusinessGrid() {
 
   return (
     <div className="space-y-6" data-testid="mzansi-business-grid-ready">
+      <AnalyticsImpressions
+        items={businesses.map((business) => ({ table: "businesses" as const, id: business.id }))}
+        surface="business_list"
+      />
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground" aria-live="polite" role="status">
           <span className="font-medium text-foreground">{totalCount}</span> business

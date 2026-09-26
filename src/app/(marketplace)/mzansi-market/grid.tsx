@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useTransition, useRef } from "react";
+import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
 import { ListingCard } from "@/components/listings/listing-card";
 import { ListingCardList } from "@/components/listings/listing-card-list";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
@@ -340,6 +341,10 @@ export function MzansiMarketGrid() {
 
   return (
     <div className="space-y-6" data-testid="mzansi-market-grid-ready">
+      <AnalyticsImpressions
+        items={listings.map((listing) => ({ table: "listings" as const, id: listing.id }))}
+        surface="market_list"
+      />
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground" aria-live="polite" role="status">
           <span className="font-medium text-foreground">{totalCount}</span> listing

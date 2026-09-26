@@ -179,7 +179,7 @@ test.describe("Mobile UX smoke", () => {
     await expect(page.getByRole("heading", { name: /filter tourism & events/i })).toBeVisible();
   });
 
-  test("billing tabs and plan CTA remain mobile-friendly", async ({ page }, testInfo) => {
+  test("billing section picker and plan CTA remain mobile-friendly", async ({ page }, testInfo) => {
     test.skip(
       testInfo.project.name === "mobile-safari",
       "Mobile Safari auth bootstrap is unreliable in CI harness for billing persona flows."
@@ -190,9 +190,9 @@ test.describe("Mobile UX smoke", () => {
     await expect(page.getByRole("heading", { name: /^choose your plan$/i })).toBeVisible();
 
     const tabs = [
-      page.getByRole("tab", { name: /market/i }),
-      page.getByRole("tab", { name: /business/i }),
-      page.getByRole("tab", { name: /events/i }),
+      page.getByRole("radio", { name: /market/i }),
+      page.getByRole("radio", { name: /business/i }),
+      page.getByRole("radio", { name: /tourism/i }),
     ];
 
     for (const tab of tabs) {
@@ -203,7 +203,7 @@ test.describe("Mobile UX smoke", () => {
       await tab.click();
     }
 
-    const cta = page.getByRole("button", { name: /choose/i }).first();
+    const cta = page.getByRole("link", { name: /choose 30 days/i }).first();
     await expect(cta).toBeVisible();
     const ctaBox = await cta.boundingBox();
     expect(ctaBox).not.toBeNull();

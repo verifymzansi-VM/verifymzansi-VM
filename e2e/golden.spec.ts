@@ -37,12 +37,7 @@ test.describe("VerifyMzansi Golden Paths", () => {
   test("Pricing page renders plans", async ({ page }) => {
     await page.goto("/pricing");
     // Should show at least one plan tier heading in main content
-    await expect(
-      page
-        .locator("main")
-        .getByRole("heading", { name: /Starter|Growth|Pro/i })
-        .first()
-    ).toBeVisible();
+    await expect(page.locator("main").getByTestId("retail-offer-half_year").first()).toBeVisible();
   });
 
   test("Public marketplace page loads", async ({ page }) => {

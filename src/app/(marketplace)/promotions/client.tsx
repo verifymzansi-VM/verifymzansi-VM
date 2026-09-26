@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, TreePalm, CalendarDays } from "lucide-react";
@@ -398,6 +399,10 @@ export function PromotionsExplorer() {
 
   return (
     <div className="container-page py-8 space-y-7 lg:py-10">
+      <AnalyticsImpressions
+        items={promotions.map((promotion) => ({ table: "promotions" as const, id: promotion.id }))}
+        surface="tourism_list"
+      />
       <PageHeader
         title="Tourism & Events"
         description="Tourism destinations, stays, experiences, and events across South Africa."

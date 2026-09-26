@@ -1,4 +1,5 @@
 import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
+import { getVerificationLevel, VERIFICATION_LEVEL_LABELS } from "@/lib/account/verification-level";
 import { PLAN_TIER_LABELS, type PlanTier } from "@/types/enums";
 import { IntroductoryTrialCard } from "@/components/dashboard/introductory-trial-card";
 import { createClient } from "@/lib/supabase/server";
@@ -195,6 +196,11 @@ export default async function DashboardPage() {
       .eq("user_id", user.id)
       .eq("status", "active")
       .gt("expires_at", now),
+    /* 13 — organisation administrator (verification representative level) */
+    supabase
+      .from("organisation_admins")
+      .select("organisation_id", { count: "exact", head: true })
+      .eq("user_id", user.id),
   ]);
 
   const profileResult = settled(results[0], EMPTY_OK);
@@ -296,6 +302,16 @@ export default async function DashboardPage() {
 
   // Verification chip helpers
   const isVerified = trustLevel >= 3;
+  const organisationAdminResult = settled(results[13], EMPTY_OK);
+  const verificationLevel = getVerificationLevel({
+    emailConfirmed: Boolean(user.email_confirmed_at),
+    phoneApproved: (verificationSteps ?? []).some(
+      (step: { step_type?: string; status?: string }) =>
+        step.step_type === "phone" && step.status === "approved"
+    ),
+    identityVerified: isVerified,
+    organisationAdministrator: (organisationAdminResult.count ?? 0) > 0,
+  });
   const verStatus = verificationSummary.accountVerificationStatus;
   const stepsRemaining = verificationSummary.stepsRemaining;
   const hasAnyPosts = posts.length > 0;
@@ -315,7 +331,7 @@ export default async function DashboardPage() {
           {isVerified ? (
             <Badge className="mt-1.5 gap-1 bg-brand-green-50 text-brand-green border-brand-green-200 dark:bg-brand-green-950 dark:border-brand-green-800 text-xs">
               <BadgeCheck className="h-3 w-3" />
-              Verified
+              {VERIFICATION_LEVEL_LABELS[verificationLevel]}
             </Badge>
           ) : verStatus === "pending_review" ? (
             <Link

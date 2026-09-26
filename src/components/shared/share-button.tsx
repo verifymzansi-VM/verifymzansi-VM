@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { CONTENT_SHARED_EVENT } from "@/lib/analytics/commercial-events";
 import { Share2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -45,6 +46,7 @@ export function ShareButton({
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
         await navigator.share(shareData);
+        window.dispatchEvent(new CustomEvent(CONTENT_SHARED_EVENT));
         return;
       } catch (err) {
         // User cancelled or share failed — fall through to clipboard
@@ -55,6 +57,7 @@ export function ShareButton({
     // Fallback: copy to clipboard
     try {
       await navigator.clipboard.writeText(shareUrl);
+      window.dispatchEvent(new CustomEvent(CONTENT_SHARED_EVENT));
       setCopied(true);
       toast({ title: "Link copied to clipboard!", variant: "success" });
       if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);

@@ -55,6 +55,7 @@ CREATE FUNCTION public.has_any_role(r text[]) RETURNS boolean LANGUAGE sql SECUR
  SELECT COALESCE((SELECT raw_app_meta_data->>'role' = ANY(r) FROM auth.users WHERE id = auth.uid()), false) $$;
 CREATE TABLE account_profiles(user_id uuid PRIMARY KEY, account_verification_status text, account_status text, phone text, display_name text, legal_first_name text DEFAULT 'Thando', legal_last_name text DEFAULT 'Mkhize');
 CREATE TABLE verification_steps(user_id uuid, step_type text, status text, id_number_hmac text);
+CREATE TABLE media_uploads(id uuid DEFAULT gen_random_uuid(), user_id uuid, file_size integer);
 CREATE TABLE free_posts_used(user_id uuid, area marketplace_area, content_id uuid, release_reason text, released_at timestamptz);
 CREATE TABLE notifications(id uuid DEFAULT gen_random_uuid(), user_id uuid, type text, title text, message text, href text, created_at timestamptz DEFAULT now());
 CREATE TABLE listings(id uuid PRIMARY KEY, owner_id uuid, area marketplace_area, status listing_status NOT NULL DEFAULT 'draft',
@@ -123,6 +124,7 @@ await migration("20260925090200_organisations.sql");
 await migration("20260925090300_partners_analytics_notifications.sql");
 await migration("20260925090400_event_archiving.sql");
 await migration("20260925090500_commercial_fixes.sql");
+await migration("20260925090600_commercial_completion.sql");
 
 let checks = 0;
 async function test(name, fn) {
@@ -1195,6 +1197,96 @@ await test("a repriced plan honours the price quoted at checkout, not arbitrary 
     admin,
     plan.id,
   ]);
+});
+
+// ── Completion ───────────────────────────────────────────────────────────
+await test("priced custom contracts unlock only when marked paid; custom start dates", async () => {
+  const u = await user();
+  const start = new Date(Date.now() - 864e5).toISOString();
+  const cid = (
+    await scalar(
+      `SELECT grant_programme_contract($1,$2,'ENTERPRISE_CUSTOM',$3,'Quoted fleet contract') AS id`,
+      [admin, u, { slotCapacity: 1200, durationDays: 365, priceCents: 18000000, startsAt: start }]
+    )
+  ).id;
+  assert.equal(
+    (
+      await scalar(`SELECT starts_at FROM commercial_contracts WHERE id=$1`, [cid])
+    ).starts_at.toISOString(),
+    start
+  );
+  assert.equal(
+    (await scalar(`SELECT posting_allowance($1,'MZANSI_MARKET') AS a`, [u])).a.hasPaidPlan,
+    false
+  );
+  await rejects(
+    db.query(`SELECT manage_commercial_contract($1,$2,'mark_paid','{}','Invoice settled')`, [
+      admin,
+      cid,
+    ]),
+    /reference/
+  );
+  await db.query(
+    `SELECT manage_commercial_contract($1,$2,'mark_paid','{"reference":"INV-2026-0042"}','Invoice settled')`,
+    [admin, cid]
+  );
+  assert.equal(
+    (await scalar(`SELECT posting_allowance($1,'MZANSI_MARKET') AS a`, [u])).a.capacity,
+    1200
+  );
+});
+
+await test("affiliation types set the badge wording and filter the directory", async () => {
+  const owner = await user();
+  const biz = await business(owner);
+  await pay(owner, await retailPlan("RETAIL_30D", "MZANSI_BUSINESS"));
+  await db.query(`UPDATE businesses SET location_province='Gauteng' WHERE id=$1`, [biz]);
+  await setStatus(biz, "pending_moderation", "businesses");
+  await setStatus(biz, "live", "businesses");
+  await db.query(`SELECT org_decide_application($1,$2,'approve',NULL)`, [
+    admin,
+    await apply(owner, biz),
+  ]);
+  const aff = (await scalar(`SELECT id FROM organisation_affiliations WHERE business_id=$1`, [biz]))
+    .id;
+  await rejects(
+    db.query(`SELECT org_set_affiliation_type($1,$2,'member')`, [owner, aff]),
+    /Organisation access required/
+  );
+  await db.query(`SELECT org_set_affiliation_type($1,$2,'member')`, [orgAdmin, aff]);
+  assert.equal(
+    (await scalar(`SELECT * FROM public_business_affiliations($1)`, [[biz]])).label,
+    "Member"
+  );
+  const members = (
+    await db.query(`SELECT * FROM organisation_directory($1, p_type => 'member')`, [orgId])
+  ).rows;
+  assert(members.some((r) => r.business_id === biz && r.affiliation_label === "Member"));
+  const gauteng = (
+    await db.query(`SELECT * FROM organisation_directory($1, p_province => 'gauteng')`, [orgId])
+  ).rows;
+  assert(gauteng.every((r) => r.province === "Gauteng") && gauteng.length >= 1);
+});
+
+await test("large organisers can receive a custom event allowance", async () => {
+  const u = await user();
+  await db.query(
+    `SELECT admin_set_event_allowance($1,$2,'{"maxActive":6,"maxCreatedPer30Days":40}','Festival organiser')`,
+    [admin, u]
+  );
+  for (let i = 0; i < 6; i++)
+    await setStatus(await post(u, { table: "promotions", type: "event" }), "live", "promotions");
+  await rejects(
+    setStatus(await post(u, { table: "promotions", type: "event" }), "live", "promotions"),
+    /EVENT_LIMIT/
+  );
+  assert.equal((await scalar(`SELECT event_limits($1) AS l`, [u])).l.maxCreatedPer30Days, 40);
+});
+
+await test("storage usage is summed per account", async () => {
+  const u = await user();
+  await db.query(`INSERT INTO media_uploads(user_id,file_size) VALUES ($1,1000),($1,2500)`, [u]);
+  assert.equal(Number((await scalar(`SELECT media_storage_used($1) AS n`, [u])).n), 3500);
 });
 
 console.log(`${checks} commercial model checks passed`);

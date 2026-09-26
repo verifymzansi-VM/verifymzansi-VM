@@ -98,10 +98,7 @@ test.describe("Platform Smoke", () => {
         path: "/pricing",
         assert: async () => {
           await expect(
-            page
-              .locator("main")
-              .getByRole("heading", { name: /Starter|Growth|Pro/i })
-              .first()
+            page.locator("main").getByTestId("retail-offer-half_year").first()
           ).toBeVisible();
         },
       },

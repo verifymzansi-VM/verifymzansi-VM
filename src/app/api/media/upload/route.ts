@@ -6,7 +6,7 @@ import { UPLOAD_AREAS } from "@/types/enums";
 import { ACCOUNT_PROFILE_NOT_FOUND_ERROR, ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
 import { ensureAccountProfile } from "@/lib/account/ensure-profile";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getMediaUploadLimits } from "@/lib/commercial/settings";
+import { checkStorageQuota, getMediaUploadLimits } from "@/lib/commercial/settings";
 import { detectMimeFromMagicBytes } from "@/lib/utils/file-validation";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
@@ -186,6 +186,24 @@ export async function POST(request: NextRequest) {
         { error: `Maximum of ${MAX_FILES} files allowed per upload` },
         { status: 400 }
       );
+    }
+
+    // ── Per-account storage quota (admin setting) ──────────
+    const quotaError = await (async () => {
+      try {
+        return await checkStorageQuota(
+          getAdmin(),
+          user.id,
+          files.reduce((sum, file) => sum + file.size, 0),
+          uploadLimits.quotaBytes,
+          uploadLimits.quotaMb
+        );
+      } catch {
+        return null;
+      }
+    })();
+    if (quotaError) {
+      return NextResponse.json({ error: quotaError }, { status: 413 });
     }
 
     // ── Validate & upload each file ──────────────────────────

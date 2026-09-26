@@ -29,6 +29,8 @@ export interface CommercialEvent {
 }
 
 const ENDPOINT = "/api/analytics/events";
+/** Fired by share buttons; the detail-page tracker attributes it to the content. */
+export const CONTENT_SHARED_EVENT = "vm:content-shared";
 const MAX_BATCH = 50;
 let queue: CommercialEvent[] = [];
 let timer: ReturnType<typeof setTimeout> | null = null;

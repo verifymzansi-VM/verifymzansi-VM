@@ -43,7 +43,14 @@ export interface OrganisationMemberRow {
   sponsorship_status: string | null;
   sponsor_type: string | null;
   sponsorship_ends_at: string | null;
+  affiliation_type?: string | null;
 }
+
+const AFFILIATION_TYPES: ReadonlyArray<[string, string]> = [
+  ["participant", "Programme Participant"],
+  ["member", "Member"],
+  ["affiliate", "Affiliated with"],
+];
 
 const date = new Intl.DateTimeFormat("en-ZA", {
   dateStyle: "medium",
@@ -370,6 +377,28 @@ export function MembersManager({
                   ? ` · sponsored until ${date.format(new Date(m.sponsorship_ends_at))}`
                   : ""}
               </p>
+              <label className="flex items-center gap-2 text-xs">
+                <span className="text-muted-foreground">Relationship</span>
+                <select
+                  aria-label={`Relationship for ${m.business_name}`}
+                  className="h-10 rounded-md border bg-background px-2 text-sm"
+                  value={m.affiliation_type ?? "participant"}
+                  disabled={busy !== null}
+                  onChange={(event) =>
+                    void act(`t-${m.affiliation_id}`, {
+                      action: "set_type",
+                      affiliationId: m.affiliation_id,
+                      affiliationType: event.target.value,
+                    })
+                  }
+                >
+                  {AFFILIATION_TYPES.map(([value, text]) => (
+                    <option key={value} value={value}>
+                      {text}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <div className="flex flex-wrap gap-2">
                 {canSponsor && !m.sponsorship_status ? (
                   <>

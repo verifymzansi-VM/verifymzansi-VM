@@ -1,3 +1,4 @@
+import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
 import { createClient } from "@/lib/supabase/server";
 import { MarketPreviewCard } from "./market-preview-card";
 import { AutoScrollRail } from "./auto-scroll-rail";
@@ -75,6 +76,11 @@ export async function HomeMzansiMarketShowcase() {
       ctaLabel="View All Listings"
       tone="green"
     >
+      <AnalyticsImpressions
+        items={items.map((l) => ({ table: "listings" as const, id: String(l.id) }))}
+        type="homepage_appearance"
+        surface="home_market"
+      />
       <AutoScrollRail
         ariaLabel="Latest on Mzansi Market"
         showEdgeFades={false}

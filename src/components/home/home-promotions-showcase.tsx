@@ -1,3 +1,4 @@
+import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
 import Link from "next/link";
 import { TreePalm, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -170,6 +171,14 @@ export async function HomePromotionsShowcase() {
       tone="teal"
       icon={<TreePalm className="h-3.5 w-3.5" />}
     >
+      <AnalyticsImpressions
+        items={items.map((item) => ({
+          table: item.kind === "event" ? ("promotions" as const) : ("businesses" as const),
+          id: String(item.data.id),
+        }))}
+        type="homepage_appearance"
+        surface="home_tourism"
+      />
       <AutoScrollRail
         ariaLabel="Tourism and events"
         showEdgeFades={false}

@@ -229,11 +229,21 @@ export async function enforceEventCreationLimit(
     return NextResponse.json({ error: "Unable to verify event limits" }, { status: 503 });
   }
 
-  if ((count ?? 0) >= settings.events.maxCreatedPer30Days) {
+  // Large organisers may have a custom allowance set by VerifyMzansi.
+  let maxCreated = settings.events.maxCreatedPer30Days;
+  try {
+    const { data: limits } = await admin.rpc("event_limits", { p_user: userId });
+    const custom = (limits as { maxCreatedPer30Days?: unknown } | null)?.maxCreatedPer30Days;
+    if (typeof custom === "number" && custom > 0) maxCreated = custom;
+  } catch {
+    // Fall back to the default allowance.
+  }
+
+  if ((count ?? 0) >= maxCreated) {
     return NextResponse.json(
       {
         error: "Event limit reached",
-        reason: `Events are free, with up to ${settings.events.maxCreatedPer30Days} new events per 30 days. Contact VerifyMzansi for an organiser allowance.`,
+        reason: `Events are free, with up to ${maxCreated} new events per 30 days. Contact VerifyMzansi for an organiser allowance.`,
       },
       { status: 429 }
     );

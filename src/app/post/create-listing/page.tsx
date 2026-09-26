@@ -1,6 +1,7 @@
 "use client";
 
 import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
+import { ListingQualityHint } from "@/components/post/listing-quality-hint";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -1422,6 +1423,16 @@ export default function CreateListingPage() {
                         </details>
                       </div>
                     )}
+
+                    <ListingQualityHint
+                      title={title}
+                      description={description}
+                      priceCents={price === "" ? null : Math.round(Number(price) * 100)}
+                      priceExpected
+                      category={category || null}
+                      location={city || null}
+                      pendingPhotoCount={photoFiles.length}
+                    />
 
                     <label className="flex items-start gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
                       <input

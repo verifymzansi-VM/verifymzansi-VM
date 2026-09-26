@@ -1,5 +1,6 @@
 "use client";
 
+import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
@@ -95,7 +96,17 @@ function resultHref(source: Source, row: Result) {
   return `${base}/${encodeURIComponent(row.id)}`;
 }
 
-function SearchResults({ source, query }: { source: Source; query: string }) {
+function SearchResults({
+  source,
+  query,
+  city,
+  org,
+}: {
+  source: Source;
+  query: string;
+  city?: string;
+  org?: string;
+}) {
   const [page, setPage] = useState(1);
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<{
@@ -111,6 +122,8 @@ function SearchResults({ source, query }: { source: Source; query: string }) {
       setState({ rows: [], total: 0, loading: false, error: true });
     }, 15_000);
     const params = new URLSearchParams({ q: query, page: String(page), limit: "12" });
+    if (city) params.set("city", city);
+    if (org) params.set("org", org);
     fetch(`/api/${source.key}?${params}`, { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error("Search unavailable");
@@ -147,7 +160,7 @@ function SearchResults({ source, query }: { source: Source; query: string }) {
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [source.key, query, page, attempt]);
+  }, [source.key, query, city, org, page, attempt]);
   function changePage(next: number) {
     setState({ rows: [], total: 0, loading: true, error: false });
     setPage(next);
@@ -179,6 +192,11 @@ function SearchResults({ source, query }: { source: Source; query: string }) {
           </p>
         )}
       </div>
+      <AnalyticsImpressions
+        items={state.rows.map((row) => ({ table: source.key, id: row.id }))}
+        type="search_appearance"
+        surface="site_search"
+      />
       <ul className="grid gap-3 sm:grid-cols-2">
         {state.rows.map((row) => (
           <li key={row.id}>
@@ -211,7 +229,35 @@ function SearchResults({ source, query }: { source: Source; query: string }) {
   );
 }
 
-export function SiteSearch({ query }: { query: string }) {
+/** Optional filters: town/city (all sections) and organisation programme (businesses). */
+function useSearchOrganisations(enabled: boolean): Array<{ slug: string; name: string }> {
+  const [organisations, setOrganisations] = useState<Array<{ slug: string; name: string }>>([]);
+  useEffect(() => {
+    if (!enabled) return;
+    const controller = new AbortController();
+    fetch("/api/organisations/search?purpose=filter", { signal: controller.signal })
+      .then((res) => (res.ok ? res.json() : { organisations: [] }))
+      .then((data: { organisations?: Array<{ slug: string; name: string }> }) =>
+        setOrganisations((data.organisations ?? []).map(({ slug, name }) => ({ slug, name })))
+      )
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [enabled]);
+  return organisations;
+}
+
+export function SiteSearch({
+  query,
+  city = "",
+  org = "",
+}: {
+  query: string;
+  city?: string;
+  org?: string;
+}) {
+  const [filtersOpen, setFiltersOpen] = useState(Boolean(city || org));
+  const organisations = useSearchOrganisations(filtersOpen);
+  const sources = org ? SOURCES.filter((source) => source.key === "businesses") : SOURCES;
   const hasSearchableText = /[\p{L}\p{N}]/u.test(query);
   const words = query.toLocaleLowerCase().split(/\s+/).filter(Boolean);
   const pages = PAGES.filter((page) =>
@@ -234,6 +280,47 @@ export function SiteSearch({ query }: { query: string }) {
             placeholder="What are you looking for?"
           />
         </div>
+        <details
+          className="w-full text-sm"
+          open={filtersOpen}
+          onToggle={(event) => setFiltersOpen((event.currentTarget as HTMLDetailsElement).open)}
+        >
+          <summary className="cursor-pointer font-medium">More filters</summary>
+          <div className="mt-3 flex flex-wrap items-end gap-3">
+            <div className="w-full sm:w-44">
+              <label htmlFor="site-search-city" className="mb-2 block text-sm font-medium">
+                Location (optional)
+              </label>
+              <Input
+                id="site-search-city"
+                name="city"
+                defaultValue={city}
+                maxLength={60}
+                placeholder="e.g. Richards Bay"
+              />
+            </div>
+            {organisations.length > 0 ? (
+              <div className="w-full sm:w-56">
+                <label htmlFor="site-search-org" className="mb-2 block text-sm font-medium">
+                  Organisation / Programme
+                </label>
+                <select
+                  id="site-search-org"
+                  name="org"
+                  defaultValue={org}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">All businesses</option>
+                  {organisations.map((item) => (
+                    <option key={item.slug} value={item.slug}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+          </div>
+        </details>
         <Button type="submit">
           <Search className="mr-2 h-4 w-4" />
           Search
@@ -248,8 +335,14 @@ export function SiteSearch({ query }: { query: string }) {
           <p>
             Results for <strong>“{query}”</strong>
           </p>
-          {SOURCES.map((source) => (
-            <SearchResults key={`${source.key}:${query}`} source={source} query={query} />
+          {sources.map((source) => (
+            <SearchResults
+              key={`${source.key}:${query}:${city}:${org}`}
+              source={source}
+              query={query}
+              city={city || undefined}
+              org={org || undefined}
+            />
           ))}
           <section aria-label="Website pages" className="space-y-3">
             <h2 className="text-xl font-semibold">Website pages</h2>

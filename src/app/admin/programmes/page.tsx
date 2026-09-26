@@ -49,7 +49,7 @@ export default async function ProgrammesPage({
     admin
       .from("commercial_contracts")
       .select(
-        "id, contract_type, user_id, organisation_id, title, status, slot_capacity, activation_limit_total, activation_limit_per_period, activation_period_days, admin_limit, price_cents, starts_at, ends_at, notes"
+        "id, contract_type, user_id, organisation_id, title, status, slot_capacity, activation_limit_total, activation_limit_per_period, activation_period_days, admin_limit, price_cents, starts_at, ends_at, notes, features"
       )
       .order("created_at", { ascending: false })
       .limit(200),

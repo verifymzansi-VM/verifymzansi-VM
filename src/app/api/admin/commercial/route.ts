@@ -67,6 +67,7 @@ const schema = z.discriminatedUnion("action", [
         priceCents: z.number().int().min(0).max(100_000_000).optional(),
         area: z.enum(["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"]).optional(),
         notes: z.string().max(2000).optional(),
+        startsAt: z.iso.datetime().optional(),
       })
       .strict(),
     override: z.boolean().default(false),
@@ -75,11 +76,35 @@ const schema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("contract.manage"),
     contractId: uuid,
-    operation: z.enum(["extend", "end", "limits", "notes", "add_member", "remove_member"]),
+    operation: z.enum([
+      "extend",
+      "end",
+      "limits",
+      "notes",
+      "add_member",
+      "remove_member",
+      "mark_paid",
+    ]),
     values,
     reason,
   }),
   z.object({ action: z.literal("trial.override"), userId: uuid, kind: trialKind, reason }),
+  z.object({
+    action: z.literal("event.allowance"),
+    userId: uuid,
+    values: z
+      .object({
+        maxActive: z.number().int().min(1).max(10000).optional(),
+        maxCreatedPer30Days: z.number().int().min(1).max(100000).optional(),
+        notes: z.string().max(1000).optional(),
+        remove: z.boolean().optional(),
+      })
+      .strict()
+      .refine((v) => v.remove || (v.maxActive && v.maxCreatedPer30Days), {
+        message: "Set both limits or remove the allowance",
+      }),
+    reason,
+  }),
   z.object({
     action: z.literal("payment.reverse"),
     paymentId: uuid,
@@ -153,6 +178,7 @@ const CAPABILITY: Record<Body["action"], Capability> = {
   "programme.grant": "contracts:manage",
   "contract.manage": "contracts:manage",
   "trial.override": "trials:manage",
+  "event.allowance": "contracts:manage",
   "payment.reverse": "payments:refund",
   "partner.manage": "partners:manage",
   "commission.manage": "partners:manage",
@@ -199,6 +225,13 @@ function call(body: Body, actor: string) {
         p_actor: actor,
         p_user: body.userId,
         p_kind: body.kind,
+        p_reason: body.reason,
+      });
+    case "event.allowance":
+      return db.rpc("admin_set_event_allowance", {
+        p_actor: actor,
+        p_user: body.userId,
+        p_values: body.values,
         p_reason: body.reason,
       });
     case "payment.reverse":

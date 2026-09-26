@@ -1,5 +1,6 @@
 "use client";
 
+import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
 import {
   ShowroomSectionShell as SectionShell,
   getBackgroundOverlayClasses,
@@ -178,6 +179,12 @@ function ShowroomArrowButton({
 /* ── SA flag section wrapper ───────────────────────────────── */
 
 /* ── Component ─────────────────────────────────────────────── */
+
+const SHOWROOM_TABLES = {
+  listing: "listings",
+  business: "businesses",
+  promotion: "promotions",
+} as const;
 
 export function ShowroomCardCarousel({
   items,
@@ -802,6 +809,14 @@ export function ShowroomCardCarousel({
       background={background}
       hasListings
     >
+      <AnalyticsImpressions
+        items={items.map((item) => ({
+          table: SHOWROOM_TABLES[item.type],
+          id: item.id,
+        }))}
+        type="showroom_appearance"
+        surface="showroom"
+      />
       <div
         className={cn(
           "pointer-events-none absolute inset-x-0 top-[12%] z-[2] hidden h-28 lg:block blur-3xl",

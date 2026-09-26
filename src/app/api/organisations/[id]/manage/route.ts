@@ -30,6 +30,11 @@ const schema = z.discriminatedUnion("action", [
     reason: z.string().trim().min(5).max(500),
   }),
   z.object({
+    action: z.literal("set_type"),
+    affiliationId: uuid,
+    affiliationType: z.enum(["participant", "member", "affiliate"]),
+  }),
+  z.object({
     action: z.literal("end_sponsorship"),
     sponsorshipId: uuid,
     reason: z.string().trim().min(5).max(500),
@@ -108,18 +113,24 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
             p_affiliation: body.affiliationId,
             p_reason: body.reason,
           })
-        : body.action === "sponsor"
-          ? await db.rpc("sponsor_business", {
+        : body.action === "set_type"
+          ? await db.rpc("org_set_affiliation_type", {
               p_user: user.id,
               p_affiliation: body.affiliationId,
-              p_sponsor_type: body.sponsorType,
-              p_reason: body.reason,
+              p_type: body.affiliationType,
             })
-          : await db.rpc("end_sponsorship", {
-              p_user: user.id,
-              p_sponsorship: body.sponsorshipId,
-              p_reason: body.reason,
-            });
+          : body.action === "sponsor"
+            ? await db.rpc("sponsor_business", {
+                p_user: user.id,
+                p_affiliation: body.affiliationId,
+                p_sponsor_type: body.sponsorType,
+                p_reason: body.reason,
+              })
+            : await db.rpc("end_sponsorship", {
+                p_user: user.id,
+                p_sponsorship: body.sponsorshipId,
+                p_reason: body.reason,
+              });
 
   if (result.error) {
     const mapped = mapCommercialError(result.error.message);

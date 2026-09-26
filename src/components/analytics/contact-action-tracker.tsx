@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import {
+  CONTENT_SHARED_EVENT,
   trackCommercialEvents,
   trackContactAction,
   type CommercialEventTable,
@@ -53,8 +54,16 @@ export function ContactActionTracker({
       }
     }
 
+    function onShare() {
+      trackContactAction(table, id, "share", "detail");
+    }
+
     document.addEventListener("click", onClick, { capture: true });
-    return () => document.removeEventListener("click", onClick, { capture: true });
+    window.addEventListener(CONTENT_SHARED_EVENT, onShare);
+    return () => {
+      document.removeEventListener("click", onClick, { capture: true });
+      window.removeEventListener(CONTENT_SHARED_EVENT, onShare);
+    };
   }, [table, id, website]);
 
   return null;

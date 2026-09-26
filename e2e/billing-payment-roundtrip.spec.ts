@@ -39,13 +39,20 @@ test.describe("Billing payment round-trip", () => {
     test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
     await openAuthenticatedBilling(page);
 
+    // Choosing a plan opens the confirmation page (dates, slots, no auto-renewal).
+    await page.getByRole("link", { name: /choose 6 months — mzansi market/i }).click();
+    await page.waitForURL("**/billing/checkout?plan=*");
+    await expect(page.getByRole("heading", { name: "Confirm your plan" })).toBeVisible();
+    await expect(page.getByText("Does not renew automatically")).toBeVisible();
+    await expect(page.getByText("6 months", { exact: true })).toBeVisible();
+
     const checkoutResponsePromise = page.waitForResponse(
       (response) =>
         response.url().includes("/api/billing/create-checkout") &&
         response.request().method() === "POST",
       { timeout: 15000 }
     );
-    await page.getByRole("button", { name: /choose mzansi market growth/i }).click();
+    await page.getByRole("button", { name: /pay r250 securely/i }).click();
     const checkoutResponse = await checkoutResponsePromise;
     expect(checkoutResponse.ok()).toBeTruthy();
     await page.waitForURL("**/billing/success?payment=*", { timeout: 30000 });

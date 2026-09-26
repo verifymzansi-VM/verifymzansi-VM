@@ -94,7 +94,7 @@ export function RetailPricing({
       <div
         role="radiogroup"
         aria-label="Where will you post?"
-        className="mx-auto grid h-12 w-full max-w-md grid-cols-3 rounded-full bg-muted/50 p-1"
+        className="mx-auto grid w-full max-w-md grid-cols-3 rounded-full bg-muted/50 p-1"
       >
         {AREA_OPTIONS.map((option) => (
           <button
@@ -103,7 +103,7 @@ export function RetailPricing({
             role="radio"
             aria-checked={area === option.value}
             onClick={() => setArea(option.value)}
-            className={`h-10 rounded-full text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm ${
+            className={`h-11 rounded-full text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm ${
               area === option.value
                 ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"

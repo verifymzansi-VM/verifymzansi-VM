@@ -92,6 +92,9 @@ export interface ModerationItem {
   targetId?: string;
   current_snapshot?: Record<string, unknown>;
   change_summary?: ContentEditChange[];
+  /** Owner's other recent listings, for duplicate hints. */
+  owner_recent_titles?: string[];
+  owner_photo_urls?: string[];
 }
 
 interface ModerationPreviewPanelProps {
@@ -1038,6 +1041,8 @@ export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
     category: item.category,
     location: item.location_city,
     photos: item.photos,
+    recentOwnerTitles: item.owner_recent_titles,
+    ownerPhotoUrls: item.owner_photo_urls,
   });
 
   return (

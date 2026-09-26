@@ -1,4 +1,11 @@
 import React, { Suspense } from "react";
+import {
+  DISPLAY_STATUS_LABELS,
+  EVENT_LIFECYCLE_LABELS,
+  OWNER_DEACTIVATED_REASON,
+  eventLifecycle,
+  toDisplayContentStatus,
+} from "@/lib/posting/content-status";
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -74,6 +81,10 @@ type DashboardItem = {
   expires_at?: string | null;
   status_reason?: string | null;
   promotion_type?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  /** Visibility funded by an organisation (derived from the slot). */
+  sponsored?: boolean;
 };
 
 type BusinessDashboardRow = {
@@ -96,6 +107,25 @@ type BusinessDashboardRow = {
 
 type ContentSource = DashboardItem["source"];
 
+/** Posts whose active slot is funded by an organisation sponsorship. */
+async function loadSponsoredContentIds(
+  admin: ReturnType<typeof tryCreateAdminClient>,
+  userId: string
+): Promise<Set<string>> {
+  if (!admin) return new Set();
+  try {
+    const { data } = await admin
+      .from("slot_assignments")
+      .select("content_id, slot_entitlements!inner(source)")
+      .eq("owner_id", userId)
+      .is("released_at", null)
+      .eq("slot_entitlements.source", "SPONSORED_ORGANISATION_MEMBER");
+    return new Set(((data ?? []) as Array<{ content_id: string }>).map((row) => row.content_id));
+  } catch {
+    return new Set();
+  }
+}
+
 /** Slot summary is informational: a failure must never block the dashboard. */
 async function loadSlotUsage(
   admin: ReturnType<typeof tryCreateAdminClient>,
@@ -109,9 +139,6 @@ async function loadSlotUsage(
     return [];
   }
 }
-
-/** Matches the status_reason written by owner_content_action('deactivate'). */
-const OWNER_DEACTIVATED_REASON = "Deactivated by owner";
 
 function dashboardActionLabel(source: ContentSource) {
   return source === "business"
@@ -376,22 +403,22 @@ export default async function ListingsPage({
       attempts: [
         {
           select:
-            "id, title, status, price_cents, category, created_at, published_at, photos, view_count, boost_until, featured_until, urgent_until, expires_at, end_date, status_reason, promotion_type",
+            "id, title, status, price_cents, category, created_at, published_at, photos, view_count, boost_until, featured_until, urgent_until, expires_at, start_date, end_date, status_reason, promotion_type",
           omittedFields: [] as const,
         },
         {
           select:
-            "id, title, status, price_cents, category, created_at, published_at, photos, view_count, boost_until, featured_until, urgent_until, end_date, status_reason, promotion_type",
+            "id, title, status, price_cents, category, created_at, published_at, photos, view_count, boost_until, featured_until, urgent_until, start_date, end_date, status_reason, promotion_type",
           omittedFields: ["expires_at"] as const,
         },
         {
           select:
-            "id, title, status, price_cents, category, created_at, published_at, photos, view_count, boost_until, featured_until, expires_at, end_date, status_reason, promotion_type",
+            "id, title, status, price_cents, category, created_at, published_at, photos, view_count, boost_until, featured_until, expires_at, start_date, end_date, status_reason, promotion_type",
           omittedFields: ["urgent_until"] as const,
         },
         {
           select:
-            "id, title, status, price_cents, category, created_at, published_at, photos, view_count, boost_until, featured_until, end_date, status_reason, promotion_type",
+            "id, title, status, price_cents, category, created_at, published_at, photos, view_count, boost_until, featured_until, start_date, end_date, status_reason, promotion_type",
           omittedFields: ["urgent_until", "expires_at"] as const,
         },
       ] as const,
@@ -455,6 +482,8 @@ export default async function ListingsPage({
       urgent_until: ((promotion as Record<string, unknown>).urgent_until as string | null) ?? null,
       promotion_type:
         ((promotion as Record<string, unknown>).promotion_type as string | null) ?? null,
+      start_date: ((promotion as Record<string, unknown>).start_date as string | null) ?? null,
+      end_date: ((promotion as Record<string, unknown>).end_date as string | null) ?? null,
     })),
   ];
 
@@ -483,11 +512,13 @@ export default async function ListingsPage({
     promotion: promotionViewCounts,
   };
 
+  const sponsoredIds = await loadSponsoredContentIds(engagementAdmin, user.id);
   const items = sortByNewest(
     baseItems
       .map((item) => ({
         ...item,
         view_count: getViewCountForItem(item, viewCounts),
+        sponsored: sponsoredIds.has(item.id),
       }))
       .map((item) => applyDashboardExpiryStatus(item))
   );
@@ -738,6 +769,7 @@ function ListingList({
                         {PROMOTION_TYPE_LABELS[listing.promotion_type as PromotionType]}
                       </Badge>
                     )}
+                  <StatusBadges item={listing} />
                 </div>
                 {shouldShowExpiryCountdown(listing) ? (
                   <ExpiryCountdownBadge
@@ -829,6 +861,30 @@ function ListingList({
         </Card>
       ))}
     </div>
+  );
+}
+
+/** Lifecycle, event stage and sponsorship labels (subscription state stays separate). */
+function StatusBadges({ item }: { item: DashboardItem }) {
+  const display = toDisplayContentStatus(item.status, item.status_reason);
+  const isEvent = item.source === "promotion" && item.promotion_type === "event";
+  return (
+    <>
+      {isEvent ? (
+        <Badge variant="outline" className="text-[10px]">
+          {EVENT_LIFECYCLE_LABELS[eventLifecycle(item)]}
+        </Badge>
+      ) : display !== "ACTIVE" && display !== "PENDING_REVIEW" ? (
+        <Badge variant="outline" className="text-[10px]">
+          {DISPLAY_STATUS_LABELS[display]}
+        </Badge>
+      ) : null}
+      {item.sponsored ? (
+        <Badge variant="secondary" className="text-[10px]">
+          Sponsored
+        </Badge>
+      ) : null}
+    </>
   );
 }
 

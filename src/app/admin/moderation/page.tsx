@@ -15,6 +15,10 @@ export const metadata = {
   description: "Review and moderate flagged content, listings, and user reports.",
 };
 
+function daysAgoIso(days: number): string {
+  return new Date(Date.now() - days * 86_400_000).toISOString();
+}
+
 export default async function AdminModerationPage() {
   const supabase = await createClient();
   const {
@@ -86,9 +90,44 @@ export default async function AdminModerationPage() {
 
   const editItems = pendingEditRequests.map(toContentEditModerationItem);
 
+  // Duplicate-detection context for the advisory quality check: the owner's
+  // other recent listings (titles and photos). Best effort.
+  const ownerIds = [...new Set(pendingListings.map((l) => l.owner_id).filter(Boolean))];
+  const ownerContext = new Map<string, Array<{ id: string; title: string; photos: string[] }>>();
+  if (ownerIds.length > 0) {
+    try {
+      const { data: recent } = await admin
+        .from("listings")
+        .select("id, owner_id, title, photos")
+        .in("owner_id", ownerIds)
+        .gte("created_at", daysAgoIso(30))
+        .limit(500);
+      for (const row of (recent ?? []) as Array<{
+        id: string;
+        owner_id: string;
+        title: string;
+        photos: string[] | null;
+      }>) {
+        const list = ownerContext.get(row.owner_id) ?? [];
+        list.push({ id: row.id, title: row.title, photos: row.photos ?? [] });
+        ownerContext.set(row.owner_id, list);
+      }
+    } catch {
+      // Quality hints are advisory.
+    }
+  }
+  const qualityContext = (id: string, ownerId: string | null | undefined) => {
+    const others = (ownerId ? (ownerContext.get(ownerId) ?? []) : []).filter((o) => o.id !== id);
+    return {
+      owner_recent_titles: others.map((o) => o.title),
+      owner_photo_urls: others.flatMap((o) => o.photos),
+    };
+  };
+
   const allItems = [
     ...(pendingListings || []).map((l) => ({
       ...l,
+      ...qualityContext(l.id, l.owner_id),
       area: "MZANSI_MARKET" as const,
       areaLabel: "Mzansi Market",
       itemType: "Listing",

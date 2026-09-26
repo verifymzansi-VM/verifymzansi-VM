@@ -38,6 +38,7 @@ export interface ProgrammeContract {
   starts_at: string;
   ends_at: string;
   notes: string | null;
+  features?: { invoiceReference?: string } | null;
   holderName: string | null;
   activeUsage: number;
   activationCount: number;
@@ -97,6 +98,7 @@ function GrantForm({
               adminLimit: optionalInt(form.adminLimit),
               priceCents: form.price ? Math.round(Number(form.price) * 100) : undefined,
               notes: form.notes || undefined,
+              startsAt: form.startsAt ? new Date(form.startsAt).toISOString() : undefined,
             },
             reason: form.reason,
           },
@@ -200,17 +202,32 @@ function GrantForm({
             className="mt-1 block w-full rounded-md border bg-background p-2"
           />
         </label>
+        <label className="text-sm">
+          Starts (optional)
+          <input
+            name="startsAt"
+            type="date"
+            className="mt-1 block w-full rounded-md border bg-background p-2"
+          />
+        </label>
         {type === "ENTERPRISE_CUSTOM" ? (
-          <label className="text-sm">
-            Contract value (R)
-            <input
-              name="price"
-              type="number"
-              min={0}
-              step="0.01"
-              className="mt-1 block w-full rounded-md border bg-background p-2"
-            />
-          </label>
+          <>
+            <label className="text-sm">
+              Contract value (R)
+              <input
+                name="price"
+                type="number"
+                min={0}
+                step="0.01"
+                className="mt-1 block w-full rounded-md border bg-background p-2"
+              />
+            </label>
+            <p className="text-xs text-muted-foreground sm:col-span-4">
+              Internal references for 1,000+ active slots: from R60,000 (3 months), R105,000 (6
+              months), R180,000 (12 months). Priced contracts stay locked until you record the
+              invoice as paid. Public-sector contracts follow the client&apos;s procurement rules.
+            </p>
+          </>
         ) : null}
         <label className="text-sm sm:col-span-4">
           Internal notes
@@ -287,6 +304,85 @@ function TrialOverrideForm({ account }: { account: ProgrammeAccount }) {
   );
 }
 
+function EventAllowanceForm({
+  account,
+  settings,
+}: {
+  account: ProgrammeAccount;
+  settings: CommercialSettings;
+}) {
+  const { run, busy, message } = useCommercialAction();
+  return (
+    <form
+      className="grid gap-2 sm:grid-cols-4 sm:items-end"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const form = readForm(event.currentTarget);
+        const remove = form.remove === "on";
+        void run(
+          {
+            action: "event.allowance",
+            userId: account.user_id,
+            values: remove
+              ? { remove: true }
+              : {
+                  maxActive: optionalInt(form.maxActive),
+                  maxCreatedPer30Days: optionalInt(form.maxCreated),
+                  notes: form.notes || undefined,
+                },
+            reason: form.reason,
+          },
+          remove ? "Allowance removed" : "Allowance saved"
+        );
+      }}
+    >
+      <p className="text-xs text-muted-foreground sm:col-span-4">
+        Defaults: {settings.events.maxActivePerAccount} active events,{" "}
+        {settings.events.maxCreatedPer30Days} new events per 30 days. Events stay free.
+      </p>
+      <label className="text-sm">
+        Active events
+        <input
+          name="maxActive"
+          type="number"
+          min={1}
+          defaultValue={settings.events.maxActivePerAccount * 4}
+          className="mt-1 block w-full rounded-md border bg-background p-2"
+        />
+      </label>
+      <label className="text-sm">
+        New events / 30 days
+        <input
+          name="maxCreated"
+          type="number"
+          min={1}
+          defaultValue={settings.events.maxCreatedPer30Days * 4}
+          className="mt-1 block w-full rounded-md border bg-background p-2"
+        />
+      </label>
+      <label className="text-sm sm:col-span-2">
+        Notes
+        <input
+          name="notes"
+          maxLength={1000}
+          className="mt-1 block w-full rounded-md border bg-background p-2"
+        />
+      </label>
+      <label className="flex items-center gap-2 text-sm sm:col-span-4">
+        <input type="checkbox" name="remove" className="h-4 w-4" />
+        Remove the custom allowance (back to defaults)
+      </label>
+      <div className="sm:col-span-3">
+        <ReasonField />
+      </div>
+      <SubmitButton busy={busy}>Save allowance</SubmitButton>
+      <div className="sm:col-span-4">
+        <ActionMessage message={message} />
+      </div>
+    </form>
+  );
+}
+
 function ContractCard({ contract }: { contract: ProgrammeContract }) {
   const { run, busy, message } = useCommercialAction();
   const [operation, setOperation] = useState("extend");
@@ -299,6 +395,13 @@ function ContractCard({ contract }: { contract: ProgrammeContract }) {
         <Badge variant="outline">
           {TYPE_LABELS[contract.contract_type] ?? contract.contract_type}
         </Badge>
+        {contract.price_cents > 0 ? (
+          <Badge variant={contract.features?.invoiceReference ? "outline" : "secondary"}>
+            {contract.features?.invoiceReference
+              ? `Paid · ${contract.features.invoiceReference}`
+              : "Awaiting payment — slots locked"}
+          </Badge>
+        ) : null}
         <Badge variant={contract.status === "active" ? "default" : "secondary"}>
           {contract.status}
         </Badge>
@@ -365,9 +468,11 @@ function ContractCard({ contract }: { contract: ProgrammeContract }) {
                   }
                 : operation === "notes"
                   ? { notes: form.notes }
-                  : operation === "add_member" || operation === "remove_member"
-                    ? { userId: form.userId }
-                    : {};
+                  : operation === "mark_paid"
+                    ? { reference: form.reference }
+                    : operation === "add_member" || operation === "remove_member"
+                      ? { userId: form.userId }
+                      : {};
           void run(
             {
               action: "contract.manage",
@@ -392,6 +497,9 @@ function ContractCard({ contract }: { contract: ProgrammeContract }) {
             <option value="add_member">Add administrator</option>
             <option value="remove_member">Remove administrator</option>
             <option value="notes">Internal notes</option>
+            {contract.price_cents > 0 ? (
+              <option value="mark_paid">Record invoice paid (unlocks slots)</option>
+            ) : null}
             <option value="end">End now</option>
           </select>
         </label>
@@ -457,6 +565,17 @@ function ContractCard({ contract }: { contract: ProgrammeContract }) {
               name="userId"
               required
               pattern="[0-9a-fA-F-]{36}"
+              className="mt-1 block w-full rounded-md border bg-background p-2"
+            />
+          </label>
+        ) : null}
+        {operation === "mark_paid" ? (
+          <label className="text-sm sm:col-span-3">
+            Invoice or payment reference
+            <input
+              name="reference"
+              required
+              minLength={3}
               className="mt-1 block w-full rounded-md border bg-background p-2"
             />
           </label>
@@ -527,6 +646,14 @@ export function ProgrammesPanel({
                 </summary>
                 <div className="mt-3">
                   <TrialOverrideForm account={account} />
+                </div>
+              </details>
+              <details className="rounded-lg border p-3">
+                <summary className="cursor-pointer text-sm font-medium">
+                  Event organiser allowance
+                </summary>
+                <div className="mt-3">
+                  <EventAllowanceForm account={account} settings={settings} />
                 </div>
               </details>
             </div>

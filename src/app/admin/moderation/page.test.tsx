@@ -87,6 +87,9 @@ describe("AdminModerationPage", () => {
     mockCreateAdminClient.mockReturnValue({
       from: (table: string) => {
         if (table === "listings") {
+          // The first listings query is the moderation queue; later ones load
+          // duplicate-detection context and must not replace it.
+          if (listingQuery) return createQuery([]);
           listingQuery = createQuery([
             {
               id: "listing-1",

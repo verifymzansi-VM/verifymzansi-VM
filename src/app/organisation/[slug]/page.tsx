@@ -16,10 +16,16 @@ import { AnalyticsImpressions } from "@/components/analytics/analytics-impressio
 export const revalidate = 300;
 
 const PAGE_SIZE = 24;
+const PROGRAMME_STATUS_LABELS: Record<string, string> = {
+  founding_trial: "Founding programme",
+  active_paid: "Active programme",
+  affiliation_only: "Affiliation network",
+};
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 type Params = { slug: string };
 type Search = {
+  type?: string;
   q?: string;
   category?: string;
   city?: string;
@@ -59,6 +65,7 @@ interface DirectoryRow {
   programme_name: string | null;
   confirmed_at: string;
   sponsored: boolean;
+  affiliation_label: string | null;
   total_count: number;
 }
 
@@ -122,6 +129,10 @@ export default async function OrganisationPage({
     programme:
       query.programme && /^[0-9a-f-]{36}$/i.test(query.programme) ? query.programme : undefined,
     sponsored: query.sponsored === "1" ? true : undefined,
+    type:
+      query.type && ["participant", "member", "affiliate"].includes(query.type)
+        ? query.type
+        : undefined,
   };
   const page = Math.max(1, Math.min(200, Number.parseInt(query.page ?? "1", 10) || 1));
 
@@ -134,6 +145,7 @@ export default async function OrganisationPage({
       p_city: filters.city ?? null,
       p_programme: filters.programme ?? null,
       p_sponsored: filters.sponsored ?? null,
+      p_type: filters.type ?? null,
       p_limit: PAGE_SIZE,
       p_offset: (page - 1) * PAGE_SIZE,
     }),
@@ -201,6 +213,9 @@ export default async function OrganisationPage({
               <div className="space-y-1 text-sm">
                 <p className="flex flex-wrap items-center gap-2">
                   <Badge variant="outline">{org.organisation_type.replace(/_/g, " ")}</Badge>
+                  <Badge variant="secondary">
+                    {PROGRAMME_STATUS_LABELS[org.programme_status] ?? "Programme"}
+                  </Badge>
                   <span>
                     <strong>{counts.affiliatedCount ?? total}</strong> participating businesses
                   </span>
@@ -309,6 +324,19 @@ export default async function OrganisationPage({
                 </select>
               </label>
             ) : null}
+            <label className="text-sm">
+              Relationship
+              <select
+                name="type"
+                defaultValue={filters.type ?? ""}
+                className="mt-1 block h-11 w-full rounded-md border bg-background px-2"
+              >
+                <option value="">All relationships</option>
+                <option value="participant">{org.affiliation_wording}</option>
+                <option value="member">Member</option>
+                <option value="affiliate">Affiliated with</option>
+              </select>
+            </label>
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
@@ -360,7 +388,7 @@ export default async function OrganisationPage({
                         {row.city ? ` · ${row.city}` : ""}
                       </span>
                       <span className="block text-xs text-muted-foreground">
-                        {org.affiliation_wording}
+                        {row.affiliation_label ?? org.affiliation_wording}
                         {row.programme_name ? ` — ${row.programme_name}` : ""}
                       </span>
                       {row.sponsored ? (

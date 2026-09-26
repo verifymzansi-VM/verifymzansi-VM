@@ -1,9 +1,18 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { trackContactAction } from "@/lib/analytics/commercial-events";
+
 import { Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ContentTargetType } from "@/lib/engagement";
+
+/** Likes double as "saves" in commercial reports. */
+const CONTENT_TABLES = {
+  listing: "listings",
+  business: "businesses",
+  promotion: "promotions",
+} as const;
 
 interface ContentLikeButtonProps {
   targetId: string;
@@ -87,6 +96,9 @@ export function ContentLikeButton({
 
               if (!response.ok) {
                 throw new Error(payload?.error || "Unable to update like right now.");
+              }
+              if (payload?.liked) {
+                trackContactAction(CONTENT_TABLES[targetType], targetId, "save", "like");
               }
 
               setOptimisticState({

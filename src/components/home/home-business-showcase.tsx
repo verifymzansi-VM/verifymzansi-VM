@@ -1,3 +1,4 @@
+import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
 import { createClient } from "@/lib/supabase/server";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { BusinessPreviewCard } from "./business-preview-card";
@@ -78,6 +79,11 @@ export async function HomeBusinessShowcase() {
       ctaLabel="View Representative Profiles"
       tone="blue"
     >
+      <AnalyticsImpressions
+        items={items.map((b) => ({ table: "businesses" as const, id: String(b.id) }))}
+        type="homepage_appearance"
+        surface="home_business"
+      />
       <AutoScrollRail
         ariaLabel="Mzansi Business"
         showEdgeFades={false}

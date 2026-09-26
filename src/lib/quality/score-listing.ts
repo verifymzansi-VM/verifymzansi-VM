@@ -12,6 +12,8 @@ export interface QualityInput {
   category?: string | null;
   location?: string | null;
   photos?: ReadonlyArray<string | null | undefined> | null;
+  /** Photos chosen but not uploaded yet (posting wizard). */
+  pendingPhotoCount?: number;
   /** Other titles by the same owner in the last 30 days (for duplicate detection). */
   recentOwnerTitles?: ReadonlyArray<string>;
   /** Photo URLs already used by the owner's other live posts. */
@@ -93,8 +95,9 @@ export function scoreListingQuality(input: QualityInput): QualityResult {
     add("missing_category", "warning", 10, "Choose a category so people can find this.");
   if (!input.location) add("missing_location", "warning", 10, "Add a town or city.");
 
-  if (photos.length === 0) add("no_photos", "warning", 15, "Add at least one clear photo.");
-  else if (photos.length < 3)
+  const photoCount = photos.length + (input.pendingPhotoCount ?? 0);
+  if (photoCount === 0) add("no_photos", "warning", 15, "Add at least one clear photo.");
+  else if (photoCount < 3)
     add("few_photos", "info", 5, "Posts with 3 or more photos get more interest.");
   if (photos.some((url) => !/^https:\/\//i.test(url)))
     add(
