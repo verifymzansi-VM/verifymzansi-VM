@@ -8,6 +8,9 @@ const ALLOWLIST = new Set([
   path.join("components", "showrooms", "showroom-card-carousel.tsx"),
   path.join("components", "showrooms", "showroom-section-shell.tsx"),
   path.join("components", "business", "layouts", "unified-layout.tsx"),
+  // Decorative, platform-owned artwork (not user uploads) may crop freely.
+  path.join("components", "home", "home-category-gateways.tsx"),
+  path.join("components", "home", "home-hero.tsx"),
   path.join("components", "ui", "focal-point-picker.tsx"),
   path.join("components", "ui", "media-crop-preview.tsx"),
   path.join("components", "ui", "media-upload.tsx"),

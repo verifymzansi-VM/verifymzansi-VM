@@ -91,7 +91,7 @@ export default function VerifyBuyerPage() {
     <div className="flex min-h-screen flex-col">
       <Header />
 
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         <div className="container-page py-4 space-y-4">
           <PageHeader
             title="Verify a Buyer"

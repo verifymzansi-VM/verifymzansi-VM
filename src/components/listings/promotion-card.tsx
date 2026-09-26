@@ -2,7 +2,7 @@
 
 import { memo } from "react";
 import { Tag } from "lucide-react";
-import { formatZARShort } from "@/lib/utils/format";
+import { formatZARShort, formatSaShortDate } from "@/lib/utils/format";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
 import { useAutoScrollRailItemState } from "@/components/home/auto-scroll-rail";
 import { getStoredPromotionTypePresentation } from "@/lib/promotions/type-presentation";
@@ -66,7 +66,7 @@ function getPromotionStatus(
   if (featured) {
     return {
       label: "Featured",
-      className: "bg-amber-400 text-amber-950",
+      className: "bg-brand-gold text-brand-gold-950",
     };
   }
 
@@ -101,15 +101,7 @@ function formatPromotionEyebrow(
     parts.push(negotiable ? `${formatted} · Neg` : formatted);
   } else if (startDate) {
     // "SAT 15 MAR" — includes day-of-week for better scannability
-    parts.push(
-      new Intl.DateTimeFormat("en-ZA", {
-        weekday: "short",
-        day: "numeric",
-        month: "short",
-      })
-        .format(new Date(startDate))
-        .toUpperCase()
-    );
+    parts.push(formatSaShortDate(startDate));
   }
 
   if (urgency) parts.push(urgency);
@@ -179,9 +171,7 @@ export const PromotionCard = memo(function PromotionCard({
       fitStrategy="smart"
       logoUrl={logoUrl}
       eyebrowClassName={
-        price != null && price > 0
-          ? undefined
-          : "text-[11px] font-bold uppercase tracking-[0.14em] text-brand-green-700 dark:text-brand-green-300 sm:text-xs"
+        price != null && price > 0 ? undefined : "text-sunset-700 dark:text-sunset-300"
       }
       statusLabel={status?.label}
       statusClassName={status?.className}

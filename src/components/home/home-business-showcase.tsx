@@ -46,15 +46,15 @@ export async function HomeBusinessShowcase() {
     return (
       <HomeShowcaseShell
         badge="Mzansi Business"
-        title="Mzansi Business"
-        description="Business profiles posted by accountable, identity-reviewed representatives."
+        title="Local businesses you can check"
+        description="Shops, trades and services run by accountable, identity-reviewed representatives."
         href="/mzansi-business"
-        ctaLabel="View Representative Profiles"
+        ctaLabel="See all businesses"
         tone="blue"
       >
         <HomeShowcaseEmptyState
           title="No representative profiles yet."
-          description="The directory is ready for its first identity-reviewed representative profile. Add a business profile and it will appear here."
+          description="Put your business on the map with photos, services, hours and contact details. Profiles are free to start."
           ctaHref="/post/create-business"
           ctaLabel="Create First Profile"
           tone="blue"
@@ -73,10 +73,10 @@ export async function HomeBusinessShowcase() {
   return (
     <HomeShowcaseShell
       badge="Mzansi Business"
-      title="Mzansi Business"
-      description="Business profiles posted by accountable, identity-reviewed representatives."
+      title="Local businesses you can check"
+      description="Shops, trades and services run by accountable, identity-reviewed representatives."
       href="/mzansi-business"
-      ctaLabel="View Representative Profiles"
+      ctaLabel="See all businesses"
       tone="blue"
     >
       <AnalyticsImpressions
@@ -85,7 +85,7 @@ export async function HomeBusinessShowcase() {
         surface="home_business"
       />
       <AutoScrollRail
-        ariaLabel="Mzansi Business"
+        ariaLabel="Local businesses you can check"
         showEdgeFades={false}
         flushEdges
         itemClassName="w-[calc((100%-12px)/2)] sm:w-auto"

@@ -10,20 +10,20 @@ const toneTileClasses: Record<GridStateTone, string> = {
   green:
     "bg-brand-green-50 text-brand-green ring-brand-green/15 dark:bg-brand-green-950/60 dark:ring-brand-green/25",
   blue: "bg-brand-blue/10 text-brand-blue ring-brand-blue/20 dark:bg-brand-blue/15 dark:ring-brand-blue/30",
-  teal: "bg-teal-500/10 text-teal-600 ring-teal-500/20 dark:bg-teal-500/15 dark:text-teal-300 dark:ring-teal-400/30",
+  teal: "bg-sunset-500/10 text-sunset-600 ring-sunset-500/20 dark:bg-sunset-500/15 dark:text-sunset-300 dark:ring-sunset-400/30",
 };
 
 const tonePanelClasses: Record<GridStateTone, string> = {
   green:
     "border-brand-green/25 bg-gradient-to-b from-brand-green-50/60 to-transparent dark:from-brand-green-950/30",
   blue: "border-brand-blue/25 bg-gradient-to-b from-brand-blue/5 to-transparent dark:from-brand-blue/10",
-  teal: "border-teal-500/25 bg-gradient-to-b from-teal-500/5 to-transparent dark:from-teal-500/10",
+  teal: "border-sunset-500/25 bg-gradient-to-b from-sunset-500/5 to-transparent dark:from-sunset-500/10",
 };
 
 const toneIconClasses: Record<GridStateTone, string> = {
   green: "text-brand-green",
   blue: "text-brand-blue",
-  teal: "text-teal-600 dark:text-teal-300",
+  teal: "text-sunset-600 dark:text-sunset-300",
 };
 
 interface GridStateMessageProps {

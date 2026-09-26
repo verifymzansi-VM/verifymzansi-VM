@@ -27,7 +27,8 @@ vi.mock("@/components/ui/video-with-poster", () => ({
   ),
 }));
 
-vi.mock("@/lib/utils/format", () => ({
+vi.mock("@/lib/utils/format", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   formatRelativeTime: () => "2 minutes ago",
   formatZAR: (value: number) => `R ${value}`,
 }));

@@ -1,5 +1,6 @@
 "use client";
 
+import { formatRandAmount } from "@/lib/utils/format";
 import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import { VideoViewTracker } from "@/components/ui/video-view-tracker";
 
@@ -66,11 +67,7 @@ import type { TourismCategoryDetails } from "@/types/tourism-details";
 import type { BusinessDetails } from "@/types/business-details";
 import { useTrackContentView } from "@/hooks/use-track-content-view";
 
-const zarCurrency = new Intl.NumberFormat("en-ZA", {
-  style: "currency",
-  currency: "ZAR",
-  maximumFractionDigits: 0,
-});
+const zarCurrency = { format: (rand: number) => `R${formatRandAmount(rand)}` };
 
 export interface BusinessDetailRecord {
   id: string;

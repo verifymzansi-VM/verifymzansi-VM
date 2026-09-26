@@ -1,10 +1,28 @@
 "use client";
 
-import { BrandShieldAlert as ShieldAlert } from "@/components/shared/brand-shield";
+import {
+  BrandShield as ShieldCheck,
+  BrandShieldAlert as ShieldAlert,
+} from "@/components/shared/brand-shield";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Menu, X, LayoutDashboard, Settings, LogOut, Loader2, Sun, Moon } from "lucide-react";
+import {
+  BadgeDollarSign,
+  LayoutDashboard,
+  LifeBuoy,
+  Loader2,
+  LogOut,
+  Megaphone,
+  Menu,
+  MessageCircle,
+  Moon,
+  Plus,
+  Search,
+  Settings,
+  Sun,
+  X,
+} from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -20,6 +38,7 @@ import {
 import { BrandLogo } from "../shared/brand-logo";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { MarketplaceSwitcher } from "./marketplace-switcher";
+import { HeaderSearch } from "./header-search";
 import { useAuth } from "@/hooks/use-auth";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
 import { cn } from "@/lib/utils";
@@ -27,6 +46,12 @@ import type { TrustLevel } from "@/types/enums";
 
 const LOGIN_HREF = "/login?authFresh=20260515";
 const REGISTER_HREF = "/register?authFresh=20260515";
+
+const SECONDARY_LINKS = [
+  { href: "/safety", label: "Safety Centre", icon: LifeBuoy },
+  { href: "/pricing", label: "Pricing", icon: BadgeDollarSign },
+  { href: "/advertise", label: "Advertise", icon: Megaphone },
+] as const;
 
 const NotificationBell = dynamic(
   () => import("@/components/notification-bell").then((mod) => mod.NotificationBell),
@@ -48,6 +73,8 @@ interface HeaderProps {
   isAuthenticated?: boolean;
   displayName?: string;
   trustLevel?: TrustLevel;
+  /** Hide the header search field where the page leads with its own (homepage hero). */
+  showSearch?: boolean;
 }
 
 export function Header(props: HeaderProps) {
@@ -57,8 +84,8 @@ export function Header(props: HeaderProps) {
       fallback={
         <header className="glass-panel sticky top-0 z-50 w-full">
           <div className="container-page flex h-16 items-center">
-            <Link href="/" prefetch={false} className="text-lg font-bold">
-              VerifyMzansi
+            <Link href="/" prefetch={false} className="font-display text-lg font-extrabold">
+              Verify<span className="text-brand-green-600">Mzansi</span>
             </Link>
           </div>
         </header>
@@ -73,6 +100,7 @@ function HeaderInner({
   isAuthenticated: isAuthProp,
   displayName: displayNameProp,
   trustLevel: trustLevelProp = 0,
+  showSearch = true,
 }: HeaderProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const mobileToggleRef = useRef<HTMLButtonElement>(null);
@@ -157,10 +185,14 @@ function HeaderInner({
     await auth.signOut();
   }
 
+  const closeMobile = () => setMobileOpen(false);
+  const mobileLinkClass =
+    "flex min-h-11 items-center gap-3 rounded-xl px-3 text-[15px] font-medium text-foreground/90 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
   return (
     <header
       className={cn(
-        "glass-panel sticky top-0 z-[110] isolate w-full transition-all duration-300",
+        "glass-panel sticky top-0 z-[110] isolate w-full border-x-0 border-t-0 transition-shadow duration-300",
         scrolled ? "elev-sm" : "shadow-none"
       )}
     >
@@ -171,31 +203,29 @@ function HeaderInner({
         </>
       ) : null}
 
-      <div className="container-page grid h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 md:h-[4.25rem] lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
-        <div className="flex min-w-0 items-center gap-1.5 lg:justify-self-start">
-          <Link
-            href="/"
-            prefetch={false}
-            aria-label="VerifyMzansi — Home"
-            className="group flex min-w-0 items-center gap-2 rounded-lg dark:bg-white sm:gap-3"
-          >
-            <BrandLogo
-              size="md"
-              variant="transparent"
-              priority
-              imageClassName="drop-shadow-[0_10px_20px_rgba(15,23,42,0.08)] transition-transform duration-200 group-hover:scale-105"
-            />
-          </Link>
-        </div>
+      <div className="container-page flex h-16 items-center gap-3 lg:gap-6">
+        <Link
+          href="/"
+          prefetch={false}
+          aria-label="VerifyMzansi — Home"
+          className="group flex shrink-0 items-center rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          <BrandLogo
+            size="md"
+            priority
+            imageClassName="transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105"
+          />
+        </Link>
 
-        {/* Marketplace Switcher — hidden on mobile, shown lg+ */}
-        <div className="hidden lg:flex lg:justify-self-center">
-          <MarketplaceSwitcher />
-        </div>
+        {/* Global search — the primary way into the platform on larger screens */}
+        {showSearch ? (
+          <div className="hidden min-w-0 flex-1 md:block md:max-w-md lg:max-w-xl">
+            <HeaderSearch />
+          </div>
+        ) : null}
 
         {/* Desktop Right — Auth */}
-        <div className="hidden items-center gap-2 lg:flex lg:justify-self-end">
-          {/* Theme toggle */}
+        <div className="ml-auto hidden items-center gap-1.5 lg:flex">
           {renderThemeToggle("relative")}
 
           {isAuthenticated ? (
@@ -204,19 +234,15 @@ function HeaderInner({
               {(trustLevelProp || auth.trustLevel) > 0 && (
                 <TrustBadge level={trustLevelProp || auth.trustLevel} size="sm" />
               )}
-              <Button asChild variant="ghost" size="sm">
-                <Link href="/advertise" prefetch={false}>
-                  Advertise
-                </Link>
-              </Button>
               <Button
                 asChild
                 variant="trust-verified"
                 size="sm"
-                className="rounded-full px-4 font-semibold shadow-sm"
+                className="ml-1 h-10 rounded-full px-4"
               >
                 <Link href="/post/create" prefetch={false}>
-                  + Post
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  Post
                 </Link>
               </Button>
 
@@ -224,24 +250,26 @@ function HeaderInner({
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
-                    className="focus:outline-none rounded-full ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    className="ml-1 rounded-full ring-offset-background focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     aria-label="Account menu"
                   >
-                    <Avatar className="h-9 w-9 cursor-pointer border-2 border-brand-gold">
-                      <AvatarFallback className="bg-brand-gold text-amber-950 text-xs font-bold">
+                    <Avatar className="h-10 w-10 cursor-pointer ring-2 ring-brand-green/25 transition hover:ring-brand-green/50">
+                      <AvatarFallback className="bg-brand-green-600 text-xs font-bold text-white">
                         {initials}
                       </AvatarFallback>
                     </Avatar>
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuContent align="end" className="w-60 rounded-2xl p-1.5">
                   <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
                       <p className="text-sm font-semibold leading-none">
                         {finalDisplayName || "My Account"}
                       </p>
                       {email && (
-                        <p className="text-xs leading-none text-muted-foreground">{email}</p>
+                        <p className="truncate text-xs leading-none text-muted-foreground">
+                          {email}
+                        </p>
                       )}
                     </div>
                   </DropdownMenuLabel>
@@ -251,6 +279,12 @@ function HeaderInner({
                       <Link href="/dashboard" prefetch={false} className="cursor-pointer">
                         <LayoutDashboard className="mr-2 h-4 w-4" />
                         Dashboard
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/verification" prefetch={false} className="cursor-pointer">
+                        <ShieldCheck className="mr-2 h-4 w-4" />
+                        Verification
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
@@ -289,25 +323,10 @@ function HeaderInner({
             </>
           ) : (
             <>
-              <Button asChild variant="ghost" size="sm">
-                <Link href="/advertise" prefetch={false}>
-                  Advertise
-                </Link>
-              </Button>
-              <Button
-                asChild
-                variant="outline"
-                className="rounded-full border-brand-green/40 hover:border-brand-green hover:bg-brand-green/5 hover:text-brand-green-800 dark:hover:text-brand-green-200"
-                size="sm"
-              >
+              <Button asChild variant="ghost" size="sm" className="h-10 rounded-full px-4">
                 <a href={LOGIN_HREF}>Sign in</a>
               </Button>
-              <Button
-                asChild
-                variant="trust-verified"
-                size="sm"
-                className="rounded-full px-4 font-semibold shadow-sm"
-              >
+              <Button asChild variant="trust-verified" size="sm" className="h-10 rounded-full px-5">
                 <a href={REGISTER_HREF}>Register</a>
               </Button>
             </>
@@ -315,13 +334,20 @@ function HeaderInner({
         </div>
 
         {/* Mobile actions stay visible when the menu is closed. */}
-        <div className="flex shrink-0 items-center gap-1 justify-self-end lg:hidden">
-          {renderThemeToggle("relative h-9 w-9 shrink-0")}
+        <div className="ml-auto flex shrink-0 items-center gap-0.5 lg:hidden">
+          <Link
+            href="/search"
+            prefetch={false}
+            aria-label="Search"
+            className="flex h-10 w-10 items-center justify-center rounded-full text-foreground/80 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden"
+          >
+            <Search className="h-5 w-5" aria-hidden="true" />
+          </Link>
           {isAuthenticated && <NotificationBell userId={auth.user?.id} />}
           <button
             ref={mobileToggleRef}
             type="button"
-            className="relative z-[120] flex h-11 w-11 items-center justify-center rounded-full p-2 touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="relative z-[120] flex h-11 w-11 items-center justify-center rounded-full p-2 touch-manipulation transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             onClick={() => setMobileOpen((prev) => !prev)}
             aria-label={mobileOpen ? "Close menu" : "Open menu"}
             aria-controls="mobile-nav-menu"
@@ -333,10 +359,28 @@ function HeaderInner({
         </div>
       </div>
 
-      {/* Mobile Marketplace Tabs — always visible on mobile */}
-      <div className="lg:hidden w-full border-t border-border/40">
-        <div className="px-3 py-2">
-          <MarketplaceSwitcher />
+      {/* Area navigation — the three product areas plus help links */}
+      <div className="border-t border-border/50">
+        <div className="container-page flex h-12 items-center gap-4">
+          <div className="min-w-0 flex-1 lg:flex-none">
+            <MarketplaceSwitcher />
+          </div>
+          <nav
+            aria-label="Help and business"
+            className="ml-auto hidden items-center gap-1 text-sm lg:flex"
+          >
+            {SECONDARY_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                prefetch={false}
+                className="inline-flex h-9 items-center gap-1.5 rounded-full px-3 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <link.icon className="h-4 w-4" aria-hidden="true" />
+                {link.label}
+              </Link>
+            ))}
+          </nav>
         </div>
       </div>
 
@@ -345,111 +389,155 @@ function HeaderInner({
         id="mobile-nav-menu"
         aria-label="Mobile navigation"
         hidden={!mobileOpen}
-        className={`lg:hidden border-t border-border/60 bg-background/95 backdrop-blur-xl ${
+        className={cn(
+          "max-h-[calc(100dvh-7rem)] overflow-y-auto border-t border-border/60 bg-background lg:hidden",
           mobileOpen ? "animate-fade-in-up" : "hidden"
-        }`}
+        )}
       >
-        <div className="container-page space-y-4 py-4 pb-safe">
-          <div className="flex flex-col gap-2">
-            {isAuthenticated ? (
-              <>
-                {/* Mobile user info */}
-                <div className="flex items-center gap-3 px-1 py-2">
-                  <Avatar className="h-9 w-9 border-2 border-brand-gold">
-                    <AvatarFallback className="bg-brand-gold text-amber-950 text-xs font-bold">
-                      {initials}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex flex-col flex-1">
-                    <span className="text-sm font-semibold">
-                      {finalDisplayName || "My Account"}
-                    </span>
-                    {email && <span className="text-xs text-muted-foreground">{email}</span>}
-                  </div>
-                </div>
-                <Link
-                  href="/dashboard"
-                  prefetch={false}
-                  className="flex items-center gap-2 py-2 text-sm font-medium"
-                  onClick={() => setMobileOpen(false)}
-                >
-                  <LayoutDashboard className="h-4 w-4" />
-                  Dashboard
-                </Link>
-                <Link
-                  href="/dashboard/settings"
-                  prefetch={false}
-                  className="flex items-center gap-2 py-2 text-sm font-medium"
-                  onClick={() => setMobileOpen(false)}
-                >
-                  <Settings className="h-4 w-4" />
-                  Settings
-                </Link>
-                {hasAdminAccess && (
-                  <Link
-                    href="/admin"
-                    prefetch={false}
-                    className="flex items-center gap-2 py-2 text-sm font-medium"
-                    onClick={() => setMobileOpen(false)}
-                  >
-                    <ShieldAlert className="h-4 w-4" />
-                    Admin
-                  </Link>
-                )}
+        <div className="container-page space-y-5 py-4 pb-safe">
+          {isAuthenticated ? (
+            <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-card p-3">
+              <Avatar className="h-11 w-11 ring-2 ring-brand-green/25">
+                <AvatarFallback className="bg-brand-green-600 text-sm font-bold text-white">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">{finalDisplayName || "My Account"}</p>
+                {email && <p className="truncate text-xs text-muted-foreground">{email}</p>}
+              </div>
+              {(trustLevelProp || auth.trustLevel) > 0 && (
+                <TrustBadge level={trustLevelProp || auth.trustLevel} size="sm" />
+              )}
+            </div>
+          ) : (
+            <div className="rounded-2xl bg-brand-green-600 p-4 text-white dark:bg-brand-green-900/60">
+              <p className="font-display text-lg font-bold leading-tight">
+                Join South Africa&apos;s trust-first marketplace
+              </p>
+              <p className="mt-1 text-sm text-white/80">
+                Free to join. Get verified and start posting in minutes.
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
                 <Button
                   asChild
-                  variant="trust-verified"
-                  className="w-full rounded-full font-semibold"
+                  className="h-11 rounded-full bg-white text-brand-green-800 hover:bg-white/90"
                 >
-                  <Link href="/post/create" prefetch={false} onClick={() => setMobileOpen(false)}>
-                    + Post
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" className="w-full rounded-full">
-                  <Link href="/advertise" prefetch={false} onClick={() => setMobileOpen(false)}>
-                    Advertise
-                  </Link>
-                </Button>
-                <button
-                  className="flex items-center gap-2 py-2 text-sm font-medium text-destructive disabled:opacity-50"
-                  disabled={signingOut}
-                  onClick={() => {
-                    setMobileOpen(false);
-                    handleSignOut();
-                  }}
-                >
-                  {signingOut ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <LogOut className="h-4 w-4" />
-                  )}
-                  {signingOut ? "Signing out…" : "Sign Out"}
-                </button>
-              </>
-            ) : (
-              <>
-                <Button asChild variant="outline" className="w-full rounded-full">
-                  <Link href="/advertise" prefetch={false} onClick={() => setMobileOpen(false)}>
-                    Advertise
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" className="w-full rounded-full">
-                  <a href={LOGIN_HREF} onClick={() => setMobileOpen(false)}>
-                    Sign in
-                  </a>
-                </Button>
-                <Button
-                  asChild
-                  variant="trust-verified"
-                  className="w-full rounded-full font-semibold"
-                >
-                  <a href={REGISTER_HREF} onClick={() => setMobileOpen(false)}>
+                  <a href={REGISTER_HREF} onClick={closeMobile}>
                     Register
                   </a>
                 </Button>
-              </>
-            )}
+                <Button
+                  asChild
+                  variant="outline"
+                  className="h-11 rounded-full border-white/40 bg-transparent text-white hover:bg-white/10 hover:text-white"
+                >
+                  <a href={LOGIN_HREF} onClick={closeMobile}>
+                    Sign in
+                  </a>
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {isAuthenticated ? (
+            <div className="space-y-1">
+              <Button asChild variant="trust-verified" className="mb-2 h-12 w-full rounded-full">
+                <Link href="/post/create" prefetch={false} onClick={closeMobile}>
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  Post something
+                </Link>
+              </Button>
+              <Link
+                href="/dashboard"
+                prefetch={false}
+                className={mobileLinkClass}
+                onClick={closeMobile}
+              >
+                <LayoutDashboard className="h-5 w-5 text-muted-foreground" />
+                Dashboard
+              </Link>
+              <Link
+                href="/verification"
+                prefetch={false}
+                className={mobileLinkClass}
+                onClick={closeMobile}
+              >
+                <ShieldCheck className="h-5 w-5 text-muted-foreground" />
+                Verification
+              </Link>
+              <Link
+                href="/dashboard/settings"
+                prefetch={false}
+                className={mobileLinkClass}
+                onClick={closeMobile}
+              >
+                <Settings className="h-5 w-5 text-muted-foreground" />
+                Settings
+              </Link>
+              {hasAdminAccess && (
+                <Link
+                  href="/admin"
+                  prefetch={false}
+                  className={mobileLinkClass}
+                  onClick={closeMobile}
+                >
+                  <ShieldAlert className="h-5 w-5 text-muted-foreground" />
+                  Admin
+                </Link>
+              )}
+            </div>
+          ) : null}
+
+          <div>
+            <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Help &amp; business
+            </p>
+            {SECONDARY_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                prefetch={false}
+                className={mobileLinkClass}
+                onClick={closeMobile}
+              >
+                <link.icon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                {link.label}
+              </Link>
+            ))}
+            <Link
+              href="/contact"
+              prefetch={false}
+              className={mobileLinkClass}
+              onClick={closeMobile}
+            >
+              <MessageCircle className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+              Contact support
+            </Link>
           </div>
+
+          <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-card px-3 py-2">
+            <span className="text-sm font-medium">Light / dark theme</span>
+            {renderThemeToggle("relative")}
+          </div>
+
+          {isAuthenticated ? (
+            <button
+              className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-[15px] font-medium text-destructive disabled:opacity-50"
+              disabled={signingOut}
+              onClick={() => {
+                closeMobile();
+                handleSignOut();
+              }}
+            >
+              {signingOut ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <LogOut className="h-5 w-5" />
+              )}
+              {signingOut ? "Signing out…" : "Sign Out"}
+            </button>
+          ) : null}
         </div>
       </nav>
     </header>

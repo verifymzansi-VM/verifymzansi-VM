@@ -916,7 +916,7 @@ export default function CreateListingPage() {
     <div className="flex min-h-screen flex-col">
       <Header isAuthenticated />
 
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         <div className="container-page py-6">
           <PlanGate area="MZANSI_MARKET" onTrialSelected={setTrialDays}>
             <form noValidate onSubmit={handleSubmit}>

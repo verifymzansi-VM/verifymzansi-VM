@@ -604,9 +604,11 @@ export function UnifiedLayout({
         <Badge variant="outline" className="text-[11px]">
           {BUSINESS_TYPE_LABELS[businessType]}
         </Badge>
-        <Badge variant="secondary" className="text-[11px]">
-          {BUSINESS_CATEGORY_LABELS[businessCategory]}
-        </Badge>
+        {BUSINESS_CATEGORY_LABELS[businessCategory] ? (
+          <Badge variant="secondary" className="text-[11px]">
+            {BUSINESS_CATEGORY_LABELS[businessCategory]}
+          </Badge>
+        ) : null}
         {business.subcategory ? (
           <Badge variant="secondary" className="bg-primary/10 text-[11px] text-primary">
             {business.subcategory.replace(/_/g, " ")}

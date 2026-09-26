@@ -19,14 +19,14 @@ export function getListingCardStatus({
   if (urgent) {
     return {
       label: "Urgent",
-      className: "bg-red-500/95 text-white border border-white/10",
+      className: "bg-brand-red-600 text-white border border-white/10",
     };
   }
 
   if (createdAt && isNew(createdAt)) {
     return {
       label: "New",
-      className: "bg-emerald-500/95 text-white border border-white/10",
+      className: "bg-white/95 text-brand-green-700 border border-black/5",
     };
   }
 

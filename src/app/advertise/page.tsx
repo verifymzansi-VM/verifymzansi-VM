@@ -64,7 +64,7 @@ export default function AdvertisePage() {
   return (
     <>
       <Header />
-      <main className="min-h-screen bg-background">
+      <main id="main-content" className="min-h-screen bg-background">
         <section className="border-b border-border/60 bg-gradient-to-b from-brand-green-50/40 via-background to-background">
           <div className="container-page py-10 space-y-6 sm:py-14">
             <PageHeader

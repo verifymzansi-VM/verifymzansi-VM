@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BrandLogo } from "../shared/brand-logo";
-import { Separator } from "@/components/ui/separator";
+import { ArrowRight, Check } from "lucide-react";
+import { BrandShield } from "@/components/shared/brand-shield";
 import { getServerPublicRuntimeConfig } from "@/lib/public-runtime-config";
 import { OfficialSocialLinks } from "@/components/shared/official-social-links";
 
@@ -40,7 +41,7 @@ const footerSections = [
 function SouthAfricanFlagMark() {
   return (
     <svg
-      className="h-5 w-[30px] shrink-0 overflow-hidden rounded-[2px] ring-1 ring-black/10 dark:ring-white/20"
+      className="h-5 w-[30px] shrink-0 overflow-hidden rounded-[2px] ring-1 ring-white/25"
       viewBox="0 0 300 200"
       role="img"
       aria-label="South African flag"
@@ -62,48 +63,84 @@ export function Footer() {
   const currentYear = new Date().getFullYear();
   const runtimeConfig = getServerPublicRuntimeConfig();
   const footerLinkClassName =
-    "inline-flex min-h-7 items-center rounded-md py-1 text-[13px] text-muted-foreground transition-all duration-200 hover:translate-x-0.5 hover:text-brand-green-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:hover:text-brand-green-300";
+    "inline-flex min-h-8 items-center rounded-md py-1 text-sm text-white/65 transition-colors duration-200 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-green-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#07130f]";
 
   return (
-    <footer className="border-t border-border/50 bg-warm-50/70 dark:bg-warm-950/60">
-      {/* Trust band — reinforces the platform promise without implying guarantees */}
-      <div className="border-b border-border/50 bg-gradient-to-r from-brand-green-50/60 via-transparent to-brand-gold-50/50 dark:from-brand-green-950/40 dark:to-brand-gold-950/20">
-        <div className="container-page flex flex-col items-center justify-between gap-4 py-6 text-center sm:flex-row sm:text-left">
-          <p className="font-display text-sm font-semibold tracking-tight text-foreground sm:text-base">
-            Real people. Verified identities. Local opportunities.{" "}
-            <span className="text-muted-foreground font-normal">
-              Verification helps you check who you are dealing with.
-            </span>
-          </p>
-          <Link
-            href="/trust-safety"
-            prefetch={false}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-brand-green/25 bg-background/80 px-4 py-1.5 text-xs font-semibold text-brand-green-800 transition-colors hover:bg-brand-green/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:text-brand-green-200"
-          >
-            How verification works
-          </Link>
+    <footer className="relative mt-auto overflow-hidden bg-[#07130f] text-white">
+      <div
+        aria-hidden="true"
+        className="mzansi-pattern pointer-events-none absolute inset-0 opacity-[0.035] invert"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -top-40 right-[-10%] h-80 w-80 rounded-full bg-brand-green-500/20 blur-3xl"
+      />
+
+      {/* Call-to-action band */}
+      <div className="relative border-b border-white/10">
+        <div className="container-page flex flex-col gap-5 py-10 md:flex-row md:items-center md:justify-between md:py-12">
+          <div className="max-w-xl">
+            <p className="font-display text-2xl font-bold leading-tight tracking-tight sm:text-3xl">
+              Got something to sell, share or host?
+            </p>
+            <p className="mt-2 text-sm leading-6 text-white/65 sm:text-base">
+              Get verified once, then post to Mzansi Market, Mzansi Business or Tourism &amp;
+              Events. Your first post is free.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/post/create"
+              prefetch={false}
+              className="inline-flex h-12 items-center gap-2 rounded-full bg-brand-green-500 px-6 text-sm font-semibold text-brand-green-950 transition-colors hover:bg-brand-green-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#07130f]"
+            >
+              Post for free
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+            <Link
+              href="/trust-safety"
+              prefetch={false}
+              className="inline-flex h-12 items-center gap-2 rounded-full border border-white/20 px-6 text-sm font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#07130f]"
+            >
+              <BrandShield className="h-4 w-4" />
+              How verification works
+            </Link>
+          </div>
         </div>
       </div>
-      <div className="container-page py-10 pb-[calc(env(safe-area-inset-bottom)+8rem)] md:py-14 md:pb-14">
+
+      <div className="container-page relative py-10 pb-[calc(env(safe-area-inset-bottom)+6.5rem)] md:py-14 md:pb-12">
         {/* Mobile nav is h-16 (64px). Extra bottom spacing keeps legal links above nav across mobile browsers. */}
         <h2 className="sr-only">Footer navigation</h2>
-        <div className="grid grid-cols-2 gap-8 sm:gap-10 sm:grid-cols-4 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-9 sm:grid-cols-4 lg:grid-cols-[1.4fr_1fr_1fr_1fr_1fr]">
           {/* Brand */}
-          <div className="space-y-3">
-            <Link href="/" prefetch={false} className="flex items-center gap-1.5">
-              <BrandLogo size="sm" />
+          <div className="col-span-2 space-y-4 sm:col-span-4 lg:col-span-1">
+            <Link href="/" prefetch={false} className="inline-flex items-center">
+              <BrandLogo size="sm" tone="inverse" />
             </Link>
-            <p className="text-[13px] leading-6 text-muted-foreground max-w-xs">
-              Find and post trusted local listings, services, tourism, and events in South Africa.
+            <p className="max-w-xs text-sm leading-6 text-white/60">
+              South Africa&apos;s trust-first marketplace. Buy, sell and discover local businesses,
+              stays and events with people whose identity has been reviewed.
             </p>
+            <ul className="flex flex-wrap gap-2 text-xs text-white/70">
+              {["ID-reviewed members", "Moderated posts", "POPIA-aligned"].map((item) => (
+                <li
+                  key={item}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1"
+                >
+                  <Check className="h-3 w-3 text-brand-green-300" aria-hidden="true" />
+                  {item}
+                </li>
+              ))}
+            </ul>
           </div>
 
           {footerSections.map((section) => (
             <div key={section.title} className="space-y-3">
-              <h3 className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground/70">
+              <h3 className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
                 {section.title}
               </h3>
-              <nav aria-label={section.title} className="flex flex-col gap-1">
+              <nav aria-label={section.title} className="flex flex-col">
                 {section.links.map((link) => (
                   <Link
                     key={link.href}
@@ -121,15 +158,14 @@ export function Footer() {
           <OfficialSocialLinks
             links={runtimeConfig.officialSocialLinks}
             className="space-y-2"
-            linkClassName="inline-flex items-center rounded-full border border-border/60 bg-background/60 px-3 py-1 text-xs text-muted-foreground transition-all duration-200 hover:border-brand-green/40 hover:bg-brand-green/5 hover:text-brand-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:hover:text-brand-green-200"
+            titleClassName="text-xs font-semibold uppercase tracking-[0.16em] text-white/45"
+            linkClassName="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-white/75 transition-colors duration-200 hover:border-white/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
           />
         </div>
 
-        <Separator className="my-6 sm:my-8 opacity-60" />
-
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
+        <div className="mt-10 flex flex-col-reverse items-start justify-between gap-4 border-t border-white/10 pt-6 text-xs text-white/50 sm:flex-row sm:items-center">
           <p>&copy; {currentYear} VerifyMzansi. All rights reserved.</p>
-          <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/80 px-3.5 py-1.5 elev-xs">
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-white/80">
             <SouthAfricanFlagMark />
             <span className="font-medium">Made in South Africa</span>
           </div>

@@ -1,3 +1,4 @@
+import { formatZARShort } from "@/lib/utils/format";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import type { CarouselItem } from "./showroom-card-carousel";
 
@@ -41,7 +42,7 @@ export function listingToCarouselItem(
         : undefined,
     logoUrl: l.logo_url ? normalizeMediaUrl(l.logo_url) : undefined,
     price: l.price_cents ? l.price_cents / 100 : null,
-    eyebrow: l.price_cents ? `R ${(l.price_cents / 100).toLocaleString("en-ZA")}` : null,
+    eyebrow: l.price_cents ? formatZARShort(l.price_cents) : null,
     focalX: l.focal_x ?? null,
     focalY: l.focal_y ?? null,
     mediaWidth: l.media_width ?? null,
@@ -133,7 +134,7 @@ export function promotionToCarouselItem(
         ? normalizeMediaUrl(p.photos[0])
         : undefined,
     price: p.price_cents ? p.price_cents / 100 : null,
-    eyebrow: p.price_cents ? `R ${(p.price_cents / 100).toLocaleString("en-ZA")}` : null,
+    eyebrow: p.price_cents ? formatZARShort(p.price_cents) : null,
     focalX: p.focal_x ?? null,
     focalY: p.focal_y ?? null,
     mediaWidth: p.media_width ?? null,

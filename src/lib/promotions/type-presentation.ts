@@ -35,12 +35,12 @@ export const PROMOTION_FILTER_TYPE_PRESENTATIONS: Record<
     label: getPromotionFilterTypeLabel("event"),
     cardTagLabel: "Event",
     activeClassName:
-      "border-teal-500 bg-teal-500 text-white shadow-[0_12px_24px_-16px_rgba(20,184,166,0.72)]",
+      "border-sunset-600 bg-sunset-600 text-white shadow-[0_12px_24px_-16px_rgba(228,88,28,0.72)]",
     inactiveClassName:
-      "border-teal-300 bg-teal-50 text-teal-700 hover:border-teal-500 hover:bg-teal-100 dark:border-teal-700/70 dark:bg-teal-950/45 dark:text-teal-100 dark:hover:border-teal-500 dark:hover:bg-teal-900/60",
-    cardBadgeClassName: "bg-teal-600/95 text-white border border-white/10",
-    cardTagClassName: "bg-teal-800 text-white",
-    cardAccentClassName: "hover:border-teal-600/60",
+      "border-sunset-300 bg-sunset-50 text-sunset-700 hover:border-sunset-500 hover:bg-sunset-100 dark:border-sunset-700/70 dark:bg-sunset-950/45 dark:text-sunset-100 dark:hover:border-sunset-500 dark:hover:bg-sunset-900/60",
+    cardBadgeClassName: "bg-sunset-600/95 text-white border border-white/10",
+    cardTagClassName: "bg-sunset-600 text-white",
+    cardAccentClassName: "hover:border-sunset-600/60",
   },
 };
 

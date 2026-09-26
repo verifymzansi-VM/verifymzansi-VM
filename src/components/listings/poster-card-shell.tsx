@@ -5,6 +5,7 @@ import { VideoViewTracker } from "@/components/ui/video-view-tracker";
 import Link from "next/link";
 import Image from "next/image";
 import { ImageOff, MapPin } from "lucide-react";
+import { VerifiedTick } from "@/components/trust/verified-tick";
 import { Card } from "@/components/ui/card";
 import {
   VideoCardPlayer,
@@ -15,9 +16,11 @@ import { VideoDurationBadge } from "@/components/ui/video-duration-badge";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
 import type { TrustLevel } from "@/types/enums";
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 const CARD_FRAME = { aspectRatio: 9 / 16, aspectClassName: "aspect-[9/16]" } as const;
+/** Feed cards (rails and grids) use a 4:5 frame: taller than square for phone media, yet browsable. */
+const FEED_FRAME = { aspectRatio: 4 / 5, aspectClassName: "aspect-[4/5]" } as const;
 type PosterCardVariant = "default" | "showcase" | "hero";
 type MediaControlVariant = "default" | "hero";
 
@@ -137,7 +140,6 @@ export function PosterCardShell({
   feedPlaybackActive = true,
   deferVideoLoadUntilPlay = false,
 }: PosterCardShellProps) {
-  const [mediaPlaying, setMediaPlaying] = useState(false);
   const normalizedMediaUrl = mediaUrl ? normalizeMediaUrl(mediaUrl) : undefined;
   const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
   const normalizedLogoUrl = logoUrl ? normalizeMediaUrl(logoUrl) : undefined;
@@ -145,7 +147,7 @@ export function PosterCardShell({
     ? normalizeMediaUrl(mediaFallbackUrl)
     : undefined;
   const hasVideo = isVideo ?? isVideoUrl(mediaUrl);
-  const frame = CARD_FRAME;
+  const frame = immersive ? FEED_FRAME : CARD_FRAME;
   // Keep hero media mounted as cards move between active and side slots.
   const hasIndependentControls =
     hasVideo || showPlaybackControl || (cardVariant === "hero" && makeEntireCardClickable);
@@ -154,7 +156,7 @@ export function PosterCardShell({
   const isShowcaseVariant = cardVariant === "showcase";
   const disableNativeDrag = disableNativeDragProp || isHeroVariant;
   const rootRadiusClassName = immersive
-    ? "rounded-[20px]"
+    ? "rounded-2xl"
     : isHeroVariant
       ? "rounded-[28px]"
       : "rounded-xl";
@@ -202,7 +204,7 @@ export function PosterCardShell({
     isHeroVariant && !immersive
       ? "border border-slate-200 bg-white text-slate-950 elev-lg ring-1 ring-black/5 hover:-translate-y-0.5 hover:elev-xl dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:ring-white/10"
       : isShowcaseVariant || immersive
-        ? "border-transparent bg-transparent shadow-none hover:-translate-y-0.5 hover:border-transparent hover:bg-transparent hover:shadow-none dark:bg-transparent"
+        ? "border-0 bg-transparent shadow-none hover:border-transparent hover:bg-transparent hover:shadow-none dark:bg-transparent"
         : "border border-border/60 bg-card elev-xs hover:-translate-y-px hover:elev-sm hover:border-foreground/15 dark:bg-card dark:text-white",
     rootRadiusClassName,
     accentClassName
@@ -344,10 +346,6 @@ export function PosterCardShell({
       trustLevel={trustLevel}
       data-card-variant={cardVariant}
       data-card-immersive={immersive || undefined}
-      onPlayingCapture={immersive ? () => setMediaPlaying(true) : undefined}
-      onPauseCapture={immersive ? () => setMediaPlaying(false) : undefined}
-      onEndedCapture={immersive ? () => setMediaPlaying(false) : undefined}
-      onErrorCapture={immersive ? () => setMediaPlaying(false) : undefined}
     >
       {/* ── 9:16 card thumbnail ───────────────────────────────── */}
       <div
@@ -355,7 +353,9 @@ export function PosterCardShell({
         className={cn(
           "relative w-full overflow-hidden bg-slate-900",
           mediaRadiusClassName,
-          immersive ? "aspect-[9/16] rounded-[20px]" : frame.aspectClassName
+          immersive
+            ? "aspect-[4/5] rounded-2xl bg-muted ring-1 ring-black/5 transition-shadow duration-300 group-hover/poster:shadow-lg dark:ring-white/5"
+            : frame.aspectClassName
         )}
       >
         {normalizedMediaUrl ? (
@@ -365,7 +365,7 @@ export function PosterCardShell({
               isVideo={hasVideo}
               posterUrl={normalizedPosterUrl}
               alt={mediaAlt || title}
-              sizes={immersive ? "(max-width: 640px) 50vw, 296px" : mediaSizes}
+              sizes={immersive ? "(max-width: 640px) 50vw, 280px" : mediaSizes}
               mode={videoMode ?? "hover"}
               fitStrategy={effectiveFitStrategy}
               containerAspectRatio={frame.aspectRatio}
@@ -394,11 +394,11 @@ export function PosterCardShell({
         )}
 
         {/* Status badge — top-left corner of thumbnail */}
-        {statusLabel && !immersive ? (
-          <div className="absolute left-2 top-2 z-[6]">
+        {statusLabel ? (
+          <div className="pointer-events-none absolute left-2 top-2 z-[6]">
             <span
               className={cn(
-                "inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] shadow-md ring-1 ring-black/10",
+                "inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.1em] shadow-md ring-1 ring-black/10",
                 statusClassName
               )}
             >
@@ -409,43 +409,59 @@ export function PosterCardShell({
 
         {/* Duration badge — bottom-right of thumbnail (YouTube-style) */}
         {hasVideo && !immersive ? <VideoDurationBadge seconds={videoDuration} /> : null}
-        {immersive ? (
+        {immersive && normalizedLogoUrl ? (
           <div
             data-card-overlay
-            className={cn(
-              "pointer-events-none absolute inset-x-0 bottom-0 z-[5] flex items-end gap-2 bg-gradient-to-t from-black/75 via-black/30 to-transparent px-2.5 pb-3 pt-10 text-white transition-opacity duration-300 motion-reduce:transition-none",
-              mediaPlaying ? "opacity-0" : "opacity-100",
-              !hasVideo && "group-hover/poster:opacity-0 group-active/poster:opacity-0"
-            )}
+            className="pointer-events-none absolute bottom-2 left-2 z-[5] overflow-hidden rounded-full bg-white shadow-md ring-2 ring-white"
           >
-            <div className="min-w-0 flex-1 drop-shadow-md">
-              {eyebrow ? <p className="mb-1 text-xs font-bold sm:text-sm">{eyebrow}</p> : null}
-              <h3 className="line-clamp-2 text-[11px] font-semibold leading-tight sm:text-sm">
-                {title}
-              </h3>
-              {location ? (
-                <p className="mt-1 flex min-w-0 items-center gap-1 text-[10px] leading-tight sm:text-xs">
-                  <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
-                  <span className="truncate">{location}</span>
-                </p>
-              ) : null}
-            </div>
-            {normalizedLogoUrl ? (
-              <Image
-                src={normalizedLogoUrl}
-                alt={`${title} logo`}
-                width={36}
-                height={36}
-                className="h-8 w-8 shrink-0 rounded-full object-contain drop-shadow-md sm:h-10 sm:w-10"
-                draggable={false}
-              />
-            ) : null}
+            <Image
+              src={normalizedLogoUrl}
+              alt={`${title} logo`}
+              width={32}
+              height={32}
+              className="h-8 w-8 object-contain"
+              draggable={false}
+            />
           </div>
         ) : null}
       </div>
 
       {/* ── YouTube-style metadata row beneath thumbnail ────────── */}
-      {immersive ? null : hasIndependentControls && !makeEntireCardClickable ? (
+      {immersive ? (
+        <div className="px-0.5 pb-1 pt-2.5" data-card-metadata>
+          {eyebrow ? (
+            <p
+              className={cn(
+                "text-[15px] font-bold leading-tight text-foreground",
+                eyebrowClassName
+              )}
+            >
+              {eyebrow}
+            </p>
+          ) : null}
+          <h3
+            className={cn(
+              "line-clamp-2 font-body text-sm font-medium leading-snug text-foreground/90 transition-colors group-hover/poster:text-foreground",
+              eyebrow ? "mt-0.5" : "font-semibold"
+            )}
+          >
+            {title}
+          </h3>
+          {location ? (
+            <p className="mt-1 flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+              <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
+              <span className="truncate">{location}</span>
+            </p>
+          ) : null}
+          {trustLevel >= 3 ? (
+            <p className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-green-700 dark:text-brand-green-300">
+              <VerifiedTick decorative className="h-3.5 w-3.5" pro={trustLevel === 4} />
+              ID reviewed
+            </p>
+          ) : null}
+          {affiliation ?? null}
+        </div>
+      ) : hasIndependentControls && !makeEntireCardClickable ? (
         <Link
           href={href}
           prefetch={false}

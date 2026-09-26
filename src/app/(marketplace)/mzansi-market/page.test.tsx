@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import MzansiMarketPage from "./page";
 
@@ -6,10 +6,10 @@ const { mockCreateClient } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
 }));
 
-const { carouselSpy, pageHeaderSpy, trustStripSpy } = vi.hoisted(() => ({
+const { carouselSpy, pageHeaderSpy, areaHeroSpy } = vi.hoisted(() => ({
   carouselSpy: vi.fn(),
   pageHeaderSpy: vi.fn(),
-  trustStripSpy: vi.fn(),
+  areaHeroSpy: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -26,10 +26,10 @@ vi.mock("@/components/showrooms/showroom-card-carousel", () => ({
   },
 }));
 
-vi.mock("@/components/layout/trust-strip", () => ({
-  TrustStrip: (props: { title?: string; variant?: string }) => {
-    trustStripSpy(props);
-    return <div data-testid="trust-strip" />;
+vi.mock("@/components/layout/area-hero", () => ({
+  AreaHero: (props: { title?: string; area?: string; ctaHref?: string }) => {
+    areaHeroSpy(props);
+    return <div data-testid="area-hero" />;
   },
 }));
 
@@ -111,20 +111,23 @@ describe("MzansiMarketPage", () => {
     );
   });
 
-  it("labels the trust strip for the market route", async () => {
+  it("introduces the market route with its area hero", async () => {
     render(await MzansiMarketPage());
 
-    expect(trustStripSpy).toHaveBeenCalledWith(
+    expect(areaHeroSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        variant: "green",
-        title: "Latest on Mzansi Market",
+        area: "market",
+        title: "Mzansi Market",
+        ctaHref: "/post/create-listing",
       })
     );
   });
 
-  it("uses Mzansi Market as the primary page heading", async () => {
+  it("uses Mzansi Market as the only primary page heading", async () => {
     render(await MzansiMarketPage());
 
-    expect(pageHeaderSpy).toHaveBeenCalledWith(expect.objectContaining({ title: "Mzansi Market" }));
+    // The area hero owns the h1; the grid section uses an h2.
+    expect(pageHeaderSpy).not.toHaveBeenCalled();
+    expect(screen.getByRole("heading", { level: 2, name: "Latest listings" })).toBeInTheDocument();
   });
 });

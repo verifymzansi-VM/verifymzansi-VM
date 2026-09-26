@@ -29,7 +29,10 @@ export default async function ErrorPage({
   const message = getMessage(params?.reason);
 
   return (
-    <main className="container-page flex min-h-[70vh] max-w-2xl flex-col items-center justify-center gap-6 py-12 text-center">
+    <main
+      id="main-content"
+      className="container-page flex min-h-[70vh] max-w-2xl flex-col items-center justify-center gap-6 py-12 text-center"
+    >
       <div className="space-y-3">
         <p className="text-sm font-medium uppercase tracking-[0.2em] text-muted-foreground">
           VerifyMzansi

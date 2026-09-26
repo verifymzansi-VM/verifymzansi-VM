@@ -20,6 +20,10 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/",
+}));
+
 vi.mock("@/components/layout/header", () => ({
   Header: () => <header data-testid="header" />,
 }));
@@ -61,7 +65,7 @@ describe("HomePage", () => {
     vi.clearAllMocks();
   });
 
-  it("renders the hero, showcase rails, and onboarding guide", async () => {
+  it("leads with a value-proposition hero and search, then the showcase rails", async () => {
     const ui = await HomePage();
     render(ui);
 
@@ -71,28 +75,29 @@ describe("HomePage", () => {
     const marketShowcase = screen.getByTestId("market-showcase");
 
     expect(heroBanner).toBeInTheDocument();
-    expect(promotionsShowcase).toBeInTheDocument();
-    expect(businessShowcase).toBeInTheDocument();
-    expect(marketShowcase).toBeInTheDocument();
     expect(promotionsShowcase.compareDocumentPosition(businessShowcase)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     );
     expect(businessShowcase.compareDocumentPosition(marketShowcase)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     );
-    expect(
-      screen.getByRole("heading", {
-        level: 1,
-        name: "Find and post trusted listings across South Africa.",
-      })
-    ).toBeInTheDocument();
+
+    const heading = screen.getByRole("heading", { level: 1 });
+    expect(heading).toHaveTextContent("Buy, sell and discover with people you can trust.");
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
-    expect(screen.queryByRole("search")).not.toBeInTheDocument();
-    expect(screen.getByRole("main").firstElementChild).toBe(heroBanner);
-    expect(screen.getByText("Get Started")).toBeInTheDocument();
-    expect(screen.getByText("Create your profile")).toBeInTheDocument();
+    // The hero is the first landmark content and carries the site search.
+    const hero = screen.getByRole("main").firstElementChild as HTMLElement;
+    expect(hero).toContainElement(heading);
+    expect(within(hero).getByRole("search", { name: "Search VerifyMzansi" })).toHaveAttribute(
+      "action",
+      "/search"
+    );
+    expect(
+      screen.getByRole("heading", { name: "Know who you're dealing with, before you meet." })
+    ).toBeInTheDocument();
+    expect(screen.getByText("Create your free account")).toBeInTheDocument();
     expect(screen.getByText("Complete verification")).toBeInTheDocument();
-    expect(screen.getByText("Choose your category")).toBeInTheDocument();
+    expect(screen.getByText("Choose where to post")).toBeInTheDocument();
   });
 
   it("uses canonical category href values", async () => {
@@ -107,7 +112,7 @@ describe("HomePage", () => {
       "href",
       "/post/create"
     );
-    expect(screen.getByRole("link", { name: /Pricing/i })).toHaveAttribute("href", "/pricing");
+    expect(screen.getByRole("link", { name: /^Pricing/i })).toHaveAttribute("href", "/pricing");
     expect(within(primaryCategories).getByRole("link", { name: /Mzansi Market/i })).toHaveAttribute(
       "href",
       "/mzansi-market"
@@ -173,10 +178,15 @@ describe("HomePage", () => {
       "href",
       "/post/create"
     );
-    expect(screen.getByRole("link", { name: /Pricing/i })).toHaveAttribute("href", "/pricing");
-    expect(screen.getByRole("link", { name: /Advertise/i })).toHaveAttribute("href", "/advertise");
-    expect(screen.getByText("Create your profile")).toBeInTheDocument();
-    expect(screen.getByText("Complete verification")).toBeInTheDocument();
-    expect(screen.getByText("Choose your category")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^Pricing/i })).toHaveAttribute("href", "/pricing");
+    expect(screen.getByRole("link", { name: /^Advertise/i })).toHaveAttribute("href", "/advertise");
+    expect(screen.getByRole("link", { name: /How verification works/i })).toHaveAttribute(
+      "href",
+      "/trust-safety"
+    );
+    expect(screen.getByRole("link", { name: /Cars & bakkies/i })).toHaveAttribute(
+      "href",
+      "/mzansi-market?category=vehicles"
+    );
   });
 });

@@ -4,6 +4,7 @@ interface OfficialSocialLinksProps {
   links: OfficialSocialLinkConfig;
   title?: string;
   className?: string;
+  titleClassName?: string;
   linkClassName?: string;
 }
 
@@ -11,6 +12,7 @@ export function OfficialSocialLinks({
   links,
   title = "Follow VerifyMzansi",
   className,
+  titleClassName,
   linkClassName,
 }: OfficialSocialLinksProps) {
   const socialLinks = getOfficialSocialLinks(links);
@@ -21,7 +23,12 @@ export function OfficialSocialLinks({
 
   return (
     <div className={className}>
-      <h4 className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground/70">
+      <h4
+        className={
+          titleClassName ??
+          "font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground/70"
+        }
+      >
         {title}
       </h4>
       <div className="mt-2 flex flex-wrap gap-2">

@@ -14,8 +14,12 @@ vi.mock("next/headers", () => ({
 }));
 
 vi.mock("next/font/google", () => ({
-  Sora: () => ({ className: "sora", variable: "--font-display", style: {} }),
-  Inter: () => ({ className: "inter", variable: "--font-body", style: {} }),
+  Bricolage_Grotesque: () => ({
+    className: "bricolage",
+    variable: "--font-display",
+    style: {},
+  }),
+  Plus_Jakarta_Sans: () => ({ className: "jakarta", variable: "--font-body", style: {} }),
 }));
 
 vi.mock("@/components/providers/theme-provider", () => ({

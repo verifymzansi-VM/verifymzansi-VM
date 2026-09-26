@@ -5,7 +5,6 @@ import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
-import { ContentViewCountText } from "@/components/listings/content-view-count-text";
 import {
   ListingDetailContent,
   type SimilarListingRow,
@@ -168,17 +167,10 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/<\//g, "<\\/") }}
       />
 
-      <main className="flex-1">
-        <div className="container-page py-4 space-y-5">
+      <main id="main-content" className="flex-1">
+        <div className="container-page space-y-6 py-6 lg:py-8">
           <PageHeader
             title={listing.title}
-            description={
-              <ContentViewCountText
-                targetId={listing.id}
-                targetType="listing"
-                initialCount={listingViewCount}
-              />
-            }
             breadcrumbs={[
               { label: "Mzansi Market", href: "/mzansi-market" },
               { label: listing.title },

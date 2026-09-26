@@ -78,7 +78,8 @@ vi.mock("@/components/trust/trust-badge", () => ({
   TrustBadge: ({ level }: { level: string }) => <span data-testid="trust-badge">{level}</span>,
 }));
 
-vi.mock("@/lib/utils/format", () => ({
+vi.mock("@/lib/utils/format", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   formatZAR: (cents: number) => `R ${(cents / 100).toFixed(2)}`,
   formatZARShort: (cents: number) => `R${Math.round(cents / 100)}`,
   formatRelativeTime: () => "1d ago",
@@ -124,9 +125,10 @@ describe("PromotionCard", () => {
       />
     );
 
-    expect(screen.getByText("TUE, 10 MAR")).toBeTruthy();
-    expect(screen.queryByText("Event")).toBeNull();
-    expect(screen.getByTestId("card")).toHaveClass("hover:border-teal-600/60");
+    // Deterministic South African date (no locale/time-zone drift on hydration).
+    expect(screen.getByText("Tue 10 Mar")).toBeTruthy();
+    expect(screen.getByText("Event")).toBeTruthy();
+    expect(screen.getByTestId("card")).toHaveClass("hover:border-sunset-600/60");
   });
 
   it("hides linked business context in the reduced card", () => {
@@ -135,7 +137,7 @@ describe("PromotionCard", () => {
     expect(screen.queryByText(/by Nomsa Foods/i)).toBeNull();
   });
 
-  it("hides status chips and category text on immersive cards", () => {
+  it("shows paid status chips but hides category text on immersive cards", () => {
     render(
       <PromotionCard
         {...defaultProps}
@@ -146,23 +148,23 @@ describe("PromotionCard", () => {
       />
     );
 
-    expect(screen.queryByText("Featured")).toBeNull();
+    expect(screen.getByText("Featured")).toBeTruthy();
     expect(screen.queryByText(/Food & Dining/i)).toBeNull();
-    expect(screen.getByTestId("card")).toHaveClass("hover:border-teal-600/60");
+    expect(screen.getByTestId("card")).toHaveClass("hover:border-sunset-600/60");
   });
 
-  it("preserves event card styling without a status badge", () => {
+  it("tags event cards so they stand out in mixed rails", () => {
     render(<PromotionCard {...defaultProps} promotionType="event" />);
 
-    expect(screen.queryByText("Event")).toBeNull();
-    expect(screen.getByTestId("card")).toHaveClass("hover:border-teal-600/60");
+    expect(screen.getByText("Event")).toBeTruthy();
+    expect(screen.getByTestId("card")).toHaveClass("hover:border-sunset-600/60");
   });
 
   it("keeps the type ribbon visible when the card is boosted", () => {
     render(<PromotionCard {...defaultProps} promotionType="event" boosted immersive={false} />);
 
     expect(screen.getByText("Event ★")).toBeTruthy();
-    expect(screen.getByText("Event ★")).toHaveClass("bg-teal-800");
+    expect(screen.getByText("Event ★")).toHaveClass("bg-sunset-600");
   });
 
   it("renders the linked business logo when provided", () => {

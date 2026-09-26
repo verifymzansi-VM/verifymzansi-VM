@@ -142,12 +142,13 @@ export function PromotionFilterDrawer({
         <SheetTrigger asChild>
           <button
             type="button"
-            className="fixed bottom-0 left-1/2 z-40 inline-flex h-12 w-12 -translate-x-1/2 items-center justify-center gap-1 rounded-full bg-brand-gold text-warm-950 shadow-lg shadow-brand-gold/40 ring-1 ring-white/30 transition-all hover:brightness-105 active:scale-95 md:hidden motion-reduce:transition-none motion-reduce:active:scale-100"
+            className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 z-40 inline-flex h-11 -translate-x-1/2 items-center justify-center gap-2 rounded-full bg-foreground px-5 text-sm font-semibold text-background shadow-xl shadow-black/20 ring-1 ring-white/10 transition-all hover:bg-foreground/90 active:scale-95 md:hidden motion-reduce:transition-none motion-reduce:active:scale-100"
             aria-label="Open tourism and events filters"
           >
             <SlidersHorizontal className="h-4 w-4 shrink-0" />
+            <span>Filters</span>
             {activeFilterCount > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-warm-950 px-1 text-[10px] font-bold text-brand-gold ring-2 ring-background">
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-gold px-1 text-[11px] font-bold text-warm-950">
                 {activeFilterCount}
               </span>
             )}
@@ -156,11 +157,12 @@ export function PromotionFilterDrawer({
       ) : (
         <button
           type="button"
-          className="fixed bottom-0 left-1/2 z-40 inline-flex h-11 w-11 -translate-x-1/2 items-center justify-center rounded-full bg-amber-400 text-foreground shadow-lg opacity-50 md:hidden"
+          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 z-40 inline-flex h-11 -translate-x-1/2 items-center justify-center gap-2 rounded-full bg-foreground px-5 text-sm font-semibold text-background opacity-50 shadow-xl md:hidden"
           aria-label="Open tourism and events filters"
           disabled
         >
-          <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+          <SlidersHorizontal className="h-4 w-4 shrink-0" />
+          <span>Filters</span>
         </button>
       )}
 

@@ -13,7 +13,10 @@ export function BannedPageContent() {
     <div className="flex min-h-screen flex-col">
       <Header />
 
-      <main className="flex-1 flex items-center justify-center px-4 py-12 overflow-hidden relative">
+      <main
+        id="main-content"
+        className="flex-1 flex items-center justify-center px-4 py-12 overflow-hidden relative"
+      >
         <div className="container-page max-w-md text-center space-y-5 relative z-10">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-destructive/20 bg-destructive/10 shadow-xs">
             <ShieldAlert className="h-8 w-8 text-destructive" aria-hidden="true" />

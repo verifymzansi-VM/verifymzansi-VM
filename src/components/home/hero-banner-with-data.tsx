@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
 import { ShowroomCardCarousel } from "@/components/showrooms/showroom-card-carousel";
@@ -22,7 +23,15 @@ function isValidHttpUrl(value: string): boolean {
  * Async server component that fetches hero data and renders the HeroBanner.
  * Designed to be wrapped in <Suspense> so the rest of the homepage streams immediately.
  */
-export async function HeroBannerWithData() {
+export async function HeroBannerWithData({
+  heading,
+  hideWhenEmpty = false,
+}: {
+  /** Section heading rendered above the showroom (only when it renders). */
+  heading?: ReactNode;
+  /** Render nothing instead of the branded empty card when there is no content. */
+  hideWhenEmpty?: boolean;
+} = {}) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const perAreaTarget = 5;
@@ -95,7 +104,11 @@ export async function HeroBannerWithData() {
     ...(latestPromotions || []).map((p) => promotionToCarouselItem(p)),
   ];
 
-  return (
+  if (hideWhenEmpty && carouselItems.length === 0) {
+    return null;
+  }
+
+  const carousel = (
     <ShowroomCardCarousel
       items={carouselItems}
       emptyTitle="Welcome to VerifyMzansi"
@@ -103,5 +116,16 @@ export async function HeroBannerWithData() {
       emptyMediaUrl="/images/fallbacks/hero-home.svg"
       background={generatedMzansiShowroomBackground}
     />
+  );
+
+  if (!heading) {
+    return carousel;
+  }
+
+  return (
+    <div>
+      {heading}
+      {carousel}
+    </div>
   );
 }

@@ -1,17 +1,17 @@
 import type { Metadata, Viewport } from "next";
 import { AcquisitionCapture } from "@/components/analytics/acquisition-capture";
 import { headers } from "next/headers";
-import { Inter, Sora } from "next/font/google";
+import { Bricolage_Grotesque, Plus_Jakarta_Sans } from "next/font/google";
 import { CSRF_HEADER_NAME } from "@/lib/utils/csrf";
 
-const fontDisplay = Sora({
+const fontDisplay = Bricolage_Grotesque({
   subsets: ["latin"],
   variable: "--font-display",
   display: "swap",
   fallback: ["Segoe UI", "Trebuchet MS", "system-ui", "sans-serif"],
 });
 
-const fontBody = Inter({
+const fontBody = Plus_Jakarta_Sans({
   subsets: ["latin"],
   variable: "--font-body",
   display: "swap",
@@ -24,6 +24,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { DesktopPageShell } from "@/components/layout/desktop-page-shell";
+import { MobileNav } from "@/components/layout/mobile-nav";
 import { SiteVisitTracker } from "@/components/analytics/site-visit-tracker";
 import { HELLO_CONTACT_EMAIL } from "@/lib/contact-email";
 import { VERIFY_MZANSI_SITE_DESCRIPTION } from "@/lib/seo/public-categories";
@@ -48,8 +49,8 @@ const THEME_BOOTSTRAP = `
 // Paint the document canvas even before the body or external styles arrive.
 // Fallback colors match the --background tokens in globals.css.
 const THEME_CANVAS_CSS = `
-html { background-color: hsl(var(--background, 40 30% 98%)); }
-html.dark { background-color: hsl(var(--background, 30 14% 7%)); }
+html { background-color: hsl(var(--background, 60 14% 96%)); }
+html.dark { background-color: hsl(var(--background, 156 20% 5%)); }
 `;
 
 const TURBOPACK_NAME_POLYFILL =
@@ -207,8 +208,8 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#faf8f5" },
-    { media: "(prefers-color-scheme: dark)", color: "#1a1714" },
+    { media: "(prefers-color-scheme: light)", color: "#f7f7f4" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0f0d" },
   ],
 };
 
@@ -270,6 +271,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         >
           <DesktopPageShell>
             <VideoPlaybackProvider>{children}</VideoPlaybackProvider>
+            <MobileNav />
             <Toaster />
             <PwaInstallPrompt />
             <ServiceWorkerRegistrar />

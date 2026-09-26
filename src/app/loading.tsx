@@ -4,7 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function GlobalLoading() {
   return (
     <div className="min-h-screen bg-background" aria-busy="true" aria-label="Loading">
-      <main className="container-page space-y-6 py-6">
+      <main id="main-content" className="container-page space-y-6 py-6">
         <div className="flex items-center justify-between">
           <Skeleton className="h-9 w-40 rounded-lg" />
           <Skeleton className="h-9 w-9 rounded-full" />

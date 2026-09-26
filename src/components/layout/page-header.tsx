@@ -29,7 +29,7 @@ export function PageHeader({
         )}
         <div className="flex flex-col items-center gap-3.5 text-center">
           <div className="space-y-2.5">
-            <h1 className="font-display text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">
+            <h1 className="font-display text-3xl font-bold leading-[1.1] tracking-tight sm:text-[2.6rem]">
               {title}
             </h1>
             {description && (
@@ -49,7 +49,7 @@ export function PageHeader({
       {breadcrumbs && <Breadcrumbs items={breadcrumbs} />}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-2 min-w-0">
-          <h1 className="font-display text-2xl font-semibold leading-tight tracking-tight sm:text-3xl">
+          <h1 className="font-display text-[1.75rem] font-bold leading-[1.1] tracking-tight sm:text-[2.25rem]">
             {title}
           </h1>
           {description && (

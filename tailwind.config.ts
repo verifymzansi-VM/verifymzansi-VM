@@ -33,81 +33,98 @@ const config: Config = {
     },
 
     extend: {
-      /* ── Brand Color Scale (SA-flag inspired) ──────────── */
+      /* ── Brand Color Scale ("Mzansi Modern") ──────────────
+         Scale names are kept stable so every surface picks up the refreshed
+         identity; the values are the new palette, not literal flag colours.
+         brand-green  → Verified Emerald  (trust, primary actions, Mzansi Market)
+         brand-blue   → Ocean Indigo      (Mzansi Business)
+         sunset       → Sunset Coral      (Tourism & Events)
+         brand-gold   → Marigold          (highlights, featured, premium)
+         brand-red    → Protea            (errors, urgent, destructive)
+         warm         → Stone             (neutral surfaces and text)        */
       colors: {
-        // SA flag: Green
         "brand-green": {
-          50: "#edfcf2",
-          100: "#d4f7df",
-          200: "#abedC4",
-          300: "#73dea0",
-          400: "#3ac878",
-          500: "#006b32",
-          600: "#006b32",
-          700: "#00552a",
-          800: "#004422",
-          900: "#00361c",
-          950: "#001f10",
-          DEFAULT: "#006b32",
+          50: "#edfaf4",
+          100: "#d3f3e4",
+          200: "#a8e6cb",
+          300: "#72d2ab",
+          400: "#3bb888",
+          500: "#149a6b",
+          600: "#0b7a55",
+          700: "#08624a",
+          800: "#084e3c",
+          900: "#073f32",
+          950: "#03241d",
+          DEFAULT: "#0b7a55",
         },
-        // SA flag: Gold
         "brand-gold": {
-          50: "#fffbeb",
-          100: "#fff3c6",
-          200: "#ffe588",
-          300: "#ffd34a",
-          400: "#ffb81c",
-          500: "#f59e0b",
-          600: "#d97706",
-          700: "#b45309",
-          800: "#92400e",
-          900: "#783610",
-          950: "#451a03",
-          DEFAULT: "#ffb81c",
+          50: "#fff8eb",
+          100: "#ffedc7",
+          200: "#ffd98a",
+          300: "#ffc24d",
+          400: "#f9a826",
+          500: "#ec8d0c",
+          600: "#cc6c07",
+          700: "#a94f0a",
+          800: "#893e10",
+          900: "#713411",
+          950: "#411904",
+          DEFAULT: "#f9a826",
         },
-        // SA flag: Blue
         "brand-blue": {
-          50: "#eff2ff",
-          100: "#dce2ff",
-          200: "#b9c5ff",
-          300: "#8aa1ff",
-          400: "#5574fc",
-          500: "#2f4cf5",
-          600: "#1a2fe0",
-          700: "#002395",
-          800: "#001d7a",
-          900: "#001a66",
-          950: "#000f3d",
-          DEFAULT: "#002395",
+          50: "#eef1fe",
+          100: "#dde3fd",
+          200: "#c0cbfb",
+          300: "#97a8f6",
+          400: "#6a80ef",
+          500: "#4a5fe4",
+          600: "#3450d8",
+          700: "#2c3fb8",
+          800: "#283795",
+          900: "#263276",
+          950: "#181e45",
+          DEFAULT: "#3450d8",
         },
-        // SA flag: Red
         "brand-red": {
-          50: "#fef2f2",
-          100: "#ffe1e1",
-          200: "#ffc8c8",
-          300: "#ffa2a1",
-          400: "#fd6c6a",
-          500: "#de3831",
-          600: "#c22d27",
-          700: "#a3231e",
-          800: "#87201d",
-          900: "#70211f",
-          950: "#3d0c0b",
-          DEFAULT: "#de3831",
+          50: "#fff3f1",
+          100: "#ffe4df",
+          200: "#ffcdc4",
+          300: "#ffa99a",
+          400: "#fd7a63",
+          500: "#ea4a2f",
+          600: "#d63b22",
+          700: "#b42f1b",
+          800: "#95291a",
+          900: "#7b271b",
+          950: "#431009",
+          DEFAULT: "#d63b22",
         },
-        // Warm neutral scale (earthy SA tones)
+        sunset: {
+          50: "#fff5ed",
+          100: "#ffe8d4",
+          200: "#ffcda8",
+          300: "#ffa970",
+          400: "#fd7d3a",
+          500: "#f26a21",
+          600: "#d9541a",
+          700: "#b8420f",
+          800: "#93360f",
+          900: "#772f10",
+          950: "#401506",
+          DEFAULT: "#e4581c",
+        },
         warm: {
-          50: "#faf8f5",
-          100: "#f3efe9",
-          200: "#e7dfd4",
-          300: "#d5c9b8",
-          400: "#bfad96",
-          500: "#a99378",
-          600: "#957e65",
-          700: "#7c6854",
-          800: "#665647",
-          900: "#55483d",
-          950: "#2d251f",
+          50: "#f8f8f6",
+          100: "#f1f1ee",
+          200: "#e4e4df",
+          300: "#cfcfc8",
+          400: "#a6a69d",
+          500: "#7f7f76",
+          600: "#64645c",
+          700: "#4e4e48",
+          800: "#393935",
+          900: "#262623",
+          950: "#161614",
         },
         // Semantic colors via CSS variables (shadcn)
         border: "hsl(var(--border))",
@@ -146,10 +163,10 @@ const config: Config = {
         // Trust Scale colors
         trust: {
           unregistered: "#9ca3af",
-          incomplete: "#d5c9b8",
-          pending: "#ffb81c",
-          verified: "#00833e",
-          premium: "#ffd700",
+          incomplete: "#cfcfc8",
+          pending: "#f9a826",
+          verified: "#0b7a55",
+          premium: "#f9a826",
         },
       },
 
@@ -206,6 +223,7 @@ const config: Config = {
         lg: "12px",
         xl: "16px",
         "2xl": "20px",
+        "3xl": "28px",
         full: "9999px",
       },
 
@@ -218,10 +236,12 @@ const config: Config = {
         xl: "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)",
         "2xl": "0 25px 50px -12px rgb(0 0 0 / 0.2)",
         // Trust scale glows
-        "trust-pending": "0 0 16px 2px rgba(255, 184, 28, 0.2)",
-        "trust-verified": "0 0 16px 2px rgba(0, 131, 62, 0.2)",
+        "trust-pending":
+          "0 0 0 1px rgba(249, 168, 38, 0.35), 0 8px 24px -12px rgba(249, 168, 38, 0.45)",
+        "trust-verified":
+          "0 0 0 1px rgba(11, 122, 85, 0.22), 0 8px 24px -12px rgba(11, 122, 85, 0.45)",
         "trust-premium":
-          "0 0 20px 4px rgba(0, 131, 62, 0.15), 0 0 20px 4px rgba(255, 184, 28, 0.15)",
+          "0 0 0 1px rgba(249, 168, 38, 0.45), 0 10px 28px -12px rgba(11, 122, 85, 0.5)",
       },
 
       /* ── Transition Duration Scale ────────────────────── */
@@ -255,8 +275,17 @@ const config: Config = {
           "50%": { opacity: "0.7" },
         },
         "trust-glow": {
-          "0%, 100%": { boxShadow: "0 0 16px 2px rgba(0, 131, 62, 0.2)" },
-          "50%": { boxShadow: "0 0 24px 4px rgba(0, 131, 62, 0.35)" },
+          "0%, 100%": { boxShadow: "0 0 16px 2px rgba(11, 122, 85, 0.2)" },
+          "50%": { boxShadow: "0 0 24px 4px rgba(11, 122, 85, 0.35)" },
+        },
+        float: {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-6px)" },
+        },
+        "badge-pop": {
+          "0%": { opacity: "0", transform: "scale(0.6)" },
+          "60%": { opacity: "1", transform: "scale(1.08)" },
+          "100%": { opacity: "1", transform: "scale(1)" },
         },
         "feed-tap-indicator": {
           "0%": { opacity: "0", transform: "scale(0.7)" },
@@ -272,6 +301,8 @@ const config: Config = {
         "pulse-soft": "pulse-soft 2s ease-in-out infinite",
         "trust-glow": "trust-glow 2.5s ease-in-out infinite",
         "feed-tap-indicator": "feed-tap-indicator 0.8s ease-out forwards",
+        float: "float 6s ease-in-out infinite",
+        "badge-pop": "badge-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both",
       },
 
       /* ── Layout ───────────────────────────────────────── */

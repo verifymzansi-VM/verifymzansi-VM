@@ -20,7 +20,10 @@ export default function MarketplaceError({
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
-      <main className="flex-1 flex flex-col items-center justify-center gap-4 px-4 text-center">
+      <main
+        id="main-content"
+        className="flex-1 flex flex-col items-center justify-center gap-4 px-4 text-center"
+      >
         <AlertTriangle className="h-8 w-8 text-destructive" />
         <div className="space-y-2">
           <h1 className="text-xl font-display font-bold">Failed to load marketplace</h1>

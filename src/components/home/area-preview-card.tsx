@@ -1,5 +1,6 @@
 "use client";
 
+import { formatRandAmount } from "@/lib/utils/format";
 import { VideoViewTracker } from "@/components/ui/video-view-tracker";
 
 import Link from "next/link";
@@ -58,12 +59,7 @@ export function AreaPreviewCard({
   const isVideo = isVideoUrl(imageUrl);
   const normalizedImageUrl = imageUrl ? normalizeMediaUrl(imageUrl) : undefined;
 
-  const formatPrice = (p: number) =>
-    new Intl.NumberFormat("en-ZA", {
-      style: "currency",
-      currency: "ZAR",
-      maximumFractionDigits: 0,
-    }).format(p);
+  const formatPrice = (p: number) => `R${formatRandAmount(p)}`;
 
   return (
     <Link

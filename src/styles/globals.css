@@ -17,36 +17,38 @@
        Fallbacks below only apply if the font variables are absent. */
     --desktop-page-scale: 1;
 
-    /* Warm paper canvas — crisp white cards float above it (premium SA feel) */
-    --background: 40 30% 98%;
-    --foreground: 30 24% 10%;
+    /* Soft stone canvas: crisp white cards float above it. */
+    --background: 60 14% 96%;
+    --foreground: 153 18% 8%;
 
     --card: 0 0% 100%;
-    --card-foreground: 30 24% 10%;
+    --card-foreground: 153 18% 8%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 30 24% 10%;
+    --popover-foreground: 153 18% 8%;
 
-    --primary: 152 100% 25%;
+    /* Verified Emerald */
+    --primary: 160 84% 26%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 38 26% 93%;
-    --secondary-foreground: 30 18% 20%;
+    --secondary: 60 10% 92%;
+    --secondary-foreground: 153 14% 14%;
 
-    --muted: 38 20% 94%;
-    --muted-foreground: 30 9% 40%;
+    --muted: 60 9% 93%;
+    --muted-foreground: 155 6% 38%;
 
-    --accent: 43 100% 55%;
-    --accent-foreground: 30 24% 10%;
+    /* Marigold */
+    --accent: 37 95% 56%;
+    --accent-foreground: 153 18% 8%;
 
-    --destructive: 4 73% 53%;
+    --destructive: 8 72% 49%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 36 15% 87%;
-    --input: 36 14% 84%;
-    --ring: 152 100% 25%;
+    --border: 60 7% 87%;
+    --input: 60 6% 82%;
+    --ring: 160 84% 26%;
 
-    --radius: 12px;
+    --radius: 14px;
 
     /* Duration scale tokens */
     --duration-fast: 100ms;
@@ -55,42 +57,48 @@
     --duration-slower: 600ms;
 
     /* Elevation scale — soft, warm-tinted layered shadows for a premium feel */
-    --shadow-xs: 0 1px 2px 0 rgb(45 37 31 / 0.04);
-    --shadow-sm: 0 1px 2px 0 rgb(45 37 31 / 0.04), 0 1px 3px 0 rgb(45 37 31 / 0.06);
-    --shadow-md: 0 2px 4px -1px rgb(45 37 31 / 0.05), 0 6px 14px -2px rgb(45 37 31 / 0.08);
-    --shadow-lg: 0 4px 8px -2px rgb(45 37 31 / 0.05), 0 14px 32px -6px rgb(45 37 31 / 0.1);
-    --shadow-xl: 0 8px 16px -4px rgb(45 37 31 / 0.06), 0 24px 48px -10px rgb(45 37 31 / 0.12);
+    --shadow-xs: 0 1px 2px 0 rgb(16 23 20 / 0.05);
+    --shadow-sm: 0 1px 2px 0 rgb(16 23 20 / 0.04), 0 2px 6px -1px rgb(16 23 20 / 0.06);
+    --shadow-md: 0 2px 4px -1px rgb(16 23 20 / 0.04), 0 8px 20px -4px rgb(16 23 20 / 0.09);
+    --shadow-lg: 0 4px 10px -2px rgb(16 23 20 / 0.05), 0 18px 40px -8px rgb(16 23 20 / 0.12);
+    --shadow-xl: 0 8px 16px -4px rgb(16 23 20 / 0.06), 0 28px 60px -12px rgb(16 23 20 / 0.18);
   }
 
   /* ── Dark Theme ──────────────────────────────────────────── */
   .dark {
-    --background: 30 14% 7%;
-    --foreground: 37 20% 92%;
+    --background: 156 20% 5%;
+    --foreground: 60 10% 94%;
 
-    --card: 30 12% 10%;
-    --card-foreground: 37 20% 92%;
+    --card: 156 14% 8%;
+    --card-foreground: 60 10% 94%;
 
-    --popover: 30 12% 10%;
-    --popover-foreground: 37 20% 92%;
+    --popover: 156 14% 9%;
+    --popover-foreground: 60 10% 94%;
 
-    --primary: 152 90% 33%;
+    --primary: 160 67% 40%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 30 9% 15%;
-    --secondary-foreground: 37 20% 88%;
+    --secondary: 156 10% 13%;
+    --secondary-foreground: 60 8% 88%;
 
-    --muted: 30 8% 14%;
-    --muted-foreground: 37 10% 60%;
+    --muted: 156 9% 12%;
+    --muted-foreground: 150 6% 64%;
 
-    --accent: 43 100% 48%;
-    --accent-foreground: 30 20% 8%;
+    --accent: 37 95% 55%;
+    --accent-foreground: 153 18% 8%;
 
-    --destructive: 4 73% 48%;
+    --destructive: 8 70% 50%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 30 8% 18%;
-    --input: 30 8% 22%;
-    --ring: 152 90% 33%;
+    --border: 156 9% 16%;
+    --input: 156 8% 21%;
+    --ring: 160 67% 40%;
+
+    --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3), 0 2px 6px -1px rgb(0 0 0 / 0.3);
+    --shadow-md: 0 2px 4px -1px rgb(0 0 0 / 0.3), 0 8px 20px -4px rgb(0 0 0 / 0.4);
+    --shadow-lg: 0 4px 10px -2px rgb(0 0 0 / 0.35), 0 18px 40px -8px rgb(0 0 0 / 0.5);
+    --shadow-xl: 0 8px 16px -4px rgb(0 0 0 / 0.4), 0 28px 60px -12px rgb(0 0 0 / 0.6);
   }
 
   /* ── Base Styles ─────────────────────────────────────────── */
@@ -254,20 +262,16 @@
   }
 
   /* ── Trust Card Borders ──────────────────────────────────── */
-  .trust-card-0 {
-    @apply border-warm-200;
-  }
-  .trust-card-1 {
-    @apply border-warm-300;
-  }
-  .trust-card-2 {
-    @apply border-brand-gold-300 shadow-trust-pending;
-  }
+  /* Trust is communicated with explicit badges on cards, so card chrome stays
+     calm: only the Pro tier earns a subtle marigold-to-emerald ring. */
+  .trust-card-0,
+  .trust-card-1,
+  .trust-card-2,
   .trust-card-3 {
-    @apply border-brand-green-400 shadow-trust-verified;
+    @apply border-border/70;
   }
   .trust-card-4 {
-    @apply shadow-trust-premium border-transparent relative;
+    @apply border-transparent relative;
   }
   .trust-card-4::before {
     content: "";
@@ -275,7 +279,7 @@
     inset: 0;
     border-radius: inherit;
     padding: 1px;
-    background: linear-gradient(135deg, #00833e, #ffb81c);
+    background: linear-gradient(135deg, #0b7a55, #f9a826);
     -webkit-mask:
       linear-gradient(#fff 0 0) content-box,
       linear-gradient(#fff 0 0);
@@ -289,44 +293,44 @@
 
   /* ── Trust Badge Base ────────────────────────────────────── */
   .trust-badge {
-    @apply inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full;
+    @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset;
   }
   .trust-badge-0 {
-    @apply trust-badge bg-warm-100 text-warm-500;
+    @apply trust-badge bg-warm-100 text-warm-600 ring-warm-200 dark:bg-white/5 dark:text-warm-300 dark:ring-white/10;
   }
   .trust-badge-1 {
-    @apply trust-badge bg-warm-200 text-warm-700;
+    @apply trust-badge bg-warm-100 text-warm-700 ring-warm-300 dark:bg-white/5 dark:text-warm-200 dark:ring-white/10;
   }
   .trust-badge-2 {
-    @apply trust-badge bg-brand-gold-100 text-brand-gold-800;
+    @apply trust-badge bg-brand-gold-50 text-brand-gold-800 ring-brand-gold-300/70 dark:bg-brand-gold/10 dark:text-brand-gold-200 dark:ring-brand-gold/30;
   }
   .trust-badge-3 {
-    @apply trust-badge bg-brand-green-100 text-brand-green-800;
+    @apply trust-badge bg-brand-green-50 text-brand-green-700 ring-brand-green/25 dark:bg-brand-green/15 dark:text-brand-green-300 dark:ring-brand-green/30;
   }
   .trust-badge-4 {
-    @apply trust-badge text-brand-green-800;
-    background: linear-gradient(135deg, rgba(0, 131, 62, 0.1), rgba(255, 184, 28, 0.15));
+    @apply trust-badge text-brand-green-800 ring-brand-gold/50 dark:text-brand-green-200;
+    background: linear-gradient(135deg, rgba(11, 122, 85, 0.12), rgba(249, 168, 38, 0.2));
   }
 
   /* ── Gradient Backgrounds ────────────────────────────────── */
   .bg-warm-gradient {
-    background: linear-gradient(135deg, hsl(37 33% 97%) 0%, hsl(37 30% 93%) 100%);
+    background: linear-gradient(135deg, hsl(60 14% 97%) 0%, hsl(60 10% 93%) 100%);
   }
 
   .bg-hero-mesh {
     background:
-      radial-gradient(ellipse at 20% 50%, rgba(0, 131, 62, 0.06) 0%, transparent 50%),
-      radial-gradient(ellipse at 80% 20%, rgba(255, 184, 28, 0.05) 0%, transparent 50%),
-      radial-gradient(ellipse at 50% 100%, rgba(0, 35, 149, 0.04) 0%, transparent 50%),
-      hsl(37 33% 97%);
+      radial-gradient(ellipse at 12% 0%, rgba(11, 122, 85, 0.1) 0%, transparent 55%),
+      radial-gradient(ellipse at 88% 10%, rgba(249, 168, 38, 0.1) 0%, transparent 50%),
+      radial-gradient(ellipse at 60% 100%, rgba(52, 80, 216, 0.06) 0%, transparent 55%),
+      hsl(var(--background));
   }
 
   .dark .bg-hero-mesh {
     background:
-      radial-gradient(ellipse at 20% 50%, rgba(0, 131, 62, 0.08) 0%, transparent 50%),
-      radial-gradient(ellipse at 80% 20%, rgba(255, 184, 28, 0.06) 0%, transparent 50%),
-      radial-gradient(ellipse at 50% 100%, rgba(0, 35, 149, 0.05) 0%, transparent 50%),
-      hsl(30 15% 8%);
+      radial-gradient(ellipse at 12% 0%, rgba(34, 176, 127, 0.14) 0%, transparent 55%),
+      radial-gradient(ellipse at 88% 10%, rgba(249, 168, 38, 0.08) 0%, transparent 50%),
+      radial-gradient(ellipse at 60% 100%, rgba(52, 80, 216, 0.08) 0%, transparent 55%),
+      hsl(var(--background));
   }
 
   /* ── Grain Overlay ───────────────────────────────────────── */
@@ -334,7 +338,9 @@
     content: "";
     position: absolute;
     inset: 0;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    /* Served as a file: the CSP does not allow data: images. */
+    background-image: url("/noise.png");
+    opacity: 0.35;
     pointer-events: none;
     z-index: 1;
   }
@@ -565,17 +571,37 @@
 
   /* Eyebrow / kicker label used above section headings */
   .section-kicker {
-    @apply inline-flex items-center gap-2 rounded-full border border-brand-green/20 bg-brand-green/5 px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-green-800 dark:border-brand-green/25 dark:bg-brand-green/10 dark:text-brand-green-100;
+    @apply inline-flex items-center gap-2 rounded-full bg-brand-green/10 px-3 py-1 text-xs font-semibold text-brand-green-800 dark:bg-brand-green/15 dark:text-brand-green-200;
+  }
+
+  /* Section heading pair used by every content band */
+  .section-title {
+    @apply font-display text-2xl font-bold tracking-tight text-foreground sm:text-[1.75rem] lg:text-[2rem];
+  }
+
+  .section-lede {
+    @apply mt-1.5 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base;
+  }
+
+  /* Subtle geometric pattern inspired by Ndebele wall art. Decorative only. */
+  .mzansi-pattern {
+    background-image: url("/images/patterns/mzansi-pattern.svg");
+    background-size: 56px 56px;
   }
 
   /* Small pill chip for meta info, filters and highlights */
   .chip {
-    @apply inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/60 px-3 py-1 text-[11px] font-medium text-muted-foreground;
+    @apply inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card px-3 py-1 text-xs font-medium text-muted-foreground;
+  }
+
+  /* Tappable filter / quick-search pill */
+  .pill-link {
+    @apply inline-flex min-h-9 items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-card px-3.5 text-sm font-medium text-foreground/80 transition-colors hover:border-foreground/25 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
   }
 
   /* Green-to-gold brand gradient text (headline accents) */
   .text-gradient-brand {
-    @apply bg-gradient-to-r from-brand-green via-brand-green-600 to-brand-gold-600 bg-clip-text text-transparent dark:from-brand-green-300 dark:via-brand-green-400 dark:to-brand-gold-400;
+    @apply bg-gradient-to-r from-brand-green-600 via-brand-green-500 to-brand-gold-500 bg-clip-text text-transparent dark:from-brand-green-300 dark:via-brand-green-400 dark:to-brand-gold-300;
   }
 
   /* Hairline divider that fades at both edges */
@@ -585,7 +611,7 @@
 
   /* Standard content surface — white card floating on the warm canvas */
   .surface-card {
-    @apply rounded-2xl border border-border/60 bg-card elev-xs;
+    @apply rounded-2xl border border-border/70 bg-card elev-xs;
   }
 
   /* Large feature/hero panel (onboarding, auth, pricing heroes) */
@@ -598,6 +624,17 @@
     @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-transform duration-200;
   }
 
+  /* Area identity helpers: one colour per product area */
+  .area-market-tile {
+    @apply bg-brand-green/10 text-brand-green-700 dark:bg-brand-green/15 dark:text-brand-green-300;
+  }
+  .area-business-tile {
+    @apply bg-brand-blue/10 text-brand-blue-700 dark:bg-brand-blue/20 dark:text-brand-blue-300;
+  }
+  .area-tourism-tile {
+    @apply bg-sunset/10 text-sunset-700 dark:bg-sunset/15 dark:text-sunset-300;
+  }
+
   /* Inline text link with arrow affordance (tertiary actions) */
   .link-arrow {
     @apply inline-flex items-center gap-1.5 rounded-full text-sm font-medium text-brand-green transition-colors hover:text-brand-green-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:text-brand-green-300 dark:hover:text-brand-green-200;
@@ -605,7 +642,7 @@
 
   /* Friendly empty-state icon disc */
   .empty-state-icon {
-    @apply mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand-green/10 text-brand-green dark:bg-brand-green/15 dark:text-brand-green-300;
+    @apply mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-green/10 text-brand-green-700 dark:bg-brand-green/15 dark:text-brand-green-300;
   }
 
   /* Hide scrollbar but keep scroll functionality */

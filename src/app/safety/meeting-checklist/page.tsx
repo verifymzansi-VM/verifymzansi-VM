@@ -60,7 +60,7 @@ export default function MeetingChecklistPage() {
     <div className="flex min-h-screen flex-col">
       <Header />
 
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         <div className="container-page py-6 space-y-5">
           <PageHeader
             title="Meeting Safety Checklist"

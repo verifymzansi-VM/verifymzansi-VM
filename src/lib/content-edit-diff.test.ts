@@ -36,8 +36,8 @@ describe("getContentEditChanges", () => {
       {
         field: "price_cents",
         label: "Price",
-        before: "R 12 000,00",
-        after: "R 11 000,00",
+        before: "R 12\u00a0000.00",
+        after: "R 11\u00a0000.00",
       },
       {
         field: "title",

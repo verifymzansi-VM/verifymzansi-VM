@@ -57,7 +57,8 @@ vi.mock("@/components/ui/label", () => ({
   Label: ({ children, ...props }: React.PropsWithChildren) =>
     React.createElement("label", props, children),
 }));
-vi.mock("@/lib/utils/format", () => ({
+vi.mock("@/lib/utils/format", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   formatRelativeTime: vi.fn(() => "2 hours ago"),
 }));
 vi.mock("next/link", () => ({

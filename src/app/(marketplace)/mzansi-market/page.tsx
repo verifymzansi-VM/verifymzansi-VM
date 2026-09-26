@@ -5,17 +5,13 @@ import { createClient } from "@/lib/supabase/server";
 import { ShowroomCardCarousel } from "@/components/showrooms/showroom-card-carousel";
 import { mzansiMarketShowroomBackground } from "@/components/showrooms/showroom-backgrounds";
 import { listingToCarouselItem } from "@/components/showrooms/carousel-item-transforms";
-import { PageHeader } from "@/components/layout";
+import { AreaHero } from "@/components/layout/area-hero";
 import { DisableMobileAutoplay } from "@/contexts/autoplay-policy-context";
-import { TrustStrip } from "@/components/layout/trust-strip";
 import { ListingFilterSidebar } from "@/components/listings/listing-filter-sidebar";
 import { ListingFilterDrawer } from "@/components/listings/listing-filter-drawer";
 import { ListingGridHeader } from "@/components/listings/listing-grid-header";
 import { MzansiMarketGrid } from "./grid";
 import { MarketplaceUrlFilterSync } from "./url-filter-sync";
-import { Button } from "@/components/ui/button";
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 import { shouldHidePlaywrightFixtureRowWhenEnabled } from "@/components/home/playwright-fixture-filter";
 import {
@@ -28,6 +24,16 @@ import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com";
 const categorySeo = getRequiredVerifyMzansiCategorySeo("mzansi-market");
+
+const MARKET_QUICK_LINKS = [
+  { label: "Vehicles", href: "/mzansi-market?category=vehicles" },
+  { label: "Phones & electronics", href: "/mzansi-market?category=electronics" },
+  { label: "Property", href: "/mzansi-market?category=property" },
+  { label: "Home & lifestyle", href: "/mzansi-market?category=home_lifestyle" },
+  { label: "Auto parts", href: "/mzansi-market?category=auto_parts" },
+  { label: "Baby & kids", href: "/mzansi-market?category=baby_kids" },
+  { label: "Farming", href: "/mzansi-market?category=farming_agriculture" },
+] as const;
 
 export const metadata: Metadata = {
   title: categorySeo.title,
@@ -91,6 +97,16 @@ export default async function MzansiMarketPage() {
           <MarketplaceUrlFilterSync />
         </Suspense>
 
+        <AreaHero
+          area="market"
+          title={categorySeo.searchName}
+          description="Buy and sell phones, cars, furniture, property and everyday finds from sellers near you."
+          trustLine="Every seller completes ID review before posting"
+          ctaHref="/post/create-listing"
+          ctaLabel="Create a listing"
+          quickLinks={MARKET_QUICK_LINKS}
+        />
+
         {/* ── Card Carousel Showroom ─────────────── */}
         <ShowroomCardCarousel
           items={carouselItems}
@@ -104,60 +120,26 @@ export default async function MzansiMarketPage() {
           <HomeProgrammeShowcase placement="market" />
         </Suspense>
 
-        <TrustStrip variant="green" title="Latest on Mzansi Market" />
-
         {/* ── Main Content ─────────────────────────────────── */}
-        <div className="container-page py-8 space-y-7 lg:py-10">
-          {/* Compact mobile header */}
-          <div className="flex items-center justify-between lg:hidden">
-            <h1 className="font-display text-lg font-bold tracking-tight">
-              {categorySeo.searchName}
-            </h1>
-            <Button
-              asChild
-              size="sm"
-              variant="trust-verified"
-              className="h-11 gap-1 rounded-full px-4 font-semibold"
-            >
-              <Link href="/post/create-listing">
-                Create a listing
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
-          </div>
-
+        <div className="container-page space-y-6 py-8 lg:py-10">
           {/* Mobile filter drawer (FAB visible < lg only) */}
           <ListingFilterDrawer />
 
           {/* Two-column layout */}
           <div className="flex gap-6 lg:gap-8">
             {/* Desktop sidebar */}
-            <aside className="hidden w-72 shrink-0 lg:block">
-              <div className="sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pr-1 scrollbar-thin">
+            <aside className="hidden w-72 shrink-0 lg:block" aria-label="Listing filters">
+              <div className="sticky top-32 max-h-[calc(100vh-9rem)] overflow-y-auto pr-1 scrollbar-thin">
                 <ListingFilterSidebar />
               </div>
             </aside>
 
             {/* Main content area */}
-            <div className="flex-1 min-w-0 space-y-5">
-              <PageHeader
-                title={categorySeo.searchName}
-                description={categorySeo.description}
-                breadcrumbs={[{ label: "Mzansi Market" }]}
-                className="hidden lg:block"
-              >
-                <Button
-                  asChild
-                  size="sm"
-                  variant="trust-verified"
-                  className="h-11 gap-1 rounded-full px-4 font-semibold"
-                >
-                  <Link href="/post/create-listing">
-                    Create a listing
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-              </PageHeader>
+            <div className="min-w-0 flex-1 space-y-5">
+              <div>
+                <h2 className="section-title">Latest listings</h2>
+                <p className="section-lede">Newest first. Boosted posts appear at the top.</p>
+              </div>
 
               {/* Toolbar: location + sort + active chips */}
               <ListingGridHeader />

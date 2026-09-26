@@ -49,15 +49,15 @@ export async function HomeMzansiMarketShowcase() {
     return (
       <HomeShowcaseShell
         badge="Mzansi Market"
-        title="Latest on Mzansi Market"
-        description="Local sellers, real products, identity-reviewed members."
+        title="Fresh on Mzansi Market"
+        description="Just listed by ID-reviewed sellers across South Africa."
         href="/mzansi-market"
-        ctaLabel="View All Listings"
+        ctaLabel="See all listings"
         tone="green"
       >
         <HomeShowcaseEmptyState
           title="No listings yet."
-          description="The marketplace is clean. Publish the first ad and this rail will fill with fresh posts."
+          description="Be one of the first sellers on Mzansi Market. Your first post is free and shows up here for buyers nationwide."
           ctaHref="/post/create-listing"
           ctaLabel="Post First Listing"
           tone="green"
@@ -70,10 +70,10 @@ export async function HomeMzansiMarketShowcase() {
   return (
     <HomeShowcaseShell
       badge="Mzansi Market"
-      title="Latest on Mzansi Market"
-      description="Local sellers, real products, identity-reviewed members."
+      title="Fresh on Mzansi Market"
+      description="Just listed by ID-reviewed sellers across South Africa."
       href="/mzansi-market"
-      ctaLabel="View All Listings"
+      ctaLabel="See all listings"
       tone="green"
     >
       <AnalyticsImpressions
@@ -82,7 +82,7 @@ export async function HomeMzansiMarketShowcase() {
         surface="home_market"
       />
       <AutoScrollRail
-        ariaLabel="Latest on Mzansi Market"
+        ariaLabel="Fresh on Mzansi Market"
         showEdgeFades={false}
         flushEdges
         itemClassName="w-[calc((100%-12px)/2)] sm:w-auto"

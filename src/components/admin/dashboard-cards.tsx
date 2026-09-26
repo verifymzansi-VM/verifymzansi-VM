@@ -550,10 +550,10 @@ const AREA_CONFIG = {
     description: "Tourism businesses & events",
     icon: TreePalm,
     href: "/admin/tourism-events",
-    accentBg: "bg-teal-50/50 dark:bg-teal-950/20",
-    iconBg: "bg-teal-100 dark:bg-teal-900/50",
-    iconColor: "text-teal-600 dark:text-teal-400",
-    ctaBg: "bg-teal-600 hover:bg-teal-700",
+    accentBg: "bg-sunset-50/50 dark:bg-sunset-950/20",
+    iconBg: "bg-sunset-100 dark:bg-sunset-900/50",
+    iconColor: "text-sunset-600 dark:text-sunset-400",
+    ctaBg: "bg-sunset-600 hover:bg-sunset-700",
   },
 } as const;
 

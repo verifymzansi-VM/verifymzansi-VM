@@ -13,7 +13,10 @@ interface BreadcrumbsProps {
   items: BreadcrumbItem[];
 }
 
-export function Breadcrumbs({ items }: BreadcrumbsProps) {
+export function Breadcrumbs({ items: rawItems }: BreadcrumbsProps) {
+  // The leading home icon already links to "/", so drop an explicit Home crumb.
+  const items = rawItems.filter((item, index) => !(index === 0 && item.href === "/"));
+
   return (
     <nav
       aria-label="Breadcrumb"
@@ -40,7 +43,10 @@ export function Breadcrumbs({ items }: BreadcrumbsProps) {
               {item.label}
             </Link>
           ) : (
-            <span className="max-w-[180px] truncate font-semibold text-foreground">
+            <span
+              aria-current="page"
+              className="max-w-[180px] truncate font-semibold text-foreground"
+            >
               {item.label}
             </span>
           )}

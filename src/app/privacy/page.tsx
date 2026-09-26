@@ -127,7 +127,7 @@ export default function PrivacyPolicyPage() {
     <div className="flex min-h-screen flex-col">
       <Header />
 
-      <main className="flex-1 bg-gradient-to-b from-muted/30 to-background">
+      <main id="main-content" className="flex-1 bg-gradient-to-b from-muted/30 to-background">
         <div className="bg-brand-green-950/20 dark:bg-black py-4 sm:py-5 border-b">
           <div className="container-page text-center max-w-3xl space-y-1">
             <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight">

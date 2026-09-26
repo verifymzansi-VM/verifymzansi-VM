@@ -8,9 +8,9 @@ const { mockCreateClient, mockCookies, mockGetOwnerColumn } = vi.hoisted(() => (
   mockGetOwnerColumn: vi.fn(),
 }));
 
-const { carouselSpy, trustStripSpy } = vi.hoisted(() => ({
+const { carouselSpy, areaHeroSpy } = vi.hoisted(() => ({
   carouselSpy: vi.fn(),
-  trustStripSpy: vi.fn(),
+  areaHeroSpy: vi.fn(),
 }));
 
 vi.mock("next/headers", () => ({
@@ -33,10 +33,10 @@ vi.mock("@/components/showrooms/showroom-card-carousel", () => ({
   },
 }));
 
-vi.mock("@/components/layout/trust-strip", () => ({
-  TrustStrip: (props: { title?: string; variant?: string }) => {
-    trustStripSpy(props);
-    return <div data-testid="trust-strip" />;
+vi.mock("@/components/layout/area-hero", () => ({
+  AreaHero: (props: { title?: string; area?: string; ctaHref?: string }) => {
+    areaHeroSpy(props);
+    return <div data-testid="area-hero" />;
   },
 }));
 
@@ -255,7 +255,7 @@ describe("PromotionsPage", () => {
     );
   });
 
-  it("labels the trust strip for the tourism route", async () => {
+  it("introduces the tourism route with its area hero", async () => {
     mockCreateClient.mockResolvedValue(
       createSupabaseClient({
         businesses: [],
@@ -265,10 +265,11 @@ describe("PromotionsPage", () => {
 
     render(await PromotionsPage());
 
-    expect(trustStripSpy).toHaveBeenCalledWith(
+    expect(areaHeroSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        variant: "green",
-        title: "Latest Tourism & Events",
+        area: "tourism",
+        title: "Tourism & Events",
+        ctaHref: "/post/create-tourism",
       })
     );
   });
@@ -287,9 +288,9 @@ describe("PromotionsPage", () => {
         items: expect.arrayContaining([expect.objectContaining({ id: "tourism-events-empty" })]),
       })
     );
-    expect(trustStripSpy).toHaveBeenCalledWith(
+    expect(areaHeroSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        title: "Latest Tourism & Events",
+        title: "Tourism & Events",
       })
     );
   });

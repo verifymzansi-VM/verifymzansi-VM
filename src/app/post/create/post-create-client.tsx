@@ -48,8 +48,8 @@ const POST_OPTIONS = [
     ],
     icon: TreePalm,
     href: "/post/create-tourism",
-    iconColor: "text-teal-600",
-    iconBg: "bg-teal-600/10",
+    iconColor: "text-sunset-600",
+    iconBg: "bg-sunset-600/10",
   },
 ] as const;
 

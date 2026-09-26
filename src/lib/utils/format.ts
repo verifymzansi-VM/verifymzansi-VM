@@ -1,16 +1,26 @@
 import { sanitizeSaPhoneInput } from "@/lib/utils/phone";
 
 /**
+ * Group a Rand amount with a non-breaking space ("12 999.50").
+ *
+ * Deliberately avoids `toLocaleString("en-ZA")`: Node and browsers ship
+ * different ICU data for en-ZA (", " vs " " grouping, "." vs "," decimals),
+ * which made server-rendered prices mismatch on hydration.
+ */
+export function formatRandAmount(rand: number, fractionDigits: 0 | 2 = 0): string {
+  const safe = Number.isFinite(rand) ? rand : 0;
+  const [whole, fraction] = Math.abs(safe).toFixed(fractionDigits).split(".");
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, "\u00a0");
+  return `${safe < 0 ? "-" : ""}${grouped}${fraction ? `.${fraction}` : ""}`;
+}
+
+/**
  * Format an amount in cents as South African Rand.
  * @example formatZAR(26000) → "R 260.00"
  */
 export function formatZAR(cents: number): string {
   if (Number.isNaN(cents) || !Number.isFinite(cents)) return "R 0.00";
-  const rand = cents / 100;
-  return `R ${rand.toLocaleString("en-ZA", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+  return `R ${formatRandAmount(cents / 100, 2)}`;
 }
 
 /**
@@ -20,13 +30,62 @@ export function formatZAR(cents: number): string {
 export function formatZARShort(cents: number): string {
   if (Number.isNaN(cents) || !Number.isFinite(cents)) return "R0";
   const rand = cents / 100;
-  if (rand % 1 === 0) {
-    return `R${rand.toLocaleString("en-ZA")}`;
-  }
-  return `R${rand.toLocaleString("en-ZA", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+  return `R${formatRandAmount(rand, rand % 1 === 0 ? 0 : 2)}`;
+}
+
+const SA_WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+const SA_MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+] as const;
+/** South Africa Standard Time is UTC+2 all year (no daylight saving). */
+const SAST_OFFSET_MS = 2 * 60 * 60 * 1000;
+
+/**
+ * Deterministic short event date in South African time, e.g. "Sat 15 Mar".
+ * Identical on the server and in every browser, so safe in client components.
+ */
+export function formatSaShortDate(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  if (Number.isNaN(d.getTime())) return "";
+  const sast = new Date(d.getTime() + SAST_OFFSET_MS);
+  return `${SA_WEEKDAYS[sast.getUTCDay()]} ${sast.getUTCDate()} ${SA_MONTHS[sast.getUTCMonth()]}`;
+}
+
+const SA_MONTHS_LONG = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
+
+/**
+ * Deterministic long date in South African time, e.g. "26 September 2026".
+ * Safe in client components (no locale or time-zone drift on hydration).
+ */
+export function formatSaLongDate(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  if (Number.isNaN(d.getTime())) return "";
+  const sast = new Date(d.getTime() + SAST_OFFSET_MS);
+  return `${sast.getUTCDate()} ${SA_MONTHS_LONG[sast.getUTCMonth()]} ${sast.getUTCFullYear()}`;
 }
 
 /**

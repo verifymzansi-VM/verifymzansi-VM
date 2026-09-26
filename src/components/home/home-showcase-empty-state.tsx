@@ -15,16 +15,16 @@ const toneClasses: Record<
   green: {
     iconClassName:
       "bg-brand-green/10 text-brand-green-700 dark:bg-brand-green/15 dark:text-brand-green-200",
-    buttonClassName: "bg-brand-green text-white hover:bg-brand-green-600",
+    buttonClassName: "bg-brand-green-600 text-white hover:bg-brand-green-700",
   },
   blue: {
     iconClassName:
       "bg-brand-blue/10 text-brand-blue-700 dark:bg-brand-blue/15 dark:text-brand-blue-200",
-    buttonClassName: "bg-brand-blue text-white hover:bg-brand-blue/90",
+    buttonClassName: "bg-brand-blue-600 text-white hover:bg-brand-blue-700",
   },
   teal: {
-    iconClassName: "bg-teal-500/10 text-teal-700 dark:bg-teal-500/15 dark:text-teal-200",
-    buttonClassName: "bg-teal-700 text-white hover:bg-teal-800",
+    iconClassName: "bg-sunset-500/10 text-sunset-700 dark:bg-sunset-500/15 dark:text-sunset-200",
+    buttonClassName: "bg-sunset-700 text-white hover:bg-sunset-800",
   },
 };
 
@@ -48,22 +48,22 @@ export function HomeShowcaseEmptyState({
   const styles = toneClasses[tone];
 
   return (
-    <div className="rounded-[1.5rem] border border-dashed border-border bg-card/70 p-8 text-center shadow-inner dark:bg-white/[0.03]">
-      <div className="mx-auto flex max-w-sm flex-col items-center gap-3">
-        <div
-          className={`flex h-14 w-14 items-center justify-center rounded-full ${styles.iconClassName}`}
-        >
-          {icon}
-        </div>
-        <p className="font-display font-semibold text-foreground">{title}</p>
-        <p className="text-sm leading-6 text-muted-foreground">{description}</p>
-        <Button asChild size="sm" className={`rounded-full px-5 ${styles.buttonClassName}`}>
-          <Link href={ctaHref} prefetch={false}>
-            {ctaLabel}
-            <ArrowRight className="ml-1 h-4 w-4" />
-          </Link>
-        </Button>
+    <div className="flex flex-col items-start gap-4 rounded-3xl border border-dashed border-border bg-card/70 p-5 sm:flex-row sm:items-center sm:gap-5 sm:p-6">
+      <div
+        className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${styles.iconClassName}`}
+      >
+        {icon}
       </div>
+      <div className="min-w-0 flex-1">
+        <p className="font-body text-base font-semibold text-foreground">{title}</p>
+        <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">{description}</p>
+      </div>
+      <Button asChild className={`h-11 shrink-0 rounded-full px-5 ${styles.buttonClassName}`}>
+        <Link href={ctaHref} prefetch={false}>
+          {ctaLabel}
+          <ArrowRight className="h-4 w-4" />
+        </Link>
+      </Button>
     </div>
   );
 }

@@ -9,9 +9,8 @@ import {
 } from "@/components/showrooms/carousel-item-transforms";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
-import { PageHeader } from "@/components/layout";
+import { AreaHero } from "@/components/layout/area-hero";
 import { DisableMobileAutoplay } from "@/contexts/autoplay-policy-context";
-import { TrustStrip } from "@/components/layout/trust-strip";
 import { MzansiBusinessGrid } from "./grid";
 import { MzansiBusinessFilterSync } from "./filter-sync";
 import { ListingGridSkeleton } from "@/components/listings/listing-skeleton";
@@ -19,9 +18,6 @@ import { ListingGridSkeleton } from "@/components/listings/listing-skeleton";
 import { BusinessDiscoveryBar } from "./discovery-bar";
 import { BusinessFilterDrawer } from "@/components/listings/business-filter-drawer";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 import { shouldHidePlaywrightFixtureRowWhenEnabled } from "@/components/home/playwright-fixture-filter";
 
@@ -34,6 +30,16 @@ import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com";
 const categorySeo = getRequiredVerifyMzansiCategorySeo("mzansi-business");
+
+const BUSINESS_QUICK_LINKS = [
+  { label: "Trades & repairs", href: "/mzansi-business?category=trade_maintenance" },
+  { label: "Food & dining", href: "/mzansi-business?category=food_dining" },
+  { label: "Health & beauty", href: "/mzansi-business?category=health_beauty" },
+  { label: "Professional services", href: "/mzansi-business?category=professional_services" },
+  { label: "Automotive", href: "/mzansi-business?category=automotive_transport" },
+  { label: "Education", href: "/mzansi-business?category=education_training" },
+  { label: "Fashion", href: "/mzansi-business?category=fashion_accessories" },
+] as const;
 
 export const metadata: Metadata = {
   title: categorySeo.title,
@@ -113,6 +119,16 @@ export default async function MzansiBusinessPage() {
           <MzansiBusinessFilterSync />
         </Suspense>
 
+        <AreaHero
+          area="business"
+          title="Mzansi Business"
+          description="Find shops, trades, services and professionals, and see who represents them."
+          trustLine="Profiles are posted by ID-reviewed representatives"
+          ctaHref="/post/create-business"
+          ctaLabel="Add your business"
+          quickLinks={BUSINESS_QUICK_LINKS}
+        />
+
         {/* ── Card Carousel Showroom ─────────────── */}
         <ShowroomCardCarousel
           items={carouselItems}
@@ -125,27 +141,14 @@ export default async function MzansiBusinessPage() {
           <HomeProgrammeShowcase placement="business" />
         </Suspense>
 
-        <TrustStrip variant="blue" title="Latest Mzansi Businesses" />
-
         {/* ── Main Content ─────────────────────────────────── */}
-        <div className="container-page py-8 space-y-7 lg:py-10">
-          {/* Compact mobile header */}
-          <div className="flex items-center justify-between lg:hidden">
-            <h1 className="font-display text-lg font-bold tracking-tight">Mzansi Business</h1>
-            <Button asChild size="sm" className="h-11 gap-1">
-              <Link href="/post/create-business">
-                New business profile
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
-          </div>
-
+        <div className="container-page space-y-6 py-8 lg:py-10">
           {/* Mobile filter drawer (FAB visible < lg only) */}
           <BusinessFilterDrawer />
 
           <div className="flex gap-6 lg:gap-8">
-            <aside className="hidden w-72 shrink-0 lg:block">
-              <div className="sticky top-24">
+            <aside className="hidden w-72 shrink-0 lg:block" aria-label="Business filters">
+              <div className="sticky top-32 rounded-3xl border border-border/70 bg-card p-5 elev-xs">
                 <Suspense
                   fallback={
                     <div className="space-y-3">
@@ -161,20 +164,15 @@ export default async function MzansiBusinessPage() {
               </div>
             </aside>
 
-            <section className="min-w-0 flex-1 space-y-6">
-              <PageHeader
-                title="Mzansi Business"
-                description={categorySeo.description}
-                breadcrumbs={[{ label: "Mzansi Business" }]}
-                className="hidden lg:block"
-              >
-                <Button asChild size="sm" className="h-11 gap-2 elev-xs hover:elev-sm">
-                  <Link href="/post/create-business">
-                    Create Business Profile
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-              </PageHeader>
+            <section className="min-w-0 flex-1 space-y-6" aria-labelledby="business-grid-title">
+              <div>
+                <h2 id="business-grid-title" className="section-title">
+                  Latest businesses
+                </h2>
+                <p className="section-lede">
+                  Open a profile to see services, hours, who represents it and how to get in touch.
+                </p>
+              </div>
 
               <Suspense fallback={<ListingGridSkeleton count={6} />}>
                 <MzansiBusinessGrid />

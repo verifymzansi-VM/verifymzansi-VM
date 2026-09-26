@@ -1,13 +1,12 @@
 import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
-import Link from "next/link";
-import { TreePalm, ArrowRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { TreePalm } from "lucide-react";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { BusinessPreviewCard } from "@/components/home/business-preview-card";
 import { createClient } from "@/lib/supabase/server";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { AutoScrollRail } from "./auto-scroll-rail";
 import { HomeShowcaseShell } from "./home-showcase-shell";
+import { HomeShowcaseEmptyState } from "./home-showcase-empty-state";
 import type { BusinessCategory, BusinessType, PromotionType } from "@/types/enums";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 import { getOptionalContentViewCountMap } from "@/lib/engagement-server";
@@ -129,34 +128,21 @@ export async function HomePromotionsShowcase() {
     return (
       <HomeShowcaseShell
         badge="Tourism & Events"
-        title="Tourism & Events"
-        description="Destinations, stays, and live experiences across South Africa."
+        title="Stays, experiences & events"
+        description="Places to go and things to do, from hosts and organisers who have been checked."
         href="/tourism-events"
-        ctaLabel="View All"
+        ctaLabel="See all"
         tone="teal"
         icon={<TreePalm className="h-3.5 w-3.5" />}
       >
-        <div className="rounded-[1.5rem] border border-dashed border-slate-300/70 bg-white/70 p-8 text-center shadow-inner dark:border-white/10 dark:bg-white/[0.03]">
-          <div className="mx-auto flex max-w-sm flex-col items-center gap-3">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-teal-500/10 text-teal-600 dark:bg-teal-500/15 dark:text-teal-200">
-              <TreePalm className="h-7 w-7" />
-            </div>
-            <p className="font-medium text-slate-900 dark:text-white">No events yet.</p>
-            <p className="text-sm text-slate-600 dark:text-slate-300">
-              Create the first tourism or event showcase and it will appear here.
-            </p>
-            <Button
-              asChild
-              size="sm"
-              className="rounded-full bg-teal-700 px-5 text-white hover:bg-teal-800"
-            >
-              <Link href="/post/create-tourism" prefetch={false}>
-                Create Event
-                <ArrowRight className="ml-1 h-4 w-4" />
-              </Link>
-            </Button>
-          </div>
-        </div>
+        <HomeShowcaseEmptyState
+          title="No events yet."
+          description="List a guesthouse, tour, venue or event and reach visitors across Mzansi. Your first post is free."
+          ctaHref="/post/create-tourism"
+          ctaLabel="Create Event"
+          tone="teal"
+          icon={<TreePalm className="h-7 w-7" />}
+        />
       </HomeShowcaseShell>
     );
   }
@@ -164,10 +150,10 @@ export async function HomePromotionsShowcase() {
   return (
     <HomeShowcaseShell
       badge="Tourism & Events"
-      title="Tourism & Events"
-      description="Destinations, stays, and live experiences across South Africa."
+      title="Stays, experiences & events"
+      description="Places to go and things to do, from hosts and organisers who have been checked."
       href="/tourism-events"
-      ctaLabel="View All"
+      ctaLabel="See all"
       tone="teal"
       icon={<TreePalm className="h-3.5 w-3.5" />}
     >

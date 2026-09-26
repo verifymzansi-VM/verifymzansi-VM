@@ -11,10 +11,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { TrustBadge } from "@/components/trust/trust-badge";
+import { VerifiedTick } from "@/components/trust/verified-tick";
 import { ListingCard } from "@/components/listings/listing-card";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import { readOwnerId } from "@/lib/account/compat";
-import { formatZAR } from "@/lib/utils/format";
+import { formatSaLongDate, formatZAR } from "@/lib/utils/format";
 import { CATEGORIES } from "@/lib/constants/categories";
 import { ListingDetailClient } from "@/app/listing/[id]/client";
 import { ListingContactActions } from "@/app/listing/[id]/listing-contact-actions";
@@ -151,26 +152,18 @@ function getVariantCopy(category: string | null | undefined) {
   switch (variant) {
     case "property":
       return {
-        eyebrow: "Property Snapshot",
-        title: "The key home details first",
         detailsHeading: "Property details",
       };
     case "motors":
       return {
-        eyebrow: "Vehicle Snapshot",
-        title: "Specs, condition, and sale details",
         detailsHeading: "Vehicle details",
       };
     case "services":
       return {
-        eyebrow: "Service Snapshot",
-        title: "What the offer includes",
         detailsHeading: "Service details",
       };
     default:
       return {
-        eyebrow: "Listing Snapshot",
-        title: "The main details shoppers look for",
         detailsHeading: "Listing details",
       };
   }
@@ -199,11 +192,10 @@ export function ListingDetailContent({
 }) {
   const isReviewLayout = layoutMode === "review";
   const trustLevel = seller ? computeTrustLevel(seller.account_verification_status ?? null) : null;
-  const createdAt = new Date(listing.created_at).toLocaleDateString("en-ZA", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  const createdAt = formatSaLongDate(listing.created_at);
+  const categoryLabel =
+    CATEGORIES.find((item) => item.value === listing.category)?.label ??
+    listing.category?.replace(/_/g, " ");
   const variantCopy = getVariantCopy(listing.category);
   const sellerInitial = seller?.display_name?.charAt(0)?.toUpperCase() || "S";
   const sellerPhone = contactPhone(seller?.phone);
@@ -233,19 +225,19 @@ export function ListingDetailContent({
           isReviewLayout
             ? "grid grid-cols-1 gap-6"
             : showStickyBar
-              ? "grid grid-cols-1 gap-6 pb-24 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:items-start lg:pb-0"
-              : "grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:items-start"
+              ? "grid grid-cols-1 gap-6 pb-24 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)_minmax(18rem,21rem)] lg:items-start lg:pb-0"
+              : "grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)_minmax(18rem,21rem)] lg:items-start"
         }
       >
         <div
           className={
             isReviewLayout
               ? "space-y-6 2xl:grid 2xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] 2xl:items-start 2xl:gap-8 2xl:space-y-0"
-              : "space-y-6 lg:col-span-2 lg:grid lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] lg:items-start lg:gap-8 lg:space-y-0"
+              : "space-y-6 lg:col-span-2 lg:grid lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:items-start lg:gap-8 lg:space-y-0"
           }
         >
           <div
-            className={`mx-auto w-full max-w-[280px] sm:max-w-[320px] ${
+            className={`mx-auto w-full max-w-[340px] sm:max-w-[380px] ${
               isReviewLayout ? "2xl:max-w-none" : "lg:max-w-none"
             }`}
           >
@@ -273,52 +265,44 @@ export function ListingDetailContent({
           </div>
 
           <div className="space-y-5">
-            <div className="space-y-3 text-center lg:text-left">
-              <div className="flex flex-wrap items-center justify-center gap-2 lg:justify-start">
-                <Badge variant="outline" className="text-[11px]">
-                  {listing.category?.replace(/_/g, " ")}
-                </Badge>
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                {categoryLabel ? (
+                  <Badge variant="secondary" className="text-xs">
+                    {categoryLabel}
+                  </Badge>
+                ) : null}
                 {listing.condition ? (
-                  <Badge variant="secondary" className="text-[11px]">
+                  <Badge variant="outline" className="text-xs">
                     {getListingConditionLabel(listing.condition)}
                   </Badge>
                 ) : null}
-                {listing.contact_methods?.map((method) => (
-                  <Badge key={method} variant="outline" className="text-[11px] capitalize">
-                    {method}
-                  </Badge>
-                ))}
               </div>
 
-              <div className="space-y-2">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                  {variantCopy.eyebrow}
-                </p>
-                <h2 className="font-display text-2xl font-semibold leading-tight tracking-tight">
-                  {variantCopy.title}
-                </h2>
-              </div>
-
-              <div className="flex flex-wrap items-end justify-center gap-3 lg:justify-start">
+              <div className="flex flex-wrap items-end gap-3">
                 {listing.price_cents != null ? (
-                  <p className="font-display text-[2rem] font-bold leading-none tracking-tight text-brand-green">
+                  <p className="font-display text-[2.25rem] font-extrabold leading-none tracking-tight text-foreground">
                     {formatZAR(listing.price_cents)}
                   </p>
                 ) : null}
-                {listing.price_negotiable ? (
-                  <Badge className="bg-brand-green/10 text-brand-green">Negotiable</Badge>
-                ) : null}
+                {listing.price_negotiable ? <Badge variant="verified">Negotiable</Badge> : null}
               </div>
 
-              <div className="flex flex-wrap items-center justify-center gap-3 text-sm text-muted-foreground lg:justify-start">
-                <span className="flex items-center gap-1">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
+                <span className="flex items-center gap-1.5">
                   <Calendar className="h-4 w-4" />
-                  <time dateTime={listing.created_at}>{createdAt}</time>
+                  Listed <time dateTime={listing.created_at}>{createdAt}</time>
                 </span>
-                <span className="flex items-center gap-1">
+                <span className="flex items-center gap-1.5">
                   <Eye className="h-4 w-4" />
                   {viewCount} {viewCount === 1 ? "view" : "views"}
                 </span>
+                {listing.contact_methods && listing.contact_methods.length > 0 ? (
+                  <span className="flex items-center gap-1.5 capitalize">
+                    <MessageCircle className="h-4 w-4" />
+                    {listing.contact_methods.join(" · ")}
+                  </span>
+                ) : null}
               </div>
             </div>
 
@@ -357,7 +341,7 @@ export function ListingDetailContent({
                     <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                       Description
                     </p>
-                    <h3 className="font-display text-xl font-semibold">What buyers should know</h3>
+                    <h3 className="font-display text-xl font-semibold">About this listing</h3>
                   </div>
                   <p className="whitespace-pre-wrap leading-relaxed text-muted-foreground">
                     {listing.description}
@@ -469,34 +453,47 @@ export function ListingDetailContent({
           ) : null}
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-4 lg:sticky lg:top-32">
           <Card className="surface-card elev-sm">
             <CardContent className="space-y-4 p-5">
-              <div className="space-y-1">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                  Seller
-                </p>
-                <h3 className="font-display text-lg font-semibold">Seller profile</h3>
-              </div>
+              <h3 className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Sold by
+              </h3>
 
               <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-green text-lg font-bold text-white">
-                  {sellerInitial}
-                </div>
-                <div className="min-w-0">
-                  <p className="break-words font-medium">
-                    {seller?.display_name || "Account name unavailable"}
-                  </p>
-                  {trustLevel ? (
-                    <div className="space-y-1">
-                      <TrustBadge level={trustLevel} size="sm" />
-                      <p className="text-xs text-muted-foreground">
-                        Badge refers to seller account checks.
-                      </p>
-                    </div>
+                <div className="relative shrink-0">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-green-600 text-lg font-bold text-white">
+                    {sellerInitial}
+                  </div>
+                  {trustLevel && trustLevel >= 3 ? (
+                    <VerifiedTick
+                      pro={trustLevel === 4}
+                      className="absolute -bottom-0.5 -right-0.5 h-5 w-5 rounded-full bg-card p-px"
+                    />
                   ) : null}
                 </div>
+                <div className="min-w-0">
+                  <p className="break-words font-semibold">
+                    {seller?.display_name || "Account name unavailable"}
+                  </p>
+                  {trustLevel ? <TrustBadge level={trustLevel} size="sm" /> : null}
+                </div>
               </div>
+
+              {trustLevel && trustLevel >= 3 ? (
+                <p className="rounded-2xl bg-brand-green-50 px-3.5 py-2.5 text-xs leading-5 text-brand-green-900 dark:bg-brand-green/10 dark:text-brand-green-200">
+                  This seller&apos;s identity evidence was reviewed by VerifyMzansi. The badge
+                  refers to account checks, not the item itself.{" "}
+                  <Link href="/trust-safety" prefetch={false} className="font-semibold underline">
+                    What this means
+                  </Link>
+                </p>
+              ) : seller ? (
+                <p className="rounded-2xl bg-brand-gold-50 px-3.5 py-2.5 text-xs leading-5 text-brand-gold-900 dark:bg-brand-gold/10 dark:text-brand-gold-200">
+                  This seller has not completed ID review yet. Take extra care and never pay before
+                  you have seen the item.
+                </p>
+              ) : null}
 
               {seller?.location_city || seller?.location_province ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -579,7 +576,7 @@ export function ListingDetailContent({
                   <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                     Brand
                   </p>
-                  <p className="font-medium">Shown on the marketplace card and detail page</p>
+                  <p className="font-medium">Seller brand logo</p>
                 </div>
               </CardContent>
             </Card>

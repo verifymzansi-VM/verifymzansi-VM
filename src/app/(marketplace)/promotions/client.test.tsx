@@ -168,9 +168,9 @@ describe("PromotionsExplorer", () => {
 
     const eventsTab = screen.getByRole("tab", { name: /Events/i });
 
-    expect(eventsTab).toHaveClass("border-amber-300");
-    expect(eventsTab).toHaveClass("bg-amber-50");
-    expect(eventsTab).toHaveClass("text-amber-800");
+    expect(eventsTab).toHaveClass("border-sunset-300");
+    expect(eventsTab).toHaveClass("bg-sunset-50");
+    expect(eventsTab).toHaveClass("text-sunset-800");
   });
 
   it("switches to Events tab and updates the query string", async () => {

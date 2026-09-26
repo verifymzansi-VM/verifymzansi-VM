@@ -540,7 +540,7 @@ export default function EditListingPage() {
     return (
       <div className="flex min-h-screen flex-col">
         <Header isAuthenticated />
-        <main className="flex-1 flex items-center justify-center">
+        <main id="main-content" className="flex-1 flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </main>
       </div>
@@ -551,7 +551,7 @@ export default function EditListingPage() {
     return (
       <div className="flex min-h-screen flex-col">
         <Header isAuthenticated />
-        <main className="flex flex-1 items-center justify-center px-4">
+        <main id="main-content" className="flex flex-1 items-center justify-center px-4">
           <Card className="w-full max-w-md">
             <CardContent className="space-y-3 p-6 text-center">
               <h1 className="text-lg font-semibold">Unable to load listing</h1>
@@ -571,7 +571,7 @@ export default function EditListingPage() {
     <div className="flex min-h-screen flex-col">
       <Header isAuthenticated />
 
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         <div className="container-page py-6">
           <div className="max-w-2xl mx-auto space-y-4">
             <PageHeader

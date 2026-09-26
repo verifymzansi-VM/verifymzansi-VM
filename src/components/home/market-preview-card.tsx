@@ -1,5 +1,6 @@
 "use client";
 
+import { formatRandAmount } from "@/lib/utils/format";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
 import { useAutoScrollRailItemState } from "@/components/home/auto-scroll-rail";
 
@@ -20,12 +21,7 @@ interface MarketPreviewCardProps {
   mediaHeight?: number | null;
 }
 
-const formatPrice = (price: number) =>
-  new Intl.NumberFormat("en-ZA", {
-    style: "currency",
-    currency: "ZAR",
-    maximumFractionDigits: 0,
-  }).format(price);
+const formatPrice = (price: number) => `R${formatRandAmount(price)}`;
 
 export function MarketPreviewCard({
   href,

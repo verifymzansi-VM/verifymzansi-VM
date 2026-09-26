@@ -1746,7 +1746,7 @@ function CreateTourismContent() {
   return (
     <div className="flex min-h-screen flex-col">
       <Header isAuthenticated />
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         <div className="container-page py-6">
           <PlanGate
             area="PROMOTIONS_EVENTS"
@@ -1769,7 +1769,7 @@ function CreateTourismContent() {
                   { label: "Tourism & Events" },
                 ]}
                 badgeLabel="Tourism & Events"
-                badgeClassName="bg-teal-600 text-white"
+                badgeClassName="bg-sunset-600 text-white"
                 guideDescription="Fill in the details, location, and media — then submit for review."
                 steps={STEPS}
                 currentStep={step}
@@ -1909,7 +1909,7 @@ function CreateTourismContent() {
                             className={cn(
                               "flex flex-col items-start rounded-lg border p-4 text-left transition-colors",
                               listingType === opt.value
-                                ? "border-teal-600 bg-teal-50 ring-2 ring-teal-600 dark:bg-teal-950/20"
+                                ? "border-sunset-600 bg-sunset-50 ring-2 ring-sunset-600 dark:bg-sunset-950/20"
                                 : "hover:border-muted-foreground/30"
                             )}
                           >

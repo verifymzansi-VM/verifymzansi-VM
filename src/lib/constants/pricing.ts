@@ -1,4 +1,5 @@
 import type { MarketplaceArea, PlanTier, RetailPlanTier } from "@/types/enums";
+import { formatRandAmount } from "@/lib/utils/format";
 import { getStablePlanId } from "@/lib/constants/plan-ids";
 
 export const ACTIVE_MARKETPLACE_AREAS = [
@@ -292,7 +293,7 @@ export const PAID_POST_CONFIG = {
 } as const;
 
 export function formatPlanPrice(priceCents: number): string {
-  return `R${(priceCents / 100).toLocaleString("en-ZA")}`;
+  return `R${formatRandAmount(priceCents / 100, priceCents % 100 === 0 ? 0 : 2)}`;
 }
 
 export function getPlanCheckoutId(plan: Pick<PlanDefinition, "area" | "tier">): string {

@@ -500,7 +500,7 @@ export default function EditPromotionPage() {
     return (
       <div className="flex min-h-screen flex-col">
         <Header isAuthenticated />
-        <main className="flex-1 flex items-center justify-center">
+        <main id="main-content" className="flex-1 flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </main>
         <Footer />
@@ -512,7 +512,7 @@ export default function EditPromotionPage() {
     <div className="flex min-h-screen flex-col">
       <Header isAuthenticated />
 
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         <div className="container-page py-4 space-y-4 max-w-3xl">
           <PageHeader
             title="Edit Event"

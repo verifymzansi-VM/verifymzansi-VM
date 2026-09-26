@@ -173,12 +173,13 @@ export function ListingFilterDrawer() {
         <SheetTrigger asChild>
           <button
             type="button"
-            className="fixed bottom-0 left-1/2 z-40 inline-flex h-12 w-12 -translate-x-1/2 items-center justify-center gap-1 rounded-full bg-brand-green text-white shadow-lg shadow-brand-green/30 ring-1 ring-white/20 transition-all hover:bg-brand-green-600 active:scale-95 md:hidden motion-reduce:transition-none motion-reduce:active:scale-100"
+            className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 z-40 inline-flex h-11 -translate-x-1/2 items-center justify-center gap-2 rounded-full bg-foreground px-5 text-sm font-semibold text-background shadow-xl shadow-black/20 ring-1 ring-white/10 transition-all hover:bg-foreground/90 active:scale-95 md:hidden motion-reduce:transition-none motion-reduce:active:scale-100"
             aria-label="Open listing filters"
           >
             <SlidersHorizontal className="h-4 w-4 shrink-0" />
+            <span>Filters</span>
             {appliedFilterCount > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-gold px-1 text-[10px] font-bold text-warm-950 ring-2 ring-background">
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-gold px-1 text-[11px] font-bold text-warm-950">
                 {appliedFilterCount}
               </span>
             )}
@@ -187,11 +188,12 @@ export function ListingFilterDrawer() {
       ) : (
         <button
           type="button"
-          className="fixed bottom-0 left-1/2 z-40 inline-flex h-12 w-12 -translate-x-1/2 items-center justify-center rounded-full bg-brand-green text-white shadow-lg opacity-50 md:hidden"
+          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 z-40 inline-flex h-11 -translate-x-1/2 items-center justify-center gap-2 rounded-full bg-foreground px-5 text-sm font-semibold text-background opacity-50 shadow-xl md:hidden"
           aria-label="Open listing filters"
           disabled
         >
           <SlidersHorizontal className="h-4 w-4 shrink-0" />
+          <span>Filters</span>
         </button>
       )}
 

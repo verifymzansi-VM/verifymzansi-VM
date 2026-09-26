@@ -3,49 +3,82 @@
 import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, PlusCircle, Search, User } from "lucide-react";
+import { Compass, Home, Plus, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { triggerHaptic } from "@/lib/utils/haptics";
 
 interface TabDef {
-  id: "home" | "verify" | "post" | "search" | "dashboard";
+  id: "home" | "search" | "post" | "verify" | "dashboard";
   href: string;
   icon: typeof Home;
   label: string;
-  dotSource?: "profile";
   requiresAuth?: boolean;
+  /** Extra path prefixes that should light this tab up. */
+  activePrefixes?: string[];
 }
 
 const TABS: TabDef[] = [
   { id: "home", href: "/", icon: Home, label: "Home" },
-  { id: "verify", href: "/verification", icon: ShieldCheck, label: "Verify" },
-  { id: "post", href: "/post/create", icon: PlusCircle, label: "Post", requiresAuth: true },
   {
     id: "search",
     href: "/search",
-    icon: Search,
+    icon: Compass,
     label: "Search",
   },
+  { id: "post", href: "/post/create", icon: Plus, label: "Post", requiresAuth: true },
+  { id: "verify", href: "/verification", icon: ShieldCheck, label: "Verify" },
   {
     id: "dashboard",
     href: "/dashboard",
-    icon: User,
-    label: "Dashboard",
-    dotSource: "profile",
+    icon: UserRound,
+    label: "Account",
     requiresAuth: true,
   },
 ];
 
+/**
+ * Discovery surfaces get the app-style tab bar. Detail pages, posting,
+ * checkout, auth and dashboards keep the screen for their own sticky actions.
+ */
+const NAV_EXACT_PATHS = new Set([
+  "/",
+  "/search",
+  "/mzansi-market",
+  "/mzansi-business",
+  "/tourism-events",
+  "/promotions",
+  "/promotions/events",
+  "/pricing",
+  "/advertise",
+  "/trust-safety",
+  "/verify-buyer",
+  "/contact",
+]);
+
+export function shouldShowMobileNav(pathname: string | null): boolean {
+  if (!pathname) return false;
+  if (NAV_EXACT_PATHS.has(pathname)) return true;
+  return pathname === "/safety" || pathname.startsWith("/safety/");
+}
+
 export function MobileNav() {
   const pathname = usePathname();
+
+  if (!shouldShowMobileNav(pathname)) return null;
+
+  return <MobileNavBar pathname={pathname} />;
+}
+
+function MobileNavBar({ pathname }: { pathname: string }) {
   const { isAuthenticated } = useAuth();
 
-  if (pathname !== "/") return null;
-
   return (
-    <nav aria-label="Main" className="fixed bottom-0 left-0 right-0 z-50 px-3 pb-0 md:hidden">
-      <div className="glass-panel elev-lg mx-auto flex h-16 max-w-md items-center justify-around rounded-t-2xl px-2">
+    <nav
+      aria-label="Main"
+      className="fixed inset-x-0 bottom-0 z-50 border-t border-border/70 bg-background/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg md:hidden"
+    >
+      <div className="mx-auto flex h-16 max-w-md items-stretch justify-around px-1">
         {TABS.map((tab) => {
           const href = tab.href;
           const resolvedHref =
@@ -64,38 +97,33 @@ export function MobileNav() {
               onClick={() => triggerHaptic("light")}
               aria-current={isActive ? "page" : undefined}
               className={cn(
-                "relative flex flex-col items-center justify-center gap-0.5 flex-1 min-h-[44px] py-2 rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                "group relative flex min-h-[44px] flex-1 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                 isPostAction
-                  ? "text-white"
+                  ? "text-foreground"
                   : isActive
-                    ? "text-brand-green"
+                    ? "text-brand-green-700 dark:text-brand-green-300"
                     : "text-muted-foreground hover:text-foreground"
               )}
             >
-              {isActive && !isPostAction ? (
+              {isPostAction ? (
                 <span
                   aria-hidden="true"
-                  className="absolute top-0 h-[3px] w-9 rounded-full bg-brand-green"
-                />
-              ) : null}
-              <span
-                className={cn(
-                  "relative flex items-center justify-center rounded-full transition-all",
-                  isPostAction
-                    ? "-mt-6 h-12 w-12 bg-brand-green text-white shadow-lg shadow-brand-green/30 ring-4 ring-background"
-                    : cn("px-3 py-0.5", isActive && "bg-brand-green-50 dark:bg-brand-green-950")
-                )}
-              >
-                <Icon className={cn("h-5 w-5", isPostAction && "h-6 w-6")} />
-              </span>
-              <span
-                className={cn(
-                  "max-w-16 text-center text-xs font-medium leading-tight",
-                  isPostAction && "font-semibold text-brand-green"
-                )}
-              >
-                {tab.label}
-              </span>
+                  className="-mt-1 flex h-10 w-12 items-center justify-center rounded-2xl bg-brand-green-600 text-white shadow-md shadow-brand-green/30 transition-transform group-active:scale-95 dark:bg-brand-green-500 dark:text-brand-green-950"
+                >
+                  <Icon className="h-6 w-6" strokeWidth={2.5} />
+                </span>
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "flex h-7 w-12 items-center justify-center rounded-full transition-colors",
+                    isActive && "bg-brand-green/10 dark:bg-brand-green/15"
+                  )}
+                >
+                  <Icon className="h-[22px] w-[22px]" strokeWidth={isActive ? 2.4 : 2} />
+                </span>
+              )}
+              <span className="leading-none">{tab.label}</span>
             </Link>
           );
         })}

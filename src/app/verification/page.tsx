@@ -1762,7 +1762,7 @@ export default function VerificationPage() {
     return (
       <div className="flex min-h-screen flex-col bg-warm-50/30 dark:bg-background">
         <Header isAuthenticated />
-        <main className="flex-1">
+        <main id="main-content" className="flex-1">
           <div className="container-page py-6">
             <div className="mx-auto w-full max-w-4xl space-y-6">
               <PageHeader
@@ -1793,7 +1793,7 @@ export default function VerificationPage() {
   return (
     <div className="flex min-h-screen flex-col bg-warm-50/30 dark:bg-background">
       <Header isAuthenticated />
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         <div className="container-page py-6">
           <div className="mx-auto w-full max-w-4xl space-y-6">
             <PageHeader

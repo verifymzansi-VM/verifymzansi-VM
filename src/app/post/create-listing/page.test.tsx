@@ -173,7 +173,8 @@ vi.mock("@/lib/constants/sa-provinces", () => ({
   getTownsForCity: () => [],
 }));
 
-vi.mock("@/lib/utils/format", () => ({
+vi.mock("@/lib/utils/format", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   formatZAR: (cents: number) => `R ${(cents / 100).toFixed(2)}`,
 }));
 

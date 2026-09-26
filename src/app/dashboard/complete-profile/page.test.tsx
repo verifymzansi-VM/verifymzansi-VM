@@ -19,7 +19,8 @@ vi.mock("@/lib/utils/csrf", () => ({
   withCsrfHeaders: (h: Record<string, string>) => h,
 }));
 
-vi.mock("@/lib/utils/format", () => ({
+vi.mock("@/lib/utils/format", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   formatPhone: (p: string) => p,
 }));
 

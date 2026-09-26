@@ -128,7 +128,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <DashboardSidebar badges={sidebarBadges} onSignOut={handleSignOut} />
 
         {/* Main content */}
-        <main className="w-0 min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto">
+        <main
+          id="main-content"
+          className="w-0 min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto"
+        >
           <div className="container-page min-w-0 max-w-full py-6">{children}</div>
         </main>
       </div>

@@ -11,7 +11,7 @@ import {
   promotionToCarouselItem,
 } from "@/components/showrooms/carousel-item-transforms";
 import { tourismEventsShowroomBackground } from "@/components/showrooms/showroom-backgrounds";
-import { TrustStrip } from "@/components/layout/trust-strip";
+import { AreaHero } from "@/components/layout/area-hero";
 import { DisableMobileAutoplay } from "@/contexts/autoplay-policy-context";
 import { getOwnerColumn, withOwnerColumn } from "@/lib/account/compat";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
@@ -48,6 +48,16 @@ export const metadata: Metadata = {
 export const revalidate = 60;
 
 const CAROUSEL_ITEM_LIMIT = 7;
+
+const TOURISM_QUICK_LINKS = [
+  { label: "Events", href: "/tourism-events?tab=events" },
+  { label: "Guest houses & B&Bs", href: "/tourism-events?subcategory=guest_house_bnb" },
+  { label: "Lodges", href: "/tourism-events?subcategory=lodge_game_lodge" },
+  { label: "Safari & wildlife", href: "/tourism-events?subcategory=safari_wildlife" },
+  { label: "Tours", href: "/tourism-events?subcategory=tour_operator" },
+  { label: "Adventure", href: "/tourism-events?subcategory=adventure_activities" },
+  { label: "Culture & heritage", href: "/tourism-events?subcategory=cultural_heritage" },
+] as const;
 
 type TourismBusinessCarouselRow = {
   id: string;
@@ -216,6 +226,16 @@ export default async function PromotionsPage() {
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/<\//g, "<\\/") }}
         />
+        <AreaHero
+          area="tourism"
+          title="Tourism & Events"
+          description="Stays, tours, experiences, venues and live events across South Africa."
+          trustLine="Hosts and organisers complete ID review before posting"
+          ctaHref="/post/create-tourism"
+          ctaLabel="List a stay or event"
+          quickLinks={TOURISM_QUICK_LINKS}
+        />
+
         {/* ── Card Carousel Showroom ── */}
         <ShowroomCardCarousel
           items={carouselItems}
@@ -227,8 +247,6 @@ export default async function PromotionsPage() {
         <Suspense fallback={null}>
           <HomeProgrammeShowcase placement="tourism" />
         </Suspense>
-
-        <TrustStrip variant="green" title="Latest Tourism & Events" />
 
         <Suspense fallback={null}>
           <PromotionsExplorer />

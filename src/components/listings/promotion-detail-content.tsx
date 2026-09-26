@@ -32,7 +32,12 @@ import { PromotionContactActions } from "@/components/listings/promotion-contact
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { MediaLightbox } from "@/components/ui/media-lightbox";
 import { StickyMobileBar } from "@/components/ui/sticky-mobile-bar";
-import { formatZAR } from "@/lib/utils/format";
+import {
+  formatRandAmount,
+  formatSaLongDate,
+  formatSaShortDate,
+  formatZAR,
+} from "@/lib/utils/format";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
 import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
@@ -110,11 +115,11 @@ function getEventState(startDate: string | null, endDate: string | null) {
 const EVENT_STATE_BADGE: Record<string, { label: string; className: string }> = {
   upcoming: {
     label: "Upcoming Event",
-    className: "bg-brand-blue text-white",
+    className: "bg-sunset-600 text-white",
   },
   ongoing: {
     label: "Happening Now",
-    className: "bg-brand-green text-white",
+    className: "bg-brand-green-600 text-white",
   },
   ended: {
     label: "Event Ended",
@@ -448,7 +453,7 @@ export function PromotionDetailContent({
                     key={`${item.kind}-${index}`}
                     type="button"
                     onClick={() => goTo(index)}
-                    className="group relative aspect-[9/16] w-20 shrink-0 overflow-hidden rounded-2xl ring-2 ring-transparent transition-all hover:shadow-md hover:ring-brand-blue/50"
+                    className="group relative aspect-[9/16] w-20 shrink-0 overflow-hidden rounded-2xl ring-2 ring-transparent transition-all hover:shadow-md hover:ring-sunset/50"
                     aria-label={
                       isVideo
                         ? `View video ${index + 1}`
@@ -534,11 +539,9 @@ export function PromotionDetailContent({
             <CardContent className="space-y-4 p-5">
               <div className="space-y-1">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                  Event At A Glance
+                  At a glance
                 </p>
-                <h2 className="font-display text-xl font-semibold">
-                  Date, venue, and ticket clarity first
-                </h2>
+                <h2 className="font-display text-xl font-semibold">When, where and tickets</h2>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {promotion.start_date ? (
@@ -547,11 +550,7 @@ export function PromotionDetailContent({
                       Starts
                     </p>
                     <p className="mt-1 text-sm font-medium">
-                      {new Date(promotion.start_date).toLocaleDateString("en-ZA", {
-                        weekday: "short",
-                        day: "numeric",
-                        month: "short",
-                      })}
+                      {formatSaShortDate(promotion.start_date)}
                     </p>
                   </div>
                 ) : null}
@@ -582,7 +581,7 @@ export function PromotionDetailContent({
               </div>
               {(promotion.location_city || promotion.location_province) && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <MapPin className="h-4 w-4 text-brand-blue" />
+                  <MapPin className="h-4 w-4 text-sunset-600" />
                   <span>
                     {[promotion.location_town, promotion.location_city, promotion.location_province]
                       .filter(Boolean)
@@ -595,8 +594,8 @@ export function PromotionDetailContent({
 
           {/* ═══ EVENT COUNTDOWN (compact) ═══ */}
           {countdown && (
-            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-brand-blue/20 bg-gradient-to-r from-brand-blue/5 to-brand-blue/10 px-4 py-3">
-              <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-brand-blue">
+            <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-sunset/20 bg-gradient-to-r from-sunset/5 to-sunset/10 px-4 py-3">
+              <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-sunset-700 dark:text-sunset-300">
                 <Timer className="h-4 w-4" />
                 <span className="hidden sm:inline">
                   {eventState === "upcoming" ? "Starts in" : "Ends in"}
@@ -628,8 +627,7 @@ export function PromotionDetailContent({
                 >
                   <a href={calendarUrl} target="_blank" rel="noopener noreferrer">
                     <CalendarPlus className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Add to Calendar</span>
-                    <span className="sm:hidden">Cal</span>
+                    Add to calendar
                   </a>
                 </Button>
               )}
@@ -722,11 +720,7 @@ export function PromotionDetailContent({
                       <dd className="flex items-center gap-1 font-medium">
                         <Calendar className="h-3 w-3" />
                         <time dateTime={promotion.start_date}>
-                          {new Date(promotion.start_date).toLocaleDateString("en-ZA", {
-                            weekday: "short",
-                            month: "short",
-                            day: "numeric",
-                          })}
+                          {formatSaShortDate(promotion.start_date)}
                         </time>
                       </dd>
                     </>
@@ -738,11 +732,7 @@ export function PromotionDetailContent({
                       <dd className="flex items-center gap-1 font-medium">
                         <Calendar className="h-3 w-3" />
                         <time dateTime={promotion.end_date}>
-                          {new Date(promotion.end_date).toLocaleDateString("en-ZA", {
-                            weekday: "short",
-                            month: "short",
-                            day: "numeric",
-                          })}
+                          {formatSaShortDate(promotion.end_date)}
                         </time>
                       </dd>
                     </>
@@ -829,9 +819,7 @@ export function PromotionDetailContent({
                           <dt className="flex items-center gap-1 text-muted-foreground">
                             <Users className="h-3 w-3" /> Capacity
                           </dt>
-                          <dd className="font-medium">
-                            {ed.venue_capacity.toLocaleString("en-ZA")}
-                          </dd>
+                          <dd className="font-medium">{formatRandAmount(ed.venue_capacity)}</dd>
                         </>
                       )}
 
@@ -1001,9 +989,7 @@ export function PromotionDetailContent({
             )}
             <p className="text-center text-xs text-muted-foreground">
               Posted{" "}
-              <time dateTime={promotion.created_at}>
-                {new Date(promotion.created_at).toLocaleDateString("en-ZA")}
-              </time>
+              <time dateTime={promotion.created_at}>{formatSaLongDate(promotion.created_at)}</time>
             </p>
           </div>
         )}
@@ -1101,9 +1087,7 @@ export function PromotionDetailContent({
 
         <p className="text-center text-xs text-muted-foreground">
           Posted{" "}
-          <time dateTime={promotion.created_at}>
-            {new Date(promotion.created_at).toLocaleDateString("en-ZA")}
-          </time>
+          <time dateTime={promotion.created_at}>{formatSaLongDate(promotion.created_at)}</time>
         </p>
       </div>
 

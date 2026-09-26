@@ -96,7 +96,8 @@ vi.mock("@/components/trust/trust-badge", () => ({
   TrustBadge: ({ level }: { level: string }) => <span data-testid="trust-badge">{level}</span>,
 }));
 
-vi.mock("@/lib/utils/format", () => ({
+vi.mock("@/lib/utils/format", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   formatZAR: (cents: number) => `R ${(cents / 100).toFixed(2)}`,
   formatZARShort: (cents: number) => `R${Math.round(cents / 100)}`,
   formatRelativeTime: (_date: string) => "2d ago",
@@ -175,9 +176,9 @@ describe("ListingCard", () => {
     expect(screen.queryByText(/Brand: Apple/i)).toBeNull();
   });
 
-  it("hides status chips on immersive cards", () => {
+  it("shows the paid Urgent chip on feed cards", () => {
     render(<ListingCard {...defaultProps} featured boosted urgent />);
-    expect(screen.queryByText("Urgent")).toBeNull();
+    expect(screen.getByText("Urgent")).toBeTruthy();
     expect(screen.queryByText("Boosted")).toBeNull();
   });
 

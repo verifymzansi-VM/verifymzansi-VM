@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Promote products, services, tourism experiences, and events across South Africa.",
     start_url: "/",
     display: "standalone",
-    background_color: "#faf8f5",
-    theme_color: "#007749",
+    background_color: "#f7f7f4",
+    theme_color: "#0b7a55",
     icons: [
       {
         src: "/icons/icon-192.png?v=20260924",

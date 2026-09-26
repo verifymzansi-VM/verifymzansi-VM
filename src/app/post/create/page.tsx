@@ -31,7 +31,7 @@ export default async function PostCreatePage() {
     <div className="flex min-h-screen flex-col">
       <Header isAuthenticated />
 
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         <div className="container-page py-6 space-y-4">
           <PageHeader
             title="Create a Post"

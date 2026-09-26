@@ -75,7 +75,8 @@ vi.mock("@/lib/account/compat", () => ({
   readOwnerId: () => null,
 }));
 
-vi.mock("@/lib/utils/format", () => ({
+vi.mock("@/lib/utils/format", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   formatZAR: (value: number) => `R ${value}`,
 }));
 
