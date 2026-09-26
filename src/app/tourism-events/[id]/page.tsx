@@ -6,7 +6,7 @@ import {
 import {
   BusinessDetailPageContent,
   generateBusinessDetailMetadata,
-} from "@/app/(marketplace)/mzansi-business/[id]/page";
+} from "@/app/(marketplace)/mzansi-business/_lib/business-detail-page-content";
 
 interface TourismEventDetailPageProps {
   params: Promise<{ id: string }>;
