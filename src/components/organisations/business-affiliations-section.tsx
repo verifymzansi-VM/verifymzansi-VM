@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { organisationsPublicEnabled } from "@/lib/commercial/settings";
 import Link from "next/link";
 import { Landmark } from "lucide-react";
 import type { PublicAffiliation } from "@/lib/organisations/affiliations";
@@ -14,6 +15,7 @@ export async function loadBusinessAffiliations(
   businessId: string
 ): Promise<PublicAffiliation[]> {
   try {
+    if (!(await organisationsPublicEnabled(client as never))) return [];
     const { data } = await client.rpc("public_business_affiliations", {
       p_business_ids: [businessId],
     });

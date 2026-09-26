@@ -355,11 +355,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const mediaLimitBlock = enforcePostingMediaLimits({
-      entitlements: ent,
-      photoCount: data.images.length,
-      videoCount: data.videos.length,
-    });
+    // Free events use the event fair-use media limits (checked below).
+    const mediaLimitBlock =
+      data.promotion_type === "event" && !postingLimitBypassEnabled
+        ? null
+        : enforcePostingMediaLimits({
+            entitlements: ent,
+            photoCount: data.images.length,
+            videoCount: data.videos.length,
+          });
     if (mediaLimitBlock) return mediaLimitBlock;
 
     // The paid-plan post limit is enforced atomically inside
@@ -374,7 +378,10 @@ export async function POST(request: NextRequest) {
       hasPaidPlan && tier && !postingLimitBypassEnabled && !isFreeEvent ? ent.maxAllowed : -1;
 
     if (isFreeEvent && !postingLimitBypassEnabled) {
-      const eventLimitBlock = await enforceEventCreationLimit(getAdmin(), user.id, log);
+      const eventLimitBlock = await enforceEventCreationLimit(getAdmin(), user.id, log, {
+        photoCount: data.images.length,
+        videoCount: data.videos.length,
+      });
       if (eventLimitBlock) return eventLimitBlock;
     }
 

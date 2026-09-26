@@ -30,32 +30,22 @@ export const COMMERCIAL_SETTING_SCHEMAS = {
       durationDays: int(7, 366),
       sponsoredCapacity: int(0, 10000),
       adminLimit: int(1, 20),
+      ownSlots: int(0, 1000),
       alertDays: z.array(int(1, 180)).min(1).max(8),
     })
     .strict(),
-  retail: z
-    .object({
-      activationsPerPeriod: int(1, 1000),
-      periodDays: int(1, 90),
-      labels: z
-        .object({
-          month: z.string().max(30),
-          half_year: z.string().max(30),
-          year: z.string().max(30),
-        })
-        .strict(),
-    })
-    .strict(),
+  /** Default activations per 30 days for sponsored members (plans set their own). */
+  retail: z.object({ activationsPerPeriod: int(1, 1000) }).strict(),
   partner: z
     .object({ commissionBps: int(0, 5000), pendingDays: int(0, 180), enabled: z.boolean() })
     .strict(),
+  /** Upload ceilings can only be lowered below the platform limits (5 MB / 50 MB). */
   media: z
     .object({
       maxPhotos: int(1, 30),
-      maxImageMb: int(1, 25),
+      maxImageMb: int(1, 5),
       maxVideos: int(0, 27),
-      maxVideoMb: int(5, 500),
-      storageQuotaMb: int(50, 100000),
+      maxVideoMb: int(5, 50),
     })
     .strict(),
   events: z
@@ -73,8 +63,6 @@ export const COMMERCIAL_SETTING_SCHEMAS = {
     .object({
       enterpriseCheckout: z.boolean(),
       organisationsPublic: z.boolean(),
-      partnerProgramme: z.boolean(),
-      qualityScore: z.boolean(),
     })
     .strict(),
 } as const;
@@ -98,15 +86,12 @@ export const DEFAULT_COMMERCIAL_SETTINGS: CommercialSettings = {
     durationDays: 180,
     sponsoredCapacity: 50,
     adminLimit: 3,
+    ownSlots: 10,
     alertDays: [60, 30, 14, 7],
   },
-  retail: {
-    activationsPerPeriod: 10,
-    periodDays: 30,
-    labels: { month: "Flexible", half_year: "Most popular", year: "Best value" },
-  },
+  retail: { activationsPerPeriod: 10 },
   partner: { commissionBps: 2000, pendingDays: 30, enabled: true },
-  media: { maxPhotos: 10, maxImageMb: 5, maxVideos: 1, maxVideoMb: 50, storageQuotaMb: 500 },
+  media: { maxPhotos: 10, maxImageMb: 5, maxVideos: 1, maxVideoMb: 50 },
   events: {
     maxActivePerAccount: 5,
     maxCreatedPer30Days: 10,
@@ -116,12 +101,7 @@ export const DEFAULT_COMMERCIAL_SETTINGS: CommercialSettings = {
     maxVideos: 1,
   },
   showroom: { programmeMinItems: 3, programmeMaxCards: 12 },
-  features: {
-    enterpriseCheckout: true,
-    organisationsPublic: true,
-    partnerProgramme: true,
-    qualityScore: true,
-  },
+  features: { enterpriseCheckout: true, organisationsPublic: true },
 };
 
 export const COMMERCIAL_SETTING_LABELS: Record<CommercialSettingKey, string> = {
@@ -129,7 +109,7 @@ export const COMMERCIAL_SETTING_LABELS: Record<CommercialSettingKey, string> = {
   strategic: "Strategic Individual trial",
   founding_commercial: "Founding Commercial Partner (dealerships)",
   founding_organisation: "Founding Organisation Programme",
-  retail: "Retail slot fair use & labels",
+  retail: "Sponsored member fair use",
   partner: "Partner commission",
   media: "Media limits",
   events: "Free event fair use",
@@ -152,7 +132,8 @@ export function resolveCommercialSettings(
       row.value && typeof row.value === "object"
         ? { ...(settings[row.key] as object), ...(row.value as object) }
         : row.value;
-    const parsed = COMMERCIAL_SETTING_SCHEMAS[row.key].safeParse(merged);
+    // Tolerate retired keys in stored rows; writes are still validated strictly.
+    const parsed = COMMERCIAL_SETTING_SCHEMAS[row.key].strip().safeParse(merged);
     if (parsed.success) settings[row.key] = parsed.data;
   }
   return settings as CommercialSettings;
@@ -181,4 +162,36 @@ export async function getCommercialSettings(client: SettingsReader): Promise<Com
 
 export function clearCommercialSettingsCache(): void {
   cache = null;
+}
+
+const PLATFORM_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const PLATFORM_MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+
+/** Upload ceilings: admin settings may lower, never raise, the platform limits. */
+export async function getMediaUploadLimits(
+  client: SettingsReader
+): Promise<{ imageBytes: number; videoBytes: number; imageMb: number; videoMb: number }> {
+  let media = DEFAULT_COMMERCIAL_SETTINGS.media;
+  try {
+    media = (await getCommercialSettings(client)).media;
+  } catch {
+    // Fall back to platform limits when settings are unavailable.
+  }
+  const imageBytes = Math.min(PLATFORM_MAX_IMAGE_BYTES, media.maxImageMb * 1024 * 1024);
+  const videoBytes = Math.min(PLATFORM_MAX_VIDEO_BYTES, media.maxVideoMb * 1024 * 1024);
+  return {
+    imageBytes,
+    videoBytes,
+    imageMb: Math.round(imageBytes / 1024 / 1024),
+    videoMb: Math.round(videoBytes / 1024 / 1024),
+  };
+}
+
+/** Kill switch for every public organisation surface (pages, badges, filters, showrooms). */
+export async function organisationsPublicEnabled(client: SettingsReader): Promise<boolean> {
+  try {
+    return (await getCommercialSettings(client)).features.organisationsPublic;
+  } catch {
+    return true;
+  }
 }

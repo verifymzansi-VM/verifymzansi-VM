@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { HomeProgrammeShowcase } from "@/components/home/home-programme-showcase";
 import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -222,6 +223,10 @@ export default async function PromotionsPage() {
           emptyDescription={categorySeo.description}
           background={tourismEventsShowroomBackground}
         />
+
+        <Suspense fallback={null}>
+          <HomeProgrammeShowcase placement="tourism" />
+        </Suspense>
 
         <TrustStrip variant="green" title="Latest Tourism & Events" />
 

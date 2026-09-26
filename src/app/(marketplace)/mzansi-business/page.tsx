@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { HomeProgrammeShowcase } from "@/components/home/home-programme-showcase";
 import { createClient } from "@/lib/supabase/server";
 import { ShowroomCardCarousel } from "@/components/showrooms/showroom-card-carousel";
 import { mzansiBusinessShowroomBackground } from "@/components/showrooms/showroom-backgrounds";
@@ -119,6 +120,10 @@ export default async function MzansiBusinessPage() {
           emptyDescription={categorySeo.description}
           background={mzansiBusinessShowroomBackground}
         />
+
+        <Suspense fallback={null}>
+          <HomeProgrammeShowcase placement="business" />
+        </Suspense>
 
         <TrustStrip variant="blue" title="Latest Mzansi Businesses" />
 

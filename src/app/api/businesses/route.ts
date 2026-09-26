@@ -1,4 +1,5 @@
 import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
+import { organisationsPublicEnabled } from "@/lib/commercial/settings";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -704,7 +705,7 @@ export async function GET(request: NextRequest) {
     // active affiliation to a listed organisation. Without it, independent
     // businesses are listed exactly as before.
     let orgBusinessIds: string[] | null = null;
-    if (query.org) {
+    if (query.org && (await organisationsPublicEnabled(admin as never))) {
       const slug = query.org.toLowerCase();
       const { data: org } = /^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)
         ? await admin

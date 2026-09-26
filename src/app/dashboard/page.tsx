@@ -1,4 +1,5 @@
 import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
+import { PLAN_TIER_LABELS, type PlanTier } from "@/types/enums";
 import { IntroductoryTrialCard } from "@/components/dashboard/introductory-trial-card";
 import { createClient } from "@/lib/supabase/server";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
@@ -274,14 +275,23 @@ export default async function DashboardPage() {
   const topTier =
     activeEntitlements.length > 0
       ? activeEntitlements.reduce((best: string, ent: { tier?: string }) => {
-          const rank: Record<string, number> = { pro: 4, growth: 3, starter: 2, basic: 1 };
+          const rank: Record<string, number> = {
+            enterprise: 8,
+            year: 7,
+            half_year: 6,
+            month: 5,
+            pro: 4,
+            growth: 3,
+            starter: 2,
+            basic: 1,
+          };
           const current = rank[ent.tier ?? ""] ?? 0;
           const bestRank = rank[best] ?? 0;
           return current > bestRank ? (ent.tier ?? best) : best;
         }, activeEntitlements[0]?.tier ?? "basic")
       : null;
   const planLabel = topTier
-    ? topTier.charAt(0).toUpperCase() + topTier.slice(1) + " Plan"
+    ? `${PLAN_TIER_LABELS[topTier as PlanTier] ?? topTier} plan`
     : undefined;
 
   // Verification chip helpers

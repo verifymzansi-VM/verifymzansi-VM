@@ -20,6 +20,7 @@ export function IntroductoryTrialCard() {
   const [eligible, setEligible] = useState(false);
   const [freePostsRemaining, setFreePostsRemaining] = useState(0);
   const [claim, setClaim] = useState<Claim | null>(null);
+  const [lengths, setLengths] = useState({ short: 7, long: 30 });
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -44,6 +45,10 @@ export function IntroductoryTrialCard() {
         setEligible(usage.available);
         setFreePostsRemaining(usage.offer?.adminFreePostsRemaining ?? 0);
         setClaim(claims.data);
+        setLengths({
+          short: usage.offer?.shortDays ?? 7,
+          long: usage.offer?.longDays ?? 30,
+        });
       }
     }
     void load().catch(() => {
@@ -83,7 +88,7 @@ export function IntroductoryTrialCard() {
           <p className="text-sm text-muted-foreground">
             {freePostsRemaining > 0
               ? `${freePostsRemaining} extra free posts remaining across all categories. Each lasts 30 days from approval. No automatic charge.`
-              : "Choose one free 7-day post or a limited 30-day launch trial across Mzansi Market, Mzansi Business and Tourism & Events. Select your offer while posting. No automatic charge."}
+              : `Choose one free ${lengths.short}-day post or a limited ${lengths.long}-day launch trial across Mzansi Market, Mzansi Business and Tourism. Events are always free. Select your offer while posting. No automatic charge.`}
           </p>
           <Button asChild>
             <Link href="/post/create">Choose a posting area</Link>
@@ -92,20 +97,25 @@ export function IntroductoryTrialCard() {
       ) : (
         <>
           <h2 className="font-semibold">
-            Your {claim?.duration_days}-day{" "}
-            {claim?.admin_granted ? "free post" : "introductory trial"}
+            Your{" "}
+            {claim?.admin_granted
+              ? claim.duration_days
+              : claim?.duration_days === 7
+                ? lengths.short
+                : lengths.long}
+            -day {claim?.admin_granted ? "free post" : "introductory trial"}
           </h2>
           <p className="text-sm">
             {claim?.activated_at
               ? `Trial visibility ends ${new Date(claim.expires_at!).toLocaleString("en-ZA")}. Your content stays saved for renewal.`
               : claim?.admin_granted
                 ? `Your post is awaiting review. Your ${claim.duration_days} free days start when approved.`
-                : "Your post is awaiting review. The trial starts only when approved; 30-day capacity is checked then."}
+                : `Your post is awaiting review. The trial starts only when approved; ${lengths.long}-day capacity is checked then.`}
           </p>
           <div className="flex flex-wrap gap-2">
             {!claim?.admin_granted && !claim?.activated_at && claim?.duration_days === 30 && (
               <Button variant="outline" disabled={busy} onClick={() => update("choose_seven")}>
-                Switch pending post to 7 days
+                Switch pending post to {lengths.short} days
               </Button>
             )}
             <Button asChild variant="outline">

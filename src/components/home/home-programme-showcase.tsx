@@ -47,10 +47,12 @@ export async function HomeProgrammeShowcase({
       .gt("ends_at", nowIso)
       .order("display_order")
       .limit(2),
-    supabase.from("commercial_settings").select("key, value").eq("key", "showroom"),
+    supabase.from("commercial_settings").select("key, value").in("key", ["showroom", "features"]),
   ]);
   if (!showcases?.length) return null;
-  const minItems = resolveCommercialSettings(settingsRows).showroom.programmeMinItems;
+  const settings = resolveCommercialSettings(settingsRows);
+  if (!settings.features.organisationsPublic) return null;
+  const minItems = settings.showroom.programmeMinItems;
 
   const sections = await Promise.all(
     (showcases as unknown as Showcase[]).map(async (showcase) => {
@@ -59,7 +61,7 @@ export async function HomeProgrammeShowcase({
         p_org: showcase.organisations.id,
         p_city: showcase.city,
         p_sponsored: showcase.sponsored_only ? true : null,
-        p_limit: showcase.max_cards,
+        p_limit: Math.min(showcase.max_cards, settings.showroom.programmeMaxCards),
         p_offset: 0,
       });
       const rows = ((data ?? []) as DirectoryRow[]).filter(

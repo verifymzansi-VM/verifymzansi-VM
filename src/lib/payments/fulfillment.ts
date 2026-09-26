@@ -72,7 +72,9 @@ export async function fulfillPayment(
       if (catalogError) throw new Error(`Paid plan validation failed: ${catalogError}`);
       if (plan.area && (payment.area !== plan.area || meta.area !== plan.area))
         throw new Error("Payment area does not match canonical plan");
-      if (payment.amount_cents !== plan.price_cents)
+      // The price quoted at checkout (server-written metadata) is honoured if
+      // the plan has been repriced since.
+      if (payment.amount_cents !== plan.price_cents && payment.amount_cents !== meta.price_cents)
         throw new Error("Payment amount does not match canonical plan");
       if (meta.plan_tier !== plan.tier)
         throw new Error("Payment metadata tier does not match canonical plan");

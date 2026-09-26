@@ -201,9 +201,21 @@ export function enforcePostingMediaLimits({
 export async function enforceEventCreationLimit(
   admin: SupabaseClient,
   userId: string,
-  log: AppLogger
+  log: AppLogger,
+  media: { photoCount: number; videoCount: number } = { photoCount: 0, videoCount: 0 }
 ): Promise<NextResponse | null> {
   const settings = await getCommercialSettings(admin as never);
+  const mediaBlock = enforcePostingMediaLimits({
+    entitlements: {
+      maxPhotos: settings.events.maxPhotos,
+      maxVideos: settings.events.maxVideos,
+      videoAllowed: settings.events.maxVideos > 0,
+    },
+    photoCount: media.photoCount,
+    videoCount: media.videoCount,
+    videoUnavailableMessage: "Video is not available on free events.",
+  });
+  if (mediaBlock) return mediaBlock;
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const { count, error } = await admin
     .from("promotions")

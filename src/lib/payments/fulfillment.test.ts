@@ -135,6 +135,15 @@ describe("atomic payment fulfillment adapter (effects are tested in test-payment
     ).rejects.toThrow(/not found or inactive/);
   });
 
+  it("honours the price quoted at checkout after the plan is repriced", async () => {
+    const admin = client([{ ...plan, price_cents: 27500 }]);
+    await fulfillPayment(admin, {
+      ...payment,
+      provider_data: { ...payment.provider_data, price_cents: 25000 },
+    });
+    expect(admin.rpc).toHaveBeenCalledOnce();
+  });
+
   it("accepts bulk plans that cover every area", async () => {
     const bulk = { ...plan, area: null, tier: "enterprise", price_cents: 500000 };
     const admin = client([bulk]);

@@ -125,6 +125,7 @@ const schema = z.discriminatedUnion("action", [
     organisationId: uuid,
     operation: z.enum([
       "activate_trial",
+      "extend_trial",
       "suspend",
       "reinstate",
       "end_trial",

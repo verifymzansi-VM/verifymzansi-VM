@@ -6,6 +6,7 @@ import { UPLOAD_AREAS } from "@/types/enums";
 import { ACCOUNT_PROFILE_NOT_FOUND_ERROR, ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
 import { ensureAccountProfile } from "@/lib/account/ensure-profile";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getMediaUploadLimits } from "@/lib/commercial/settings";
 import { detectMimeFromMagicBytes } from "@/lib/utils/file-validation";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
@@ -118,6 +119,15 @@ export async function POST(request: NextRequest) {
       admin ??= createAdminClient();
       return admin;
     };
+    const uploadLimits = await getMediaUploadLimits(
+      (() => {
+        try {
+          return getAdmin() as never;
+        } catch {
+          return undefined as never;
+        }
+      })()
+    );
 
     // ── Get account profile ──────────────────────────────────
     const { data: profile, error: profileError } = await supabase
@@ -224,9 +234,14 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      const maxSize = isVideo ? MAX_VIDEO_SIZE : MAX_IMAGE_SIZE;
+      const maxSize = Math.min(
+        isVideo ? MAX_VIDEO_SIZE : MAX_IMAGE_SIZE,
+        isVideo ? uploadLimits.videoBytes : uploadLimits.imageBytes
+      );
       if (file.size > maxSize) {
-        errors.push(`"${file.name}": exceeds ${isVideo ? "50 MB" : "5 MB"} limit`);
+        errors.push(
+          `"${file.name}": exceeds ${isVideo ? uploadLimits.videoMb : uploadLimits.imageMb} MB limit`
+        );
         continue;
       }
 

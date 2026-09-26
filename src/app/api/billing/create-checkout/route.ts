@@ -215,6 +215,7 @@ export async function POST(request: NextRequest) {
           plan_code: plan.plan_code ?? null,
           plan_name: plan.name,
           duration_days: durationDays,
+          price_cents: plan.price_cents,
         },
       });
       paymentId = checkout.paymentId;

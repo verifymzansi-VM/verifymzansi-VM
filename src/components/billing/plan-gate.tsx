@@ -63,6 +63,11 @@ type AllowanceResponse = {
   maxVideos: number;
 };
 
+/** Configured length for a trial choice (7 = short, 30 = launch). */
+function trialLength(offer: IntroTrialOffer | undefined, choice: 7 | 30): number {
+  return choice === 7 ? (offer?.shortDays ?? 7) : (offer?.longDays ?? 30);
+}
+
 async function fetchAllowance(area: MarketplaceArea): Promise<AllowanceResponse | null> {
   try {
     const res = await fetch(`/api/billing/allowance?area=${area}`, { cache: "no-store" });
@@ -694,7 +699,7 @@ function PlanPickerWithTrial({
             <span className="text-amber-600 dark:text-amber-400 font-medium">
               {planInfo.postingLimitBypassEnabled
                 ? `Staff / testing access — Unlimited posts • ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`
-                : `${(planInfo.offer?.adminFreePostsRemaining ?? 0) > 0 ? "Account free post" : "Introductory trial"} — ${trialDays} days • ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`}
+                : `${(planInfo.offer?.adminFreePostsRemaining ?? 0) > 0 ? "Account free post" : "Introductory trial"} — ${(planInfo.offer?.adminFreePostsRemaining ?? 0) > 0 ? 30 : trialLength(planInfo.offer, trialDays)} days • ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`}
             </span>
           </div>
 
@@ -746,7 +751,7 @@ function PlanPickerWithTrial({
                   ? `Each post still uses free-tier media limits: ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video.`
                   : (planInfo.offer?.adminFreePostsRemaining ?? 0) > 0
                     ? "Your account has extra free posts. Each lasts 30 days from approval with standard placement."
-                    : "Choose 7 or 30 days once. Standard placement; no boosts, featured placement or urgent badges. Your trial starts on approval. 30-day availability is checked again then."}
+                    : `Choose ${trialLength(planInfo.offer, 7)} or ${trialLength(planInfo.offer, 30)} days once. Standard placement; no boosts, featured placement or urgent badges. Your trial starts on approval. ${trialLength(planInfo.offer, 30)}-day availability is checked again then.`}
               </p>
             </div>
             <Button
@@ -766,7 +771,7 @@ function PlanPickerWithTrial({
                 ? "Start Posting"
                 : (planInfo.offer?.adminFreePostsRemaining ?? 0) > 0
                   ? "Use 30-Day Free Post"
-                  : "Choose 7 Days Free"}
+                  : `Choose ${trialLength(planInfo.offer, 7)} Days Free`}
             </Button>
           </div>
         </div>
@@ -777,7 +782,8 @@ function PlanPickerWithTrial({
             <h2 className="font-display text-base font-bold">Choose How You Want to Post</h2>
           </div>
           <p className="text-white/80 text-xs mt-1">
-            Subscribe to a 30-day plan for the best value on {AREA_LABELS[area]}.
+            Choose a plan for {AREA_LABELS[area]}: R50 / 30 days, R250 / 6 months or R450 / 12
+            months (best value).
           </p>
         </div>
       )}
@@ -787,16 +793,17 @@ function PlanPickerWithTrial({
         !planInfo.postingLimitBypassEnabled &&
         !(planInfo.offer.adminFreePostsRemaining ?? 0) && (
           <div className="rounded-lg border p-4 space-y-2">
-            <p className="font-semibold">30-Day Free Launch Trial</p>
+            <p className="font-semibold">{trialLength(planInfo.offer, 30)}-Day Free Launch Trial</p>
             <p className="text-sm text-muted-foreground">
               {trialAvailabilityMessage(planInfo.offer)}
             </p>
             <Button disabled={!planInfo.offer.thirtyDayAvailable} onClick={() => selectTrial(30)}>
-              Choose 30 Days Free
+              Choose {trialLength(planInfo.offer, 30)} Days Free
             </Button>
             <p className="text-xs text-muted-foreground">
               One post, one introductory choice. No automatic charge or free renewal. If capacity
-              fills before approval, your post stays pending; you can choose seven days instead.
+              fills before approval, your post stays pending; you can choose{" "}
+              {trialLength(planInfo.offer, 7)} days instead.
             </p>
           </div>
         )}

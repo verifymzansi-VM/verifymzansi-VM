@@ -331,6 +331,7 @@ export function OrganisationProfileForm({ org }: { org: AdminOrganisation }) {
 
 const OPERATIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "activate_trial", label: "Activate founding pilot (6 months, no platform fee)" },
+  { value: "extend_trial", label: "Extend founding pilot" },
   { value: "set_capacity", label: "Change sponsored cohort size" },
   { value: "approve_logo", label: "Record written logo permission" },
   { value: "revoke_logo", label: "Withdraw logo permission" },
@@ -352,7 +353,12 @@ export function OrganisationActionsForm({ org }: { org: AdminOrganisation }) {
   function values(form: Record<string, string>): Record<string, unknown> {
     switch (operation) {
       case "activate_trial":
-        return { durationDays: optionalInt(form.durationDays) };
+        return {
+          durationDays: optionalInt(form.durationDays),
+          ownSlots: optionalInt(form.ownSlots),
+        };
+      case "extend_trial":
+        return { endsAt: new Date(form.endsAt).toISOString() };
       case "set_capacity":
         return { sponsoredCapacity: optionalInt(form.sponsoredCapacity) };
       case "approve_logo":
@@ -430,15 +436,34 @@ export function OrganisationActionsForm({ org }: { org: AdminOrganisation }) {
         </label>
         <div className="grid gap-3 sm:grid-cols-2">
           {operation === "activate_trial" ? (
+            <>
+              <label className="text-sm">
+                Duration (days)
+                <input
+                  name="durationDays"
+                  type="number"
+                  min={7}
+                  defaultValue={180}
+                  className={input}
+                />
+              </label>
+              <label className="text-sm">
+                Organisation&apos;s own posting slots
+                <input
+                  name="ownSlots"
+                  type="number"
+                  min={0}
+                  max={1000}
+                  defaultValue={10}
+                  className={input}
+                />
+              </label>
+            </>
+          ) : null}
+          {operation === "extend_trial" ? (
             <label className="text-sm">
-              Duration (days)
-              <input
-                name="durationDays"
-                type="number"
-                min={7}
-                defaultValue={180}
-                className={input}
-              />
+              New end date
+              <input name="endsAt" type="date" required className={input} />
             </label>
           ) : null}
           {operation === "set_capacity" || operation === "convert_paid" ? (

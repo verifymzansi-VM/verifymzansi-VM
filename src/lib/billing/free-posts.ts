@@ -7,6 +7,9 @@ export type IntroTrialOffer = {
   thirtyDayAvailable: boolean;
   remaining: number;
   launchEnabled: boolean;
+  /** Configured trial lengths (admin setting); 7 / 30 when not reported. */
+  shortDays?: number;
+  longDays?: number;
 };
 export type FreePostUsage = {
   used: number;
@@ -78,8 +81,9 @@ export function releaseRejectedDeletedFreePost(
   return releaseFreePostSlot(admin, { userId, area, contentId, reason: "rejected_deleted" });
 }
 export function trialAvailabilityMessage(offer: IntroTrialOffer): string {
-  if (!offer.launchEnabled) return "The 30-day launch offer is currently paused.";
-  if (offer.remaining === 0) return "30-day free spaces are currently fully allocated.";
-  if (offer.remaining <= 10) return `Only ${offer.remaining} free 30-day spaces remaining.`;
-  return "Limited 30-day free spaces available.";
+  const long = offer.longDays ?? 30;
+  if (!offer.launchEnabled) return `The ${long}-day launch offer is currently paused.`;
+  if (offer.remaining === 0) return `${long}-day free spaces are currently fully allocated.`;
+  if (offer.remaining <= 10) return `Only ${offer.remaining} free ${long}-day spaces remaining.`;
+  return `Limited ${long}-day free spaces available.`;
 }

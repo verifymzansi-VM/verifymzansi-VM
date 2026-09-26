@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { organisationsPublicEnabled } from "@/lib/commercial/settings";
 import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
@@ -64,6 +65,7 @@ interface DirectoryRow {
 async function loadOrganisation(slug: string): Promise<PublicOrganisation | null> {
   if (!SLUG.test(slug)) return null;
   const supabase = await createClient();
+  if (!(await organisationsPublicEnabled(supabase as never))) return null;
   const { data } = await supabase
     .from("organisations")
     .select(

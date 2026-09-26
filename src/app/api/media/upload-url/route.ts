@@ -6,6 +6,7 @@ import { createLogger } from "@/lib/utils/logger";
 import { ACCOUNT_PROFILE_NOT_FOUND_ERROR, ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
 import { ensureAccountProfile } from "@/lib/account/ensure-profile";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getMediaUploadLimits } from "@/lib/commercial/settings";
 import { UPLOAD_AREAS } from "@/types/enums";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { parseAndValidateJsonRequest } from "@/lib/utils/api";
@@ -170,9 +171,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (size > MAX_VIDEO_SIZE) {
+    const { videoBytes, videoMb } = await getMediaUploadLimits(
+      (() => {
+        try {
+          return createAdminClient() as never;
+        } catch {
+          return undefined as never;
+        }
+      })()
+    );
+    if (size > Math.min(MAX_VIDEO_SIZE, videoBytes)) {
       return NextResponse.json(
-        { error: "File too large. Maximum video size is 50 MB." },
+        { error: `File too large. Maximum video size is ${videoMb} MB.` },
         { status: 400 }
       );
     }

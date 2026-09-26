@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { organisationsPublicEnabled } from "@/lib/commercial/settings";
 import { createClient } from "@/lib/supabase/server";
 import { checkLocalRateLimit, getClientRateLimitKey } from "@/lib/utils/rate-limit";
 
@@ -15,6 +16,9 @@ export async function GET(request: NextRequest) {
     .trim()
     .slice(0, 80);
   const supabase = await createClient();
+  if (!(await organisationsPublicEnabled(supabase as never))) {
+    return NextResponse.json({ organisations: [] });
+  }
   let query = supabase
     .from("organisations")
     .select(

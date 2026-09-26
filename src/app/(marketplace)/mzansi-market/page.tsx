@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { HomeProgrammeShowcase } from "@/components/home/home-programme-showcase";
 import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { ShowroomCardCarousel } from "@/components/showrooms/showroom-card-carousel";
@@ -98,6 +99,10 @@ export default async function MzansiMarketPage() {
           emptyMediaUrl="/images/fallbacks/hero-listing.svg"
           background={mzansiMarketShowroomBackground}
         />
+
+        <Suspense fallback={null}>
+          <HomeProgrammeShowcase placement="market" />
+        </Suspense>
 
         <TrustStrip variant="green" title="Latest on Mzansi Market" />
 

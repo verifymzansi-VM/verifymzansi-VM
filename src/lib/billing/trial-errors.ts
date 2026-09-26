@@ -10,6 +10,10 @@ const TRIAL_ERRORS: Record<string, string> = {
   TRIAL_REQUIRED: "This post needs an introductory offer or an active paid plan before approval.",
   TRIAL_RELEASED: "This reservation was released. The owner needs to select a new offer.",
   TRIAL_EVENT_ENDED: "This event has already ended and cannot activate a trial.",
+  SLOT_FULL:
+    "The owner's active posting slots or fair-use activations are all in use. The post stays pending until they free a slot or add a plan.",
+  EVENT_LIMIT:
+    "The owner already has the maximum number of active free events. The post stays pending until one ends or is taken down.",
 };
 export function trialErrorMessage(message: string): string | null {
   const code = message.split(":", 1)[0];
