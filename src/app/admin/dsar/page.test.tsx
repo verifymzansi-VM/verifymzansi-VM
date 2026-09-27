@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { staffGuard } from "@/test/staff-guard";
 import AdminDSARPage from "./page";
 
 const { mockGetUser, mockSessionFrom, mockAdminFrom, redirectMock, mockVerifyCapability } =
@@ -26,6 +27,11 @@ function dsarQuery(result: { data: unknown[] | null; count?: number | null; erro
   });
   return builder;
 }
+
+vi.mock(
+  "@/lib/auth/require-staff",
+  async () => (await import("@/test/staff-guard")).staffGuardModule
+);
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
@@ -83,6 +89,7 @@ vi.mock("./dsar-action-buttons", () => ({
 
 describe("AdminDSARPage", () => {
   beforeEach(() => {
+    staffGuard.reset();
     vi.clearAllMocks();
     mockGetUser.mockResolvedValue({
       data: { user: { id: "admin-1", app_metadata: { role: "admin" } } },
@@ -117,7 +124,7 @@ describe("AdminDSARPage", () => {
 
     render(await AdminDSARPage({ searchParams: Promise.resolve({}) }));
 
-    expect(mockVerifyCapability).toHaveBeenCalledWith(expect.anything(), "dsar:manage");
+    expect(staffGuard.requireStaff).toHaveBeenCalledWith("dsar:manage");
     expect(mockSessionFrom).not.toHaveBeenCalled();
     expect(mockAdminFrom).toHaveBeenCalledWith("dsar_cases");
     expect(query.in).toHaveBeenCalledWith("status", [
@@ -167,12 +174,12 @@ describe("AdminDSARPage", () => {
   });
 
   it("redirects staff without dsar:manage", async () => {
-    mockVerifyCapability.mockResolvedValue(false);
+    staffGuard.deny("capability");
 
     await expect(AdminDSARPage({ searchParams: Promise.resolve({}) })).rejects.toThrow(
       "NEXT_REDIRECT"
     );
-    expect(redirectMock).toHaveBeenCalledWith("/dashboard");
+    expect(redirectMock).toHaveBeenCalledWith("/admin");
     expect(mockAdminFrom).not.toHaveBeenCalled();
   });
 

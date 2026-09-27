@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { staffGuard } from "@/test/staff-guard";
 import AdminAuditLogPage from "./page";
 
 const { mockGetUser, mockSessionFrom, mockAdminFrom, redirectMock } = vi.hoisted(() => ({
@@ -8,6 +9,11 @@ const { mockGetUser, mockSessionFrom, mockAdminFrom, redirectMock } = vi.hoisted
   mockAdminFrom: vi.fn(),
   redirectMock: vi.fn(),
 }));
+
+vi.mock(
+  "@/lib/auth/require-staff",
+  async () => (await import("@/test/staff-guard")).staffGuardModule
+);
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
@@ -43,6 +49,7 @@ vi.mock("@/components/layout/page-header", () => ({
 
 describe("AdminAuditLogPage", () => {
   beforeEach(() => {
+    staffGuard.reset();
     vi.clearAllMocks();
     mockGetUser.mockResolvedValue({
       data: { user: { id: "admin-1", app_metadata: { role: "admin" } } },

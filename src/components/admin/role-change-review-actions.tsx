@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
 
 export function RoleChangeReviewActions({
   decisionId,
@@ -35,7 +36,7 @@ export function RoleChangeReviewActions({
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       if (data.code === "step_up_required" || data.code === "mfa_required") {
-        window.location.assign(`${data.verifyUrl}&next=/admin/governance/roles`);
+        router.push(staffVerifyHref(data.verifyUrl, "/admin/governance/roles"));
         return;
       }
       setError(data.error ?? "The change could not be saved. Try again.");

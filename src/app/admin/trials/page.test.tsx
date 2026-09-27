@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { staffGuard } from "@/test/staff-guard";
 const { getUser, capability, rpc, from } = vi.hoisted(() => ({
   getUser: vi.fn(),
   capability: vi.fn(),
   rpc: vi.fn(),
   from: vi.fn(),
 }));
+vi.mock(
+  "@/lib/auth/require-staff",
+  async () => (await import("@/test/staff-guard")).staffGuardModule
+);
+
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser } }) }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ rpc, from }) }));
 vi.mock("@/lib/auth/admin-access", () => ({ verifyCapabilityFromDb: capability }));
@@ -17,6 +23,8 @@ import Page from "./page";
 
 describe("free-post account search page", () => {
   beforeEach(() => {
+    staffGuard.reset();
+    staffGuard.as("admin", "admin-1");
     vi.clearAllMocks();
     getUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
     capability.mockResolvedValue(true);
@@ -46,10 +54,11 @@ describe("free-post account search page", () => {
     expect(page.props.accounts).toEqual([account]);
   });
   it("does not search or expose accounts without verified capability", async () => {
-    capability.mockResolvedValue(false);
+    staffGuard.deny("capability");
     await expect(
       Page({ searchParams: Promise.resolve({ account: "member@example.com" }) })
     ).rejects.toThrow("redirect:/admin");
+    expect(staffGuard.requireStaff).toHaveBeenCalledWith("trials:manage");
     expect(rpc).not.toHaveBeenCalled();
     expect(from).not.toHaveBeenCalled();
   });

@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { staffGuard } from "@/test/staff-guard";
 import AdminModerationPage from "./page";
 
 const { mockCreateClient, mockCreateAdminClient, mockRedirect, mockLoggerError } = vi.hoisted(
@@ -15,6 +16,11 @@ let listingQuery: ReturnType<typeof createQuery> | undefined;
 let businessQuery: ReturnType<typeof createQuery> | undefined;
 let promotionQuery: ReturnType<typeof createQuery> | undefined;
 let editQuery: ReturnType<typeof createQuery> | undefined;
+
+vi.mock(
+  "@/lib/auth/require-staff",
+  async () => (await import("@/test/staff-guard")).staffGuardModule
+);
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: mockCreateClient,
@@ -70,6 +76,7 @@ function createQuery(data: unknown[], error: { message: string } | null = null) 
 
 describe("AdminModerationPage", () => {
   beforeEach(() => {
+    staffGuard.reset();
     vi.clearAllMocks();
     listingQuery = undefined;
     businessQuery = undefined;

@@ -83,6 +83,9 @@ docs/*
 !docs/DESIGN-SYSTEM.md
 !docs/playbooks/
 !docs/playbooks/sentry-bug-finding.md
+!docs/admin-access-inventory.md
+!docs/runbooks/
+!docs/runbooks/admin-provisioning.md
 
 # ── QA evidence & temporary files ─────────────────────────────
 /evidence/

@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { staffGuard } from "@/test/staff-guard";
 
 const { mockCreateClient, mockCreateAdminClient, mockRedirect, mockHasCapability, mockAdminFrom } =
   vi.hoisted(() => ({
@@ -9,6 +10,11 @@ const { mockCreateClient, mockCreateAdminClient, mockRedirect, mockHasCapability
     mockHasCapability: vi.fn(() => true),
     mockAdminFrom: vi.fn(),
   }));
+
+vi.mock(
+  "@/lib/auth/require-staff",
+  async () => (await import("@/test/staff-guard")).staffGuardModule
+);
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: mockCreateClient,
@@ -92,6 +98,7 @@ function createQuery(result: QueryResult) {
 
 describe("admin intelligence page regressions", () => {
   beforeEach(() => {
+    staffGuard.reset();
     vi.clearAllMocks();
 
     mockCreateClient.mockResolvedValue({

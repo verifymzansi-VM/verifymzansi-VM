@@ -38,10 +38,16 @@ export function getAdminActorRole(user: MaybeUser): "admin" | null {
  * (fail closed).
  */
 export async function readStaffAccessFromDb(userId: string): Promise<StaffAccess | null> {
-  const { createAdminClient } = await import("@/lib/supabase/admin");
-  const admin = createAdminClient();
-  const { data, error } = await admin.rpc("staff_access_of", { p_user: userId });
-  if (error || !Array.isArray(data) || data.length === 0) return null;
+  let data: unknown;
+  try {
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    const result = await createAdminClient().rpc("staff_access_of", { p_user: userId });
+    if (result.error) return null;
+    data = result.data;
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(data) || data.length === 0) return null;
 
   const row = data[0] as { role?: unknown; mfa_required_after?: unknown };
   const role = asStaffRole(typeof row.role === "string" ? row.role : null);

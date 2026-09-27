@@ -380,6 +380,27 @@ assert.equal(await scalar(`SELECT count(*)::int FROM staff_roles WHERE role='adm
 assert.equal((await propose(secondAdmin, admin, "member", "Rotation")).error, "forbidden");
 assert.equal(await roleOf(admin), "admin");
 
+// Owner provisioning: the recovery path when no second admin can approve.
+const recovered = await person(null);
+await assert.rejects(
+  rpc(`SELECT public.provision_staff_role_by_owner($1,'admin','short') AS result`, [recovered]),
+  /written reason/
+);
+assert.equal(
+  await rpc(`SELECT public.provision_staff_role_by_owner($1,'admin',$2) AS result`, [
+    recovered,
+    "Second admin for four-eyes approval",
+  ]),
+  "member"
+);
+assert.equal(await roleOf(recovered), "admin");
+assert.equal(
+  await scalar(`SELECT count(*)::int FROM audit_logs WHERE target_id=$1 AND action='role_provisioned_by_owner'`, [
+    recovered,
+  ]),
+  1
+);
+
 // Members cannot call the RPCs.
 await as(member, "member", async () => {
   await assert.rejects(
@@ -387,6 +408,10 @@ await as(member, "member", async () => {
     /permission denied/
   );
   await assert.rejects(db.query(`SELECT public.auth_user_id_by_email('a@b.co')`), /permission denied/);
+  await assert.rejects(
+    db.query(`SELECT public.provision_staff_role_by_owner($1,'admin','Self promotion attempt')`, [member]),
+    /permission denied/
+  );
 });
 
 console.log("Staff role change checks passed.");

@@ -399,6 +399,56 @@ BEGIN
 END;
 $$;
 
+-- ── Owner provisioning ──────────────────────────────────────────────────
+-- Used only by the owner-run `pnpm bootstrap:operator` script (service key),
+-- for the first admins and for recovery when no second admin can approve.
+-- Recorded with a distinct audit action so every use is visible.
+CREATE OR REPLACE FUNCTION public.provision_staff_role_by_owner(
+  p_target uuid,
+  p_role text,
+  p_reason text
+) RETURNS text
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  v_previous text;
+BEGIN
+  IF p_role NOT IN ('moderator', 'governance_controller', 'admin') THEN
+    RAISE EXCEPTION 'Unsupported staff role: %', p_role;
+  END IF;
+  IF length(btrim(coalesce(p_reason, ''))) < 10 THEN
+    RAISE EXCEPTION 'Owner provisioning needs a written reason (at least 10 characters)';
+  END IF;
+  IF NOT public.auth_user_exists(p_target) THEN
+    RAISE EXCEPTION 'No auth user %', p_target;
+  END IF;
+
+  SELECT role INTO v_previous FROM public.staff_roles WHERE user_id = p_target AND status = 'active';
+
+  INSERT INTO public.staff_roles AS sr (user_id, role, status, granted_by, granted_at)
+  VALUES (p_target, p_role, 'active', NULL, now())
+  ON CONFLICT (user_id) DO UPDATE
+    SET role = EXCLUDED.role, status = 'active', granted_by = NULL, granted_at = now(),
+        revoked_by = NULL, revoked_at = NULL, revoked_reason = NULL,
+        mfa_required_after = CASE WHEN sr.status = 'revoked'
+                                  THEN now() + interval '7 days'
+                                  ELSE sr.mfa_required_after END;
+
+  -- There is no in-app actor; the history row names the person provisioned.
+  INSERT INTO public.role_assignments_history (target_user_id, previous_role, new_role, assigned_by, reason)
+  VALUES (p_target, coalesce(v_previous, 'member'), p_role, p_target, 'Owner provisioning: ' || p_reason);
+
+  INSERT INTO public.audit_logs (actor_id, actor_role, action, target_type, target_id, metadata,
+                                 previous_value, new_value, reason)
+  VALUES ('00000000-0000-0000-0000-000000000000', 'system', 'role_provisioned_by_owner', 'user', p_target,
+          jsonb_build_object('source', 'bootstrap-operator'),
+          to_jsonb(coalesce(v_previous, 'member')), to_jsonb(p_role), p_reason);
+
+  RETURN coalesce(v_previous, 'member');
+END;
+$$;
+
 REVOKE EXECUTE ON FUNCTION
   public.staff_role_rank(text),
   public.auth_user_id_by_email(text),
@@ -407,7 +457,8 @@ REVOKE EXECUTE ON FUNCTION
   public.role_change_approver_allowed(text, text, text),
   public.propose_staff_role_change(uuid, uuid, text, text),
   public.approve_staff_role_change(uuid, uuid, integer, text),
-  public.reject_staff_role_change(uuid, uuid, text)
+  public.reject_staff_role_change(uuid, uuid, text),
+  public.provision_staff_role_by_owner(uuid, text, text)
 FROM PUBLIC, anon, authenticated;
 
 -- The RPCs run as the service role (SECURITY INVOKER), so it also needs the
@@ -420,7 +471,8 @@ GRANT EXECUTE ON FUNCTION
   public.role_change_approver_allowed(text, text, text),
   public.propose_staff_role_change(uuid, uuid, text, text),
   public.approve_staff_role_change(uuid, uuid, integer, text),
-  public.reject_staff_role_change(uuid, uuid, text)
+  public.reject_staff_role_change(uuid, uuid, text),
+  public.provision_staff_role_by_owner(uuid, text, text)
 TO service_role;
 
 COMMIT;

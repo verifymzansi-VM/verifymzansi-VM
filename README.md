@@ -488,14 +488,21 @@ pnpm bootstrap:operator -- \
   --password='replace-with-strong-password' \
   --display-name='VerifyMzansi Admin' \
   --role=admin \
+  --reason='First admin after launch reset' \
   --confirm-project=your-project-ref
 ```
 
 Notes:
 
-- The script only supports `admin` and `moderator` roles.
-- It creates or updates the auth user, sets both `user_metadata.role` and
-  `app_metadata.role`, and upserts a minimal `account_profiles` row.
+- Roles: `admin`, `governance_controller` or `moderator`. A written `--reason`
+  is required.
+- It creates or updates the auth user, upserts a minimal `account_profiles` row,
+  and grants the role in `staff_roles` (the only source of staff authority) with
+  a role-history row and a `role_provisioned_by_owner` audit entry.
+  `app_metadata.role` is set only as a display hint.
+- Everyday role changes go through Admin → Role Management, where an independent
+  person approves them. Use this script only for the first admins and for
+  recovery; see `docs/runbooks/admin-provisioning.md`.
 - It refuses to run unless `--confirm-project` matches the current
   `NEXT_PUBLIC_SUPABASE_URL` project ref.
 

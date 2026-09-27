@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { staffGuard } from "@/test/staff-guard";
 import { render, screen } from "@testing-library/react";
 
 const { getUser, verifyStaff, createAdmin, range, auditLimit, query } = vi.hoisted(() => {
@@ -14,6 +15,11 @@ const { getUser, verifyStaff, createAdmin, range, auditLimit, query } = vi.hoist
   };
   return { getUser: vi.fn(), verifyStaff: vi.fn(), createAdmin: vi.fn(), range, auditLimit, query };
 });
+vi.mock(
+  "@/lib/auth/require-staff",
+  async () => (await import("@/test/staff-guard")).staffGuardModule
+);
+
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser } }) }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: createAdmin }));
 vi.mock("@/lib/auth/admin-access", () => ({ verifyStaffActorRoleFromDb: verifyStaff }));
@@ -28,6 +34,7 @@ import Page from "./page";
 
 describe("Support inbox", () => {
   beforeEach(() => {
+    staffGuard.reset();
     vi.clearAllMocks();
     getUser.mockResolvedValue({ data: { user: { id: "staff" } } });
     verifyStaff.mockResolvedValue("admin");
@@ -39,7 +46,7 @@ describe("Support inbox", () => {
   });
 
   it("does not expose submissions when a staff role was revoked", async () => {
-    verifyStaff.mockResolvedValue(null);
+    staffGuard.deny("staff");
     await expect(Page({ searchParams: Promise.resolve({}) })).rejects.toThrow("redirect");
     expect(createAdmin).not.toHaveBeenCalled();
   });

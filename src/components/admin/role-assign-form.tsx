@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, UserCog } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
 
 const ADMIN_ROLES = [
   { value: "moderator", label: "Moderator" },
@@ -65,7 +66,7 @@ export function RoleAssignForm({ mode }: { mode: "admin" | "governor" }) {
 
       if (!res.ok) {
         if (data.code === "step_up_required" || data.code === "mfa_required") {
-          window.location.assign(`${data.verifyUrl}&next=/admin/governance/roles`);
+          router.push(staffVerifyHref(data.verifyUrl, "/admin/governance/roles"));
           return;
         }
         throw new Error(data.error || `Request failed (${res.status})`);
