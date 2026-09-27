@@ -62,6 +62,20 @@ export function formatSaShortDate(date: Date | string): string {
   return `${SA_WEEKDAYS[sast.getUTCDay()]} ${sast.getUTCDate()} ${SA_MONTHS[sast.getUTCMonth()]}`;
 }
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * Whole South African calendar days from `from` to `to`: 0 when both fall on the
+ * same SAST day, 1 when `to` is the next SAST day, negative when `to` is earlier.
+ * Returns NaN for an invalid date. Deterministic (no locale or time-zone APIs).
+ */
+export function saCalendarDaysBetween(from: Date | string, to: Date | string): number {
+  const fromMs = (typeof from === "string" ? new Date(from) : from).getTime();
+  const toMs = (typeof to === "string" ? new Date(to) : to).getTime();
+  const saDay = (ms: number) => Math.floor((ms + SAST_OFFSET_MS) / MS_PER_DAY);
+  return saDay(toMs) - saDay(fromMs);
+}
+
 const SA_MONTHS_LONG = [
   "January",
   "February",

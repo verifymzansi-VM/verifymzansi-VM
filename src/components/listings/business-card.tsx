@@ -4,7 +4,7 @@ import { Store } from "lucide-react";
 import { AffiliationBadge } from "@/components/organisations/affiliation-badges";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
 import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
-import type { TrustLevel, BusinessType, BusinessCategory } from "@/types/enums";
+import type { BusinessType, BusinessCategory } from "@/types/enums";
 
 interface BusinessCardProps {
   id: string;
@@ -18,11 +18,8 @@ interface BusinessCardProps {
   galleryPhotos?: string[] | null;
   province: string;
   city: string;
-  trustLevel?: TrustLevel;
   category?: BusinessCategory;
   subcategory?: string | null;
-  boostUntil?: string | null;
-  featuredUntil?: string | null;
   serviceAreas?: Record<string, unknown> | null;
   viewCount?: number;
   videoDuration?: number | null;
@@ -30,20 +27,6 @@ interface BusinessCardProps {
   focalY?: number | null;
   mediaWidth?: number | null;
   mediaHeight?: number | null;
-}
-
-function getBusinessStatus(
-  boostUntil?: string | null,
-  featuredUntil?: string | null
-): { label: string; className: string } | null {
-  const now = new Date();
-  if (featuredUntil && new Date(featuredUntil) > now) {
-    return { label: "Featured", className: "bg-amber-400 text-amber-950" };
-  }
-  if (boostUntil && new Date(boostUntil) > now) {
-    return { label: "Boosted", className: "bg-brand-blue text-white" };
-  }
-  return null;
 }
 
 function buildBusinessDescription(
@@ -92,11 +75,8 @@ export function BusinessCard({
   galleryPhotos,
   province: _province,
   city,
-  trustLevel = 0,
   category,
   subcategory,
-  boostUntil,
-  featuredUntil,
   viewCount,
   videoDuration,
   focalX,
@@ -109,7 +89,6 @@ export function BusinessCard({
     coverPhoto ||
     (galleryPhotos && galleryPhotos.length > 0 ? galleryPhotos[0] : null);
   const posterUrl = videoThumbnail || coverPhoto || galleryPhotos?.[0] || undefined;
-  const status = getBusinessStatus(boostUntil, featuredUntil);
   const cardDescription = buildBusinessDescription(
     category,
     subcategory,
@@ -131,12 +110,8 @@ export function BusinessCard({
       posterUrl={posterUrl}
       mediaAlt={businessName}
       logoUrl={logoUrl}
-      statusLabel={status?.label ?? null}
-      statusClassName={status?.className}
-      statusVariant="ribbon"
       accentClassName="hover:border-brand-blue/55"
       cardVariant="showcase"
-      trustLevel={trustLevel}
       viewCount={viewCount}
       fitStrategy="smart"
       videoDuration={videoDuration}

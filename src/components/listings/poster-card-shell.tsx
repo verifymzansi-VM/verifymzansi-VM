@@ -14,7 +14,6 @@ import {
 import { VideoDurationBadge } from "@/components/ui/video-duration-badge";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
-import type { TrustLevel } from "@/types/enums";
 import { useState, type ReactNode } from "react";
 
 const CARD_FRAME = { aspectRatio: 9 / 16, aspectClassName: "aspect-[9/16]" } as const;
@@ -41,7 +40,6 @@ interface PosterCardShellProps {
   contentClassName?: string;
   eyebrowClassName?: string;
   mediaSizes?: string;
-  trustLevel?: TrustLevel;
   fallback?: ReactNode;
   /** Branded artwork shown when the primary media fails or is missing. */
   mediaFallbackUrl?: string | null;
@@ -148,7 +146,9 @@ export function PosterCardShell({
   // Keep hero media mounted as cards move between active and side slots.
   const hasIndependentControls =
     hasVideo || showPlaybackControl || (cardVariant === "hero" && makeEntireCardClickable);
-  const effectiveFitStrategy = immersive ? "cover" : fitStrategy;
+  // Immersive cards use "smart": fill when the crop is small, otherwise contain
+  // over a blurred backdrop so landscape uploads are never hard-cropped.
+  const effectiveFitStrategy = immersive ? "smart" : fitStrategy;
   const isHeroVariant = cardVariant === "hero";
   const isShowcaseVariant = cardVariant === "showcase";
   const disableNativeDrag = disableNativeDragProp || isHeroVariant;

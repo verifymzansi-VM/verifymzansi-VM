@@ -116,7 +116,8 @@ describe("PosterCardShell", () => {
     const player = screen.getByTestId("video-player");
     const overlay = container.querySelector("[data-card-overlay]");
     expect(container.querySelector("[data-card-metadata]")).toBeNull();
-    expect(player).toHaveAttribute("data-fit", "cover");
+    // Smart fit: fills small crops, letterboxes landscape uploads instead of cropping them.
+    expect(player).toHaveAttribute("data-fit", "smart");
     expect(screen.getByRole("link", { name: "Open Mobile video" })).toHaveAttribute(
       "href",
       "/listing/mobile"

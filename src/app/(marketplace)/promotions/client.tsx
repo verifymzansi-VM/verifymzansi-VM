@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -26,9 +26,11 @@ import {
   type TrustLevel,
 } from "@/types/enums";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
-import { useDebouncedCallback } from "@/hooks/use-debounce";
 import { triggerHaptic } from "@/lib/utils/haptics";
 import { cn } from "@/lib/utils";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("PromotionsExplorer");
 
 type ActiveTab = "tourism" | "events";
 
@@ -196,17 +198,11 @@ export function PromotionsExplorer() {
   );
 
   const cities = filters.province ? getCitiesForProvince(filters.province) : [];
-  const debouncedUpdateQuery = useDebouncedCallback((value: string) => {
-    updateFilters({ q: value || undefined });
-  }, 300);
-
   const clearQueryFilter = () => {
-    debouncedUpdateQuery.cancel();
     updateFilters({ q: undefined });
   };
 
   const clearAllFilters = () => {
-    debouncedUpdateQuery.cancel();
     const params = new URLSearchParams();
     params.set("tab", activeTab);
     if (activeTab === "events") params.set("type", "event");
@@ -270,6 +266,24 @@ export function PromotionsExplorer() {
     [filters.province, filters.city, pathname, router]
   );
 
+  /* ── Tabs keyboard support (roving tabindex, arrow keys) ── */
+  const tourismTabRef = useRef<HTMLButtonElement>(null);
+  const eventsTabRef = useRef<HTMLButtonElement>(null);
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    let target: ActiveTab | null = null;
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      target = activeTab === "tourism" ? "events" : "tourism";
+    } else if (event.key === "Home") {
+      target = "tourism";
+    } else if (event.key === "End") {
+      target = "events";
+    }
+    if (!target) return;
+    event.preventDefault();
+    (target === "tourism" ? tourismTabRef : eventsTabRef).current?.focus();
+    if (target !== activeTab) switchTab(target);
+  };
+
   /* ── Data fetching ── */
   useEffect(() => {
     let active = true;
@@ -291,7 +305,8 @@ export function PromotionsExplorer() {
           if (filters.subcategory) params.set("subcategory", filters.subcategory);
 
           const res = await fetch(`/api/businesses?${params.toString()}`, { cache: "no-store" });
-          const payload = (await res.json()) as BusinessesResponse;
+          // A non-JSON error page (e.g. a 502) must not surface as a parser error.
+          const payload = (await res.json().catch(() => ({}))) as BusinessesResponse;
 
           if (!active) return;
           if (!res.ok) {
@@ -306,7 +321,7 @@ export function PromotionsExplorer() {
           if (filters.eventState) params.set("event_state", filters.eventState);
 
           const res = await fetch(`/api/promotions?${params.toString()}`, { cache: "no-store" });
-          const payload = (await res.json()) as PromotionsResponse;
+          const payload = (await res.json().catch(() => ({}))) as PromotionsResponse;
 
           if (!active) return;
           if (!res.ok) {
@@ -328,7 +343,10 @@ export function PromotionsExplorer() {
         setLoading(false);
       } catch (loadError) {
         if (!active) return;
-        setError(loadError instanceof Error ? loadError.message : "Failed to load data.");
+        log.error("Tourism & Events fetch threw", {
+          message: loadError instanceof Error ? loadError.message : String(loadError),
+        });
+        setError("We couldn't load this right now. Please check your connection and try again.");
         setLoading(false);
       }
     }
@@ -386,6 +404,7 @@ export function PromotionsExplorer() {
     onEventStateChange: handleEventStateChange,
     onClearQuery: clearQueryFilter,
     onClearAll: clearAllFilters,
+    onBusinessClear: () => updateFilters({ business_id: undefined }),
   };
   // Only the active tab's grid is rendered, and only when it has results, so
   // aria-controls must never point at a panel that is not in the DOM.
@@ -436,7 +455,10 @@ export function PromotionsExplorer() {
           <button
             type="button"
             role="tab"
+            onKeyDown={handleTabKeyDown}
             aria-selected="true"
+            tabIndex={0}
+            ref={tourismTabRef}
             id="tab-tourism"
             aria-controls={tourismPanelId}
             className={cn(tabBaseClasses, tourismTabActiveClasses)}
@@ -449,7 +471,10 @@ export function PromotionsExplorer() {
           <button
             type="button"
             role="tab"
+            onKeyDown={handleTabKeyDown}
             aria-selected="false"
+            tabIndex={-1}
+            ref={tourismTabRef}
             id="tab-tourism"
             aria-controls={tourismPanelId}
             className={cn(tabBaseClasses, inactiveTabClasses)}
@@ -464,7 +489,10 @@ export function PromotionsExplorer() {
           <button
             type="button"
             role="tab"
+            onKeyDown={handleTabKeyDown}
             aria-selected="true"
+            tabIndex={0}
+            ref={eventsTabRef}
             id="tab-events"
             aria-controls={eventsPanelId}
             className={cn(tabBaseClasses, eventTabActiveClasses)}
@@ -477,7 +505,10 @@ export function PromotionsExplorer() {
           <button
             type="button"
             role="tab"
+            onKeyDown={handleTabKeyDown}
             aria-selected="false"
+            tabIndex={-1}
+            ref={eventsTabRef}
             id="tab-events"
             aria-controls={eventsPanelId}
             className={cn(tabBaseClasses, eventTabInactiveClasses)}
@@ -633,7 +664,8 @@ export function PromotionsExplorer() {
                   return (
                     <div
                       key={promotion.id}
-                      className={`content-auto animate-in fade-in fill-mode-both [animation-duration:400ms] sm:slide-in-from-bottom-2 [animation-delay:${Math.min(index * 50, 400)}ms]`}
+                      className="content-auto motion-safe:animate-in motion-safe:fade-in motion-safe:fill-mode-both [animation-duration:400ms] sm:slide-in-from-bottom-2"
+                      style={{ animationDelay: `${Math.min(index * 50, 400)}ms` }}
                     >
                       <PromotionCard
                         id={promotion.id}
@@ -650,7 +682,6 @@ export function PromotionsExplorer() {
                         city={promotion.location_city}
                         promotionType={promotion.promotion_type}
                         createdAt={promotion.created_at}
-                        ownerTrustLevel={accountProfile?.trust}
                         ownerName={accountProfile?.display_name}
                         viewCount={promotion.view_count}
                         boosted={isBoosted}

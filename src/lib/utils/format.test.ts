@@ -6,6 +6,7 @@ import {
   formatDateTime,
   formatRelativeTime,
   formatPhone,
+  saCalendarDaysBetween,
 } from "./format";
 
 // ── formatZAR ───────────────────────────────────────────────────────────────
@@ -119,5 +120,28 @@ describe("formatPhone", () => {
 
   it("returns unrecognized numbers as-is", () => {
     expect(formatPhone("555-1234")).toBe("555-1234");
+  });
+});
+
+// ── saCalendarDaysBetween ───────────────────────────────────────────────────
+
+describe("saCalendarDaysBetween", () => {
+  it("returns 0 for two moments on the same SAST day", () => {
+    // 08:00 and 23:30 SAST on 10 March.
+    expect(saCalendarDaysBetween("2026-03-10T06:00:00Z", "2026-03-10T21:30:00Z")).toBe(0);
+  });
+
+  it("counts SAST midnight, not UTC midnight, as the day boundary", () => {
+    // 21:00 SAST on 10 March to 00:30 SAST on 11 March (still 10 March in UTC).
+    expect(saCalendarDaysBetween("2026-03-10T19:00:00Z", "2026-03-10T22:30:00Z")).toBe(1);
+  });
+
+  it("counts whole days ahead and behind", () => {
+    expect(saCalendarDaysBetween("2026-03-10T10:00:00Z", "2026-03-13T08:00:00Z")).toBe(3);
+    expect(saCalendarDaysBetween("2026-03-13T08:00:00Z", "2026-03-10T10:00:00Z")).toBe(-3);
+  });
+
+  it("returns NaN for invalid dates", () => {
+    expect(saCalendarDaysBetween("not-a-date", "2026-03-10T10:00:00Z")).toBeNaN();
   });
 });

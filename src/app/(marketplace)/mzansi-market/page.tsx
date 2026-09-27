@@ -132,7 +132,7 @@ export default async function MzansiMarketPage() {
           {/* Two-column layout */}
           <div className="flex gap-6 lg:gap-8">
             {/* Desktop sidebar */}
-            <aside className="hidden w-72 shrink-0 lg:block">
+            <aside className="hidden w-72 shrink-0 lg:block" aria-label="Listing filters">
               <div className="sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pr-1 scrollbar-thin">
                 <ListingFilterSidebar />
               </div>

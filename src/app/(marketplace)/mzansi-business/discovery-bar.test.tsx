@@ -159,6 +159,28 @@ describe("BusinessDiscoveryBar", () => {
     expect(screen.getByLabelText("Search")).toHaveValue("synced from store");
   });
 
+  it("keeps focus and the typed text when the debounced query commits", () => {
+    let filters: { sort: "newest"; attributes: Record<string, string>; query?: string } = {
+      sort: "newest",
+      attributes: {},
+      query: undefined,
+    };
+    useMarketplaceStoreMock.mockImplementation(() => ({ filters, setFilter, resetFilters }));
+
+    const { rerender } = render(<BusinessDiscoveryBar />);
+    const input = screen.getByLabelText("Search");
+    input.focus();
+    fireEvent.change(input, { target: { value: "plumb" } });
+
+    // The store catches up with the typed text; the input must not remount.
+    filters = { ...filters, query: "plumb" };
+    rerender(<BusinessDiscoveryBar />);
+
+    expect(screen.getByLabelText("Search")).toBe(input);
+    expect(input).toHaveFocus();
+    expect(input).toHaveValue("plumb");
+  });
+
   it("applies the query filter when the search input changes", () => {
     render(<BusinessDiscoveryBar />);
 

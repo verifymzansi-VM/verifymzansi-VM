@@ -69,8 +69,10 @@ export function GridStateMessage({
       )}
       data-testid={testId}
       data-grid-state={state}
+      role={isError ? "alert" : undefined}
     >
       <div
+        aria-hidden="true"
         className={cn(
           "flex h-16 w-16 items-center justify-center rounded-2xl ring-1 elev-xs",
           isError ? "bg-amber-500/10 text-amber-500 ring-amber-500/25" : toneTileClasses[tone]

@@ -24,7 +24,6 @@ import { PosterCardShell } from "@/components/listings/poster-card-shell";
 import { isVideoUrl } from "@/components/ui/video-card-player";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { TrustLevel } from "@/types/enums";
 
 /* ── Types ─────────────────────────────────────────────────── */
 
@@ -44,7 +43,6 @@ export interface CarouselItem {
   statusClassName?: string;
   focalX?: number | null;
   focalY?: number | null;
-  trustLevel?: TrustLevel;
   mediaWidth?: number | null;
   mediaHeight?: number | null;
   fallbackMediaUrl?: string | null;
@@ -946,7 +944,6 @@ export function ShowroomCardCarousel({
                 eyebrow={item.eyebrow}
                 statusLabel={item.statusLabel}
                 statusClassName={item.statusClassName}
-                trustLevel={item.trustLevel}
                 focalX={item.focalX}
                 focalY={item.focalY}
                 mediaWidth={item.mediaWidth}

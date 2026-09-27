@@ -66,6 +66,17 @@ export function BusinessFilterDrawer() {
   ].filter(Boolean).length;
   const organisations = useFilterOrganisations(open || Boolean(filters.organisation));
 
+  // The search box is uncontrolled so typing never remounts it (a query-based
+  // key dropped focus after every debounced commit). Mirror query changes made
+  // elsewhere (URL hydration, chips, clear all) without touching it mid-typing.
+  useEffect(() => {
+    const input = searchInputRef.current;
+    const query = filters.query ?? "";
+    if (input && document.activeElement !== input && input.value !== query) {
+      input.value = query;
+    }
+  }, [filters.query]);
+
   const clearAllFilters = () => {
     triggerHaptic("light");
     debouncedSetQuery.cancel();
@@ -186,7 +197,6 @@ export function BusinessFilterDrawer() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                key={filters.query || "__empty-query__"}
                 ref={searchInputRef}
                 id="drawer-business-search"
                 type="search"

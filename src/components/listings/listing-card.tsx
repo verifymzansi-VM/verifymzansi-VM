@@ -1,7 +1,6 @@
 "use client";
 
 import { memo } from "react";
-import { getListingCardStatus } from "@/components/listings/listing-card-status";
 import { formatZARShort } from "@/lib/utils/format";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
 import type { MediaFitStrategy } from "@/components/ui/video-card-player";
@@ -22,9 +21,14 @@ interface ListingCardProps {
   attributes?: Record<string, unknown>;
   condition?: string;
   createdAt: string;
+  /** @deprecated Ignored: feed cards carry no trust styling. Kept so existing callers compile. */
   ownerTrustLevel?: TrustLevel;
   ownerName?: string;
   viewCount?: number;
+  /**
+   * Status flags are accepted for call-site compatibility with ListingCardList,
+   * but immersive feed cards deliberately show no status chip.
+   */
   boosted?: boolean;
   featured?: boolean;
   urgent?: boolean;
@@ -48,11 +52,7 @@ export const ListingCard = memo(function ListingCard({
   province: _province,
   city,
   createdAt,
-  ownerTrustLevel = 0,
   viewCount,
-  boosted,
-  featured,
-  urgent,
   logoUrl,
   videoDuration,
   focalX,
@@ -60,7 +60,6 @@ export const ListingCard = memo(function ListingCard({
   mediaWidth,
   mediaHeight,
 }: ListingCardProps) {
-  const status = getListingCardStatus({ featured, boosted, urgent, createdAt });
   const priceLabel = price > 0 ? formatZARShort(price) : null;
   const eyebrow = priceLabel && negotiable ? `${priceLabel} · Neg` : priceLabel;
 
@@ -78,11 +77,8 @@ export const ListingCard = memo(function ListingCard({
       createdAt={createdAt}
       viewCount={viewCount}
       eyebrow={eyebrow}
-      statusLabel={status?.label}
-      statusClassName={status?.className}
       accentClassName="hover:border-brand-green/55"
       cardVariant="showcase"
-      trustLevel={ownerTrustLevel}
       logoUrl={logoUrl}
       videoDuration={videoDuration}
       focalX={focalX}

@@ -25,6 +25,17 @@ export function BusinessDiscoveryBar() {
     return () => debouncedSetQuery.cancel();
   }, [debouncedSetQuery]);
 
+  // The search box is uncontrolled so typing never remounts it (which dropped
+  // focus after every debounced commit). Mirror query changes made elsewhere
+  // (URL hydration, back/forward, chips) without touching the box mid-typing.
+  useEffect(() => {
+    const input = searchInputRef.current;
+    const query = filters.query ?? "";
+    if (input && document.activeElement !== input && input.value !== query) {
+      input.value = query;
+    }
+  }, [filters.query]);
+
   const clearQueryFilter = () => {
     debouncedSetQuery.cancel();
     if (searchInputRef.current) {
@@ -60,6 +71,7 @@ export function BusinessDiscoveryBar() {
   ].filter(Boolean).length;
 
   return (
+    // Unnamed on purpose: the page's <aside aria-label="Business filters"> names this landmark.
     <section className="space-y-5 rounded-2xl border border-border/70 bg-background/95 p-5 elev-sm">
       <div className="space-y-4">
         <div className="space-y-1.5">
@@ -67,7 +79,6 @@ export function BusinessDiscoveryBar() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              key={filters.query || "__empty-query__"}
               ref={searchInputRef}
               id="business-search"
               type="search"
@@ -182,7 +193,7 @@ export function BusinessDiscoveryBar() {
               {filters.query}
               <button
                 type="button"
-                className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="-my-1 -mr-1.5 inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label={`Remove query filter ${filters.query}`}
                 disabled={!isInteractive}
                 onClick={clearQueryFilter}
@@ -197,7 +208,7 @@ export function BusinessDiscoveryBar() {
               {BUSINESS_CATEGORIES.find((item) => item.value === filters.businessCategory)?.label}
               <button
                 type="button"
-                className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="-my-1 -mr-1.5 inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label="Remove business category filter"
                 disabled={!isInteractive}
                 onClick={() => setFilter("businessCategory", undefined)}
@@ -211,7 +222,7 @@ export function BusinessDiscoveryBar() {
               {BUSINESS_TYPE_OPTIONS.find((item) => item.value === filters.businessType)?.label}
               <button
                 type="button"
-                className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="-my-1 -mr-1.5 inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label="Remove business type filter"
                 disabled={!isInteractive}
                 onClick={() => setFilter("businessType", undefined)}
@@ -226,7 +237,7 @@ export function BusinessDiscoveryBar() {
               {filters.city && `, ${filters.city}`}
               <button
                 type="button"
-                className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="-my-1 -mr-1.5 inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label="Remove location filter"
                 disabled={!isInteractive}
                 onClick={() => {

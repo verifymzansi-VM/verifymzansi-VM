@@ -3,7 +3,10 @@ import { Card } from "@/components/ui/card";
 
 function ListingCardSkeleton({ index = 0 }: { index?: number }) {
   return (
+    // Decorative: the grid wrapper is the single status region, so hide the
+    // per-block Skeleton roles from assistive tech.
     <Card
+      aria-hidden="true"
       className="overflow-visible rounded-[20px] border-transparent bg-transparent shadow-none motion-safe:animate-in motion-safe:fade-in motion-safe:fill-mode-both"
       style={{ animationDelay: `${Math.min(index * 60, 420)}ms` }}
     >
@@ -26,9 +29,11 @@ export function ListingGridSkeleton({ count = 8 }: { count?: number }) {
   return (
     <div
       className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-5 xl:gap-6"
+      role="status"
       aria-busy="true"
       aria-label="Loading results"
     >
+      <span className="sr-only">Loading results…</span>
       {Array.from({ length: count }).map((_, i) => (
         <ListingCardSkeleton key={i} index={i} />
       ))}

@@ -188,6 +188,27 @@ describe("PromotionsExplorer", () => {
     );
   });
 
+  it("uses a roving tabindex and moves between tabs with the arrow keys", async () => {
+    render(<PromotionsExplorer />);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+
+    const tourismTab = screen.getByRole("tab", { name: /Tourism/i });
+    const eventsTab = screen.getByRole("tab", { name: /Events/i });
+    expect(tourismTab).toHaveAttribute("tabindex", "0");
+    expect(eventsTab).toHaveAttribute("tabindex", "-1");
+
+    fireEvent.keyDown(tourismTab, { key: "ArrowRight" });
+
+    expect(eventsTab).toHaveFocus();
+    expect(replaceMock).toHaveBeenCalledWith(
+      expect.stringContaining("tab=events"),
+      expect.anything()
+    );
+  });
+
   it("exposes canonical tourism creation links on the tourism tab", async () => {
     render(<PromotionsExplorer />);
 

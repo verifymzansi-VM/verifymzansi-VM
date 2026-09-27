@@ -4,14 +4,12 @@ import { useEffect, useState, useCallback, useTransition, useRef } from "react";
 import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
 import { ListingCard } from "@/components/listings/listing-card";
 import { ListingCardList } from "@/components/listings/listing-card-list";
-import { computeTrustLevel } from "@/lib/constants/trust-scale";
-import type { ListingCondition, AccountVerificationStatus } from "@/types/enums";
+import type { ListingCondition } from "@/types/enums";
 import { useMarketplaceStore } from "@/stores";
 import { ListingGridSkeleton } from "@/components/listings/listing-skeleton";
 import { GridStateMessage } from "@/components/listings/grid-state-message";
 import { Plus, LayoutGrid, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { MarketplacePaginationControls } from "@/components/listings/marketplace-pagination-controls";
 import Link from "next/link";
 import { CATEGORIES } from "@/lib/constants/categories";
@@ -107,9 +105,6 @@ function getListingCardProps(listing: ListingRow) {
     attributes: listing.attributes,
     condition: listing.condition ?? undefined,
     createdAt: listing.created_at,
-    ownerTrustLevel: computeTrustLevel(
-      (seller?.account_verification_status ?? null) as AccountVerificationStatus | null
-    ),
     ownerName: seller?.display_name,
     boosted: listing.boost_until ? new Date(listing.boost_until) > new Date() : false,
     featured: listing.featured,
@@ -288,10 +283,10 @@ export function MzansiMarketGrid() {
             {suggestedCats.map((cat) => {
               const Icon = cat.icon;
               return (
-                <Badge
+                <button
                   key={cat.value}
-                  variant="secondary"
-                  className="cursor-pointer gap-1 transition-colors hover:bg-brand-green/10"
+                  type="button"
+                  className="inline-flex min-h-6 cursor-pointer items-center gap-1 rounded-full border border-transparent bg-secondary px-2.5 py-0.5 text-xs font-semibold text-secondary-foreground transition-colors hover:bg-brand-green/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   onClick={() => {
                     resetFilters();
                     setFilter("category", cat.value);
@@ -299,7 +294,7 @@ export function MzansiMarketGrid() {
                 >
                   <Icon className="h-3 w-3" />
                   {cat.label}
-                </Badge>
+                </button>
               );
             })}
           </div>

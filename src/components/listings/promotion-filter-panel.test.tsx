@@ -64,11 +64,25 @@ describe("PromotionFilterPanel", () => {
     );
 
     expect(screen.getByText("sale")).toBeInTheDocument();
-    expect(screen.getAllByText("Events").length).toBeGreaterThan(0);
+    // type=event is implied by the Events tab, so it is not a removable chip there.
+    expect(screen.queryByText("Events")).not.toBeInTheDocument();
     expect(screen.getByText(/fix fast/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /clear all/i }));
     expect(handlers.onClearAll).toHaveBeenCalled();
+  });
+
+  it("does not show filters as active on a fresh Events tab", () => {
+    renderPanel({ type: "event" }, "events");
+
+    expect(screen.queryByRole("button", { name: /clear all/i })).not.toBeInTheDocument();
+  });
+
+  it("shows the type chip outside the Events tab", () => {
+    const handlers = renderPanel({ type: "event" }, "tourism");
+
+    fireEvent.click(screen.getByRole("button", { name: /remove promotion type filter/i }));
+    expect(handlers.onTypeChange).toHaveBeenCalledWith(undefined);
   });
 
   it("shows subcategory dropdown on tourism tab", () => {

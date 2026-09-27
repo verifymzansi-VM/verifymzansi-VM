@@ -39,6 +39,8 @@ export interface PromotionFilterCallbacks {
   onEventStateChange: (value: PromotionEventState | undefined) => void;
   onClearQuery: () => void;
   onClearAll: () => void;
+  /** Clears the linked-business filter; the chip is removable only when provided. */
+  onBusinessClear?: () => void;
 }
 
 interface PromotionFilterPanelProps extends PromotionFilterCallbacks {
@@ -49,6 +51,10 @@ interface PromotionFilterPanelProps extends PromotionFilterCallbacks {
   className?: string;
   mode?: "desktop" | "mobile";
 }
+
+// 28px hit area inside the chip; the negative margins keep the chip's height unchanged.
+const chipRemoveClassName =
+  "-my-1 -mr-1.5 inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 const selectClassName =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
@@ -67,14 +73,18 @@ export function PromotionFilterPanel({
   onEventStateChange,
   onClearQuery,
   onClearAll,
+  onBusinessClear,
   className,
   mode = "desktop",
 }: PromotionFilterPanelProps) {
   const idPrefix = `promotion-filters-${mode}-${activeTab}`;
-  const labelId = (name: string) => `${idPrefix}-${name}-label`;
+  const fieldId = (name: string) => `${idPrefix}-${name}`;
+  // The Events tab always carries type=event, so that type is implied by the
+  // tab rather than being a removable filter of its own.
+  const showTypeChip = Boolean(filters.type) && activeTab !== "events";
   const hasActiveFilters = Boolean(
     filters.query ||
-    filters.type ||
+    showTypeChip ||
     filters.category ||
     filters.eventType ||
     filters.subcategory ||
@@ -86,6 +96,7 @@ export function PromotionFilterPanel({
 
   return (
     <section
+      aria-label="Filters"
       className={cn(
         "space-y-5 rounded-2xl border border-border/70 bg-background/95 p-4 shadow-sm",
         className
@@ -101,10 +112,9 @@ export function PromotionFilterPanel({
       <div className="space-y-4">
         {activeTab === "tourism" ? (
           <div className="space-y-1.5">
-            <Label id={labelId("subcategory")}>Subcategory</Label>
+            <Label htmlFor={fieldId("subcategory")}>Subcategory</Label>
             <select
-              aria-labelledby={labelId("subcategory")}
-              aria-label="Tourism subcategory"
+              id={fieldId("subcategory")}
               className={selectClassName}
               value={filters.subcategory || ""}
               onChange={(event) => onSubcategoryChange(event.target.value || undefined)}
@@ -119,10 +129,9 @@ export function PromotionFilterPanel({
           </div>
         ) : (
           <div className="space-y-1.5">
-            <Label id={labelId("event-type")}>Event Type</Label>
+            <Label htmlFor={fieldId("event-type")}>Event type</Label>
             <select
-              aria-labelledby={labelId("event-type")}
-              aria-label="Event type"
+              id={fieldId("event-type")}
               className={selectClassName}
               value={filters.eventType || ""}
               onChange={(event) => onEventTypeChange(event.target.value || undefined)}
@@ -139,10 +148,9 @@ export function PromotionFilterPanel({
 
         <div className={cn("gap-3", mode === "mobile" ? "grid grid-cols-2" : "space-y-4")}>
           <div className="space-y-1.5">
-            <Label id={labelId("province")}>Province</Label>
+            <Label htmlFor={fieldId("province")}>Province</Label>
             <select
-              aria-labelledby={labelId("province")}
-              aria-label="Province"
+              id={fieldId("province")}
               className={selectClassName}
               value={filters.province || ""}
               onChange={(event) => onProvinceChange(event.target.value || undefined)}
@@ -157,10 +165,9 @@ export function PromotionFilterPanel({
           </div>
 
           <div className="space-y-1.5">
-            <Label id={labelId("city")}>City</Label>
+            <Label htmlFor={fieldId("city")}>City</Label>
             <select
-              aria-labelledby={labelId("city")}
-              aria-label="City"
+              id={fieldId("city")}
               className={selectClassName}
               value={filters.city || ""}
               onChange={(event) => onCityChange(event.target.value || undefined)}
@@ -178,10 +185,9 @@ export function PromotionFilterPanel({
 
         {activeTab === "events" && (
           <div className="space-y-1.5">
-            <Label id={labelId("event-state")}>Event state</Label>
+            <Label htmlFor={fieldId("event-state")}>Event state</Label>
             <select
-              aria-labelledby={labelId("event-state")}
-              aria-label="Event state"
+              id={fieldId("event-state")}
               className={selectClassName}
               value={filters.eventState || ""}
               onChange={(event) =>
@@ -208,7 +214,7 @@ export function PromotionFilterPanel({
               {filters.query}
               <button
                 type="button"
-                className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={chipRemoveClassName}
                 aria-label={`Remove query filter ${filters.query}`}
                 onClick={onClearQuery}
               >
@@ -217,12 +223,12 @@ export function PromotionFilterPanel({
             </Badge>
           )}
 
-          {filters.type && (
+          {showTypeChip && filters.type && (
             <Badge variant="secondary" className="gap-1">
               {getPromotionFilterTypeLabel(filters.type)}
               <button
                 type="button"
-                className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={chipRemoveClassName}
                 aria-label="Remove promotion type filter"
                 onClick={() => onTypeChange(undefined)}
               >
@@ -237,7 +243,7 @@ export function PromotionFilterPanel({
                 filters.subcategory}
               <button
                 type="button"
-                className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={chipRemoveClassName}
                 aria-label="Remove subcategory filter"
                 onClick={() => onSubcategoryChange(undefined)}
               >
@@ -251,7 +257,7 @@ export function PromotionFilterPanel({
               {EVENT_TYPES.find((et) => et.value === filters.eventType)?.label ?? filters.eventType}
               <button
                 type="button"
-                className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={chipRemoveClassName}
                 aria-label="Remove event type filter"
                 onClick={() => onEventTypeChange(undefined)}
               >
@@ -266,7 +272,7 @@ export function PromotionFilterPanel({
               {filters.city && `, ${filters.city}`}
               <button
                 type="button"
-                className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={chipRemoveClassName}
                 aria-label="Remove promotion location filter"
                 onClick={() => {
                   onProvinceChange(undefined);
@@ -282,6 +288,16 @@ export function PromotionFilterPanel({
             <Badge variant="secondary" className="gap-1">
               <Building2 className="h-3 w-3" />
               {businessMap.get(filters.businessId) || "Linked business"}
+              {onBusinessClear ? (
+                <button
+                  type="button"
+                  className={chipRemoveClassName}
+                  aria-label="Remove linked business filter"
+                  onClick={onBusinessClear}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              ) : null}
             </Badge>
           )}
 
@@ -291,7 +307,7 @@ export function PromotionFilterPanel({
               {PROMOTION_EVENT_STATE_LABELS[filters.eventState]}
               <button
                 type="button"
-                className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={chipRemoveClassName}
                 aria-label="Remove event state filter"
                 onClick={() => onEventStateChange(undefined)}
               >
@@ -300,7 +316,7 @@ export function PromotionFilterPanel({
             </Badge>
           )}
 
-          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={onClearAll}>
+          <Button variant="ghost" size="sm" className="h-9 px-2 text-xs" onClick={onClearAll}>
             Clear all
           </Button>
         </div>

@@ -97,7 +97,27 @@ vi.mock("@/components/ui/countdown-badge", () => ({
   ),
 }));
 
-const { PromotionCard } = await import("@/components/listings/promotion-card");
+const { PromotionCard, getUrgencyLabel } = await import("@/components/listings/promotion-card");
+
+describe("getUrgencyLabel", () => {
+  // 10:00 SAST on Tuesday 10 March 2026.
+  const now = new Date("2026-03-10T08:00:00Z");
+
+  it("says 'Ends today!' for an event ending later the same SA day", () => {
+    expect(getUrgencyLabel("2026-03-10T20:00:00Z", now)).toBe("Ends today!");
+  });
+
+  it("says 'Ends tomorrow!' for an event ending on the next SA day", () => {
+    expect(getUrgencyLabel("2026-03-11T06:00:00Z", now)).toBe("Ends tomorrow!");
+  });
+
+  it("counts a few days left and stays quiet further out or after the end", () => {
+    expect(getUrgencyLabel("2026-03-13T08:00:00Z", now)).toBe("3 days left");
+    expect(getUrgencyLabel("2026-03-20T08:00:00Z", now)).toBeNull();
+    expect(getUrgencyLabel("2026-03-10T07:00:00Z", now)).toBeNull();
+    expect(getUrgencyLabel(null, now)).toBeNull();
+  });
+});
 
 describe("PromotionCard", () => {
   const defaultProps = {
@@ -175,7 +195,7 @@ describe("PromotionCard", () => {
     );
   });
 
-  it("uses the shared cover-fit video player for motion promotions", () => {
+  it("uses the shared smart-fit video player for motion promotions", () => {
     render(
       <PromotionCard
         {...defaultProps}
@@ -187,7 +207,7 @@ describe("PromotionCard", () => {
     const videoPlayer = screen.getByTestId("video-card-player");
     expect(videoPlayer).toHaveAttribute("data-src", "https://example.com/promo.mp4");
     expect(videoPlayer).toHaveAttribute("data-mode", "hover");
-    expect(videoPlayer).toHaveAttribute("data-fit-strategy", "cover");
+    expect(videoPlayer).toHaveAttribute("data-fit-strategy", "smart");
     expect(videoPlayer).toHaveAttribute("data-mute-control", "always");
   });
 

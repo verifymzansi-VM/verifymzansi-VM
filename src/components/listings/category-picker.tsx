@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
   CATEGORIES,
   type CategoryDefinition,
@@ -55,6 +55,7 @@ export function CategoryPicker({
 }: CategoryPickerProps) {
   const [expanded, setExpanded] = useState<ListingCategory | "">(value);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const categoryLabelId = `${useId()}-category-label`;
   const selectedCategory = CATEGORIES.find((c) => c.value === expanded);
 
   function handleSelect(cat: CategoryDefinition) {
@@ -100,10 +101,16 @@ export function CategoryPicker({
 
   return (
     <div className="space-y-4">
-      <Label>Category *</Label>
+      <p id={categoryLabelId} className="text-sm font-medium leading-none">
+        Category *
+      </p>
 
       {/* Category Grid */}
-      <div aria-label="Category" className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <div
+        role="group"
+        aria-labelledby={categoryLabelId}
+        className="grid grid-cols-2 sm:grid-cols-3 gap-3"
+      >
         {CATEGORIES.map((cat) => {
           const Icon = cat.icon;
           const isSelected = expanded === cat.value;
@@ -113,6 +120,7 @@ export function CategoryPicker({
               key={cat.value}
               type="button"
               aria-label={cat.label}
+              aria-pressed={isSelected}
               onClick={() => handleSelect(cat)}
               className={cn(
                 "relative flex flex-col items-center gap-1.5 rounded-xl border-2 p-3 text-center transition-all duration-200",
@@ -158,17 +166,19 @@ export function CategoryPicker({
           {/* Smart tip */}
           {selectedCategory.value === "property" && (
             <p className="text-xs text-muted-foreground bg-background/60 rounded-md px-2.5 py-1.5">
-              💡 Listings with levy and security info get 40% more enquiries.
+              <span aria-hidden="true">💡</span> Add levies, rates and security. Buyers ask about
+              these first.
             </p>
           )}
           {selectedCategory.value === "vehicles" && (
             <p className="text-xs text-muted-foreground bg-background/60 rounded-md px-2.5 py-1.5">
-              💡 Buyers filter by service history — fill it in to appear in more searches.
+              <span aria-hidden="true">💡</span> Buyers filter by service history — fill it in to
+              appear in more searches.
             </p>
           )}
           {selectedCategory.value === "jobs_services" && (
             <p className="text-xs text-muted-foreground bg-background/60 rounded-md px-2.5 py-1.5">
-              💡 Include salary range to attract 3× more applicants.
+              <span aria-hidden="true">💡</span> Include the pay or rate range.
             </p>
           )}
 
@@ -223,6 +233,7 @@ export function CategoryPicker({
                     <div key={group.label} className="rounded-lg border border-border/60">
                       <button
                         type="button"
+                        aria-expanded={isOpen}
                         onClick={() => {
                           setExpandedGroups((prev) => {
                             const next = new Set(prev);
@@ -231,7 +242,7 @@ export function CategoryPicker({
                             return next;
                           });
                         }}
-                        className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                        className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         <span>{group.label}</span>
                         <ChevronDown
@@ -275,6 +286,15 @@ function AttributeInput({
 }) {
   const selectClass =
     "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+  // Stable ids: the create/edit forms focus `listing-attribute-<name>` on validation errors.
+  const inputId = `listing-attribute-${field.name}`;
+  const errorId = `${useId()}-error`;
+  const describedBy = error ? errorId : undefined;
+  const errorNode = error ? (
+    <p id={errorId} className="inline-form-error">
+      {error}
+    </p>
+  ) : null;
 
   switch (field.type) {
     case "select": {
@@ -290,12 +310,14 @@ function AttributeInput({
 
       return (
         <div className="space-y-1.5">
-          <Label>
+          <Label htmlFor={inputId}>
             {field.label} {field.required && "*"}
           </Label>
           <select
+            id={inputId}
             data-listing-attribute={field.name}
-            aria-label={field.label}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={describedBy}
             value={value as string}
             onChange={(e) => onChange(e.target.value)}
             required={field.required}
@@ -318,7 +340,7 @@ function AttributeInput({
               );
             })}
           </select>
-          {error && <p className="inline-form-error">{error}</p>}
+          {errorNode}
         </div>
       );
     }
@@ -326,12 +348,13 @@ function AttributeInput({
     case "number":
       return (
         <div className="space-y-1.5">
-          <Label>
+          <Label htmlFor={inputId}>
             {field.label}
             {field.unit ? ` (${field.unit})` : ""}
             {field.required ? " *" : ""}
           </Label>
           <Input
+            id={inputId}
             data-listing-attribute={field.name}
             type="number"
             inputMode="numeric"
@@ -340,9 +363,11 @@ function AttributeInput({
             value={value as string}
             onChange={(e) => onChange(e.target.value)}
             required={field.required}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={describedBy}
             className={cn(error && "border-destructive")}
           />
-          {error && <p className="inline-form-error">{error}</p>}
+          {errorNode}
         </div>
       );
 
@@ -351,8 +376,10 @@ function AttributeInput({
         <div className="space-y-1">
           <label className="flex items-center gap-2 self-end pb-1">
             <input
+              id={inputId}
               type="checkbox"
-              aria-label={field.label}
+              aria-invalid={error ? true : undefined}
+              aria-describedby={describedBy}
               data-listing-attribute={field.name}
               className={cn(
                 "h-4 w-4 rounded border-input text-brand-green focus:ring-brand-green",
@@ -363,7 +390,7 @@ function AttributeInput({
             />
             <span className="cursor-pointer text-sm font-normal">{field.label}</span>
           </label>
-          {error && <p className="inline-form-error">{error}</p>}
+          {errorNode}
         </div>
       );
 
@@ -371,18 +398,21 @@ function AttributeInput({
     default:
       return (
         <div className="space-y-1.5">
-          <Label>
+          <Label htmlFor={inputId}>
             {field.label} {field.required && "*"}
           </Label>
           <Input
+            id={inputId}
             data-listing-attribute={field.name}
             placeholder={field.placeholder}
             value={value as string}
             onChange={(e) => onChange(e.target.value)}
             required={field.required}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={describedBy}
             className={cn(error && "border-destructive")}
           />
-          {error && <p className="inline-form-error">{error}</p>}
+          {errorNode}
         </div>
       );
 
@@ -398,10 +428,15 @@ function AttributeInput({
       }
 
       return (
-        <div className="space-y-1.5 sm:col-span-2">
-          <Label>
+        <fieldset
+          id={inputId}
+          tabIndex={-1}
+          aria-describedby={describedBy}
+          className="space-y-1.5 sm:col-span-2"
+        >
+          <legend className="text-sm font-medium leading-none">
             {field.label} {field.required && "*"}
-          </Label>
+          </legend>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {options.map((opt) => {
               const optionValue = typeof opt === "string" ? opt : opt.value;
@@ -429,8 +464,8 @@ function AttributeInput({
               );
             })}
           </div>
-          {error && <p className="inline-form-error">{error}</p>}
-        </div>
+          {errorNode}
+        </fieldset>
       );
     }
   }

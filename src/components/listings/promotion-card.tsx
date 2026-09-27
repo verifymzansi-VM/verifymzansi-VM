@@ -2,7 +2,8 @@
 
 import { memo } from "react";
 import { Tag } from "lucide-react";
-import { formatSaShortDate, formatZARShort } from "@/lib/utils/format";
+import { formatSaShortDate, formatZARShort, saCalendarDaysBetween } from "@/lib/utils/format";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
 import { useAutoScrollRailItemState } from "@/components/home/auto-scroll-rail";
 import { getStoredPromotionTypePresentation } from "@/lib/promotions/type-presentation";
@@ -21,6 +22,7 @@ interface PromotionCardProps {
   city: string;
   promotionType: PromotionType;
   createdAt: string;
+  /** @deprecated Ignored: feed cards carry no trust styling. Kept so existing callers compile. */
   ownerTrustLevel?: TrustLevel;
   ownerName?: string;
   viewCount?: number;
@@ -42,16 +44,15 @@ interface PromotionCardProps {
 
 /* ── Urgency helper ─────────────────────────────────────────────── */
 
-function getUrgencyLabel(endDate?: string | null): string | null {
+/** Countdown label by South African calendar day (not rounded 24-hour blocks). */
+export function getUrgencyLabel(endDate: string | null | undefined, now: Date): string | null {
   if (!endDate) return null;
-  const now = new Date();
   const end = new Date(endDate);
-  const diffMs = end.getTime() - now.getTime();
-  if (diffMs < 0) return null; // already ended
-  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-  if (diffDays <= 0) return "Ends today!";
-  if (diffDays === 1) return "Ends tomorrow!";
-  if (diffDays <= 3) return `${diffDays} days left`;
+  if (Number.isNaN(end.getTime()) || end.getTime() < now.getTime()) return null; // ended
+  const days = saCalendarDaysBetween(now, end);
+  if (days <= 0) return "Ends today!";
+  if (days === 1) return "Ends tomorrow!";
+  if (days <= 3) return `${days} days left`;
   return null;
 }
 
@@ -129,7 +130,6 @@ export const PromotionCard = memo(function PromotionCard({
   city,
   promotionType,
   createdAt,
-  ownerTrustLevel = 0,
   ownerName: _ownerName,
   viewCount,
   categoryLabel: _categoryLabel,
@@ -151,7 +151,10 @@ export const PromotionCard = memo(function PromotionCard({
   const { isActive, isRailDragging } = useAutoScrollRailItemState();
   const typePresentation = getStoredPromotionTypePresentation(promotionType);
   const status = getPromotionStatus(featured, boosted, promotionType);
-  const urgency = getUrgencyLabel(endDate);
+  // "Now" differs between the server render and hydration, so the countdown is
+  // only computed once the card is running in the browser.
+  const isHydrated = useHydrated();
+  const urgency = isHydrated ? getUrgencyLabel(endDate, new Date()) : null;
   const eyebrow = formatPromotionEyebrow(price, negotiable, promotionType, startDate, urgency);
   const description = buildDescription(businessName);
 
@@ -180,7 +183,6 @@ export const PromotionCard = memo(function PromotionCard({
       statusVariant="ribbon"
       accentClassName={typePresentation.cardAccentClassName}
       cardVariant="showcase"
-      trustLevel={ownerTrustLevel}
       priority={priority}
       videoDuration={videoDuration}
       focalX={focalX}

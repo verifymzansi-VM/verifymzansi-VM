@@ -6,12 +6,22 @@ import { Badge } from "@/components/ui/badge";
 import { CATEGORIES, BUSINESS_CATEGORIES } from "@/lib/constants/categories";
 import { getListingConditionLabel } from "@/lib/constants/listing-condition";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { describeAttributeFilter, formatPriceRangeLabel } from "./filter-controls";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
+type AttributeFilterValue = string | boolean | string[] | undefined;
+
+function isActiveAttributeValue(
+  value: AttributeFilterValue
+): value is Exclude<AttributeFilterValue, undefined> {
+  if (value === undefined || value === "") return false;
+  return !Array.isArray(value) || value.length > 0;
+}
 
 export function ListingGridHeader() {
   const { filters, setFilter, setAttribute, resetFilters } = useMarketplaceStore();
@@ -34,7 +44,7 @@ export function ListingGridHeader() {
     filters.priceMin ||
     filters.priceMax ||
     filters.condition ||
-    Object.values(filters.attributes).some((v) => v !== undefined && v !== "");
+    Object.values(filters.attributes).some(isActiveAttributeValue);
 
   return (
     <div className="space-y-3 mb-5">
@@ -43,7 +53,10 @@ export function ListingGridHeader() {
         <div className="flex items-center gap-1.5 text-muted-foreground">
           {isHydrated ? (
             <DropdownMenu>
-              <DropdownMenuTrigger className="flex min-h-9 items-center gap-1.5 rounded-full border border-border/70 bg-card px-3.5 py-1.5 text-xs font-medium text-foreground shadow-xs outline-none transition-all hover:-translate-y-px hover:border-brand-green/50 hover:text-brand-green hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0">
+              <DropdownMenuTrigger
+                aria-label={`Sort: ${currentSortLabel}`}
+                className="flex min-h-9 items-center gap-1.5 rounded-full border border-border/70 bg-card px-3.5 py-1.5 text-xs font-medium text-foreground shadow-xs outline-none transition-all hover:-translate-y-px hover:border-brand-green/50 hover:text-brand-green hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+              >
                 <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="hidden sm:inline">{currentSortLabel}</span>
                 <span className="sm:hidden">Sort</span>
@@ -154,7 +167,7 @@ export function ListingGridHeader() {
               variant="secondary"
               className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-green-200"
             >
-              R{filters.priceMin || 0} – R{filters.priceMax || "∞"}
+              {formatPriceRangeLabel(filters.priceMin || undefined, filters.priceMax || undefined)}
               <button
                 type="button"
                 className="rounded-full p-0.5 opacity-60 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -169,14 +182,16 @@ export function ListingGridHeader() {
             </Badge>
           )}
           {Object.entries(filters.attributes)
-            .filter(([, v]) => v !== undefined && v !== "")
+            .filter((entry): entry is [string, Exclude<AttributeFilterValue, undefined>] =>
+              isActiveAttributeValue(entry[1])
+            )
             .map(([name, val]) => (
               <Badge
                 key={name}
                 variant="secondary"
-                className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium capitalize text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-green-200"
+                className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-green-200"
               >
-                {typeof val === "boolean" ? name.replace(/_/g, " ") : String(val)}
+                {describeAttributeFilter(filters.category, name, val)}
                 <button
                   type="button"
                   className="rounded-full p-0.5 opacity-60 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -188,6 +203,7 @@ export function ListingGridHeader() {
               </Badge>
             ))}
           <button
+            type="button"
             className="text-xs text-muted-foreground hover:text-foreground underline ml-1 transition-colors"
             onClick={resetFilters}
           >

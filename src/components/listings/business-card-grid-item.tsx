@@ -34,7 +34,8 @@ export function BusinessCardGridItem({
 }) {
   return (
     <div
-      className={`content-auto animate-in fade-in fill-mode-both [animation-duration:400ms] sm:slide-in-from-bottom-2 [animation-delay:${Math.min(index * 50, 400)}ms]`}
+      className="content-auto motion-safe:animate-in motion-safe:fade-in motion-safe:fill-mode-both [animation-duration:400ms] sm:slide-in-from-bottom-2"
+      style={{ animationDelay: `${Math.min(index * 50, 400)}ms` }}
     >
       <BusinessCard
         id={business.id}
@@ -50,8 +51,6 @@ export function BusinessCardGridItem({
         city={business.location_city}
         category={business.category as BusinessCategory | undefined}
         subcategory={business.subcategory}
-        boostUntil={business.boost_until}
-        featuredUntil={business.featured_until}
         serviceAreas={business.service_areas}
         viewCount={business.view_count ?? 0}
         focalX={business.focal_x}

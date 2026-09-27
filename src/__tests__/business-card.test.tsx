@@ -93,7 +93,6 @@ describe("BusinessCard", () => {
         category="fashion_accessories"
         subcategory="clothing_store"
         description="Tailored clothing and occasionwear"
-        featuredUntil="2099-01-02T00:00:00.000Z"
       />
     );
 
@@ -128,7 +127,7 @@ describe("BusinessCard", () => {
       "https://example.com/cover.mp4"
     );
     expect(screen.getByTestId("video-card-player")).toHaveAttribute("data-mode", "hover");
-    expect(screen.getByTestId("video-card-player")).toHaveAttribute("data-fit-strategy", "cover");
+    expect(screen.getByTestId("video-card-player")).toHaveAttribute("data-fit-strategy", "smart");
     expect(screen.getByTestId("video-card-player")).toHaveAttribute("data-mute-control", "always");
   });
 

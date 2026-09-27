@@ -1,7 +1,7 @@
 "use client";
 
 import { Search, SlidersHorizontal, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +25,21 @@ export function ListingFilterSidebar() {
     300
   );
 
+  // Keep the box in step with query changes made elsewhere: URL hydration after
+  // mount (deep links, back/forward), chip removal and "Clear all" in the grid header.
+  const [syncedQuery, setSyncedQuery] = useState(filters.query);
+  if (filters.query !== syncedQuery) {
+    setSyncedQuery(filters.query);
+    if ((filters.query ?? "") !== localQuery) setLocalQuery(filters.query ?? "");
+  }
+  // A query cleared elsewhere must not be re-applied by a keystroke still in flight.
+  useEffect(() => {
+    if (!filters.query) debouncedSetQuery.cancel();
+  }, [filters.query, debouncedSetQuery]);
+
+  const priceRangeInvalid =
+    filters.priceMin != null && filters.priceMax != null && filters.priceMin > filters.priceMax;
+
   const hasActiveFilters =
     filters.category ||
     filters.province ||
@@ -33,7 +48,9 @@ export function ListingFilterSidebar() {
     filters.priceMax ||
     filters.condition ||
     filters.query ||
-    Object.values(filters.attributes).some((v) => v !== undefined && v !== "");
+    Object.values(filters.attributes).some(
+      (v) => v !== undefined && v !== "" && !(Array.isArray(v) && v.length === 0)
+    );
 
   return (
     <div className="space-y-5 rounded-2xl border border-border/70 bg-card p-4 elev-xs">
@@ -64,9 +81,11 @@ export function ListingFilterSidebar() {
 
       {/* ── Category ───────────────────────────────── */}
       <div className="space-y-2">
-        <Label className="text-sm font-semibold">Category</Label>
+        <Label htmlFor="market-sidebar-category" className="text-sm font-semibold">
+          Category
+        </Label>
         <select
-          aria-label="Category"
+          id="market-sidebar-category"
           className="h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs ring-offset-background transition-colors hover:border-brand-green/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           value={filters.category || ""}
           onChange={(e) => setFilter("category", e.target.value || undefined)}
@@ -81,8 +100,8 @@ export function ListingFilterSidebar() {
       </div>
 
       {/* ── Location ────────────────────────────────── */}
-      <div className="space-y-2">
-        <Label className="text-sm font-semibold">Location</Label>
+      <fieldset className="space-y-2">
+        <legend className="mb-2 text-sm font-semibold leading-none">Location</legend>
         <select
           aria-label="Province"
           className="h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs ring-offset-background transition-colors hover:border-brand-green/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -117,7 +136,7 @@ export function ListingFilterSidebar() {
               </option>
             ))}
         </select>
-      </div>
+      </fieldset>
 
       {/* ── Dynamic Category Attributes ────────────── */}
       <ListingAttributeFilters
@@ -128,8 +147,8 @@ export function ListingFilterSidebar() {
       />
 
       {/* ── Price range ───────────────────────────── */}
-      <div className="space-y-2">
-        <Label className="text-sm font-semibold">Price range (ZAR)</Label>
+      <fieldset className="space-y-2">
+        <legend className="mb-2 text-sm font-semibold leading-none">Price range (ZAR)</legend>
         <div className="flex items-center gap-2">
           <Input
             type="number"
@@ -137,19 +156,25 @@ export function ListingFilterSidebar() {
             min={0}
             placeholder="Min"
             aria-label="Minimum price"
+            aria-invalid={priceRangeInvalid || undefined}
+            aria-describedby={priceRangeInvalid ? "market-sidebar-price-error" : undefined}
             className="text-sm"
             value={filters.priceMin || ""}
             onChange={(e) =>
               setFilter("priceMin", e.target.value ? Number(e.target.value) : undefined)
             }
           />
-          <span className="text-muted-foreground text-xs">–</span>
+          <span className="text-muted-foreground text-xs" aria-hidden="true">
+            –
+          </span>
           <Input
             type="number"
             inputMode="decimal"
             min={0}
             placeholder="Max"
             aria-label="Maximum price"
+            aria-invalid={priceRangeInvalid || undefined}
+            aria-describedby={priceRangeInvalid ? "market-sidebar-price-error" : undefined}
             className="text-sm"
             value={filters.priceMax || ""}
             onChange={(e) =>
@@ -157,23 +182,22 @@ export function ListingFilterSidebar() {
             }
           />
         </div>
-        {filters.priceMin != null &&
-          filters.priceMax != null &&
-          filters.priceMin > filters.priceMax && (
-            <p className="text-xs text-destructive" role="alert">
-              Min price must be less than max
-            </p>
-          )}
-      </div>
+        {priceRangeInvalid && (
+          <p id="market-sidebar-price-error" className="text-xs text-destructive" role="alert">
+            Min price must be less than max
+          </p>
+        )}
+      </fieldset>
 
       {/* ── Condition ──────────────────────────────── */}
-      <div className="space-y-2">
-        <Label className="text-sm font-semibold">Condition</Label>
+      <fieldset className="space-y-2">
+        <legend className="mb-2 text-sm font-semibold leading-none">Condition</legend>
         <div className="flex gap-2">
           {LISTING_CONDITIONS.map((cond) => (
             <button
               key={cond.value}
               type="button"
+              aria-pressed={filters.condition === cond.value}
               onClick={() =>
                 setFilter("condition", filters.condition === cond.value ? undefined : cond.value)
               }
@@ -188,7 +212,7 @@ export function ListingFilterSidebar() {
             </button>
           ))}
         </div>
-      </div>
+      </fieldset>
 
       {/* ── Reset Button ─────────────────────────── */}
       {hasActiveFilters && (

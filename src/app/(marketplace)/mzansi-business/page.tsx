@@ -144,7 +144,7 @@ export default async function MzansiBusinessPage() {
           <BusinessFilterDrawer />
 
           <div className="flex gap-6 lg:gap-8">
-            <aside className="hidden w-72 shrink-0 lg:block">
+            <aside className="hidden w-72 shrink-0 lg:block" aria-label="Business filters">
               <div className="sticky top-24">
                 <Suspense
                   fallback={
