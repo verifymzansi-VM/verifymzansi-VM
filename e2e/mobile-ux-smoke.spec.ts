@@ -65,21 +65,14 @@ test.describe("Mobile UX smoke", () => {
     test.skip(!isMobileProject(testInfo.project.name), "Runs only on mobile projects.");
   });
 
-  test("homepage spotlight controls have touch-friendly tap targets", async ({ page }) => {
+  test("homepage showroom controls have touch-friendly tap targets", async ({ page }) => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle").catch(() => {});
 
-    // The homepage leads with the hero; the Spotlight showroom only renders when it has items.
-    await expect(
-      page.getByRole("heading", {
-        level: 1,
-        name: "Buy, sell and discover with people you can trust.",
-      })
-    ).toBeVisible();
-
+    // The showroom opens the homepage; with no items it shows a single welcome card instead.
     const spotlight = page.locator('main section[aria-roledescription="carousel"]').first();
     if ((await spotlight.count()) === 0) {
-      test.skip(true, "Spotlight showroom is hidden because it has no items in this run.");
+      test.skip(true, "The showroom has no items in this run, so there is no carousel.");
     }
 
     const slideButton = spotlight.getByRole("button", { name: /go to slide/i }).first();
@@ -324,7 +317,7 @@ test.describe("Mobile UX smoke", () => {
     expect(reportBox!.height).toBeGreaterThanOrEqual(44);
 
     await reportButton.click();
-    await expect(page.getByRole("heading", { name: /report promotion/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /report (event|promotion)/i })).toBeVisible();
 
     const reasonSelect = page.getByLabel(/reason/i).first();
     await expect(reasonSelect).toBeVisible();

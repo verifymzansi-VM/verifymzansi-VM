@@ -14,17 +14,17 @@ const sizes = [
 ];
 
 /**
- * Routes that render a showroom carousel. Browse pages lead with their
- * <AreaHero> (the page h1), so the carousel sits below it rather than being the
- * first section in <main>. The homepage "Spotlight" showroom renders only when
- * it has items (hideWhenEmpty), so it can be absent in fixture-free stub runs.
+ * Routes that render a showroom carousel. The showroom is the first thing on
+ * every one of these pages, so there is no intro heading to wait for. The
+ * homepage showroom falls back to a welcome card when it has no items, which
+ * is not a carousel, so it is optional in fixture-free stub runs.
  */
 const routes = [
-  { path: "/", optional: true, heroHeading: "Buy, sell and discover with people you can trust." },
-  { path: "/mzansi-market", optional: false, heroHeading: /^mzansi market$/i },
-  { path: "/mzansi-business", optional: false, heroHeading: /^mzansi business$/i },
-  { path: "/tourism-events", optional: false, heroHeading: /^tourism & events$/i },
-  { path: "/dev/showroom-drag", optional: false, heroHeading: null },
+  { path: "/", optional: true },
+  { path: "/mzansi-market", optional: false },
+  { path: "/mzansi-business", optional: false },
+  { path: "/tourism-events", optional: false },
+  { path: "/dev/showroom-drag", optional: false },
 ] as const;
 
 type Box = { x: number; y: number; width: number; height: number };
@@ -76,36 +76,14 @@ for (const viewport of sizes) {
       const main = page.locator("main");
       const showroom = main.locator('section[aria-roledescription="carousel"]').first();
 
-      if (route.heroHeading) {
-        // The page intro (HomeHero / AreaHero) owns the h1 and comes first.
-        const h1 = main.getByRole("heading", { level: 1, name: route.heroHeading });
-        await expect(h1).toBeVisible();
-      }
-
       if (route.optional) {
         await page.waitForLoadState("networkidle").catch(() => {});
         if ((await showroom.count()) === 0) {
-          // hideWhenEmpty: no empty carousel shell and no orphaned Spotlight heading.
-          await expect(main.getByRole("heading", { name: "Trending across Mzansi" })).toHaveCount(
-            0
-          );
           continue;
         }
       }
 
       await expect(showroom).toBeAttached();
-      if (route.heroHeading) {
-        // The carousel follows the intro rather than leading the page.
-        const h1 = main.getByRole("heading", { level: 1 }).first();
-        const followsHero = await h1.evaluate(
-          (heading, section) =>
-            !!section &&
-            !!(heading.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING),
-          await showroom.elementHandle()
-        );
-        expect(followsHero).toBe(true);
-      }
-
       await showroom.scrollIntoViewIfNeeded();
       await expect(showroom).toBeVisible();
       const card = showroom

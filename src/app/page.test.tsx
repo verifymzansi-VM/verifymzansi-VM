@@ -28,10 +28,6 @@ vi.mock("@/components/layout/footer", () => ({
   Footer: () => <footer data-testid="footer" />,
 }));
 
-vi.mock("@/components/layout/mobile-nav", () => ({
-  MobileNav: () => <nav data-testid="mobile-nav" />,
-}));
-
 vi.mock("@/components/home/hero-banner-with-data", () => ({
   HeroBannerWithData: () => <div data-testid="hero-banner-with-data" />,
 }));
@@ -50,6 +46,10 @@ vi.mock("@/components/home/home-mzansi-market-showcase", () => ({
 
 vi.mock("@/components/home/home-business-showcase", () => ({
   HomeBusinessShowcase: () => <div data-testid="business-showcase" />,
+}));
+
+vi.mock("@/components/home/home-programme-showcase", () => ({
+  HomeProgrammeShowcase: () => null,
 }));
 
 vi.mock("@/components/home/home-promotions-showcase", () => ({
@@ -89,7 +89,9 @@ describe("HomePage", () => {
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     expect(screen.queryByRole("search")).not.toBeInTheDocument();
     // The showroom is the first visible section, straight after the screen-reader h1.
-    expect(screen.getByRole("main").children[1]).toBe(heroBanner);
+    const showroom = screen.getByRole("region", { name: "Showroom" });
+    expect(screen.getByRole("main").children[1]).toBe(showroom);
+    expect(showroom).toContainElement(heroBanner);
     const categories = screen.getByRole("navigation", {
       name: "VerifyMzansi primary categories",
     });

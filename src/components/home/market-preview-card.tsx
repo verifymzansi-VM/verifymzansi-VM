@@ -21,7 +21,7 @@ interface MarketPreviewCardProps {
   mediaHeight?: number | null;
 }
 
-const formatPrice = (price: number) => `R ${formatRandAmount(price)}`;
+const formatPrice = (price: number) => `R ${formatRandAmount(price, price % 1 ? 2 : 0)}`;
 
 export function MarketPreviewCard({
   href,

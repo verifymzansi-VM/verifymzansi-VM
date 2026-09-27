@@ -205,6 +205,8 @@ export function ShowroomCardCarousel({
   const { disableAutoplay } = useAutoplayPolicy();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const pausedRef = useRef(false);
+  // Hovering or focusing the showroom holds it still (WCAG 2.2.2 pause on hover/focus).
+  const holdRef = useRef(false);
   const pauseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isVisible, setIsVisible] = useState(false);
 
@@ -688,7 +690,8 @@ export function ShowroomCardCarousel({
   const videoEndedRef = useRef(false);
 
   const handleVideoEnded = useCallback(() => {
-    if (pausedRef.current || activeInputModeRef.current || disableAutoplay) return;
+    if (pausedRef.current || holdRef.current || activeInputModeRef.current || disableAutoplay)
+      return;
     videoEndedRef.current = true;
     nextRef.current();
   }, [disableAutoplay]);
@@ -708,7 +711,12 @@ export function ShowroomCardCarousel({
     const delayMs = activeIsVideo ? videoFallbackMs : imageDisplayMs;
 
     const id = setTimeout(() => {
-      if (!pausedRef.current && !activeInputModeRef.current && !videoEndedRef.current)
+      if (
+        !pausedRef.current &&
+        !holdRef.current &&
+        !activeInputModeRef.current &&
+        !videoEndedRef.current
+      )
         nextRef.current();
     }, delayMs);
     return () => clearTimeout(id);
@@ -784,7 +792,8 @@ export function ShowroomCardCarousel({
             {/* Area-branded artwork card */}
             <div className={cn(CARD_W, "shrink-0")}>
               <PosterCardShell
-                href="#"
+                href="/search"
+                immersive
                 title={emptyTitle}
                 description={emptyDescription}
                 location="South Africa"
@@ -810,7 +819,7 @@ export function ShowroomCardCarousel({
       hasListings
     >
       <AnalyticsImpressions
-        items={items.map((item) => ({
+        items={carouselItems.map((item) => ({
           table: SHOWROOM_TABLES[item.type],
           id: item.id,
         }))}
@@ -851,6 +860,21 @@ export function ShowroomCardCarousel({
         }}
         onClickCapture={handleClickCapture}
         onKeyDown={handleKeyDown}
+        onMouseEnter={() => {
+          holdRef.current = true;
+        }}
+        onMouseLeave={() => {
+          holdRef.current = false;
+          pauseAutoSwipe();
+        }}
+        onFocus={() => {
+          holdRef.current = true;
+        }}
+        onBlur={(event) => {
+          if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+          holdRef.current = false;
+          pauseAutoSwipe();
+        }}
         tabIndex={0}
         aria-label="Carousel slides"
       >
@@ -946,7 +970,12 @@ export function ShowroomCardCarousel({
 
       {/* Screen-reader live announcer */}
       {count > 1 && (
-        <div className="sr-only" aria-live="polite" aria-atomic="true">
+        // Announce only when slides move by user action, not on every auto-advance.
+        <div
+          className="sr-only"
+          aria-live={disableAutoplay || reducedMotion ? "polite" : "off"}
+          aria-atomic="true"
+        >
           {`Slide ${displayIndex + 1} of ${count}`}
         </div>
       )}

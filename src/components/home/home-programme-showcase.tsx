@@ -1,10 +1,9 @@
-import Image from "next/image";
 import Link from "next/link";
-import { Building2, Landmark } from "lucide-react";
+import { Landmark } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { resolveCommercialSettings } from "@/lib/commercial/settings";
 import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
-import { BUSINESS_CATEGORY_LABELS, type BusinessCategory } from "@/types/enums";
+import { PosterCardShell } from "@/components/listings/poster-card-shell";
 
 interface Showcase {
   id: string;
@@ -99,48 +98,27 @@ export async function HomeProgrammeShowcase({
               </div>
               <Link
                 href={`/organisation/${showcase.organisations!.slug}`}
-                className="text-sm underline"
+                prefetch={false}
+                className="inline-flex min-h-11 items-center text-sm font-semibold underline"
               >
                 View all
+                <span className="sr-only"> {showcase.organisations!.name} businesses</span>
               </Link>
             </div>
-            <ul className="-mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
+            <ul className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:gap-4 sm:px-0">
               {rows.map((row) => (
-                <li key={row.business_id} className="w-60 shrink-0 snap-start">
-                  <Link
+                <li key={row.business_id} className="w-[44%] shrink-0 snap-start sm:w-[238px]">
+                  {/* Same full-bleed 9:16 card as every other rail. */}
+                  <PosterCardShell
+                    immersive
                     href={`/mzansi-business/${row.business_id}`}
-                    className="surface-card block h-full overflow-hidden transition-shadow hover:elev-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <span className="relative block aspect-[4/3] bg-muted">
-                      {row.cover_image ? (
-                        <Image
-                          src={row.cover_image}
-                          alt=""
-                          fill
-                          sizes="240px"
-                          className="object-contain"
-                          unoptimized
-                        />
-                      ) : (
-                        <Building2
-                          aria-hidden="true"
-                          className="absolute inset-0 m-auto h-10 w-10 text-muted-foreground"
-                        />
-                      )}
-                    </span>
-                    <span className="block space-y-0.5 p-3">
-                      <span className="block truncate font-semibold">{row.business_name}</span>
-                      <span className="block truncate text-xs text-muted-foreground">
-                        {BUSINESS_CATEGORY_LABELS[row.category as BusinessCategory] ?? "Business"}
-                        {row.city ? ` · ${row.city}` : ""}
-                      </span>
-                      <span className="block truncate text-[11px] text-muted-foreground">
-                        {row.sponsored
-                          ? `Supported by ${showcase.organisations!.name}`
-                          : `Participant — ${showcase.organisations!.name}`}
-                      </span>
-                    </span>
-                  </Link>
+                    title={row.business_name}
+                    mediaUrl={row.cover_image ?? row.logo_url ?? undefined}
+                    mediaAlt={row.business_name}
+                    logoUrl={row.cover_image ? (row.logo_url ?? undefined) : undefined}
+                    location={row.city}
+                    cardVariant="showcase"
+                  />
                 </li>
               ))}
             </ul>

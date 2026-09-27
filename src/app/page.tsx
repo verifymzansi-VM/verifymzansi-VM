@@ -144,9 +144,14 @@ export default async function HomePage() {
           </h1>
 
           {/* ═══ Showroom: our clients' posts, first thing on the page ═══ */}
-          <Suspense fallback={<HeroBannerSkeleton />}>
-            <HeroBannerWithData />
-          </Suspense>
+          <section aria-labelledby="home-showroom-title">
+            <h2 id="home-showroom-title" className="sr-only">
+              Showroom
+            </h2>
+            <Suspense fallback={<HeroBannerSkeleton />}>
+              <HeroBannerWithData />
+            </Suspense>
+          </section>
 
           {/* ═══ The three areas ═══ */}
           <nav aria-label="VerifyMzansi primary categories" className="container-page py-5 sm:py-8">
@@ -165,7 +170,7 @@ export default async function HomePage() {
                         src={tile.image}
                         alt=""
                         fill
-                        sizes="(min-width: 640px) 33vw, 33vw"
+                        sizes="33vw"
                         className="object-cover transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none"
                       />
                       <span

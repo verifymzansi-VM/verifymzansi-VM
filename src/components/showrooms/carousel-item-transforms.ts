@@ -2,6 +2,11 @@ import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { formatRandAmount } from "@/lib/utils/format";
 import type { CarouselItem } from "./showroom-card-carousel";
 
+/** "R 1 250" for whole amounts, "R 99.50" when there are cents. */
+function formatCardPrice(cents: number): string {
+  return `R ${formatRandAmount(cents / 100, cents % 100 ? 2 : 0)}`;
+}
+
 export type { CarouselItem };
 
 /* ── Listing → CarouselItem ─────────────────────────────── */
@@ -42,7 +47,7 @@ export function listingToCarouselItem(
         : undefined,
     logoUrl: l.logo_url ? normalizeMediaUrl(l.logo_url) : undefined,
     price: l.price_cents ? l.price_cents / 100 : null,
-    eyebrow: l.price_cents ? `R ${formatRandAmount(l.price_cents / 100)}` : null,
+    eyebrow: l.price_cents ? formatCardPrice(l.price_cents) : null,
     focalX: l.focal_x ?? null,
     focalY: l.focal_y ?? null,
     mediaWidth: l.media_width ?? null,
@@ -134,7 +139,7 @@ export function promotionToCarouselItem(
         ? normalizeMediaUrl(p.photos[0])
         : undefined,
     price: p.price_cents ? p.price_cents / 100 : null,
-    eyebrow: p.price_cents ? `R ${formatRandAmount(p.price_cents / 100)}` : null,
+    eyebrow: p.price_cents ? formatCardPrice(p.price_cents) : null,
     focalX: p.focal_x ?? null,
     focalY: p.focal_y ?? null,
     mediaWidth: p.media_width ?? null,

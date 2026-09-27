@@ -1,7 +1,5 @@
-"use client";
-
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { ArrowRight, Building2, ShoppingBag, TreePalm, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -69,9 +67,13 @@ export function HomeShowcaseShell({
 }: HomeShowcaseShellProps) {
   const styles = toneStyles[tone];
   const { icon: Icon, tileClassName } = toneIcons[tone];
+  const headingId = useId();
 
   return (
-    <section className={cn("relative py-8 sm:py-10 lg:py-12", className)}>
+    <section
+      aria-labelledby={headingId}
+      className={cn("relative py-8 sm:py-10 lg:py-12", className)}
+    >
       <div className="container-page">
         <div
           className={cn(
@@ -100,6 +102,7 @@ export function HomeShowcaseShell({
                   <Icon className="h-5 w-5" />
                 </span>
                 <h2
+                  id={headingId}
                   className={cn(
                     "min-w-0 font-display text-xl font-bold leading-tight tracking-tight sm:text-3xl",
                     styles.headingClassName
@@ -121,7 +124,7 @@ export function HomeShowcaseShell({
                 View all
                 <ArrowRight
                   aria-hidden="true"
-                  className="h-4 w-4 transition-transform duration-200 group-hover/link:translate-x-0.5"
+                  className="h-4 w-4 transition-transform duration-200 group-hover/link:translate-x-0.5 motion-reduce:transition-none"
                 />
               </Link>
             </div>

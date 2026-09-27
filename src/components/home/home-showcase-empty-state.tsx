@@ -51,13 +51,14 @@ export function HomeShowcaseEmptyState({
     <div className="rounded-[1.5rem] border border-dashed border-border bg-card/70 p-8 text-center shadow-inner dark:bg-white/[0.03]">
       <div className="mx-auto flex max-w-sm flex-col items-center gap-3">
         <div
+          aria-hidden="true"
           className={`flex h-14 w-14 items-center justify-center rounded-full ${styles.iconClassName}`}
         >
           {icon}
         </div>
-        <p className="font-display font-semibold text-foreground">{title}</p>
+        <h3 className="font-display font-semibold text-foreground">{title}</h3>
         <p className="text-sm leading-6 text-muted-foreground">{description}</p>
-        <Button asChild size="sm" className={`rounded-full px-5 ${styles.buttonClassName}`}>
+        <Button asChild size="sm" className={`h-11 rounded-full px-5 ${styles.buttonClassName}`}>
           <Link href={ctaHref} prefetch={false}>
             {ctaLabel}
             <ArrowRight className="ml-1 h-4 w-4" />

@@ -1,10 +1,22 @@
 "use client";
 
-import { BrandShieldAlert as ShieldAlert } from "@/components/shared/brand-shield";
+import { BrandShield, BrandShieldAlert as ShieldAlert } from "@/components/shared/brand-shield";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Menu, X, LayoutDashboard, Settings, LogOut, Loader2, Sun, Moon } from "lucide-react";
+import {
+  Menu,
+  X,
+  LayoutDashboard,
+  Settings,
+  LogOut,
+  Loader2,
+  Sun,
+  Moon,
+  Search,
+  LifeBuoy,
+  Tag,
+} from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -117,6 +129,22 @@ function HeaderInner({
     </Button>
   );
 
+  // The phone tab bar carries Search; from tablet up the header does.
+  const renderSearchLink = (className?: string) => (
+    <Link
+      href="/search"
+      prefetch={false}
+      aria-label="Search"
+      title="Search"
+      className={cn(
+        "h-11 w-11 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        className
+      )}
+    >
+      <Search className="h-4 w-4" />
+    </Link>
+  );
+
   // Close mobile menu on Escape key
   const handleEscape = useCallback(
     (e: KeyboardEvent) => {
@@ -195,6 +223,7 @@ function HeaderInner({
 
         {/* Desktop Right — Auth */}
         <div className="hidden items-center gap-2 lg:flex lg:justify-self-end">
+          {renderSearchLink("flex")}
           {/* Theme toggle */}
           {renderThemeToggle("relative")}
 
@@ -251,6 +280,12 @@ function HeaderInner({
                       <Link href="/dashboard" prefetch={false} className="cursor-pointer">
                         <LayoutDashboard className="mr-2 h-4 w-4" />
                         Dashboard
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/verification" prefetch={false} className="cursor-pointer">
+                        <BrandShield className="mr-2 h-4 w-4" />
+                        Verification
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
@@ -316,7 +351,8 @@ function HeaderInner({
 
         {/* Mobile actions stay visible when the menu is closed. */}
         <div className="flex shrink-0 items-center gap-1 justify-self-end lg:hidden">
-          {renderThemeToggle("relative h-9 w-9 shrink-0")}
+          {renderSearchLink("hidden md:flex")}
+          {renderThemeToggle("relative h-11 w-11 shrink-0")}
           {isAuthenticated && <NotificationBell userId={auth.user?.id} />}
           <button
             ref={mobileToggleRef}
@@ -345,7 +381,7 @@ function HeaderInner({
         id="mobile-nav-menu"
         aria-label="Mobile navigation"
         hidden={!mobileOpen}
-        className={`lg:hidden border-t border-border/60 bg-background/95 backdrop-blur-xl ${
+        className={`lg:hidden max-h-[calc(100dvh-7rem)] overflow-y-auto overscroll-contain border-t border-border/60 bg-background/95 backdrop-blur-xl ${
           mobileOpen ? "animate-fade-in-up" : "hidden"
         }`}
       >
@@ -370,16 +406,25 @@ function HeaderInner({
                 <Link
                   href="/dashboard"
                   prefetch={false}
-                  className="flex items-center gap-2 py-2 text-sm font-medium"
+                  className="flex min-h-11 items-center gap-2 py-2 text-sm font-medium"
                   onClick={() => setMobileOpen(false)}
                 >
                   <LayoutDashboard className="h-4 w-4" />
                   Dashboard
                 </Link>
                 <Link
+                  href="/verification"
+                  prefetch={false}
+                  className="flex min-h-11 items-center gap-2 py-2 text-sm font-medium"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  <BrandShield className="h-4 w-4" />
+                  Verification
+                </Link>
+                <Link
                   href="/dashboard/settings"
                   prefetch={false}
-                  className="flex items-center gap-2 py-2 text-sm font-medium"
+                  className="flex min-h-11 items-center gap-2 py-2 text-sm font-medium"
                   onClick={() => setMobileOpen(false)}
                 >
                   <Settings className="h-4 w-4" />
@@ -389,7 +434,7 @@ function HeaderInner({
                   <Link
                     href="/admin"
                     prefetch={false}
-                    className="flex items-center gap-2 py-2 text-sm font-medium"
+                    className="flex min-h-11 items-center gap-2 py-2 text-sm font-medium"
                     onClick={() => setMobileOpen(false)}
                   >
                     <ShieldAlert className="h-4 w-4" />
@@ -411,7 +456,7 @@ function HeaderInner({
                   </Link>
                 </Button>
                 <button
-                  className="flex items-center gap-2 py-2 text-sm font-medium text-destructive disabled:opacity-50"
+                  className="flex min-h-11 items-center gap-2 py-2 text-sm font-medium text-destructive disabled:opacity-50"
                   disabled={signingOut}
                   onClick={() => {
                     setMobileOpen(false);
@@ -449,6 +494,26 @@ function HeaderInner({
                 </Button>
               </>
             )}
+          </div>
+          <div className="flex flex-col border-t border-border/60 pt-2">
+            <Link
+              href="/safety"
+              prefetch={false}
+              className="flex min-h-11 items-center gap-2 text-sm font-medium"
+              onClick={() => setMobileOpen(false)}
+            >
+              <LifeBuoy className="h-4 w-4" />
+              Safety Centre
+            </Link>
+            <Link
+              href="/pricing"
+              prefetch={false}
+              className="flex min-h-11 items-center gap-2 text-sm font-medium"
+              onClick={() => setMobileOpen(false)}
+            >
+              <Tag className="h-4 w-4" />
+              Pricing
+            </Link>
           </div>
         </div>
       </nav>

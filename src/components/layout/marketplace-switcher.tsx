@@ -72,7 +72,7 @@ export function MarketplaceSwitcher() {
             aria-label={tab.label}
             aria-current={isActive ? "page" : undefined}
             className={cn(
-              "inline-flex min-w-0 flex-1 items-center justify-center gap-1 rounded-full px-3 py-1.5 text-[10px] font-semibold leading-tight transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 lg:min-w-0 lg:flex-none lg:gap-1.5 lg:px-4 lg:py-2 lg:text-sm lg:leading-none",
+              "inline-flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-semibold leading-tight lg:min-h-0 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 lg:min-w-0 lg:flex-none lg:gap-1.5 lg:px-4 lg:py-2 lg:text-sm lg:leading-none",
               isActive
                 ? tab.activeClass
                 : cn("text-muted-foreground hover:text-foreground", tab.hoverClass)
