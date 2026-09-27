@@ -122,10 +122,13 @@ for (const viewport of sizes) {
       const showroomBox = await rectOf(showroom);
       expect(box.y).toBeGreaterThanOrEqual(showroomBox.y);
       expect(box.y + box.height).toBeLessThanOrEqual(showroomBox.y + showroomBox.height);
-      const metadata = card.locator("[data-card-metadata]");
-      expect(await metadata.evaluate((el) => el.scrollHeight <= el.clientHeight)).toBe(true);
-      const metadataBox = await rectOf(metadata);
-      expect(metadataBox.y + metadataBox.height).toBeLessThanOrEqual(box.y + box.height);
+      // Title, price and place sit on the media (TikTok-style) and stay inside the card.
+      const overlayBox = await rectOf(card.locator("[data-card-overlay]").first());
+      expect(overlayBox.height).toBeGreaterThan(0);
+      expect(overlayBox.y).toBeGreaterThanOrEqual(mediaBox.y - 1);
+      expect(overlayBox.y + overlayBox.height).toBeLessThanOrEqual(
+        mediaBox.y + mediaBox.height + 1
+      );
       if (route.path === "/dev/showroom-drag") {
         const sizingCard = showroom.locator(".showroom-card-frame.invisible");
         const sizingHeight = await sizingCard.evaluate((el) => el.getBoundingClientRect().height);

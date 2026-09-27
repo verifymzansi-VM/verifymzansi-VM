@@ -967,12 +967,7 @@ export function ShowroomCardCarousel({
 
       {/* Screen-reader live announcer */}
       {count > 1 && (
-        // Announce only when slides move by user action, not on every auto-advance.
-        <div
-          className="sr-only"
-          aria-live={disableAutoplay || reducedMotion ? "polite" : "off"}
-          aria-atomic="true"
-        >
+        <div className="sr-only" aria-live="polite" aria-atomic="true">
           {`Slide ${displayIndex + 1} of ${count}`}
         </div>
       )}

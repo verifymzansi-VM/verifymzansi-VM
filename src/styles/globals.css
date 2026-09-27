@@ -495,42 +495,33 @@
     }
   }
 
-  /* Landscape phones have room beside the media, rather than below it. */
+  /* Landscape phones: keep the same 9:16 card, sized to the height left under the
+     sticky header (and above the tab bar, which shows below 768px). */
   @media (min-width: 640px) and (max-height: 500px) {
     .showroom-viewport {
-      --showroom-landscape-height: calc(100svh - 272px - env(safe-area-inset-bottom, 0px));
-      padding-block: 16px;
+      --showroom-landscape-height: calc(100svh - 216px - env(safe-area-inset-bottom, 0px));
+      padding-block: 8px;
     }
 
     .showroom-card-frame {
-      width: min(80vw, calc(var(--showroom-landscape-height) * 9 / 16 + 240px));
+      width: calc(var(--showroom-landscape-height) * 9 / 16);
     }
 
-    .showroom-card-frame [data-card-variant="hero"] {
-      display: grid;
-      grid-template-columns: calc((var(--showroom-landscape-height) - 2px) * 9 / 16) minmax(0, 1fr);
-      grid-template-rows: minmax(0, 1fr);
-      height: var(--showroom-landscape-height);
+    /* Compact overlay so title, price and place still fit the smaller card.
+       !important: the card's own spacing and type are utility classes. */
+    .showroom-card-frame [data-card-overlay] {
+      padding: 1.5rem 0.5rem 0.5rem !important;
     }
 
-    .showroom-card-frame [data-card-media] {
-      height: 100%;
-      max-height: none;
-      aspect-ratio: auto;
-      border-radius: 0;
-    }
-
-    .showroom-card-frame [data-card-metadata] {
-      height: 100%;
-      min-height: 0;
-      padding-block: 8px;
-      align-items: center;
+    .showroom-card-frame [data-card-overlay] :is(h3, p) {
+      font-size: 0.6875rem !important;
+      line-height: 1.2 !important;
     }
   }
 
   @media (min-width: 768px) and (max-height: 500px) {
     .showroom-viewport {
-      --showroom-landscape-height: calc(100svh - 208px);
+      --showroom-landscape-height: calc(100svh - 160px);
     }
   }
 }
