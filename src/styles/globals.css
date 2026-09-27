@@ -392,8 +392,33 @@
     /* Header, floating mobile navigation pill (74px incl. bottom offset),
        section padding, controls, and metadata. */
     --showroom-reserved-height: calc(292px + env(safe-area-inset-bottom, 0px));
-    --showroom-card-width: 260px;
+    /* Leave room for the neighbouring cards to peek in at the sides. */
+    --showroom-card-width: calc(100vw - 72px);
+    /* Height of the sticky header: logo row plus the area tabs below lg. */
+    --showroom-header-height: 136px;
     padding-block: 16px;
+  }
+
+  /* Homepage: the showroom fills the first screen under the header, card centred. */
+  .showroom-fill {
+    display: flex;
+    min-height: calc(100svh - var(--showroom-header-height));
+    flex-direction: column;
+    justify-content: center;
+    /* Centre the card above the floating bottom tab bar on phones. */
+    padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  }
+
+  @media (min-width: 768px) {
+    .showroom-fill {
+      padding-bottom: 16px;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .showroom-fill {
+      padding-bottom: 8px;
+    }
   }
 
   .showroom-card-frame {
@@ -412,17 +437,29 @@
     visibility: var(--slide-mobile-visibility);
     pointer-events: var(--slide-mobile-pointer-events);
     z-index: var(--slide-z-index);
-    filter: saturate(0.65) brightness(0.75);
-    transition: filter 700ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* Side cards sit in shade. A fading overlay instead of a CSS filter: filters
+     repaint the video every frame of a swipe, opacity stays on the compositor. */
+  .showroom-slide::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    border-radius: 28px;
+    background: rgb(15 23 42);
+    opacity: 0.3;
+    pointer-events: none;
+    transition: opacity 450ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   /* The light travels with the selected card; preserve its original colours. */
-  .showroom-slide[data-showroom-layer="active"] {
-    filter: saturate(1) brightness(1);
+  .showroom-slide[data-showroom-layer="active"]::after {
+    opacity: 0;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .showroom-slide {
+    .showroom-slide::after {
       transition: none;
     }
   }
@@ -468,16 +505,19 @@
 
   @media (min-width: 768px) {
     .showroom-viewport {
-      --showroom-card-width: 300px;
-      --showroom-reserved-height: 198px;
+      --showroom-card-width: 420px;
+      /* Two-row header, padding and the details row; no bottom tab bar here. */
+      --showroom-reserved-height: 248px;
+      --showroom-header-height: 141px;
     }
   }
 
   @media (min-width: 1024px) {
     .showroom-viewport {
-      --showroom-card-width: 440px;
+      --showroom-card-width: 540px;
       /* Use the space recovered from the desktop padding, details, and controls. */
       --showroom-reserved-height: 196px;
+      --showroom-header-height: 70px;
       padding-block: 8px;
     }
 
@@ -496,10 +536,11 @@
   }
 
   /* Landscape phones: keep the same 9:16 card, sized to the height left under the
-     sticky header (and above the tab bar, which shows below 768px). */
+     sticky header (and above the tab bar, which shows below 768px), with a slimmer
+     details row underneath. */
   @media (min-width: 640px) and (max-height: 500px) {
     .showroom-viewport {
-      --showroom-landscape-height: calc(100svh - 216px - env(safe-area-inset-bottom, 0px));
+      --showroom-landscape-height: calc(100svh - 260px - env(safe-area-inset-bottom, 0px));
       padding-block: 8px;
     }
 
@@ -507,21 +548,67 @@
       width: calc(var(--showroom-landscape-height) * 9 / 16);
     }
 
-    /* Compact overlay so title, price and place still fit the smaller card.
-       !important: the card's own spacing and type are utility classes. */
-    .showroom-card-frame [data-card-overlay] {
-      padding: 1.5rem 0.5rem 0.5rem !important;
-    }
-
-    .showroom-card-frame [data-card-overlay] :is(h3, p) {
-      font-size: 0.6875rem !important;
-      line-height: 1.2 !important;
+    .showroom-card-frame [data-card-metadata] {
+      height: 44px;
+      padding-block: 6px;
     }
   }
 
   @media (min-width: 768px) and (max-height: 500px) {
     .showroom-viewport {
-      --showroom-landscape-height: calc(100svh - 160px);
+      --showroom-landscape-height: calc(100svh - 204px);
+    }
+  }
+}
+
+/* Homepage rails and "Why VerifyMzansi": light hover motion for mouse users only.
+   Touch screens skip it (no sticky hover, no extra work while scrolling), and only
+   transform animates, so it stays on the compositor. */
+@layer components {
+  @media (hover: hover) and (pointer: fine) {
+    .home-rail-icon,
+    .home-feature-icon,
+    .home-link-arrow svg {
+      transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .home-rail:hover .home-rail-icon {
+      transform: scale(1.06) rotate(-6deg);
+    }
+
+    .home-link-arrow:hover svg {
+      transform: translateX(3px);
+    }
+
+    /* The feature's top rule fills with brand green from the left. */
+    .home-feature::before {
+      content: "";
+      position: absolute;
+      top: -1px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: theme("colors.brand-green.600");
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 450ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .home-feature:hover::before {
+      transform: scaleX(1);
+    }
+
+    .home-feature:hover .home-feature-icon {
+      transform: translateY(-3px);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .home-rail-icon,
+    .home-feature-icon,
+    .home-link-arrow svg,
+    .home-feature::before {
+      transition: none !important;
     }
   }
 }

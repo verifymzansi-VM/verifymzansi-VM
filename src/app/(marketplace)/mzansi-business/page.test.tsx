@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import MzansiBusinessPage from "./page";
 
@@ -7,9 +7,8 @@ const { mockCreateClient, mockCookies } = vi.hoisted(() => ({
   mockCookies: vi.fn(),
 }));
 
-const { carouselSpy, trustStripSpy } = vi.hoisted(() => ({
+const { carouselSpy } = vi.hoisted(() => ({
   carouselSpy: vi.fn(),
-  trustStripSpy: vi.fn(),
 }));
 
 vi.mock("next/headers", () => ({
@@ -27,13 +26,6 @@ vi.mock("@/components/showrooms/showroom-card-carousel", () => ({
   }) => {
     carouselSpy(props);
     return <div data-testid="showroom-card-carousel" />;
-  },
-}));
-
-vi.mock("@/components/layout/trust-strip", () => ({
-  TrustStrip: (props: { title?: string; variant?: string }) => {
-    trustStripSpy(props);
-    return <div data-testid="trust-strip" />;
   },
 }));
 
@@ -114,14 +106,9 @@ describe("MzansiBusinessPage", () => {
     );
   });
 
-  it("labels the trust strip for the business route", async () => {
+  it("shows no trust strip under the business showroom", async () => {
     render(await MzansiBusinessPage());
 
-    expect(trustStripSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        variant: "blue",
-        title: "Latest Mzansi Businesses",
-      })
-    );
+    expect(screen.queryByText("Phone & ID checked")).not.toBeInTheDocument();
   });
 });

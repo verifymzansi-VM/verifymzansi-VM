@@ -118,7 +118,8 @@ function getSlideFrame(index: number, position: number, count: number, width: nu
   const fadeEdge = count === 2 ? 1.45 : Math.min(maxDepth + 1, count / 2);
   const opacity = count <= 1 ? 1 : clamp((fadeEdge - depth) / Math.min(0.45, fadeEdge), 0, 1);
   return {
-    transform: `translateX(calc(-50% + ${x}%)) translateY(${y}px) scale(${scale})`,
+    // translate3d keeps every frame on the compositor, so swipes do not repaint the cards.
+    transform: `translate3d(calc(-50% + ${x}%), ${y}px, 0) scale(${scale})`,
     opacity: String(opacity),
     zIndex: String(Math.round(100 - depth * 20)),
     pointerEvents: depth < 1.1 && opacity > 0.1 ? "auto" : "none",
@@ -217,15 +218,18 @@ export function ShowroomCardCarousel({
   const dragDistanceRef = useRef(DRAG_PROGRESS_DISTANCE);
   const releaseSampleRef = useRef({ x: 0, time: 0, velocity: 0 });
   const settle = useCallback(
-    (target: number) => {
+    (target: number, velocity = 0) => {
       position.stop();
       if (reducedMotion) position.set(target);
       else
+        // Carry the finger's speed into the spring so a flick glides on instead of
+        // stopping and restarting, and settle without bounce.
         animate(position, target, {
           type: "spring",
-          stiffness: 310,
-          damping: 34,
+          stiffness: 260,
+          damping: 32,
           mass: 1,
+          velocity,
           restDelta: 0.001,
           restSpeed: 0.01,
         });
@@ -253,14 +257,14 @@ export function ShowroomCardCarousel({
   /* ── Navigation helpers ────────────────────────────────── */
 
   const goTo = useCallback(
-    (index: number) => {
+    (index: number, velocity?: number) => {
       if (count <= 1) return;
       let distance = index - normalizedActiveIndex;
       if (distance > count / 2) distance -= count;
       if (distance < -count / 2) distance += count;
       const target = activeIndex + distance;
       setActiveIndex(target);
-      settle(target);
+      settle(target, velocity);
     },
     [count, normalizedActiveIndex, activeIndex, settle]
   );
@@ -435,7 +439,8 @@ export function ShowroomCardCarousel({
     (clientX: number, pointerId?: number) => {
       const rawDelta = clientX - dragStartXRef.current;
       const sample = releaseSampleRef.current;
-      const absVelocity = Date.now() - sample.time < 100 ? Math.abs(sample.velocity) : 0;
+      const releaseVelocity = Date.now() - sample.time < 100 ? sample.velocity : 0;
+      const absVelocity = Math.abs(releaseVelocity);
       const shouldSuppressClick = didDragRef.current;
 
       clearActiveDrag(coverflowRef.current, pointerId, { preserveDragFlag: shouldSuppressClick });
@@ -449,7 +454,9 @@ export function ShowroomCardCarousel({
         // Advance one card per swipe so users always move through the displayed sequence.
         const direction = rawDelta > 0 ? -1 : 1;
         pauseAutoSwipe();
-        goTo(normalizedActiveIndex + direction);
+        // px/ms of finger travel -> slides per second, matching the drag mapping.
+        const slideVelocity = clamp((-releaseVelocity * 1000) / dragDistanceRef.current, -8, 8);
+        goTo(normalizedActiveIndex + direction, slideVelocity);
       } else {
         settle(activeIndex);
       }
@@ -750,27 +757,38 @@ export function ShowroomCardCarousel({
   }
 
   useLayoutEffect(() => {
+    const cards = Array.from(
+      coverflowRef.current?.querySelectorAll<HTMLElement>("[data-showroom-index]") ?? []
+    );
+    // Remember what each card last received so a frame only writes styles that changed.
+    const painted = new Map<HTMLElement, Record<string, string>>();
+    let viewportWidth = window.innerWidth;
     const paint = () => {
-      coverflowRef.current
-        ?.querySelectorAll<HTMLElement>("[data-showroom-index]")
-        .forEach((card) => {
-          Object.assign(
-            card.style,
-            getSlideFrame(
-              Number(card.dataset.showroomIndex),
-              position.get(),
-              count,
-              window.innerWidth
-            )
-          );
-        });
+      const current = position.get();
+      for (const card of cards) {
+        const frame = getSlideFrame(
+          Number(card.dataset.showroomIndex),
+          current,
+          count,
+          viewportWidth
+        );
+        const previous = painted.get(card);
+        for (const key of Object.keys(frame) as (keyof typeof frame)[]) {
+          if (previous?.[key] !== frame[key]) card.style[key] = frame[key];
+        }
+        painted.set(card, frame);
+      }
+    };
+    const handleResize = () => {
+      viewportWidth = window.innerWidth;
+      paint();
     };
     paint();
     const unsubscribe = position.on("change", paint);
-    window.addEventListener("resize", paint);
+    window.addEventListener("resize", handleResize);
     return () => {
       unsubscribe();
-      window.removeEventListener("resize", paint);
+      window.removeEventListener("resize", handleResize);
     };
   }, [position, count, displayIndex]);
 
@@ -791,7 +809,6 @@ export function ShowroomCardCarousel({
             <div className={cn(CARD_W, "shrink-0")}>
               <PosterCardShell
                 href="/search"
-                immersive
                 title={emptyTitle}
                 description={emptyDescription}
                 location="South Africa"
@@ -846,7 +863,7 @@ export function ShowroomCardCarousel({
       <div
         ref={coverflowRef}
         className={cn(
-          "relative mx-auto max-w-[1680px] overflow-x-clip overflow-y-visible select-none touch-pan-y [perspective:1200px]",
+          "relative mx-auto w-full max-w-[1680px] overflow-x-clip overflow-y-visible select-none touch-pan-y",
           isDragging ? "cursor-grabbing" : "cursor-grab"
         )}
         onPointerDown={handlePointerDown}
@@ -887,7 +904,6 @@ export function ShowroomCardCarousel({
             mediaUrl="/images/fallbacks/hero-shop.svg"
             cardVariant="hero"
             mediaControlVariant="hero"
-            immersive
           />
         </div>
 
@@ -958,7 +974,7 @@ export function ShowroomCardCarousel({
                 makeEntireCardClickable
                 cardVariant="hero"
                 mediaControlVariant={offset === 0 ? "hero" : "default"}
-                immersive
+                fitStrategy="contain"
               />
             </div>
           );

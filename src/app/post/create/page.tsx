@@ -35,7 +35,7 @@ export default async function PostCreatePage() {
         <div className="container-page space-y-6 py-6 sm:py-8">
           <PageHeader
             title="What would you like to post?"
-            description="Pick an area to start. We check every post before it goes live."
+            description="Tap the option that fits best. The form opens ready for it, and we check every post before it goes live."
             breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Create Post" }]}
           />
 

@@ -7,16 +7,22 @@ import { Skeleton } from "@/components/ui/skeleton";
  */
 export function ShowroomCardCarouselSkeleton({
   background,
+  className,
 }: {
   background?: ShowroomDecorativeBackground;
+  className?: string;
 }) {
   return (
-    <ShowroomSectionShell sectionClassName="showroom-viewport" background={background}>
+    <ShowroomSectionShell
+      sectionClassName="showroom-viewport"
+      extraClassName={className}
+      background={background}
+    >
       <div
         role="status"
         aria-busy="true"
         aria-label="Loading"
-        className="relative z-10 mx-auto flex items-center justify-center overflow-hidden px-4 lg:h-full"
+        className="relative z-10 mx-auto flex w-full items-center justify-center overflow-hidden px-4 lg:h-full"
       >
         {/* Left card (scaled down) */}
         <div

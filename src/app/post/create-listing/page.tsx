@@ -375,6 +375,21 @@ export default function CreateListingPage() {
   }, []);
 
   useEffect(() => {
+    // Preselect the category picked on /post/create (e.g. ?category=vehicles).
+    // A restored draft still wins because it loads after this runs.
+    const requested = new URLSearchParams(window.location.search).get("category");
+    const match = CATEGORIES.find((c) => c.value === requested);
+    if (!match) return;
+
+    queueMicrotask(() => {
+      setCategory(match.value);
+      setCategoryAttributes(
+        match.value === "vehicles" ? { year: String(new Date().getFullYear()) } : {}
+      );
+    });
+  }, []);
+
+  useEffect(() => {
     if (!user?.id || isLoading || submitSucceeded) return;
 
     void Promise.resolve(restoreDraft()).then((restored) => {

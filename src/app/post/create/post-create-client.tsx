@@ -2,16 +2,28 @@
 
 import { BrandShieldAlert as ShieldAlert } from "@/components/shared/brand-shield";
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  Baby,
+  BedDouble,
+  Briefcase,
   Building2,
-  Camera,
-  ClipboardCheck,
+  CalendarDays,
+  Car,
+  ChevronRight,
+  Cog,
+  Globe,
+  House,
   Loader2,
   ShoppingBag,
+  Smartphone,
+  Sofa,
+  Store,
+  Tent,
+  Tractor,
   TreePalm,
+  Truck,
   type LucideIcon,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -20,66 +32,189 @@ import { normalizeAccountVerificationStatus } from "@/lib/account/compat";
 import { cn } from "@/lib/utils";
 import type { AccountVerificationStatus } from "@/types/enums";
 
-interface PostOption {
-  title: string;
-  tagline: string;
-  examples: readonly string[];
-  cta: string;
+interface PostChoice {
+  label: string;
+  hint: string;
   icon: LucideIcon;
   href: string;
-  image: string;
-  tile: string;
-  accent: string;
-  ring: string;
-  ctaColor: string;
 }
 
-const POST_OPTIONS: readonly PostOption[] = [
+interface PostArea {
+  id: string;
+  title: string;
+  fitsWhen: string;
+  question: string;
+  icon: LucideIcon;
+  tile: string;
+  accent: string;
+  choices: readonly PostChoice[];
+}
+
+// Each choice opens the matching form with the category or type already set.
+const POST_AREAS: readonly PostArea[] = [
   {
+    id: "market",
     title: "Mzansi Market",
-    tagline: "Sell or rent out one item.",
-    examples: ["Cars & bakkies", "Phones", "Property"],
-    cta: "Post an item",
+    fitsWhen: "You have one thing to sell or rent out, or a job to fill.",
+    question: "What is it?",
     icon: ShoppingBag,
-    href: "/post/create-listing",
-    image: "/images/showrooms/market-v2-mobile.avif",
     tile: "area-market-tile",
     accent: "bg-brand-green-600 dark:bg-brand-green-400",
-    ring: "hover:border-brand-green-400/70 focus-visible:ring-brand-green-500/50 dark:hover:border-brand-green-600",
-    ctaColor: "text-brand-green-700 dark:text-brand-green-300",
+    choices: [
+      {
+        label: "Property",
+        hint: "House, flat, room or land",
+        icon: House,
+        href: "/post/create-listing?category=property",
+      },
+      {
+        label: "Vehicle",
+        hint: "Car, bakkie, bike or truck",
+        icon: Car,
+        href: "/post/create-listing?category=vehicles",
+      },
+      {
+        label: "Auto parts",
+        hint: "Spares, tyres, accessories",
+        icon: Cog,
+        href: "/post/create-listing?category=auto_parts",
+      },
+      {
+        label: "Electronics",
+        hint: "Phone, laptop, TV, console",
+        icon: Smartphone,
+        href: "/post/create-listing?category=electronics",
+      },
+      {
+        label: "Home & lifestyle",
+        hint: "Furniture, appliances, fashion",
+        icon: Sofa,
+        href: "/post/create-listing?category=home_lifestyle",
+      },
+      {
+        label: "Baby & kids",
+        hint: "Prams, toys, clothes",
+        icon: Baby,
+        href: "/post/create-listing?category=baby_kids",
+      },
+      {
+        label: "Farming",
+        hint: "Livestock, crops, equipment",
+        icon: Tractor,
+        href: "/post/create-listing?category=farming_agriculture",
+      },
+      {
+        label: "Job or service",
+        hint: "Vacancy or once-off service",
+        icon: Briefcase,
+        href: "/post/create-listing?category=jobs_services",
+      },
+    ],
   },
   {
+    id: "business",
     title: "Mzansi Business",
-    tagline: "Create a profile for your business.",
-    examples: ["Salons", "Trades", "Restaurants"],
-    cta: "Create a business profile",
+    fitsWhen: "You run a business and want customers to find you.",
+    question: "How do customers reach you?",
     icon: Building2,
-    href: "/post/create-business",
-    image: "/images/showrooms/business-v2-mobile.avif",
     tile: "area-business-tile",
     accent: "bg-brand-blue-600 dark:bg-brand-blue-400",
-    ring: "hover:border-brand-blue-400/70 focus-visible:ring-brand-blue-500/50 dark:hover:border-brand-blue-600",
-    ctaColor: "text-brand-blue-700 dark:text-brand-blue-300",
+    choices: [
+      {
+        label: "Own premises",
+        hint: "Shop, office, salon or workshop",
+        icon: Store,
+        href: "/post/create-business?type=standalone_shop",
+      },
+      {
+        label: "From home",
+        hint: "Run from where you live",
+        icon: House,
+        href: "/post/create-business?type=home_business",
+      },
+      {
+        label: "Mobile service",
+        hint: "You travel to your clients",
+        icon: Truck,
+        href: "/post/create-business?type=mobile_service",
+      },
+      {
+        label: "Online only",
+        hint: "Website or social media",
+        icon: Globe,
+        href: "/post/create-business?type=online_only",
+      },
+      {
+        label: "Mall store",
+        hint: "Inside a shopping centre",
+        icon: Building2,
+        href: "/post/create-business?type=mall_store",
+      },
+      {
+        label: "Market stall",
+        hint: "Flea or farmers market",
+        icon: Tent,
+        href: "/post/create-business?type=market_stall",
+      },
+    ],
   },
   {
+    id: "tourism",
     title: "Tourism & Events",
-    tagline: "List a stay, experience or event.",
-    examples: ["Guest houses", "Tours", "Festivals"],
-    cta: "List a stay or event",
+    fitsWhen: "You host visitors or you're putting on an event.",
+    question: "What are you listing?",
     icon: TreePalm,
-    href: "/post/create-tourism",
-    image: "/images/showrooms/tourism-v2-mobile.avif",
     tile: "area-tourism-tile",
     accent: "bg-sunset-600 dark:bg-sunset-400",
-    ring: "hover:border-sunset-400/70 focus-visible:ring-sunset-500/50 dark:hover:border-sunset-600",
-    ctaColor: "text-sunset-700 dark:text-sunset-300",
+    choices: [
+      {
+        label: "Stay, tour or attraction",
+        hint: "Guest house, lodge, tours, safaris",
+        icon: BedDouble,
+        href: "/post/create-tourism?type=tourism_business",
+      },
+      {
+        label: "Event",
+        hint: "Festival, gig, market or expo",
+        icon: CalendarDays,
+        href: "/post/create-tourism?type=event",
+      },
+    ],
   },
 ];
 
-const HOW_IT_WORKS: readonly { icon: LucideIcon; title: string }[] = [
-  { icon: ShoppingBag, title: "Choose an area" },
-  { icon: Camera, title: "Add details and photos" },
-  { icon: ClipboardCheck, title: "We check it, then it goes live" },
+// The mix-ups people hit most often, each with where it belongs.
+const EXAMPLES: readonly { situation: string; destination: string; href: string }[] = [
+  {
+    situation: "Selling your own car",
+    destination: "Market · Vehicle",
+    href: "/post/create-listing?category=vehicles",
+  },
+  {
+    situation: "You own a car dealership",
+    destination: "Business · Own premises",
+    href: "/post/create-business?type=standalone_shop",
+  },
+  {
+    situation: "Renting out a flat by the month",
+    destination: "Market · Property",
+    href: "/post/create-listing?category=property",
+  },
+  {
+    situation: "Renting out rooms by the night",
+    destination: "Tourism · Stay",
+    href: "/post/create-tourism?type=tourism_business",
+  },
+  {
+    situation: "Hiring staff for your shop",
+    destination: "Market · Job or service",
+    href: "/post/create-listing?category=jobs_services",
+  },
+  {
+    situation: "You're a plumber or electrician",
+    destination: "Business · Mobile service",
+    href: "/post/create-business?type=mobile_service",
+  },
 ];
 
 function getVerificationNote(status: AccountVerificationStatus | null | undefined) {
@@ -171,15 +306,15 @@ export function PostCreateClient({
     };
   }, [initialVerificationStatus, isAuthenticated, resolvedVerificationStatus]);
 
-  function handleCategoryClick(optionHref: string) {
+  function handleChoiceClick(targetHref: string) {
     if (pendingHref) return;
 
-    const href = buildPostCategoryHref(optionHref, verificationStatus);
-    setPendingHref(href);
-    router.push(href);
+    setPendingHref(targetHref);
+    router.push(buildPostCategoryHref(targetHref, verificationStatus));
   }
 
   const showVerificationCta = verificationStatus !== "pending_review";
+  const isBusy = pendingHref !== null;
 
   return (
     <div className="space-y-6">
@@ -215,122 +350,115 @@ export function PostCreateClient({
         </Alert>
       )}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-5">
-        {POST_OPTIONS.map((option) => {
-          const Icon = option.icon;
-          const href = buildPostCategoryHref(option.href, verificationStatus);
-          const isPending = pendingHref === href;
-          const isDisabled = pendingHref !== null;
+      <div className="space-y-4">
+        {POST_AREAS.map((area) => {
+          const AreaIcon = area.icon;
+          const headingId = `post-area-${area.id}`;
 
           return (
-            <button
-              key={option.href}
-              type="button"
-              onClick={() => handleCategoryClick(option.href)}
-              disabled={isDisabled}
-              className={cn(
-                "group relative flex h-full w-full flex-col overflow-hidden rounded-3xl border border-border/70 bg-card text-left elev-xs transition-all duration-200 ease-out hover:-translate-y-0.5 hover:elev-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-wait motion-reduce:transition-none motion-reduce:hover:translate-y-0",
-                option.ring,
-                isPending && "ring-2 ring-offset-2",
-                isDisabled && !isPending && "opacity-60"
-              )}
+            <section
+              key={area.id}
+              aria-labelledby={headingId}
+              className="surface-card relative overflow-hidden p-4 sm:p-5 lg:grid lg:grid-cols-[16rem_1fr] lg:gap-6"
             >
-              <span aria-hidden="true" className={cn("h-1.5 w-full md:hidden", option.accent)} />
-              <span className="relative hidden aspect-[16/9] w-full overflow-hidden md:block">
-                <Image
-                  src={option.image}
-                  alt=""
-                  fill
-                  sizes="(min-width: 1280px) 400px, 33vw"
-                  className="object-cover transition-transform duration-500 group-hover:scale-[1.03] motion-reduce:transition-none"
-                />
-                <span
-                  aria-hidden="true"
-                  className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent"
-                />
-              </span>
+              <span
+                aria-hidden="true"
+                className={cn("absolute inset-y-0 left-0 w-1", area.accent)}
+              />
 
-              <span className="flex flex-1 flex-col gap-4 p-5">
-                <span className="flex items-start gap-3.5">
-                  <span
-                    aria-hidden="true"
-                    className="relative z-10 shrink-0 rounded-[1.1rem] md:-mt-12 md:bg-card md:p-1 md:elev-sm"
+              <div className="flex items-start gap-3 lg:flex-col lg:gap-3">
+                <span aria-hidden="true" className={cn("icon-tile h-11 w-11", area.tile)}>
+                  <AreaIcon className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <h2
+                    id={headingId}
+                    className="font-display text-lg font-bold leading-tight tracking-tight text-foreground"
                   >
-                    <span
-                      className={cn(
-                        "flex h-12 w-12 items-center justify-center rounded-2xl md:h-14 md:w-14",
-                        option.tile
-                      )}
-                    >
-                      <Icon className="h-6 w-6" />
-                    </span>
-                  </span>
-                  <span className="min-w-0 pt-0.5 md:pt-0">
-                    <span className="block font-display text-xl font-bold leading-tight tracking-tight text-foreground">
-                      {option.title}
-                    </span>
-                    <span className="mt-1 block text-sm font-medium text-foreground/80">
-                      {option.tagline}
-                    </span>
-                  </span>
-                </span>
+                    {area.title}
+                  </h2>
+                  <p className="mt-1 text-sm text-foreground/80">{area.fitsWhen}</p>
+                </div>
+              </div>
 
-                <span className="flex flex-wrap gap-1.5">
-                  {option.examples.map((example) => (
-                    <span key={example} className="chip py-0.5">
-                      {example}
-                    </span>
-                  ))}
-                </span>
+              <div className="mt-4 lg:mt-0">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {area.question}
+                </p>
+                <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                  {area.choices.map((choice) => {
+                    const ChoiceIcon = choice.icon;
+                    const isPending = pendingHref === choice.href;
 
-                <span
-                  className={cn(
-                    "mt-auto flex min-h-11 items-center justify-between gap-2 border-t border-border/60 pt-3 text-sm font-semibold",
-                    option.ctaColor
-                  )}
-                >
-                  {isPending ? (
-                    <span className="inline-flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                      Loading...
-                    </span>
-                  ) : (
-                    <span className="underline-offset-4 group-hover:underline">{option.cta}</span>
-                  )}
-                </span>
-              </span>
-            </button>
+                    return (
+                      <li key={choice.href}>
+                        <button
+                          type="button"
+                          onClick={() => handleChoiceClick(choice.href)}
+                          disabled={isBusy}
+                          aria-label={`${choice.label}: ${choice.hint} (${area.title})`}
+                          className={cn(
+                            "group flex h-full min-h-14 w-full items-center gap-3 rounded-xl border border-border/70 bg-card px-3 py-2.5 text-left transition-colors hover:border-foreground/25 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-wait",
+                            isPending && "border-foreground/30 bg-muted/60",
+                            isBusy && !isPending && "opacity-60"
+                          )}
+                        >
+                          <span aria-hidden="true" className="text-foreground/70">
+                            {isPending ? (
+                              <Loader2 className="h-5 w-5 animate-spin" />
+                            ) : (
+                              <ChoiceIcon className="h-5 w-5" />
+                            )}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-semibold text-foreground">
+                              {choice.label}
+                            </span>
+                            <span className="block text-xs text-muted-foreground">
+                              {isPending ? "Opening form..." : choice.hint}
+                            </span>
+                          </span>
+                          <ChevronRight
+                            aria-hidden="true"
+                            className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"
+                          />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </section>
           );
         })}
       </div>
 
-      <section
-        aria-labelledby="post-how-it-works"
-        className="surface-card grid gap-4 p-5 sm:grid-cols-[auto_1fr] sm:items-center sm:gap-8"
-      >
-        <h2
-          id="post-how-it-works"
-          className="font-display text-lg font-bold tracking-tight text-foreground"
-        >
-          How posting works
-        </h2>
-        <ol className="grid gap-4 sm:grid-cols-3">
-          {HOW_IT_WORKS.map((item, index) => {
-            const StepIcon = item.icon;
-            return (
-              <li key={item.title} className="flex items-center gap-3">
-                <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground/80">
-                  <StepIcon className="h-5 w-5" aria-hidden="true" />
-                  <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-brand-green-600 text-[11px] font-bold text-white dark:bg-brand-green-400 dark:text-brand-green-950">
-                    {index + 1}
-                  </span>
+      <details className="surface-card group p-4 sm:p-5">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&::-webkit-details-marker]:hidden">
+          Not sure where it fits? See common examples
+          <ChevronRight
+            aria-hidden="true"
+            className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90 motion-reduce:transition-none"
+          />
+        </summary>
+        <ul className="mt-3 divide-y divide-border/60">
+          {EXAMPLES.map((example) => (
+            <li key={example.situation}>
+              <button
+                type="button"
+                onClick={() => handleChoiceClick(example.href)}
+                disabled={isBusy}
+                className="flex min-h-11 w-full items-center justify-between gap-3 py-2 text-left text-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait"
+              >
+                <span className="text-foreground/80">{example.situation}</span>
+                <span className="shrink-0 font-semibold text-foreground">
+                  {example.destination}
                 </span>
-                <span className="min-w-0 text-sm font-semibold text-foreground">{item.title}</span>
-              </li>
-            );
-          })}
-        </ol>
-      </section>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </details>
 
       <p className="text-sm text-muted-foreground">
         Need more visibility after launch?{" "}

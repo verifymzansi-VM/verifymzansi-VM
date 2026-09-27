@@ -11,7 +11,6 @@ import { Suspense } from "react";
 import { cookies } from "next/headers";
 import { PageHeader } from "@/components/layout";
 import { DisableMobileAutoplay } from "@/contexts/autoplay-policy-context";
-import { TrustStrip } from "@/components/layout/trust-strip";
 import { MzansiBusinessGrid } from "./grid";
 import { MzansiBusinessFilterSync } from "./filter-sync";
 import { ListingGridSkeleton } from "@/components/listings/listing-skeleton";
@@ -124,8 +123,6 @@ export default async function MzansiBusinessPage() {
         <Suspense fallback={null}>
           <HomeProgrammeShowcase placement="business" />
         </Suspense>
-
-        <TrustStrip variant="blue" title="Latest Mzansi Businesses" />
 
         {/* ── Main Content ─────────────────────────────────── */}
         <div className="container-page py-8 space-y-7 lg:py-10">

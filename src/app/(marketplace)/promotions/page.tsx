@@ -11,7 +11,6 @@ import {
   promotionToCarouselItem,
 } from "@/components/showrooms/carousel-item-transforms";
 import { tourismEventsShowroomBackground } from "@/components/showrooms/showroom-backgrounds";
-import { TrustStrip } from "@/components/layout/trust-strip";
 import { DisableMobileAutoplay } from "@/contexts/autoplay-policy-context";
 import { getOwnerColumn, withOwnerColumn } from "@/lib/account/compat";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
@@ -227,8 +226,6 @@ export default async function PromotionsPage() {
         <Suspense fallback={null}>
           <HomeProgrammeShowcase placement="tourism" />
         </Suspense>
-
-        <TrustStrip variant="green" title="Latest Tourism & Events" />
 
         <Suspense fallback={null}>
           <PromotionsExplorer />

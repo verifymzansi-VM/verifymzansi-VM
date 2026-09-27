@@ -106,13 +106,15 @@ vi.mock("@/components/layout/page-header", () => ({
 
 vi.mock("@/components/listings/category-picker", () => ({
   CategoryPicker: ({
+    value,
     onChange,
     onAttributeChange,
   }: {
+    value: string;
     onChange: (value: string) => void;
     onAttributeChange: (name: string, value: string | boolean) => void;
   }) => (
-    <div data-testid="category-picker">
+    <div data-testid="category-picker" data-value={value}>
       <button
         type="button"
         onClick={() => {
@@ -208,6 +210,20 @@ describe("CreateListingPage", () => {
     expect(within(stepNav).getAllByText("Details").length).toBeGreaterThan(0);
     expect(within(stepNav).getAllByText("Price & Location").length).toBeGreaterThan(0);
     expect(within(stepNav).getAllByText("Media").length).toBeGreaterThan(0);
+  });
+
+  it("preselects the category chosen on the post chooser", async () => {
+    window.history.replaceState(null, "", "/post/create-listing?category=vehicles");
+
+    try {
+      render(<CreateListingPage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("category-picker")).toHaveAttribute("data-value", "vehicles");
+      });
+    } finally {
+      window.history.replaceState(null, "", "/");
+    }
   });
 
   it("shows inline validation instead of only using toast errors", () => {

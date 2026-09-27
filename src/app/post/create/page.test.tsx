@@ -91,36 +91,56 @@ describe("CreatePostPage", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders the current category cards with the current category selection UI", async () => {
+  it("renders each area with the choices its form supports", async () => {
     render(await CreatePostPage());
 
-    expect(screen.getAllByText("Mzansi Market").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Mzansi Business").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Tourism & Events").length).toBeGreaterThan(0);
     expect(
       screen.getByRole("heading", { name: "What would you like to post?" })
     ).toBeInTheDocument();
-    expect(screen.getByText("Need more visibility after launch?")).toBeInTheDocument();
-    expect(screen.getByText("Sell or rent out one item.")).toBeInTheDocument();
-    expect(screen.getByText("Create a profile for your business.")).toBeInTheDocument();
-    expect(screen.getByText("List a stay, experience or event.")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "How posting works" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Mzansi Market/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Mzansi Business/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Tourism & Events/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Mzansi Market" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Mzansi Business" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Tourism & Events" })).toBeInTheDocument();
+    expect(screen.getByText("What is it?")).toBeInTheDocument();
+    expect(screen.getByText("How do customers reach you?")).toBeInTheDocument();
+    expect(screen.getByText("What are you listing?")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Vehicle:/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Mobile service:/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Event:/ })).toBeInTheDocument();
+    expect(screen.getByText("Not sure where it fits? See common examples")).toBeInTheDocument();
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /See advertising options/i })).toHaveAttribute(
       "href",
       "/advertise"
     );
   });
 
+  it("opens each form with the chosen category or type preselected", async () => {
+    render(await CreatePostPage());
+
+    fireEvent.click(screen.getByRole("button", { name: /^Mobile service:/ }));
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith("/post/create-business?type=mobile_service");
+    });
+  });
+
+  it("routes common examples to the right area", async () => {
+    render(await CreatePostPage());
+
+    fireEvent.click(screen.getByRole("button", { name: /Renting out rooms by the night/ }));
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith("/post/create-tourism?type=tourism_business");
+    });
+  });
+
   it("sends verified users directly to the create forms", async () => {
     render(await CreatePostPage());
 
-    fireEvent.click(screen.getByRole("button", { name: /Mzansi Market/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Vehicle:/ }));
 
     await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith("/post/create-listing");
+      expect(mockPush).toHaveBeenCalledWith("/post/create-listing?category=vehicles");
     });
   });
 
@@ -135,10 +155,12 @@ describe("CreatePostPage", () => {
       expect(screen.getByText("Verification required before posting")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /Mzansi Market/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Vehicle:/ }));
 
     await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith("/verification?returnUrl=%2Fpost%2Fcreate-listing");
+      expect(mockPush).toHaveBeenCalledWith(
+        "/verification?returnUrl=%2Fpost%2Fcreate-listing%3Fcategory%3Dvehicles"
+      );
     });
   });
 
@@ -151,7 +173,7 @@ describe("CreatePostPage", () => {
 
     await waitFor(() => {
       expect(screen.queryByText("Verification required before posting")).not.toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /Mzansi Market/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /^Vehicle:/ })).toBeInTheDocument();
     });
   });
 
@@ -159,7 +181,7 @@ describe("CreatePostPage", () => {
     render(await CreatePostPage());
 
     expect(screen.queryByText("Checking access")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Mzansi Market/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Vehicle:/ })).toBeInTheDocument();
   });
 
   it("updates the posting gate copy when the verification status refresh resolves to pending review", async () => {
@@ -181,25 +203,27 @@ describe("CreatePostPage", () => {
       ).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /Mzansi Market/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Vehicle:/ }));
 
     await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith("/verification?returnUrl=%2Fpost%2Fcreate-listing");
+      expect(mockPush).toHaveBeenCalledWith(
+        "/verification?returnUrl=%2Fpost%2Fcreate-listing%3Fcategory%3Dvehicles"
+      );
     });
   });
 
   it("shows pending loading feedback and blocks repeated category clicks", async () => {
     render(await CreatePostPage());
 
-    const marketButton = screen.getByRole("button", { name: /Mzansi Market/i });
-    const businessButton = screen.getByRole("button", { name: /Mzansi Business/i });
+    const marketButton = screen.getByRole("button", { name: /^Vehicle:/ });
+    const businessButton = screen.getByRole("button", { name: /^Event:/ });
 
     fireEvent.click(marketButton);
 
     expect(mockPush).toHaveBeenCalledTimes(1);
-    expect(mockPush).toHaveBeenCalledWith("/post/create-listing");
+    expect(mockPush).toHaveBeenCalledWith("/post/create-listing?category=vehicles");
     expect(marketButton).toBeDisabled();
-    expect(screen.getByText("Loading...")).toBeInTheDocument();
+    expect(screen.getByText("Opening form...")).toBeInTheDocument();
     expect(businessButton).toBeDisabled();
 
     fireEvent.click(businessButton);

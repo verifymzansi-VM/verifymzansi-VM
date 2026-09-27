@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import MzansiMarketPage from "./page";
 
@@ -6,10 +6,9 @@ const { mockCreateClient } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
 }));
 
-const { carouselSpy, pageHeaderSpy, trustStripSpy } = vi.hoisted(() => ({
+const { carouselSpy, pageHeaderSpy } = vi.hoisted(() => ({
   carouselSpy: vi.fn(),
   pageHeaderSpy: vi.fn(),
-  trustStripSpy: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -23,13 +22,6 @@ vi.mock("@/components/showrooms/showroom-card-carousel", () => ({
   }) => {
     carouselSpy(props);
     return <div data-testid="showroom-card-carousel" />;
-  },
-}));
-
-vi.mock("@/components/layout/trust-strip", () => ({
-  TrustStrip: (props: { title?: string; variant?: string }) => {
-    trustStripSpy(props);
-    return <div data-testid="trust-strip" />;
   },
 }));
 
@@ -111,15 +103,10 @@ describe("MzansiMarketPage", () => {
     );
   });
 
-  it("labels the trust strip for the market route", async () => {
+  it("shows no trust strip under the market showroom", async () => {
     render(await MzansiMarketPage());
 
-    expect(trustStripSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        variant: "green",
-        title: "Latest on Mzansi Market",
-      })
-    );
+    expect(screen.queryByText("Phone & ID checked")).not.toBeInTheDocument();
   });
 
   it("uses Mzansi Market as the primary page heading", async () => {

@@ -54,6 +54,12 @@ export function CategoryPicker({
   errors = {},
 }: CategoryPickerProps) {
   const [expanded, setExpanded] = useState<ListingCategory | "">(value);
+  const [syncedValue, setSyncedValue] = useState(value);
+  // Follow value set from outside (restored draft or a preselected category).
+  if (value !== syncedValue) {
+    setSyncedValue(value);
+    setExpanded(value);
+  }
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const categoryLabelId = `${useId()}-category-label`;
   const selectedCategory = CATEGORIES.find((c) => c.value === expanded);

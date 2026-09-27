@@ -7,7 +7,6 @@ import { mzansiMarketShowroomBackground } from "@/components/showrooms/showroom-
 import { listingToCarouselItem } from "@/components/showrooms/carousel-item-transforms";
 import { PageHeader } from "@/components/layout";
 import { DisableMobileAutoplay } from "@/contexts/autoplay-policy-context";
-import { TrustStrip } from "@/components/layout/trust-strip";
 import { ListingFilterSidebar } from "@/components/listings/listing-filter-sidebar";
 import { ListingFilterDrawer } from "@/components/listings/listing-filter-drawer";
 import { ListingGridHeader } from "@/components/listings/listing-grid-header";
@@ -103,8 +102,6 @@ export default async function MzansiMarketPage() {
         <Suspense fallback={null}>
           <HomeProgrammeShowcase placement="market" />
         </Suspense>
-
-        <TrustStrip variant="green" title="Latest on Mzansi Market" />
 
         {/* ── Main Content ─────────────────────────────────── */}
         <div className="container-page py-8 space-y-7 lg:py-10">

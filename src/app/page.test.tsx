@@ -92,40 +92,24 @@ describe("HomePage", () => {
     const showroom = screen.getByRole("region", { name: "Showroom" });
     expect(screen.getByRole("main").children[1]).toBe(showroom);
     expect(showroom).toContainElement(heroBanner);
-    const categories = screen.getByRole("navigation", {
-      name: "VerifyMzansi primary categories",
-    });
-    expect(heroBanner.compareDocumentPosition(categories)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(categories.compareDocumentPosition(promotionsShowcase)).toBe(
+    // The category tiles are gone: the rails follow the showroom directly.
+    expect(
+      screen.queryByRole("navigation", { name: "VerifyMzansi primary categories" })
+    ).not.toBeInTheDocument();
+    expect(heroBanner.compareDocumentPosition(promotionsShowcase)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     );
-    // Only the three areas are named; no invented sub-categories.
-    expect(within(categories).getAllByRole("link")).toHaveLength(3);
   });
 
-  it("uses canonical category href values", async () => {
+  it("links the post-for-free band to posting and pricing", async () => {
     const ui = await HomePage();
     render(ui);
-
-    const primaryCategories = screen.getByRole("navigation", {
-      name: "VerifyMzansi primary categories",
-    });
 
     expect(screen.getByRole("link", { name: /Post for Free/i })).toHaveAttribute(
       "href",
       "/post/create"
     );
     expect(screen.getByRole("link", { name: /Pricing/i })).toHaveAttribute("href", "/pricing");
-    expect(within(primaryCategories).getByRole("link", { name: /Mzansi Market/i })).toHaveAttribute(
-      "href",
-      "/mzansi-market"
-    );
-    expect(
-      within(primaryCategories).getByRole("link", { name: /Mzansi Business/i })
-    ).toHaveAttribute("href", "/mzansi-business");
-    expect(
-      within(primaryCategories).getByRole("link", { name: /Tourism & Events/i })
-    ).toHaveAttribute("href", "/tourism-events");
   });
 
   it("exposes the three public categories in search metadata and structured data", async () => {
@@ -183,6 +167,22 @@ describe("HomePage", () => {
     );
     expect(screen.getByRole("link", { name: /Pricing/i })).toHaveAttribute("href", "/pricing");
     expect(screen.getByRole("link", { name: /Advertise/i })).toHaveAttribute("href", "/advertise");
-    expect(screen.getByRole("heading", { name: "Your first post is free." })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Trust & Safety/i })).toHaveAttribute(
+      "href",
+      "/trust-safety"
+    );
+  });
+
+  it("explains the site and its advantages below the rails", async () => {
+    const ui = await HomePage();
+    render(ui);
+
+    const about = screen.getByRole("region", { name: "Show it on video. Sell it with trust." });
+    expect(screen.getByRole("main").lastElementChild).toBe(about);
+    expect(within(about).getAllByRole("listitem")).toHaveLength(4);
+    expect(within(about).getByText(/Your first post is free/)).toBeInTheDocument();
+    expect(
+      within(about).getByRole("heading", { name: "Advertise with video" })
+    ).toBeInTheDocument();
   });
 });

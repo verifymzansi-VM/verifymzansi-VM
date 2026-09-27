@@ -4,5 +4,10 @@ import { generatedMzansiShowroomBackground } from "@/components/showrooms/showro
 
 /** Skeleton shown while the HeroBanner data streams in via Suspense. */
 export function HeroBannerSkeleton() {
-  return <ShowroomCardCarouselSkeleton background={generatedMzansiShowroomBackground} />;
+  return (
+    <ShowroomCardCarouselSkeleton
+      background={generatedMzansiShowroomBackground}
+      className="showroom-fill"
+    />
+  );
 }

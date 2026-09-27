@@ -102,6 +102,7 @@ export async function HeroBannerWithData() {
       emptyDescription="Explore business profiles, listings, tourism, and events across South Africa."
       emptyMediaUrl="/images/fallbacks/hero-home.svg"
       background={generatedMzansiShowroomBackground}
+      className="showroom-fill"
     />
   );
 }

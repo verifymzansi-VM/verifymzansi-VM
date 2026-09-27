@@ -8,9 +8,8 @@ const { mockCreateClient, mockCookies, mockGetOwnerColumn } = vi.hoisted(() => (
   mockGetOwnerColumn: vi.fn(),
 }));
 
-const { carouselSpy, trustStripSpy } = vi.hoisted(() => ({
+const { carouselSpy } = vi.hoisted(() => ({
   carouselSpy: vi.fn(),
-  trustStripSpy: vi.fn(),
 }));
 
 vi.mock("next/headers", () => ({
@@ -30,13 +29,6 @@ vi.mock("@/components/showrooms/showroom-card-carousel", () => ({
   }) => {
     carouselSpy(props);
     return <div data-testid="showroom-card-carousel" />;
-  },
-}));
-
-vi.mock("@/components/layout/trust-strip", () => ({
-  TrustStrip: (props: { title?: string; variant?: string }) => {
-    trustStripSpy(props);
-    return <div data-testid="trust-strip" />;
   },
 }));
 
@@ -255,7 +247,7 @@ describe("PromotionsPage", () => {
     );
   });
 
-  it("labels the trust strip for the tourism route", async () => {
+  it("shows no trust strip under the tourism showroom", async () => {
     mockCreateClient.mockResolvedValue(
       createSupabaseClient({
         businesses: [],
@@ -265,12 +257,7 @@ describe("PromotionsPage", () => {
 
     render(await PromotionsPage());
 
-    expect(trustStripSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        variant: "green",
-        title: "Latest Tourism & Events",
-      })
-    );
+    expect(screen.queryByText("Phone & ID checked")).not.toBeInTheDocument();
   });
 
   it("renders the tourism empty state when owner detection and hero queries fail", async () => {
@@ -287,10 +274,6 @@ describe("PromotionsPage", () => {
         items: expect.arrayContaining([expect.objectContaining({ id: "tourism-events-empty" })]),
       })
     );
-    expect(trustStripSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: "Latest Tourism & Events",
-      })
-    );
+    expect(screen.queryByText("Phone & ID checked")).not.toBeInTheDocument();
   });
 });

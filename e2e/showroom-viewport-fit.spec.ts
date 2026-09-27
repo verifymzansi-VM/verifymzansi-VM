@@ -116,19 +116,19 @@ for (const viewport of sizes) {
         expect(Math.abs(mediaBox.width - (mediaBox.height * 9) / 16)).toBeLessThan(1);
       }
       if (viewport.width === 390 && viewport.height === 844) {
-        // Matches --showroom-card-width (260px), the mobile card width cap in globals.css.
-        expect(box.width).toBeCloseTo(260, 0);
+        // Tall phones grow the card to the height left under the header (globals.css
+        // --showroom-reserved-height), still leaving the side cards room to peek in.
+        expect(box.width).toBeGreaterThan(300);
+        expect(box.width).toBeLessThanOrEqual(viewport.width - 72 + 1);
       }
       const showroomBox = await rectOf(showroom);
       expect(box.y).toBeGreaterThanOrEqual(showroomBox.y);
       expect(box.y + box.height).toBeLessThanOrEqual(showroomBox.y + showroomBox.height);
-      // Title, price and place sit on the media (TikTok-style) and stay inside the card.
-      const overlayBox = await rectOf(card.locator("[data-card-overlay]").first());
-      expect(overlayBox.height).toBeGreaterThan(0);
-      expect(overlayBox.y).toBeGreaterThanOrEqual(mediaBox.y - 1);
-      expect(overlayBox.y + overlayBox.height).toBeLessThanOrEqual(
-        mediaBox.y + mediaBox.height + 1
-      );
+      // Logo, title and place sit in a row under the media and stay inside the card.
+      const metadataBox = await rectOf(card.locator("[data-card-metadata]").first());
+      expect(metadataBox.height).toBeGreaterThan(0);
+      expect(metadataBox.y).toBeGreaterThanOrEqual(mediaBox.y + mediaBox.height - 1);
+      expect(metadataBox.y + metadataBox.height).toBeLessThanOrEqual(box.y + box.height + 1);
       if (route.path === "/dev/showroom-drag") {
         const sizingCard = showroom.locator(".showroom-card-frame.invisible");
         const sizingHeight = await sizingCard.evaluate((el) => el.getBoundingClientRect().height);
