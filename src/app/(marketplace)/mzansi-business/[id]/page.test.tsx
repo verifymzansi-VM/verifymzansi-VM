@@ -47,12 +47,6 @@ vi.mock("@/components/layout/header", () => ({
 vi.mock("@/components/layout/footer", () => ({
   Footer: () => <footer>Footer</footer>,
 }));
-vi.mock("@/components/listings/business-gallery", () => ({
-  BusinessGallery: () => <div>Gallery</div>,
-}));
-vi.mock("@/components/listings/business-promo-video", () => ({
-  BusinessPromoVideo: () => <div>Video</div>,
-}));
 vi.mock("@/components/listings/promotion-card", () => ({
   PromotionCard: (props: unknown) => {
     promotionCardSpy(props);

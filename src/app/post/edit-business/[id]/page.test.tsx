@@ -56,19 +56,6 @@ vi.mock("@/components/business/layouts/business-layout-router", () => ({
 }));
 
 vi.mock("@/components/business/business-detail-content", () => ({
-  BusinessDetailContent: ({
-    business,
-  }: {
-    business: { business_name: string; business_details?: { service_suburb?: string } | null };
-  }) => (
-    <div>
-      <div>Business Detail Preview</div>
-      <div>{business.business_name}</div>
-      {business.business_details?.service_suburb ? (
-        <div>{business.business_details.service_suburb}</div>
-      ) : null}
-    </div>
-  ),
   BusinessDetailsCard: () => <div>Business Details Card</div>,
 }));
 
