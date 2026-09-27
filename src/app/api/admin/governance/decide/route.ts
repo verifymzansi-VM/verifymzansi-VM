@@ -199,6 +199,7 @@ export async function POST(request: Request) {
               action: enforcementAction,
               reason: rationale,
               moderatorId: guard.user.id,
+              actorRole: guard.actorRole,
               reportId: decision.case_type === "report" ? decision.case_id : undefined,
             });
           } catch (enforcementErr) {

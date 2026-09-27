@@ -61,8 +61,6 @@ function mockSupabase(overrides: {
   stepsData?: Array<{ step_type: string; status: string }>;
   stepsError?: { message: string; code?: string } | null;
   updateResult?: { error: null };
-  /** Simulate the auto-unsuspend update chain result */
-  unsuspendResult?: { error?: { message: string } | null };
 }) {
   return {
     from: vi.fn().mockImplementation((table: string) => {
@@ -84,9 +82,7 @@ function mockSupabase(overrides: {
           error: overrides.profileError ?? null,
         }),
         update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({
-            error: overrides.unsuspendResult?.error ?? null,
-          }),
+          eq: vi.fn().mockResolvedValue({ error: null }),
         }),
       };
     }),
@@ -403,13 +399,12 @@ describe("checkBanEnforcement", () => {
     expect(location.searchParams.get("suspended")).toBe("true");
   });
 
-  it("auto-unsuspends users when suspendedUntil has passed and DB update succeeds", async () => {
+  it("lets an expired suspension through without writing account_status", async () => {
     const supabase = mockSupabase({
       profileData: {
         account_status: "suspended",
         suspended_until: "2020-01-01T00:00:00Z",
       },
-      unsuspendResult: { error: null },
     });
     const result = await checkBanEnforcement(
       createRequest("/billing"),
@@ -419,25 +414,12 @@ describe("checkBanEnforcement", () => {
       null
     );
     expect(result.response).toBeNull();
-  });
-
-  it("still treats user as suspended when auto-unsuspend DB update errors", async () => {
-    const supabase = mockSupabase({
-      profileData: {
-        account_status: "suspended",
-        suspended_until: "2020-01-01T00:00:00Z",
-      },
-      unsuspendResult: { error: { message: "connection lost" } },
-    });
-    const result = await checkBanEnforcement(
-      createRequest("/billing"),
-      supabase,
-      "user-1",
-      true,
-      null
-    );
-    expect(result.response).not.toBeNull();
-    expect(result.response!.status).toBe(307);
+    // The member's own session cannot change account_status; the
+    // lift-expired-suspensions cron job makes the durable change.
+    const fromMock = (supabase as unknown as { from: ReturnType<typeof vi.fn> }).from;
+    for (const call of fromMock.mock.results) {
+      expect(call.value.update).not.toHaveBeenCalled();
+    }
   });
 
   it("allows active users through", async () => {

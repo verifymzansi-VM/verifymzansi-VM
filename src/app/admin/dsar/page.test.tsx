@@ -2,12 +2,30 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import AdminDSARPage from "./page";
 
-const { mockGetUser, mockSessionFrom, mockAdminFrom, redirectMock } = vi.hoisted(() => ({
-  mockGetUser: vi.fn(),
-  mockSessionFrom: vi.fn(),
-  mockAdminFrom: vi.fn(),
-  redirectMock: vi.fn(),
-}));
+const { mockGetUser, mockSessionFrom, mockAdminFrom, redirectMock, mockVerifyCapability } =
+  vi.hoisted(() => ({
+    mockGetUser: vi.fn(),
+    mockSessionFrom: vi.fn(),
+    mockAdminFrom: vi.fn(),
+    redirectMock: vi.fn(() => {
+      throw new Error("NEXT_REDIRECT");
+    }),
+    mockVerifyCapability: vi.fn(),
+  }));
+
+/** Chainable dsar_cases query stub resolving to `result` at `.range()`. */
+function dsarQuery(result: { data: unknown[] | null; count?: number | null; error?: unknown }) {
+  const builder: Record<string, ReturnType<typeof vi.fn>> = {};
+  builder.select = vi.fn(() => builder);
+  builder.in = vi.fn(() => builder);
+  builder.order = vi.fn(() => builder);
+  builder.range = vi.fn().mockResolvedValue({
+    data: result.data,
+    count: result.count ?? result.data?.length ?? 0,
+    error: result.error ?? null,
+  });
+  return builder;
+}
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
@@ -24,8 +42,8 @@ vi.mock("@/lib/supabase/admin", () => ({
   })),
 }));
 
-vi.mock("@/lib/auth/roles", () => ({
-  isAdmin: vi.fn(() => true),
+vi.mock("@/lib/auth/admin-access", () => ({
+  verifyCapabilityFromDb: mockVerifyCapability,
 }));
 
 vi.mock("next/navigation", () => ({
@@ -69,42 +87,46 @@ describe("AdminDSARPage", () => {
     mockGetUser.mockResolvedValue({
       data: { user: { id: "admin-1", app_metadata: { role: "admin" } } },
     });
+    mockVerifyCapability.mockResolvedValue(true);
   });
 
   it("passes case type and identity state to actions for submitted and in-progress requests", async () => {
-    mockAdminFrom.mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        order: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue({
-            data: [
-              {
-                id: "req-submitted",
-                requester_email: "submitted@example.com",
-                description: "Submitted request",
-                status: "submitted",
-                type: "access",
-                identity_verified: false,
-                created_at: "2026-03-10T10:00:00.000Z",
-              },
-              {
-                id: "req-progress",
-                requester_email: "progress@example.com",
-                description: "Already in progress",
-                status: "in_progress",
-                type: "deletion",
-                identity_verified: true,
-                created_at: "2026-03-10T09:00:00.000Z",
-              },
-            ],
-          }),
-        }),
-      }),
+    const query = dsarQuery({
+      data: [
+        {
+          id: "req-submitted",
+          requester_email: "submitted@example.com",
+          description: "Submitted request",
+          status: "submitted",
+          type: "access",
+          identity_verified: false,
+          created_at: "2026-03-10T10:00:00.000Z",
+        },
+        {
+          id: "req-progress",
+          requester_email: "progress@example.com",
+          description: "Already in progress",
+          status: "in_progress",
+          type: "deletion",
+          identity_verified: true,
+          created_at: "2026-03-10T09:00:00.000Z",
+        },
+      ],
     });
+    mockAdminFrom.mockReturnValue(query);
 
-    render(await AdminDSARPage());
+    render(await AdminDSARPage({ searchParams: Promise.resolve({}) }));
 
+    expect(mockVerifyCapability).toHaveBeenCalledWith(expect.anything(), "dsar:manage");
     expect(mockSessionFrom).not.toHaveBeenCalled();
     expect(mockAdminFrom).toHaveBeenCalledWith("dsar_cases");
+    expect(query.in).toHaveBeenCalledWith("status", [
+      "submitted",
+      "identity_pending",
+      "in_progress",
+    ]);
+    expect(query.order).toHaveBeenCalledWith("due_by", { ascending: true, nullsFirst: true });
+    expect(query.range).toHaveBeenCalledWith(0, 24);
     expect(screen.getByText("s***d@example.com")).toBeInTheDocument();
     expect(screen.getByText("p***s@example.com")).toBeInTheDocument();
     expect(screen.getByTestId("dsar-actions-req-submitted-submitted")).toBeInTheDocument();
@@ -125,16 +147,54 @@ describe("AdminDSARPage", () => {
   });
 
   it("uses neutral empty-state copy when there are no data requests", async () => {
-    mockAdminFrom.mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        order: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue({ data: [] }),
-        }),
-      }),
+    mockAdminFrom.mockReturnValue(dsarQuery({ data: [] }));
+
+    render(await AdminDSARPage({ searchParams: Promise.resolve({ view: "closed" }) }));
+
+    expect(screen.getByText("No closed data requests.")).toBeInTheDocument();
+  });
+
+  it("lets a governance controller in when the DB confirms dsar:manage", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "gov-1", app_metadata: { role: "governance_controller" } } },
     });
+    mockAdminFrom.mockReturnValue(dsarQuery({ data: [] }));
 
-    render(await AdminDSARPage());
+    render(await AdminDSARPage({ searchParams: Promise.resolve({}) }));
 
-    expect(screen.getByText("No data requests found.")).toBeInTheDocument();
+    expect(redirectMock).not.toHaveBeenCalled();
+    expect(screen.getByText("No open data requests.")).toBeInTheDocument();
+  });
+
+  it("redirects staff without dsar:manage", async () => {
+    mockVerifyCapability.mockResolvedValue(false);
+
+    await expect(AdminDSARPage({ searchParams: Promise.resolve({}) })).rejects.toThrow(
+      "NEXT_REDIRECT"
+    );
+    expect(redirectMock).toHaveBeenCalledWith("/dashboard");
+    expect(mockAdminFrom).not.toHaveBeenCalled();
+  });
+
+  it("pages through older cases and shows the total", async () => {
+    const query = dsarQuery({ data: [], count: 60 });
+    mockAdminFrom.mockReturnValue(query);
+
+    render(await AdminDSARPage({ searchParams: Promise.resolve({ page: "3" }) }));
+
+    expect(query.range).toHaveBeenCalledWith(50, 74);
+    expect(screen.getByText(/60 open requests · Page 3 of 3/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Previous page" })).toHaveAttribute(
+      "href",
+      "/admin/dsar?view=open&page=2"
+    );
+  });
+
+  it("shows an error instead of an empty state when the read fails", async () => {
+    mockAdminFrom.mockReturnValue(dsarQuery({ data: null, error: { message: "boom" } }));
+
+    render(await AdminDSARPage({ searchParams: Promise.resolve({}) }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("could not be loaded");
   });
 });

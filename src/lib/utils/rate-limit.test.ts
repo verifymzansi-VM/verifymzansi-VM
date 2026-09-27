@@ -1,5 +1,10 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
-import { checkRateLimit, getClientIp, getClientRateLimitIdentity } from "./rate-limit";
+import {
+  checkRateLimit,
+  checkSensitiveActionRateLimit,
+  getClientIp,
+  getClientRateLimitIdentity,
+} from "./rate-limit";
 
 describe("rate-limit", () => {
   beforeEach(() => {
@@ -174,6 +179,36 @@ describe("rate-limit", () => {
           }),
         })
       );
+    });
+  });
+
+  describe("checkSensitiveActionRateLimit", () => {
+    it("fails closed when the shared limiter is not configured", async () => {
+      vi.stubEnv("OTP_RATE_LIMITER_URL", "");
+
+      const result = await checkSensitiveActionRateLimit("staff-1", "admin:role:assign", 5);
+
+      expect(result.limited).toBe(true);
+    });
+
+    it("fails closed when the shared limiter is unreachable", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
+
+      const result = await checkSensitiveActionRateLimit("staff-2", "admin:dsar:export");
+
+      expect(result.limited).toBe(true);
+    });
+
+    it("applies the route's local limit before calling the shared limiter", async () => {
+      const fetchMock = vi.fn().mockResolvedValue({ status: 200, ok: true });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const first = await checkSensitiveActionRateLimit("staff-3", "admin:flagging:enforce", 1);
+      const second = await checkSensitiveActionRateLimit("staff-3", "admin:flagging:enforce", 1);
+
+      expect(first.limited).toBe(false);
+      expect(second.limited).toBe(true);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     });
   });
 

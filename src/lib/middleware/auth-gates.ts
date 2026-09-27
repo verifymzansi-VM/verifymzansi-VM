@@ -225,10 +225,8 @@ export async function checkBanEnforcement(
     }
 
     if (statusProfile.account_status === "suspended") {
-      const suspendResult = await handleSuspension(
+      const suspendResult = handleSuspension(
         request,
-        supabase,
-        userId,
         statusProfile.suspended_until ?? null,
         createRedirect
       );
@@ -296,10 +294,8 @@ export async function checkPostingGate(
   }
 
   if (profile?.account_status === "suspended") {
-    const suspendResult = await handleSuspension(
+    const suspendResult = handleSuspension(
       request,
-      supabase,
-      userId,
       profile.suspended_until ?? null,
       createRedirect
     );
@@ -343,38 +339,19 @@ export async function checkPostingGate(
 
 // -- Suspension helper -------------------------------------------------------
 
-async function handleSuspension(
+function handleSuspension(
   request: NextRequest,
-  supabase: SupabaseClient,
-  userId: string,
   suspendedUntil: string | null,
   createRedirect: GateRedirectFactory
-): Promise<NextResponse | null> {
+): NextResponse | null {
   const pathname = request.nextUrl.pathname;
   const isApiRoute = pathname.startsWith("/api/");
 
+  // An expired suspension no longer restricts the member. The durable status
+  // change is made by the lift-expired-suspensions cron job; a member's own
+  // session cannot change account_status (guard_account_enforcement_columns).
   if (suspendedUntil && new Date(suspendedUntil) <= new Date()) {
-    try {
-      const { error: unsuspendError } = await supabase
-        .from(ACCOUNT_PROFILE_WRITE_TABLE)
-        .update({ account_status: "active", suspended_until: null })
-        .eq("user_id", userId);
-      if (unsuspendError) {
-        logger.error("Auto-unsuspend DB update failed — treating as still suspended", {
-          userId,
-          error: unsuspendError.message,
-        });
-        // Fall through to suspension handling below
-      } else {
-        return null;
-      }
-    } catch (unsuspendErr) {
-      logger.error("Auto-unsuspend DB update failed — user will retry on next request", {
-        userId,
-        error: unsuspendErr instanceof Error ? unsuspendErr.message : "Unknown",
-      });
-      // Fall through to suspension handling below
-    }
+    return null;
   }
 
   // Avoid redirect loop: if already on /dashboard with ?suspended, let it through

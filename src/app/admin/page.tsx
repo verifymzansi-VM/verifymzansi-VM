@@ -10,6 +10,7 @@ import {
   getAreaCardCounts,
   getVerificationStepCounts,
   getSiteVisitStats,
+  getGovernanceQueueCounts,
   EMPTY_SITE_VISIT_STATS,
   type AdminDashboardStats,
   type VerificationStepCounts,
@@ -94,6 +95,7 @@ export default async function AdminPage() {
     getAreaCardCounts(),
     getVerificationStepCounts(),
     isAdminRole ? getSiteVisitStats() : Promise.resolve(EMPTY_SITE_VISIT_STATS),
+    isGovernance ? getGovernanceQueueCounts() : Promise.resolve(null),
   ]);
 
   const stats = settled[0].status === "fulfilled" ? settled[0].value : EMPTY_STATS;
@@ -113,6 +115,7 @@ export default async function AdminPage() {
         };
   const stepCounts = settled[5].status === "fulfilled" ? settled[5].value : EMPTY_STEP_COUNTS;
   const siteVisits = settled[6].status === "fulfilled" ? settled[6].value : EMPTY_SITE_VISIT_STATS;
+  const governanceCounts = settled[7].status === "fulfilled" ? settled[7].value : null;
 
   // ── Compute health status ──────────────────────────────────
   const breachedReports = reports.filter((r) => {
@@ -202,6 +205,7 @@ export default async function AdminPage() {
         areaCounts={areaCounts}
         stepCounts={stepCounts}
         extended={extended}
+        governanceCounts={governanceCounts}
       />
 
       <section className="space-y-3">

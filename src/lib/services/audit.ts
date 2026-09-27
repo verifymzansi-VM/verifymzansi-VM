@@ -47,6 +47,7 @@ export type AuditAction =
   | "account_suspended"
   | "account_banned"
   | "account_unbanned"
+  | "account_unsuspended"
   | "dsar_requested"
   | "dsar_started"
   | "dsar_completed"

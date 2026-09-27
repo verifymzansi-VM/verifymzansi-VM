@@ -26,6 +26,7 @@ import type {
   AdminDashboardStats,
   DashboardReport,
   ExtendedPlatformStats,
+  GovernanceQueueCounts,
   VerificationStepCounts,
 } from "@/lib/utils/admin-queries";
 
@@ -67,6 +68,8 @@ interface RoleCommandCenterProps {
   >;
   stepCounts: VerificationStepCounts;
   extended: ExtendedPlatformStats | null;
+  /** `null` when the counts could not be loaded — shown as unavailable, never 0. */
+  governanceCounts: GovernanceQueueCounts | null;
 }
 
 const ROLE_COPY: Record<
@@ -132,22 +135,18 @@ export function RoleCommandCenter({
   areaCounts,
   stepCounts,
   extended,
+  governanceCounts,
 }: RoleCommandCenterProps) {
   const copy = ROLE_COPY[role];
   const totalPendingContent =
     areaCounts.MZANSI_MARKET.pendingContent +
     areaCounts.MZANSI_BUSINESS.pendingContent +
     areaCounts.PROMOTIONS_EVENTS.pendingContent;
-  const totalFlags =
-    areaCounts.MZANSI_MARKET.pendingFlags +
-    areaCounts.MZANSI_BUSINESS.pendingFlags +
-    areaCounts.PROMOTIONS_EVENTS.pendingFlags;
   const busiestArea = (
     Object.entries(areaSummary) as Array<[keyof typeof AREA_CONFIG, AreaSummaryStats]>
   )
     .filter(([, areaStats]) => areaStats.pendingReview > 0)
     .sort(([, a], [, b]) => b.pendingReview - a.pendingReview)[0];
-  const latestReport = reports[0];
 
   const operationsItems: MetricItem[] = [
     {
@@ -184,8 +183,12 @@ export function RoleCommandCenter({
   const governanceItems: MetricItem[] = [
     {
       label: "Escalations",
-      value: breachedReportCount,
-      detail: breachedReportCount > 0 ? "SLA-breached or high-risk cases" : "No breached cases",
+      value: governanceCounts?.pendingDecisions ?? "Unavailable",
+      detail: governanceCounts
+        ? governanceCounts.pendingDecisions > 0
+          ? "Decisions awaiting governance approval"
+          : "No decisions waiting"
+        : "Counts could not be loaded",
       href: "/admin/governance/escalations",
     },
     {
@@ -196,10 +199,12 @@ export function RoleCommandCenter({
     },
     {
       label: "Appeals & DSAR",
-      value: totalFlags,
-      detail: latestReport
-        ? `Latest ${latestReport.severity} report: ${latestReport.category}`
-        : "No active report signal",
+      value: governanceCounts
+        ? governanceCounts.pendingAppeals + governanceCounts.openDsar
+        : "Unavailable",
+      detail: governanceCounts
+        ? `${governanceCounts.pendingAppeals} ${governanceCounts.pendingAppeals === 1 ? "appeal" : "appeals"}, ${governanceCounts.openDsar} open data ${governanceCounts.openDsar === 1 ? "request" : "requests"}`
+        : "Counts could not be loaded",
       href: "/admin/governance/appeals",
     },
   ];

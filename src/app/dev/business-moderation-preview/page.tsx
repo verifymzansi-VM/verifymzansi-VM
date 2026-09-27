@@ -1,3 +1,5 @@
+import { notFound } from "next/navigation";
+import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import {
   ModerationPreviewPanel,
   type ModerationItem,
@@ -74,7 +76,16 @@ const emptyBusinessItem: ModerationItem = {
   },
 };
 
+export const metadata = {
+  robots: { index: false, follow: false },
+};
+
 export default function BusinessModerationPreviewPage() {
+  // Local design preview only; never served in production.
+  if (process.env.NODE_ENV === "production" && !isPlaywrightTestMode()) {
+    notFound();
+  }
+
   return (
     <main className="min-h-screen bg-muted/20 px-4 py-8 md:px-8">
       <div className="mx-auto max-w-6xl space-y-8">

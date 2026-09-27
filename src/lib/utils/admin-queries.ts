@@ -985,6 +985,40 @@ export async function getExtendedPlatformStats(): Promise<ExtendedPlatformStats>
   };
 }
 
+export interface GovernanceQueueCounts {
+  pendingDecisions: number;
+  pendingAppeals: number;
+  openDsar: number;
+}
+
+/** Head-count the governance queues shown on the governor dashboard. */
+export async function getGovernanceQueueCounts(): Promise<GovernanceQueueCounts> {
+  const supabase = createAdminClient();
+  const [decisions, appeals, dsar] = await Promise.all([
+    supabase
+      .from("decision_records")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["pending_approval", "escalated"]),
+    supabase
+      .from("appeal_cases")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["submitted", "under_review"]),
+    supabase
+      .from("dsar_cases")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["submitted", "identity_pending", "in_progress"]),
+  ]);
+  const failed = [decisions, appeals, dsar].find((r) => r.error);
+  if (failed?.error) {
+    throw new Error(`Failed to count governance queues: ${failed.error.message}`);
+  }
+  return {
+    pendingDecisions: decisions.count ?? 0,
+    pendingAppeals: appeals.count ?? 0,
+    openDsar: dsar.count ?? 0,
+  };
+}
+
 /** Count moderation actions taken today, grouped by action type */
 export async function getActionsToday(area?: string): Promise<Record<string, number>> {
   const supabase = createAdminClient();

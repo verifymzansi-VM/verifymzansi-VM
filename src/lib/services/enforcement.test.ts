@@ -68,6 +68,7 @@ describe("enforcement service", () => {
       action: "warning",
       reason: "First offense",
       moderatorId: "mod-1",
+      actorRole: "moderator",
     });
 
     expect(mockFrom).toHaveBeenCalledWith("moderation_actions");
@@ -81,12 +82,25 @@ describe("enforcement service", () => {
     );
   });
 
+  it("does not change account status for a warning", async () => {
+    await enforceAction({
+      ownerId: "seller-1",
+      action: "warning",
+      reason: "First offense",
+      moderatorId: "mod-1",
+      actorRole: "moderator",
+    });
+
+    expect(mockFrom).not.toHaveBeenCalledWith("account_profiles");
+  });
+
   it("updates account profile status for ban", async () => {
     await enforceAction({
       ownerId: "seller-2",
       action: "ban",
       reason: "Fraud",
       moderatorId: "mod-1",
+      actorRole: "moderator",
     });
 
     expect(mockFrom).toHaveBeenCalledWith("account_profiles");
@@ -98,6 +112,7 @@ describe("enforcement service", () => {
       action: "ban",
       reason: "Fraud",
       moderatorId: "mod-1",
+      actorRole: "moderator",
     });
 
     expect(mockFrom).toHaveBeenCalledWith("listings");
@@ -112,12 +127,13 @@ describe("enforcement service", () => {
       action: "ban",
       reason: "Fraud",
       moderatorId: "mod-1",
+      actorRole: "governance_controller",
     });
 
     expect(logAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         actorId: "mod-1",
-        actorRole: "moderator",
+        actorRole: "governance_controller",
         action: "account_banned",
         targetType: "account_profile",
         targetId: "seller-2",
@@ -131,6 +147,7 @@ describe("enforcement service", () => {
       action: "suspend",
       reason: "Suspicious activity",
       moderatorId: "mod-2",
+      actorRole: "moderator",
       reportId: "report-1",
     });
 
@@ -164,6 +181,7 @@ describe("enforcement service", () => {
         action: "unban",
         reason: "Reversal",
         moderatorId: "mod-1",
+        actorRole: "moderator",
       })
     ).rejects.toThrow("Account profile not found for unban");
   });
@@ -184,6 +202,7 @@ describe("enforcement service", () => {
         action: "ban",
         reason: "Test",
         moderatorId: "mod-1",
+        actorRole: "moderator",
       })
     ).rejects.toThrow("Failed to update account status");
   });

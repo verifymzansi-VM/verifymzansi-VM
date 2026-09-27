@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
+import type * as RateLimitModule from "@/lib/utils/rate-limit";
 
 // ── Hoisted mocks ────────────────────────────────────────────
 
@@ -15,7 +16,9 @@ const {
   mockSendVerificationApprovedEmail,
   mockSendVerificationRejectedEmail,
   mockSendVerificationResubmissionEmail,
+  mockCheckSensitiveActionRateLimit,
 } = vi.hoisted(() => ({
+  mockCheckSensitiveActionRateLimit: vi.fn(),
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
   mockCreateNotification: vi.fn(),
@@ -76,6 +79,11 @@ vi.mock("@/lib/utils/logger", () => ({
 
 vi.mock("@/lib/utils/mutation-origin", () => ({
   enforceSameOriginMutation: mockEnforceSameOriginMutation,
+}));
+
+vi.mock("@/lib/utils/rate-limit", async (importOriginal) => ({
+  ...(await importOriginal<typeof RateLimitModule>()),
+  checkSensitiveActionRateLimit: mockCheckSensitiveActionRateLimit,
 }));
 
 vi.mock("@/lib/utils/csrf", () => ({
@@ -183,6 +191,7 @@ const baseStep = {
 describe("POST /api/admin/verification/decide", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCheckSensitiveActionRateLimit.mockResolvedValue({ limited: false });
     mockCreateAdminClient.mockReturnValue({
       from: mockFrom,
       auth: {
@@ -291,6 +300,38 @@ describe("POST /api/admin/verification/decide", () => {
     expect(response.status).toBe(400);
     const data = await response.json();
     expect(data.error).toContain("Override reason code is required");
+  });
+
+  it("refuses a high-risk override when the shared limiter blocks it", async () => {
+    mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
+    mockCheckSensitiveActionRateLimit.mockResolvedValue({ limited: true, retryAfter: 60 });
+
+    const highRiskStep = { ...baseStep, risk_level: "high", risk_score: 65 };
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: highRiskStep, error: null }),
+            }),
+          }),
+        };
+      }
+      return {};
+    });
+
+    const response = await POST(
+      createMockRequest({
+        stepId: STEP_UUID,
+        decision: "approved",
+        overrideReasonCode: "verified_in_person",
+      })
+    );
+    expect(response.status).toBe(429);
+    expect(mockCheckSensitiveActionRateLimit).toHaveBeenCalledWith(
+      ADMIN_UUID,
+      "admin:verification:override"
+    );
   });
 
   it("allows approving high-risk step with override reason", async () => {

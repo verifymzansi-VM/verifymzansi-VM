@@ -11,6 +11,7 @@ import { createDecisionRecord } from "@/lib/services/decision-ledger";
 import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import type { StaffRole } from "@/types/enums";
 import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
+import { checkSensitiveActionRateLimit } from "@/lib/utils/rate-limit";
 
 const log = createLogger("AdminFlagging");
 
@@ -48,6 +49,20 @@ export async function POST(request: Request) {
     }
 
     const { reportId, action, reason, durationDays } = parsedBody.data;
+
+    // Bans and suspensions fail closed when the shared limiter is unavailable.
+    if (action === "ban" || action === "suspend") {
+      const enforceRl = await checkSensitiveActionRateLimit(
+        guard.user.id,
+        "admin:flagging:enforce"
+      );
+      if (enforceRl.limited) {
+        return NextResponse.json(
+          { error: "Too many requests", retryAfter: enforceRl.retryAfter ?? 60 },
+          { status: 429, headers: { "Retry-After": String(enforceRl.retryAfter ?? 60) } }
+        );
+      }
+    }
 
     // Direct warn/hide enforcement is reserved for roles holding
     // enforcement:execute (governance_controller, admin). Moderators stay at

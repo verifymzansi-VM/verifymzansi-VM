@@ -37,6 +37,10 @@ vi.mock("@/lib/auth/admin-access", () => ({
 
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkLocalRateLimit: mockCheckLocalRateLimit,
+  // The sensitive (fail-closed) limiter is covered in rate-limit.test.ts;
+  // here it follows the local limiter mock.
+  checkSensitiveActionRateLimit: async (userId: string, action: string, max?: number) =>
+    mockCheckLocalRateLimit(userId, action, max),
 }));
 
 vi.mock("@/lib/account/compat", async () => {

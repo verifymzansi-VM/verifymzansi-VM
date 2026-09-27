@@ -5,7 +5,7 @@ import { verifyAdminActorRoleFromDb } from "@/lib/auth/admin-access";
 import { getRoleFromUser } from "@/lib/auth/roles";
 import { recordRoleChange } from "@/lib/services/decision-ledger";
 import { createLogger } from "@/lib/utils/logger";
-import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
+import { checkSensitiveActionRateLimit } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import {
@@ -66,8 +66,9 @@ export async function POST(request: Request) {
       return forbiddenResponse();
     }
 
-    // L4: Tight rate limit — max 5 role changes per minute
-    const rl = checkLocalRateLimit(user.id, "admin:role:assign", 5);
+    // L4: Tight rate limit — max 5 role changes per minute; fails closed
+    // when the shared limiter is unavailable.
+    const rl = await checkSensitiveActionRateLimit(user.id, "admin:role:assign", 5);
     if (rl.limited) {
       return rateLimitResponse(rl.retryAfter ?? 60);
     }

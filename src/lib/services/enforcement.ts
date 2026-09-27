@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { ACCOUNT_PROFILE_WRITE_TABLE, getOwnerColumn } from "@/lib/account/compat";
 import { logAuditEvent, type AuditAction } from "./audit";
 import { createLogger } from "@/lib/utils/logger";
+import type { StaffRole } from "@/types/enums";
 
 const log = createLogger("Enforcement");
 
@@ -17,6 +18,8 @@ interface EnforceParams {
   action: EnforcementAction;
   reason: string;
   moderatorId: string;
+  /** DB-verified role of the acting staff member, recorded in the audit log. */
+  actorRole: StaffRole;
   reportId?: string;
   /** Marketplace area for accurate moderation record tracking */
   area?: string;
@@ -32,8 +35,9 @@ interface EnforceParams {
 export async function enforceAction(params: EnforceParams) {
   const supabase = createAdminClient();
 
-  const statusMap: Record<EnforcementAction, string> = {
-    warning: "active",
+  // A warning is recorded as a moderation action only. It must never touch
+  // account_status, or it would silently lift an existing ban or suspension.
+  const statusMap: Record<Exclude<EnforcementAction, "warning">, string> = {
     suspend: "suspended",
     ban: "banned",
     unban: "active",
@@ -53,26 +57,28 @@ export async function enforceAction(params: EnforceParams) {
     previousStatus = profile.account_status;
   }
 
-  // Update account status
-  const updatePayload: Record<string, unknown> = {
-    account_status: statusMap[params.action],
-  };
-  if (params.action === "suspend") {
-    const days = params.durationDays ?? 7;
-    const suspendUntil = new Date();
-    suspendUntil.setDate(suspendUntil.getDate() + days);
-    updatePayload.suspended_until = suspendUntil.toISOString();
-  }
-  if (params.action === "unban") {
-    updatePayload.suspended_until = null;
-  }
-  const { error } = await supabase
-    .from(ACCOUNT_PROFILE_WRITE_TABLE)
-    .update(updatePayload)
-    .eq("user_id", params.ownerId);
+  // Update account status (not for warnings)
+  if (params.action !== "warning") {
+    const updatePayload: Record<string, unknown> = {
+      account_status: statusMap[params.action],
+    };
+    if (params.action === "suspend") {
+      const days = params.durationDays ?? 7;
+      const suspendUntil = new Date();
+      suspendUntil.setDate(suspendUntil.getDate() + days);
+      updatePayload.suspended_until = suspendUntil.toISOString();
+    }
+    if (params.action === "unban") {
+      updatePayload.suspended_until = null;
+    }
+    const { error } = await supabase
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
+      .update(updatePayload)
+      .eq("user_id", params.ownerId);
 
-  if (error) {
-    throw new Error("Failed to update account status");
+    if (error) {
+      throw new Error("Failed to update account status");
+    }
   }
 
   // Create moderation action record
@@ -225,7 +231,7 @@ export async function enforceAction(params: EnforceParams) {
 
   await logAuditEvent({
     actorId: params.moderatorId,
-    actorRole: "moderator",
+    actorRole: params.actorRole,
     action: auditActionMap[params.action],
     targetType: "account_profile",
     targetId: params.ownerId,

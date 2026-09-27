@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatRelativeTime } from "@/lib/utils/format";
 import { ScrollText } from "lucide-react";
-import { isAdmin } from "@/lib/auth/roles";
+import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
 import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
 import type { AuditLogEntry } from "@/lib/utils/admin-queries";
 
@@ -51,7 +51,7 @@ export default async function AdminAuditLogPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user || !isAdmin(user)) {
+  if (!user || !(await verifyCapabilityFromDb(user, "audit:view"))) {
     redirect("/dashboard");
   }
 
@@ -164,11 +164,14 @@ export default async function AdminAuditLogPage({
       {!logs?.length ? (
         <div className="text-center py-6 text-muted-foreground">
           <ScrollText className="h-8 w-8 mx-auto mb-3" />
-          <p>No audit entries recorded yet.</p>
+          <p>
+            {Object.values(filters).some(Boolean)
+              ? "No audit entries match these filters."
+              : "No audit entries recorded yet."}
+          </p>
         </div>
       ) : (
         <div className="space-y-2">
-          {}
           {logs.map((entry: AuditLogEntry) => (
             <Card key={entry.id}>
               <CardContent className="py-3">

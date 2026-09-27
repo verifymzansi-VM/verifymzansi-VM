@@ -45,6 +45,10 @@ vi.mock("@/lib/utils/csrf", () => ({
 }));
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkLocalRateLimit: mockCheckLocalRateLimit,
+  // The sensitive (fail-closed) limiter is covered in rate-limit.test.ts;
+  // here it follows the local limiter mock.
+  checkSensitiveActionRateLimit: async (userId: string, action: string, max?: number) =>
+    mockCheckLocalRateLimit(userId, action, max),
 }));
 
 import { POST } from "@/app/api/admin/flagging/action/route";

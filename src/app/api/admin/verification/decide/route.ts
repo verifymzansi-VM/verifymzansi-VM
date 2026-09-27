@@ -11,7 +11,7 @@ import { logAuditEvent } from "@/lib/services/audit";
 import { adminVerificationDecideSchema } from "@/lib/validations/admin";
 import { createLogger } from "@/lib/utils/logger";
 import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
-import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
+import { checkLocalRateLimit, checkSensitiveActionRateLimit } from "@/lib/utils/rate-limit";
 import { createNotification } from "@/lib/notifications";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
@@ -93,6 +93,17 @@ export async function POST(request: Request) {
         { error: "Override reason code is required when approving high-risk steps" },
         { status: 400 }
       );
+    }
+
+    // High-risk overrides are sensitive: fail closed without the shared limiter.
+    if (decision === "approved" && (step.risk_level === "high" || step.risk_level === "critical")) {
+      const overrideRl = await checkSensitiveActionRateLimit(
+        user.id,
+        "admin:verification:override"
+      );
+      if (overrideRl.limited) {
+        return rateLimitResponse(overrideRl.retryAfter ?? 60);
+      }
     }
 
     if (decision === "approved" && step.step_type === "id_doc" && step.id_number_hmac) {

@@ -24,8 +24,8 @@ vi.mock("@/lib/supabase/admin", () => ({
   })),
 }));
 
-vi.mock("@/lib/auth/roles", () => ({
-  isAdmin: vi.fn(() => true),
+vi.mock("@/lib/auth/admin-access", () => ({
+  verifyCapabilityFromDb: vi.fn(async () => true),
 }));
 
 vi.mock("next/navigation", () => ({
