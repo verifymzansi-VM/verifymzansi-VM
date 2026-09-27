@@ -20,9 +20,9 @@ import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provi
 import { triggerHaptic } from "@/lib/utils/haptics";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { ActiveFilterChips, type FilterChip } from "./active-filter-chips";
+import { filterSelectClass } from "./filter-controls";
 
-const selectClassName =
-  "flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-colors hover:border-brand-blue/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
+const selectClassName = filterSelectClass;
 
 /** Listed organisations for the optional programme filter (loaded on demand). */
 function useFilterOrganisations(enabled: boolean): Array<{ slug: string; name: string }> {
@@ -116,7 +116,7 @@ export function BusinessFilterDrawer() {
     });
   }
   if (filters.province) {
-    const locLabel = filters.city ? `${filters.province} › ${filters.city}` : filters.province;
+    const locLabel = filters.city ? `${filters.city}, ${filters.province}` : filters.province;
     activeChips.push({
       key: "location",
       label: locLabel,
@@ -154,13 +154,14 @@ export function BusinessFilterDrawer() {
       <SheetTrigger asChild>
         <button
           type="button"
-          className="fixed bottom-0 left-1/2 z-40 inline-flex h-12 w-12 -translate-x-1/2 items-center justify-center gap-1 rounded-full bg-brand-blue text-white shadow-lg shadow-brand-blue/30 ring-1 ring-white/20 transition-all hover:bg-brand-blue/90 active:scale-95 md:hidden motion-reduce:transition-none motion-reduce:active:scale-100"
+          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 z-40 inline-flex h-11 -translate-x-1/2 items-center justify-center gap-2 rounded-full bg-foreground px-5 text-sm font-semibold text-background shadow-xl shadow-black/20 ring-1 ring-white/10 transition-all hover:bg-foreground/90 active:scale-[0.98] lg:hidden motion-reduce:transition-none motion-reduce:active:scale-100"
           aria-label="Open business filters"
           disabled={!isInteractive}
         >
           <SlidersHorizontal className="h-4 w-4 shrink-0" />
+          <span>Filters</span>
           {activeFilterCount > 0 && (
-            <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-gold px-1 text-[10px] font-bold text-warm-950 ring-2 ring-background">
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-gold px-1 text-[11px] font-bold text-warm-950">
               {activeFilterCount}
             </span>
           )}
@@ -174,10 +175,8 @@ export function BusinessFilterDrawer() {
       >
         <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-border" aria-hidden="true" />
         <SheetHeader className="mb-3">
-          <SheetTitle>Filter Businesses</SheetTitle>
-          <SheetDescription>
-            Search and narrow the business list without leaving the page.
-          </SheetDescription>
+          <SheetTitle>Filters</SheetTitle>
+          <SheetDescription className="sr-only">Narrow the business list.</SheetDescription>
         </SheetHeader>
 
         <div className="space-y-3">
@@ -191,9 +190,9 @@ export function BusinessFilterDrawer() {
                 ref={searchInputRef}
                 id="drawer-business-search"
                 type="search"
-                placeholder="Search businesses, services, or brands"
+                placeholder="Name, service or brand"
                 aria-label="Search businesses"
-                className="rounded-xl pl-9"
+                className="h-11 rounded-xl pl-9"
                 defaultValue={filters.query || ""}
                 disabled={!isInteractive}
                 onChange={(event) => {
@@ -262,7 +261,7 @@ export function BusinessFilterDrawer() {
 
           {/* Business Type */}
           <div className="space-y-1.5">
-            <Label htmlFor="drawer-business-type">Business Type</Label>
+            <Label htmlFor="drawer-business-type">Business type</Label>
             <select
               id="drawer-business-type"
               aria-label="Business type"
@@ -333,7 +332,7 @@ export function BusinessFilterDrawer() {
           {/* Organisation / programme (optional; never changes ranking) */}
           {organisations.length > 0 ? (
             <div className="space-y-1.5">
-              <Label htmlFor="drawer-business-organisation">Organisation / Programme</Label>
+              <Label htmlFor="drawer-business-organisation">Organisation or programme</Label>
               <select
                 id="drawer-business-organisation"
                 aria-label="Organisation or programme"
@@ -369,7 +368,7 @@ export function BusinessFilterDrawer() {
                 setOpen(false);
               }}
             >
-              View results
+              Show results
             </Button>
           </div>
         </div>
