@@ -25,7 +25,8 @@ const AREA_TABS: AreaTab[] = [
     slug: "/mzansi-market",
     icon: ShoppingBag,
     iconColor: "text-brand-green",
-    activeClass: "bg-card text-brand-green shadow-sm ring-1 ring-brand-green/30",
+    activeClass:
+      "bg-card text-brand-green-700 shadow-sm ring-1 ring-brand-green/30 dark:text-brand-green-300",
     hoverClass: "hover:bg-card/70 hover:text-foreground",
   },
   {
@@ -36,7 +37,7 @@ const AREA_TABS: AreaTab[] = [
     icon: Building2,
     iconColor: "text-brand-blue",
     activeClass:
-      "bg-card text-brand-blue shadow-sm ring-1 ring-brand-blue/30 dark:text-brand-blue-300",
+      "bg-card text-brand-blue-700 shadow-sm ring-1 ring-brand-blue/30 dark:text-brand-blue-300",
     hoverClass: "hover:bg-card/70 hover:text-foreground",
   },
   {
@@ -46,7 +47,7 @@ const AREA_TABS: AreaTab[] = [
     slug: "/tourism-events",
     icon: TreePalm,
     iconColor: "text-teal-500",
-    activeClass: "bg-card text-teal-600 shadow-sm ring-1 ring-teal-500/30 dark:text-teal-300",
+    activeClass: "bg-card text-teal-700 shadow-sm ring-1 ring-teal-500/30 dark:text-teal-300",
     hoverClass: "hover:bg-card/70 hover:text-foreground",
   },
 ];

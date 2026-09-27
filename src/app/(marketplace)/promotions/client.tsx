@@ -387,6 +387,17 @@ export function PromotionsExplorer() {
     onClearQuery: clearQueryFilter,
     onClearAll: clearAllFilters,
   };
+  // Only the active tab's grid is rendered, and only when it has results, so
+  // aria-controls must never point at a panel that is not in the DOM.
+  const activePanelRendered =
+    !loading &&
+    !error &&
+    (activeTab === "tourism" ? tourismBusinesses.length > 0 : promotions.length > 0);
+  const tourismPanelId =
+    activeTab === "tourism" && activePanelRendered ? "tab-panel-tourism" : undefined;
+  const eventsPanelId =
+    activeTab === "events" && activePanelRendered ? "tab-panel-events" : undefined;
+
   const tabBaseClasses =
     "inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
   const tourismTabActiveClasses =
@@ -426,7 +437,8 @@ export function PromotionsExplorer() {
             type="button"
             role="tab"
             aria-selected="true"
-            aria-controls="tab-panel-tourism"
+            id="tab-tourism"
+            aria-controls={tourismPanelId}
             className={cn(tabBaseClasses, tourismTabActiveClasses)}
             onClick={() => switchTab("tourism")}
           >
@@ -438,7 +450,8 @@ export function PromotionsExplorer() {
             type="button"
             role="tab"
             aria-selected="false"
-            aria-controls="tab-panel-tourism"
+            id="tab-tourism"
+            aria-controls={tourismPanelId}
             className={cn(tabBaseClasses, inactiveTabClasses)}
             onClick={() => switchTab("tourism")}
           >
@@ -452,7 +465,8 @@ export function PromotionsExplorer() {
             type="button"
             role="tab"
             aria-selected="true"
-            aria-controls="tab-panel-events"
+            id="tab-events"
+            aria-controls={eventsPanelId}
             className={cn(tabBaseClasses, eventTabActiveClasses)}
             onClick={() => switchTab("events")}
           >
@@ -464,7 +478,8 @@ export function PromotionsExplorer() {
             type="button"
             role="tab"
             aria-selected="false"
-            aria-controls="tab-panel-events"
+            id="tab-events"
+            aria-controls={eventsPanelId}
             className={cn(tabBaseClasses, eventTabInactiveClasses)}
             onClick={() => switchTab("events")}
           >

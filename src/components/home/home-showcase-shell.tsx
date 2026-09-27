@@ -29,7 +29,8 @@ const toneStyles: Record<
     badgeClassName:
       "bg-brand-green/5 text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-green-100 border-brand-green/20",
     headingClassName: "text-foreground",
-    linkClassName: "text-brand-green hover:text-brand-green-700 dark:hover:text-brand-green-300",
+    linkClassName:
+      "text-brand-green-700 hover:text-brand-green-800 dark:text-brand-green-300 dark:hover:text-brand-green-200",
     glowClassName: "bg-brand-green/10",
   },
   blue: {
@@ -37,7 +38,8 @@ const toneStyles: Record<
     badgeClassName:
       "bg-brand-blue/5 text-brand-blue-800 dark:bg-brand-blue/10 dark:text-brand-blue-100 border-brand-blue/20",
     headingClassName: "text-foreground",
-    linkClassName: "text-brand-blue hover:text-brand-blue/80 dark:hover:text-brand-blue/70",
+    linkClassName:
+      "text-brand-blue-700 hover:text-brand-blue-800 dark:text-brand-blue-300 dark:hover:text-brand-blue-200",
     glowClassName: "bg-brand-blue/10",
   },
   teal: {
@@ -45,7 +47,7 @@ const toneStyles: Record<
     badgeClassName:
       "bg-teal-500/5 text-teal-800 dark:bg-teal-500/10 dark:text-teal-100 border-teal-500/20",
     headingClassName: "text-foreground",
-    linkClassName: "text-teal-700 hover:text-teal-800 dark:hover:text-teal-300",
+    linkClassName: "text-teal-700 hover:text-teal-800 dark:text-teal-300 dark:hover:text-teal-200",
     glowClassName: "bg-teal-400/10",
   },
 };
