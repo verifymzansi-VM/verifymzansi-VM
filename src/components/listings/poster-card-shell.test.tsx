@@ -100,7 +100,7 @@ describe("PosterCardShell", () => {
     }
   });
 
-  it("renders feed cards with full-bleed media and details below the media", () => {
+  it("fills homepage cards with media and fades details only during playback", () => {
     const { container } = render(
       <PosterCardShell
         href="/listing/mobile"
@@ -110,28 +110,27 @@ describe("PosterCardShell", () => {
         location="Durban"
         logoUrl="/logo.png"
         cardVariant="showcase"
-        trustLevel={3}
         immersive
       />
     );
     const player = screen.getByTestId("video-player");
-    const media = container.querySelector("[data-card-media]");
-    const metadata = container.querySelector("[data-card-metadata]");
+    const overlay = container.querySelector("[data-card-overlay]");
+    expect(container.querySelector("[data-card-metadata]")).toBeNull();
     expect(player).toHaveAttribute("data-fit", "cover");
-    expect(media).toHaveClass("aspect-[4/5]");
     expect(screen.getByRole("link", { name: "Open Mobile video" })).toHaveAttribute(
       "href",
       "/listing/mobile"
     );
-    // Price, title and location stay readable while the video plays.
-    expect(metadata).toContainElement(screen.getByText("R 123 000"));
-    expect(metadata).toContainElement(screen.getByText("Durban"));
-    expect(metadata).toContainElement(screen.getByText("ID reviewed"));
-    expect(container.querySelector("[data-card-overlay]")).toContainElement(
-      screen.getByAltText("Mobile video logo")
-    );
+    expect(overlay).toHaveClass("opacity-100");
+    expect(overlay).toContainElement(screen.getByText("Durban"));
+    expect(overlay).toContainElement(screen.getByAltText("Mobile video logo"));
     fireEvent.playing(player);
-    expect(metadata).toBeVisible();
+    expect(overlay).toHaveClass("opacity-0");
+    fireEvent.pause(player);
+    expect(overlay).toHaveClass("opacity-100");
+    fireEvent.playing(player);
+    fireEvent.ended(player);
+    expect(overlay).toHaveClass("opacity-100");
   });
 
   it("keeps feed video controls outside navigation links", () => {

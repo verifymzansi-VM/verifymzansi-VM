@@ -167,8 +167,8 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/<\//g, "<\\/") }}
       />
 
-      <main id="main-content" className="flex-1">
-        <div className="container-page space-y-5 py-5 lg:space-y-6 lg:py-8">
+      <main className="flex-1">
+        <div className="container-page py-4 space-y-5">
           <Breadcrumbs
             items={[{ label: "Mzansi Market", href: "/mzansi-market" }, { label: listing.title }]}
           />

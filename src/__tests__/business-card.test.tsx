@@ -102,8 +102,7 @@ describe("BusinessCard", () => {
     expect(screen.queryByText(/Clothing Store/i)).toBeNull();
     expect(screen.queryByText(/Own Premises/i)).toBeNull();
     expect(screen.getByText(/Johannesburg/i)).toBeTruthy();
-    // Featured placement is a paid add-on, so it is visible on the card.
-    expect(screen.getByText("Featured")).toBeTruthy();
+    expect(screen.queryByText("Featured")).toBeNull();
   });
 
   it("shows the business logo when provided", () => {

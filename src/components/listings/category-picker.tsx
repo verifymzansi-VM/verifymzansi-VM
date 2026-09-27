@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useState } from "react";
 import {
   CATEGORIES,
   type CategoryDefinition,
@@ -11,17 +11,7 @@ import type { ListingCategory } from "@/types/enums";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { Check, ChevronDown, Lightbulb } from "lucide-react";
-
-/** Native select styled to match `Input`. */
-const SELECT_CLASS =
-  "flex h-11 w-full rounded-xl border border-input bg-card px-3.5 py-2 text-base shadow-xs transition-colors hover:border-foreground/30 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:text-sm";
-
-const CATEGORY_TIPS: Partial<Record<ListingCategory, string>> = {
-  property: "Add levies, rates and security. Buyers ask about these first.",
-  vehicles: "Add mileage and service history. Buyers filter by them.",
-  jobs_services: "Include the pay or rate range.",
-};
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 /* ─── Collapsible field groups by category ──────────────────────── */
 const COLLAPSIBLE_GROUPS: Partial<Record<ListingCategory, { label: string; fields: string[] }[]>> =
@@ -108,22 +98,12 @@ export function CategoryPicker({
     return allowedValues.includes(String(parentValue));
   }
 
-  const tip = selectedCategory ? CATEGORY_TIPS[selectedCategory.value as ListingCategory] : null;
-
   return (
     <div className="space-y-4">
-      <div>
-        <p id="listing-category-label" className="text-sm font-semibold text-foreground">
-          Category *
-        </p>
-      </div>
+      <Label>Category *</Label>
 
       {/* Category Grid */}
-      <div
-        role="group"
-        aria-labelledby="listing-category-label"
-        className="grid grid-cols-2 gap-2.5 sm:grid-cols-3"
-      >
+      <div aria-label="Category" className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {CATEGORIES.map((cat) => {
           const Icon = cat.icon;
           const isSelected = expanded === cat.value;
@@ -133,41 +113,34 @@ export function CategoryPicker({
               key={cat.value}
               type="button"
               aria-label={cat.label}
-              aria-pressed={isSelected}
               onClick={() => handleSelect(cat)}
               className={cn(
-                "relative flex min-h-[4.5rem] items-center gap-3 rounded-2xl border p-3 text-left transition-colors duration-200",
+                "relative flex flex-col items-center gap-1.5 rounded-xl border-2 p-3 text-center transition-all duration-200",
+                "hover:border-brand-green/60 hover:bg-brand-green/5 hover:shadow-sm",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                 isSelected
-                  ? "border-brand-green-600 bg-brand-green-50 ring-1 ring-brand-green-600 dark:border-brand-green-400 dark:bg-brand-green-950/50 dark:ring-brand-green-400"
-                  : "border-border bg-card hover:border-foreground/25 hover:bg-muted/50"
+                  ? "border-brand-green bg-brand-green/10 shadow-md"
+                  : "border-muted bg-background"
               )}
             >
-              <span
-                aria-hidden="true"
+              <div
                 className={cn(
-                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors",
-                  isSelected
-                    ? "bg-brand-green-600 text-white dark:bg-brand-green-400 dark:text-brand-green-950"
-                    : "bg-muted text-foreground/70"
+                  "flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
+                  isSelected ? "bg-brand-green text-white" : "bg-muted text-muted-foreground"
                 )}
               >
-                <Icon className="h-[18px] w-[18px]" />
-              </span>
+                <Icon className="h-4 w-4" />
+              </div>
               <span
                 className={cn(
-                  "min-w-0 text-[13px] font-semibold leading-snug",
-                  isSelected ? "text-brand-green-800 dark:text-brand-green-200" : "text-foreground"
+                  "text-xs font-medium leading-tight",
+                  isSelected ? "text-brand-green" : "text-foreground"
                 )}
               >
                 {cat.label}
               </span>
               {isSelected && (
-                <Check
-                  aria-hidden="true"
-                  strokeWidth={3}
-                  className="absolute right-2 top-2 h-3.5 w-3.5 text-brand-green-700 dark:text-brand-green-300"
-                />
+                <ChevronRight className="absolute right-2 top-2 h-4 w-4 text-brand-green" />
               )}
             </button>
           );
@@ -176,30 +149,34 @@ export function CategoryPicker({
 
       {/* Expanded Attribute Fields */}
       {selectedCategory && selectedCategory.attributeFields.length > 0 && (
-        <div className="space-y-4 rounded-2xl border border-border bg-muted/30 p-4">
-          <div className="flex items-start gap-2.5">
-            <span
-              aria-hidden="true"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg area-market-tile"
-            >
-              <selectedCategory.icon className="h-4 w-4" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-foreground">
-                {selectedCategory.label} details
-              </p>
-            </div>
-          </div>
+        <div className="rounded-xl border border-brand-green/30 bg-brand-green/5 p-3 space-y-3 animate-in fade-in-0 slide-in-from-top-2 duration-300">
+          <p className="text-sm font-semibold text-brand-green flex items-center gap-1.5">
+            <selectedCategory.icon className="h-4 w-4" />
+            {selectedCategory.label} — Details
+          </p>
 
-          {tip ? (
-            <p className="flex items-start gap-2 rounded-xl bg-card px-3 py-2 text-xs leading-5 text-muted-foreground">
-              <Lightbulb
-                className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-gold-700 dark:text-brand-gold-300"
-                aria-hidden="true"
-              />
-              {tip}
+          {/* Smart tip */}
+          {selectedCategory.value === "property" && (
+            <p className="text-xs text-muted-foreground bg-background/60 rounded-md px-2.5 py-1.5">
+              💡 Listings with levy and security info get 40% more enquiries.
             </p>
-          ) : null}
+          )}
+          {selectedCategory.value === "vehicles" && (
+            <p className="text-xs text-muted-foreground bg-background/60 rounded-md px-2.5 py-1.5">
+              💡 Buyers filter by service history — fill it in to appear in more searches.
+            </p>
+          )}
+          {selectedCategory.value === "jobs_services" && (
+            <p className="text-xs text-muted-foreground bg-background/60 rounded-md px-2.5 py-1.5">
+              💡 Include salary range to attract 3× more applicants.
+            </p>
+          )}
+
+          {/* Required field legend */}
+          <p className="text-xs text-muted-foreground">
+            Fields marked <span className="font-medium text-foreground">*</span> are required.
+            Optional fields help your listing stand out.
+          </p>
 
           {(() => {
             const groups = COLLAPSIBLE_GROUPS[selectedCategory.value as ListingCategory] ?? [];
@@ -243,10 +220,9 @@ export function CategoryPicker({
                   if (groupFields.length === 0) return null;
                   const isOpen = expandedGroups.has(group.label);
                   return (
-                    <div key={group.label} className="rounded-xl border border-border bg-card">
+                    <div key={group.label} className="rounded-lg border border-border/60">
                       <button
                         type="button"
-                        aria-expanded={isOpen}
                         onClick={() => {
                           setExpandedGroups((prev) => {
                             const next = new Set(prev);
@@ -255,19 +231,18 @@ export function CategoryPicker({
                             return next;
                           });
                         }}
-                        className="flex min-h-11 w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-semibold text-foreground/80 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                       >
                         <span>{group.label}</span>
                         <ChevronDown
-                          aria-hidden="true"
                           className={cn(
-                            "h-4 w-4 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none",
+                            "h-4 w-4 transition-transform duration-200",
                             isOpen && "rotate-180"
                           )}
                         />
                       </button>
                       {isOpen && (
-                        <div className="grid grid-cols-1 gap-3 px-3 pb-3 sm:grid-cols-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 px-3 pb-3 animate-in fade-in-0 slide-in-from-top-1 duration-200">
                           {groupFields.map(renderField)}
                         </div>
                       )}
@@ -298,15 +273,8 @@ function AttributeInput({
   onChange: (value: string | boolean | string[]) => void;
   error?: string;
 }) {
-  const reactId = useId();
-  const inputId = `listing-attribute-${field.name}`;
-  const errorId = `${reactId}-error`;
-  const describedBy = error ? errorId : undefined;
-  const errorNode = error ? (
-    <p id={errorId} className="inline-form-error">
-      {error}
-    </p>
-  ) : null;
+  const selectClass =
+    "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
   switch (field.type) {
     case "select": {
@@ -322,20 +290,17 @@ function AttributeInput({
 
       return (
         <div className="space-y-1.5">
-          <Label htmlFor={inputId}>
+          <Label>
             {field.label} {field.required && "*"}
           </Label>
           <select
-            id={inputId}
             data-listing-attribute={field.name}
             aria-label={field.label}
-            aria-invalid={error ? true : undefined}
-            aria-describedby={describedBy}
             value={value as string}
             onChange={(e) => onChange(e.target.value)}
             required={field.required}
             disabled={!!isDisabled}
-            className={cn(SELECT_CLASS, error && "border-destructive")}
+            className={cn(selectClass, error && "border-destructive")}
           >
             <option value="">
               {isDisabled
@@ -353,7 +318,7 @@ function AttributeInput({
               );
             })}
           </select>
-          {errorNode}
+          {error && <p className="inline-form-error">{error}</p>}
         </div>
       );
     }
@@ -361,13 +326,12 @@ function AttributeInput({
     case "number":
       return (
         <div className="space-y-1.5">
-          <Label htmlFor={inputId}>
+          <Label>
             {field.label}
             {field.unit ? ` (${field.unit})` : ""}
             {field.required ? " *" : ""}
           </Label>
           <Input
-            id={inputId}
             data-listing-attribute={field.name}
             type="number"
             inputMode="numeric"
@@ -376,35 +340,30 @@ function AttributeInput({
             value={value as string}
             onChange={(e) => onChange(e.target.value)}
             required={field.required}
-            aria-invalid={error ? true : undefined}
-            aria-describedby={describedBy}
             className={cn(error && "border-destructive")}
           />
-          {errorNode}
+          {error && <p className="inline-form-error">{error}</p>}
         </div>
       );
 
     case "boolean":
       return (
-        <div className="space-y-1 sm:self-end">
-          <label className="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-xl border border-input bg-card px-3 text-sm font-medium text-foreground transition-colors hover:border-foreground/30">
+        <div className="space-y-1">
+          <label className="flex items-center gap-2 self-end pb-1">
             <input
-              id={inputId}
               type="checkbox"
               aria-label={field.label}
-              aria-invalid={error ? true : undefined}
-              aria-describedby={describedBy}
               data-listing-attribute={field.name}
               className={cn(
-                "h-4 w-4 rounded border-input accent-brand-green-600",
+                "h-4 w-4 rounded border-input text-brand-green focus:ring-brand-green",
                 error && "border-destructive"
               )}
               checked={value as boolean}
               onChange={(e) => onChange(e.target.checked)}
             />
-            <span>{field.label}</span>
+            <span className="cursor-pointer text-sm font-normal">{field.label}</span>
           </label>
-          {errorNode}
+          {error && <p className="inline-form-error">{error}</p>}
         </div>
       );
 
@@ -412,21 +371,18 @@ function AttributeInput({
     default:
       return (
         <div className="space-y-1.5">
-          <Label htmlFor={inputId}>
+          <Label>
             {field.label} {field.required && "*"}
           </Label>
           <Input
-            id={inputId}
             data-listing-attribute={field.name}
             placeholder={field.placeholder}
             value={value as string}
             onChange={(e) => onChange(e.target.value)}
             required={field.required}
-            aria-invalid={error ? true : undefined}
-            aria-describedby={describedBy}
             className={cn(error && "border-destructive")}
           />
-          {errorNode}
+          {error && <p className="inline-form-error">{error}</p>}
         </div>
       );
 
@@ -442,16 +398,11 @@ function AttributeInput({
       }
 
       return (
-        <fieldset
-          id={inputId}
-          tabIndex={-1}
-          aria-describedby={describedBy}
-          className="space-y-1.5 sm:col-span-2"
-        >
-          <legend className="mb-1.5 text-sm font-medium leading-none">
+        <div className="space-y-1.5 sm:col-span-2">
+          <Label>
             {field.label} {field.required && "*"}
-          </legend>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          </Label>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {options.map((opt) => {
               const optionValue = typeof opt === "string" ? opt : opt.value;
               const optionLabel = typeof opt === "string" ? opt.replace(/_/g, " ") : opt.label;
@@ -461,25 +412,25 @@ function AttributeInput({
                 <label
                   key={optionValue}
                   className={cn(
-                    "flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium transition-colors",
+                    "flex cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all",
                     isChecked
-                      ? "border-brand-green-600 bg-brand-green-50 text-brand-green-800 dark:border-brand-green-400 dark:bg-brand-green-950/50 dark:text-brand-green-200"
-                      : "border-input bg-card text-foreground/80 hover:border-foreground/30"
+                      ? "border-brand-green bg-brand-green/10 text-brand-green"
+                      : "border-input text-muted-foreground hover:border-brand-green/40 hover:bg-muted/50"
                   )}
                 >
                   <input
                     type="checkbox"
                     checked={isChecked}
                     onChange={() => toggleItem(optionValue)}
-                    className="h-4 w-4 shrink-0 rounded border-input accent-brand-green-600"
+                    className="h-3.5 w-3.5 rounded border-input text-brand-green focus:ring-brand-green"
                   />
-                  <span className="first-letter:uppercase">{optionLabel}</span>
+                  <span className="capitalize">{optionLabel}</span>
                 </label>
               );
             })}
           </div>
-          {errorNode}
-        </fieldset>
+          {error && <p className="inline-form-error">{error}</p>}
+        </div>
       );
     }
   }

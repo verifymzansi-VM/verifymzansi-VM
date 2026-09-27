@@ -100,7 +100,7 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/<\//g, "<\\/") }}
       />
 
-      <div className="container-page space-y-5 py-5 lg:space-y-6 lg:py-8">
+      <div className="container-page py-4 space-y-5">
         <Breadcrumbs
           items={[
             { label: "Tourism & Events", href: "/tourism-events" },

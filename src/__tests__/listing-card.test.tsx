@@ -96,8 +96,7 @@ vi.mock("@/components/trust/trust-badge", () => ({
   TrustBadge: ({ level }: { level: string }) => <span data-testid="trust-badge">{level}</span>,
 }));
 
-vi.mock("@/lib/utils/format", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+vi.mock("@/lib/utils/format", () => ({
   formatZAR: (cents: number) => `R ${(cents / 100).toFixed(2)}`,
   formatZARShort: (cents: number) => `R${Math.round(cents / 100)}`,
   formatRelativeTime: (_date: string) => "2d ago",
@@ -176,9 +175,9 @@ describe("ListingCard", () => {
     expect(screen.queryByText(/Brand: Apple/i)).toBeNull();
   });
 
-  it("shows the paid Urgent chip on feed cards", () => {
+  it("hides status chips on immersive cards", () => {
     render(<ListingCard {...defaultProps} featured boosted urgent />);
-    expect(screen.getByText("Urgent")).toBeTruthy();
+    expect(screen.queryByText("Urgent")).toBeNull();
     expect(screen.queryByText("Boosted")).toBeNull();
   });
 
@@ -198,9 +197,10 @@ describe("ListingCard", () => {
     expect(listingLink).toBeTruthy();
   });
 
-  it("should preserve trust styling when owner trust level provided", () => {
+  it("does not mark cards with the owner's trust level", () => {
+    // Every poster is ID-reviewed, so feed cards carry no verification styling.
     render(<ListingCard {...defaultProps} ownerTrustLevel={2 as never} />);
-    expect(screen.getByTestId("card")).toHaveAttribute("data-trust-level", "2");
+    expect(screen.getByTestId("card")).not.toHaveAttribute("data-trust-level");
   });
 
   it("should show boosted indicator when boosted", () => {

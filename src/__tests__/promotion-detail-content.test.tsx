@@ -124,14 +124,14 @@ describe("PromotionDetailContent", () => {
       />
     );
 
-    // Views now sit in the always-visible summary rather than a collapsed accordion.
-    expect(screen.getByText("4 views")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /details/i }));
+    expect(screen.getByText("4")).toBeTruthy();
 
     await act(async () => {
       trackViewState.lastArgs?.onRecorded?.();
     });
 
-    expect(screen.getByText("5 views")).toBeTruthy();
+    expect(screen.getByText("5")).toBeTruthy();
   });
 
   it("renders event state and readable contact method labels", () => {
@@ -175,13 +175,13 @@ describe("PromotionDetailContent", () => {
       />
     );
 
-    // The state badge resolves after hydration so server and browser markup match.
-    expect(screen.getByText("Upcoming")).toBeTruthy();
+    expect(screen.getByText("Upcoming Event")).toBeTruthy();
 
-    expect(screen.getByRole("heading", { name: "Saved contact methods" })).toBeTruthy();
-    expect(screen.getByText("Phone call")).toBeTruthy();
+    // Details section is collapsed by default — expand it to see contact methods
+    fireEvent.click(screen.getByRole("button", { name: /details/i }));
+    expect(screen.getByText("Phone Call")).toBeTruthy();
     expect(screen.getByText("WhatsApp")).toBeTruthy();
-    expect(screen.getByText("Enquiry form")).toBeTruthy();
+    expect(screen.getByText("Contact Form")).toBeTruthy();
   });
 
   it("renders remaining videos before photos when a lead video exists", () => {

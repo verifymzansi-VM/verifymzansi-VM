@@ -7,9 +7,9 @@ const { mockCreateClient, mockCookies } = vi.hoisted(() => ({
   mockCookies: vi.fn(),
 }));
 
-const { carouselSpy, areaHeroSpy } = vi.hoisted(() => ({
+const { carouselSpy, trustStripSpy } = vi.hoisted(() => ({
   carouselSpy: vi.fn(),
-  areaHeroSpy: vi.fn(),
+  trustStripSpy: vi.fn(),
 }));
 
 vi.mock("next/headers", () => ({
@@ -30,10 +30,10 @@ vi.mock("@/components/showrooms/showroom-card-carousel", () => ({
   },
 }));
 
-vi.mock("@/components/layout/area-hero", () => ({
-  AreaHero: (props: { title?: string; area?: string; ctaHref?: string }) => {
-    areaHeroSpy(props);
-    return <div data-testid="area-hero" />;
+vi.mock("@/components/layout/trust-strip", () => ({
+  TrustStrip: (props: { title?: string; variant?: string }) => {
+    trustStripSpy(props);
+    return <div data-testid="trust-strip" />;
   },
 }));
 
@@ -114,14 +114,13 @@ describe("MzansiBusinessPage", () => {
     );
   });
 
-  it("introduces the business route with its area hero", async () => {
+  it("labels the trust strip for the business route", async () => {
     render(await MzansiBusinessPage());
 
-    expect(areaHeroSpy).toHaveBeenCalledWith(
+    expect(trustStripSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        area: "business",
-        title: "Mzansi Business",
-        ctaHref: "/post/create-business",
+        variant: "blue",
+        title: "Latest Mzansi Businesses",
       })
     );
   });

@@ -47,32 +47,25 @@ test.describe("Marketplace showroom smoke", () => {
 
       await page.goto(route.path, { waitUntil: "domcontentloaded" });
       await page.locator("body").waitFor({ state: "visible" });
-      // Each browse page opens with its AreaHero, which owns the page h1.
       await page
-        .getByRole("heading", { level: 1, name: route.heading })
+        .getByRole("heading", { name: route.heading })
         .first()
         .waitFor({ state: "visible" });
       await page.waitForLoadState("networkidle").catch(() => {});
 
-      // The showroom sits below the intro, so scroll to it like a visitor would.
       const showroomSection = page.locator("section[aria-roledescription='carousel']").first();
-      await showroomSection.scrollIntoViewIfNeeded();
       await expect(showroomSection).toBeVisible();
 
       const showroomCard = showroomSection.getByRole("link").first();
-      await showroomCard.scrollIntoViewIfNeeded();
+
       await expect(showroomCard).toBeVisible();
 
-      const [cardBox, headerBox, viewportHeight] = await Promise.all([
+      const [cardBox, viewportHeight] = await Promise.all([
         showroomCard.boundingBox(),
-        page.locator("body header").first().boundingBox(),
         page.evaluate(() => window.innerHeight),
       ]);
 
       expect(cardBox).not.toBeNull();
-      expect(cardBox!.height).toBeLessThanOrEqual(
-        viewportHeight - (headerBox ? headerBox.height : 0)
-      );
       expect(cardBox!.y).toBeGreaterThanOrEqual(0);
       expect(cardBox!.y + cardBox!.height).toBeLessThanOrEqual(viewportHeight);
 

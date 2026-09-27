@@ -47,18 +47,12 @@ export async function HomeMzansiMarketShowcase() {
     .slice(0, 8);
   if (items.length === 0) {
     return (
-      <HomeShowcaseShell
-        badge="Mzansi Market"
-        title="Just listed"
-        href="/mzansi-market"
-        ctaLabel="See all listings"
-        tone="green"
-      >
+      <HomeShowcaseShell title="Mzansi Market" href="/mzansi-market" tone="green">
         <HomeShowcaseEmptyState
-          title="No listings yet"
-          description="Items from verified sellers will show here. Your first post is free."
+          title="No listings yet."
+          description="The marketplace is clean. Publish the first ad and this rail will fill with fresh posts."
           ctaHref="/post/create-listing"
-          ctaLabel="Post an item"
+          ctaLabel="Post First Listing"
           tone="green"
           icon={<PackageOpen className="h-7 w-7" />}
         />
@@ -67,20 +61,14 @@ export async function HomeMzansiMarketShowcase() {
   }
 
   return (
-    <HomeShowcaseShell
-      badge="Mzansi Market"
-      title="Just listed"
-      href="/mzansi-market"
-      ctaLabel="See all listings"
-      tone="green"
-    >
+    <HomeShowcaseShell title="Mzansi Market" href="/mzansi-market" tone="green">
       <AnalyticsImpressions
         items={items.map((l) => ({ table: "listings" as const, id: String(l.id) }))}
         type="homepage_appearance"
         surface="home_market"
       />
       <AutoScrollRail
-        ariaLabel="Fresh on Mzansi Market"
+        ariaLabel="Latest on Mzansi Market"
         showEdgeFades={false}
         flushEdges
         itemClassName="w-[calc((100%-12px)/2)] sm:w-auto"

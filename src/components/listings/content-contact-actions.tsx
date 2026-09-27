@@ -253,16 +253,6 @@ export function ContentContactActions({
             </a>
           </Button>
         )}
-        {whatsappUrl && (
-          <p className="text-xs text-muted-foreground">
-            Opens WhatsApp with this post attached. Press send there to start the conversation.
-          </p>
-        )}
-        {!whatsappUrl && !phoneNumber && (
-          <p className="text-sm text-muted-foreground">
-            {showMessageButton ? "No phone number shared." : "No contact details added."}
-          </p>
-        )}
 
         {showMessageButton && (
           <Button

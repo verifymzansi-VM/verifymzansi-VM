@@ -21,24 +21,15 @@ vi.mock("next/link", () => ({
 }));
 
 describe("HomeShowcaseShell", () => {
-  it("renders the shared showcase frame with heading, copy, CTA, and children", () => {
+  it("renders the area title, a single View all link, and children", () => {
     render(
-      <HomeShowcaseShell
-        badge="Mzansi Market"
-        title="Latest on Mzansi Market"
-        description="Local sellers. Real products."
-        href="/mzansi-market"
-        ctaLabel="View All Listings"
-        tone="green"
-      >
+      <HomeShowcaseShell title="Mzansi Market" href="/mzansi-market" tone="green">
         <div data-testid="shell-children">Rail content</div>
       </HomeShowcaseShell>
     );
 
-    expect(screen.getByText("Mzansi Market")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Latest on Mzansi Market" })).toBeInTheDocument();
-    expect(screen.getByText("Local sellers. Real products.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /View All Listings/i })).toHaveAttribute(
+    expect(screen.getByRole("heading", { name: "Mzansi Market" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View all Mzansi Market" })).toHaveAttribute(
       "href",
       "/mzansi-market"
     );

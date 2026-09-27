@@ -20,10 +20,6 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-vi.mock("next/navigation", () => ({
-  usePathname: () => "/",
-}));
-
 vi.mock("@/components/layout/header", () => ({
   Header: () => <header data-testid="header" />,
 }));
@@ -65,7 +61,7 @@ describe("HomePage", () => {
     vi.clearAllMocks();
   });
 
-  it("leads with a value-proposition hero and search, then the showcase rails", async () => {
+  it("leads with the showroom, then the three areas and their showcase rails", async () => {
     const ui = await HomePage();
     render(ui);
 
@@ -75,29 +71,34 @@ describe("HomePage", () => {
     const marketShowcase = screen.getByTestId("market-showcase");
 
     expect(heroBanner).toBeInTheDocument();
+    expect(promotionsShowcase).toBeInTheDocument();
+    expect(businessShowcase).toBeInTheDocument();
+    expect(marketShowcase).toBeInTheDocument();
     expect(promotionsShowcase.compareDocumentPosition(businessShowcase)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     );
     expect(businessShowcase.compareDocumentPosition(marketShowcase)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     );
-
-    const heading = screen.getByRole("heading", { level: 1 });
-    expect(heading).toHaveTextContent("Buy, sell and discover with people you can trust.");
-    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
-    // The hero is the first landmark content and carries the site search.
-    const hero = screen.getByRole("main").firstElementChild as HTMLElement;
-    expect(hero).toContainElement(heading);
-    expect(within(hero).getByRole("search", { name: "Search VerifyMzansi" })).toHaveAttribute(
-      "action",
-      "/search"
-    );
     expect(
-      screen.getByRole("heading", { name: "Know who you're dealing with." })
-    ).toBeInTheDocument();
-    expect(screen.getByText("Create your free account")).toBeInTheDocument();
-    expect(screen.getByText("Complete verification")).toBeInTheDocument();
-    expect(screen.getByText("Choose where to post")).toBeInTheDocument();
+      screen.getByRole("heading", {
+        level: 1,
+        name: "VerifyMzansi: Mzansi Market, Mzansi Business, Tourism and Events",
+      })
+    ).toHaveClass("sr-only");
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.queryByRole("search")).not.toBeInTheDocument();
+    // The showroom is the first visible section, straight after the screen-reader h1.
+    expect(screen.getByRole("main").children[1]).toBe(heroBanner);
+    const categories = screen.getByRole("navigation", {
+      name: "VerifyMzansi primary categories",
+    });
+    expect(heroBanner.compareDocumentPosition(categories)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(categories.compareDocumentPosition(promotionsShowcase)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+    // Only the three areas are named; no invented sub-categories.
+    expect(within(categories).getAllByRole("link")).toHaveLength(3);
   });
 
   it("uses canonical category href values", async () => {
@@ -112,7 +113,7 @@ describe("HomePage", () => {
       "href",
       "/post/create"
     );
-    expect(screen.getByRole("link", { name: /^Pricing/i })).toHaveAttribute("href", "/pricing");
+    expect(screen.getByRole("link", { name: /Pricing/i })).toHaveAttribute("href", "/pricing");
     expect(within(primaryCategories).getByRole("link", { name: /Mzansi Market/i })).toHaveAttribute(
       "href",
       "/mzansi-market"
@@ -170,7 +171,7 @@ describe("HomePage", () => {
     );
   });
 
-  it("links onboarding destinations and actions to the expected pages", async () => {
+  it("links the post-for-free actions to the expected pages", async () => {
     const ui = await HomePage();
     render(ui);
 
@@ -178,15 +179,8 @@ describe("HomePage", () => {
       "href",
       "/post/create"
     );
-    expect(screen.getByRole("link", { name: /^Pricing/i })).toHaveAttribute("href", "/pricing");
-    expect(screen.getByRole("link", { name: /^Advertise/i })).toHaveAttribute("href", "/advertise");
-    expect(screen.getByRole("link", { name: /How verification works/i })).toHaveAttribute(
-      "href",
-      "/trust-safety"
-    );
-    expect(screen.getByRole("link", { name: /Cars & bakkies/i })).toHaveAttribute(
-      "href",
-      "/mzansi-market?category=vehicles"
-    );
+    expect(screen.getByRole("link", { name: /Pricing/i })).toHaveAttribute("href", "/pricing");
+    expect(screen.getByRole("link", { name: /Advertise/i })).toHaveAttribute("href", "/advertise");
+    expect(screen.getByRole("heading", { name: "Your first post is free." })).toBeInTheDocument();
   });
 });

@@ -4,21 +4,6 @@ import { CreditCard, Truck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-const PAYMENT_ACRONYMS = new Set(["eft", "atm", "pos", "qr"]);
-
-/** "eft" → "EFT", "cash_on_delivery" → "Cash On Delivery". */
-function formatPaymentMethod(method: string): string {
-  return method
-    .split(/[_\s]+/)
-    .filter(Boolean)
-    .map((word) =>
-      PAYMENT_ACRONYMS.has(word.toLowerCase())
-        ? word.toUpperCase()
-        : word.charAt(0).toUpperCase() + word.slice(1)
-    )
-    .join(" ");
-}
-
 interface BusinessPaymentDeliverySectionProps {
   paymentMethods: string[] | null;
   deliveryAvailable: boolean;
@@ -44,8 +29,8 @@ export function BusinessPaymentDeliverySection({
           <CardContent>
             <div className="flex flex-wrap gap-2">
               {paymentMethods.map((method) => (
-                <Badge key={method} variant="outline">
-                  {formatPaymentMethod(method)}
+                <Badge key={method} variant="outline" className="capitalize">
+                  {method.replace(/_/g, " ")}
                 </Badge>
               ))}
             </div>

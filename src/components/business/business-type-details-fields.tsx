@@ -18,11 +18,6 @@ import {
 import type { BusinessDetails } from "@/types/business-details";
 import type { BusinessType } from "@/types/enums";
 
-const RADIO_CARD =
-  "flex flex-1 cursor-pointer items-start gap-3 rounded-xl border border-input bg-card px-3 py-3 text-sm transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring";
-const RADIO_CARD_ON =
-  "border-brand-blue-600 bg-brand-blue-50 dark:border-brand-blue-400 dark:bg-brand-blue-950/40";
-
 interface BusinessTypeDetailsFieldsProps {
   businessType: BusinessType;
   businessDetails: BusinessDetails;
@@ -68,24 +63,26 @@ export function BusinessTypeDetailsFields({
   );
 
   return (
-    <div className="space-y-4 rounded-2xl border border-border bg-muted/30 p-4">
-      <div className="space-y-0.5">
-        <h4 className="text-sm font-semibold text-foreground">{section.title}</h4>
-        <p className="text-xs leading-5 text-muted-foreground">{section.description}</p>
+    <div className="space-y-4 rounded-xl border bg-muted/40 p-4">
+      <div className="space-y-1">
+        <h3 className="text-sm font-medium">{section.title}</h3>
+        <p className="text-xs text-muted-foreground">{section.description}</p>
       </div>
 
       {businessType === "online_only" && onDeliveryAvailableChange && (
-        <div className="space-y-3">
-          <p className="text-sm font-medium">Does this business deliver?</p>
+        <div className="space-y-3 rounded-lg border bg-background p-4">
+          <div className="space-y-1">
+            <Label className="text-sm font-medium">Does this business provide delivery?</Label>
+            <p className="text-xs text-muted-foreground">
+              Choose Yes only if this online business delivers orders to customers.
+            </p>
+          </div>
           <div
             className="flex flex-col gap-3 sm:flex-row"
             role="radiogroup"
             aria-label="Delivery availability"
           >
-            <label
-              htmlFor="online-delivery-yes"
-              className={cn(RADIO_CARD, deliveryAvailable && RADIO_CARD_ON)}
-            >
+            <div className="flex items-start gap-3 rounded-lg border bg-background px-3 py-3 text-sm">
               <input
                 id="online-delivery-yes"
                 type="radio"
@@ -93,16 +90,16 @@ export function BusinessTypeDetailsFields({
                 aria-label="Yes, this business offers delivery"
                 checked={deliveryAvailable}
                 onChange={() => onDeliveryAvailableChange(true)}
-                className="mt-0.5 h-4 w-4 accent-brand-blue-600"
+                className="mt-0.5"
               />
               <span>
                 <span className="block font-medium">Yes, this business offers delivery</span>
+                <span className="block text-xs text-muted-foreground">
+                  Customers can place orders and have them delivered.
+                </span>
               </span>
-            </label>
-            <label
-              htmlFor="online-delivery-no"
-              className={cn(RADIO_CARD, !deliveryAvailable && RADIO_CARD_ON)}
-            >
+            </div>
+            <div className="flex items-start gap-3 rounded-lg border bg-background px-3 py-3 text-sm">
               <input
                 id="online-delivery-no"
                 type="radio"
@@ -110,12 +107,15 @@ export function BusinessTypeDetailsFields({
                 aria-label="No, delivery is not available"
                 checked={!deliveryAvailable}
                 onChange={() => onDeliveryAvailableChange(false)}
-                className="mt-0.5 h-4 w-4 accent-brand-blue-600"
+                className="mt-0.5"
               />
               <span>
                 <span className="block font-medium">No, delivery is not available</span>
+                <span className="block text-xs text-muted-foreground">
+                  Hide delivery fields and save this business without delivery coverage details.
+                </span>
               </span>
-            </label>
+            </div>
           </div>
         </div>
       )}
@@ -149,7 +149,9 @@ export function BusinessTypeDetailsFields({
             placeholder="e.g. Sandton, Randburg, Fourways, Midrand"
             className={cn(fieldErrors.service_areas && "border-destructive")}
           />
-          <p className="text-xs text-muted-foreground">Separate areas with commas.</p>
+          <p className="text-xs text-muted-foreground">
+            Separate areas with commas so customers know where you operate.
+          </p>
           {fieldErrors.service_areas && (
             <p className="inline-form-error">{fieldErrors.service_areas}</p>
           )}
@@ -168,7 +170,9 @@ export function BusinessTypeDetailsFields({
             placeholder="https://maps.google.com/..."
             className={cn(fieldErrors.map_directions && "border-destructive")}
           />
-          <p className="text-xs text-muted-foreground">Optional. Paste a Google Maps link.</p>
+          <p className="text-xs text-muted-foreground">
+            Add a shareable maps link for customers who need navigation help.
+          </p>
           {fieldErrors.map_directions && (
             <p className="inline-form-error">{fieldErrors.map_directions}</p>
           )}
@@ -199,10 +203,10 @@ export function BusinessTypeDetailsFields({
                         key={day.value}
                         htmlFor={`business-detail-${field.name}-${day.value}`}
                         className={cn(
-                          "flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-xl border px-3 text-sm font-medium transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2",
+                          "flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
                           checked
-                            ? "border-brand-blue-600 bg-brand-blue-50 text-brand-blue-800 dark:border-brand-blue-400 dark:bg-brand-blue-950/40 dark:text-brand-blue-200"
-                            : "border-input bg-card hover:bg-muted/50"
+                            ? "border-brand-green bg-brand-green/10 text-brand-green"
+                            : "border-input bg-background hover:bg-muted/50"
                         )}
                       >
                         <input
@@ -232,14 +236,14 @@ export function BusinessTypeDetailsFields({
               <label
                 key={field.name}
                 htmlFor={`business-detail-${field.name}`}
-                className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-input bg-card px-3 py-2.5 text-sm"
+                className="flex items-center gap-3 rounded-lg border bg-background px-3 py-3 text-sm"
               >
                 <input
                   id={`business-detail-${field.name}`}
                   type="checkbox"
                   checked={Boolean(value)}
                   onChange={(event) => onBusinessDetailsChange(field.name, event.target.checked)}
-                  className="h-4 w-4 rounded accent-brand-blue-600"
+                  className="rounded"
                 />
                 <span>{field.label}</span>
               </label>

@@ -1,13 +1,11 @@
 import { Suspense } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ArrowRight, LayoutGrid, UserRoundCheck, BadgeCheck } from "lucide-react";
+import { ArrowRight, Building2, ShoppingBag, TreePalm } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
-import { HomeHero } from "@/components/home/home-hero";
-import { HomeCategoryGateways } from "@/components/home/home-category-gateways";
-import { HomeTrustSection } from "@/components/home/home-trust-section";
 import { MarketplacePreviewsSkeleton } from "@/components/home/marketplace-previews-skeleton";
 import { HeroBannerWithData } from "@/components/home/hero-banner-with-data";
 import { HeroBannerSkeleton } from "@/components/home/hero-banner-skeleton";
@@ -37,23 +35,27 @@ export const metadata: Metadata = {
 /** Revalidate homepage data every 60 seconds (ISR) */
 export const revalidate = 60;
 
-const START_STEPS = [
-  {
-    icon: UserRoundCheck,
-    title: "Create your free account",
-    tile: "area-market-tile",
+/** The three VerifyMzansi areas, shown as photo tiles in each area's colour. */
+const CATEGORY_TILES = {
+  "mzansi-market": {
+    icon: ShoppingBag,
+    image: "/images/showrooms/market-v2-mobile.avif",
+    tint: "from-brand-green-900/85 via-brand-green-800/35",
+    chip: "bg-brand-green-600",
   },
-  {
-    icon: BadgeCheck,
-    title: "Complete verification",
-    tile: "bg-brand-gold/15 text-brand-gold-800 dark:text-brand-gold-300",
+  "mzansi-business": {
+    icon: Building2,
+    image: "/images/showrooms/business-v2-mobile.avif",
+    tint: "from-brand-blue-900/85 via-brand-blue-800/35",
+    chip: "bg-brand-blue-600",
   },
-  {
-    icon: LayoutGrid,
-    title: "Choose where to post",
-    tile: "area-business-tile",
+  "tourism-events": {
+    icon: TreePalm,
+    image: "/images/showrooms/tourism-v2-mobile.avif",
+    tint: "from-teal-900/85 via-teal-800/35",
+    chip: "bg-teal-600",
   },
-] as const;
+} as const;
 
 export default async function HomePage() {
   const runtimeConfig = getServerPublicRuntimeConfig();
@@ -130,50 +132,72 @@ export default async function HomePage() {
   return (
     <DisableMobileAutoplay>
       <div className="flex min-h-screen flex-col">
-        <Header showSearch={false} />
+        <Header />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/<\//g, "<\\/") }}
         />
 
         <main id="main-content" className="flex-1 scroll-mt-24">
-          {/* ═══ Hero: what VerifyMzansi is, search, and why to trust it ═══ */}
-          <HomeHero />
+          <h1 className="sr-only">
+            VerifyMzansi: Mzansi Market, Mzansi Business, Tourism and Events
+          </h1>
 
-          {/* ═══ The three product areas ═══ */}
-          <HomeCategoryGateways />
-
-          {/* ═══ Spotlight showroom (boosted + newest across all areas) ═══ */}
+          {/* ═══ Showroom: our clients' posts, first thing on the page ═══ */}
           <Suspense fallback={<HeroBannerSkeleton />}>
-            <HeroBannerWithData
-              hideWhenEmpty
-              heading={
-                <div className="container-page mb-5 flex items-end justify-between gap-4 pt-2">
-                  <div>
-                    <p className="flex items-center gap-2 text-sm font-semibold text-brand-gold-800 dark:text-brand-gold-300">
-                      <span aria-hidden="true" className="h-1.5 w-5 rounded-full bg-brand-gold" />
-                      Spotlight
-                    </p>
-                    <h2 className="section-title mt-2">Trending across Mzansi</h2>
-                  </div>
-                  <Link
-                    href="/advertise"
-                    prefetch={false}
-                    className="link-arrow hidden sm:inline-flex"
-                  >
-                    Get featured here
-                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </Link>
-                </div>
-              }
-            />
+            <HeroBannerWithData />
           </Suspense>
 
+          {/* ═══ The three areas ═══ */}
+          <nav aria-label="VerifyMzansi primary categories" className="container-page py-5 sm:py-8">
+            <ul className="grid grid-cols-3 gap-2.5 sm:gap-4">
+              {VERIFY_MZANSI_CATEGORY_SEO.map((category) => {
+                const tile = CATEGORY_TILES[category.id];
+                const Icon = tile.icon;
+                return (
+                  <li key={category.id}>
+                    <Link
+                      href={category.href}
+                      prefetch={false}
+                      className="group relative flex aspect-[3/4] items-end overflow-hidden rounded-2xl bg-muted elev-sm transition-transform duration-300 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:aspect-[16/7] sm:rounded-3xl"
+                    >
+                      <Image
+                        src={tile.image}
+                        alt=""
+                        fill
+                        sizes="(min-width: 640px) 33vw, 33vw"
+                        className="object-cover transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none"
+                      />
+                      <span
+                        aria-hidden="true"
+                        className={`absolute inset-0 bg-gradient-to-t ${tile.tint} to-transparent`}
+                      />
+                      <span className="relative flex w-full flex-col items-start gap-2 p-3 sm:flex-row sm:items-center sm:gap-3 sm:p-5">
+                        <span
+                          aria-hidden="true"
+                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white shadow-md sm:h-11 sm:w-11 ${tile.chip}`}
+                        >
+                          <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
+                        </span>
+                        <span className="font-display text-sm font-bold leading-tight text-white drop-shadow sm:text-xl">
+                          {category.name}
+                        </span>
+                        <ArrowRight
+                          aria-hidden="true"
+                          className="ml-auto hidden h-5 w-5 text-white/80 transition-transform group-hover:translate-x-0.5 sm:block"
+                        />
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+
+          {/* ═══ Latest posts from each area ═══ */}
           <Suspense fallback={<MarketplacePreviewsSkeleton />}>
             <HomePromotionsShowcase />
           </Suspense>
-
-          <HomeTrustSection />
 
           <Suspense fallback={<MarketplacePreviewsSkeleton />}>
             <HomeBusinessShowcase />
@@ -187,61 +211,35 @@ export default async function HomePage() {
             <HomeProgrammeShowcase />
           </Suspense>
 
-          {/* ═══ Get started ═══ */}
-          <section aria-labelledby="home-start-title" className="container-page py-12 sm:py-16">
-            <div className="grid gap-8 rounded-[32px] border border-border/70 bg-card p-6 elev-sm sm:p-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-center lg:gap-14 lg:p-14">
-              <div>
-                <h2
-                  id="home-start-title"
-                  className="font-display text-3xl font-bold leading-tight tracking-tight sm:text-4xl"
+          {/* ═══ Post for free ═══ */}
+          <section aria-labelledby="home-start-title" className="container-page py-10 sm:py-14">
+            <div className="flex flex-col items-start gap-5 rounded-3xl bg-gradient-to-br from-brand-green-700 to-brand-green-900 p-6 text-white elev-sm sm:flex-row sm:items-center sm:justify-between sm:p-10">
+              <h2
+                id="home-start-title"
+                className="font-display text-2xl font-bold leading-tight tracking-tight sm:text-3xl"
+              >
+                Your first post is free.
+              </h2>
+              <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+                <Button
+                  asChild
+                  size="lg"
+                  className="h-12 rounded-full bg-white px-7 text-base font-semibold text-brand-green-800 hover:bg-white/90"
                 >
-                  Your first post is free.
-                </h2>
-                <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <Button
-                    asChild
-                    variant="trust-verified"
-                    size="lg"
-                    className="h-12 w-full rounded-full px-7 sm:w-auto"
-                  >
-                    <Link href="/post/create" prefetch={false}>
-                      Post for free
-                    </Link>
-                  </Button>
-                  <div className="flex items-center gap-5 px-1">
-                    <Link href="/pricing" prefetch={false} className="link-arrow">
-                      Pricing
-                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                    </Link>
-                    <Link href="/advertise" prefetch={false} className="link-arrow">
-                      Advertise
-                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                    </Link>
-                  </div>
+                  <Link href="/post/create" prefetch={false}>
+                    Post for Free
+                    <ArrowRight className="h-5 w-5" aria-hidden="true" />
+                  </Link>
+                </Button>
+                <div className="flex items-center gap-5 px-1 text-sm font-semibold">
+                  <Link href="/pricing" prefetch={false} className="hover:underline">
+                    Pricing
+                  </Link>
+                  <Link href="/advertise" prefetch={false} className="hover:underline">
+                    Advertise
+                  </Link>
                 </div>
               </div>
-
-              <ol className="grid gap-3">
-                {START_STEPS.map((step, index) => (
-                  <li
-                    key={step.title}
-                    className="flex items-center gap-4 rounded-2xl border border-border/70 bg-background/60 p-4"
-                  >
-                    <span
-                      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${step.tile}`}
-                      aria-hidden="true"
-                    >
-                      <step.icon className="h-5 w-5" />
-                    </span>
-                    <h3 className="min-w-0 font-body text-base font-semibold text-foreground">
-                      <span aria-hidden="true" className="mr-2 tabular-nums text-muted-foreground">
-                        {index + 1}.
-                      </span>
-                      <span>{step.title}</span>
-                    </h3>
-                  </li>
-                ))}
-              </ol>
             </div>
           </section>
         </main>

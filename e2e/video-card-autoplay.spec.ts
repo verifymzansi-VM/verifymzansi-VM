@@ -263,10 +263,8 @@ test.describe("Card video autoplay", () => {
       await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(true);
       await card.getByRole("button", { name: "Unmute", exact: true }).click();
       await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(true);
-      // Card details sit below the media and stay readable whatever the playback state.
-      const metadata = card.locator("[data-card-metadata]");
-      await expect(metadata).toBeVisible();
-      await expect(metadata.getByText("Johannesburg", { exact: true })).toBeVisible();
+      await expect(card.locator("[data-card-overlay]")).toHaveCSS("opacity", "1");
+      await expect(card.getByText("Johannesburg", { exact: true })).toBeVisible();
       expect(page.url()).toBe(url);
     });
 

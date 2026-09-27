@@ -38,7 +38,7 @@ function getBusinessStatus(
 ): { label: string; className: string } | null {
   const now = new Date();
   if (featuredUntil && new Date(featuredUntil) > now) {
-    return { label: "Featured", className: "bg-brand-gold-400 text-brand-gold-950" };
+    return { label: "Featured", className: "bg-amber-400 text-amber-950" };
   }
   if (boostUntil && new Date(boostUntil) > now) {
     return { label: "Boosted", className: "bg-brand-blue text-white" };
@@ -75,8 +75,7 @@ function buildBusinessDescription(
     if (typeDef) parts.push(typeDef.label);
   }
 
-  // One clear label reads better on a card than a "Category · Type" string.
-  if (parts.length > 0) return parts[0];
+  if (parts.length > 0) return parts.join(" · ");
   if (description) return description;
   return null;
 }
@@ -147,7 +146,7 @@ export function BusinessCard({
       mediaHeight={mediaHeight}
       fallback={
         <div className="flex h-full w-full items-center justify-center text-brand-blue/35">
-          <Store className="h-16 w-16" aria-hidden="true" />
+          <Store className="h-16 w-16" />
         </div>
       }
     />

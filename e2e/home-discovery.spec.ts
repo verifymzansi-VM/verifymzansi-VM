@@ -23,27 +23,3 @@ test("mobile menu preserves scrolling, returns focus, and resets on desktop", as
     true
   );
 });
-
-test("homepage hero search sends visitors to site search", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
-  await expect(
-    page.getByRole("heading", {
-      level: 1,
-      name: "Buy, sell and discover with people you can trust.",
-    })
-  ).toBeVisible();
-  // The header search is hidden on the homepage because the hero leads with its own.
-  await expect(page.locator("header").getByRole("search")).toHaveCount(0);
-
-  const search = page.locator("main").getByRole("search", { name: "Search VerifyMzansi" });
-  const input = search.getByRole("searchbox", { name: "Search VerifyMzansi" });
-  // An empty search stays on the page and keeps focus in the field.
-  await search.getByRole("button", { name: "Search" }).click();
-  await expect(page).toHaveURL(/\/$/);
-  await expect(input).toBeFocused();
-
-  await input.fill("bakkie");
-  await input.press("Enter");
-  await expect(page).toHaveURL(/\/search\?q=bakkie/);
-});

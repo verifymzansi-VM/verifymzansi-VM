@@ -1,7 +1,7 @@
 "use client";
 
-import { formatRandAmount } from "@/lib/utils/format";
 import { VideoViewTracker } from "@/components/ui/video-view-tracker";
+import { formatRandAmount } from "@/lib/utils/format";
 
 import Link from "next/link";
 import { MapPin, Play } from "lucide-react";
@@ -59,7 +59,7 @@ export function AreaPreviewCard({
   const isVideo = isVideoUrl(imageUrl);
   const normalizedImageUrl = imageUrl ? normalizeMediaUrl(imageUrl) : undefined;
 
-  const formatPrice = (p: number) => `R${formatRandAmount(p)}`;
+  const formatPrice = (p: number) => `R ${formatRandAmount(p)}`;
 
   return (
     <Link

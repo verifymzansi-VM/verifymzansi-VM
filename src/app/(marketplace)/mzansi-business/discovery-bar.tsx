@@ -1,21 +1,16 @@
 "use client";
 
 import { useEffect, useRef, type KeyboardEvent } from "react";
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { useDebouncedCallback } from "@/hooks/use-debounce";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { useMarketplaceStore } from "@/stores";
 import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
-import { cn } from "@/lib/utils";
-import {
-  FilterField,
-  RemovableFilterChip,
-  filterInputClass,
-  filterSelectClass,
-} from "@/components/listings/filter-controls";
 
 export function BusinessDiscoveryBar() {
   const { filters, setFilter, resetFilters } = useMarketplaceStore();
@@ -65,33 +60,19 @@ export function BusinessDiscoveryBar() {
   ].filter(Boolean).length;
 
   return (
-    // The page supplies the card surface around this panel, so render plain content here.
-    <section aria-labelledby="business-filters-title" className="space-y-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="space-y-1">
-          <h2
-            id="business-filters-title"
-            className="font-display text-base font-semibold tracking-tight"
-          >
-            Filters
-          </h2>
-        </div>
-      </div>
-
+    <section className="space-y-5 rounded-2xl border border-border/70 bg-background/95 p-5 elev-sm">
       <div className="space-y-4">
-        <FilterField label="Search" htmlFor="business-search">
+        <div className="space-y-1.5">
+          <Label htmlFor="business-search">Search</Label>
           <div className="relative">
-            <Search
-              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               key={filters.query || "__empty-query__"}
               ref={searchInputRef}
               id="business-search"
               type="search"
-              placeholder="Name, service or brand"
-              className={cn(filterInputClass, "pl-9")}
+              placeholder="Search businesses, services, or brands"
+              className="pl-9"
               defaultValue={filters.query || ""}
               disabled={!isInteractive}
               onChange={(event) => {
@@ -99,12 +80,14 @@ export function BusinessDiscoveryBar() {
               }}
             />
           </div>
-        </FilterField>
+        </div>
 
-        <FilterField label="Category" htmlFor="business-category">
+        <div className="space-y-1.5">
+          <Label htmlFor="business-category">Category</Label>
           <select
             id="business-category"
-            className={filterSelectClass}
+            aria-label="Category"
+            className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm"
             value={filters.businessCategory || ""}
             disabled={!isInteractive}
             onChange={(event) =>
@@ -123,12 +106,14 @@ export function BusinessDiscoveryBar() {
               </option>
             ))}
           </select>
-        </FilterField>
+        </div>
 
-        <FilterField label="Business type" htmlFor="business-type">
+        <div className="space-y-1.5">
+          <Label htmlFor="business-type">Business type</Label>
           <select
             id="business-type"
-            className={filterSelectClass}
+            aria-label="Business type"
+            className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm"
             value={filters.businessType || ""}
             disabled={!isInteractive}
             onChange={(event) =>
@@ -145,12 +130,14 @@ export function BusinessDiscoveryBar() {
               </option>
             ))}
           </select>
-        </FilterField>
+        </div>
 
-        <FilterField label="Province" htmlFor="business-province">
+        <div className="space-y-1.5">
+          <Label htmlFor="business-province">Province</Label>
           <select
             id="business-province"
-            className={filterSelectClass}
+            aria-label="Province"
+            className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm"
             value={filters.province || ""}
             disabled={!isInteractive}
             onChange={(event) => {
@@ -165,17 +152,19 @@ export function BusinessDiscoveryBar() {
               </option>
             ))}
           </select>
-        </FilterField>
+        </div>
 
-        <FilterField label="City" htmlFor="business-city">
+        <div className="space-y-1.5">
+          <Label htmlFor="business-city">City</Label>
           <select
             id="business-city"
-            className={filterSelectClass}
+            aria-label="City"
+            className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm"
             value={filters.city || ""}
             onChange={(event) => setFilter("city", event.target.value || undefined)}
             disabled={!isInteractive || !filters.province}
           >
-            <option value="">{filters.province ? "All cities" : "Choose a province first"}</option>
+            <option value="">{filters.province ? "All cities" : "Select province first"}</option>
             {filters.province &&
               getCitiesForProvince(filters.province).map((city) => (
                 <option key={city} value={city}>
@@ -183,64 +172,81 @@ export function BusinessDiscoveryBar() {
                 </option>
               ))}
           </select>
-        </FilterField>
+        </div>
       </div>
 
       {hasActiveFilters > 0 && (
-        <div className="space-y-2 border-t border-border/70 pt-4">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {filters.query && (
-              <RemovableFilterChip
-                label={filters.query}
-                removeLabel={`Remove query filter ${filters.query}`}
+        <div className="flex flex-wrap items-center gap-2">
+          {filters.query && (
+            <Badge variant="secondary" className="gap-1">
+              {filters.query}
+              <button
+                type="button"
+                className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={`Remove query filter ${filters.query}`}
                 disabled={!isInteractive}
-                onRemove={clearQueryFilter}
-                onRemoveKeyDown={(event) => handleKeyboardChipClear(event, clearQueryFilter)}
-              />
-            )}
-            {filters.businessCategory && (
-              <RemovableFilterChip
-                label={
-                  BUSINESS_CATEGORIES.find((item) => item.value === filters.businessCategory)
-                    ?.label ?? filters.businessCategory
-                }
-                removeLabel="Remove business category filter"
+                onClick={clearQueryFilter}
+                onKeyDown={(event) => handleKeyboardChipClear(event, clearQueryFilter)}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+          {filters.businessCategory && (
+            <Badge variant="secondary" className="gap-1">
+              {BUSINESS_CATEGORIES.find((item) => item.value === filters.businessCategory)?.label}
+              <button
+                type="button"
+                className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Remove business category filter"
                 disabled={!isInteractive}
-                onRemove={() => setFilter("businessCategory", undefined)}
-              />
-            )}
-            {filters.businessType && (
-              <RemovableFilterChip
-                label={
-                  BUSINESS_TYPE_OPTIONS.find((item) => item.value === filters.businessType)
-                    ?.label ?? filters.businessType
-                }
-                removeLabel="Remove business type filter"
+                onClick={() => setFilter("businessCategory", undefined)}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+          {filters.businessType && (
+            <Badge variant="secondary" className="gap-1">
+              {BUSINESS_TYPE_OPTIONS.find((item) => item.value === filters.businessType)?.label}
+              <button
+                type="button"
+                className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Remove business type filter"
                 disabled={!isInteractive}
-                onRemove={() => setFilter("businessType", undefined)}
-              />
-            )}
-            {filters.province && (
-              <RemovableFilterChip
-                label={filters.city ? `${filters.city}, ${filters.province}` : filters.province}
-                removeLabel="Remove location filter"
+                onClick={() => setFilter("businessType", undefined)}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+          {filters.province && (
+            <Badge variant="secondary" className="gap-1">
+              {filters.province}
+              {filters.city && `, ${filters.city}`}
+              <button
+                type="button"
+                className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Remove location filter"
                 disabled={!isInteractive}
-                onRemove={() => {
+                onClick={() => {
                   setFilter("province", undefined);
                   setFilter("city", undefined);
                 }}
-              />
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 px-2.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
-              disabled={!isInteractive}
-              onClick={clearAllFilters}
-            >
-              Clear all
-            </Button>
-          </div>
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-11 px-3 text-sm sm:h-10 sm:text-xs"
+            disabled={!isInteractive}
+            onClick={clearAllFilters}
+          >
+            Clear all
+          </Button>
         </div>
       )}
     </section>

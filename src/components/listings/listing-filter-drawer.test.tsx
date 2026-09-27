@@ -66,7 +66,7 @@ describe("ListingFilterDrawer", () => {
 
     render(<ListingFilterDrawer />);
 
-    expect(screen.getByText("Electronics & Tech filters")).toBeInTheDocument();
+    expect(screen.getByText("Electronics & Tech Filters")).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Device Type" })).toBeInTheDocument();
     expect(screen.getByLabelText("Brand")).toBeInTheDocument();
   });

@@ -8,40 +8,38 @@ import { contactPhone, whatsappLink } from "@/lib/utils/contact-links";
 import Image from "next/image";
 import {
   Building2,
-  CalendarClock,
+  Calendar,
   CalendarPlus,
-  ChevronLeft,
-  ChevronRight,
+  ChevronDown,
   Eye,
+  Globe,
   MapPin,
   Maximize2,
   MessageCircle,
+  Music2,
   Phone,
   Play,
   Ticket,
   Timer,
+  Users,
+  UtensilsCrossed,
 } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { PromotionContactActions } from "@/components/listings/promotion-contact-actions";
-import {
-  DetailSection,
-  FactGrid,
-  PosterTrustCard,
-  SafetyTipsCard,
-  type DetailFact,
-} from "@/components/listings/detail-panels";
+import { TrustBadge } from "@/components/trust/trust-badge";
 import { MediaLightbox } from "@/components/ui/media-lightbox";
 import { StickyMobileBar } from "@/components/ui/sticky-mobile-bar";
 import {
   formatRandAmount,
   formatSaLongDate,
   formatSaShortDate,
-  formatZARShort,
+  formatZAR,
 } from "@/lib/utils/format";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
-import { safeExternalHref } from "@/lib/utils/sanitize-html";
 import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
 import { type BusinessCategory, type AccountVerificationStatus } from "@/types/enums";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
@@ -52,7 +50,6 @@ import { ProfileVideoPlayer } from "@/components/ui/profile-video-player";
 import type { EventDetails, TicketTier } from "@/types/tourism-details";
 import { useHorizontalSwipeNavigation } from "@/hooks/use-horizontal-swipe-navigation";
 import { useTrackContentView } from "@/hooks/use-track-content-view";
-import { useHydrated } from "@/hooks/use-hydrated";
 
 export interface PromotionDetailRecord {
   id: string;
@@ -105,98 +102,53 @@ type PromotionMediaItem = {
   photoNumber?: number;
 };
 
-type EventState = "upcoming" | "ongoing" | "ended";
+function getEventState(startDate: string | null, endDate: string | null) {
+  const now = new Date();
+  const startsAt = startDate ? new Date(startDate) : null;
+  const endsAt = endDate ? new Date(endDate) : null;
 
-function getEventState(
-  startDate: string | null,
-  endDate: string | null,
-  nowMs: number
-): EventState {
-  const startsAt = startDate ? new Date(startDate).getTime() : null;
-  const endsAt = endDate ? new Date(endDate).getTime() : null;
-
-  if (startsAt != null && startsAt > nowMs) return "upcoming";
-  if (endsAt != null && endsAt < nowMs) return "ended";
+  if (startsAt && startsAt > now) return "upcoming";
+  if (endsAt && endsAt < now) return "ended";
   return "ongoing";
 }
 
-const EVENT_STATE_BADGE: Record<EventState, { label: string; className: string }> = {
+const EVENT_STATE_BADGE: Record<string, { label: string; className: string }> = {
   upcoming: {
-    label: "Upcoming",
-    className: "bg-sunset-600 text-white",
+    label: "Upcoming Event",
+    className: "bg-brand-blue text-white",
   },
   ongoing: {
-    label: "Happening now",
-    className: "bg-brand-green-600 text-white",
+    label: "Happening Now",
+    className: "bg-brand-green text-white",
   },
   ended: {
-    label: "Event ended",
-    className: "bg-warm-700 text-white",
+    label: "Event Ended",
+    className: "bg-muted text-foreground",
   },
 };
 
 const CONTACT_METHOD_LABELS: Record<string, string> = {
-  call: "Phone call",
+  call: "Phone Call",
   whatsapp: "WhatsApp",
-  form: "Enquiry form",
-  in_app: "Enquiry form",
+  form: "Contact Form",
 };
 
 const EVENT_RECURRING_LABELS: Record<string, string> = {
-  one_off: "Once-off",
+  one_off: "One-off",
   weekly: "Weekly",
   monthly: "Monthly",
   annual: "Annual",
 };
 
 const EVENT_RAIN_POLICY_LABELS: Record<string, string> = {
-  outdoor_rain_or_shine: "Outdoor, rain or shine",
-  moved_indoors: "Moves indoors",
+  outdoor_rain_or_shine: "Outdoor — rain or shine",
+  moved_indoors: "Moved indoors",
   postponed: "Postponed",
   refunded: "Refunded",
 };
 
-const SAST_OFFSET_MS = 2 * 60 * 60 * 1000;
-
-/** Deterministic "18:00" in South African time (safe for hydration). */
-function formatSaTime(date: string): string | null {
-  const d = new Date(date);
-  if (Number.isNaN(d.getTime())) return null;
-  const sast = new Date(d.getTime() + SAST_OFFSET_MS);
-  const hours = sast.getUTCHours();
-  const minutes = sast.getUTCMinutes();
-  if (hours === 0 && minutes === 0) return null; // date-only value
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
-}
-
-function formatEventMoment(date: string) {
-  const day = formatSaShortDate(date);
-  const time = formatSaTime(date);
-  return time ? `${day}, ${time}` : day;
-}
-
-function formatEventWhen(start: string | null, end: string | null) {
-  if (!start) return end ? `Until ${formatEventMoment(end)}` : null;
-  if (!end) return formatEventMoment(start);
-  const sameDay = formatSaShortDate(start) === formatSaShortDate(end);
-  const endTime = formatSaTime(end);
-  if (sameDay)
-    return endTime ? `${formatEventMoment(start)} – ${endTime}` : formatEventMoment(start);
-  return `${formatEventMoment(start)} – ${formatEventMoment(end)}`;
-}
-
-function humanizeKey(value: string) {
-  const text = value.replace(/_/g, " ").trim();
-  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
-}
-
-/** Early-bird deadlines are free text; show a real date consistently when we can parse one. */
-function formatLooseDate(value: string) {
-  return /^\d{4}-\d{2}-\d{2}/.test(value) ? formatSaLongDate(value) || value : value;
-}
-
-/* ─── Countdown (isolated so the 1s tick doesn't re-render the whole page) ─── */
-function EventCountdown({ targetDate, label }: { targetDate: string | null; label: string }) {
+/* ─── Countdown timer hook ─── */
+function useCountdown(targetDate: string | null) {
   const [timeLeft, setTimeLeft] = useState<{
     days: number;
     hours: number;
@@ -226,26 +178,8 @@ function EventCountdown({ targetDate, label }: { targetDate: string | null; labe
     return () => clearInterval(interval);
   }, [targetDate]);
 
-  if (!timeLeft) return null;
-
-  return (
-    <div className="flex items-center gap-3 rounded-xl bg-sunset-50 px-3.5 py-2.5 text-sunset-900 dark:bg-sunset-500/10 dark:text-sunset-200">
-      <Timer className="h-4 w-4 shrink-0" aria-hidden="true" />
-      <p className="text-sm font-medium">{label}</p>
-      <p className="ml-auto font-display text-base font-bold tabular-nums" aria-live="off">
-        {timeLeft.days > 0 ? `${timeLeft.days}d ` : ""}
-        {String(timeLeft.hours).padStart(2, "0")}h {String(timeLeft.minutes).padStart(2, "0")}m{" "}
-        <span className="sr-only">and </span>
-        {String(timeLeft.seconds).padStart(2, "0")}s
-      </p>
-    </div>
-  );
+  return timeLeft;
 }
-
-const PUBLIC_GRID =
-  "grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:grid-rows-[auto_1fr] lg:gap-x-8 xl:grid-cols-[minmax(0,1fr)_24rem]";
-const REVIEW_GRID =
-  "grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-rows-[auto_1fr] 2xl:gap-x-8";
 
 export function PromotionDetailContent({
   promotion,
@@ -265,17 +199,14 @@ export function PromotionDetailContent({
   layoutMode?: "public" | "review";
 }) {
   const isReviewLayout = layoutMode === "review";
+  // Create/edit previews already have a page h1.
+  const TitleTag = isReviewLayout ? "h2" : "h1";
   const shouldTrackView = trackView && !isReviewLayout;
   const [viewCount, setViewCount] = useState(promotion.view_count ?? 0);
   const handleViewRecorded = useCallback(() => {
     setViewCount((currentCount) => currentCount + 1);
   }, []);
   useTrackContentView(promotion.id, "promotion", shouldTrackView, handleViewRecorded);
-  // The event state depends on "now": resolve it after mount so server and
-  // browser render the same markup (no hydration mismatch at start/end times).
-  const isHydrated = useHydrated();
-  // eslint-disable-next-line react-hooks/purity -- read the clock only after hydration
-  const nowMs = isHydrated ? Date.now() : null;
   const photos = promotion.photos ?? [];
   const videos = promotion.videos ?? [];
   const leadVideo = videos[0] ?? null;
@@ -318,6 +249,8 @@ export function PromotionDetailContent({
   const manager = useVideoPlaybackManager();
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   const activeMedia = mediaItems[activeMediaIndex] ?? null;
+  const [isDescExpanded, setIsDescExpanded] = useState(false);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxStart, setLightboxStart] = useState(0);
   const wasPlayingRef = useRef(false);
@@ -388,21 +321,14 @@ export function PromotionDetailContent({
     contactMethods.includes("whatsapp") &&
     Boolean(contactPhone(advertiserProfile?.phone));
   const showStickyBar = layoutMode === "public" && (canCall || canWhatsapp);
-  const eventState =
-    nowMs == null ? null : getEventState(promotion.start_date, promotion.end_date, nowMs);
-  const rawCategoryLabel = getPromotionCategoryDisplayLabel(
+  const eventState = getEventState(promotion.start_date, promotion.end_date);
+  const categoryLabel = getPromotionCategoryDisplayLabel(
     promotion.category_key,
     promotion.category
   );
-  // Legacy rows can carry a bare key ("events", "food_market"); never show those raw.
-  const categoryLabel =
-    rawCategoryLabel && /^[a-z0-9_]+$/.test(rawCategoryLabel)
-      ? humanizeKey(rawCategoryLabel)
-      : rawCategoryLabel;
-  const trustLevel =
-    advertiserProfile && !isReviewLayout
-      ? computeTrustLevel(readAccountVerificationStatus(advertiserProfile))
-      : null;
+  const trustLevel = advertiserProfile
+    ? computeTrustLevel(readAccountVerificationStatus(advertiserProfile))
+    : 0;
 
   // Countdown to event start (upcoming) or end (ongoing)
   const countdownTarget =
@@ -411,268 +337,45 @@ export function PromotionDetailContent({
       : eventState === "ongoing"
         ? promotion.end_date
         : null;
-  const ed = promotion.event_details ?? null;
-  const eventTypeLabel = ed?.event_type
-    ? (EVENT_TYPES.find((t) => t.value === ed.event_type)?.label ?? humanizeKey(ed.event_type))
+  const countdown = useCountdown(countdownTarget);
+  const eventTypeLabel = promotion.event_details?.event_type
+    ? EVENT_TYPES.find((t) => t.value === promotion.event_details?.event_type)?.label
     : null;
-  const ageLabel = ed?.age_restriction
-    ? (EVENT_AGE_RESTRICTIONS.find((a) => a.value === ed.age_restriction)?.label ??
-      humanizeKey(ed.age_restriction))
-    : null;
-  const ticketTiers = ed?.ticket_tiers ?? [];
-  const paidTierPrices = ticketTiers
-    .map((tier) => tier.price_cents)
-    .filter((price): price is number => typeof price === "number" && price > 0);
-  const allTiersFree = ticketTiers.length > 0 && paidTierPrices.length === 0;
-  const priceLabel =
-    promotion.price_cents != null && promotion.price_cents > 0
-      ? formatZARShort(promotion.price_cents)
-      : paidTierPrices.length > 0
-        ? `From ${formatZARShort(Math.min(...paidTierPrices))}`
-        : allTiersFree
-          ? "Free entry"
-          : null;
-  const whenLabel = formatEventWhen(promotion.start_date, promotion.end_date);
-  const locationLabel = [
-    promotion.location_town,
-    promotion.location_city,
-    promotion.location_province,
-  ]
-    .filter(Boolean)
-    .join(", ");
-  const TitleTag = isReviewLayout ? "h2" : "h1";
-
-  const eventFacts: DetailFact[] = [
-    ...(eventTypeLabel ? [{ label: "Event type", value: eventTypeLabel }] : []),
-    ...(categoryLabel ? [{ label: "Category", value: categoryLabel }] : []),
-    ...(promotion.start_date
-      ? [{ label: "Starts", value: formatEventMoment(promotion.start_date) }]
-      : []),
-    ...(promotion.end_date
-      ? [{ label: "Ends", value: formatEventMoment(promotion.end_date) }]
-      : []),
-    ...(typeof ed?.venue_capacity === "number"
-      ? [{ label: "Capacity", value: `${formatRandAmount(ed.venue_capacity)} people` }]
-      : []),
-    ...(ageLabel ? [{ label: "Age", value: ageLabel }] : []),
-    ...(ed?.dress_code ? [{ label: "Dress code", value: ed.dress_code }] : []),
-    ...(ed?.parking_available != null
-      ? [{ label: "Parking", value: ed.parking_available ? "Available" : "Not available" }]
-      : []),
-    ...(ed?.food_drinks_available != null
-      ? [
-          {
-            label: "Food and drinks",
-            value: ed.food_drinks_available ? "Available" : "Not available",
-          },
-        ]
-      : []),
-    ...(ed?.recurring
-      ? [
-          {
-            label: "Repeats",
-            value: EVENT_RECURRING_LABELS[ed.recurring] ?? humanizeKey(ed.recurring),
-          },
-        ]
-      : []),
-    ...(ed?.rain_policy
-      ? [
-          {
-            label: "If it rains",
-            value: EVENT_RAIN_POLICY_LABELS[ed.rain_policy] ?? humanizeKey(ed.rain_policy),
-          },
-        ]
-      : []),
-    ...(ed?.early_bird_deadline
-      ? [{ label: "Early-bird until", value: formatLooseDate(ed.early_bird_deadline) }]
-      : []),
-    ...(ed?.group_discount_available != null
-      ? [
-          {
-            label: "Group discounts",
-            value: ed.group_discount_available ? "Available" : "Not available",
-          },
-        ]
-      : []),
-    ...(ed?.bring_your_own
-      ? [{ label: "What to bring", value: ed.bring_your_own, wide: true }]
-      : []),
-  ];
+  const venueLabel = promotion.event_details?.venue_name ?? null;
+  const ticketSummary =
+    promotion.event_details?.ticket_tiers && promotion.event_details.ticket_tiers.length > 0
+      ? `${promotion.event_details.ticket_tiers.length} ticket tier${
+          promotion.event_details.ticket_tiers.length === 1 ? "" : "s"
+        }`
+      : promotion.event_details?.tickets_url
+        ? "Tickets available"
+        : null;
 
   // Calendar link (Google Calendar)
   const calendarUrl = promotion.start_date
     ? `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(promotion.title)}&dates=${promotion.start_date.replace(/[-:]/g, "").split(".")[0]}Z${promotion.end_date ? `/${promotion.end_date.replace(/[-:]/g, "").split(".")[0]}Z` : ""}&details=${encodeURIComponent(promotion.description?.slice(0, 500) ?? "")}&location=${encodeURIComponent([promotion.location_town, promotion.location_city, promotion.location_province].filter(Boolean).join(", "))}`
     : null;
 
-  const logoUrl = promotion.logo_url ?? linkedBusiness?.logo_url ?? null;
-
-  const summary = (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        {eventState ? (
-          <Badge className={`${EVENT_STATE_BADGE[eventState].className} border-0`}>
-            {EVENT_STATE_BADGE[eventState].label}
-          </Badge>
-        ) : null}
-        {eventTypeLabel || categoryLabel ? (
-          <Badge variant="secondary" className="text-xs">
-            {eventTypeLabel ?? categoryLabel}
-          </Badge>
-        ) : null}
-      </div>
-
-      <TitleTag className="font-display text-[1.6rem] font-bold leading-[1.15] tracking-tight text-foreground sm:text-[2rem]">
-        {promotion.title}
-      </TitleTag>
-
-      {priceLabel ? (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <p className="font-display text-[2rem] font-extrabold leading-none tracking-tight text-foreground">
-            {priceLabel}
-          </p>
-          {promotion.price_negotiable ? <Badge variant="verified">Negotiable</Badge> : null}
-        </div>
-      ) : null}
-
-      <ul className="space-y-2 text-sm">
-        {whenLabel ? (
-          <li className="flex items-start gap-2.5">
-            <CalendarClock
-              className="mt-0.5 h-4 w-4 shrink-0 text-sunset-700 dark:text-sunset-300"
-              aria-hidden="true"
-            />
-            <span className="font-medium text-foreground">
-              {promotion.start_date ? (
-                <time dateTime={promotion.start_date}>{whenLabel}</time>
-              ) : (
-                whenLabel
-              )}
-            </span>
-          </li>
-        ) : null}
-        {ed?.venue_name || locationLabel ? (
-          <li className="flex items-start gap-2.5">
-            <MapPin
-              className="mt-0.5 h-4 w-4 shrink-0 text-sunset-700 dark:text-sunset-300"
-              aria-hidden="true"
-            />
-            <span className="text-muted-foreground">
-              {ed?.venue_name ? (
-                <span className="block font-medium text-foreground">{ed.venue_name}</span>
-              ) : null}
-              {locationLabel}
-              {promotion.location_address ? (
-                <span className="block">{promotion.location_address}</span>
-              ) : null}
-            </span>
-          </li>
-        ) : null}
-        <li className="flex items-center gap-2.5 text-muted-foreground">
-          <Eye className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>
-            {viewCount} {viewCount === 1 ? "view" : "views"}
-          </span>
-        </li>
-      </ul>
-
-      <EventCountdown
-        targetDate={countdownTarget}
-        label={eventState === "upcoming" ? "Starts in" : "Ends in"}
-      />
-
-      {calendarUrl || ed?.tickets_url ? (
-        <div className="flex flex-wrap gap-2">
-          {ed?.tickets_url ? (
-            <Button asChild className="gap-2 bg-sunset-600 text-white hover:bg-sunset-700">
-              <a
-                href={safeExternalHref(ed.tickets_url)}
-                target="_blank"
-                rel="noopener noreferrer nofollow ugc"
-              >
-                <Ticket className="h-4 w-4" aria-hidden="true" />
-                Buy tickets
-              </a>
-            </Button>
-          ) : null}
-          {calendarUrl && eventState !== "ended" ? (
-            <Button asChild variant="outline" className="gap-2">
-              <a href={calendarUrl} target="_blank" rel="noopener noreferrer">
-                <CalendarPlus className="h-4 w-4" aria-hidden="true" />
-                Add to calendar
-              </a>
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
-
-  const contactBlock = showContactActions ? (
-    <PromotionContactActions
-      promotionId={promotion.id}
-      contactMethods={contactMethods}
-      advertiserPhone={contactMethods.includes("call") ? (advertiserProfile?.phone ?? null) : null}
-      advertiserWhatsapp={
-        contactMethods.includes("whatsapp") ? (advertiserProfile?.phone ?? null) : null
-      }
-    />
-  ) : (
-    <div className="space-y-1 text-sm text-muted-foreground">
-      <p className="font-medium text-foreground">Your preview — only you can see this</p>
-      <p>Contact buttons appear once approved.</p>
-    </div>
-  );
-
-  const linkedBusinessCard = linkedBusiness ? (
-    <Link
-      href={`/mzansi-business/${linkedBusiness.id}`}
-      className="surface-card elev-xs flex items-center gap-3 rounded-2xl p-4 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white p-1 ring-1 ring-border dark:bg-warm-900">
-        {linkedBusiness.logo_url ? (
-          <Image
-            src={normalizeMediaUrl(linkedBusiness.logo_url)}
-            alt=""
-            width={40}
-            height={40}
-            className="h-full w-full object-contain"
-          />
-        ) : (
-          <Building2
-            className="h-5 w-5 text-brand-blue-700 dark:text-brand-blue-300"
-            aria-hidden="true"
-          />
-        )}
-      </span>
-      <span className="min-w-0">
-        <span className="block text-xs text-muted-foreground">Organised by</span>
-        <span className="block break-words text-sm font-semibold text-foreground">
-          {linkedBusiness.business_name}
-        </span>
-      </span>
-      <span className="ml-auto text-sm font-medium text-brand-blue-700 dark:text-brand-blue-300">
-        View business
-      </span>
-    </Link>
-  ) : null;
-
   return (
     <article
       data-layout-mode={layoutMode}
-      className={cn(isReviewLayout ? REVIEW_GRID : PUBLIC_GRID, showStickyBar && "pb-24 lg:pb-0")}
+      className={
+        isReviewLayout
+          ? "grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] 2xl:gap-6"
+          : showStickyBar
+            ? "grid grid-cols-1 gap-4 pb-24 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:gap-6 lg:pb-0"
+            : "grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:gap-6"
+      }
     >
-      <div
-        className={cn(
-          "min-w-0 space-y-3",
-          isReviewLayout ? "2xl:col-start-1 2xl:row-start-1" : "lg:col-start-1 lg:row-start-1"
-        )}
-      >
-        {activeMedia ? (
+      {activeMedia ? (
+        <div className={isReviewLayout ? "space-y-4 2xl:w-[20rem]" : "space-y-4 lg:w-[20rem]"}>
           <div
-            className="relative overflow-hidden rounded-3xl bg-warm-950 elev-sm"
+            className={`mx-auto w-full max-w-[280px] overflow-hidden rounded-[28px] border border-slate-200/70 bg-black shadow-[0_35px_80px_-48px_rgba(15,23,42,0.55)] sm:max-w-[320px] ${
+              isReviewLayout ? "2xl:max-w-none" : "lg:max-w-none"
+            }`}
             {...swipeHandlers}
           >
-            <div className="relative aspect-[4/5] touch-pan-y overflow-hidden sm:aspect-[4/3]">
+            <div className={cn("relative aspect-[9/16] overflow-hidden bg-black touch-pan-y")}>
               {activeMedia.kind === "video" ? (
                 <VideoViewTracker
                   targetId={promotion.id}
@@ -696,250 +399,696 @@ export function PromotionDetailContent({
               ) : (
                 <button
                   type="button"
-                  className="group relative h-full w-full cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
+                  className="relative h-full w-full cursor-zoom-in"
                   onClick={() => openLightbox(activeMediaIndex)}
                   aria-label={`View ${promotion.title} photo fullscreen`}
                 >
                   <Image
                     src={normalizeMediaUrl(activeMedia.url)}
-                    alt=""
-                    aria-hidden="true"
-                    fill
-                    className="hidden scale-110 object-fill opacity-60 md:block md:blur-2xl md:motion-reduce:blur-none"
-                    sizes="(max-width: 1024px) 100vw, 66vw"
-                  />
-                  <Image
-                    src={normalizeMediaUrl(activeMedia.url)}
                     alt={promotion.title}
                     fill
-                    className="object-contain"
-                    sizes="(max-width: 1024px) 100vw, 66vw"
+                    className="bg-black object-contain"
+                    sizes="(max-width: 1024px) 78vw, 320px"
                     priority
                   />
-                  <span className="absolute bottom-3 right-3 z-10 rounded-full bg-black/55 p-2 text-white transition-opacity lg:opacity-0 lg:group-hover:opacity-100">
-                    <Maximize2 className="h-4 w-4" aria-hidden="true" />
-                  </span>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/5 to-transparent" />
+                  <div className="absolute bottom-4 right-4 z-10 rounded-full bg-black/50 p-2 text-white">
+                    <Maximize2 className="h-5 w-5" />
+                  </div>
                 </button>
               )}
 
-              {logoUrl ? (
-                <div className="pointer-events-none absolute bottom-3 left-3 h-12 w-12 overflow-hidden rounded-xl border border-white/20 bg-white p-1 shadow-md">
+              <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
+                <Badge className="bg-black/50 text-white border-0">Event</Badge>
+                {eventState && (
+                  <Badge className={`${EVENT_STATE_BADGE[eventState].className} border-0`}>
+                    {EVENT_STATE_BADGE[eventState].label}
+                  </Badge>
+                )}
+              </div>
+
+              {(promotion.logo_url || linkedBusiness?.logo_url) && (
+                <div className="absolute bottom-4 left-4 h-12 w-12 overflow-hidden rounded-xl border border-white/20 bg-white shadow-md">
                   <Image
-                    src={normalizeMediaUrl(logoUrl)}
+                    src={normalizeMediaUrl((promotion.logo_url ?? linkedBusiness?.logo_url)!)}
                     alt={`${promotion.title} logo`}
                     width={48}
                     height={48}
                     className="h-full w-full object-contain"
                   />
                 </div>
-              ) : null}
-
-              {mediaItems.length > 1 ? (
-                <>
-                  <span className="absolute left-3 top-3 z-20 rounded-full bg-black/55 px-2.5 py-1 text-xs font-semibold tabular-nums text-white">
-                    {activeMediaIndex + 1} / {mediaItems.length}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => goTo(activeMediaIndex - 1)}
-                    disabled={!canPrevious}
-                    className="absolute left-3 top-1/2 z-30 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white transition hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:pointer-events-none disabled:opacity-0"
-                    aria-label="Previous media"
-                    data-carousel-control="true"
-                  >
-                    <ChevronLeft className="h-5 w-5" aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => goTo(activeMediaIndex + 1)}
-                    disabled={!canNext}
-                    className="absolute right-3 top-1/2 z-30 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white transition hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:pointer-events-none disabled:opacity-0"
-                    aria-label="Next media"
-                    data-carousel-control="true"
-                  >
-                    <ChevronRight className="h-5 w-5" aria-hidden="true" />
-                  </button>
-                </>
-              ) : null}
+              )}
             </div>
           </div>
-        ) : (
-          <div className="flex aspect-[4/3] flex-col items-center justify-center gap-2 rounded-3xl bg-gradient-to-br from-sunset-600 to-warm-950 text-white/75">
-            <CalendarClock className="h-10 w-10" aria-hidden="true" />
-            <p className="text-sm">No photos added yet</p>
-          </div>
-        )}
 
-        {mediaItems.length > 1 ? (
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-            {mediaItems.map((item, index) => {
-              const isVideo = item.kind === "video";
-              const isActive = index === activeMediaIndex;
-              return (
-                <button
-                  key={`${item.kind}-${index}`}
-                  type="button"
-                  onClick={() => goTo(index)}
-                  aria-current={isActive ? "true" : undefined}
-                  className={cn(
-                    "group relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 bg-warm-950 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-20 sm:w-20",
-                    isActive
-                      ? "border-sunset-600 shadow-md"
-                      : "border-transparent opacity-70 hover:opacity-100"
-                  )}
-                  aria-label={
-                    isVideo
-                      ? `View video ${index + 1}`
-                      : `View photo ${item.photoNumber ?? index + 1}`
-                  }
-                  data-carousel-control="true"
-                >
-                  {isVideo ? (
-                    <>
-                      {item.poster ? (
-                        <Image
-                          src={normalizeMediaUrl(item.poster)}
-                          alt={`${promotion.title} video thumbnail`}
-                          fill
-                          className="object-contain"
-                          sizes="80px"
-                        />
-                      ) : null}
-                      <span className="absolute inset-0 flex items-center justify-center bg-black/30">
-                        <span className="rounded-full bg-white/90 p-1.5 shadow">
-                          <Play className="h-3.5 w-3.5 fill-black text-black" aria-hidden="true" />
-                        </span>
-                      </span>
-                    </>
-                  ) : (
-                    <Image
-                      src={normalizeMediaUrl(item.url)}
-                      alt={`${promotion.title} photo ${item.photoNumber ?? index + 1}`}
-                      fill
-                      className="object-contain"
-                      sizes="80px"
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        ) : null}
-      </div>
-
-      <aside
-        className={cn(
-          "min-w-0",
-          isReviewLayout
-            ? "2xl:col-start-2 2xl:row-span-2 2xl:row-start-1"
-            : "lg:col-start-2 lg:row-span-2 lg:row-start-1"
-        )}
-      >
-        <div className={cn("space-y-4", !isReviewLayout && "lg:sticky lg:top-32")}>
-          {summary}
-          <PosterTrustCard
-            area="tourism"
-            roleLabel="Hosted by"
-            name={advertiserProfile?.display_name}
-            trustLevel={trustLevel}
-          >
-            {contactBlock}
-          </PosterTrustCard>
-          {linkedBusinessCard}
-          <SafetyTipsCard
-            area="tourism"
-            className={isReviewLayout ? "hidden" : "hidden lg:block"}
-          />
+          {mediaItems.length > 1 && (
+            <div
+              className={`mx-auto flex w-full max-w-[320px] gap-2 overflow-x-auto pb-1 ${
+                isReviewLayout ? "2xl:max-w-none" : "lg:max-w-none"
+              }`}
+            >
+              {mediaItems.map((item, index) => {
+                if (index === activeMediaIndex) return null;
+                const isVideo = item.kind === "video";
+                return (
+                  <button
+                    key={`${item.kind}-${index}`}
+                    type="button"
+                    onClick={() => goTo(index)}
+                    className="group relative aspect-[9/16] w-20 shrink-0 overflow-hidden rounded-2xl ring-2 ring-transparent transition-all hover:shadow-md hover:ring-brand-blue/50"
+                    aria-label={
+                      isVideo
+                        ? `View video ${index + 1}`
+                        : `View photo ${item.photoNumber ?? index + 1}`
+                    }
+                    data-carousel-control="true"
+                  >
+                    {isVideo ? (
+                      <>
+                        {item.poster ? (
+                          <Image
+                            src={normalizeMediaUrl(item.poster)}
+                            alt={`${promotion.title} video thumbnail`}
+                            fill
+                            className="bg-black object-contain transition-transform group-hover:scale-105"
+                            sizes="80px"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-black" />
+                        )}
+                        <div className="absolute inset-0 bg-black/25" />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="rounded-full bg-white/90 p-2 shadow-lg backdrop-blur-sm">
+                            <Play className="h-4 w-4 text-black fill-black" />
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <Image
+                        src={normalizeMediaUrl(item.url)}
+                        alt={`${promotion.title} photo ${item.photoNumber ?? index + 1}`}
+                        fill
+                        className="bg-black object-contain transition-transform group-hover:scale-105"
+                        sizes="80px"
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
-      </aside>
+      ) : null}
 
       <div
         className={cn(
-          "min-w-0 space-y-6",
-          isReviewLayout ? "2xl:col-start-1 2xl:row-start-2" : "lg:col-start-1 lg:row-start-2"
+          "space-y-4",
+          !activeMedia && (isReviewLayout ? "2xl:col-span-2" : "lg:col-span-2")
         )}
       >
-        {promotion.description ? (
-          <DetailSection title="About this event">
-            <p className="whitespace-pre-wrap text-[15px] leading-7 text-foreground/85">
-              {promotion.description}
-            </p>
-          </DetailSection>
-        ) : null}
-
-        {eventFacts.length > 0 ||
-        ed?.lineup ||
-        ticketTiers.length > 0 ||
-        ed?.accessibility?.length ? (
-          <DetailSection title="Event details">
-            <div className="space-y-5">
-              <FactGrid facts={eventFacts} />
-
-              {ticketTiers.length > 0 ? (
-                <div className="space-y-2">
-                  <h3 className="flex items-center gap-2 text-sm font-semibold">
-                    <Ticket
-                      className="h-4 w-4 text-sunset-700 dark:text-sunset-300"
-                      aria-hidden="true"
-                    />
-                    Tickets
-                  </h3>
-                  <ul className="divide-y divide-border/70 rounded-xl border border-border/70">
-                    {ticketTiers.map((tier: TicketTier, i: number) => (
-                      <li
-                        key={`${tier.name}-${i}`}
-                        className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 text-sm"
-                      >
-                        <span className="font-medium">{tier.name}</span>
-                        <span className="font-semibold">
-                          {tier.price_cents != null && tier.price_cents > 0
-                            ? formatZARShort(tier.price_cents)
-                            : "Free"}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              {ed?.lineup ? (
-                <div className="space-y-1">
-                  <h3 className="text-sm font-semibold">Line-up</h3>
-                  <p className="whitespace-pre-wrap text-sm text-muted-foreground">{ed.lineup}</p>
-                </div>
-              ) : null}
-
-              {ed?.accessibility && ed.accessibility.length > 0 ? (
-                <div className="space-y-2">
-                  <h3 className="text-sm font-semibold">Accessibility</h3>
-                  <ul className="flex flex-wrap gap-1.5">
-                    {ed.accessibility.map((a) => (
-                      <li key={a} className="chip">
-                        {humanizeKey(a)}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
+        {/* ═══ TITLE BAR — fallback when no media hero ═══ */}
+        {!activeMedia && (
+          <div>
+            <TitleTag className="font-display text-xl font-bold leading-tight sm:text-2xl">
+              {promotion.title}
+            </TitleTag>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              <Badge className="bg-black/70 text-white backdrop-blur-sm border-0">Event</Badge>
+              {eventState && (
+                <Badge className={`${EVENT_STATE_BADGE[eventState].className} border-0`}>
+                  {EVENT_STATE_BADGE[eventState].label}
+                </Badge>
+              )}
+              <span className="flex items-center gap-1">
+                <MapPin className="h-3 w-3" />
+                {[promotion.location_town, promotion.location_city, promotion.location_province]
+                  .filter(Boolean)
+                  .join(", ")}
+              </span>
+              {promotion.price_cents != null && promotion.price_cents > 0 && (
+                <span className="font-bold">
+                  {formatZAR(promotion.price_cents)}
+                  {promotion.price_negotiable && (
+                    <span className="ml-1 text-xs font-normal text-brand-green">Negotiable</span>
+                  )}
+                </span>
+              )}
             </div>
-          </DetailSection>
-        ) : null}
+          </div>
+        )}
+        <div className="space-y-4">
+          <Card className="surface-card elev-sm">
+            <CardContent className="space-y-4 p-5">
+              {/* Without media the title bar above already shows the title. */}
+              {activeMedia ? (
+                <TitleTag className="break-words font-display text-2xl font-bold leading-tight tracking-tight sm:text-3xl">
+                  {promotion.title}
+                </TitleTag>
+              ) : null}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {promotion.start_date ? (
+                  <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Starts
+                    </p>
+                    <p className="mt-1 text-sm font-medium">
+                      {formatSaShortDate(promotion.start_date)}
+                    </p>
+                  </div>
+                ) : null}
+                {venueLabel ? (
+                  <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Venue
+                    </p>
+                    <p className="mt-1 text-sm font-medium">{venueLabel}</p>
+                  </div>
+                ) : null}
+                {eventTypeLabel ? (
+                  <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Event Type
+                    </p>
+                    <p className="mt-1 text-sm font-medium">{eventTypeLabel}</p>
+                  </div>
+                ) : null}
+                {ticketSummary ? (
+                  <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Tickets
+                    </p>
+                    <p className="mt-1 text-sm font-medium">{ticketSummary}</p>
+                  </div>
+                ) : null}
+              </div>
+              {(promotion.location_city || promotion.location_province) && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <MapPin className="h-4 w-4 text-brand-blue" />
+                  <span>
+                    {[promotion.location_town, promotion.location_city, promotion.location_province]
+                      .filter(Boolean)
+                      .join(", ")}
+                  </span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-        {showContactSummary && contactMethods.length > 0 ? (
-          <DetailSection title="Saved contact methods" headingLevel="h2">
-            <ul className="flex flex-wrap gap-1.5">
-              {contactMethods.map((method) => (
-                <li key={method} className="chip">
-                  {CONTACT_METHOD_LABELS[method] ?? humanizeKey(method)}
-                </li>
-              ))}
-            </ul>
-          </DetailSection>
-        ) : null}
+          {/* ═══ EVENT COUNTDOWN (compact) ═══ */}
+          {countdown && (
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-brand-blue/20 bg-gradient-to-r from-brand-blue/5 to-brand-blue/10 px-4 py-3">
+              <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-brand-blue">
+                <Timer className="h-4 w-4" />
+                <span className="hidden sm:inline">
+                  {eventState === "upcoming" ? "Starts in" : "Ends in"}
+                </span>
+              </div>
+              <div className="flex flex-1 flex-wrap gap-2 text-center sm:justify-center">
+                {[
+                  { value: countdown.days, label: "D" },
+                  { value: countdown.hours, label: "H" },
+                  { value: countdown.minutes, label: "M" },
+                  { value: countdown.seconds, label: "S" },
+                ].map((unit) => (
+                  <div key={unit.label} className="min-w-[2.5rem]">
+                    <div className="font-display text-lg font-bold tabular-nums sm:text-xl">
+                      {String(unit.value).padStart(2, "0")}
+                    </div>
+                    <div className="text-[9px] uppercase tracking-wide text-muted-foreground">
+                      {unit.label}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {calendarUrl && (
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-center gap-1 text-xs sm:ml-auto sm:w-auto"
+                >
+                  <a href={calendarUrl} target="_blank" rel="noopener noreferrer">
+                    <CalendarPlus className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Add to Calendar</span>
+                    <span className="sm:hidden">Cal</span>
+                  </a>
+                </Button>
+              )}
+            </div>
+          )}
 
-        {!isReviewLayout ? <SafetyTipsCard area="tourism" className="lg:hidden" /> : null}
+          {/* ═══ CONTACT ACTIONS — mobile-first, above details ═══ */}
+          {showContactActions && (
+            <div className="lg:hidden">
+              <Card>
+                <CardContent className="flex items-center gap-3 p-4">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-green text-sm font-bold text-white">
+                    {advertiserProfile?.display_name?.charAt(0)?.toUpperCase() || "A"}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="break-words text-sm font-medium">
+                      {advertiserProfile?.display_name || "Account name unavailable"}
+                    </p>
+                    <TrustBadge level={trustLevel} size="sm" />
+                  </div>
+                </CardContent>
+              </Card>
+              <div className="mt-2">
+                <PromotionContactActions
+                  promotionId={promotion.id}
+                  contactMethods={contactMethods}
+                  advertiserPhone={
+                    contactMethods.includes("call") ? (advertiserProfile?.phone ?? null) : null
+                  }
+                  advertiserWhatsapp={
+                    contactMethods.includes("whatsapp") ? (advertiserProfile?.phone ?? null) : null
+                  }
+                />
+              </div>
+            </div>
+          )}
 
-        <p className="text-xs text-muted-foreground">
+          {/* ═══ DESCRIPTION — condensed ═══ */}
+          {promotion.description && (
+            <div className="space-y-1">
+              <p
+                className={`whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground ${
+                  !isDescExpanded ? "line-clamp-2" : ""
+                }`}
+              >
+                {promotion.description}
+              </p>
+              {promotion.description.length > 100 && (
+                <button
+                  type="button"
+                  onClick={() => setIsDescExpanded(!isDescExpanded)}
+                  className="text-sm font-medium text-brand-blue hover:underline"
+                >
+                  {isDescExpanded ? "Show less" : "Read more"}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* ═══ DETAILS — collapsible single section ═══ */}
+          <div className="rounded-xl border">
+            <button
+              type="button"
+              onClick={() => setIsDetailsOpen(!isDetailsOpen)}
+              className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold"
+            >
+              Details
+              <ChevronDown
+                className={`h-4 w-4 text-muted-foreground transition-transform ${
+                  isDetailsOpen ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+            {isDetailsOpen && (
+              <div className="border-t px-4 py-3">
+                <dl className="grid grid-cols-1 gap-x-4 gap-y-2.5 text-sm sm:grid-cols-2">
+                  <dt className="text-muted-foreground">Type</dt>
+                  <dd className="font-medium">Event</dd>
+
+                  {categoryLabel && (
+                    <>
+                      <dt className="text-muted-foreground">Category</dt>
+                      <dd className="font-medium">{categoryLabel}</dd>
+                    </>
+                  )}
+
+                  {promotion.start_date && (
+                    <>
+                      <dt className="text-muted-foreground">Starts</dt>
+                      <dd className="flex items-center gap-1 font-medium">
+                        <Calendar className="h-3 w-3" />
+                        <time dateTime={promotion.start_date}>
+                          {formatSaShortDate(promotion.start_date)}
+                        </time>
+                      </dd>
+                    </>
+                  )}
+
+                  {promotion.end_date && (
+                    <>
+                      <dt className="text-muted-foreground">Ends</dt>
+                      <dd className="flex items-center gap-1 font-medium">
+                        <Calendar className="h-3 w-3" />
+                        <time dateTime={promotion.end_date}>
+                          {formatSaShortDate(promotion.end_date)}
+                        </time>
+                      </dd>
+                    </>
+                  )}
+
+                  <dt className="text-muted-foreground">Views</dt>
+                  <dd className="flex items-center gap-1 font-medium">
+                    <Eye className="h-3 w-3" />
+                    {viewCount}
+                  </dd>
+                </dl>
+
+                {(showContactSummary || contactMethods.length > 0) && contactMethods.length > 0 && (
+                  <div className="mt-3 border-t pt-3">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      {showContactSummary ? "Saved contact methods" : "Contact options"}
+                    </p>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {contactMethods.map((method) => (
+                        <Badge key={method} variant="outline" className="capitalize text-xs">
+                          {CONTACT_METHOD_LABELS[method] ?? method}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ═══ EVENT DETAILS — venue, tickets, accessibility ═══ */}
+          {promotion.event_details &&
+            (() => {
+              const ed = promotion.event_details!;
+              const eventTypeLabel = EVENT_TYPES.find((t) => t.value === ed.event_type)?.label;
+              const ageLabel = EVENT_AGE_RESTRICTIONS.find(
+                (a) => a.value === ed.age_restriction
+              )?.label;
+              const hasContent =
+                ed.event_type ||
+                ed.venue_name ||
+                ed.venue_capacity ||
+                (ed.ticket_tiers && ed.ticket_tiers.length > 0) ||
+                ed.tickets_url ||
+                ed.age_restriction ||
+                ed.dress_code ||
+                ed.lineup ||
+                ed.parking_available != null ||
+                ed.accessibility?.length ||
+                ed.food_drinks_available != null ||
+                ed.bring_your_own ||
+                ed.recurring ||
+                ed.rain_policy ||
+                ed.early_bird_deadline ||
+                ed.group_discount_available != null;
+              if (!hasContent) return null;
+              return (
+                <Card>
+                  <CardContent className="space-y-4 p-4 text-sm">
+                    <h3 className="flex items-center gap-2 font-semibold">
+                      <Music2 className="h-4 w-4 text-muted-foreground" />
+                      Event Details
+                    </h3>
+
+                    <dl className="grid grid-cols-1 gap-x-4 gap-y-2.5 sm:grid-cols-2">
+                      {eventTypeLabel && (
+                        <>
+                          <dt className="text-muted-foreground">Event type</dt>
+                          <dd>
+                            <Badge variant="secondary">{eventTypeLabel}</Badge>
+                          </dd>
+                        </>
+                      )}
+
+                      {ed.venue_name && (
+                        <>
+                          <dt className="text-muted-foreground">Venue</dt>
+                          <dd className="font-medium">{ed.venue_name}</dd>
+                        </>
+                      )}
+
+                      {typeof ed.venue_capacity === "number" && (
+                        <>
+                          <dt className="flex items-center gap-1 text-muted-foreground">
+                            <Users className="h-3 w-3" /> Capacity
+                          </dt>
+                          <dd className="font-medium">{formatRandAmount(ed.venue_capacity)}</dd>
+                        </>
+                      )}
+
+                      {ageLabel && (
+                        <>
+                          <dt className="text-muted-foreground">Age restriction</dt>
+                          <dd className="font-medium">{ageLabel}</dd>
+                        </>
+                      )}
+
+                      {ed.dress_code && (
+                        <>
+                          <dt className="text-muted-foreground">Dress code</dt>
+                          <dd className="font-medium">{ed.dress_code}</dd>
+                        </>
+                      )}
+
+                      {ed.parking_available != null && (
+                        <>
+                          <dt className="text-muted-foreground">Parking</dt>
+                          <dd className="font-medium">
+                            {ed.parking_available ? "Available" : "Not available"}
+                          </dd>
+                        </>
+                      )}
+
+                      {ed.food_drinks_available != null && (
+                        <>
+                          <dt className="flex items-center gap-1 text-muted-foreground">
+                            <UtensilsCrossed className="h-3 w-3" /> Food &amp; drinks
+                          </dt>
+                          <dd className="font-medium">
+                            {ed.food_drinks_available ? "Available" : "Not available"}
+                          </dd>
+                        </>
+                      )}
+
+                      {ed.recurring && (
+                        <>
+                          <dt className="text-muted-foreground">Recurring</dt>
+                          <dd className="font-medium">
+                            {EVENT_RECURRING_LABELS[ed.recurring] ?? ed.recurring}
+                          </dd>
+                        </>
+                      )}
+
+                      {ed.rain_policy && (
+                        <>
+                          <dt className="text-muted-foreground">Rain policy</dt>
+                          <dd className="font-medium">
+                            {EVENT_RAIN_POLICY_LABELS[ed.rain_policy] ?? ed.rain_policy}
+                          </dd>
+                        </>
+                      )}
+
+                      {ed.early_bird_deadline && (
+                        <>
+                          <dt className="text-muted-foreground">Early-bird deadline</dt>
+                          <dd className="font-medium">{ed.early_bird_deadline}</dd>
+                        </>
+                      )}
+
+                      {ed.group_discount_available != null && (
+                        <>
+                          <dt className="text-muted-foreground">Group discounts</dt>
+                          <dd className="font-medium">
+                            {ed.group_discount_available ? "Available" : "Not available"}
+                          </dd>
+                        </>
+                      )}
+                    </dl>
+
+                    {ed.lineup && (
+                      <div className="space-y-1">
+                        <p className="text-muted-foreground">Lineup / Performers</p>
+                        <p className="whitespace-pre-wrap font-medium">{ed.lineup}</p>
+                      </div>
+                    )}
+
+                    {ed.ticket_tiers && ed.ticket_tiers.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="flex items-center gap-1 text-muted-foreground">
+                          <Ticket className="h-3 w-3" /> Tickets
+                        </p>
+                        <div className="divide-y rounded-lg border">
+                          {ed.ticket_tiers.map((tier: TicketTier, i: number) => (
+                            <div
+                              key={i}
+                              className="flex flex-wrap items-center justify-between gap-2 px-3 py-2"
+                            >
+                              <span className="font-medium">{tier.name}</span>
+                              <span className="font-bold">
+                                {tier.price_cents != null && tier.price_cents > 0
+                                  ? `R${(tier.price_cents / 100).toFixed(0)}`
+                                  : "Free"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {ed.tickets_url && (
+                      <Button asChild variant="outline" className="w-full gap-2">
+                        <a
+                          href={ed.tickets_url}
+                          target="_blank"
+                          rel="noopener noreferrer nofollow ugc"
+                        >
+                          <Globe className="h-4 w-4" />
+                          Buy Tickets
+                        </a>
+                      </Button>
+                    )}
+
+                    {ed.accessibility && ed.accessibility.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-muted-foreground">Accessibility</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {ed.accessibility.map((a) => (
+                            <Badge key={a} variant="outline" className="text-xs">
+                              {a}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {ed.bring_your_own && (
+                      <div className="space-y-1">
+                        <p className="text-muted-foreground">What to bring</p>
+                        <p className="font-medium">{ed.bring_your_own}</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })()}
+        </div>
+
+        {/* ═══ LINKED BUSINESS + POSTED — mobile only ═══ */}
+        {!isReviewLayout && (
+          <div className="space-y-3 lg:hidden">
+            {linkedBusiness && (
+              <Link
+                href={`/mzansi-business/${linkedBusiness.id}`}
+                className="flex items-center gap-3 rounded-xl border p-3 transition-opacity hover:opacity-80"
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-brand-blue/10">
+                  {linkedBusiness.logo_url ? (
+                    <Image
+                      src={normalizeMediaUrl(linkedBusiness.logo_url)}
+                      alt={linkedBusiness.business_name}
+                      width={32}
+                      height={32}
+                      className="object-contain"
+                    />
+                  ) : (
+                    <Building2 className="h-4 w-4 text-brand-blue" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="break-words text-sm font-medium">{linkedBusiness.business_name}</p>
+                  <p className="text-xs text-brand-blue">View Business</p>
+                </div>
+              </Link>
+            )}
+            <p className="text-center text-xs text-muted-foreground">
+              Posted{" "}
+              <time dateTime={promotion.created_at}>{formatSaLongDate(promotion.created_at)}</time>
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* ═══ SIDEBAR — desktop only (mobile contact shown above) ═══ */}
+      <div className={isReviewLayout ? "space-y-4 2xl:col-span-2" : "hidden space-y-4 lg:block"}>
+        {/* Price card (when no media overlay) */}
+        {promotion.price_cents != null &&
+          promotion.price_cents > 0 &&
+          photos.length === 0 &&
+          videos.length === 0 && (
+            <Card>
+              <CardContent className="space-y-2 p-4">
+                <div className="flex items-baseline gap-2">
+                  <span className="font-display text-2xl font-bold">
+                    {formatZAR(promotion.price_cents)}
+                  </span>
+                  {promotion.price_negotiable && (
+                    <Badge variant="outline" className="text-brand-green">
+                      Negotiable
+                    </Badge>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+        {/* Advertiser card */}
+        <Card>
+          <CardContent className="space-y-3 p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-green text-sm font-bold text-white">
+                {advertiserProfile?.display_name?.charAt(0)?.toUpperCase() || "A"}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">
+                  {advertiserProfile?.display_name || "Account name unavailable"}
+                </p>
+                <TrustBadge level={trustLevel} size="sm" />
+              </div>
+            </div>
+
+            <Separator />
+
+            {showContactActions ? (
+              <PromotionContactActions
+                promotionId={promotion.id}
+                contactMethods={contactMethods}
+                advertiserPhone={
+                  contactMethods.includes("call") ? (advertiserProfile?.phone ?? null) : null
+                }
+                advertiserWhatsapp={
+                  contactMethods.includes("whatsapp") ? (advertiserProfile?.phone ?? null) : null
+                }
+              />
+            ) : (
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p className="font-medium text-foreground">Your preview — only you can see this</p>
+                <p>Public contact actions appear after approval.</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Linked business */}
+        {linkedBusiness && (
+          <Card>
+            <CardContent className="space-y-3 p-4">
+              <Link
+                href={`/mzansi-business/${linkedBusiness.id}`}
+                className="flex items-center gap-3 transition-opacity hover:opacity-80"
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-brand-blue/10">
+                  {linkedBusiness.logo_url ? (
+                    <Image
+                      src={normalizeMediaUrl(linkedBusiness.logo_url)}
+                      alt={linkedBusiness.business_name}
+                      width={32}
+                      height={32}
+                      className="object-contain"
+                    />
+                  ) : (
+                    <Building2 className="h-4 w-4 text-brand-blue" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="break-words text-sm font-medium">{linkedBusiness.business_name}</p>
+                  <p className="text-xs text-brand-blue">View Business</p>
+                </div>
+              </Link>
+            </CardContent>
+          </Card>
+        )}
+
+        <p className="text-center text-xs text-muted-foreground">
           Posted{" "}
           <time dateTime={promotion.created_at}>{formatSaLongDate(promotion.created_at)}</time>
         </p>
@@ -967,7 +1116,7 @@ export function PromotionDetailContent({
               asChild
             >
               <a href={`tel:${contactPhone(advertiserProfile?.phone)}`}>
-                <Phone className="h-4 w-4" aria-hidden="true" /> Call host
+                <Phone className="h-4 w-4" /> Call advertiser
               </a>
             </Button>
           )}
@@ -975,7 +1124,7 @@ export function PromotionDetailContent({
           {canWhatsapp && advertiserProfile?.phone && (
             <Button
               variant="outline"
-              className="h-12 flex-1 gap-2 rounded-full border-brand-green/30 font-semibold"
+              className="h-12 flex-1 gap-2 rounded-full font-semibold"
               size="lg"
               asChild
             >
@@ -988,7 +1137,7 @@ export function PromotionDetailContent({
                 target="_blank"
                 rel="noopener noreferrer nofollow ugc"
               >
-                <MessageCircle className="h-4 w-4 text-brand-green-600" aria-hidden="true" />
+                <MessageCircle className="h-4 w-4" />
                 WhatsApp
               </a>
             </Button>

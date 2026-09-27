@@ -5,6 +5,7 @@ import { AnalyticsImpressions } from "@/components/analytics/analytics-impressio
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, TreePalm, CalendarDays } from "lucide-react";
+import { PageHeader } from "@/components/layout";
 import {
   BusinessCardGridItem,
   type BusinessCardGridRow,
@@ -386,27 +387,15 @@ export function PromotionsExplorer() {
     onClearQuery: clearQueryFilter,
     onClearAll: clearAllFilters,
   };
-  // Only the active tab's grid is rendered, and only when it has results, so
-  // aria-controls must never point at a panel that is not in the DOM.
-  const activePanelRendered =
-    !loading &&
-    !error &&
-    (activeTab === "tourism" ? tourismBusinesses.length > 0 : promotions.length > 0);
-  const tourismPanelId =
-    activeTab === "tourism" && activePanelRendered ? "tab-panel-tourism" : undefined;
-  const eventsPanelId =
-    activeTab === "events" && activePanelRendered ? "tab-panel-events" : undefined;
-
   const tabBaseClasses =
     "inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
   const tourismTabActiveClasses =
-    "border-sunset-700 bg-sunset-700 text-white shadow-sm shadow-sunset/30 dark:border-sunset-600 dark:bg-sunset-700";
+    "border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-700 dark:bg-teal-950 dark:text-teal-200";
   const inactiveTabClasses = "border-transparent text-muted-foreground hover:bg-muted/60";
   const eventTabActiveClasses =
-    "border-sunset-700 bg-sunset-700 text-white shadow-sm shadow-sunset/30 hover:bg-sunset-800 dark:border-sunset-600 dark:bg-sunset-700";
-  // Keep Events visibly discoverable while Tourism is selected.
+    "border-amber-500 bg-amber-500 text-white shadow-sm shadow-amber-500/30 hover:bg-amber-600 dark:border-amber-400 dark:bg-amber-400 dark:text-amber-950";
   const eventTabInactiveClasses =
-    "border-sunset-300 bg-sunset-50 text-sunset-800 hover:border-sunset-400 hover:bg-sunset-100 dark:border-sunset-500/60 dark:bg-sunset-500/15 dark:text-sunset-200 dark:hover:bg-sunset-500/25";
+    "border-amber-300 bg-amber-50 text-amber-800 shadow-sm shadow-amber-200/70 hover:border-amber-400 hover:bg-amber-100 hover:text-amber-900 dark:border-amber-500/70 dark:bg-amber-500/15 dark:text-amber-200 dark:shadow-none dark:hover:bg-amber-500/25";
 
   return (
     <div className="container-page py-8 space-y-7 lg:py-10">
@@ -414,18 +403,17 @@ export function PromotionsExplorer() {
         items={promotions.map((promotion) => ({ table: "promotions" as const, id: promotion.id }))}
         surface="tourism_list"
       />
-      <div>
-        <div>
-          <h2 className="section-title">
-            {activeTab === "events" ? "Upcoming events" : "Places to stay & explore"}
-          </h2>
-          <p className="section-lede">
-            {activeTab === "events"
-              ? "Live music, markets, festivals and gatherings near you."
-              : "Tourism destinations, stays and experiences across South Africa."}
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Tourism & Events"
+        breadcrumbs={[{ label: "Home", href: "/" }, { label: "Tourism & Events" }]}
+      >
+        <Button asChild size="sm" className="h-11 gap-1 elev-xs hover:elev-sm">
+          <Link href={createHref}>
+            {createLabel}
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </Button>
+      </PageHeader>
 
       {/* ── Tab Switcher ── */}
       <div
@@ -438,8 +426,7 @@ export function PromotionsExplorer() {
             type="button"
             role="tab"
             aria-selected="true"
-            id="tab-tourism"
-            aria-controls={tourismPanelId}
+            aria-controls="tab-panel-tourism"
             className={cn(tabBaseClasses, tourismTabActiveClasses)}
             onClick={() => switchTab("tourism")}
           >
@@ -451,8 +438,7 @@ export function PromotionsExplorer() {
             type="button"
             role="tab"
             aria-selected="false"
-            id="tab-tourism"
-            aria-controls={tourismPanelId}
+            aria-controls="tab-panel-tourism"
             className={cn(tabBaseClasses, inactiveTabClasses)}
             onClick={() => switchTab("tourism")}
           >
@@ -466,8 +452,7 @@ export function PromotionsExplorer() {
             type="button"
             role="tab"
             aria-selected="true"
-            id="tab-events"
-            aria-controls={eventsPanelId}
+            aria-controls="tab-panel-events"
             className={cn(tabBaseClasses, eventTabActiveClasses)}
             onClick={() => switchTab("events")}
           >
@@ -479,8 +464,7 @@ export function PromotionsExplorer() {
             type="button"
             role="tab"
             aria-selected="false"
-            id="tab-events"
-            aria-controls={eventsPanelId}
+            aria-controls="tab-panel-events"
             className={cn(tabBaseClasses, eventTabInactiveClasses)}
             onClick={() => switchTab("events")}
           >
@@ -543,7 +527,7 @@ export function PromotionsExplorer() {
                   : "Unable to load events"
               }
               body={error}
-              icon={<TreePalm className="h-7 w-7 text-sunset-600 dark:text-sunset-300" />}
+              icon={<TreePalm className="h-7 w-7 text-teal-600 dark:text-teal-300" />}
               testId="promotions-grid-empty"
             >
               <Button variant="outline" onClick={() => setReloadToken((token) => token + 1)}>
@@ -564,9 +548,9 @@ export function PromotionsExplorer() {
               body="Try broadening the filters or clearing a location filter."
               icon={
                 activeTab === "tourism" ? (
-                  <TreePalm className="h-7 w-7 text-sunset-600 dark:text-sunset-300" />
+                  <TreePalm className="h-7 w-7 text-teal-600 dark:text-teal-300" />
                 ) : (
-                  <CalendarDays className="h-7 w-7 text-sunset-600 dark:text-sunset-300" />
+                  <CalendarDays className="h-7 w-7 text-teal-600 dark:text-teal-300" />
                 )
               }
               testId="promotions-grid-empty"

@@ -2,17 +2,19 @@
 
 import { VideoViewTracker } from "@/components/ui/video-view-tracker";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
   ChevronLeft,
   ChevronRight,
-  ImageOff,
   Maximize2,
   Play,
+  Copy,
+  Check,
   RotateCcw,
   AlertTriangle,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { MediaLightbox } from "@/components/ui/media-lightbox";
 import { cn } from "@/lib/utils";
 import { normalizeMediaUrls } from "@/lib/utils/media-url";
@@ -107,6 +109,14 @@ export function ListingDetailClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photos, videos, photoCount]);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    },
+    []
+  );
 
   /* ---- video controls state ---- */
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -168,16 +178,21 @@ export function ListingDetailClient({
     onNext: () => goTo(activeIndex + 1),
   });
 
+  async function copyShareLink() {
+    try {
+      const url = `${window.location.origin}/listing/${listingId}`;
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* ignore */
+    }
+  }
+
   if (orderedMedia.length === 0) {
     return (
-      <div
-        className={cn(
-          heroAspectClassName,
-          "flex flex-col items-center justify-center gap-2 rounded-3xl border border-dashed border-border bg-muted/60 text-muted-foreground"
-        )}
-      >
-        <ImageOff className="h-6 w-6" aria-hidden="true" />
-        <p className="text-sm">No photos added yet</p>
+      <div className="aspect-video rounded-xl bg-muted flex items-center justify-center">
+        <p className="text-muted-foreground">No images</p>
       </div>
     );
   }
@@ -186,7 +201,7 @@ export function ListingDetailClient({
     <div className="space-y-3">
       {/* ── Main Image / Video ──────────────────────────── */}
       <div
-        className="group relative touch-pan-y overflow-hidden rounded-3xl bg-warm-950 elev-sm"
+        className="relative group overflow-hidden rounded-xl bg-warm-100 dark:bg-warm-800 touch-pan-y"
         {...swipeHandlers}
       >
         <div className={`${heroAspectClassName} relative`}>
@@ -247,21 +262,10 @@ export function ListingDetailClient({
             /* ---- Photo with click-to-lightbox ---- */
             <button
               type="button"
-              className="relative h-full w-full cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
+              className="relative w-full h-full cursor-zoom-in"
               onClick={() => openLightbox(activeIndex)}
               aria-label={`View ${title} photo fullscreen`}
             >
-              {/* Soft blurred fill behind contained photos; desktop only (blur is costly on phones). */}
-              {!shouldUseUnoptimizedImage ? (
-                <Image
-                  src={activeUrl}
-                  alt=""
-                  aria-hidden="true"
-                  fill
-                  className="hidden scale-110 object-fill opacity-60 blur-2xl md:block motion-reduce:blur-none"
-                  sizes="(max-width: 1024px) 100vw, 66vw"
-                />
-              ) : null}
               <Image
                 src={activeUrl}
                 alt={`${title} - ${activeMedia?.kind ?? "photo"} ${activeIndex + 1}`}
@@ -274,8 +278,8 @@ export function ListingDetailClient({
                 unoptimized={shouldUseUnoptimizedImage ? true : undefined}
               />
               {/* Expand affordance */}
-              <div className="absolute bottom-3 right-3 z-10 rounded-full bg-black/55 p-2 text-white transition-opacity lg:opacity-0 lg:group-hover:opacity-100">
-                <Maximize2 className="h-4 w-4" aria-hidden="true" />
+              <div className="absolute bottom-3 left-3 z-10 rounded-full bg-black/50 p-2 text-white backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                <Maximize2 className="h-4 w-4" />
               </div>
             </button>
           )}
@@ -308,7 +312,7 @@ export function ListingDetailClient({
 
           {/* Image counter */}
           {orderedMedia.length > 1 && (
-            <div className="absolute left-3 top-3 z-10 rounded-full bg-black/55 px-2.5 py-1 text-xs font-semibold tabular-nums text-white">
+            <div className="absolute left-3 top-3 bg-black/50 text-white text-xs font-medium px-2.5 py-1 rounded-full">
               {activeIndex + 1} / {orderedMedia.length}
             </div>
           )}
@@ -326,12 +330,11 @@ export function ListingDetailClient({
                 type="button"
                 onClick={() => goTo(i)}
                 aria-label={`View ${item.kind} ${i + 1} of ${orderedMedia.length}`}
-                aria-current={i === activeIndex ? "true" : undefined}
                 className={cn(
-                  "relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl border-2 bg-warm-950 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-20 sm:w-20",
+                  "relative flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border-2 transition-all duration-200",
                   i === activeIndex
-                    ? "border-brand-green-600 shadow-md"
-                    : "border-transparent opacity-70 hover:opacity-100"
+                    ? "border-brand-green ring-2 ring-brand-green/20 shadow-md"
+                    : "border-transparent hover:border-brand-green/40 opacity-60 hover:opacity-100"
                 )}
               >
                 {isVid ? (
@@ -341,7 +344,7 @@ export function ListingDetailClient({
                     src={item.url}
                     alt={`Thumbnail ${i + 1}`}
                     fill
-                    className="object-contain"
+                    className="bg-black object-contain"
                     sizes="80px"
                     unoptimized={isBlobOrDataUrl(item.url) ? true : undefined}
                   />
@@ -351,6 +354,28 @@ export function ListingDetailClient({
           })}
         </div>
       )}
+
+      {/* ── Share Button ─────────────────────────────────── */}
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-11 gap-1.5 text-sm sm:h-10 sm:text-xs"
+          onClick={copyShareLink}
+        >
+          {copied ? (
+            <>
+              <Check className="h-3.5 w-3.5 text-brand-green" />
+              Link Copied!
+            </>
+          ) : (
+            <>
+              <Copy className="h-3.5 w-3.5" />
+              Copy Link
+            </>
+          )}
+        </Button>
+      </div>
 
       {/* ── Media Lightbox ──────────────────────────────── */}
       <VideoViewTracker

@@ -65,8 +65,7 @@ vi.mock("@/components/ui/video-card-player", () => ({
   isVideoUrl: (url: string | undefined) => Boolean(url?.endsWith(".mp4")),
 }));
 
-vi.mock("@/lib/utils/format", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+vi.mock("@/lib/utils/format", () => ({
   formatZARShort: () => "R150",
 }));
 

@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 const { trackContentViewSpy } = vi.hoisted(() => ({
@@ -175,7 +175,7 @@ describe("PromotionDetailContent", () => {
     expect(container.querySelector('article[data-layout-mode="review"]')).toBeTruthy();
     expect(screen.queryByTestId("promotion-contact-actions")).not.toBeInTheDocument();
     expect(screen.getByText("Your preview — only you can see this")).toBeInTheDocument();
-    expect(screen.getByText("Upcoming")).toBeInTheDocument();
+    expect(screen.getByText("Upcoming Event")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Add to Calendar/i })).toBeInTheDocument();
     expect(trackContentViewSpy).toHaveBeenCalledWith(
       "promotion-1",
@@ -184,65 +184,9 @@ describe("PromotionDetailContent", () => {
       expect.any(Function)
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Details" }));
+
     expect(screen.getByText("Saved contact methods")).toBeInTheDocument();
-    expect(screen.getByText("Phone call")).toBeInTheDocument();
-    // Review previews use an h2 so the surrounding editor keeps its own h1.
-    expect(screen.getByRole("heading", { level: 2, name: "Soweto Food Festival" })).toBeTruthy();
-  });
-
-  it("shows price, host trust note and ticket prices on the public page", () => {
-    render(
-      <PromotionDetailContent
-        promotion={{
-          id: "promotion-2",
-          owner_id: "owner-1",
-          business_id: null,
-          title: "Jazz on the Lawn",
-          description: "Live jazz.",
-          promotion_type: "event",
-          category: "Festival",
-          category_key: "events_entertainment",
-          photos: ["https://example.com/photo.jpg"],
-          videos: [],
-          video_thumbnail: null,
-          price_cents: 25000,
-          price_negotiable: false,
-          location_province: "Gauteng",
-          location_city: "Johannesburg",
-          location_town: null,
-          location_address: null,
-          contact_methods: ["form"],
-          start_date: "2099-03-10T16:00:00.000Z",
-          end_date: "2099-03-10T20:00:00.000Z",
-          boost_until: null,
-          featured_until: null,
-          view_count: 3,
-          created_at: "2099-01-01T00:00:00.000Z",
-          event_details: {
-            early_bird_deadline: "2099-02-01",
-            ticket_tiers: [
-              { name: "General", price_cents: 25000 },
-              { name: "Kids", price_cents: 0 },
-            ],
-          },
-        }}
-        advertiserProfile={{
-          display_name: "Lerato",
-          account_verification_status: null,
-          phone: null,
-          masked_phone_public: null,
-        }}
-        linkedBusiness={null}
-      />
-    );
-
-    expect(screen.getByRole("heading", { level: 1, name: "Jazz on the Lawn" })).toBeTruthy();
-    expect(screen.getAllByText("R250").length).toBeGreaterThan(0);
-    expect(screen.getByText("Free")).toBeInTheDocument();
-    expect(screen.getByText("Tue 10 Mar, 18:00 – 22:00")).toBeInTheDocument();
-    expect(screen.getByText("1 February 2099")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Hosted by" })).toBeInTheDocument();
-    expect(screen.getByText(/Not ID reviewed yet/i)).toBeInTheDocument();
-    expect(screen.getByTestId("promotion-contact-actions")).toBeInTheDocument();
+    expect(screen.getByText("Phone Call")).toBeInTheDocument();
   });
 });

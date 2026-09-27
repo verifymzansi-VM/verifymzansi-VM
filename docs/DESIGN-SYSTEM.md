@@ -17,11 +17,13 @@ and not a security company.
 
 1. **Explain first, then browse.** Every entry page answers: what is this, what
    can I find, why trust it, how do I start.
-2. **Trust is visible but light.** Use the shield-check mark, the `VerifiedTick`
-   beside names and the labelled `TrustBadge` on detail pages. Never imply a
-   guarantee: badges describe _account checks_.
-3. **Media-first, info-clear.** Photos/video lead; price, title, location and
-   trust sit _below_ the media, never hidden behind hover.
+2. **Trust is visible but light.** Every poster is ID-reviewed, so feed cards
+   carry **no** verification marks. The labelled `TrustBadge` appears only
+   beside the poster's name on detail pages. Never imply a guarantee: badges
+   describe _account checks_.
+3. **Media-first, like TikTok and Facebook.** Clients' photos and video are the
+   product. Pages open on the showroom; detail pages open on the media card,
+   fully visible without scrolling. Keep text to a title, price and place.
 4. **Mobile first.** 16px gutters (`container-page`), 44px minimum touch
    targets, bottom tab bar on discovery pages, sticky action bars on detail
    pages.
@@ -39,7 +41,8 @@ new palette.
 | ------------- | --------------------------------------------- | ------------------------------------- |
 | `brand-green` | **Verified Emerald** — primary, trust, Market | 600 `#0b7a55` (DEFAULT), 500, 700     |
 | `brand-blue`  | **Ocean Indigo** — Mzansi Business            | 600 `#3450d8` (DEFAULT), 700 for text |
-| `sunset`      | **Sunset Coral** — Tourism & Events           | 600 `#d9541a`, 700 `#b8420f` for text |
+| `teal`        | **Coast Teal** — Tourism & Events             | 600 for tiles, 700/800 for text       |
+| `sunset`      | **Sunset Coral** — warm accents               | 600 `#d9541a`, 700 `#b8420f` for text |
 | `brand-gold`  | **Marigold** — highlights, Featured, Pro      | 400 `#f9a826` (DEFAULT)               |
 | `brand-red`   | **Protea** — errors, Urgent, destructive      | 600 `#d63b22` (DEFAULT)               |
 | `warm`        | **Stone** neutrals                            | 50–950                                |
@@ -86,30 +89,29 @@ Area identity helpers: `.area-market-tile`, `.area-business-tile`,
 - Elevation: `elev-xs … elev-xl` utilities (token-based, dark-mode aware).
 - Surfaces: `.surface-card` (white card, hairline border), `.hero-panel`.
 - Motion: 200–300ms ease-out. Motion should answer a user action (open, expand,
-  confirm). At most one ambient animation per page (the hero's floating
-  verification card); always add `motion-reduce:animate-none`. No fade-up
-  entrance on every section.
+  confirm). At most one ambient animation per page (the showroom); always add
+  `motion-reduce:animate-none`. No fade-up entrance on every section.
 
 ## Components
 
-| Component                               | Use                                                                                                                                                                         |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Button` (`@/components/ui/button`)     | variants: default, `trust-verified` (primary emerald), `outline`, `ghost`, `ink` (dark neutral), `trust-gold`, `destructive`. Sizes sm/default/lg/xl.                       |
-| `Badge`                                 | adds `variant="verified"`.                                                                                                                                                  |
-| `BrandLogo` (`shared/brand-logo`)       | **The owner's original logo artwork — never redraw or restyle it.** Default `tone="auto"` swaps to the original inverse file in dark mode; `tone="inverse"` on dark panels. |
-| `BrandShield` / `BrandShieldAlert`      | The original shield artwork, used as an icon.                                                                                                                               |
-| `TrustBadge` (`trust/trust-badge`)      | labelled trust tier pill (legal wording from `trust-scale`).                                                                                                                |
-| `VerifiedTick` (`trust/verified-tick`)  | compact emerald shield tick beside names; `decorative` when text already says it; `pro` for tier 4.                                                                         |
-| `PageHeader` (`layout/page-header`)     | h1 + description + breadcrumbs + actions for secondary pages.                                                                                                               |
-| `AreaHero` (`layout/area-hero`)         | colour-coded intro for the three product areas.                                                                                                                             |
-| `HeaderSearch` (`layout/header-search`) | GET form to `/search`; `size="lg"` for heroes.                                                                                                                              |
-| `PosterCardShell` (immersive)           | feed card: 4:5 media, status chip, details below media.                                                                                                                     |
-| `.pill-link`, `.chip`                   | quick-filter pills and meta chips.                                                                                                                                          |
+| Component                              | Use                                                                                                                                                                         |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Button` (`@/components/ui/button`)    | variants: default, `trust-verified` (primary emerald), `outline`, `ghost`, `ink` (dark neutral), `trust-gold`, `destructive`. Sizes sm/default/lg/xl.                       |
+| `Badge`                                | adds `variant="verified"`.                                                                                                                                                  |
+| `BrandLogo` (`shared/brand-logo`)      | **The owner's original logo artwork — never redraw or restyle it.** Default `tone="auto"` swaps to the original inverse file in dark mode; `tone="inverse"` on dark panels. |
+| `BrandShield` / `BrandShieldAlert`     | The original shield artwork, used as an icon.                                                                                                                               |
+| `TrustBadge` (`trust/trust-badge`)     | labelled trust tier pill (legal wording from `trust-scale`).                                                                                                                |
+| `VerifiedTick` (`trust/verified-tick`) | compact emerald shield tick beside names; `decorative` when text already says it; `pro` for tier 4.                                                                         |
+| `PageHeader` (`layout/page-header`)    | h1 + description + breadcrumbs + actions for secondary pages.                                                                                                               |
+| `PosterCardShell` (`immersive`)        | **the one card shape**: full-bleed 9:16 media, title/price/place and logo overlaid at the bottom. Used by the showroom, home rails and every browse grid.                   |
+| `ShowroomCardCarousel`                 | coverflow showroom that opens the homepage and each area page over the platform photo; the active card always fits the viewport.                                            |
+| `HomeShowcaseShell`                    | a home rail: coloured area icon + area name + "View all". Only the three areas: Mzansi Market, Mzansi Business, Tourism & Events.                                           |
+| `.pill-link`, `.chip`                  | quick-filter pills and meta chips.                                                                                                                                          |
 
-Global chrome: sticky two-row `Header` (logo · search · actions / area tabs ·
-help links), dark `Footer` with a post-for-free call-to-action band, and
-`MobileNav` tab bar (Home · Search · Post · Verify · Account) on discovery pages
-only (`shouldShowMobileNav`).
+Global chrome: sticky single-row `Header` (logo · area tabs · actions), dark
+`Footer` with a post-for-free call-to-action band, and `MobileNav` tab bar (Home
+· Search · Post · Verify · Account) on discovery pages only
+(`shouldShowMobileNav`).
 
 ## States
 

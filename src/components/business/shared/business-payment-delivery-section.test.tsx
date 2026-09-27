@@ -29,9 +29,9 @@ describe("BusinessPaymentDeliverySection", () => {
       />
     );
     expect(screen.getByText("Payment Methods")).toBeInTheDocument();
-    expect(screen.getByText("Cash")).toBeInTheDocument();
-    expect(screen.getByText("Credit Card")).toBeInTheDocument();
-    expect(screen.getByText("EFT")).toBeInTheDocument();
+    expect(screen.getByText("cash")).toBeInTheDocument();
+    expect(screen.getByText("credit card")).toBeInTheDocument();
+    expect(screen.getByText("eft")).toBeInTheDocument();
   });
 
   it("renders delivery available badge", () => {
@@ -45,6 +45,6 @@ describe("BusinessPaymentDeliverySection", () => {
     expect(screen.getByText("Payment Methods")).toBeInTheDocument();
     expect(screen.getByText("Delivery")).toBeInTheDocument();
     expect(screen.getByText("Available")).toBeInTheDocument();
-    expect(screen.getByText("Cash")).toBeInTheDocument();
+    expect(screen.getByText("cash")).toBeInTheDocument();
   });
 });

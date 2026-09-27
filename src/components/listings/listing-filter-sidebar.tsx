@@ -1,9 +1,10 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { Search, SlidersHorizontal, X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useDebouncedCallback } from "@/hooks/use-debounce";
 import { CATEGORIES } from "@/lib/constants/categories";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
@@ -11,13 +12,6 @@ import { useMarketplaceStore } from "@/stores";
 import { cn } from "@/lib/utils";
 import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
 import { ListingAttributeFilters } from "./listing-attribute-filters";
-import {
-  FilterChoiceChip,
-  FilterField,
-  FilterPanel,
-  filterInputClass,
-  filterSelectClass,
-} from "./filter-controls";
 
 /* ─── Main Component ───────────────────────────────────────── */
 
@@ -41,40 +35,25 @@ export function ListingFilterSidebar() {
     filters.query ||
     Object.values(filters.attributes).some((v) => v !== undefined && v !== "");
 
-  const priceRangeInvalid =
-    filters.priceMin != null && filters.priceMax != null && filters.priceMin > filters.priceMax;
-
   return (
-    <FilterPanel
-      title="Filters"
-      action={
-        hasActiveFilters ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="-mr-2 -mt-1 h-9 px-2.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
-            onClick={() => {
-              debouncedSetQuery.cancel();
-              setLocalQuery("");
-              resetFilters();
-            }}
-          >
-            Clear all
-          </Button>
-        ) : null
-      }
-    >
+    <div className="space-y-5 rounded-2xl border border-border/70 bg-card p-4 elev-xs">
+      {/* ── Panel header ────────────────────────────── */}
+      <div className="flex items-center gap-2 border-b border-border/60 pb-3">
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-green/10 text-brand-green">
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+        </span>
+        <p className="font-display text-sm font-semibold tracking-tight">Refine results</p>
+      </div>
+
+      {/* ── Search ────────────────────────────────────── */}
       <div className="relative" role="search">
-        <Search
-          className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-          aria-hidden="true"
-        />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           type="search"
-          placeholder="Search listings"
+          placeholder="Search listings..."
           aria-label="Search listings"
           enterKeyHint="search"
-          className={cn(filterInputClass, "pl-9")}
+          className="rounded-xl pl-9"
           value={localQuery}
           onChange={(e) => {
             setLocalQuery(e.target.value);
@@ -83,34 +62,30 @@ export function ListingFilterSidebar() {
         />
       </div>
 
-      <FilterField label="Category" htmlFor="market-sidebar-category">
+      {/* ── Category ───────────────────────────────── */}
+      <div className="space-y-2">
+        <Label className="text-sm font-semibold">Category</Label>
         <select
-          id="market-sidebar-category"
-          className={filterSelectClass}
+          aria-label="Category"
+          className="h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs ring-offset-background transition-colors hover:border-brand-green/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           value={filters.category || ""}
           onChange={(e) => setFilter("category", e.target.value || undefined)}
         >
-          <option value="">All categories</option>
+          <option value="">All Categories</option>
           {CATEGORIES.map((cat) => (
             <option key={cat.value} value={cat.value}>
               {cat.label}
             </option>
           ))}
         </select>
-      </FilterField>
+      </div>
 
-      <ListingAttributeFilters
-        category={filters.category}
-        attributes={filters.attributes}
-        density="sidebar"
-        onAttributeChange={setAttribute}
-      />
-
-      <fieldset className="space-y-1.5">
-        <legend className="mb-1.5 text-sm font-medium text-foreground">Location</legend>
+      {/* ── Location ────────────────────────────────── */}
+      <div className="space-y-2">
+        <Label className="text-sm font-semibold">Location</Label>
         <select
           aria-label="Province"
-          className={filterSelectClass}
+          className="h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs ring-offset-background transition-colors hover:border-brand-green/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           value={filters.province || ""}
           onChange={(e) => {
             setFilter("province", e.target.value || undefined);
@@ -126,12 +101,15 @@ export function ListingFilterSidebar() {
         </select>
         <select
           aria-label="City"
-          className={filterSelectClass}
+          className={cn(
+            "h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs ring-offset-background transition-colors hover:border-brand-green/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            !filters.province && "opacity-50"
+          )}
           value={filters.city || ""}
           onChange={(e) => setFilter("city", e.target.value || undefined)}
           disabled={!filters.province}
         >
-          <option value="">{filters.province ? "All cities" : "Choose a province first"}</option>
+          <option value="">{filters.province ? "All cities" : "Select province first"}</option>
           {filters.province &&
             getCitiesForProvince(filters.province).map((c) => (
               <option key={c} value={c}>
@@ -139,66 +117,95 @@ export function ListingFilterSidebar() {
               </option>
             ))}
         </select>
-      </fieldset>
+      </div>
 
-      <fieldset className="space-y-1.5">
-        <legend className="mb-1.5 text-sm font-medium text-foreground">Price (R)</legend>
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+      {/* ── Dynamic Category Attributes ────────────── */}
+      <ListingAttributeFilters
+        category={filters.category}
+        attributes={filters.attributes}
+        density="sidebar"
+        onAttributeChange={setAttribute}
+      />
+
+      {/* ── Price range ───────────────────────────── */}
+      <div className="space-y-2">
+        <Label className="text-sm font-semibold">Price range (ZAR)</Label>
+        <div className="flex items-center gap-2">
           <Input
             type="number"
             inputMode="decimal"
             min={0}
             placeholder="Min"
             aria-label="Minimum price"
-            aria-invalid={priceRangeInvalid || undefined}
-            aria-describedby={priceRangeInvalid ? "market-sidebar-price-error" : undefined}
-            className={filterInputClass}
+            className="text-sm"
             value={filters.priceMin || ""}
             onChange={(e) =>
               setFilter("priceMin", e.target.value ? Number(e.target.value) : undefined)
             }
           />
-          <span className="text-xs text-muted-foreground" aria-hidden="true">
-            to
-          </span>
+          <span className="text-muted-foreground text-xs">–</span>
           <Input
             type="number"
             inputMode="decimal"
             min={0}
             placeholder="Max"
             aria-label="Maximum price"
-            aria-invalid={priceRangeInvalid || undefined}
-            aria-describedby={priceRangeInvalid ? "market-sidebar-price-error" : undefined}
-            className={filterInputClass}
+            className="text-sm"
             value={filters.priceMax || ""}
             onChange={(e) =>
               setFilter("priceMax", e.target.value ? Number(e.target.value) : undefined)
             }
           />
         </div>
-        {priceRangeInvalid ? (
-          <p id="market-sidebar-price-error" className="text-xs text-destructive" role="alert">
-            The minimum price is higher than the maximum. Swap them or clear one.
-          </p>
-        ) : null}
-      </fieldset>
+        {filters.priceMin != null &&
+          filters.priceMax != null &&
+          filters.priceMin > filters.priceMax && (
+            <p className="text-xs text-destructive" role="alert">
+              Min price must be less than max
+            </p>
+          )}
+      </div>
 
-      <fieldset>
-        <legend className="mb-2 text-sm font-medium text-foreground">Condition</legend>
-        <div className="flex flex-wrap gap-1.5">
+      {/* ── Condition ──────────────────────────────── */}
+      <div className="space-y-2">
+        <Label className="text-sm font-semibold">Condition</Label>
+        <div className="flex gap-2">
           {LISTING_CONDITIONS.map((cond) => (
-            <FilterChoiceChip
+            <button
               key={cond.value}
-              selected={filters.condition === cond.value}
+              type="button"
               onClick={() =>
                 setFilter("condition", filters.condition === cond.value ? undefined : cond.value)
               }
+              className={cn(
+                "rounded-full border px-3 py-1.5 text-xs font-medium transition-all active:scale-[0.97] motion-reduce:transition-none",
+                filters.condition === cond.value
+                  ? "border-brand-green bg-brand-green/10 text-brand-green shadow-xs"
+                  : "border-border/80 text-muted-foreground hover:text-foreground hover:border-brand-green/40 hover:bg-brand-green/5"
+              )}
             >
               {cond.label}
-            </FilterChoiceChip>
+            </button>
           ))}
         </div>
-      </fieldset>
-    </FilterPanel>
+      </div>
+
+      {/* ── Reset Button ─────────────────────────── */}
+      {hasActiveFilters && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full"
+          onClick={() => {
+            debouncedSetQuery.cancel();
+            setLocalQuery("");
+            resetFilters();
+          }}
+        >
+          <X className="mr-1 h-3 w-3" />
+          Clear all filters
+        </Button>
+      )}
+    </div>
   );
 }

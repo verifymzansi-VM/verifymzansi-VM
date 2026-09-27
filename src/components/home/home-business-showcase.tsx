@@ -44,18 +44,12 @@ export async function HomeBusinessShowcase() {
     .slice(0, 8);
   if (items.length === 0) {
     return (
-      <HomeShowcaseShell
-        badge="Mzansi Business"
-        title="Local businesses"
-        href="/mzansi-business"
-        ctaLabel="See all businesses"
-        tone="blue"
-      >
+      <HomeShowcaseShell title="Mzansi Business" href="/mzansi-business" tone="blue">
         <HomeShowcaseEmptyState
-          title="No business profiles yet"
-          description="Verified local businesses will show here. Profiles are free to start."
+          title="No representative profiles yet."
+          description="The directory is ready for its first identity-reviewed representative profile. Add a business profile and it will appear here."
           ctaHref="/post/create-business"
-          ctaLabel="Add your business"
+          ctaLabel="Create First Profile"
           tone="blue"
           icon={<Building2 className="h-7 w-7" />}
         />
@@ -70,20 +64,14 @@ export async function HomeBusinessShowcase() {
   );
 
   return (
-    <HomeShowcaseShell
-      badge="Mzansi Business"
-      title="Local businesses"
-      href="/mzansi-business"
-      ctaLabel="See all businesses"
-      tone="blue"
-    >
+    <HomeShowcaseShell title="Mzansi Business" href="/mzansi-business" tone="blue">
       <AnalyticsImpressions
         items={items.map((b) => ({ table: "businesses" as const, id: String(b.id) }))}
         type="homepage_appearance"
         surface="home_business"
       />
       <AutoScrollRail
-        ariaLabel="Local businesses you can check"
+        ariaLabel="Mzansi Business"
         showEdgeFades={false}
         flushEdges
         itemClassName="w-[calc((100%-12px)/2)] sm:w-auto"

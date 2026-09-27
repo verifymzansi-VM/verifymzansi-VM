@@ -25,8 +25,24 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+vi.mock("lucide-react", () => ({
+  Calendar: () => <span data-testid="icon-calendar" />,
+  Eye: () => <span data-testid="icon-eye" />,
+  MapPin: () => <span data-testid="icon-map-pin" />,
+  ShieldCheck: () => <span data-testid="icon-shield-check" />,
+}));
+
+vi.mock("@/components/ui/card", () => ({
+  Card: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  CardContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
 vi.mock("@/components/ui/badge", () => ({
   Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+}));
+
+vi.mock("@/components/ui/separator", () => ({
+  Separator: () => <hr />,
 }));
 
 vi.mock("@/components/trust/trust-badge", () => ({

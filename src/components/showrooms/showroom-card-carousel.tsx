@@ -865,6 +865,7 @@ export function ShowroomCardCarousel({
             mediaUrl="/images/fallbacks/hero-shop.svg"
             cardVariant="hero"
             mediaControlVariant="hero"
+            immersive
           />
         </div>
 
@@ -936,7 +937,7 @@ export function ShowroomCardCarousel({
                 makeEntireCardClickable
                 cardVariant="hero"
                 mediaControlVariant={offset === 0 ? "hero" : "default"}
-                fitStrategy="contain"
+                immersive
               />
             </div>
           );

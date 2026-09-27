@@ -1,6 +1,5 @@
 "use client";
 
-import { formatRandAmount } from "@/lib/utils/format";
 import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import { VideoViewTracker } from "@/components/ui/video-view-tracker";
 
@@ -66,8 +65,7 @@ import { getCategoryDetailFields } from "@/lib/forms/business-category-details";
 import type { TourismCategoryDetails } from "@/types/tourism-details";
 import type { BusinessDetails } from "@/types/business-details";
 import { useTrackContentView } from "@/hooks/use-track-content-view";
-
-const zarCurrency = { format: (rand: number) => `R${formatRandAmount(rand)}` };
+import { formatRandAmount } from "@/lib/utils/format";
 
 export interface BusinessDetailRecord {
   id: string;
@@ -455,7 +453,7 @@ export function BusinessDetailsCard({
               <div className="flex items-start justify-between gap-4">
                 <span className="text-muted-foreground">Callout fee from</span>
                 <span className="text-right font-medium">
-                  {zarCurrency.format(businessDetails.callout_fee_from)}
+                  {`R ${formatRandAmount(businessDetails.callout_fee_from)}`}
                 </span>
               </div>
             )}
@@ -599,12 +597,14 @@ export function TourismDetailsCard({ details }: { details: TourismCategoryDetail
     : null;
 
   return (
-    <section className="surface-card elev-xs rounded-2xl p-5 sm:p-6">
-      <h2 className="mb-4 flex items-center gap-2 font-display text-lg font-semibold tracking-tight">
-        <BedDouble className="h-4 w-4 text-sunset-700 dark:text-sunset-300" aria-hidden="true" />
-        Stay and visit details
-      </h2>
-      <div className="space-y-4 text-sm">
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <BedDouble className="h-4 w-4 text-muted-foreground" />
+          Tourism &amp; Hospitality Details
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4 text-sm">
         {subcategoryLabel && (
           <div className="flex items-start justify-between gap-4">
             <span className="text-muted-foreground">Type</span>
@@ -615,13 +615,9 @@ export function TourismDetailsCard({ details }: { details: TourismCategoryDetail
         {typeof details.star_rating === "number" && details.star_rating > 0 && (
           <div className="flex items-start justify-between gap-4">
             <span className="text-muted-foreground">Rating</span>
-            <span className="flex gap-0.5" role="img" aria-label={`${details.star_rating} stars`}>
+            <span className="flex gap-0.5">
               {Array.from({ length: details.star_rating }).map((_, i) => (
-                <Star
-                  key={i}
-                  className="h-4 w-4 fill-brand-gold-400 text-brand-gold-400"
-                  aria-hidden="true"
-                />
+                <Star key={i} className="h-4 w-4 fill-amber-400 text-amber-400" />
               ))}
             </span>
           </div>
@@ -748,7 +744,7 @@ export function TourismDetailsCard({ details }: { details: TourismCategoryDetail
               rel="noopener noreferrer nofollow ugc"
             >
               <Globe className="h-4 w-4" />
-              Book online
+              Book Online
             </a>
           </Button>
         )}
@@ -927,8 +923,8 @@ export function TourismDetailsCard({ details }: { details: TourismCategoryDetail
             )}
           </div>
         )}
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }
 

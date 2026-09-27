@@ -109,8 +109,8 @@ describe("HomeBusinessShowcase", () => {
     const ui = await HomeBusinessShowcase();
     render(ui);
 
-    expect(screen.getByText("No business profiles yet")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /add your business/i })).toHaveAttribute(
+    expect(screen.getByText("No representative profiles yet.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /create first profile/i })).toHaveAttribute(
       "href",
       "/post/create-business"
     );
