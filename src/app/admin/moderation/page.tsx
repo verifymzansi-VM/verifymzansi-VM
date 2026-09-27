@@ -1,10 +1,8 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { requireStaff } from "@/lib/auth/require-staff";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { ModerationQueueClient } from "./moderation-queue-client";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isStaff } from "@/lib/auth/roles";
 import { createLogger } from "@/lib/utils/logger";
 import { toContentEditModerationItem } from "@/lib/content-edit-moderation";
 
@@ -20,13 +18,7 @@ function daysAgoIso(days: number): string {
 }
 
 export default async function AdminModerationPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user || !isStaff(user)) {
-    redirect("/dashboard");
-  }
+  await requireStaff("queue:view");
 
   const admin = createAdminClient();
 

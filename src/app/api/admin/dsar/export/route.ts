@@ -9,6 +9,8 @@ import { ACCOUNT_PROFILE_WRITE_TABLE, getOwnerColumn } from "@/lib/account/compa
 import { parseAndValidateSearchParams } from "@/lib/utils/api";
 import { uuidSchema } from "@/lib/validations/shared";
 import { z } from "zod";
+import { checkStaffApiMfa } from "@/lib/auth/staff-mfa-guard";
+import { STAFF_MFA_PATH } from "@/lib/auth/staff-mfa";
 
 const log = createLogger("DSARExport");
 const DSAR_AUTH_LOOKUP_MAX_PAGES = 50;
@@ -124,6 +126,17 @@ export async function GET(request: NextRequest) {
     const actorRole = await verifyCapabilityRoleFromDb(user, "dsar:manage");
     if (!actorRole) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Exporting personal data needs a recently verified second factor. The
+    // export is opened as a browser download, so send the staff member to
+    // verify rather than returning JSON.
+    const mfaBlock = await checkStaffApiMfa(supabase, user.id, { stepUp: true });
+    if (mfaBlock) {
+      return NextResponse.redirect(
+        new URL(`${STAFF_MFA_PATH}?confirm=1&next=/admin/dsar`, request.url),
+        303
+      );
     }
 
     const rl = await checkSensitiveActionRateLimit(user.id, "admin:dsar:export");

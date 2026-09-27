@@ -1,12 +1,10 @@
-import { createClient } from "@/lib/supabase/server";
+import { requireStaff } from "@/lib/auth/require-staff";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatRelativeTime } from "@/lib/utils/format";
 import { ScrollText } from "lucide-react";
-import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
 import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
 import type { AuditLogEntry } from "@/lib/utils/admin-queries";
 
@@ -47,13 +45,7 @@ export default async function AdminAuditLogPage({
     to: clean(raw.to, 10),
     q: clean(raw.q, 100)?.replace(/[%_,()]/g, " "),
   };
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user || !(await verifyCapabilityFromDb(user, "audit:view"))) {
-    redirect("/dashboard");
-  }
+  await requireStaff("audit:view");
 
   const admin = createAdminClient();
 

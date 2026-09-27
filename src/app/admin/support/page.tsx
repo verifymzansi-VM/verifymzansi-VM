@@ -1,11 +1,9 @@
-import { createClient } from "@/lib/supabase/server";
+import { requireStaff } from "@/lib/auth/require-staff";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Inbox } from "lucide-react";
 import { SupportInboxClient } from "./support-inbox-client";
-import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
 import Link from "next/link";
 import { uuidSchema } from "@/lib/validations/shared";
 import { createLogger } from "@/lib/utils/logger";
@@ -30,13 +28,7 @@ export default async function AdminSupportPage({
 }: {
   searchParams: Promise<{ page?: string; submission?: string }>;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user || !(await verifyStaffActorRoleFromDb(user))) {
-    redirect("/dashboard");
-  }
+  await requireStaff();
 
   const admin = createAdminClient();
   const params = await searchParams;

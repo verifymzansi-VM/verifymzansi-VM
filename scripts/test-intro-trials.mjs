@@ -1,6 +1,8 @@
 import { PGlite } from "@electric-sql/pglite";
 import fs from "node:fs";
 import assert from "node:assert/strict";
+
+let staffRolesReady = false;
 process.on("uncaughtException", (error) => {
   console.error(error.message, error.where ?? "");
   process.exit(1);
@@ -30,6 +32,9 @@ for (const f of [
   "20260920110000_account_trials_30_days_email_search.sql",
 ])
   await db.exec(fs.readFileSync("supabase/migrations/" + f, "utf8"));
+// Staff role authority: from here on, staff_roles (not auth metadata) grants staff powers.
+await db.exec(fs.readFileSync("supabase/migrations/20260927110000_staff_roles_authority.sql", "utf8"));
+staffRolesReady = true;
 const scalar = async (sql, args) => (await db.query(sql, args)).rows[0];
 const uuid = () => crypto.randomUUID();
 async function user(role = "member", h = uuid()) {
@@ -39,6 +44,8 @@ async function user(role = "member", h = uuid()) {
     `INSERT INTO account_profiles(user_id,account_verification_status,account_status,phone) VALUES($1,'verified','active','+27712345678')`,
     [id]
   );
+  if (staffRolesReady && ["moderator", "governance_controller", "admin"].includes(role))
+    await db.query(`INSERT INTO staff_roles(user_id, role) VALUES($1, $2)`, [id, role]);
   for (const step of ["phone", "id_doc", "selfie", "location"])
     await db.query(`INSERT INTO verification_steps VALUES($1,$2,'approved',$3)`, [
       id,

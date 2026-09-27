@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   mockCreateClient,
   mockVerifyCapabilityRoleFromDb,
+  mockVerifyCapabilityFromDb,
   mockApproveDecision,
   mockRejectDecision,
   mockEscalateDecision,
@@ -14,6 +15,7 @@ const {
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockVerifyCapabilityRoleFromDb: vi.fn(),
+  mockVerifyCapabilityFromDb: vi.fn(),
   mockApproveDecision: vi.fn(),
   mockRejectDecision: vi.fn(),
   mockEscalateDecision: vi.fn(),
@@ -34,6 +36,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("@/lib/auth/admin-access", () => ({
   verifyCapabilityRoleFromDb: mockVerifyCapabilityRoleFromDb,
+  verifyCapabilityFromDb: mockVerifyCapabilityFromDb,
 }));
 
 vi.mock("@/lib/services/decision-ledger", () => ({
@@ -273,5 +276,59 @@ describe("POST /api/admin/governance/decide", () => {
 
     expect(res.status).toBe(500);
     expect(mockLogApiError).toHaveBeenCalled();
+  });
+
+  function decisionRow(data: Record<string, unknown>) {
+    mockAdminFrom.mockImplementation((table: string) =>
+      table === "decision_records"
+        ? {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data, error: null }),
+              }),
+            }),
+          }
+        : {}
+    );
+  }
+
+  it.each(["approve", "reject", "escalate"])(
+    "refuses to %s staff role changes, which have their own approval flow",
+    async (action) => {
+      decisionRow({ recommender_id: "admin-1", action_category: "role_change", case_type: "staff_role" });
+      const res = await POST(
+        createRequest({
+          decisionId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+          action,
+          rationale: "Looks right",
+        })
+      );
+      expect(res.status).toBe(409);
+      expect(mockApproveDecision).not.toHaveBeenCalled();
+      expect(mockRejectDecision).not.toHaveBeenCalled();
+      expect(mockEscalateDecision).not.toHaveBeenCalled();
+    }
+  );
+
+  it("checks the secondary approver against the staff role table, not auth metadata", async () => {
+    decisionRow({ recommender_id: "mod-1", action_category: "account_ban", case_type: "report" });
+    mockVerifyCapabilityFromDb.mockResolvedValue(false);
+    const secondaryApproverId = "b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22";
+
+    const res = await POST(
+      createRequest({
+        decisionId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        action: "approve",
+        rationale: "Approved",
+        secondaryApproverId,
+      })
+    );
+
+    expect(res.status).toBe(422);
+    expect(mockVerifyCapabilityFromDb).toHaveBeenCalledWith(
+      expect.objectContaining({ id: secondaryApproverId }),
+      "decision:approve"
+    );
+    expect(mockApproveDecision).not.toHaveBeenCalled();
   });
 });

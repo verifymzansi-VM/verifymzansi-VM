@@ -406,49 +406,6 @@ export async function resolveAppeal(params: ResolveAppealParams) {
   return { appealId: params.appealId, status: params.status };
 }
 
-/* ── Role Assignment History ───────────────────────────── */
-
-/**
- * Record a role change in the role assignments history.
- */
-export async function recordRoleChange(params: {
-  targetUserId: string;
-  previousRole: string | null;
-  newRole: string;
-  assignedBy: string;
-  assignerRole: StaffRole;
-  reason: string;
-}) {
-  const supabase = createAdminClient();
-
-  const { error } = await supabase.from("role_assignments_history").insert({
-    target_user_id: params.targetUserId,
-    previous_role: params.previousRole,
-    new_role: params.newRole,
-    assigned_by: params.assignedBy,
-    reason: params.reason,
-  });
-
-  if (error) {
-    log.error("Failed to record role change", { error: error.message });
-    throw new Error("Failed to record role change");
-  }
-
-  await logAuditEvent({
-    actorId: params.assignedBy,
-    actorRole: params.assignerRole,
-    // Demotion to plain membership is a revocation, not an assignment.
-    action: params.newRole === "member" ? "role_revoked" : "role_assigned",
-    targetType: "user",
-    targetId: params.targetUserId,
-    metadata: {
-      previousRole: params.previousRole,
-      newRole: params.newRole,
-      reason: params.reason,
-    },
-  });
-}
-
 /* ── Query Helpers ─────────────────────────────────────── */
 
 /**
@@ -461,6 +418,8 @@ export async function getPendingDecisions(limit = 50) {
     .from("decision_records")
     .select("*")
     .in("status", ["pending_approval", "escalated"])
+    // Staff role changes have their own review flow on the Role management page.
+    .neq("case_type", "staff_role")
     .order("created_at", { ascending: true })
     .limit(limit);
 

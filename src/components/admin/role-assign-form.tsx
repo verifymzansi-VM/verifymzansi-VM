@@ -21,13 +21,18 @@ import { Loader2, UserCog } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 
-const ASSIGNABLE_ROLES = [
+const ADMIN_ROLES = [
   { value: "moderator", label: "Moderator" },
-  { value: "governance_controller", label: "Governance Controller" },
-  { value: "member", label: "Member (revoke staff)" },
+  { value: "governance_controller", label: "Governor" },
+  { value: "admin", label: "Admin" },
+  { value: "member", label: "Member (remove staff access)" },
 ] as const;
 
-export function RoleAssignForm() {
+// Governors may only ask for a moderator's removal; an admin approves it.
+const GOVERNOR_ROLES = [{ value: "member", label: "Member (request removal)" }] as const;
+
+export function RoleAssignForm({ mode }: { mode: "admin" | "governor" }) {
+  const ASSIGNABLE_ROLES = mode === "admin" ? ADMIN_ROLES : GOVERNOR_ROLES;
   const router = useRouter();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -53,18 +58,25 @@ export function RoleAssignForm() {
       const res = await fetch("/api/admin/governance/roles", {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ targetEmail, newRole, reason: reason.trim() }),
+        body: JSON.stringify({ action: "propose", targetEmail, newRole, reason: reason.trim() }),
       });
 
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
+        if (data.code === "step_up_required" || data.code === "mfa_required") {
+          window.location.assign(`${data.verifyUrl}&next=/admin/governance/roles`);
+          return;
+        }
         throw new Error(data.error || `Request failed (${res.status})`);
       }
 
       toast({
-        title: "Role updated",
-        description: `Changed to ${newRole} successfully.`,
+        title: data.status === "proposed" ? "Sent for approval" : "Role updated",
+        description:
+          data.status === "proposed"
+            ? "Another reviewer must approve this change before it takes effect."
+            : `Changed to ${newRole}.`,
       });
 
       setTargetEmail("");
@@ -96,7 +108,7 @@ export function RoleAssignForm() {
             Assign Role
             <Badge variant="outline" className="ml-auto text-xs">
               <ShieldAlert className="h-3 w-3 mr-1" />
-              Admin only
+              {mode === "admin" ? "Admin" : "Governor"}
             </Badge>
           </CardTitle>
         </CardHeader>

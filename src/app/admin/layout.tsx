@@ -3,9 +3,11 @@ import { AdminLiveNotifier } from "@/components/admin/admin-live-notifier";
 import { AdminRealtimeRefresh } from "@/components/admin/admin-realtime-refresh";
 import { NotificationBell } from "@/components/notification-bell";
 import { BrandLogo } from "@/components/shared/brand-logo";
-import { createClient } from "@/lib/supabase/server";
+import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getRoleFromUser, isStaff, asStaffRole } from "@/lib/auth/roles";
+import { requireStaff } from "@/lib/auth/require-staff";
+import { STAFF_MFA_PATH } from "@/lib/auth/staff-mfa";
+import { formatSaLongDate } from "@/lib/utils/format";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { getPendingModerationCount } from "@/lib/utils/admin-queries";
 
@@ -21,22 +23,12 @@ const WORKSPACE_LABELS: Record<string, string> = {
 };
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  // Default to unprivileged role — never grant staff access implicitly.
-  // The middleware enforces admin access, but defense-in-depth ensures
-  // non-staff authenticated users are never shown the admin UI.
-  if (!user || !isStaff(user)) {
-    const { redirect } = await import("next/navigation");
-    redirect(!user ? "/login" : "/dashboard");
-  }
-  const staffUser = user!;
-  const role = getRoleFromUser(staffUser) || "viewer";
-  const staffRole = asStaffRole(role);
-  const workspaceLabel = staffRole ? (WORKSPACE_LABELS[staffRole] ?? "Admin") : "Admin";
+  // Staff role, account status and two-step verification come from the
+  // database on every request; the JWT role is never trusted.
+  const staff = await requireStaff();
+  const staffUser = staff.user;
+  const role = staff.role;
+  const workspaceLabel = WORKSPACE_LABELS[role] ?? "Admin";
 
   // Fetch counts for sidebar badges (using admin client for cross-user data)
   const admin = createAdminClient();
@@ -76,6 +68,16 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </div>
         </div>
       </header>
+
+      {staff.mfa.status === "grace" && (
+        <div role="status" className="border-b bg-muted px-4 py-2 text-center text-sm">
+          Set up two-step verification by {formatSaLongDate(staff.mfa.graceEndsAt)} to keep
+          access.{" "}
+          <Link href={STAFF_MFA_PATH} className="font-medium underline">
+            Set it up now
+          </Link>
+        </div>
+      )}
 
       <AdminLiveNotifier userId={staffUser.id} userRole={role} />
       <AdminRealtimeRefresh />

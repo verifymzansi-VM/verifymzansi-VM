@@ -1,11 +1,9 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { requireStaff } from "@/lib/auth/require-staff";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { VerificationAlertBanner } from "@/components/admin/verification-alert-banner";
 import { KycQueueClient } from "./kyc-queue-client";
 import { getPendingVerificationGroups } from "@/lib/utils/admin-queries";
-import { isStaff } from "@/lib/auth/roles";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 
 export const metadata = {
@@ -14,13 +12,7 @@ export const metadata = {
 };
 
 export default async function AdminVerificationPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user || !isStaff(user)) {
-    redirect("/dashboard");
-  }
+  await requireStaff("queue:view");
 
   let pendingGroups: Awaited<ReturnType<typeof getPendingVerificationGroups>> = [];
   try {

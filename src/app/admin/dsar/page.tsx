@@ -1,6 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
+import { requireStaff } from "@/lib/auth/require-staff";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,7 +9,6 @@ import { formatRelativeTime, formatSaShortDate } from "@/lib/utils/format";
 import { maskEmail } from "@/lib/utils/mask";
 import { Download, FileText } from "lucide-react";
 import { DsarActionButtons } from "./dsar-action-buttons";
-import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
 import { createLogger } from "@/lib/utils/logger";
 import type { DsarCase } from "@/types/database";
 import type { DsarStatus } from "@/types/enums";
@@ -36,13 +34,7 @@ export default async function AdminDSARPage({
 }: {
   searchParams?: Promise<{ view?: string; page?: string }>;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user || !(await verifyCapabilityFromDb(user, "dsar:manage"))) {
-    redirect("/dashboard");
-  }
+  await requireStaff("dsar:manage");
 
   const params = (await searchParams) ?? {};
   const view: DsarView = params.view === "closed" ? "closed" : "open";

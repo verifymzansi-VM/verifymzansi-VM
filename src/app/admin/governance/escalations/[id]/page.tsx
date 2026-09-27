@@ -1,6 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect, notFound } from "next/navigation";
-import { hasCapability } from "@/lib/auth/roles";
+import { requireStaff } from "@/lib/auth/require-staff";
+import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,14 +18,7 @@ interface Props {
 export default async function DecisionDetailPage({ params }: Props) {
   const { id } = await params;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user || !hasCapability(user, "decision:approve")) {
-    redirect("/admin");
-  }
+  await requireStaff("decision:approve");
 
   const admin = createAdminClient();
 

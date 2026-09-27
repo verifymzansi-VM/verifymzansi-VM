@@ -35,6 +35,8 @@ export type Capability =
   | "enforcement:execute"
   | "role:assign"
   | "role:revoke"
+  /** Review role-change proposals (approve moderator grants, propose moderator removal). */
+  | "role:review"
   | "oversight:view"
   // Admin intelligence (read-only)
   | "bi:view"
@@ -76,6 +78,7 @@ const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
     "appeal:review",
     "appeal:decide",
     "enforcement:execute",
+    "role:review",
     "oversight:view",
     "audit:view",
     "dsar:manage",
@@ -108,6 +111,7 @@ const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
     // Admin-exclusive: role management
     "role:assign",
     "role:revoke",
+    "role:review",
     // Admin-exclusive: intelligence & tools
     "bi:view",
     "bi:export",

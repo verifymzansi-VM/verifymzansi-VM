@@ -1,9 +1,7 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { requireStaff } from "@/lib/auth/require-staff";
 import { PageHeader } from "@/components/layout/page-header";
 import { getAllFeatureFlags } from "@/lib/services/feature-flags";
 import { FeatureFlagsClient } from "./feature-flags-client";
-import { isAdmin } from "@/lib/auth/roles";
 
 export const metadata = {
   title: "Feature Flags — Admin",
@@ -11,14 +9,7 @@ export const metadata = {
 };
 
 export default async function FeatureFlagsPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user || !isAdmin(user)) {
-    redirect("/dashboard");
-  }
+  await requireStaff("feature_flag:toggle");
 
   const flags = await getAllFeatureFlags();
 

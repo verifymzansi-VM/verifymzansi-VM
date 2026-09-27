@@ -1,13 +1,11 @@
-import { createClient } from "@/lib/supabase/server";
+import { requireStaff } from "@/lib/auth/require-staff";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Flag } from "lucide-react";
 import { ReportsClient } from "./reports-client";
 import { countOpenReports } from "@/lib/utils/reports";
 import type { Report } from "@/types/database";
-import { isStaff } from "@/lib/auth/roles";
 
 export const metadata = {
   title: "Reports — Admin",
@@ -15,13 +13,7 @@ export const metadata = {
 };
 
 export default async function AdminReportsPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user || !isStaff(user)) {
-    redirect("/dashboard");
-  }
+  await requireStaff("queue:view");
 
   const admin = createAdminClient();
 

@@ -1,6 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
-import { hasCapability } from "@/lib/auth/roles";
+import { requireStaff } from "@/lib/auth/require-staff";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { PageHeader } from "@/components/layout/page-header";
@@ -14,14 +12,7 @@ export const metadata = {
 };
 
 export default async function IntelligenceUsersPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user || !hasCapability(user, "bi:view")) {
-    redirect("/admin");
-  }
+  await requireStaff("bi:view");
 
   const admin = createAdminClient();
 

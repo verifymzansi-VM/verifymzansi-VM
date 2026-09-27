@@ -5,7 +5,7 @@ import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
-import { hasCapability } from "@/lib/auth/roles";
+import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
 import { z } from "zod";
 import { uuidSchema } from "@/lib/validations/shared";
 
@@ -97,19 +97,28 @@ export async function POST(request: Request) {
     const { decisionId, action, rationale, afterState, secondaryApproverId } = bodyResult.data;
 
     // ── Dual approval enforcement for high-stakes actions ────
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    const adminSupabase = createAdminClient();
+    const { data: decisionRow } = await adminSupabase
+      .from("decision_records")
+      .select("recommender_id, action_category, case_type, case_id, recommendation, before_state")
+      .eq("id", decisionId)
+      .maybeSingle();
+
+    if (!decisionRow) {
+      return NextResponse.json({ error: "Decision record not found" }, { status: 404 });
+    }
+    // Staff role changes are decided on the Role management page, where the
+    // database enforces the role-change approval policy.
+    if ((decisionRow as DecisionRow).case_type === "staff_role") {
+      return NextResponse.json(
+        { error: "Review staff role changes on the Role management page" },
+        { status: 409 }
+      );
+    }
+
     let decision: DecisionRow | null = null;
     if (action === "approve" || action === "reject") {
-      const { createAdminClient } = await import("@/lib/supabase/admin");
-      const adminSupabase = createAdminClient();
-      const { data: decisionRow } = await adminSupabase
-        .from("decision_records")
-        .select("recommender_id, action_category, case_type, case_id, recommendation, before_state")
-        .eq("id", decisionId)
-        .maybeSingle();
-
-      if (!decisionRow) {
-        return NextResponse.json({ error: "Decision record not found" }, { status: 404 });
-      }
       decision = decisionRow as DecisionRow;
 
       // Four-eyes principle: approver must differ from recommender
@@ -150,13 +159,11 @@ export async function POST(request: Request) {
 
         // DB-verify the secondary approver exists and actually holds the
         // decision:approve capability (presence of a UUID is not approval).
-        const { data: secondaryData, error: secondaryError } =
-          await adminSupabase.auth.admin.getUserById(secondaryApproverId);
-        if (
-          secondaryError ||
-          !secondaryData?.user ||
-          !hasCapability(secondaryData.user, "decision:approve")
-        ) {
+        const secondaryIsApprover = await verifyCapabilityFromDb(
+          { id: secondaryApproverId, app_metadata: {}, is_anonymous: false },
+          "decision:approve"
+        );
+        if (!secondaryIsApprover) {
           return NextResponse.json(
             { error: "Secondary approver is not an authorized decision approver" },
             { status: 422 }

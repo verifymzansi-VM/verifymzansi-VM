@@ -24,6 +24,7 @@ import {
 import { summarizeVerification } from "@/lib/account/verification-summary";
 import { getAuthAdminUserSummary } from "@/lib/supabase/auth-admin-user";
 import { scheduleBackgroundTask } from "@/lib/utils/background-task";
+import { checkStaffApiMfa } from "@/lib/auth/staff-mfa-guard";
 
 const log = createLogger("AdminVerification");
 const ID_NUMBER_IN_USE_ERROR = "This ID number is already linked to another account.";
@@ -53,6 +54,9 @@ export async function POST(request: Request) {
     if (!actorRole) {
       return forbiddenResponse();
     }
+
+    const mfaBlock = await checkStaffApiMfa(supabase, user.id);
+    if (mfaBlock) return mfaBlock;
 
     const rl = checkLocalRateLimit(user.id, "admin:verification:decide");
     if (rl.limited) {
@@ -95,8 +99,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // High-risk overrides are sensitive: fail closed without the shared limiter.
+    // High-risk overrides are sensitive: they need a recently verified second
+    // factor, and fail closed without the shared limiter.
     if (decision === "approved" && (step.risk_level === "high" || step.risk_level === "critical")) {
+      const stepUpBlock = await checkStaffApiMfa(supabase, user.id, { stepUp: true });
+      if (stepUpBlock) return stepUpBlock;
+
       const overrideRl = await checkSensitiveActionRateLimit(
         user.id,
         "admin:verification:override"

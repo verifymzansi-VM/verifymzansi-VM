@@ -27,7 +27,6 @@ import {
   createAppeal,
   createDecisionRecord,
   getPendingDecisions,
-  recordRoleChange,
   rejectDecision,
   resolveAppeal,
 } from "@/lib/services/decision-ledger";
@@ -273,35 +272,6 @@ describe("decision-ledger service", () => {
     );
   });
 
-  it("records role changes and throws when history insert fails", async () => {
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "role_assignments_history") {
-          return {
-            insert: vi.fn().mockResolvedValue({ error: { message: "insert failed" } }),
-          };
-        }
-        throw new Error(`Unexpected table ${table}`);
-      }),
-    });
-
-    await expect(
-      recordRoleChange({
-        targetUserId: "user-1",
-        previousRole: "moderator",
-        newRole: "governance_controller",
-        assignedBy: "admin-1",
-        assignerRole: "admin",
-        reason: "Promotion",
-      })
-    ).rejects.toThrow("Failed to record role change");
-
-    expect(mockLoggerError).toHaveBeenCalledWith(
-      "Failed to record role change",
-      expect.objectContaining({ error: "insert failed" })
-    );
-  });
-
   it("fetches pending decisions ordered by status set", async () => {
     const limit = vi.fn().mockResolvedValue({
       data: [{ id: "decision-1", status: "pending_approval" }],
@@ -314,8 +284,10 @@ describe("decision-ledger service", () => {
           return {
             select: vi.fn().mockReturnValue({
               in: vi.fn().mockReturnValue({
-                order: vi.fn().mockReturnValue({
-                  limit,
+                neq: vi.fn().mockReturnValue({
+                  order: vi.fn().mockReturnValue({
+                    limit,
+                  }),
                 }),
               }),
             }),

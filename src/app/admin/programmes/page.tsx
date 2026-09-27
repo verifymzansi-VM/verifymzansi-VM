@@ -1,7 +1,5 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { requireStaff } from "@/lib/auth/require-staff";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
 import { resolveCommercialSettings } from "@/lib/commercial/settings";
 import {
   ProgrammesPanel,
@@ -17,12 +15,7 @@ export default async function ProgrammesPage({
 }: {
   searchParams: Promise<{ account?: string }>;
 }) {
-  const client = await createClient();
-  const {
-    data: { user },
-  } = await client.auth.getUser();
-  if (!user) redirect("/login");
-  if (!(await verifyCapabilityFromDb(user, "contracts:manage"))) redirect("/admin");
+  const { user } = await requireStaff("contracts:manage");
 
   const admin = createAdminClient();
   const { account } = await searchParams;

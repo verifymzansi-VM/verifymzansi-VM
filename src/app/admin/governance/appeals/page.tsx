@@ -1,6 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
-import { hasCapability } from "@/lib/auth/roles";
+import { requireStaff } from "@/lib/auth/require-staff";
 import { getPendingAppeals } from "@/lib/services/decision-ledger";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -14,14 +12,7 @@ export const metadata = {
 };
 
 export default async function GovernanceAppealsPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user || !hasCapability(user, "appeal:decide")) {
-    redirect("/admin");
-  }
+  await requireStaff("appeal:decide");
 
   const appeals = await getPendingAppeals(50);
 

@@ -4,6 +4,7 @@ import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import type { AppLogger } from "@/lib/utils/logger";
 import type { StaffRole } from "@/types/enums";
+import { checkStaffApiMfa } from "@/lib/auth/staff-mfa-guard";
 
 type EvidenceAuthSuccess = {
   success: true;
@@ -44,6 +45,11 @@ export async function authorizeEvidenceRequest({
       response: NextResponse.json({ error: "Forbidden", code: "forbidden" }, { status: 403 }),
       status: 403,
     };
+  }
+
+  const mfaBlock = await checkStaffApiMfa(supabase, user.id);
+  if (mfaBlock) {
+    return { success: false, response: mfaBlock, status: 403 };
   }
 
   const rateLimit = checkLocalRateLimit(user.id, rateLimitAction);

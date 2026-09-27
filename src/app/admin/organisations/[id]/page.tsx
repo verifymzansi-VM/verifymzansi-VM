@@ -1,8 +1,7 @@
+import { requireStaff } from "@/lib/auth/require-staff";
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
 import {
   OrganisationActionsForm,
   OrganisationProfileForm,
@@ -44,12 +43,7 @@ export default async function OrganisationAdminDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const client = await createClient();
-  const {
-    data: { user },
-  } = await client.auth.getUser();
-  if (!user) redirect("/login");
-  if (!(await verifyCapabilityFromDb(user, "organisations:manage"))) redirect("/admin");
+  const { user } = await requireStaff("organisations:manage");
 
   const admin = createAdminClient();
   const { data: org } = await admin.from("organisations").select("*").eq("id", id).maybeSingle();

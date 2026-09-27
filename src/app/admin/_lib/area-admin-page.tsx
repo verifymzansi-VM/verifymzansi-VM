@@ -1,9 +1,7 @@
-import { redirect } from "next/navigation";
+import { requireStaff } from "@/lib/auth/require-staff";
 import { AreaAdminTabs } from "@/components/admin/area-admin-tabs";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
-import { isStaff } from "@/lib/auth/roles";
-import { createClient } from "@/lib/supabase/server";
 import {
   getActionsToday,
   getAreaReports,
@@ -26,13 +24,7 @@ function fulfilledValue<T>(result: PromiseSettledResult<T>, fallback: T): T {
 }
 
 export async function AreaAdminPage({ area, areaLabel, description }: AreaAdminPageConfig) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user || !isStaff(user)) {
-    redirect("/dashboard");
-  }
+  await requireStaff("queue:view");
 
   const settled = await Promise.allSettled([
     getPendingVerificationGroups(),

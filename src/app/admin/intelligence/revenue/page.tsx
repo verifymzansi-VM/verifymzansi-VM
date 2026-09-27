@@ -1,6 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
-import { hasCapability } from "@/lib/auth/roles";
+import { requireStaff } from "@/lib/auth/require-staff";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -101,14 +99,7 @@ async function fetchInvoiceRows(admin: ReturnType<typeof createAdminClient>) {
 }
 
 export default async function IntelligenceRevenuePage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user || !hasCapability(user, "bi:view")) {
-    redirect("/admin");
-  }
+  await requireStaff("bi:view");
 
   const admin = createAdminClient();
 

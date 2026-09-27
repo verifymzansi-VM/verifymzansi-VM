@@ -1,451 +1,199 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// ── Hoisted mocks ────────────────────────────────────────────
+const { guard, rpc, getUserById, updateUserById, rateLimit, reportCriticalIncident } = vi.hoisted(
+  () => ({
+    guard: vi.fn(),
+    rpc: vi.fn(),
+    getUserById: vi.fn(),
+    updateUserById: vi.fn(),
+    rateLimit: vi.fn(),
+    reportCriticalIncident: vi.fn(),
+  })
+);
 
-const {
-  mockCreateClient,
-  mockCreateAdminClient,
-  mockVerifyAdminActorRoleFromDb,
-  mockGetRoleFromUser,
-  mockRecordRoleChange,
-  mockCheckLocalRateLimit,
-  mockEnforceSameOriginMutation,
-  mockEnforceCsrfToken,
-  mockListUsers,
-  mockUpdateUserById,
-} = vi.hoisted(() => ({
-  mockCreateClient: vi.fn(),
-  mockCreateAdminClient: vi.fn(),
-  mockVerifyAdminActorRoleFromDb: vi.fn(),
-  mockGetRoleFromUser: vi.fn(),
-  mockRecordRoleChange: vi.fn(),
-  mockCheckLocalRateLimit: vi.fn(),
-  mockEnforceSameOriginMutation: vi.fn<(request: Request) => Response | null>(() => null),
-  mockEnforceCsrfToken: vi.fn<(request: Request) => Response | null>(() => null),
-  mockListUsers: vi.fn(),
-  mockUpdateUserById: vi.fn(),
-}));
-
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: mockCreateClient,
-}));
-
+vi.mock("@/lib/utils/admin-route-guard", () => ({ enforceAdminMutationGuard: guard }));
 vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: mockCreateAdminClient,
+  createAdminClient: () => ({ rpc, auth: { admin: { getUserById, updateUserById } } }),
 }));
-
-vi.mock("@/lib/auth/admin-access", () => ({
-  verifyAdminActorRoleFromDb: mockVerifyAdminActorRoleFromDb,
-}));
-
-vi.mock("@/lib/auth/roles", () => ({
-  getRoleFromUser: mockGetRoleFromUser,
-}));
-
-vi.mock("@/lib/services/decision-ledger", () => ({
-  recordRoleChange: mockRecordRoleChange,
-}));
-
-vi.mock("@/lib/utils/rate-limit", () => ({
-  checkLocalRateLimit: mockCheckLocalRateLimit,
-  // The sensitive (fail-closed) limiter is covered in rate-limit.test.ts;
-  // here it follows the local limiter mock.
-  checkSensitiveActionRateLimit: async (userId: string, action: string, max?: number) =>
-    mockCheckLocalRateLimit(userId, action, max),
-}));
-
-vi.mock("@/lib/utils/logger", () => ({
-  createLogger: () => ({
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
-}));
-
-vi.mock("@/lib/utils/mutation-origin", () => ({
-  enforceSameOriginMutation: mockEnforceSameOriginMutation,
-}));
-
-vi.mock("@/lib/utils/csrf", () => ({
-  enforceCsrfToken: mockEnforceCsrfToken,
-}));
+vi.mock("@/lib/utils/rate-limit", () => ({ checkSensitiveActionRateLimit: rateLimit }));
+vi.mock("@/lib/utils/alerts", () => ({ reportCriticalIncident }));
 
 import { POST } from "./route";
 
-// ── Helpers ──────────────────────────────────────────────────
+const ADMIN_ID = "11111111-1111-4111-8111-111111111111";
+const TARGET_ID = "22222222-2222-4222-8222-222222222222";
+const DECISION_ID = "33333333-3333-4333-8333-333333333333";
 
-const ADMIN_USER = {
-  id: "admin-1",
-  email: "admin@example.com",
-  app_metadata: { role: "admin" },
+const request = (body: unknown) =>
+  new Request("https://verifymzansi.com/api/admin/governance/roles", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+const propose = {
+  action: "propose",
+  targetEmail: "target@example.com",
+  newRole: "moderator",
+  reason: "Joining the verification team",
 };
 
-const TARGET_USER = {
-  id: "target-1",
-  email: "target@example.com",
-  app_metadata: { role: "member" },
-};
-
-function createMockRequest(body: Record<string, unknown>): Request {
-  const json = JSON.stringify(body);
-  return {
-    text: async () => json,
-    headers: new Headers(),
-    url: "https://verifymzansi.com/api/admin/governance/roles",
-  } as unknown as Request;
+function rpcReturns(results: Record<string, unknown>) {
+  rpc.mockImplementation(async (fn: string) => ({ data: results[fn], error: null }));
 }
-
-function validBody(overrides?: Partial<{ targetEmail: string; newRole: string; reason: string }>) {
-  return {
-    targetEmail: TARGET_USER.email,
-    newRole: "moderator",
-    reason: "Promoting to moderator for content moderation duties",
-    ...overrides,
-  };
-}
-
-function setupHappyPath() {
-  mockCreateClient.mockResolvedValue({
-    auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user: ADMIN_USER } }),
-    },
-  });
-  mockVerifyAdminActorRoleFromDb.mockResolvedValue("admin");
-  mockCheckLocalRateLimit.mockReturnValue({ limited: false });
-  mockGetRoleFromUser.mockReturnValue("member");
-  mockRecordRoleChange.mockResolvedValue(undefined);
-
-  mockListUsers.mockResolvedValue({
-    data: { users: [TARGET_USER] },
-    error: null,
-  });
-  mockUpdateUserById.mockResolvedValue({ error: null });
-
-  mockCreateAdminClient.mockReturnValue({
-    auth: {
-      admin: {
-        listUsers: mockListUsers,
-        updateUserById: mockUpdateUserById,
-      },
-    },
-  });
-}
-
-// ── Tests ────────────────────────────────────────────────────
 
 describe("POST /api/admin/governance/roles", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockEnforceSameOriginMutation.mockReturnValue(null);
-    mockEnforceCsrfToken.mockReturnValue(null);
-    setupHappyPath();
+    guard.mockResolvedValue({ success: true, user: { id: ADMIN_ID }, actorRole: "admin" });
+    rateLimit.mockResolvedValue({ limited: false });
+    getUserById.mockResolvedValue({
+      data: { user: { id: TARGET_ID, app_metadata: { provider: "email", role: "member" } } },
+      error: null,
+    });
+    updateUserById.mockResolvedValue({ error: null });
   });
 
-  // ── Security layer tests ───────────────────────────────
-
-  describe("L1: Same-origin enforcement", () => {
-    it("blocks cross-origin requests", async () => {
-      const blocked = new Response(JSON.stringify({ error: "Origin mismatch" }), { status: 403 });
-      mockEnforceSameOriginMutation.mockReturnValue(blocked);
-
-      const res = await POST(createMockRequest(validBody()));
-
-      expect(res.status).toBe(403);
-      expect(mockVerifyAdminActorRoleFromDb).not.toHaveBeenCalled();
-    });
+  it("requires role:review with a recent second factor", async () => {
+    guard.mockResolvedValue({ success: false, response: new Response(null, { status: 403 }) });
+    expect((await POST(request(propose))).status).toBe(403);
+    expect(guard).toHaveBeenCalledWith(
+      expect.objectContaining({ capability: "role:review", stepUp: true })
+    );
+    expect(rpc).not.toHaveBeenCalled();
   });
 
-  describe("L2: CSRF enforcement", () => {
-    it("blocks requests with invalid CSRF token", async () => {
-      const blocked = new Response(JSON.stringify({ error: "Invalid CSRF token" }), {
-        status: 403,
-      });
-      mockEnforceCsrfToken.mockReturnValue(blocked);
-
-      const res = await POST(createMockRequest(validBody()));
-
-      expect(res.status).toBe(403);
-      expect(mockVerifyAdminActorRoleFromDb).not.toHaveBeenCalled();
-    });
+  it("fails closed when the sensitive rate limit refuses", async () => {
+    rateLimit.mockResolvedValue({ limited: true, retryAfter: 30 });
+    expect((await POST(request(propose))).status).toBe(429);
+    expect(rateLimit).toHaveBeenCalledWith(ADMIN_ID, "admin:role:assign", 5);
+    expect(rpc).not.toHaveBeenCalled();
   });
 
-  describe("Authentication", () => {
-    it("returns 401 for unauthenticated requests", async () => {
-      mockCreateClient.mockResolvedValue({
-        auth: {
-          getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
-        },
-      });
-
-      const res = await POST(createMockRequest(validBody()));
-      const data = await res.json();
-
-      expect(res.status).toBe(401);
-      expect(data.error).toBe("Unauthorized");
+  it("proposes a promotion with the verified actor, without changing auth metadata", async () => {
+    rpcReturns({
+      auth_user_id_by_email: TARGET_ID,
+      propose_staff_role_change: {
+        ok: true,
+        status: "proposed",
+        decision_id: DECISION_ID,
+        target_user_id: TARGET_ID,
+        previous_role: "member",
+        new_role: "moderator",
+      },
     });
+
+    const response = await POST(request({ ...propose, actorId: "attacker" }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ status: "proposed", decisionId: DECISION_ID });
+    expect(rpc).toHaveBeenCalledWith("propose_staff_role_change", {
+      p_actor: ADMIN_ID,
+      p_target: TARGET_ID,
+      p_role: "moderator",
+      p_reason: "Joining the verification team",
+    });
+    expect(updateUserById).not.toHaveBeenCalled();
   });
 
-  describe("L3: DB-verified admin role", () => {
-    it("returns 403 when user is not a verified admin", async () => {
-      mockVerifyAdminActorRoleFromDb.mockResolvedValue(null);
-
-      const res = await POST(createMockRequest(validBody()));
-      const data = await res.json();
-
-      expect(res.status).toBe(403);
-      expect(data.error).toBe("Forbidden");
-    });
-
-    it("returns 403 for a moderator", async () => {
-      mockCreateClient.mockResolvedValue({
-        auth: {
-          getUser: vi.fn().mockResolvedValue({
-            data: {
-              user: {
-                id: "moderator-1",
-                email: "moderator@example.com",
-                app_metadata: { role: "moderator" },
-              },
-            },
-          }),
-        },
-      });
-      mockVerifyAdminActorRoleFromDb.mockResolvedValue(null);
-
-      const res = await POST(createMockRequest(validBody()));
-      const data = await res.json();
-
-      expect(res.status).toBe(403);
-      expect(data.error).toBe("Forbidden");
-      expect(mockUpdateUserById).not.toHaveBeenCalled();
-    });
-
-    it("returns 403 for governance controllers", async () => {
-      mockCreateClient.mockResolvedValue({
-        auth: {
-          getUser: vi.fn().mockResolvedValue({
-            data: {
-              user: {
-                id: "governance-1",
-                email: "governance@example.com",
-                app_metadata: { role: "governance_controller" },
-              },
-            },
-          }),
-        },
-      });
-      mockVerifyAdminActorRoleFromDb.mockResolvedValue(null);
-
-      const res = await POST(createMockRequest(validBody()));
-      const data = await res.json();
-
-      expect(res.status).toBe(403);
-      expect(data.error).toBe("Forbidden");
-      expect(mockUpdateUserById).not.toHaveBeenCalled();
-    });
+  it("returns 404 without calling the RPC when no account uses the email", async () => {
+    rpcReturns({ auth_user_id_by_email: null });
+    expect((await POST(request(propose))).status).toBe(404);
+    expect(rpc).not.toHaveBeenCalledWith("propose_staff_role_change", expect.anything());
   });
 
-  describe("L5: Rate limiting", () => {
-    it("returns 429 when rate limit is exceeded", async () => {
-      mockCheckLocalRateLimit.mockReturnValue({ limited: true, retryAfter: 45 });
-
-      const res = await POST(createMockRequest(validBody()));
-      const data = await res.json();
-
-      expect(res.status).toBe(429);
-      expect(data.error).toContain("Too many requests");
-      expect(res.headers.get("Retry-After")).toBe("45");
+  it("syncs the auth metadata hint once a change is applied, keeping other keys", async () => {
+    rpcReturns({
+      approve_staff_role_change: {
+        ok: true,
+        status: "applied",
+        decision_id: DECISION_ID,
+        target_user_id: TARGET_ID,
+        previous_role: "member",
+        new_role: "moderator",
+      },
     });
+
+    const response = await POST(
+      request({ action: "approve", decisionId: DECISION_ID, payloadVersion: 1 })
+    );
+
+    expect(response.status).toBe(200);
+    expect(rpc).toHaveBeenCalledWith("approve_staff_role_change", {
+      p_actor: ADMIN_ID,
+      p_decision: DECISION_ID,
+      p_payload_version: 1,
+      p_note: null,
+    });
+    expect(updateUserById).toHaveBeenCalledWith(TARGET_ID, {
+      app_metadata: { provider: "email", role: "moderator" },
+    });
+    expect(await response.json()).toMatchObject({ status: "applied", metadataSynced: true });
   });
 
-  // ── Validation tests ───────────────────────────────────
-
-  describe("Input validation", () => {
-    it("rejects missing targetEmail", async () => {
-      const res = await POST(createMockRequest({ newRole: "moderator", reason: "test reason" }));
-      expect(res.status).toBe(400);
+  it("reports but does not fail when the committed change cannot sync metadata", async () => {
+    rpcReturns({
+      propose_staff_role_change: {
+        ok: true,
+        status: "applied",
+        decision_id: DECISION_ID,
+        target_user_id: TARGET_ID,
+        previous_role: "moderator",
+        new_role: "member",
+      },
+      auth_user_id_by_email: TARGET_ID,
     });
+    updateUserById.mockResolvedValue({ error: { message: "auth down" } });
 
-    it("rejects invalid email format", async () => {
-      const res = await POST(createMockRequest(validBody({ targetEmail: "not-an-email" })));
-      expect(res.status).toBe(400);
-    });
+    const response = await POST(request({ ...propose, newRole: "member" }));
 
-    it("rejects invalid role value", async () => {
-      const res = await POST(createMockRequest(validBody({ newRole: "superadmin" })));
-      expect(res.status).toBe(400);
-    });
-
-    it("rejects reason shorter than 5 chars", async () => {
-      const res = await POST(createMockRequest(validBody({ reason: "hi" })));
-      expect(res.status).toBe(400);
-    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ status: "applied", metadataSynced: false });
+    expect(reportCriticalIncident).toHaveBeenCalledWith(
+      "GovernanceRoles",
+      expect.stringContaining("metadata sync failed"),
+      expect.objectContaining({ userId: TARGET_ID, decisionId: DECISION_ID })
+    );
   });
 
-  // ── Business logic tests ───────────────────────────────
-
-  describe("Business rules", () => {
-    it("blocks self-role-change", async () => {
-      const res = await POST(createMockRequest(validBody({ targetEmail: ADMIN_USER.email })));
-      const data = await res.json();
-
-      expect(res.status).toBe(400);
-      expect(data.error).toBe("Cannot change your own role");
-    });
-
-    it("returns 404 when target user does not exist", async () => {
-      mockListUsers.mockResolvedValue({
-        data: { users: [] },
-        error: null,
-      });
-
-      const res = await POST(createMockRequest(validBody()));
-      const data = await res.json();
-
-      expect(res.status).toBe(404);
-      expect(data.error).toBe("Target user not found");
-    });
-
-    it("returns 409 when user already has the requested role", async () => {
-      mockGetRoleFromUser.mockReturnValue("moderator");
-
-      const res = await POST(createMockRequest(validBody({ newRole: "moderator" })));
-      const data = await res.json();
-
-      expect(res.status).toBe(409);
-      expect(data.error).toBe("User already has the requested role");
-    });
-
-    it("returns 409 when demoting member to member", async () => {
-      mockGetRoleFromUser.mockReturnValue("member");
-
-      const res = await POST(createMockRequest(validBody({ newRole: "member" })));
-      const data = await res.json();
-
-      expect(res.status).toBe(409);
-      expect(data.error).toBe("User already has the requested role");
-    });
+  it.each([
+    ["not_independent", 403],
+    ["self_change", 400],
+    ["pending_exists", 409],
+    ["expired", 410],
+    ["stale", 409],
+    ["forbidden", 403],
+  ])("maps the %s refusal to %i without touching metadata", async (error, status) => {
+    rpcReturns({ reject_staff_role_change: { ok: false, error } });
+    const response = await POST(request({ action: "reject", decisionId: DECISION_ID }));
+    expect(response.status).toBe(status);
+    expect((await response.json()).code).toBe(error);
+    expect(updateUserById).not.toHaveBeenCalled();
   });
 
-  // ── Happy path ─────────────────────────────────────────
-
-  describe("Successful role assignment", () => {
-    it("updates user role and records audit trail", async () => {
-      const res = await POST(createMockRequest(validBody()));
-      const data = await res.json();
-
-      expect(res.status).toBe(200);
-      expect(data.status).toBe("ok");
-      expect(data.targetUserId).toBe(TARGET_USER.id);
-      expect(data.previousRole).toBe("member");
-      expect(data.newRole).toBe("moderator");
-
-      // Verify updateUserById was called with correct role metadata
-      expect(mockUpdateUserById).toHaveBeenCalledWith(TARGET_USER.id, {
-        app_metadata: { ...TARGET_USER.app_metadata, role: "moderator" },
-      });
-
-      // Verify audit trail was recorded
-      expect(mockRecordRoleChange).toHaveBeenCalledWith({
-        targetUserId: TARGET_USER.id,
-        previousRole: "member",
-        newRole: "moderator",
-        assignedBy: ADMIN_USER.id,
-        assignerRole: "admin",
-        reason: "Promoting to moderator for content moderation duties",
-      });
-    });
-
-    it("correctly handles demotion to member", async () => {
-      mockGetRoleFromUser
-        .mockReturnValueOnce("moderator") // for currentRole
-        .mockReturnValueOnce("admin"); // for actorRole
-
-      const targetWithRole = { ...TARGET_USER, app_metadata: { role: "moderator" } };
-      mockListUsers.mockResolvedValue({
-        data: { users: [targetWithRole] },
-        error: null,
-      });
-
-      const res = await POST(createMockRequest(validBody({ newRole: "member" })));
-      const data = await res.json();
-
-      expect(res.status).toBe(200);
-      expect(data.newRole).toBe("member");
-      expect(mockUpdateUserById).toHaveBeenCalledWith(TARGET_USER.id, {
-        app_metadata: { role: "member" },
-      });
-    });
-
-    it("assigns governance_controller role", async () => {
-      const res = await POST(createMockRequest(validBody({ newRole: "governance_controller" })));
-      const data = await res.json();
-
-      expect(res.status).toBe(200);
-      expect(data.newRole).toBe("governance_controller");
-    });
+  it("explains the last-admin protection", async () => {
+    rpc.mockImplementation(async (fn: string) =>
+      fn === "auth_user_id_by_email"
+        ? { data: TARGET_ID, error: null }
+        : { data: null, error: { message: "The last active admin cannot be removed" } }
+    );
+    const response = await POST(request({ ...propose, newRole: "member" }));
+    expect(response.status).toBe(409);
+    expect((await response.json()).error).toContain("last active admin");
   });
 
-  // ── Error handling ─────────────────────────────────────
-
-  describe("Error handling", () => {
-    it("returns 500 when listUsers fails", async () => {
-      mockListUsers.mockResolvedValue({
-        data: null,
-        error: { message: "DB connection lost" },
-      });
-
-      const res = await POST(createMockRequest(validBody()));
-
-      expect(res.status).toBe(500);
-    });
-
-    it("returns 500 when updateUserById fails", async () => {
-      mockUpdateUserById.mockResolvedValue({
-        error: { message: "Update failed" },
-      });
-
-      const res = await POST(createMockRequest(validBody()));
-
-      expect(res.status).toBe(500);
-    });
-
-    it("does not expose PII in successful response", async () => {
-      const res = await POST(createMockRequest(validBody()));
-      const data = await res.json();
-
-      expect(data.email).toBeUndefined();
-      expect(data.targetEmail).toBeUndefined();
-      expect(JSON.stringify(data)).not.toContain("@example.com");
-    });
+  it("hides unexpected database errors", async () => {
+    rpc.mockResolvedValue({ data: null, error: { message: "relation secret_table missing" } });
+    const response = await POST(
+      request({ action: "approve", decisionId: DECISION_ID, payloadVersion: 1 })
+    );
+    expect(response.status).toBe(500);
+    expect(await response.text()).not.toContain("secret_table");
   });
 
-  // ── Security enforcement order ─────────────────────────
-
-  describe("Security layer ordering", () => {
-    it("checks same-origin before CSRF", async () => {
-      const callOrder: string[] = [];
-      mockEnforceSameOriginMutation.mockImplementation(() => {
-        callOrder.push("origin");
-        return null;
-      });
-      mockEnforceCsrfToken.mockImplementation(() => {
-        callOrder.push("csrf");
-        return null;
-      });
-
-      await POST(createMockRequest(validBody()));
-
-      expect(callOrder.indexOf("origin")).toBeLessThan(callOrder.indexOf("csrf"));
-    });
-
-    it("checks DB admin verification before rate limit", async () => {
-      mockVerifyAdminActorRoleFromDb.mockResolvedValue(null);
-
-      await POST(createMockRequest(validBody()));
-
-      // Should fail at DB admin verification, never reach rate limit
-      expect(mockCheckLocalRateLimit).not.toHaveBeenCalled();
-    });
+  it("rejects malformed bodies before any database call", async () => {
+    expect((await POST(request({ action: "propose", targetEmail: "nope" }))).status).toBe(400);
+    expect((await POST(request({ ...propose, reason: "no" }))).status).toBe(400);
+    expect(rpc).not.toHaveBeenCalled();
   });
 });

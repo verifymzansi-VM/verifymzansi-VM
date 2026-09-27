@@ -1,8 +1,7 @@
-import { createClient } from "@/lib/supabase/server";
+import { requireStaff } from "@/lib/auth/require-staff";
 import { redirect } from "next/navigation";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { PageHeader } from "@/components/layout/page-header";
-import { isStaff } from "@/lib/auth/roles";
 import { EvidenceDeskClient } from "@/components/admin/evidence-desk";
 
 export const metadata = {
@@ -15,13 +14,7 @@ export default async function EvidenceDeskPage({
 }: {
   searchParams: Promise<{ stepId?: string; userId?: string }>;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user || !isStaff(user)) {
-    redirect("/dashboard");
-  }
+  await requireStaff("queue:view");
 
   // Feature flag check
   const evidenceDeskEnabled = await isFeatureEnabled("kyc_evidence_desk");

@@ -25,6 +25,7 @@ const PROTECTED_PREFIXES = [
   "/verification",
   "/dsar",
   "/admin",
+  "/staff",
   "/api/account",
   "/api/communications",
   "/api/content",

@@ -1,7 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
-import { getRoleFromUser, isStaff } from "@/lib/auth/roles";
+import { requireStaff } from "@/lib/auth/require-staff";
 import {
   getAdminDashboardStats,
   getDashboardReports,
@@ -43,14 +41,7 @@ const ROLE_VARIANTS: Record<string, "secondary" | "destructive" | "outline"> = {
 };
 
 export default async function AdminPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const role = getRoleFromUser(user);
-  if (!isStaff(user) || !role) redirect("/dashboard");
+  const { role } = await requireStaff();
 
   const isAdminRole = role === "admin";
   const isGovernance = role === "governance_controller";

@@ -1,8 +1,6 @@
+import { requireStaff } from "@/lib/auth/require-staff";
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
 import { Badge } from "@/components/ui/badge";
 import { OrganisationCreateForm } from "@/components/admin/commercial/organisation-forms";
 
@@ -15,12 +13,7 @@ const date = new Intl.DateTimeFormat("en-ZA", {
 });
 
 export default async function OrganisationsAdminPage() {
-  const client = await createClient();
-  const {
-    data: { user },
-  } = await client.auth.getUser();
-  if (!user) redirect("/login");
-  if (!(await verifyCapabilityFromDb(user, "organisations:manage"))) redirect("/admin");
+  await requireStaff("organisations:manage");
 
   const admin = createAdminClient();
   const [orgs, sponsorships, affiliations, pending] = await Promise.all([

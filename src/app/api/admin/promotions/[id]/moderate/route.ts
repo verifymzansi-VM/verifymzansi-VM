@@ -18,6 +18,7 @@ import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { uuidSchema } from "@/lib/validations/shared";
 import { getApprovedPostExpiryIso } from "@/lib/posting/post-lifecycle";
+import { checkStaffApiMfa } from "@/lib/auth/staff-mfa-guard";
 
 const log = createLogger("PromotionModeration");
 const promotionModerationParamsSchema = z.object({
@@ -70,6 +71,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!adminRole) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+
+    const mfaBlock = await checkStaffApiMfa(supabase, user.id);
+    if (mfaBlock) return mfaBlock;
 
     const rl = checkLocalRateLimit(user.id, "admin:promotions:moderate");
     if (rl.limited) {

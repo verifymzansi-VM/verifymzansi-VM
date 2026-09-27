@@ -1,7 +1,6 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { requireStaff } from "@/lib/auth/require-staff";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
+import { roleHasCapability } from "@/lib/auth/admin-access";
 import { PaymentsPanel, type AdminPaymentRow } from "@/components/admin/commercial/partners-panel";
 
 export const metadata = { title: "Payments & Refunds" };
@@ -26,13 +25,8 @@ export default async function PaymentsAdminPage({
 }: {
   searchParams: Promise<{ status?: string }>;
 }) {
-  const client = await createClient();
-  const {
-    data: { user },
-  } = await client.auth.getUser();
-  if (!user) redirect("/login");
-  if (!(await verifyCapabilityFromDb(user, "bi:view"))) redirect("/admin");
-  const canRefund = await verifyCapabilityFromDb(user, "payments:refund");
+  const { role } = await requireStaff("bi:view");
+  const canRefund = roleHasCapability(role, "payments:refund");
 
   const { status } = await searchParams;
   let query = createAdminClient()

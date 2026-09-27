@@ -1,7 +1,5 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { requireStaff } from "@/lib/auth/require-staff";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
 import { resolveCommercialSettings } from "@/lib/commercial/settings";
 import {
   PartnersPanel,
@@ -13,12 +11,7 @@ export const metadata = { title: "Partners & Commission" };
 export const dynamic = "force-dynamic";
 
 export default async function PartnersAdminPage() {
-  const client = await createClient();
-  const {
-    data: { user },
-  } = await client.auth.getUser();
-  if (!user) redirect("/login");
-  if (!(await verifyCapabilityFromDb(user, "partners:manage"))) redirect("/admin");
+  await requireStaff("partners:manage");
 
   const admin = createAdminClient();
   const [partners, commissions, acquisition, settings] = await Promise.all([

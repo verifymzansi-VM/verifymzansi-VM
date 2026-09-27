@@ -1,8 +1,6 @@
+import { requireStaff } from "@/lib/auth/require-staff";
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
 import { resolveCommercialSettings } from "@/lib/commercial/settings";
 import {
   CommercialSettingsPanel,
@@ -13,12 +11,7 @@ export const metadata = { title: "Commercial Settings" };
 export const dynamic = "force-dynamic";
 
 export default async function CommercialSettingsPage() {
-  const client = await createClient();
-  const {
-    data: { user },
-  } = await client.auth.getUser();
-  if (!user) redirect("/login");
-  if (!(await verifyCapabilityFromDb(user, "commercial:manage"))) redirect("/admin");
+  await requireStaff("commercial:manage");
 
   const admin = createAdminClient();
   const [settings, plans] = await Promise.all([

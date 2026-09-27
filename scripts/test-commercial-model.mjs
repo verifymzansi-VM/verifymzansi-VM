@@ -4,6 +4,8 @@ import { PGlite } from "@electric-sql/pglite";
 import fs from "node:fs";
 import assert from "node:assert/strict";
 
+let staffRolesReady = false;
+
 process.on("uncaughtException", (error) => {
   console.error(error.message, error.where ?? "");
   process.exit(1);
@@ -49,10 +51,10 @@ CREATE UNIQUE INDEX entitlements_key ON entitlements(user_id,area,type);
 CREATE UNIQUE INDEX invoices_payment_key ON invoices(payment_id);
 ALTER TABLE payments ADD COLUMN provider text, ADD COLUMN provider_payment_id text,
  ADD COLUMN provider_reference text, ADD COLUMN provider_data jsonb;
-CREATE FUNCTION public.has_role(r text) RETURNS boolean LANGUAGE sql SECURITY DEFINER AS $$
- SELECT COALESCE((SELECT raw_app_meta_data->>'role' = r FROM auth.users WHERE id = auth.uid()), false) $$;
-CREATE FUNCTION public.has_any_role(r text[]) RETURNS boolean LANGUAGE sql SECURITY DEFINER AS $$
- SELECT COALESCE((SELECT raw_app_meta_data->>'role' = ANY(r) FROM auth.users WHERE id = auth.uid()), false) $$;
+CREATE FUNCTION public.has_role(required_role text) RETURNS boolean LANGUAGE sql SECURITY DEFINER AS $$
+ SELECT COALESCE((SELECT raw_app_meta_data->>'role' = required_role FROM auth.users WHERE id = auth.uid()), false) $$;
+CREATE FUNCTION public.has_any_role(roles text[]) RETURNS boolean LANGUAGE sql SECURITY DEFINER AS $$
+ SELECT COALESCE((SELECT raw_app_meta_data->>'role' = ANY(roles) FROM auth.users WHERE id = auth.uid()), false) $$;
 CREATE TABLE account_profiles(user_id uuid PRIMARY KEY, account_verification_status text, account_status text, phone text, display_name text, legal_first_name text DEFAULT 'Thando', legal_last_name text DEFAULT 'Mkhize');
 CREATE TABLE verification_steps(user_id uuid, step_type text, status text, id_number_hmac text);
 CREATE TABLE media_uploads(id uuid DEFAULT gen_random_uuid(), user_id uuid, file_size integer);
@@ -94,6 +96,8 @@ async function user(role = "member", h = uuid()) {
     `INSERT INTO account_profiles(user_id,account_verification_status,account_status,phone) VALUES($1,'verified','active','+27712345678')`,
     [id]
   );
+  if (staffRolesReady && ["moderator", "governance_controller", "admin"].includes(role))
+    await db.query(`INSERT INTO staff_roles(user_id, role) VALUES($1, $2)`, [id, role]);
   for (const step of ["phone", "id_doc", "selfie", "location"])
     await db.query(`INSERT INTO verification_steps VALUES($1,$2,'approved',$3)`, [
       id,
@@ -125,6 +129,9 @@ await migration("20260925090300_partners_analytics_notifications.sql");
 await migration("20260925090400_event_archiving.sql");
 await migration("20260925090500_commercial_fixes.sql");
 await migration("20260925090600_commercial_completion.sql");
+// Staff role authority: from here on, staff_roles (not auth metadata) grants staff powers.
+await db.exec(fs.readFileSync("supabase/migrations/20260927110000_staff_roles_authority.sql", "utf8"));
+staffRolesReady = true;
 
 let checks = 0;
 async function test(name, fn) {
