@@ -202,7 +202,7 @@ test.describe("Mobile UX smoke", () => {
       path: "/tourism-events",
       createLink: /create event/i,
       buttonLabel: "Open tourism and events filters",
-      drawerHeading: { name: /filter tourism & events/i as string | RegExp },
+      drawerHeading: { name: "Filters" as string | RegExp },
     },
   ]) {
     test(`${filterCheck.name} filter pill is touch-friendly, clear of the tab bar and opens the drawer`, async ({

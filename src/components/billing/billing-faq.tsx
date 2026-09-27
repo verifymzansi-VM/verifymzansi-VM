@@ -128,7 +128,7 @@ export function BillingFaq({
 
         <FaqItem question="Are events really free?">
           <p>
-            Yes. Events don&apos;t need a trial or a plan and stay visible until the event ends.
+            Yes. Events don&apos;t need a trial or a plan and stay live until the event is over.
             They&apos;re still moderated, with fair-use limits on how many you can run at once.
           </p>
         </FaqItem>

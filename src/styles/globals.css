@@ -76,7 +76,8 @@
     --popover-foreground: 60 10% 94%;
 
     --primary: 160 67% 40%;
-    --primary-foreground: 0 0% 100%;
+    /* Dark text on the brighter dark-mode green keeps AA contrast (white is ~3:1). */
+    --primary-foreground: 153 18% 8%;
 
     --secondary: 156 10% 13%;
     --secondary-foreground: 60 8% 88%;

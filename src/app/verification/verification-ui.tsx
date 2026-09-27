@@ -188,11 +188,9 @@ export function StepCard({
           </span>
           <div className="min-w-0">
             {/* The accessible name stays "Step N: Title" — e2e journeys find steps by it. */}
-            <h2 id={id} className="font-body">
+            <h2 id={id} aria-label={`Step ${stepNumber}: ${title}`} className="font-body">
               <span className="block text-xs font-semibold text-brand-green-700 dark:text-brand-green-300 sm:text-sm">
-                Step {stepNumber}
-                <span aria-hidden="true"> of {totalSteps}</span>
-                <span className="sr-only">:</span>
+                Step {stepNumber} of {totalSteps}
               </span>{" "}
               <span className="mt-0.5 block font-display text-xl font-bold leading-tight tracking-tight text-foreground sm:text-2xl">
                 {title}
