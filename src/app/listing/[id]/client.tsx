@@ -2,19 +2,9 @@
 
 import { VideoViewTracker } from "@/components/ui/video-view-tracker";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Maximize2,
-  Play,
-  Copy,
-  Check,
-  RotateCcw,
-  AlertTriangle,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ChevronLeft, ChevronRight, Maximize2, Play, RotateCcw, AlertTriangle } from "lucide-react";
 import { MediaLightbox } from "@/components/ui/media-lightbox";
 import { cn } from "@/lib/utils";
 import { normalizeMediaUrls } from "@/lib/utils/media-url";
@@ -109,14 +99,6 @@ export function ListingDetailClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photos, videos, photoCount]);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [copied, setCopied] = useState(false);
-  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(
-    () => () => {
-      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
-    },
-    []
-  );
 
   /* ---- video controls state ---- */
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -177,17 +159,6 @@ export function ListingDetailClient({
     onPrevious: () => goTo(activeIndex - 1),
     onNext: () => goTo(activeIndex + 1),
   });
-
-  async function copyShareLink() {
-    try {
-      const url = `${window.location.origin}/listing/${listingId}`;
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* ignore */
-    }
-  }
 
   if (orderedMedia.length === 0) {
     return (
@@ -330,6 +301,7 @@ export function ListingDetailClient({
                 type="button"
                 onClick={() => goTo(i)}
                 aria-label={`View ${item.kind} ${i + 1} of ${orderedMedia.length}`}
+                aria-current={i === activeIndex ? "true" : undefined}
                 className={cn(
                   "relative flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border-2 transition-all duration-200",
                   i === activeIndex
@@ -354,28 +326,6 @@ export function ListingDetailClient({
           })}
         </div>
       )}
-
-      {/* ── Share Button ─────────────────────────────────── */}
-      <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-11 gap-1.5 text-sm sm:h-10 sm:text-xs"
-          onClick={copyShareLink}
-        >
-          {copied ? (
-            <>
-              <Check className="h-3.5 w-3.5 text-brand-green" />
-              Link Copied!
-            </>
-          ) : (
-            <>
-              <Copy className="h-3.5 w-3.5" />
-              Copy Link
-            </>
-          )}
-        </Button>
-      </div>
 
       {/* ── Media Lightbox ──────────────────────────────── */}
       <VideoViewTracker

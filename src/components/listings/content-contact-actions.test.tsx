@@ -29,6 +29,14 @@ describe("seller contact actions", () => {
     expect(screen.queryByRole("button", { name: "Send an enquiry" })).toBeNull();
     expect(screen.queryByText("Show Contact")).toBeNull();
   });
+  it("says no contact details were added when there is no way to reach the poster", () => {
+    render(<ListingContactActions listingId="abc" contactMethods={["call"]} />);
+    expect(screen.getByText("No contact details added.")).toBeInTheDocument();
+  });
+  it("hides the empty-contact note when an enquiry form is available", () => {
+    render(<ListingContactActions listingId="abc" contactMethods={["form"]} />);
+    expect(screen.queryByText("No contact details added.")).toBeNull();
+  });
   it("sends reply details and shows saved status only after persistence", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")

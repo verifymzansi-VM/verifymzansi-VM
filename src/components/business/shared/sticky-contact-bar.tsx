@@ -2,6 +2,7 @@
 
 import { MessageCircle, Phone } from "lucide-react";
 import { StickyMobileBar } from "@/components/ui/sticky-mobile-bar";
+import { contactPhone } from "@/lib/utils/contact-links";
 import type { BusinessDetailRecord } from "@/components/business/business-detail-content";
 
 interface StickyContactBarProps {
@@ -16,25 +17,26 @@ interface StickyContactBarProps {
  * Hidden on desktop (lg+) where the sidebar contact card is visible.
  */
 export function StickyContactBar({ business, ctaLabel }: StickyContactBarProps) {
-  const hasPhone = Boolean(business.phone);
-  const hasWhatsApp = Boolean(business.whatsapp);
+  // Normalise to +27… so local "082…" numbers still produce working tel:/wa.me links.
+  const phone = contactPhone(business.phone);
+  const whatsapp = contactPhone(business.whatsapp);
 
-  if (!hasPhone && !hasWhatsApp) return null;
+  if (!phone && !whatsapp) return null;
 
   return (
     <StickyMobileBar>
-      {hasPhone && (
+      {phone && (
         <a
-          href={`tel:${business.phone}`}
+          href={`tel:${phone}`}
           className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-primary text-sm font-semibold text-primary-foreground shadow-lg transition-all duration-200 hover:-translate-y-px active:bg-primary/90"
         >
           <Phone className="h-4 w-4" />
           {ctaLabel ?? "Call Now"}
         </a>
       )}
-      {hasWhatsApp && (
+      {whatsapp && (
         <a
-          href={`https://wa.me/${business.whatsapp!.replace(/\D/g, "")}`}
+          href={`https://wa.me/${whatsapp.slice(1)}`}
           target="_blank"
           rel="noopener noreferrer nofollow ugc"
           className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-green-500 text-sm font-semibold text-white shadow-lg transition-all duration-200 hover:-translate-y-px active:bg-green-600"

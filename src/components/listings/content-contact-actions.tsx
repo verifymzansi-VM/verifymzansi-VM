@@ -111,6 +111,7 @@ export function ContentContactActions({
   const [reportReason, setReportReason] = useState(config.reportOptions[0]?.value ?? "other");
   const [reportDescription, setReportDescription] = useState("");
   const [reportTurnstile, setReportTurnstile] = useState("");
+  const [reportCaptchaAttempt, setReportCaptchaAttempt] = useState(0);
   const [reportSending, setReportSending] = useState(false);
   const [reportSent, setReportSent] = useState(false);
   const [reportError, setReportError] = useState("");
@@ -189,6 +190,7 @@ export function ContentContactActions({
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
       copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       /* ignore */
@@ -231,6 +233,9 @@ export function ContentContactActions({
       setReportError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setReportSending(false);
+      // Turnstile tokens are single-use: force a fresh challenge for any retry.
+      setReportTurnstile("");
+      setReportCaptchaAttempt((value) => value + 1);
     }
   }
 
@@ -252,6 +257,10 @@ export function ContentContactActions({
               <Phone className="h-4 w-4" /> Call {phoneNumber}
             </a>
           </Button>
+        )}
+
+        {!whatsappUrl && !(showPhoneButton && phoneNumber) && !showMessageButton && (
+          <p className="text-sm text-muted-foreground">No contact details added.</p>
         )}
 
         {showMessageButton && (
@@ -453,9 +462,22 @@ export function ContentContactActions({
                 </p>
               </div>
 
-              <TurnstileWidget onSuccess={handleReportTurnstile} size="compact" />
+              <TurnstileWidget
+                key={reportCaptchaAttempt}
+                onSuccess={handleReportTurnstile}
+                onExpire={() => setReportTurnstile("")}
+                onError={(error) => {
+                  setReportTurnstile("");
+                  setReportError(error);
+                }}
+                size="compact"
+              />
 
-              {reportError && <p className="text-sm text-destructive">{reportError}</p>}
+              {reportError && (
+                <p role="alert" className="text-sm text-destructive">
+                  {reportError}
+                </p>
+              )}
 
               <DialogFooter>
                 <DialogClose asChild>

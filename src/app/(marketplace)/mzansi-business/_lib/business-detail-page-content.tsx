@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cache } from "react";
 import {
   BusinessAffiliationsSection,
   loadBusinessAffiliations,
@@ -125,7 +126,10 @@ function isMissingBusinessOptionalColumnError(
   return false;
 }
 
-async function loadBusinessDetail(id: string): Promise<LoadedBusinessDetail | null> {
+// Deduped per request: generateMetadata and the page both need the same record.
+const loadBusinessDetail = cache(async function loadBusinessDetail(
+  id: string
+): Promise<LoadedBusinessDetail | null> {
   const supabase = await createClient();
   const ownerColumn = await getOwnerColumn(supabase, "businesses");
   const selectCandidates = [
@@ -206,7 +210,7 @@ async function loadBusinessDetail(id: string): Promise<LoadedBusinessDetail | nu
     promotions: (promotions ?? []) as BusinessPromotionRecord[],
     isOwnerPreview,
   };
-}
+});
 
 function getBreadcrumbs(
   isOwnerPreview: boolean,

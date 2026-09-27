@@ -615,7 +615,7 @@ export function TourismDetailsCard({ details }: { details: TourismCategoryDetail
         {typeof details.star_rating === "number" && details.star_rating > 0 && (
           <div className="flex items-start justify-between gap-4">
             <span className="text-muted-foreground">Rating</span>
-            <span className="flex gap-0.5">
+            <span className="flex gap-0.5" role="img" aria-label={`${details.star_rating} stars`}>
               {Array.from({ length: details.star_rating }).map((_, i) => (
                 <Star key={i} className="h-4 w-4 fill-amber-400 text-amber-400" />
               ))}

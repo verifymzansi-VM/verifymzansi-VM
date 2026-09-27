@@ -155,8 +155,8 @@ describe("UnifiedLayout", () => {
       );
       expect(screen.getByText("12 Main Road")).toBeVisible();
       expect(screen.getByText("08:00 - 17:00")).toBeVisible();
-      expect(screen.getByText("cash")).toBeVisible();
-      expect(screen.getByText(/Delivery options: courier/)).toBeVisible();
+      expect(screen.getByText("Cash")).toBeVisible();
+      expect(screen.getByText(/Delivery options: Courier/)).toBeVisible();
       expect(screen.getByRole("link", { name: "hello@example.com" })).toHaveAttribute(
         "href",
         "mailto:hello@example.com"

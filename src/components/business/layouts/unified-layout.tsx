@@ -49,6 +49,9 @@ import { getCategoryDetailFields } from "@/lib/forms/business-category-details";
 import type { BusinessProfileFamily } from "@/lib/presentation/profile-variants";
 import { useHorizontalSwipeNavigation } from "@/hooks/use-horizontal-swipe-navigation";
 import { useTrackContentView } from "@/hooks/use-track-content-view";
+import { useHydrated } from "@/hooks/use-hydrated";
+import { contactPhone } from "@/lib/utils/contact-links";
+import { BUSINESS_CATEGORIES, TOURISM_SUBCATEGORIES } from "@/lib/constants/categories";
 
 interface UnifiedLayoutProps {
   family: BusinessProfileFamily;
@@ -75,6 +78,31 @@ interface BusinessHeroMediaItem {
   poster?: string;
   label: string;
 }
+
+/** Turn a stored key such as `children_over_6` into readable text. */
+function humanizeKey(value: string) {
+  const text = value.replace(/_/g, " ").trim();
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+}
+
+function getSubcategoryLabel(category: string, subcategory: string | null | undefined) {
+  if (!subcategory) return null;
+  const categoryDefinition = BUSINESS_CATEGORIES.find((item) => item.value === category);
+  const match =
+    categoryDefinition?.subcategories.find((item) => item.value === subcategory) ??
+    TOURISM_SUBCATEGORIES.find((item) => item.value === subcategory);
+  return match?.label ?? humanizeKey(subcategory);
+}
+
+const SOCIAL_LABELS: Record<string, string> = {
+  facebook: "Facebook",
+  instagram: "Instagram",
+  twitter: "X (Twitter)",
+  tiktok: "TikTok",
+  youtube: "YouTube",
+  linkedin: "LinkedIn",
+  website: "Website",
+};
 
 function normalizeList(values: unknown): string[] {
   if (!Array.isArray(values)) return [];
@@ -220,10 +248,20 @@ function getBusinessQuickFacts(
   ].filter((fact): fact is QuickFact => Boolean(fact));
 }
 
-function SectionCard({ title, body }: { title: string; body: React.ReactNode }) {
+function SectionCard({
+  title,
+  body,
+  lead,
+}: {
+  title: string;
+  body: React.ReactNode;
+  /** Optional content above the section heading (e.g. the page title). */
+  lead?: React.ReactNode;
+}) {
   return (
     <Card className="surface-card elev-sm">
       <CardContent className="space-y-3 p-5">
+        {lead}
         <h2 className="font-display text-lg font-semibold tracking-tight">{title}</h2>
         {body}
       </CardContent>
@@ -439,9 +477,10 @@ function MediaColumn({
                           ? "Business Profile"
                           : "Featured Profile"}
                     </p>
-                    <h1 className="line-clamp-2 font-display text-2xl font-semibold leading-tight">
+                    {/* Decorative repeat of the name; the page heading lives in the details column. */}
+                    <p className="line-clamp-2 font-display text-2xl font-semibold leading-tight">
                       {business.business_name}
-                    </h1>
+                    </p>
                   </div>
                 </div>
               </div>
@@ -486,6 +525,7 @@ function MediaColumn({
                 index === activeMediaIndex ? "ring-brand-blue shadow-md" : "ring-transparent"
               }`}
               aria-label={`View ${item.label}`}
+              aria-current={index === activeMediaIndex ? "true" : undefined}
               data-carousel-control="true"
             >
               {item.kind === "video" ? (
@@ -557,8 +597,21 @@ export function UnifiedLayout({
     handleViewRecorded
   );
   const isReviewLayout = layoutMode === "review";
+  // Create/edit previews already have a page h1.
+  const TitleTag = isReviewLayout ? "h2" : "h1";
+  // Boost/feature flags depend on "now": read the clock only after hydration.
+  const isHydrated = useHydrated();
+  // eslint-disable-next-line react-hooks/purity -- read the clock only after hydration
+  const nowMs = isHydrated ? Date.now() : null;
+  const isActiveUntil = (value: string | null | undefined) =>
+    nowMs != null && Boolean(value) && new Date(value!).getTime() > nowMs;
   const businessType = business.business_type as BusinessType;
   const businessCategory = business.category as BusinessCategory;
+  const typeLabel =
+    BUSINESS_TYPE_LABELS[businessType] ??
+    (business.business_type ? humanizeKey(business.business_type) : null);
+  const categoryLabel = BUSINESS_CATEGORY_LABELS[businessCategory] ?? null;
+  const subcategoryLabel = getSubcategoryLabel(business.category, business.subcategory);
   const ctaConfig = CATEGORY_CTA_CONFIG[businessCategory];
   const quickFacts = getBusinessQuickFacts(family, business, deliveryAvailable, promotions);
   // Tourism already shows languages in the spotlight section — skip duplicate.
@@ -580,7 +633,7 @@ export function UnifiedLayout({
   const showStickyContactBar = layoutMode === "public" && showPublicActions;
   const shellClassName = isReviewLayout
     ? "grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] 2xl:items-start"
-    : showStickyContactBar && (business.phone || business.whatsapp)
+    : showStickyContactBar && (contactPhone(business.phone) || contactPhone(business.whatsapp))
       ? "grid grid-cols-1 gap-6 pb-24 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:items-start lg:pb-0"
       : "grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:items-start";
   const viewCountLabel = `${viewCount} ${viewCount === 1 ? "view" : "views"}`;
@@ -588,15 +641,19 @@ export function UnifiedLayout({
   const introBody = (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="outline" className="text-[11px]">
-          {BUSINESS_TYPE_LABELS[businessType]}
-        </Badge>
-        <Badge variant="secondary" className="text-[11px]">
-          {BUSINESS_CATEGORY_LABELS[businessCategory]}
-        </Badge>
-        {business.subcategory ? (
+        {typeLabel ? (
+          <Badge variant="outline" className="text-[11px]">
+            {typeLabel}
+          </Badge>
+        ) : null}
+        {categoryLabel ? (
+          <Badge variant="secondary" className="text-[11px]">
+            {categoryLabel}
+          </Badge>
+        ) : null}
+        {subcategoryLabel ? (
           <Badge variant="secondary" className="bg-primary/10 text-[11px] text-primary">
-            {business.subcategory.replace(/_/g, " ")}
+            {subcategoryLabel}
           </Badge>
         ) : null}
       </div>
@@ -790,7 +847,7 @@ export function UnifiedLayout({
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Service Model
           </p>
-          <p className="mt-1 text-sm font-medium">{BUSINESS_TYPE_LABELS[businessType]}</p>
+          <p className="mt-1 text-sm font-medium">{typeLabel ?? "Not listed"}</p>
         </div>
         <div className="rounded-2xl bg-muted/40 p-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
@@ -846,7 +903,15 @@ export function UnifiedLayout({
 
   const infoColumn = (
     <div className="space-y-5">
-      <SectionCard title="About" body={introBody} />
+      <SectionCard
+        lead={
+          <TitleTag className="break-words font-display text-2xl font-bold leading-tight tracking-tight sm:text-3xl">
+            {business.business_name}
+          </TitleTag>
+        }
+        title="About"
+        body={introBody}
+      />
 
       {hasSpotlight ? (
         <SectionCard
@@ -917,7 +982,7 @@ export function UnifiedLayout({
             <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
               Active Posts
             </p>
-            <h3 className="font-display text-xl font-semibold">Tourism & Events posts</h3>
+            <h2 className="font-display text-xl font-semibold">Tourism & Events posts</h2>
           </div>
           <div className="grid grid-cols-2 gap-3">
             {promotions.map((promo) => (
@@ -935,10 +1000,8 @@ export function UnifiedLayout({
                 promotionType={promo.promotion_type as PromotionType}
                 createdAt={promo.created_at}
                 viewCount={promo.view_count ?? undefined}
-                boosted={promo.boost_until ? new Date(promo.boost_until) > new Date() : false}
-                featured={
-                  promo.featured_until ? new Date(promo.featured_until) > new Date() : false
-                }
+                boosted={isActiveUntil(promo.boost_until)}
+                featured={isActiveUntil(promo.featured_until)}
                 endDate={promo.end_date}
                 logoUrl={business.logo_url}
                 focalX={promo.focal_x}
@@ -981,9 +1044,9 @@ export function UnifiedLayout({
                       href={safeExternalHref(url)}
                       target="_blank"
                       rel="noopener noreferrer nofollow ugc"
-                      className="block rounded-xl border px-3 py-2 capitalize"
+                      className="block rounded-xl border px-3 py-2"
                     >
-                      {platform}
+                      {SOCIAL_LABELS[platform] ?? humanizeKey(platform)}
                     </a>
                   ))}
                 {business.email ? (
@@ -1019,8 +1082,8 @@ export function UnifiedLayout({
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {business.services_offered?.map((service) => (
-                  <Badge key={service} variant="outline">
+                {business.services_offered?.map((service, index) => (
+                  <Badge key={`${service}-${index}`} variant="outline">
                     {service}
                   </Badge>
                 ))}

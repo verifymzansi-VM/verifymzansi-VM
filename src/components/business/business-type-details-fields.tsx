@@ -72,7 +72,9 @@ export function BusinessTypeDetailsFields({
       {businessType === "online_only" && onDeliveryAvailableChange && (
         <div className="space-y-3 rounded-lg border bg-background p-4">
           <div className="space-y-1">
-            <Label className="text-sm font-medium">Does this business provide delivery?</Label>
+            <p id="online-delivery-question" className="text-sm font-medium">
+              Does this business provide delivery?
+            </p>
             <p className="text-xs text-muted-foreground">
               Choose Yes only if this online business delivers orders to customers.
             </p>
@@ -80,9 +82,12 @@ export function BusinessTypeDetailsFields({
           <div
             className="flex flex-col gap-3 sm:flex-row"
             role="radiogroup"
-            aria-label="Delivery availability"
+            aria-labelledby="online-delivery-question"
           >
-            <div className="flex items-start gap-3 rounded-lg border bg-background px-3 py-3 text-sm">
+            <label
+              htmlFor="online-delivery-yes"
+              className="flex cursor-pointer items-start gap-3 rounded-lg border bg-background px-3 py-3 text-sm has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
+            >
               <input
                 id="online-delivery-yes"
                 type="radio"
@@ -98,8 +103,11 @@ export function BusinessTypeDetailsFields({
                   Customers can place orders and have them delivered.
                 </span>
               </span>
-            </div>
-            <div className="flex items-start gap-3 rounded-lg border bg-background px-3 py-3 text-sm">
+            </label>
+            <label
+              htmlFor="online-delivery-no"
+              className="flex cursor-pointer items-start gap-3 rounded-lg border bg-background px-3 py-3 text-sm has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
+            >
               <input
                 id="online-delivery-no"
                 type="radio"
@@ -115,7 +123,7 @@ export function BusinessTypeDetailsFields({
                   Hide delivery fields and save this business without delivery coverage details.
                 </span>
               </span>
-            </div>
+            </label>
           </div>
         </div>
       )}
@@ -203,7 +211,7 @@ export function BusinessTypeDetailsFields({
                         key={day.value}
                         htmlFor={`business-detail-${field.name}-${day.value}`}
                         className={cn(
-                          "flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
+                          "flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2",
                           checked
                             ? "border-brand-green bg-brand-green/10 text-brand-green"
                             : "border-input bg-background hover:bg-muted/50"

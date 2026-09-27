@@ -24,26 +24,47 @@ describe("StickyContactBar", () => {
   });
 
   it("renders call button when phone is provided", () => {
-    render(<StickyContactBar business={makeBiz({ phone: "+27123456789" })} />);
+    render(<StickyContactBar business={makeBiz({ phone: "+27821234567" })} />);
     expect(screen.getByText("Call Now")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Call Now/i })).toHaveAttribute(
       "href",
-      "tel:+27123456789"
+      "tel:+27821234567"
     );
   });
 
   it("renders whatsapp button when whatsapp is provided", () => {
-    render(<StickyContactBar business={makeBiz({ whatsapp: "+27987654321" })} />);
+    render(<StickyContactBar business={makeBiz({ whatsapp: "+27787654321" })} />);
     expect(screen.getByText("WhatsApp")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /WhatsApp/i })).toHaveAttribute(
       "href",
-      "https://wa.me/27987654321"
+      "https://wa.me/27787654321"
     );
+  });
+
+  it("normalises local-format numbers into working tel and wa.me links", () => {
+    render(
+      <StickyContactBar business={makeBiz({ phone: "082 123 4567", whatsapp: "0821234567" })} />
+    );
+    expect(screen.getByRole("link", { name: /Call Now/i })).toHaveAttribute(
+      "href",
+      "tel:+27821234567"
+    );
+    expect(screen.getByRole("link", { name: /WhatsApp/i })).toHaveAttribute(
+      "href",
+      "https://wa.me/27821234567"
+    );
+  });
+
+  it("renders nothing when the stored numbers are not valid SA mobiles", () => {
+    const { container } = render(
+      <StickyContactBar business={makeBiz({ phone: "12345", whatsapp: "abc" })} />
+    );
+    expect(container.firstChild).toBeNull();
   });
 
   it("renders both buttons when both contacts exist", () => {
     render(
-      <StickyContactBar business={makeBiz({ phone: "+27111111111", whatsapp: "+27222222222" })} />
+      <StickyContactBar business={makeBiz({ phone: "+27611111111", whatsapp: "+27722222222" })} />
     );
     expect(screen.getByText("Call Now")).toBeInTheDocument();
     expect(screen.getByText("WhatsApp")).toBeInTheDocument();
@@ -51,7 +72,7 @@ describe("StickyContactBar", () => {
 
   it("uses custom CTA label", () => {
     render(
-      <StickyContactBar business={makeBiz({ phone: "+27111111111" })} ctaLabel="Book Appointment" />
+      <StickyContactBar business={makeBiz({ phone: "+27611111111" })} ctaLabel="Book Appointment" />
     );
     expect(screen.getByText("Book Appointment")).toBeInTheDocument();
   });

@@ -14,7 +14,7 @@ import { TrustBadge } from "@/components/trust/trust-badge";
 import { ListingCard } from "@/components/listings/listing-card";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import { readOwnerId } from "@/lib/account/compat";
-import { formatSaLongDate, formatZAR } from "@/lib/utils/format";
+import { formatRandAmount, formatSaLongDate, formatZAR } from "@/lib/utils/format";
 import { CATEGORIES } from "@/lib/constants/categories";
 import { ListingDetailClient } from "@/app/listing/[id]/client";
 import { ListingContactActions } from "@/app/listing/[id]/listing-contact-actions";
@@ -99,9 +99,33 @@ interface FactItem {
   value: string;
 }
 
-function formatFactValue(value: unknown, unit?: string) {
+type AttributeOption = string | { value: string; label: string };
+
+const CONTACT_METHOD_LABELS: Record<string, string> = {
+  call: "Call",
+  whatsapp: "WhatsApp",
+  form: "Enquiry form",
+  in_app: "Enquiry form",
+};
+
+/** Turn a stored key such as `like_new` into readable text ("Like new"). */
+function humanizeKey(value: string) {
+  const text = value.replace(/_/g, " ").trim();
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+}
+
+function optionLabel(item: unknown, options?: AttributeOption[]) {
+  const raw = String(item);
+  const match = options?.find((option) =>
+    typeof option === "string" ? option === raw : option.value === raw
+  );
+  if (match) return typeof match === "string" ? match : match.label;
+  return /^[a-z0-9]+(_[a-z0-9]+)+$/.test(raw) ? humanizeKey(raw) : raw;
+}
+
+function formatFactValue(value: unknown, unit?: string, options?: AttributeOption[]) {
   if (Array.isArray(value)) {
-    return value.map((item) => String(item).replace(/_/g, " ")).join(", ");
+    return value.map((item) => optionLabel(item, options)).join(", ");
   }
   if (typeof value === "boolean") {
     return value ? "Yes" : "No";
@@ -109,7 +133,12 @@ function formatFactValue(value: unknown, unit?: string) {
   if (value == null) {
     return "";
   }
-  return unit ? `${String(value)} ${unit}` : String(value).replace(/_/g, " ");
+  if (typeof value === "number") {
+    // Group digits for measured values (mileage, size) but never for years or counts.
+    return unit ? `${formatRandAmount(value)} ${unit}` : String(value);
+  }
+  const label = optionLabel(value, options);
+  return unit ? `${label} ${unit}` : label;
 }
 
 function buildListingFacts(listing: ListingDetailRecord) {
@@ -127,7 +156,7 @@ function buildListingFacts(listing: ListingDetailRecord) {
         }
         return {
           label: field.label,
-          value: formatFactValue(rawValue, field.unit),
+          value: formatFactValue(rawValue, field.unit, field.options),
         };
       })
       .filter((fact): fact is FactItem => Boolean(fact)) ?? [];
@@ -137,7 +166,7 @@ function buildListingFacts(listing: ListingDetailRecord) {
       if (value === "" || value == null || (Array.isArray(value) && value.length === 0)) {
         return null;
       }
-      return { label: key.replace(/_/g, " "), value: formatFactValue(value) };
+      return { label: humanizeKey(key), value: formatFactValue(value) };
     })
     .filter((fact): fact is FactItem => Boolean(fact));
 
@@ -184,8 +213,22 @@ export function ListingDetailContent({
   const isReviewLayout = layoutMode === "review";
   // Create/edit previews already have a page h1.
   const TitleTag = isReviewLayout ? "h2" : "h1";
-  const trustLevel = seller ? computeTrustLevel(seller.account_verification_status ?? null) : null;
+  // Previews show the poster's own account; the trust badge only makes sense publicly.
+  const trustLevel =
+    seller && !isReviewLayout
+      ? computeTrustLevel(seller.account_verification_status ?? null)
+      : null;
   const createdAt = formatSaLongDate(listing.created_at);
+  const categoryLabel =
+    CATEGORIES.find((item) => item.value === listing.category)?.label ??
+    (listing.category ? humanizeKey(listing.category) : null);
+  const contactMethodLabels = Array.from(
+    new Set(
+      (listing.contact_methods ?? []).map(
+        (method) => CONTACT_METHOD_LABELS[method] ?? humanizeKey(method)
+      )
+    )
+  );
   const variantCopy = getVariantCopy(listing.category);
   const sellerInitial = seller?.display_name?.charAt(0)?.toUpperCase() || "S";
   const sellerPhone = contactPhone(seller?.phone);
@@ -257,17 +300,19 @@ export function ListingDetailContent({
           <div className="space-y-5">
             <div className="space-y-3 text-center lg:text-left">
               <div className="flex flex-wrap items-center justify-center gap-2 lg:justify-start">
-                <Badge variant="outline" className="text-[11px]">
-                  {listing.category?.replace(/_/g, " ")}
-                </Badge>
+                {categoryLabel ? (
+                  <Badge variant="outline" className="text-[11px]">
+                    {categoryLabel}
+                  </Badge>
+                ) : null}
                 {listing.condition ? (
                   <Badge variant="secondary" className="text-[11px]">
                     {getListingConditionLabel(listing.condition)}
                   </Badge>
                 ) : null}
-                {listing.contact_methods?.map((method) => (
-                  <Badge key={method} variant="outline" className="text-[11px] capitalize">
-                    {method}
+                {contactMethodLabels.map((label) => (
+                  <Badge key={label} variant="outline" className="text-[11px]">
+                    {label}
                   </Badge>
                 ))}
               </div>
@@ -277,11 +322,15 @@ export function ListingDetailContent({
               </TitleTag>
 
               <div className="flex flex-wrap items-end justify-center gap-3 lg:justify-start">
-                {listing.price_cents != null ? (
+                {listing.price_cents != null && listing.price_cents > 0 ? (
                   <p className="font-display text-[2rem] font-bold leading-none tracking-tight text-brand-green">
                     {formatZAR(listing.price_cents)}
                   </p>
-                ) : null}
+                ) : (
+                  <p className="font-display text-2xl font-bold leading-none tracking-tight text-brand-green">
+                    Price on request
+                  </p>
+                )}
                 {listing.price_negotiable ? (
                   <Badge className="bg-brand-green/10 text-brand-green">Negotiable</Badge>
                 ) : null}
@@ -306,9 +355,9 @@ export function ListingDetailContent({
                     <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                       Quick Facts
                     </p>
-                    <h3 className="font-display text-xl font-semibold">
+                    <h2 className="font-display text-xl font-semibold">
                       {variantCopy.detailsHeading}
-                    </h3>
+                    </h2>
                   </div>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {quickFacts.map((fact) => (
@@ -370,7 +419,7 @@ export function ListingDetailContent({
                   <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                     More Details
                   </p>
-                  <h3 className="font-display text-xl font-semibold">Full listing breakdown</h3>
+                  <h2 className="font-display text-xl font-semibold">Full listing breakdown</h2>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {detailFacts.map((fact) => (
@@ -394,7 +443,7 @@ export function ListingDetailContent({
                   <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                     Keep Browsing
                   </p>
-                  <h3 className="font-display text-xl font-semibold">Similar listings</h3>
+                  <h2 className="font-display text-xl font-semibold">Similar listings</h2>
                 </div>
                 <Link
                   href="/mzansi-market"

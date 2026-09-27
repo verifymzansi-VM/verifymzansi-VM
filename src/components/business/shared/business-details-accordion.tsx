@@ -35,10 +35,10 @@ function DetailSection({
 }) {
   return (
     <section className="border-b border-border last:border-b-0">
-      <h3 className="flex items-center gap-2 px-4 py-3 text-sm font-semibold">
+      <h2 className="flex items-center gap-2 px-4 py-3 text-sm font-semibold">
         {icon}
         {title}
-      </h3>
+      </h2>
       <div className="px-4 pb-4">{children}</div>
     </section>
   );
@@ -71,6 +71,27 @@ function OperatingHoursInline({ hours }: { hours: Record<string, string> }) {
 
 /* ── Payment & Delivery (inline, no Card wrapper) ──────── */
 
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: "Cash",
+  card: "Card",
+  eft: "EFT",
+  snapscan: "SnapScan",
+  capitec_pay: "Capitec Pay",
+  other: "Other",
+};
+
+const DELIVERY_OPTION_LABELS: Record<string, string> = {
+  in_store: "In store",
+  delivery: "Delivery",
+  collection: "Collection",
+  nationwide: "Nationwide shipping",
+};
+
+function humanize(value: string) {
+  const text = value.replace(/_/g, " ").trim();
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+}
+
 function PaymentDeliveryInline({
   paymentMethods,
   deliveryAvailable,
@@ -89,8 +110,8 @@ function PaymentDeliveryInline({
           </p>
           <div className="flex flex-wrap gap-2">
             {paymentMethods.map((method) => (
-              <Badge key={method} variant="outline" className="capitalize">
-                {method.replace(/_/g, " ")}
+              <Badge key={method} variant="outline">
+                {PAYMENT_METHOD_LABELS[method] ?? humanize(method)}
               </Badge>
             ))}
           </div>
@@ -180,7 +201,9 @@ export function BusinessDetailsAccordion({
           {business.delivery_options?.length ? (
             <p className="mb-3 text-sm">
               Delivery options:{" "}
-              {business.delivery_options.map((option) => option.replace(/_/g, " ")).join(", ")}
+              {business.delivery_options
+                .map((option) => DELIVERY_OPTION_LABELS[option] ?? humanize(option))
+                .join(", ")}
             </p>
           ) : null}
           <PaymentDeliveryInline

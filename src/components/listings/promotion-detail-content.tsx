@@ -37,9 +37,11 @@ import {
   formatSaLongDate,
   formatSaShortDate,
   formatZAR,
+  formatZARShort,
 } from "@/lib/utils/format";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
+import { safeExternalHref } from "@/lib/utils/sanitize-html";
 import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
 import { type BusinessCategory, type AccountVerificationStatus } from "@/types/enums";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
@@ -50,6 +52,7 @@ import { ProfileVideoPlayer } from "@/components/ui/profile-video-player";
 import type { EventDetails, TicketTier } from "@/types/tourism-details";
 import { useHorizontalSwipeNavigation } from "@/hooks/use-horizontal-swipe-navigation";
 import { useTrackContentView } from "@/hooks/use-track-content-view";
+import { useHydrated } from "@/hooks/use-hydrated";
 
 export interface PromotionDetailRecord {
   id: string;
@@ -102,17 +105,22 @@ type PromotionMediaItem = {
   photoNumber?: number;
 };
 
-function getEventState(startDate: string | null, endDate: string | null) {
-  const now = new Date();
-  const startsAt = startDate ? new Date(startDate) : null;
-  const endsAt = endDate ? new Date(endDate) : null;
+type EventState = "upcoming" | "ongoing" | "ended";
 
-  if (startsAt && startsAt > now) return "upcoming";
-  if (endsAt && endsAt < now) return "ended";
+function getEventState(
+  startDate: string | null,
+  endDate: string | null,
+  nowMs: number
+): EventState {
+  const startsAt = startDate ? new Date(startDate).getTime() : null;
+  const endsAt = endDate ? new Date(endDate).getTime() : null;
+
+  if (startsAt != null && startsAt > nowMs) return "upcoming";
+  if (endsAt != null && endsAt < nowMs) return "ended";
   return "ongoing";
 }
 
-const EVENT_STATE_BADGE: Record<string, { label: string; className: string }> = {
+const EVENT_STATE_BADGE: Record<EventState, { label: string; className: string }> = {
   upcoming: {
     label: "Upcoming Event",
     className: "bg-brand-blue text-white",
@@ -147,8 +155,36 @@ const EVENT_RAIN_POLICY_LABELS: Record<string, string> = {
   refunded: "Refunded",
 };
 
-/* ─── Countdown timer hook ─── */
-function useCountdown(targetDate: string | null) {
+function humanizeKey(value: string) {
+  const text = value.replace(/_/g, " ").trim();
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+}
+
+/** Early-bird deadlines are free text; show a real date consistently when we can parse one. */
+function formatLooseDate(value: string) {
+  return /^\d{4}-\d{2}-\d{2}/.test(value) ? formatSaLongDate(value) || value : value;
+}
+
+/** Google Calendar wants UTC "20261001T100000Z"; timestamptz strings carry "+00:00". */
+function toGoogleCalendarDate(value: string): string | null {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}/, "");
+}
+
+/* ─── Countdown (isolated so the 1s tick doesn't re-render the whole page) ─── */
+function EventCountdown({
+  targetDate,
+  label,
+  calendarUrl,
+}: {
+  targetDate: string | null;
+  label: string;
+  calendarUrl: string | null;
+}) {
   const [timeLeft, setTimeLeft] = useState<{
     days: number;
     hours: number;
@@ -178,7 +214,52 @@ function useCountdown(targetDate: string | null) {
     return () => clearInterval(interval);
   }, [targetDate]);
 
-  return timeLeft;
+  if (!timeLeft) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-brand-blue/20 bg-gradient-to-r from-brand-blue/5 to-brand-blue/10 px-4 py-3">
+      <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-brand-blue">
+        <Timer className="h-4 w-4" />
+        <span className="hidden sm:inline">{label}</span>
+      </div>
+      <div className="flex flex-1 flex-wrap gap-2 text-center sm:justify-center">
+        {[
+          { value: timeLeft.days, label: "D" },
+          { value: timeLeft.hours, label: "H" },
+          { value: timeLeft.minutes, label: "M" },
+          { value: timeLeft.seconds, label: "S" },
+        ].map((unit) => (
+          <div key={unit.label} className="min-w-[2.5rem]">
+            <div className="font-display text-lg font-bold tabular-nums sm:text-xl">
+              {String(unit.value).padStart(2, "0")}
+            </div>
+            <div className="text-[9px] uppercase tracking-wide text-muted-foreground">
+              {unit.label}
+            </div>
+          </div>
+        ))}
+      </div>
+      {calendarUrl && (
+        <Button
+          asChild
+          variant="outline"
+          size="sm"
+          className="w-full justify-center gap-1 text-xs sm:ml-auto sm:w-auto"
+        >
+          <a
+            href={calendarUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Add to Calendar"
+          >
+            <CalendarPlus className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Add to Calendar</span>
+            <span className="sm:hidden">Cal</span>
+          </a>
+        </Button>
+      )}
+    </div>
+  );
 }
 
 export function PromotionDetailContent({
@@ -207,6 +288,11 @@ export function PromotionDetailContent({
     setViewCount((currentCount) => currentCount + 1);
   }, []);
   useTrackContentView(promotion.id, "promotion", shouldTrackView, handleViewRecorded);
+  // The event state depends on "now": resolve it after mount so server and
+  // browser render the same markup (no hydration mismatch at start/end times).
+  const isHydrated = useHydrated();
+  // eslint-disable-next-line react-hooks/purity -- read the clock only after hydration
+  const nowMs = isHydrated ? Date.now() : null;
   const photos = promotion.photos ?? [];
   const videos = promotion.videos ?? [];
   const leadVideo = videos[0] ?? null;
@@ -321,11 +407,17 @@ export function PromotionDetailContent({
     contactMethods.includes("whatsapp") &&
     Boolean(contactPhone(advertiserProfile?.phone));
   const showStickyBar = layoutMode === "public" && (canCall || canWhatsapp);
-  const eventState = getEventState(promotion.start_date, promotion.end_date);
-  const categoryLabel = getPromotionCategoryDisplayLabel(
+  const eventState =
+    nowMs == null ? null : getEventState(promotion.start_date, promotion.end_date, nowMs);
+  const rawCategoryLabel = getPromotionCategoryDisplayLabel(
     promotion.category_key,
     promotion.category
   );
+  // Legacy rows can carry a bare key ("events", "food_market"); never show those raw.
+  const categoryLabel =
+    rawCategoryLabel && /^[a-z0-9_]+$/.test(rawCategoryLabel)
+      ? humanizeKey(rawCategoryLabel)
+      : rawCategoryLabel;
   const trustLevel = advertiserProfile
     ? computeTrustLevel(readAccountVerificationStatus(advertiserProfile))
     : 0;
@@ -337,9 +429,9 @@ export function PromotionDetailContent({
       : eventState === "ongoing"
         ? promotion.end_date
         : null;
-  const countdown = useCountdown(countdownTarget);
   const eventTypeLabel = promotion.event_details?.event_type
-    ? EVENT_TYPES.find((t) => t.value === promotion.event_details?.event_type)?.label
+    ? (EVENT_TYPES.find((t) => t.value === promotion.event_details?.event_type)?.label ??
+      humanizeKey(promotion.event_details.event_type))
     : null;
   const venueLabel = promotion.event_details?.venue_name ?? null;
   const ticketSummary =
@@ -352,8 +444,10 @@ export function PromotionDetailContent({
         : null;
 
   // Calendar link (Google Calendar)
-  const calendarUrl = promotion.start_date
-    ? `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(promotion.title)}&dates=${promotion.start_date.replace(/[-:]/g, "").split(".")[0]}Z${promotion.end_date ? `/${promotion.end_date.replace(/[-:]/g, "").split(".")[0]}Z` : ""}&details=${encodeURIComponent(promotion.description?.slice(0, 500) ?? "")}&location=${encodeURIComponent([promotion.location_town, promotion.location_city, promotion.location_province].filter(Boolean).join(", "))}`
+  const calendarStart = promotion.start_date ? toGoogleCalendarDate(promotion.start_date) : null;
+  const calendarEnd = promotion.end_date ? toGoogleCalendarDate(promotion.end_date) : null;
+  const calendarUrl = calendarStart
+    ? `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(promotion.title)}&dates=${calendarStart}/${calendarEnd ?? calendarStart}&details=${encodeURIComponent(promotion.description?.slice(0, 500) ?? "")}&location=${encodeURIComponent([promotion.location_town, promotion.location_city, promotion.location_province].filter(Boolean).join(", "))}`
     : null;
 
   return (
@@ -595,47 +689,11 @@ export function PromotionDetailContent({
           </Card>
 
           {/* ═══ EVENT COUNTDOWN (compact) ═══ */}
-          {countdown && (
-            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-brand-blue/20 bg-gradient-to-r from-brand-blue/5 to-brand-blue/10 px-4 py-3">
-              <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-brand-blue">
-                <Timer className="h-4 w-4" />
-                <span className="hidden sm:inline">
-                  {eventState === "upcoming" ? "Starts in" : "Ends in"}
-                </span>
-              </div>
-              <div className="flex flex-1 flex-wrap gap-2 text-center sm:justify-center">
-                {[
-                  { value: countdown.days, label: "D" },
-                  { value: countdown.hours, label: "H" },
-                  { value: countdown.minutes, label: "M" },
-                  { value: countdown.seconds, label: "S" },
-                ].map((unit) => (
-                  <div key={unit.label} className="min-w-[2.5rem]">
-                    <div className="font-display text-lg font-bold tabular-nums sm:text-xl">
-                      {String(unit.value).padStart(2, "0")}
-                    </div>
-                    <div className="text-[9px] uppercase tracking-wide text-muted-foreground">
-                      {unit.label}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {calendarUrl && (
-                <Button
-                  asChild
-                  variant="outline"
-                  size="sm"
-                  className="w-full justify-center gap-1 text-xs sm:ml-auto sm:w-auto"
-                >
-                  <a href={calendarUrl} target="_blank" rel="noopener noreferrer">
-                    <CalendarPlus className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Add to Calendar</span>
-                    <span className="sm:hidden">Cal</span>
-                  </a>
-                </Button>
-              )}
-            </div>
-          )}
+          <EventCountdown
+            targetDate={countdownTarget}
+            label={eventState === "upcoming" ? "Starts in" : "Ends in"}
+            calendarUrl={calendarUrl}
+          />
 
           {/* ═══ CONTACT ACTIONS — mobile-first, above details ═══ */}
           {showContactActions && (
@@ -672,6 +730,7 @@ export function PromotionDetailContent({
           {promotion.description && (
             <div className="space-y-1">
               <p
+                id="promotion-description"
                 className={`whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground ${
                   !isDescExpanded ? "line-clamp-2" : ""
                 }`}
@@ -681,6 +740,8 @@ export function PromotionDetailContent({
               {promotion.description.length > 100 && (
                 <button
                   type="button"
+                  aria-expanded={isDescExpanded}
+                  aria-controls="promotion-description"
                   onClick={() => setIsDescExpanded(!isDescExpanded)}
                   className="text-sm font-medium text-brand-blue hover:underline"
                 >
@@ -694,6 +755,8 @@ export function PromotionDetailContent({
           <div className="rounded-xl border">
             <button
               type="button"
+              aria-expanded={isDetailsOpen}
+              aria-controls="promotion-details-panel"
               onClick={() => setIsDetailsOpen(!isDetailsOpen)}
               className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold"
             >
@@ -705,7 +768,7 @@ export function PromotionDetailContent({
               />
             </button>
             {isDetailsOpen && (
-              <div className="border-t px-4 py-3">
+              <div id="promotion-details-panel" className="border-t px-4 py-3">
                 <dl className="grid grid-cols-1 gap-x-4 gap-y-2.5 text-sm sm:grid-cols-2">
                   <dt className="text-muted-foreground">Type</dt>
                   <dd className="font-medium">Event</dd>
@@ -770,10 +833,14 @@ export function PromotionDetailContent({
           {promotion.event_details &&
             (() => {
               const ed = promotion.event_details!;
-              const eventTypeLabel = EVENT_TYPES.find((t) => t.value === ed.event_type)?.label;
-              const ageLabel = EVENT_AGE_RESTRICTIONS.find(
-                (a) => a.value === ed.age_restriction
-              )?.label;
+              const eventTypeLabel = ed.event_type
+                ? (EVENT_TYPES.find((t) => t.value === ed.event_type)?.label ??
+                  humanizeKey(ed.event_type))
+                : null;
+              const ageLabel = ed.age_restriction
+                ? (EVENT_AGE_RESTRICTIONS.find((a) => a.value === ed.age_restriction)?.label ??
+                  humanizeKey(ed.age_restriction))
+                : null;
               const hasContent =
                 ed.event_type ||
                 ed.venue_name ||
@@ -795,10 +862,10 @@ export function PromotionDetailContent({
               return (
                 <Card>
                   <CardContent className="space-y-4 p-4 text-sm">
-                    <h3 className="flex items-center gap-2 font-semibold">
+                    <h2 className="flex items-center gap-2 font-semibold">
                       <Music2 className="h-4 w-4 text-muted-foreground" />
                       Event Details
-                    </h3>
+                    </h2>
 
                     <dl className="grid grid-cols-1 gap-x-4 gap-y-2.5 sm:grid-cols-2">
                       {eventTypeLabel && (
@@ -881,7 +948,7 @@ export function PromotionDetailContent({
                       {ed.early_bird_deadline && (
                         <>
                           <dt className="text-muted-foreground">Early-bird deadline</dt>
-                          <dd className="font-medium">{ed.early_bird_deadline}</dd>
+                          <dd className="font-medium">{formatLooseDate(ed.early_bird_deadline)}</dd>
                         </>
                       )}
 
@@ -916,7 +983,7 @@ export function PromotionDetailContent({
                               <span className="font-medium">{tier.name}</span>
                               <span className="font-bold">
                                 {tier.price_cents != null && tier.price_cents > 0
-                                  ? `R${(tier.price_cents / 100).toFixed(0)}`
+                                  ? formatZARShort(tier.price_cents)
                                   : "Free"}
                               </span>
                             </div>
@@ -928,7 +995,7 @@ export function PromotionDetailContent({
                     {ed.tickets_url && (
                       <Button asChild variant="outline" className="w-full gap-2">
                         <a
-                          href={ed.tickets_url}
+                          href={safeExternalHref(ed.tickets_url)}
                           target="_blank"
                           rel="noopener noreferrer nofollow ugc"
                         >
