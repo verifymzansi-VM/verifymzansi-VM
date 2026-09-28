@@ -60,6 +60,52 @@ Legend for "Authorised by":
   - direct account-status writes from the flagging route
   - the typed secondary-approver field
 
+## Status after Phase 3 (queue claims and data requests)
+
+- **Queue claims.** Moderators claim the next items from a queue
+  (`claim_queue_items`: up to 20 live claims each, 15 minutes, renewable 4
+  times). The database locks the work rows, so two moderators never get the same
+  item.
+  - The decide routes (`flagging/action`, `verification/decide`,
+    `content/decide`, `content-edits/decide`) call `check_queue_claim` first. A
+    moderator must hold the claim.
+  - Governors and admins may act on unclaimed items, and can free or reassign a
+    claim with a reason. That action is audited.
+  - Claims are released when a decision is made, when the holder loses their
+    staff role, or when they expire (the `expire-queue-claims` pg_cron job).
+- **Data requests (DSAR).**
+  - Deadlines come from `dsar_deadline_rules` and are set by the database when a
+    case is created. Each case stores `received_at`, `legal_basis`, `due_by` and
+    any `extended_due_at`.
+  - The rule values are the owner's defaults and still need the Information
+    Officer's confirmation:
+    - access: 30 days, plus one 30-day extension with notice
+    - correction, deletion and objection: a 30-day internal target, with no
+      extension
+  - An extension (`extend_dsar_deadline`) is allowed once, before the deadline
+    passes, with a reason. The requester is emailed through a durable job.
+  - Cases can be assigned. `/admin/dsar` has overdue, due-soon and
+    assigned-to-me views.
+  - `/admin/dsar/new` records requests received by email, post or phone. These
+    cases start with identity unchecked (`identity_check = 'manual'`).
+  - The export is a POST with CSRF and needs a second factor from the last 15
+    minutes. It refuses to run until identity is verified.
+    - It reads every dataset in full, or returns nothing (`export_incomplete`).
+    - Other people are never identified: message senders become `sent_by_you`,
+      and staff appear as "VerifyMzansi staff".
+    - The file is sent straight to the staff member's browser and is not stored.
+- **Evidence retention.** Admin → Operations Health shows
+  `retention_overview()`:
+  - the purge and retention job runs, with failures over the last 7 days
+  - evidence past its purge date
+  - stuck file deletions
+  - accounts on legal hold
+- **New routes.**
+  - `POST /api/admin/queue` (claim, renew, release, reassign)
+  - `POST /api/admin/dsar/case` (extend, assign)
+  - `POST /api/admin/dsar/intake`
+  - `POST /api/admin/dsar/export` (replaces the GET)
+
 ## Gates in front of every admin request
 
 | Layer                   | File                                                | Check                                                                                      |
@@ -104,7 +150,8 @@ Legend for "Authorised by":
 | `content/decide`                     | POST      | Guard, any staff                                                                                                     | no self-review check                                                                                         |
 | `content-edits/decide`               | POST      | Guard, any staff                                                                                                     | no self-review check                                                                                         |
 | `dsar/complete`, `dsar/decide`       | POST      | Guard `dsar:manage`                                                                                                  |                                                                                                              |
-| `dsar/export`                        | **GET**   | DB `dsar:manage`                                                                                                     | returns personal data from a GET; fail-closed limiter added in Phase 0; POST + CSRF in Phase 3               |
+| `dsar/export`                        | POST      | Guard `dsar:manage` + recent second factor + shared limiter (fail closed)                                            | refused until identity is verified; complete or nothing; third parties redacted (Phase 3)                    |
+| `dsar/case`, `dsar/intake`           | POST      | Guard `dsar:manage`                                                                                                  | extension rules enforced in `extend_dsar_deadline`; assignee must hold `dsar:manage`                         |
 | `feature-flags/toggle`               | POST      | Guard admin only                                                                                                     |                                                                                                              |
 | `flagging/action`                    | POST      | Guard, any staff; warn/hide need `enforcement:execute`; ban/suspend by holders of `decision:approve` skip the ledger | fail-closed limiter on ban/suspend added in Phase 0                                                          |
 | `governance/appeal`                  | POST      | Guard `appeal:decide`                                                                                                | overturn does not reverse enforcement                                                                        |

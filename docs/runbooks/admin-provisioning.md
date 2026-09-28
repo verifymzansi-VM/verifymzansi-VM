@@ -143,3 +143,42 @@ queue.
 Admin → Operations Health lists stuck jobs (admins can retry them), approved
 decisions whose update failed (for example a KYC override; admins retry from the
 decision page), open incidents, and whether the expiry job is running.
+
+## Queue claims
+
+Moderators press **Claim next** on a queue to take the most urgent items. The
+most severe come first, then the oldest. A claim lasts 15 minutes and can be
+renewed 4 times. Only the holder can decide a claimed item.
+
+- **Someone leaves mid-shift.** A governor or admin can free that person's
+  claims, or reassign them, from the queue. A reason is required and the action
+  is audited. Removing someone's staff role releases their claims straight away.
+- **Nothing to claim, but the queue shows items.** Those items are held by
+  someone else, or involve you (you reported them, own them, or are their
+  subject). You cannot claim those.
+
+## Data requests (POPIA)
+
+- **Deadlines** come from the `dsar_deadline_rules` table, not from code. Before
+  launch, have the Information Officer confirm the values. Change them with a
+  migration that updates the table, so the change is reviewed. Existing cases
+  keep the deadline they were given.
+- **Requests by email, post or phone.** Record them at Admin → Data Requests →
+  Record a request, using the date the request arrived. Check the requester's
+  identity yourself, then press **Verify identity** before exporting, correcting
+  or deleting anything.
+- **Extensions** apply only to access requests. You can extend once, before the
+  deadline, and you must give a reason; the requester is emailed the new date
+  and the reason. If the email job gets stuck, it appears under Operations
+  Health, and the case shows "requester notice pending".
+- **Exports** ask for your second factor again if you last used it more than 15
+  minutes ago. If any dataset cannot be read in full, nothing is exported; try
+  again or escalate. Send the file to the requester through a secure channel and
+  delete your local copy.
+
+## Evidence retention
+
+Operations Health shows the retention and purge jobs, evidence past its purge
+date, stuck file deletions and legal holds. If evidence is overdue or deletions
+are stuck, check the `queue_r2_*` and `retention_*` pg_cron jobs, and the R2
+cleanup worker, before anything else.

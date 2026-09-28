@@ -1,353 +1,313 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { NextResponse } from "next/server";
+import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
-import { verifyCapabilityRoleFromDb } from "@/lib/auth/admin-access";
 import { createLogger } from "@/lib/utils/logger";
 import { checkSensitiveActionRateLimit } from "@/lib/utils/rate-limit";
-import { ACCOUNT_PROFILE_WRITE_TABLE, getOwnerColumn } from "@/lib/account/compat";
-import { parseAndValidateSearchParams } from "@/lib/utils/api";
+import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
+import { parseAndValidateJsonRequest, rateLimitResponse } from "@/lib/utils/api";
 import { uuidSchema } from "@/lib/validations/shared";
-import { z } from "zod";
-import { checkStaffApiMfa } from "@/lib/auth/staff-mfa-guard";
-import { STAFF_MFA_PATH } from "@/lib/auth/staff-mfa";
 
 const log = createLogger("DSARExport");
-const DSAR_AUTH_LOOKUP_MAX_PAGES = 50;
-const DSAR_AUTH_LOOKUP_PER_PAGE = 200;
-const dsarExportQuerySchema = z.object({
-  requestId: uuidSchema,
-});
 
-function rejectCrossSiteExport(request: NextRequest): NextResponse | null {
-  const fetchSite = request.headers.get("sec-fetch-site")?.toLowerCase();
-  if (fetchSite === "cross-site") {
-    log.warn("Blocked cross-site DSAR export request");
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+const PAGE_SIZE = 1000;
+/** A direct download beyond this would need a background export job. */
+const MAX_ROWS_PER_DATASET = 50_000;
+
+const exportSchema = z.object({ requestId: uuidSchema });
+
+class ExportIncompleteError extends Error {}
+
+type Row = Record<string, unknown>;
+type Admin = ReturnType<typeof createAdminClient>;
+
+/**
+ * Read every row of a dataset, page by page. Any error, or a dataset too
+ * large for a direct download, stops the export: it is never returned
+ * partially complete.
+ */
+async function fetchAll(
+  label: string,
+  build: () => {
+    range: (
+      from: number,
+      to: number
+    ) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>;
   }
-
-  return null;
+): Promise<Row[]> {
+  const rows: Row[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await build().range(from, from + PAGE_SIZE - 1);
+    if (error) throw new ExportIncompleteError(`${label}: ${error.message}`);
+    const page = (data ?? []) as Row[];
+    rows.push(...page);
+    if (page.length < PAGE_SIZE) return rows;
+    if (rows.length >= MAX_ROWS_PER_DATASET) {
+      throw new ExportIncompleteError(`${label}: more than ${MAX_ROWS_PER_DATASET} rows`);
+    }
+  }
 }
 
-type AuthListUser = {
-  id: string;
-  email?: string | null;
-};
-
-type AuthListUsersResponse = {
-  data?: {
-    users?: AuthListUser[];
+/** The subject's own audit events in full; other people's only as "staff" or "system". */
+function redactAuditRow(row: Row, subjectId: string): Row {
+  if (row.actor_id === subjectId) {
+    return {
+      action: row.action,
+      target_type: row.target_type,
+      metadata: row.metadata,
+      created_at: row.created_at,
+    };
+  }
+  return {
+    action: row.action,
+    target_type: row.target_type,
+    by: row.actor_role === "system" ? "system" : "VerifyMzansi staff",
+    created_at: row.created_at,
   };
-  error?: {
-    message?: string | null;
-  } | null;
-};
-
-type AuthAdminLike = {
-  listUsers?: (params: { page: number; perPage: number }) => Promise<AuthListUsersResponse>;
-};
-
-async function resolveUserIdByEmail(
-  admin: ReturnType<typeof createAdminClient>,
-  email: string
-): Promise<
-  | { status: "matched"; userId: string }
-  | { status: "not_found" | "ambiguous" | "unavailable"; userId: null }
-> {
-  const authAdmin = (admin.auth as { admin?: AuthAdminLike } | undefined)?.admin;
-  if (!authAdmin?.listUsers) {
-    return { status: "unavailable", userId: null };
-  }
-
-  const normalizedEmail = email.trim().toLowerCase();
-  const matches: AuthListUser[] = [];
-
-  for (let page = 1; page <= DSAR_AUTH_LOOKUP_MAX_PAGES; page += 1) {
-    const { data, error } = await authAdmin.listUsers({ page, perPage: DSAR_AUTH_LOOKUP_PER_PAGE });
-    if (error) {
-      throw new Error(error.message || "Failed to resolve requester email");
-    }
-
-    const users = data?.users || [];
-    matches.push(
-      ...users.filter((user) => (user.email || "").trim().toLowerCase() === normalizedEmail)
-    );
-
-    if (matches.length > 1) {
-      return { status: "ambiguous", userId: null };
-    }
-
-    if (users.length < DSAR_AUTH_LOOKUP_PER_PAGE) {
-      break;
-    }
-  }
-
-  if (matches.length === 1) {
-    return { status: "matched", userId: matches[0].id };
-  }
-
-  if (matches.length > 1) {
-    return { status: "ambiguous", userId: null };
-  }
-
-  return { status: "not_found", userId: null };
 }
 
-// NOTE: This GET handler writes an audit log entry (dsar_exported). This is a
-// deliberate side-effect — the export is a significant privacy action that must
-// be audited. The endpoint is protected by admin auth, mitigating CSRF risk.
-export async function GET(request: NextRequest) {
+async function collectSubjectData(admin: Admin, subjectId: string) {
+  const byOwner = (table: string, columns: string) => () =>
+    admin
+      .from(table)
+      .select(columns)
+      .eq("owner_id", subjectId)
+      .order("created_at", { ascending: true });
+  const byUser = (table: string, columns: string) => () =>
+    admin
+      .from(table)
+      .select(columns)
+      .eq("user_id", subjectId)
+      .order("created_at", { ascending: true });
+
+  const [
+    accountProfile,
+    verificationSteps,
+    kycArtifacts,
+    listings,
+    businesses,
+    promotions,
+    contactEvents,
+    payments,
+    auditLogs,
+    introductoryTrials,
+    restrictions,
+    appeals,
+  ] = await Promise.all([
+    fetchAll("account profile", () =>
+      admin
+        .from("account_profiles")
+        .select(
+          "user_id, display_name, account_verification_status, phone, location_province, location_city, location_verified_at, account_status, strikes, suspended_until, banned_at, ban_reason, legal_hold, created_at, updated_at"
+        )
+        .eq("user_id", subjectId)
+    ),
+    fetchAll(
+      "verification steps",
+      byUser(
+        "verification_steps",
+        "id, step_type, status, full_name, dob, document_type, location_method, location_province, location_city, location_town, phone_verified_at, reviewed_at, reason_code, reason_note, submitted_at, created_at, updated_at"
+      )
+    ),
+    fetchAll(
+      "KYC artifacts",
+      byUser(
+        "kyc_artifacts",
+        "id, step_type, artifact_kind, content_type, file_size_bytes, purge_after, status, created_at"
+      )
+    ),
+    fetchAll(
+      "listings",
+      byOwner(
+        "listings",
+        "id, title, category, price_cents, price_negotiable, location_province, location_city, status, status_reason, published_at, expires_at, created_at, updated_at"
+      )
+    ),
+    fetchAll(
+      "businesses",
+      byOwner(
+        "businesses",
+        "id, business_name, business_type, category, phone, whatsapp, email, website, location_province, location_city, status, status_reason, published_at, created_at, updated_at"
+      )
+    ),
+    fetchAll(
+      "promotions",
+      byOwner(
+        "promotions",
+        "id, business_id, title, promotion_type, category, price_cents, price_negotiable, location_province, location_city, start_date, end_date, status, status_reason, published_at, created_at, updated_at"
+      )
+    ),
+    fetchAll("contact events", () =>
+      admin
+        .from("contact_events")
+        .select(
+          "id, target_id, target_type, member_verified, contact_type, sender_user_id, created_at"
+        )
+        .eq("owner_id", subjectId)
+        .order("created_at", { ascending: true })
+    ),
+    fetchAll(
+      "payments",
+      byUser(
+        "payments",
+        "id, area, amount_cents, status, provider, provider_reference, created_at, updated_at"
+      )
+    ),
+    fetchAll("audit log", () =>
+      admin
+        .from("audit_logs")
+        .select("id, actor_id, actor_role, action, target_type, target_id, metadata, created_at")
+        .or(`actor_id.eq.${subjectId},target_id.eq.${subjectId}`)
+        .order("created_at", { ascending: true })
+    ),
+    fetchAll(
+      "introductory trials",
+      byUser(
+        "intro_trial_claims",
+        "id, area, content_id, duration_days, created_at, activated_at, expires_at, released_at, release_reason, converted_at"
+      )
+    ),
+    fetchAll(
+      "moderation decisions",
+      byUser(
+        "account_restrictions",
+        "kind, reason, starts_at, ends_at, lifted_at, lift_reason, created_at"
+      )
+    ),
+    fetchAll("appeals", () =>
+      admin
+        .from("appeal_cases")
+        .select("status, reason, reviewer_rationale, created_at, resolved_at")
+        .eq("appellant_id", subjectId)
+        .order("created_at", { ascending: true })
+    ),
+  ]);
+
+  return {
+    accountProfile: accountProfile[0] ?? null,
+    verificationSteps,
+    kycArtifacts,
+    listings,
+    businesses,
+    promotions,
+    // Messages from other members: the sender is not identified.
+    contactEvents: contactEvents.map(({ sender_user_id, ...rest }) => ({
+      ...rest,
+      sent_by_you: sender_user_id === subjectId,
+    })),
+    payments,
+    auditLog: auditLogs.map((row) => redactAuditRow(row, subjectId)),
+    introductoryTrials,
+    moderationDecisions: restrictions,
+    appeals,
+  };
+}
+
+/**
+ * POST /api/admin/dsar/export  { requestId }
+ *
+ * Build the complete export of a data subject's records as a download.
+ * Needs dsar:manage, a second factor verified in the last 15 minutes, and a
+ * verified requester identity. Nothing is stored: the file goes straight to
+ * the staff member, who sends it to the requester.
+ */
+export async function POST(request: Request) {
   try {
-    const crossSiteBlock = rejectCrossSiteExport(request);
-    if (crossSiteBlock) return crossSiteBlock;
+    const guard = await enforceAdminMutationGuard({
+      request,
+      logger: log,
+      capability: "dsar:manage",
+      stepUp: true,
+      rateLimitAction: "admin:dsar:export:local",
+    });
+    if (!guard.success) return guard.response;
 
-    const parsedQuery = parseAndValidateSearchParams(
-      request.nextUrl.searchParams,
-      dsarExportQuerySchema,
-      {
-        validationErrorMessage: "Valid requestId is required",
-        includeValidationDetails: false,
-      }
-    );
-    if (!parsedQuery.success) {
-      return parsedQuery.response;
-    }
-    const { requestId } = parsedQuery.data;
+    const rl = await checkSensitiveActionRateLimit(guard.user.id, "admin:dsar:export");
+    if (rl.limited) return rateLimitResponse(rl.retryAfter ?? 60);
 
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    const actorRole = await verifyCapabilityRoleFromDb(user, "dsar:manage");
-    if (!actorRole) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    // Exporting personal data needs a recently verified second factor. The
-    // export is opened as a browser download, so send the staff member to
-    // verify rather than returning JSON.
-    const mfaBlock = await checkStaffApiMfa(supabase, user.id, { stepUp: true });
-    if (mfaBlock) {
-      return NextResponse.redirect(
-        new URL(`${STAFF_MFA_PATH}?confirm=1&next=/admin/dsar`, request.url),
-        303
-      );
-    }
-
-    const rl = await checkSensitiveActionRateLimit(user.id, "admin:dsar:export");
-    if (rl.limited) {
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
-      );
-    }
+    const body = await parseAndValidateJsonRequest(request, exportSchema, {
+      invalidJsonMessage: "Invalid JSON payload",
+      validationErrorMessage: "Valid requestId is required",
+      includeValidationDetails: false,
+    });
+    if (!body.success) return body.response;
+    const { requestId } = body.data;
 
     const admin = createAdminClient();
-
     const { data: dsarCase, error: dsarError } = await admin
       .from("dsar_cases")
       .select(
-        "id, type, requester_email, requester_phone, identity_verified, description, status, due_by, completed_at, response_summary, processed_by, created_at, updated_at"
+        "id, type, requester_email, identity_verified, identity_check, description, status, received_at, due_by, extended_due_at, legal_basis, completed_at, response_summary, subject_user_id, created_at"
       )
       .eq("id", requestId)
       .maybeSingle();
-
     if (dsarError) {
       log.error("Failed to load DSAR case", { requestId, error: dsarError.message });
-      return NextResponse.json({ error: "Failed to load DSAR request" }, { status: 500 });
+      return NextResponse.json({ error: "The request could not be loaded." }, { status: 500 });
     }
-
     if (!dsarCase) {
-      return NextResponse.json({ error: "DSAR request not found" }, { status: 404 });
+      return NextResponse.json({ error: "Data request not found." }, { status: 404 });
     }
-
-    const caseAuditQuery = admin
-      .from("audit_logs")
-      .select(
-        "id, actor_id, actor_role, action, target_type, target_id, area, metadata, created_at"
-      )
-      .eq("target_type", "dsar_case")
-      .eq("target_id", requestId)
-      .order("created_at", { ascending: true })
-      .limit(250);
-
-    const userResolution = await resolveUserIdByEmail(admin, dsarCase.requester_email);
-    const matchedUserId = userResolution.userId;
-
-    let accountProfile: Record<string, unknown> | null = null;
-    let verificationSteps: Record<string, unknown>[] = [];
-    let kycArtifacts: Record<string, unknown>[] = [];
-    let listings: Record<string, unknown>[] = [];
-    let businesses: Record<string, unknown>[] = [];
-    let promotions: Record<string, unknown>[] = [];
-    let contactEvents: Record<string, unknown>[] = [];
-    let payments: Record<string, unknown>[] = [];
-    let userAuditLogs: Record<string, unknown>[] = [];
-    let introductoryTrials: Record<string, unknown>[] = [];
-
-    const { data: caseAuditLogs } = await caseAuditQuery;
-
-    if (matchedUserId) {
-      const listingOwnerColumn = await getOwnerColumn(admin as never, "listings");
-      const businessOwnerColumn = await getOwnerColumn(admin as never, "businesses");
-      const promotionOwnerColumn = await getOwnerColumn(admin as never, "promotions");
-      const contactOwnerColumn = await getOwnerColumn(admin as never, "contact_events");
-
-      const [
-        profileResult,
-        verificationStepsResult,
-        kycArtifactsResult,
-        listingsResult,
-        businessesResult,
-        promotionsResult,
-        contactEventsResult,
-        paymentsResult,
-        userAuditLogsResult,
-      ] = await Promise.all([
-        admin
-          .from(ACCOUNT_PROFILE_WRITE_TABLE)
-          .select(
-            "id, user_id, display_name, account_verification_status, phone, masked_phone_public, location_province, location_city, location_verified_at, account_status, strikes, suspended_until, banned_at, ban_reason, legal_hold, profile_completeness_score, created_at, updated_at"
-          )
-          .eq("user_id", matchedUserId)
-          .maybeSingle(),
-        admin
-          .from("verification_steps")
-          .select(
-            "id, user_id, step_type, status, full_name, dob, document_type, location_method, location_province, location_city, location_town, phone_verified_at, reviewed_by, reviewed_at, reason_code, reason_note, submitted_at, created_at, updated_at"
-          )
-          .eq("user_id", matchedUserId)
-          .order("created_at", { ascending: true }),
-        admin
-          .from("kyc_artifacts")
-          .select(
-            "id, user_id, step_type, artifact_kind, content_type, file_size_bytes, provider_ref, purge_after, status, created_at"
-          )
-          .eq("user_id", matchedUserId)
-          .order("created_at", { ascending: true })
-          .limit(500),
-        admin
-          .from("listings")
-          .select(
-            "id, title, category, price_cents, price_negotiable, location_province, location_city, status, status_reason, published_at, expires_at, created_at, updated_at"
-          )
-          .eq(listingOwnerColumn, matchedUserId)
-          .order("created_at", { ascending: false })
-          .limit(500),
-        admin
-          .from("businesses")
-          .select(
-            "id, business_name, business_type, category, phone, whatsapp, email, website, location_province, location_city, status, status_reason, published_at, created_at, updated_at"
-          )
-          .eq(businessOwnerColumn, matchedUserId)
-          .order("created_at", { ascending: false })
-          .limit(500),
-        admin
-          .from("promotions")
-          .select(
-            "id, business_id, title, promotion_type, category, price_cents, price_negotiable, location_province, location_city, start_date, end_date, status, status_reason, published_at, created_at, updated_at"
-          )
-          .eq(promotionOwnerColumn, matchedUserId)
-          .order("created_at", { ascending: false })
-          .limit(500),
-        admin
-          .from("contact_events")
-          .select(
-            "id, target_id, target_type, member_verified, contact_type, sender_user_id, created_at"
-          )
-          .eq(contactOwnerColumn, matchedUserId)
-          .order("created_at", { ascending: false })
-          .limit(500),
-        admin
-          .from("payments")
-          .select(
-            "id, area, amount_cents, status, provider, provider_payment_id, provider_reference, created_at, updated_at"
-          )
-          .eq("user_id", matchedUserId)
-          .order("created_at", { ascending: false })
-          .limit(500),
-        admin
-          .from("audit_logs")
-          .select(
-            "id, actor_id, actor_role, action, target_type, target_id, area, metadata, created_at"
-          )
-          .or(`actor_id.eq.${matchedUserId},target_id.eq.${matchedUserId}`)
-          .order("created_at", { ascending: false })
-          .limit(250),
-      ]);
-
-      const trialRows = await admin
-        .from("intro_trial_claims")
-        .select(
-          "id,area,content_id,duration_days,created_at,activated_at,expires_at,released_at,release_reason,converted_at"
-        )
-        .eq("user_id", matchedUserId)
-        .order("created_at", { ascending: true })
-        .limit(500);
-      if (trialRows.error) throw new Error("Unable to export introductory trial records");
-      introductoryTrials = trialRows.data ?? [];
-      accountProfile = (profileResult.data as Record<string, unknown> | null) || null;
-      verificationSteps = (verificationStepsResult.data as Record<string, unknown>[] | null) || [];
-      kycArtifacts = (kycArtifactsResult.data as Record<string, unknown>[] | null) || [];
-      listings = (listingsResult.data as Record<string, unknown>[] | null) || [];
-      businesses = (businessesResult.data as Record<string, unknown>[] | null) || [];
-      promotions = (promotionsResult.data as Record<string, unknown>[] | null) || [];
-      contactEvents = (contactEventsResult.data as Record<string, unknown>[] | null) || [];
-      payments = (paymentsResult.data as Record<string, unknown>[] | null) || [];
-      userAuditLogs = (userAuditLogsResult.data as Record<string, unknown>[] | null) || [];
-    }
-
-    try {
-      await logAuditEvent({
-        action: "dsar_exported",
-        actorId: user.id,
-        actorRole,
-        targetId: requestId,
-        targetType: "dsar_case",
-        metadata: {
-          resolution: userResolution.status,
-          matchedUserId,
+    if (!dsarCase.identity_verified) {
+      return NextResponse.json(
+        {
+          error: "Verify the requester's identity before exporting their data.",
+          code: "identity_unverified",
         },
-      });
-    } catch (auditErr) {
-      log.error("Audit log failed (non-fatal)", {
-        error: auditErr instanceof Error ? auditErr.message : "Unknown",
-      });
+        { status: 409 }
+      );
     }
+
+    let subjectId: string | null = dsarCase.subject_user_id;
+    let resolution = subjectId ? "linked_account" : "not_found";
+    if (!subjectId) {
+      const { data: matched, error: lookupError } = await admin.rpc("auth_user_id_by_email", {
+        p_email: dsarCase.requester_email,
+      });
+      if (lookupError) throw new ExportIncompleteError(`subject lookup: ${lookupError.message}`);
+      if (typeof matched === "string") {
+        subjectId = matched;
+        resolution = "exact_email_match";
+      }
+    }
+
+    const data = subjectId ? await collectSubjectData(admin, subjectId) : null;
+
+    await logAuditEvent({
+      action: "dsar_exported",
+      actorId: guard.user.id,
+      actorRole: guard.actorRole,
+      targetId: requestId,
+      targetType: "dsar_case",
+      metadata: {
+        resolution,
+        subjectId,
+        datasets: data
+          ? Object.fromEntries(
+              Object.entries(data).map(([k, v]) => [k, Array.isArray(v) ? v.length : v ? 1 : 0])
+            )
+          : {},
+      },
+    });
 
     const exportPackage = {
       generatedAt: new Date().toISOString(),
-      generatedBy: user.id,
-      request: dsarCase,
-      identityResolution: {
-        status: userResolution.status,
-        requesterEmail: dsarCase.requester_email,
-        matchedUserId,
+      request: {
+        reference: `DSAR-${requestId.slice(0, 8).toUpperCase()}`,
+        type: dsarCase.type,
+        receivedAt: dsarCase.received_at,
+        dueBy: dsarCase.extended_due_at ?? dsarCase.due_by,
+        legalBasis: dsarCase.legal_basis,
+        status: dsarCase.status,
       },
+      subject: { resolution },
       notes: {
-        scope:
-          "This export includes the DSAR case, DSAR audit trail, and matched platform data when the requester email resolves to exactly one account.",
+        completeness:
+          "Every record held for this account in the datasets below is included; the export is refused rather than cut short.",
         exclusions:
-          "Raw KYC files, encrypted identifiers, exact GPS coordinates, provider raw responses, and payment provider payload blobs are intentionally excluded.",
+          "Raw identity documents and selfies, encrypted identifiers, exact GPS coordinates, provider raw responses and payment provider payloads are excluded. Other people (reporters, staff, other members) are not identified.",
       },
-      data: {
-        caseAuditLogs: caseAuditLogs || [],
-        accountProfile,
-        verificationSteps,
-        kycArtifacts,
-        listings,
-        businesses,
-        promotions,
-        contactEvents,
-        payments,
-        userAuditLogs,
-        introductoryTrials,
-      },
+      data,
     };
 
     return new NextResponse(JSON.stringify(exportPackage, null, 2), {
@@ -359,9 +319,19 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
+    const incomplete = error instanceof ExportIncompleteError;
     log.error("Failed to export DSAR package", {
       error: error instanceof Error ? error.message : "unknown error",
+      incomplete,
     });
-    return NextResponse.json({ error: "Failed to export DSAR package" }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: incomplete
+          ? "The export could not include every record, so nothing was exported. Try again, or contact the platform team if it keeps failing."
+          : "The export failed. Try again.",
+        code: incomplete ? "export_incomplete" : "export_failed",
+      },
+      { status: 500 }
+    );
   }
 }

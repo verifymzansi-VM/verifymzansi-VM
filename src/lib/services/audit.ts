@@ -54,6 +54,8 @@ export type AuditAction =
   | "dsar_exported"
   | "dsar_rejected"
   | "dsar_identity_verified"
+  | "dsar_assigned"
+  | "dsar_extended"
   | "consent_updated"
   | "moderation_action"
   | "kyc_evidence_viewed"

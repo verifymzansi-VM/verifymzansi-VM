@@ -68,7 +68,15 @@ CREATE TABLE public.verification_steps(id uuid PRIMARY KEY DEFAULT gen_random_uu
   step_type verification_step_type NOT NULL, status verification_status NOT NULL DEFAULT 'pending',
   risk_level text, created_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE public.content_edit_requests(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), owner_id uuid NOT NULL,
-  status text NOT NULL DEFAULT 'pending', created_at timestamptz NOT NULL DEFAULT now());`);
+  status text NOT NULL DEFAULT 'pending', created_at timestamptz NOT NULL DEFAULT now());
+${type("dsar_type")}
+ALTER TYPE dsar_type ADD VALUE 'objection';
+${type("dsar_status")}
+${table("dsar_cases")}
+CREATE TABLE public.kyc_artifacts(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid NOT NULL,
+  r2_key text NOT NULL, purge_after timestamptz, status text NOT NULL DEFAULT 'pending');
+CREATE TABLE public.r2_cleanup_queue(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), bucket text NOT NULL,
+  r2_key text NOT NULL, reason text NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), processed_at timestamptz);`);
   await db.exec(read("20260326000000_decision_ledger_and_role_lifecycle.sql"));
 
   const uuid = () => crypto.randomUUID();

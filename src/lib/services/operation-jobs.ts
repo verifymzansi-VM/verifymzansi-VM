@@ -1,7 +1,11 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthAdminUserSummary } from "@/lib/supabase/auth-admin-user";
 import { createLogger } from "@/lib/utils/logger";
-import { sendModerationNoticeEmail, type ModerationNoticeTemplate } from "@/lib/services/email";
+import {
+  sendDsarExtensionEmail,
+  sendModerationNoticeEmail,
+  type ModerationNoticeTemplate,
+} from "@/lib/services/email";
 import { logAuditEvent } from "@/lib/services/audit";
 
 const log = createLogger("OperationJobs");
@@ -39,8 +43,32 @@ const NOTICE_TEMPLATES = new Set<ModerationNoticeTemplate>([
 
 const str = (value: unknown) => (typeof value === "string" && value ? value : null);
 
+/** Written notice of a DSAR deadline extension, then record that it was sent. */
+async function sendDsarExtensionNotice(job: OperationJob): Promise<void> {
+  const caseId = str(job.payload.case_id);
+  const email = str(job.payload.email);
+  const due = str(job.payload.due);
+  const reason = str(job.payload.reason);
+  if (!caseId || !email || !due || !reason) throw new Error("Unusable DSAR extension payload");
+
+  const result = await sendDsarExtensionEmail(
+    email,
+    `DSAR-${caseId.slice(0, 8).toUpperCase()}`,
+    due,
+    reason
+  );
+  if (!result.success) throw new Error(result.error ?? "Email provider refused the notice");
+
+  const { error } = await createAdminClient()
+    .from("dsar_cases")
+    .update({ extension_notified_at: new Date().toISOString() })
+    .eq("id", caseId);
+  if (error) throw new Error(`Notice sent but not recorded: ${error.message}`);
+}
+
 async function sendNotice(job: OperationJob): Promise<void> {
   const template = str(job.payload.template);
+  if (template === "dsar_extension") return sendDsarExtensionNotice(job);
   const userId = str(job.payload.user_id);
   const decisionId = str(job.payload.decision_id) ?? job.decision_id;
   if (

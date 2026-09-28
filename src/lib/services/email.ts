@@ -397,6 +397,56 @@ export async function sendDsarSubmissionEmail(
   return sendEmail({ to: email, subject, html, text });
 }
 
+/**
+ * Written notice that an access request's deadline was extended (PAIA s26):
+ * the new date and the reason.
+ */
+export async function sendDsarExtensionEmail(
+  email: string,
+  reference: string,
+  newDueIso: string,
+  reason: string
+): Promise<SendEmailResult> {
+  const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
+  const dueDate = new Date(newDueIso).toLocaleDateString("en-ZA", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    timeZone: "Africa/Johannesburg",
+  });
+  const subject = `VerifyMzansi data request update (${reference})`;
+  const html = brandedEmail({
+    tone: "neutral",
+    eyebrow: "Data request",
+    title: "We need more time for your request",
+    intro: "This email explains a change to the response date of your data request.",
+    bodyHtml: `
+      ${paragraph("Hi,")}
+      ${paragraph("We need more time to respond to your data request, as the law allows for access requests.")}
+      ${detailList([
+        ["Reference", reference],
+        ["New response date", dueDate],
+        ["Reason", reason],
+      ])}
+      ${paragraph("If you do not agree with this extension, you may complain to the Information Regulator.")}
+    `,
+    cta: { label: "View data request information", href: `${appUrl}/dsar`, tone: "neutral" },
+    reason: "A data request was submitted to VerifyMzansi using this email address.",
+  });
+  const text = `Hi,
+
+We need more time to respond to your data request, as the law allows for access requests.
+
+Reference: ${reference}
+New response date: ${dueDate}
+Reason: ${reason}
+
+If you do not agree with this extension, you may complain to the Information Regulator.
+
+Learn more: ${appUrl}/dsar`;
+  return sendEmail({ to: email, subject, html, text });
+}
+
 export async function sendDsarCompletedEmail(
   email: string,
   reference: string,
