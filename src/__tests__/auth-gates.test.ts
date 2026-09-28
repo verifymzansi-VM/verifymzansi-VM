@@ -335,6 +335,43 @@ describe("checkPhoneGate", () => {
 // ── checkBanEnforcement ─────────────────────────────────────────────
 
 describe("checkBanEnforcement", () => {
+  it.each([
+    ["POST", "/api/appeals"],
+    ["GET", "/appeals/new"],
+    ["GET", "/dsar"],
+    ["POST", "/api/dsar/submit"],
+    ["POST", "/api/contact"],
+    ["GET", "/api/notifications"],
+    ["POST", "/api/auth/sign-out"],
+  ])("lets a banned member %s %s to appeal, get help or leave", async (method, path) => {
+    const supabase = mockSupabase({ profileData: { account_status: "banned" } });
+    const result = await checkBanEnforcement(
+      createRequest(path, method),
+      supabase,
+      "user-1",
+      true,
+      null
+    );
+    expect(result.response).toBeNull();
+  });
+
+  it.each([
+    ["POST", "/api/listings"],
+    ["POST", "/api/appealsx"],
+    ["DELETE", "/api/contact"],
+    ["GET", "/dashboard"],
+  ])("still blocks a banned member from %s %s", async (method, path) => {
+    const supabase = mockSupabase({ profileData: { account_status: "banned" } });
+    const result = await checkBanEnforcement(
+      createRequest(path, method),
+      supabase,
+      "user-1",
+      true,
+      null
+    );
+    expect(result.response).not.toBeNull();
+  });
+
   it("skips non-protected non-mutation routes", async () => {
     const supabase = mockSupabase({ profileData: null });
     const result = await checkBanEnforcement(
@@ -458,7 +495,7 @@ describe("checkBanEnforcement", () => {
       profileError: { message: "connection error", code: "TIMEOUT" },
     });
     const result = await checkBanEnforcement(
-      createRequest("/dsar"),
+      createRequest("/dashboard"),
       supabase,
       "user-1",
       true,

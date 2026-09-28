@@ -196,6 +196,14 @@ async function syncRoleMetadata(
     if (error) throw new Error(error.message);
     return true;
   } catch (err) {
+    // Queue a durable retry; the ops-jobs runner keeps trying and raises a
+    // critical ops event if it never succeeds.
+    await admin.rpc("enqueue_operation_job", {
+      p_key: `auth_metadata_sync:${userId}:${decisionId ?? role}`,
+      p_kind: "auth_metadata_sync",
+      p_payload: { user_id: userId, role },
+      p_decision: decisionId ?? null,
+    });
     reportCriticalIncident("GovernanceRoles", "Role changed but auth metadata sync failed", {
       userId,
       role,

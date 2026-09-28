@@ -134,16 +134,21 @@ describe("notifications helper", () => {
     });
   });
 
-  it("sends bulk staff notifications only to recipients with the requested capability", async () => {
-    mockListUsers.mockResolvedValueOnce({
-      data: {
-        users: [
-          { id: "moderator-1", app_metadata: { role: "moderator" } },
-          { id: "governance-1", app_metadata: { role: "governance_controller" } },
-          { id: "admin-1", app_metadata: { role: "admin" } },
-          { id: "member-1", app_metadata: { role: "member" } },
-        ],
-      },
+  function staffRolesReturn(result: { data: unknown; error: unknown }) {
+    const eq = vi.fn().mockResolvedValue(result);
+    mockFrom.mockImplementation((table: string) =>
+      table === "staff_roles" ? { select: vi.fn(() => ({ eq })) } : { insert: mockInsert }
+    );
+    return eq;
+  }
+
+  it("sends bulk staff notifications only to active staff with the requested capability", async () => {
+    const eq = staffRolesReturn({
+      data: [
+        { user_id: "moderator-1", role: "moderator" },
+        { user_id: "governance-1", role: "governance_controller" },
+        { user_id: "admin-1", role: "admin" },
+      ],
       error: null,
     });
 
@@ -156,7 +161,8 @@ describe("notifications helper", () => {
     });
 
     expect(ok).toBe(true);
-    expect(mockListUsers).toHaveBeenCalledWith({ page: 1, perPage: 200 });
+    expect(eq).toHaveBeenCalledWith("status", "active");
+    expect(mockListUsers).not.toHaveBeenCalled();
     expect(mockInsert).toHaveBeenCalledWith([
       {
         user_id: "governance-1",
@@ -169,10 +175,7 @@ describe("notifications helper", () => {
   });
 
   it("returns false when listing staff recipients fails", async () => {
-    mockListUsers.mockResolvedValueOnce({
-      data: null,
-      error: { message: "auth lookup failed" },
-    });
+    staffRolesReturn({ data: null, error: { message: "staff lookup failed" } });
 
     await expect(
       notifyStaffForAdminEvent({
@@ -183,7 +186,7 @@ describe("notifications helper", () => {
     ).resolves.toBe(false);
 
     expect(mockLogger.error).toHaveBeenCalledWith("notifyStaffForAdminEvent failed", {
-      error: "auth lookup failed",
+      error: "staff lookup failed",
       capability: "queue:view",
     });
   });

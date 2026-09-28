@@ -149,6 +149,12 @@ describe("POST /api/admin/governance/roles", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ status: "applied", metadataSynced: false });
+    expect(rpc).toHaveBeenCalledWith("enqueue_operation_job", {
+      p_key: `auth_metadata_sync:${TARGET_ID}:${DECISION_ID}`,
+      p_kind: "auth_metadata_sync",
+      p_payload: { user_id: TARGET_ID, role: "member" },
+      p_decision: DECISION_ID,
+    });
     expect(reportCriticalIncident).toHaveBeenCalledWith(
       "GovernanceRoles",
       expect.stringContaining("metadata sync failed"),

@@ -569,6 +569,142 @@ export async function sendAccountEnforcementEmail(params: {
   return sendEmail({ to: params.email, subject, html, text });
 }
 
+export type ModerationNoticeTemplate =
+  | "account_warn"
+  | "account_suspend"
+  | "account_ban"
+  | "content_hidden"
+  | "restriction_lifted"
+  | "appeal_upheld"
+  | "appeal_dismissed"
+  | "appeal_overturned"
+  | "appeal_partially_overturned";
+
+const NOTICE_COPY: Record<
+  ModerationNoticeTemplate,
+  {
+    title: string;
+    body: string;
+    tone: "warning" | "danger" | "success" | "info";
+    appealable: boolean;
+  }
+> = {
+  account_warn: {
+    title: "Account warning issued",
+    body: "A warning has been recorded on your account after a moderation review. Your account and content are not restricted.",
+    tone: "warning",
+    appealable: true,
+  },
+  account_suspend: {
+    title: "Account suspended",
+    body: "Your account has been suspended after a moderation review. Your listings are hidden until the suspension ends.",
+    tone: "danger",
+    appealable: true,
+  },
+  account_ban: {
+    title: "Account banned",
+    body: "Your account has been banned after a moderation review. Your listings are hidden.",
+    tone: "danger",
+    appealable: true,
+  },
+  content_hidden: {
+    title: "Content hidden",
+    body: "One of your listings has been hidden after a moderation review.",
+    tone: "warning",
+    appealable: true,
+  },
+  restriction_lifted: {
+    title: "Restriction lifted",
+    body: "A restriction on your account has been lifted. Content it hid has been restored where it can still be published.",
+    tone: "success",
+    appealable: false,
+  },
+  appeal_upheld: {
+    title: "Your appeal was decided",
+    body: "We reviewed your appeal. The original decision stands.",
+    tone: "info",
+    appealable: false,
+  },
+  appeal_dismissed: {
+    title: "Your appeal was decided",
+    body: "We reviewed your appeal. The original decision stands.",
+    tone: "info",
+    appealable: false,
+  },
+  appeal_overturned: {
+    title: "Your appeal was successful",
+    body: "We reviewed your appeal and reversed the decision. Content it hid has been restored where it can still be published.",
+    tone: "success",
+    appealable: false,
+  },
+  appeal_partially_overturned: {
+    title: "Your appeal was partly successful",
+    body: "We reviewed your appeal and shortened the restriction.",
+    tone: "success",
+    appealable: false,
+  },
+};
+
+/**
+ * Notice for a moderation decision or appeal outcome. It states what
+ * happened, the reason and any end date, and how to appeal. It never names
+ * the person who reported the content or includes staff notes.
+ */
+export async function sendModerationNoticeEmail(params: {
+  email: string;
+  accountName: string;
+  template: ModerationNoticeTemplate;
+  reason?: string | null;
+  endsAt?: string | null;
+  decisionId: string;
+}): Promise<SendEmailResult> {
+  const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
+  const copy = NOTICE_COPY[params.template];
+  const endsAt = params.endsAt
+    ? new Date(params.endsAt).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg" })
+    : null;
+  const details: Array<[string, string]> = [];
+  if (params.reason) details.push([copy.appealable ? "Reason" : "Reviewer's note", params.reason]);
+  if (endsAt) details.push(["Ends", endsAt]);
+  const appealHref = `${appUrl}/appeals/new?decision=${encodeURIComponent(params.decisionId)}`;
+  const accountHref = `${appUrl}/dashboard/profile#account`;
+  const appealLine = copy.appealable
+    ? "If you think this is wrong, you can ask for a review by someone who was not involved."
+    : "If you have questions, reply to this email and our team will help.";
+
+  const html = brandedEmail({
+    tone: copy.tone,
+    eyebrow: "Account update",
+    title: copy.title,
+    intro: "This notice relates to your VerifyMzansi account.",
+    bodyHtml: `
+      ${paragraph(`Hi ${params.accountName},`)}
+      ${paragraph(copy.body)}
+      ${details.length ? detailList(details) : ""}
+      ${paragraph(appealLine)}
+    `,
+    cta: copy.appealable
+      ? { label: "Ask for a review", href: appealHref, tone: "danger" }
+      : { label: "Review account", href: accountHref, tone: "danger" },
+    reason: "A moderation decision was recorded on your VerifyMzansi account.",
+  });
+
+  const text = [
+    `Hi ${params.accountName},`,
+    copy.body,
+    ...details.map(([label, value]) => `${label}: ${value}`),
+    appealLine,
+    copy.appealable ? `Ask for a review: ${appealHref}` : `Review account: ${accountHref}`,
+  ].join("\n\n");
+
+  return sendEmail({
+    to: params.email,
+    subject: `VerifyMzansi account update - ${copy.title}`,
+    html,
+    text,
+  });
+}
+
 export async function sendPasswordChangeNotification(email: string): Promise<SendEmailResult> {
   const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
   const subject = "VerifyMzansi - Your password was changed";

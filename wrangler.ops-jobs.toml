@@ -1,0 +1,14 @@
+name = "verifymzansi-ops-jobs"
+main = "workers/ops-jobs.ts"
+compatibility_date = "2026-01-01"
+
+# OPS_JOBS_SECRET is a secret shared with the app:
+#   wrangler secret put OPS_JOBS_SECRET --config wrangler.ops-jobs.toml
+# and set the same value as OPS_JOBS_SECRET on the app worker.
+
+[vars]
+ENVIRONMENT = "production"
+APP_URL = "https://verifymzansi.com"
+
+[triggers]
+crons = ["* * * * *"]

@@ -22,11 +22,6 @@ interface NotifyStaffForAdminEventInput {
   type?: CreateNotificationInput["type"];
 }
 
-type AuthListUser = {
-  id: string;
-  app_metadata?: Record<string, unknown> | null;
-};
-
 /**
  * Rollout guard for owner lifecycle notifications.
  * Set ENABLE_OWNER_LIFECYCLE_NOTIFICATIONS=false to disable these messages.
@@ -106,40 +101,26 @@ export async function createNotifications(inputs: CreateNotificationInput[]): Pr
   }
 }
 
+/** Active staff whose role grants `capability`, read from staff_roles. */
 async function listStaffRecipientIdsForCapability(
   capability: Capability,
   excludeUserId?: string
 ): Promise<string[]> {
-  const supabase = createAdminClient();
-  const authAdmin = supabase.auth.admin;
-  const recipientIds = new Set<string>();
-  const perPage = 200;
-
-  for (let page = 1; page <= 50; page += 1) {
-    const { data, error } = await authAdmin.listUsers({ page, perPage });
-    if (error) {
-      throw new Error(error.message || "Failed to list staff users");
-    }
-
-    const users = (data?.users ?? []) as AuthListUser[];
-    for (const user of users) {
-      if (!user?.id || user.id === excludeUserId) {
-        continue;
-      }
-
-      if (
-        hasCapability({ app_metadata: user.app_metadata ?? {}, is_anonymous: false }, capability)
-      ) {
-        recipientIds.add(user.id);
-      }
-    }
-
-    if (users.length < perPage) {
-      break;
-    }
+  const { data, error } = await createAdminClient()
+    .from("staff_roles")
+    .select("user_id, role")
+    .eq("status", "active");
+  if (error) {
+    throw new Error(error.message || "Failed to list staff users");
   }
 
-  return [...recipientIds];
+  return (data ?? [])
+    .filter(
+      (row) =>
+        row.user_id !== excludeUserId &&
+        hasCapability({ app_metadata: { role: row.role }, is_anonymous: false }, capability)
+    )
+    .map((row) => row.user_id as string);
 }
 
 export async function notifyStaffForAdminEvent(

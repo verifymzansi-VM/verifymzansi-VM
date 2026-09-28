@@ -157,6 +157,29 @@ export function checkAdminGate(
 // -- Ban/suspension enforcement ----------------------------------------------
 
 /**
+ * What a banned or suspended member can still do: appeal the decision, read
+ * their notifications, contact support, make a privacy (DSAR) request and
+ * sign out. Everything else stays blocked.
+ */
+const RESTRICTED_ACCOUNT_ALLOWED: ReadonlyArray<{ prefix: string; methods?: readonly string[] }> = [
+  { prefix: "/appeals" },
+  { prefix: "/api/appeals" },
+  { prefix: "/dsar" },
+  { prefix: "/api/dsar/submit", methods: ["POST"] },
+  { prefix: "/api/contact", methods: ["POST"] },
+  { prefix: "/api/notifications" },
+  { prefix: "/api/auth/sign-out" },
+];
+
+export function isAllowedForRestrictedAccount(pathname: string, method: string): boolean {
+  return RESTRICTED_ACCOUNT_ALLOWED.some(
+    ({ prefix, methods }) =>
+      (pathname === prefix || pathname.startsWith(`${prefix}/`)) &&
+      (!methods || methods.includes(method))
+  );
+}
+
+/**
  * Block banned/suspended users from protected routes and mutations.
  * Returns a response if blocked, or null to continue.
  */
@@ -173,7 +196,7 @@ export async function checkBanEnforcement(
   const isMutationRequest = ["POST", "PUT", "PATCH", "DELETE"].includes(request.method);
   const isBanEnforced = isProtectedRoute || (isApiRoute && isMutationRequest);
 
-  if (!isBanEnforced) {
+  if (!isBanEnforced || isAllowedForRestrictedAccount(pathname, request.method)) {
     return { response: null, profile: cachedProfile };
   }
 

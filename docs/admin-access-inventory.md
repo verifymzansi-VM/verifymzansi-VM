@@ -40,6 +40,26 @@ Legend for "Authorised by":
   DSAR export as a POST, the decision execution layer and removing unused routes
   are later phases.
 
+## Status after Phase 2 (decision execution layer)
+
+- **Enforcement.** Enforcement, appeals and lifts run in database functions that
+  apply a decision, its effects and its audit row together (`moderate_report`,
+  `approve_decision`, `reject_decision`, `lift_restriction`, `submit_appeal`,
+  `resolve_appeal`, `propose_kyc_override`).
+- **Account status.** It is written only by `recompute_account_status()`.
+- **Append-only tables.** `audit_logs`, `decision_record_events` and
+  `role_assignments_history` are append-only.
+- **New routes.**
+  - `POST /api/appeals` (member)
+  - `POST /api/admin/governance/restrictions/lift`
+  - `POST /api/admin/ops/jobs/retry` (admin)
+  - `POST /api/webhooks/ops-jobs` (worker; shared secret)
+- **New pages.** `/appeals`, `/appeals/new` and `/admin/operations`.
+- **Removed.**
+  - `src/lib/services/enforcement.ts`
+  - direct account-status writes from the flagging route
+  - the typed secondary-approver field
+
 ## Gates in front of every admin request
 
 | Layer                   | File                                                | Check                                                                                      |

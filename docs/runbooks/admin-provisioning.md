@@ -90,3 +90,56 @@ a display hint, because `staff_roles` already denies access.
 Critical incidents are sent to Sentry as `fatal` events tagged
 `severity: critical`. An example is a committed role change whose metadata sync
 failed. Route those events to the on-call channel in Sentry's alert rules.
+
+## Enforcement decisions and appeals
+
+Every warning, suspension, ban, hide, lift and appeal outcome commits in one
+database transaction, together with its recorded effects, decision events and
+audit row. A failure leaves nothing half-applied.
+
+| Action                            | Who                         | Second person needed?                 |
+| --------------------------------- | --------------------------- | ------------------------------------- |
+| Dismiss a report, warn an account | any staff                   | no                                    |
+| Hide the reported item            | governor or admin           | no                                    |
+| Suspend (1–30 days) or ban        | any staff proposes          | yes: an independent governor or admin |
+| Emergency containment             | governor or admin, 72 hours | the full action needs someone else    |
+| High-risk KYC approval            | any staff proposes          | yes: an independent governor or admin |
+| Lift a restriction, decide appeal | governor or admin           | must not have taken part              |
+
+- Nobody acts on a report they filed, a decision about themselves, or a decision
+  they already took part in.
+- A warning never changes account status. Lifting a restriction restores only
+  the content that restriction hid, and only once nothing else restricts the
+  account. Content whose listing period ended stays hidden, with the reason
+  recorded.
+- Suspensions end, emergency containments lapse and proposals expire through the
+  `expire-due-items` pg_cron job, which runs every 5 minutes. Admin → Operations
+  Health shows when it last ran.
+- Members see their decisions at `/appeals` and can appeal each decision once.
+  Banned and suspended members can still reach appeals, notifications, support,
+  privacy requests and sign-out.
+
+## Notices and other background jobs
+
+Member notices, and auth metadata syncs that failed inline, are durable jobs in
+`operation_jobs`. The `verifymzansi-ops-jobs` worker triggers
+`/api/webhooks/ops-jobs` every minute. Jobs retry with backoff; after 6 failures
+a job is marked stuck and a critical incident is recorded.
+
+Setup (once per environment):
+
+```bash
+wrangler secret put OPS_JOBS_SECRET --config wrangler.ops-jobs.toml
+```
+
+```bash
+wrangler deploy --config wrangler.ops-jobs.toml
+```
+
+Set the same `OPS_JOBS_SECRET` (at least 32 characters) on the app worker. If
+the secret is missing, the endpoint refuses every call and notices wait in the
+queue.
+
+Admin → Operations Health lists stuck jobs (admins can retry them), approved
+decisions whose update failed (for example a KYC override; admins retry from the
+decision page), open incidents, and whether the expiry job is running.

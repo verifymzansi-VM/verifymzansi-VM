@@ -10,10 +10,9 @@ import { Footer } from "@/components/layout/footer";
 const APPEALS_EMAIL = "appeals@verifymzansi.com";
 
 const CONSEQUENCES = [
-  "All active listings removed",
-  "Account profile no longer visible",
-  "Cannot create new listings",
-  "Active subscriptions cancelled",
+  "Your listings are hidden from the marketplace",
+  "You cannot post or publish content",
+  "Hidden listings are restored if the decision is reversed",
 ] as const;
 
 export function BannedPageContent() {
@@ -34,7 +33,7 @@ export function BannedPageContent() {
             Your account has been banned
           </h1>
           <p className="mt-2 text-sm leading-6 text-muted-foreground sm:text-base sm:leading-7">
-            This account was permanently banned after a serious breach of our{" "}
+            This account was banned after a moderation review found a serious breach of our{" "}
             <Link
               href="/terms"
               className="font-semibold text-foreground underline underline-offset-4 hover:text-brand-green-700 dark:hover:text-brand-green-300"
@@ -62,17 +61,18 @@ export function BannedPageContent() {
           <div className="mt-6 border-t border-border/70 pt-6">
             <h2 className="text-sm font-semibold text-foreground">Think this is a mistake?</h2>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              Email us your registered address and any evidence.
+              Ask for a review. Someone who was not involved in the decision will look at it, and
+              you will be told the outcome.
             </p>
             <div className="mt-4 flex flex-col gap-2.5 sm:flex-row">
               <Button asChild variant="trust-verified" className="h-11">
+                <Link href="/appeals">See the decision and appeal</Link>
+              </Button>
+              <Button asChild variant="outline" className="h-11">
                 <a href={`mailto:${APPEALS_EMAIL}`}>
                   <Mail className="h-4 w-4" aria-hidden="true" />
                   Email {APPEALS_EMAIL}
                 </a>
-              </Button>
-              <Button asChild variant="outline" className="h-11">
-                <Link href="/">Go to homepage</Link>
               </Button>
             </div>
           </div>

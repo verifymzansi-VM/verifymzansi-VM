@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { ACCOUNT_PROFILE_TABLE, applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
@@ -12,6 +12,7 @@ import {
 import { DashboardMobileNav } from "@/components/dashboard/dashboard-mobile-nav";
 import { createClient } from "@/lib/supabase/client";
 import { useLeadsUnread } from "@/hooks/use-leads-unread";
+import { SuspensionNotice } from "@/components/dashboard/suspension-notice";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -131,6 +132,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <main id="main-content" className="w-0 min-w-0 max-w-full flex-1 overflow-x-hidden">
           <div className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
+            <Suspense fallback={null}>
+              <SuspensionNotice />
+            </Suspense>
             {children}
           </div>
         </main>
