@@ -106,6 +106,43 @@ Legend for "Authorised by":
   - `POST /api/admin/dsar/intake`
   - `POST /api/admin/dsar/export` (replaces the GET)
 
+## Status after Phase 4 (shell and role homes)
+
+- **One navigation registry.** `src/lib/admin/nav.ts` lists every admin page and
+  the capability its page guard requires. The sidebar shows a page exactly when
+  the viewer's role holds that capability. `nav.test.ts` reads each page's
+  `requireStaff(...)` call and fails if the two disagree, or if a new admin page
+  is added without a menu entry or a named parent.
+- **Role homes at `/admin`.**
+  - Moderator, "My shift": held items with time left, renew and release, claim
+    buttons, and the queues with their size, oldest item and SLA breaches.
+  - Governor, "Decisions": escalations (with those expiring in 24 hours),
+    appeals, overdue and upcoming data requests, active restrictions, decisions
+    that failed to apply, role changes, and 30-day oversight rates shown with
+    their totals.
+  - Admin, "Platform": health (reports past deadline, incidents, stuck jobs,
+    evidence past its purge date, the expiry job), the team, everything a
+    governor sees, and website traffic streamed separately.
+- **Counts come from the database in one call.** `staff_dashboard(actor)` and
+  `staff_nav_counts(actor)` (migration `20260929120000_staff_dashboard.sql`)
+  return only the sections for the actor's role. A section that cannot be read
+  shows as "Unavailable", never as 0.
+- **Support inbox.** Governors can read it but not change it; the update route
+  already required `case:recommend`, and the buttons are now hidden too.
+- **Realtime refresh.** Queue events are merged, with at most one refresh every
+  10 seconds per screen, so a busy platform does not make every staff screen
+  reload continuously.
+- **Removed.**
+  - `dashboard-cards.tsx` and `strategy-dashboard.tsx`
+  - nine dashboard-only query functions in `admin-queries.ts`
+  - the separate governor, moderator and admin sidebar builders
+- **Not built: a TypeScript copy of the action policy.** Who may propose,
+  approve or decide each action is enforced inside the database functions
+  (`moderate_report`, `approve_decision`, `propose_staff_role_change` and
+  others), and is covered by the PGlite suites. A second copy in TypeScript
+  would drift from them. Page and menu access comes from the capability map in
+  `src/lib/auth/roles.ts`.
+
 ## Gates in front of every admin request
 
 | Layer                   | File                                                | Check                                                                                      |
@@ -223,8 +260,18 @@ KYC evidence lives in the private R2 bucket. It is reached only through
 | `getGovernanceQueueCounts` (governor)        | 3                                                                                                    |
 | Auth                                         | `getUser` twice (layout + page)                                                                      |
 
-That totals about 40 database round-trips per load for a moderator, 49 for an
-admin and 51 for a governor, plus two Auth calls. Measuring live p95 needs the
-local Supabase stack with seeded data; that is taken before Phase 4 replaces the
-dashboard. The Phase 4 target is one role/status lookup plus one dashboard RPC
-above the fold.
+That totalled about 40 database round-trips per load for a moderator, 49 for an
+admin and 51 for a governor, plus two Auth calls.
+
+After Phase 4, a load of `/admin` makes:
+
+| Source                                                  | Calls                                                          |
+| ------------------------------------------------------- | -------------------------------------------------------------- |
+| Staff check (`requireStaff`, shared by layout and page) | `getUser`, `staff_access_of`, the assurance-level check        |
+| Sidebar badges                                          | 1 RPC (`staff_nav_counts`) + 1 feature flag (cached in memory) |
+| Home                                                    | 1 RPC (`staff_dashboard`)                                      |
+| Traffic (admins only)                                   | 1 RPC, streamed after the rest of the page                     |
+
+That is three database calls for a moderator or governor above the fold (four
+for an admin, one of them streamed), down from 40 to 51. Measuring live p95
+still needs the local Supabase stack with seeded data.

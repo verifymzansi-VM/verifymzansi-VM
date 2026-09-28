@@ -1,423 +1,213 @@
 "use client";
 
-import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
+import { useState } from "react";
 import {
-  LayoutDashboard,
-  Flag,
-  ScrollText,
-  FileText,
+  Activity,
+  AlertTriangle,
+  Award,
+  BadgePercent,
+  BarChart3,
+  Building2,
   ChevronLeft,
   ChevronRight,
-  ToggleLeft,
-  Eye,
-  ShoppingBag,
-  Building2,
-  TreePalm,
   Clock,
+  Eye,
+  FileText,
+  Flag,
   Gavel,
-  BarChart3,
-  AlertTriangle,
-  Users,
-  TrendingUp,
-  Scale,
-  Menu,
-  Inbox,
-  BadgePercent,
-  Landmark,
+  Gift,
   Handshake,
+  Inbox,
+  Landmark,
+  LayoutDashboard,
+  Menu,
   Receipt,
-  Award,
+  Scale,
+  ScrollText,
+  ShoppingBag,
+  ToggleLeft,
+  TreePalm,
+  TrendingUp,
+  Users,
 } from "lucide-react";
-import { useState } from "react";
-import { Badge } from "@/components/ui/badge";
+import { BrandShield } from "@/components/shared/brand-shield";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { cn } from "@/lib/utils";
+import { navItemForPath, type NavIcon, type NavSectionView } from "@/lib/admin/nav";
+import type { StaffNavCounts } from "@/lib/services/staff-dashboard";
 
-interface AdminSidebarProps {
-  pendingVerifications?: number;
-  openReports?: number;
-  pendingModeration?: number;
-  newSupportRequests?: number;
-  userRole?: string;
-  evidenceDeskEnabled?: boolean;
+const ICONS: Record<NavIcon, React.ElementType> = {
+  home: LayoutDashboard,
+  shield: BrandShield,
+  eye: Eye,
+  clock: Clock,
+  flag: Flag,
+  inbox: Inbox,
+  shopping: ShoppingBag,
+  building: Building2,
+  palm: TreePalm,
+  alert: AlertTriangle,
+  scale: Scale,
+  gavel: Gavel,
+  file: FileText,
+  users: Users,
+  activity: Activity,
+  scroll: ScrollText,
+  chart: BarChart3,
+  trending: TrendingUp,
+  percent: BadgePercent,
+  award: Award,
+  landmark: Landmark,
+  handshake: Handshake,
+  receipt: Receipt,
+  gift: Gift,
+  toggle: ToggleLeft,
+};
+
+interface AdminNavProps {
+  sections: NavSectionView[];
+  counts: StaffNavCounts;
 }
 
-interface NavSection {
-  label: string;
-  items: {
-    href: string;
-    label: string;
-    icon: React.ElementType;
-    badgeCount?: number;
-  }[];
-}
-
-function buildModeratorSections(
-  pendingVerifications: number,
-  openReports: number,
-  pendingModeration: number,
-  newSupportRequests: number,
-  evidenceDeskEnabled: boolean
-): NavSection[] {
-  return [
-    {
-      label: "Operations",
-      items: [{ href: "/admin", label: "My Queue", icon: LayoutDashboard }],
-    },
-    {
-      label: "Verification",
-      items: [
-        {
-          href: "/admin/verification",
-          label: "Verify Accounts",
-          icon: ShieldCheck,
-          badgeCount: pendingVerifications > 0 ? pendingVerifications : undefined,
-        },
-        ...(evidenceDeskEnabled
-          ? [{ href: "/admin/verification/evidence", label: "Evidence Desk", icon: Eye }]
-          : []),
-      ],
-    },
-    {
-      label: "Marketplace Areas",
-      items: [
-        { href: "/admin/mzansi-market", label: "Mzansi Market", icon: ShoppingBag },
-        { href: "/admin/businesses", label: "Mzansi Business", icon: Building2 },
-        { href: "/admin/tourism-events", label: "Tourism & Events", icon: TreePalm },
-      ],
-    },
-    {
-      label: "Queues",
-      items: [
-        {
-          href: "/admin/moderation",
-          label: "Moderation",
-          icon: Clock,
-          badgeCount: pendingModeration > 0 ? pendingModeration : undefined,
-        },
-        {
-          href: "/admin/reports",
-          label: "Reports",
-          icon: Flag,
-          badgeCount: openReports > 0 ? openReports : undefined,
-        },
-        {
-          href: "/admin/support",
-          label: "Support Inbox",
-          icon: Inbox,
-          badgeCount: newSupportRequests > 0 ? newSupportRequests : undefined,
-        },
-      ],
-    },
-  ];
-}
-
-function buildGovernanceSections(newSupportRequests: number): NavSection[] {
-  return [
-    {
-      label: "Governance",
-      items: [{ href: "/admin", label: "Approval Center", icon: Gavel }],
-    },
-    {
-      label: "Decisions",
-      items: [
-        {
-          href: "/admin/governance/escalations",
-          label: "Escalations",
-          icon: AlertTriangle,
-        },
-        {
-          href: "/admin/governance/appeals",
-          label: "Appeals",
-          icon: Scale,
-        },
-        {
-          href: "/admin/governance/enforcement",
-          label: "Enforcement Review",
-          icon: ShieldCheck,
-        },
-      ],
-    },
-    {
-      label: "Oversight",
-      items: [
-        { href: "/admin/governance/oversight", label: "Oversight Hub", icon: Eye },
-        { href: "/admin/operations", label: "Operations Health", icon: AlertTriangle },
-        { href: "/admin/trials", label: "Free Posts & Trials", icon: ToggleLeft },
-        { href: "/admin/audit-log", label: "Audit Log", icon: ScrollText },
-        { href: "/admin/governance/roles", label: "Role Management", icon: Users },
-      ],
-    },
-    {
-      label: "Commercial",
-      items: [
-        { href: "/admin/commercial", label: "Commercial Settings", icon: BadgePercent },
-        { href: "/admin/programmes", label: "Programmes & Contracts", icon: Award },
-        { href: "/admin/organisations", label: "Organisations", icon: Landmark },
-        { href: "/admin/partners", label: "Partners & Commission", icon: Handshake },
-      ],
-    },
-    {
-      label: "Compliance",
-      items: [
-        { href: "/admin/dsar", label: "Data Requests", icon: FileText },
-        {
-          href: "/admin/support",
-          label: "Support Inbox",
-          icon: Inbox,
-          badgeCount: newSupportRequests > 0 ? newSupportRequests : undefined,
-        },
-      ],
-    },
-  ];
-}
-
-function buildAdminSections(
-  pendingVerifications: number,
-  openReports: number,
-  pendingModeration: number,
-  newSupportRequests: number,
-  evidenceDeskEnabled: boolean
-): NavSection[] {
-  return [
-    // Intelligence (admin-exclusive analytics)
-    {
-      label: "Intelligence",
-      items: [{ href: "/admin", label: "Strategy Dashboard", icon: LayoutDashboard }],
-    },
-    {
-      label: "Analytics",
-      items: [
-        { href: "/admin/intelligence/users", label: "Users & Growth", icon: Users },
-        {
-          href: "/admin/intelligence/verification",
-          label: "Verification Metrics",
-          icon: ShieldCheck,
-        },
-        { href: "/admin/intelligence/revenue", label: "Revenue & Costs", icon: TrendingUp },
-        { href: "/admin/intelligence/marketplace", label: "Marketplace Health", icon: BarChart3 },
-        { href: "/admin/intelligence/trends", label: "Trend Analysis", icon: TrendingUp },
-        { href: "/admin/intelligence/operations", label: "Ops Summary", icon: Clock },
-      ],
-    },
-    // Governance (decisions, oversight, appeals)
-    {
-      label: "Governance",
-      items: [
-        {
-          href: "/admin/governance/escalations",
-          label: "Escalations",
-          icon: AlertTriangle,
-        },
-        { href: "/admin/governance/appeals", label: "Appeals", icon: Scale },
-        {
-          href: "/admin/governance/enforcement",
-          label: "Enforcement Review",
-          icon: ShieldCheck,
-        },
-        { href: "/admin/governance/oversight", label: "Oversight Hub", icon: Eye },
-        { href: "/admin/governance/roles", label: "Role Management", icon: Users },
-        { href: "/admin/audit-log", label: "Audit Log", icon: ScrollText },
-        { href: "/admin/dsar", label: "Data Requests", icon: FileText },
-      ],
-    },
-    // Operations (verification, marketplace, queues)
-    {
-      label: "Operations",
-      items: [
-        {
-          href: "/admin/verification",
-          label: "Verify Accounts",
-          icon: ShieldCheck,
-          badgeCount: pendingVerifications > 0 ? pendingVerifications : undefined,
-        },
-        ...(evidenceDeskEnabled
-          ? [{ href: "/admin/verification/evidence", label: "Evidence Desk", icon: Eye }]
-          : []),
-        { href: "/admin/mzansi-market", label: "Mzansi Market", icon: ShoppingBag },
-        { href: "/admin/businesses", label: "Mzansi Business", icon: Building2 },
-        { href: "/admin/tourism-events", label: "Tourism & Events", icon: TreePalm },
-        {
-          href: "/admin/moderation",
-          label: "Moderation",
-          icon: Clock,
-          badgeCount: pendingModeration > 0 ? pendingModeration : undefined,
-        },
-        {
-          href: "/admin/reports",
-          label: "Reports",
-          icon: Flag,
-          badgeCount: openReports > 0 ? openReports : undefined,
-        },
-        {
-          href: "/admin/support",
-          label: "Support Inbox",
-          icon: Inbox,
-          badgeCount: newSupportRequests > 0 ? newSupportRequests : undefined,
-        },
-      ],
-    },
-    {
-      label: "Commercial",
-      items: [
-        { href: "/admin/commercial", label: "Commercial Settings", icon: BadgePercent },
-        { href: "/admin/programmes", label: "Programmes & Contracts", icon: Award },
-        { href: "/admin/organisations", label: "Organisations", icon: Landmark },
-        { href: "/admin/partners", label: "Partners & Commission", icon: Handshake },
-        { href: "/admin/payments", label: "Payments & Refunds", icon: Receipt },
-      ],
-    },
-    // Tools
-    {
-      label: "Tools",
-      items: [
-        { href: "/admin/operations", label: "Operations Health", icon: AlertTriangle },
-        { href: "/admin/feature-flags", label: "Feature Flags", icon: ToggleLeft },
-        { href: "/admin/trials", label: "Free Posts & Trials", icon: ToggleLeft },
-      ],
-    },
-  ];
-}
-
-export function AdminSidebar({
-  pendingVerifications = 0,
-  openReports = 0,
-  pendingModeration = 0,
-  newSupportRequests = 0,
-  userRole = "moderator",
-  evidenceDeskEnabled = false,
-}: AdminSidebarProps) {
+function NavList({
+  sections,
+  counts,
+  collapsed = false,
+  onNavigate,
+}: AdminNavProps & { collapsed?: boolean; onNavigate?: () => void }) {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
+  const activeHref = navItemForPath(pathname)?.href;
 
-  let sections: NavSection[];
-  switch (userRole) {
-    case "governance_controller":
-      sections = buildGovernanceSections(newSupportRequests);
-      break;
-    case "admin":
-      sections = buildAdminSections(
-        pendingVerifications,
-        openReports,
-        pendingModeration,
-        newSupportRequests,
-        evidenceDeskEnabled
-      );
-      break;
-    default:
-      sections = buildModeratorSections(
-        pendingVerifications,
-        openReports,
-        pendingModeration,
-        newSupportRequests,
-        evidenceDeskEnabled
-      );
-      break;
-  }
-
-  const navContent = (
-    <>
-      <div className="flex-1 overflow-y-auto py-3">
-        {sections.map((section, sIdx) => (
-          <div key={section.label} className={cn(sIdx > 0 && "mt-3")}>
-            {/* Section label */}
-            {!collapsed && (
-              <p className="px-4 mb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
-                {section.label}
-              </p>
-            )}
-            {collapsed && sIdx > 0 && <div className="mx-3 mb-2 border-t" />}
-
-            <nav aria-label="Admin" className="space-y-0.5 px-2">
-              {section.items.map((item) => {
-                const isActive =
-                  pathname === item.href ||
-                  (item.href !== "/admin" && pathname.startsWith(item.href));
-                const Icon = item.icon;
-
-                return (
+  return (
+    <nav aria-label="Admin" className="flex-1 overflow-y-auto py-3">
+      {sections.map((section, index) => (
+        <div key={section.id} className={cn(index > 0 && "mt-3")}>
+          {collapsed ? (
+            index > 0 && <div className="mx-3 mb-2 border-t" aria-hidden="true" />
+          ) : (
+            <p
+              id={`admin-nav-${section.id}`}
+              className="mb-1 px-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70"
+            >
+              {section.label}
+            </p>
+          )}
+          <ul
+            className="space-y-0.5 px-2"
+            aria-labelledby={collapsed ? undefined : `admin-nav-${section.id}`}
+          >
+            {section.items.map((item) => {
+              const Icon = ICONS[item.icon];
+              const isActive = item.href === activeHref;
+              const count = item.badge ? counts[item.badge] : undefined;
+              const showCount = typeof count === "number" && count > 0;
+              return (
+                <li key={item.href}>
                   <Link
-                    key={item.href}
                     href={item.href}
+                    onClick={onNavigate}
                     aria-current={isActive ? "page" : undefined}
+                    aria-label={
+                      collapsed || showCount
+                        ? `${item.label}${showCount ? `, ${count} waiting` : ""}`
+                        : undefined
+                    }
+                    title={collapsed ? item.label : undefined}
                     className={cn(
-                      "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                      "relative flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                       isActive
                         ? "bg-primary/10 font-semibold text-primary ring-1 ring-primary/20"
                         : "text-muted-foreground hover:bg-muted hover:text-foreground"
                     )}
-                    title={collapsed ? item.label : undefined}
                   >
-                    <Icon className="h-4 w-4 flex-shrink-0" />
-                    {!collapsed && (
-                      <>
-                        <span className="flex-1 truncate">{item.label}</span>
-                        {item.badgeCount !== undefined && (
-                          <Badge
-                            variant="destructive"
-                            className="h-5 min-w-[20px] px-1.5 text-[10px] font-bold"
-                          >
-                            {item.badgeCount > 99 ? "99+" : item.badgeCount}
-                          </Badge>
-                        )}
-                      </>
-                    )}
-                    {collapsed && item.badgeCount !== undefined && (
-                      <span className="absolute right-1 top-0 h-2 w-2 rounded-full bg-destructive" />
-                    )}
+                    <Icon className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                    {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
+                    {showCount &&
+                      (collapsed ? (
+                        <span
+                          className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-destructive"
+                          aria-hidden="true"
+                        />
+                      ) : (
+                        <span
+                          className="min-w-[20px] rounded-full bg-destructive px-1.5 text-center text-[10px] font-bold leading-5 text-destructive-foreground"
+                          aria-hidden="true"
+                        >
+                          {count > 99 ? "99+" : count}
+                        </span>
+                      ))}
                   </Link>
-                );
-              })}
-            </nav>
-          </div>
-        ))}
-      </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </nav>
+  );
+}
 
-      <div className="border-t px-2 py-2">
+/** Desktop sidebar, built from the navigation registry for the viewer's role. */
+export function AdminSidebar({ sections, counts }: AdminNavProps) {
+  const [collapsed, setCollapsed] = useState(false);
+
+  return (
+    <aside
+      className={cn(
+        "sticky top-14 hidden h-[calc(100vh-3.5rem)] shrink-0 flex-col border-r bg-card transition-[width] duration-200 md:flex",
+        collapsed ? "w-16" : "w-60"
+      )}
+    >
+      <NavList sections={sections} counts={counts} collapsed={collapsed} />
+      <div className="border-t p-2">
         <Button
           variant="ghost"
           size="sm"
-          className="w-full justify-center"
-          onClick={() => setCollapsed(!collapsed)}
+          className="h-11 w-full justify-center"
+          onClick={() => setCollapsed((c) => !c)}
+          aria-label={collapsed ? "Expand menu" : "Collapse menu"}
+          aria-expanded={!collapsed}
         >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </Button>
       </div>
-    </>
+    </aside>
   );
+}
+
+/** Menu button for the header on small screens; opens the same menu in a sheet. */
+export function AdminMobileNav({ sections, counts }: AdminNavProps) {
+  const [open, setOpen] = useState(false);
+  const total = Object.values(counts).reduce<number>((sum, n) => sum + (n ?? 0), 0);
 
   return (
-    <>
-      {/* Desktop sidebar — hidden on mobile */}
-      <aside
-        className={cn(
-          "sticky top-[65px] hidden h-[calc(100vh-65px)] shrink-0 flex-col border-r bg-card transition-all duration-200 md:flex",
-          collapsed ? "w-16" : "w-56"
-        )}
-      >
-        {navContent}
-      </aside>
-
-      {/* Mobile drawer trigger — visible only on mobile */}
-      <div className="md:hidden fixed bottom-20 right-4 z-40">
-        <Sheet>
-          <SheetTrigger asChild>
-            <Button
-              size="icon"
-              className="h-12 w-12 rounded-full shadow-lg bg-primary text-primary-foreground"
-              aria-label="Open admin menu"
-            >
-              <Menu className="h-5 w-5" />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="w-72 p-0 pb-[env(safe-area-inset-bottom)]">
-            <div className="flex h-full flex-col">{navContent}</div>
-          </SheetContent>
-        </Sheet>
-      </div>
-    </>
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative h-11 w-11 md:hidden"
+          aria-label={total > 0 ? `Open admin menu, ${total} items waiting` : "Open admin menu"}
+        >
+          <Menu className="h-5 w-5" />
+          {total > 0 && (
+            <span
+              className="absolute right-2 top-2 h-2 w-2 rounded-full bg-destructive"
+              aria-hidden="true"
+            />
+          )}
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="left" className="w-72 p-0 pb-[env(safe-area-inset-bottom)]">
+        <SheetTitle className="sr-only">Admin menu</SheetTitle>
+        <div className="flex h-full flex-col">
+          <NavList sections={sections} counts={counts} onNavigate={() => setOpen(false)} />
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }

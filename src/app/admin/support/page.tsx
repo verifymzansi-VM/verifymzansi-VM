@@ -1,4 +1,5 @@
 import { requireStaff } from "@/lib/auth/require-staff";
+import { roleHasCapability } from "@/lib/auth/admin-access";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -28,7 +29,8 @@ export default async function AdminSupportPage({
 }: {
   searchParams: Promise<{ page?: string; submission?: string }>;
 }) {
-  await requireStaff();
+  const { role } = await requireStaff();
+  const canRespond = roleHasCapability(role, "case:recommend");
 
   const admin = createAdminClient();
   const params = await searchParams;
@@ -102,6 +104,11 @@ export default async function AdminSupportPage({
           {newCount} New on this page
         </Badge>
       </PageHeader>
+      {!canRespond && (
+        <p className="text-sm text-muted-foreground">
+          You can read support requests. Moderators and admins update their status.
+        </p>
+      )}
       {activityUnavailable && (
         <p role="alert">
           Email activity could not be loaded. Request contents are still available below.
@@ -122,7 +129,7 @@ export default async function AdminSupportPage({
           <p>No support submissions yet.</p>
         </div>
       ) : (
-        <SupportInboxClient submissions={rows} />
+        <SupportInboxClient submissions={rows} canRespond={canRespond} />
       )}
       {!selected.success && (
         <nav aria-label="Support inbox pages" className="flex gap-4">

@@ -75,6 +75,8 @@ ${type("dsar_status")}
 ${table("dsar_cases")}
 CREATE TABLE public.kyc_artifacts(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid NOT NULL,
   r2_key text NOT NULL, purge_after timestamptz, status text NOT NULL DEFAULT 'pending');
+CREATE TABLE public.contact_submissions(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), name text NOT NULL,
+  email text NOT NULL, message text NOT NULL, status text NOT NULL DEFAULT 'new', created_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE public.r2_cleanup_queue(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), bucket text NOT NULL,
   r2_key text NOT NULL, reason text NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), processed_at timestamptz);`);
   await db.exec(read("20260326000000_decision_ledger_and_role_lifecycle.sql"));
@@ -82,8 +84,14 @@ CREATE TABLE public.r2_cleanup_queue(id uuid PRIMARY KEY DEFAULT gen_random_uuid
   const uuid = () => crypto.randomUUID();
   async function person(role, status = "active") {
     const id = uuid();
-    await db.query(`INSERT INTO auth.users(id, raw_app_meta_data) VALUES ($1, $2)`, [id, role ? { role } : {}]);
-    await db.query(`INSERT INTO account_profiles(user_id, account_status) VALUES ($1, $2)`, [id, status]);
+    await db.query(`INSERT INTO auth.users(id, raw_app_meta_data) VALUES ($1, $2)`, [
+      id,
+      role ? { role } : {},
+    ]);
+    await db.query(`INSERT INTO account_profiles(user_id, account_status) VALUES ($1, $2)`, [
+      id,
+      status,
+    ]);
     return id;
   }
 

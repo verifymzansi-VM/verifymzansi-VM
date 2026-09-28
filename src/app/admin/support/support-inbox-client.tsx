@@ -31,7 +31,14 @@ function formatDate(iso: string) {
   });
 }
 
-export function SupportInboxClient({ submissions }: { submissions: SupportSubmission[] }) {
+export function SupportInboxClient({
+  submissions,
+  canRespond = true,
+}: {
+  submissions: SupportSubmission[];
+  /** Governors read the inbox; moderators and admins work it (case:recommend). */
+  canRespond?: boolean;
+}) {
   const router = useRouter();
   const [filter, setFilter] = useState<StatusFilter>("all");
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -157,38 +164,40 @@ export function SupportInboxClient({ submissions }: { submissions: SupportSubmis
                   )}
                 </div>
 
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {sub.status !== "in_progress" && sub.status !== "resolved" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() => updateStatus(sub.id, "in_progress")}
-                    >
-                      Mark in progress
-                    </Button>
-                  )}
-                  {sub.status !== "resolved" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() => updateStatus(sub.id, "resolved")}
-                    >
-                      Mark resolved
-                    </Button>
-                  )}
-                  {sub.status === "resolved" && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={busy}
-                      onClick={() => updateStatus(sub.id, "new")}
-                    >
-                      Reopen
-                    </Button>
-                  )}
-                </div>
+                {canRespond && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {sub.status !== "in_progress" && sub.status !== "resolved" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => updateStatus(sub.id, "in_progress")}
+                      >
+                        Mark in progress
+                      </Button>
+                    )}
+                    {sub.status !== "resolved" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => updateStatus(sub.id, "resolved")}
+                      >
+                        Mark resolved
+                      </Button>
+                    )}
+                    {sub.status === "resolved" && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={() => updateStatus(sub.id, "new")}
+                      >
+                        Reopen
+                      </Button>
+                    )}
+                  </div>
+                )}
               </li>
             );
           })}

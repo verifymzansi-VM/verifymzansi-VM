@@ -62,7 +62,7 @@ export function ClaimGate({
   return <>{children({ blocked, blockedReason })}</>;
 }
 
-async function postQueue(body: Record<string, unknown>) {
+export async function postQueue(body: Record<string, unknown>) {
   const res = await fetch("/api/admin/queue", {
     method: "POST",
     headers: withCsrfHeaders({ "Content-Type": "application/json" }),
