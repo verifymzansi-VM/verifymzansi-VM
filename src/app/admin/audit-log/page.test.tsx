@@ -103,6 +103,21 @@ describe("AdminAuditLogPage", () => {
     expect(screen.getByText(/About 90[\s,]000 entries/)).toBeInTheDocument();
   });
 
+  it("offers older entries after a full page even when the estimated total is low", async () => {
+    tables({ data: Array.from({ length: 50 }, (_, i) => entry({ id: `l${i}` })), count: 40 });
+    render(await AdminAuditLogPage({ searchParams: Promise.resolve({}) }));
+    expect(screen.getByRole("link", { name: "Older entries" })).toHaveAttribute(
+      "href",
+      "/admin/audit-log?page=2"
+    );
+  });
+
+  it("matches the action prefix literally, not with _ as a wildcard", async () => {
+    const audit = tables({ data: [], count: 0 });
+    render(await AdminAuditLogPage({ searchParams: Promise.resolve({ action: "dsar_" }) }));
+    expect(audit.ilike).toHaveBeenCalledWith("action", "dsar\\_%");
+  });
+
   it("says when a filter matches nothing, and how to clear it", async () => {
     tables({ data: [], count: 0 });
     render(await AdminAuditLogPage({ searchParams: Promise.resolve({ type: "dsar_case" }) }));

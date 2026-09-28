@@ -20,7 +20,14 @@ export type StaffMfaState =
   /** Access is blocked until the staff member enrols or verifies. */
   | { status: "required"; hasFactor: boolean };
 
-const SECOND_FACTOR_METHODS = new Set(["totp", "mfa/totp", "webauthn", "mfa/webauthn", "phone", "mfa/phone"]);
+const SECOND_FACTOR_METHODS = new Set([
+  "totp",
+  "mfa/totp",
+  "webauthn",
+  "mfa/webauthn",
+  "phone",
+  "mfa/phone",
+]);
 
 function lastSecondFactorAt(methods: AMREntry[] | string[]): Date | null {
   let latest = 0;
@@ -32,6 +39,27 @@ function lastSecondFactorAt(methods: AMREntry[] | string[]): Date | null {
   }
   // AMR timestamps are seconds since the epoch.
   return latest > 0 ? new Date(latest * 1000) : null;
+}
+
+/**
+ * `isFeatureEnabled` reports "off" both when the flag is off and when it could
+ * not be read. The kill switch only counts when the flag row is readable and
+ * explicitly off; a failed read keeps enforcement on (fail closed).
+ */
+async function mfaSwitchedOff(): Promise<boolean> {
+  try {
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    const { data, error } = await createAdminClient()
+      .from("feature_flags")
+      .select("enabled, mode")
+      .eq("key", STAFF_MFA_FLAG)
+      .maybeSingle();
+    if (error || !data) return false;
+    const mode = (data as { mode?: string | null }).mode;
+    return mode ? mode === "off" : !(data as { enabled: boolean }).enabled;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -47,7 +75,7 @@ export async function evaluateStaffMfa(
   mfaRequiredAfter: Date,
   now: Date = new Date()
 ): Promise<StaffMfaState> {
-  if (!(await isFeatureEnabled(STAFF_MFA_FLAG))) {
+  if (!(await isFeatureEnabled(STAFF_MFA_FLAG)) && (await mfaSwitchedOff())) {
     return { status: "not_enforced" };
   }
 

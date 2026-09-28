@@ -17,8 +17,6 @@ export const metadata = {
 };
 
 const SHOWN_PER_TYPE = 50;
-/** Matches no row; keeps the claimed-items query the same shape when there are none. */
-const NO_ID = "00000000-0000-0000-0000-000000000000";
 
 type Read<T> = { data: T[] | null; error: { message: string } | null; count?: number | null };
 
@@ -47,10 +45,9 @@ export default async function AdminModerationPage() {
   // The oldest waiting items of each kind with their true totals, plus the
   // items the viewer holds, even beyond the limit.
   const myClaimed = await getMyClaimedItems(user.id, "content");
-  const mine = (type: string) => {
-    const ids = myClaimed.filter((c) => c.type === type).map((c) => c.id);
-    return ids.length ? ids : [NO_ID];
-  };
+  const mine = (type: string) => myClaimed.filter((c) => c.type === type).map((c) => c.id);
+  /** No extra query when the viewer holds nothing of this kind. */
+  const NONE = Promise.resolve({ data: [] as never[], error: null });
   const LISTING_FIELDS =
     "id, title, status, created_at, category, owner_id, description, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, location_suburb, attributes, contact_methods, buyer_verification_required" as const;
   const BUSINESS_FIELDS =
@@ -94,26 +91,34 @@ export default async function AdminModerationPage() {
       .eq("status", "pending")
       .order("created_at", { ascending: true })
       .limit(SHOWN_PER_TYPE),
-    admin
-      .from("listings")
-      .select(LISTING_FIELDS)
-      .eq("status", "pending_moderation")
-      .in("id", mine("listing")),
-    admin
-      .from("businesses")
-      .select(BUSINESS_FIELDS)
-      .eq("status", "pending_moderation")
-      .in("id", mine("business")),
-    admin
-      .from("promotions")
-      .select(PROMOTION_FIELDS)
-      .eq("status", "pending_moderation")
-      .in("id", mine("promotion")),
-    admin
-      .from("content_edit_requests")
-      .select(EDIT_FIELDS)
-      .eq("status", "pending")
-      .in("id", mine("content_edit")),
+    mine("listing").length
+      ? admin
+          .from("listings")
+          .select(LISTING_FIELDS)
+          .eq("status", "pending_moderation")
+          .in("id", mine("listing"))
+      : NONE,
+    mine("business").length
+      ? admin
+          .from("businesses")
+          .select(BUSINESS_FIELDS)
+          .eq("status", "pending_moderation")
+          .in("id", mine("business"))
+      : NONE,
+    mine("promotion").length
+      ? admin
+          .from("promotions")
+          .select(PROMOTION_FIELDS)
+          .eq("status", "pending_moderation")
+          .in("id", mine("promotion"))
+      : NONE,
+    mine("content_edit").length
+      ? admin
+          .from("content_edit_requests")
+          .select(EDIT_FIELDS)
+          .eq("status", "pending")
+          .in("id", mine("content_edit"))
+      : NONE,
   ]);
   const listingsResult = withClaimed(listingsOldest, listingsMine);
   const businessesResult = withClaimed(businessesOldest, businessesMine);

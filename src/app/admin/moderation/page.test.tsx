@@ -177,12 +177,16 @@ describe("AdminModerationPage", () => {
     expect(listingQuery?.select).toHaveBeenCalledWith(expect.stringContaining("video_thumbnail"), {
       count: "exact",
     });
-    expect(businessQuery?.select).toHaveBeenCalledWith(expect.stringContaining("business_details"));
-    expect(businessQuery?.select).toHaveBeenCalledWith(expect.stringContaining("cover_photo"));
-    expect(businessQuery?.select).toHaveBeenCalledWith(
-      expect.stringContaining("payment_methods_accepted")
+    const counted = { count: "exact" };
+    for (const field of ["business_details", "cover_photo", "payment_methods_accepted"]) {
+      expect(businessQuery?.select).toHaveBeenCalledWith(expect.stringContaining(field), counted);
+    }
+    expect(promotionQuery?.select).toHaveBeenCalledWith(
+      expect.stringContaining("video_thumbnail"),
+      counted
     );
-    expect(promotionQuery?.select).toHaveBeenCalledWith(expect.stringContaining("video_thumbnail"));
+    // Nothing held: no extra queries for claimed items.
+    expect(listingQuery?.in).not.toHaveBeenCalled();
   });
 
   it("shows a warning when one moderation area fails to load instead of silently dropping it", async () => {

@@ -1,21 +1,42 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { rpc, getUserById, updateUserById, userSummary, sendNotice, logAuditEvent } = vi.hoisted(
-  () => ({
-    rpc: vi.fn(),
-    getUserById: vi.fn(),
-    updateUserById: vi.fn(),
-    userSummary: vi.fn(),
-    sendNotice: vi.fn(),
-    logAuditEvent: vi.fn(),
-  })
-);
+const {
+  rpc,
+  getUserById,
+  updateUserById,
+  userSummary,
+  sendNotice,
+  sendDsarExtension,
+  logAuditEvent,
+  tableRow,
+  tableUpdate,
+} = vi.hoisted(() => ({
+  rpc: vi.fn(),
+  sendDsarExtension: vi.fn(),
+  tableRow: vi.fn(),
+  tableUpdate: vi.fn(),
+  getUserById: vi.fn(),
+  updateUserById: vi.fn(),
+  userSummary: vi.fn(),
+  sendNotice: vi.fn(),
+  logAuditEvent: vi.fn(),
+}));
 
 vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: () => ({ rpc, auth: { admin: { getUserById, updateUserById } } }),
+  createAdminClient: () => ({
+    rpc,
+    auth: { admin: { getUserById, updateUserById } },
+    from: (table: string) => ({
+      select: () => ({ eq: () => ({ maybeSingle: () => tableRow(table) }) }),
+      update: (values: unknown) => ({ eq: () => tableUpdate(table, values) }),
+    }),
+  }),
 }));
 vi.mock("@/lib/supabase/auth-admin-user", () => ({ getAuthAdminUserSummary: userSummary }));
-vi.mock("@/lib/services/email", () => ({ sendModerationNoticeEmail: sendNotice }));
+vi.mock("@/lib/services/email", () => ({
+  sendModerationNoticeEmail: sendNotice,
+  sendDsarExtensionEmail: sendDsarExtension,
+}));
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent }));
 
 import { runOperationJobs } from "./operation-jobs";
@@ -44,6 +65,9 @@ describe("runOperationJobs", () => {
     vi.clearAllMocks();
     userSummary.mockResolvedValue({ email: "member@example.com", accountName: "Thando" });
     sendNotice.mockResolvedValue({ success: true });
+    sendDsarExtension.mockResolvedValue({ success: true });
+    tableRow.mockResolvedValue({ data: null, error: null });
+    tableUpdate.mockResolvedValue({ error: null });
   });
 
   it("sends a notice with the reason and reports success", async () => {
@@ -127,6 +151,63 @@ describe("runOperationJobs", () => {
     expect(updateUserById).toHaveBeenCalledWith("u", {
       app_metadata: { provider: "email", role: "member" },
     });
+  });
+
+  it("writes the role the person holds now, not the one queued earlier", async () => {
+    jobs([
+      {
+        id: "job-3",
+        kind: "auth_metadata_sync",
+        attempts: 2,
+        decision_id: null,
+        payload: { user_id: "u", role: "moderator" },
+      },
+    ]);
+    // Demoted after this job was queued.
+    tableRow.mockResolvedValue({ data: null, error: null });
+    getUserById.mockResolvedValue({
+      data: { user: { app_metadata: { role: "moderator" } } },
+      error: null,
+    });
+    updateUserById.mockResolvedValue({ error: null });
+    await runOperationJobs();
+    expect(updateUserById).toHaveBeenCalledWith("u", { app_metadata: { role: "member" } });
+  });
+
+  it("never emails a data-request extension twice", async () => {
+    const extension = {
+      id: "job-4",
+      kind: "email_notice",
+      attempts: 2,
+      decision_id: null,
+      payload: {
+        template: "dsar_extension",
+        case_id: "11111111-2222-4333-8444-555555555555",
+        email: "subject@example.com",
+        due: "2026-11-01T00:00:00Z",
+        reason: "Records are held in two systems",
+      },
+    };
+    jobs([extension]);
+    tableRow.mockResolvedValue({
+      data: { extension_notified_at: "2026-10-01T00:00:00Z" },
+      error: null,
+    });
+    const already = await runOperationJobs();
+    expect(sendDsarExtension).not.toHaveBeenCalled();
+    expect(already.succeeded).toBe(1);
+
+    // Sent, but recording it failed: the job still succeeds so it is not resent.
+    tableRow.mockResolvedValue({ data: { extension_notified_at: null }, error: null });
+    tableUpdate.mockResolvedValue({ error: { message: "timeout" } });
+    rpc.mockImplementation(async (fn: string, args?: { p_ok?: boolean }) =>
+      fn === "claim_operation_jobs"
+        ? { data: [extension], error: null }
+        : { data: args?.p_ok ? "succeeded" : "retrying", error: null }
+    );
+    const sent = await runOperationJobs();
+    expect(sendDsarExtension).toHaveBeenCalledTimes(1);
+    expect(sent.succeeded).toBe(1);
   });
 
   it("throws when jobs cannot be claimed", async () => {

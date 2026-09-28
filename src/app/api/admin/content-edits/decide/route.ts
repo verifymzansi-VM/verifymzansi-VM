@@ -205,7 +205,6 @@ export async function POST(request: Request) {
       });
 
       await releaseDecidedClaim(guard.user.id, claimItem);
-      await releaseDecidedClaim(guard.user.id, claimItem);
       return NextResponse.json({ success: true, decision });
     }
 

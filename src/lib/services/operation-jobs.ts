@@ -51,6 +51,16 @@ async function sendDsarExtensionNotice(job: OperationJob): Promise<void> {
   const reason = str(job.payload.reason);
   if (!caseId || !email || !due || !reason) throw new Error("Unusable DSAR extension payload");
 
+  const admin = createAdminClient();
+  const { data: current, error: readError } = await admin
+    .from("dsar_cases")
+    .select("extension_notified_at")
+    .eq("id", caseId)
+    .maybeSingle();
+  if (readError) throw new Error(`Could not read the case: ${readError.message}`);
+  // Already sent on an earlier attempt: never email the requester twice.
+  if (current?.extension_notified_at) return;
+
   const result = await sendDsarExtensionEmail(
     email,
     `DSAR-${caseId.slice(0, 8).toUpperCase()}`,
@@ -59,11 +69,15 @@ async function sendDsarExtensionNotice(job: OperationJob): Promise<void> {
   );
   if (!result.success) throw new Error(result.error ?? "Email provider refused the notice");
 
-  const { error } = await createAdminClient()
+  const { error } = await admin
     .from("dsar_cases")
     .update({ extension_notified_at: new Date().toISOString() })
     .eq("id", caseId);
-  if (error) throw new Error(`Notice sent but not recorded: ${error.message}`);
+  if (error) {
+    // The email went out. Failing the job would send it again on retry, so
+    // record the gap instead; the case keeps showing "notice pending".
+    log.error("DSAR extension notice sent but not recorded", { caseId, error: error.message });
+  }
 }
 
 async function sendNotice(job: OperationJob): Promise<void> {
@@ -116,10 +130,19 @@ async function sendNotice(job: OperationJob): Promise<void> {
 
 async function syncAuthMetadata(job: OperationJob): Promise<void> {
   const userId = str(job.payload.user_id);
-  const role = str(job.payload.role);
-  if (!userId || !role) throw new Error("Unusable metadata payload");
+  if (!userId) throw new Error("Unusable metadata payload");
 
+  // Write the role as it is now, not as it was when the job was queued, so a
+  // late retry never restores an older role over a newer change.
   const admin = createAdminClient();
+  const { data: staff, error: staffError } = await admin
+    .from("staff_roles")
+    .select("role, status")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (staffError) throw new Error(`Could not read the current role: ${staffError.message}`);
+  const role = staff?.status === "active" ? staff.role : "member";
+
   const { data, error: readError } = await admin.auth.admin.getUserById(userId);
   if (readError || !data?.user) throw new Error(readError?.message ?? "User not found");
   const { error } = await admin.auth.admin.updateUserById(userId, {

@@ -69,7 +69,8 @@ export default async function AdminAuditLogPage({
     .select("*", { count: filtered ? "exact" : "estimated" })
     .order("created_at", { ascending: false })
     .order("id", { ascending: false });
-  if (filters.action) query = query.ilike("action", `${filters.action}%`);
+  // "_" is a LIKE wildcard; action names use it literally (e.g. "dsar_").
+  if (filters.action) query = query.ilike("action", `${filters.action.replace(/_/g, "\\_")}%`);
   if (filters.target && UUID.test(filters.target)) query = query.eq("target_id", filters.target);
   if (filters.actor && UUID.test(filters.actor)) query = query.eq("actor_id", filters.actor);
   if (filters.type) query = query.eq("target_type", filters.type);
@@ -87,6 +88,8 @@ export default async function AdminAuditLogPage({
     createLogger("AdminAuditLog").error("Audit log read failed", { error: error.message });
   }
   const total = count ?? logs?.length ?? 0;
+  // An estimated total can be low, so a full page always offers older entries.
+  const hasOlder = logs?.length === PAGE_SIZE && (!filtered || page * PAGE_SIZE < total);
   const hrefFor = (nextPage: number) => {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(filters)) if (value) params.set(key, value);
@@ -271,14 +274,14 @@ export default async function AdminAuditLogPage({
         </div>
       )}
 
-      {!error && (page > 1 || page * PAGE_SIZE < total) && (
+      {!error && (page > 1 || hasOlder) && (
         <nav aria-label="Audit log pages" className="flex gap-4">
           {page > 1 && (
             <Link href={hrefFor(page - 1)} className="underline">
               Newer entries
             </Link>
           )}
-          {page * PAGE_SIZE < total && logs?.length === PAGE_SIZE && (
+          {hasOlder && (
             <Link href={hrefFor(page + 1)} className="underline">
               Older entries
             </Link>

@@ -116,7 +116,7 @@ export default async function PaymentsAdminPage({
               Newer payments
             </Link>
           )}
-          {rows.length === PAGE_SIZE && page * PAGE_SIZE < total && (
+          {rows.length === PAGE_SIZE && (!status || page * PAGE_SIZE < total) && (
             <Link href={hrefFor(page + 1)} className="underline">
               Older payments
             </Link>

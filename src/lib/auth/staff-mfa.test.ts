@@ -1,7 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { isFeatureEnabled } = vi.hoisted(() => ({ isFeatureEnabled: vi.fn() }));
+const { isFeatureEnabled, flagRow } = vi.hoisted(() => ({
+  isFeatureEnabled: vi.fn(),
+  flagRow: vi.fn(),
+}));
 vi.mock("@/lib/services/feature-flags", () => ({ isFeatureEnabled }));
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: () => ({
+    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: flagRow }) }) }),
+  }),
+}));
 
 import { evaluateStaffMfa, hasRecentSecondFactor, STAFF_MFA_FLAG } from "./staff-mfa";
 
@@ -29,13 +37,23 @@ describe("evaluateStaffMfa", () => {
     isFeatureEnabled.mockResolvedValue(true);
   });
 
-  it("does nothing when the enforcement flag is off", async () => {
+  it("does nothing when the enforcement flag is switched off", async () => {
     isFeatureEnabled.mockResolvedValue(false);
+    flagRow.mockResolvedValue({ data: { enabled: false, mode: "off" }, error: null });
     const supabase = aal("aal1", "aal1");
     await expect(evaluateStaffMfa(supabase, GRACE_OVER, NOW)).resolves.toEqual({
       status: "not_enforced",
     });
     expect(isFeatureEnabled).toHaveBeenCalledWith(STAFF_MFA_FLAG);
+  });
+
+  it("keeps enforcing when the flag cannot be read", async () => {
+    isFeatureEnabled.mockResolvedValue(false);
+    flagRow.mockResolvedValue({ data: null, error: { message: "timeout" } });
+    await expect(evaluateStaffMfa(aal("aal1", "aal1"), GRACE_OVER, NOW)).resolves.toEqual({
+      status: "required",
+      hasFactor: false,
+    });
   });
 
   it("records when the second factor was last verified", async () => {
