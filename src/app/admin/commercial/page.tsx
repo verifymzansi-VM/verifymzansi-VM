@@ -1,5 +1,6 @@
 import { requireStaff } from "@/lib/auth/require-staff";
 import Link from "next/link";
+import { PageHeader } from "@/components/layout/page-header";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveCommercialSettings } from "@/lib/commercial/settings";
 import {
@@ -27,20 +28,20 @@ export default async function CommercialSettingsPage() {
   if (settings.error || plans.error) throw new Error("Unable to load commercial settings");
 
   return (
-    <div className="space-y-6 p-4">
-      <div>
-        <h1 className="text-2xl font-bold">Commercial Settings</h1>
-        <p className="text-sm text-muted-foreground">
-          Prices, trial durations, programme ceilings, commission and fair-use limits. Every change
-          needs a reason and is written to the audit log. 30-day trial capacity and toggles are
-          managed in{" "}
-          <Link className="underline" href="/admin/trials">
-            Free Posts &amp; Trials
-          </Link>
-          . Event price: <strong>Free</strong> by policy — events never use paid slots or trials;
-          control them with the free event fair-use limits and per-account allowances.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Commercial Settings"
+        description="Prices, trial durations, programme ceilings, commission and fair-use limits. Every change needs a reason and is written to the audit log."
+        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Commercial Settings" }]}
+      />
+      <p className="text-sm text-muted-foreground">
+        30-day trial capacity and switches are managed in{" "}
+        <Link className="underline" href="/admin/trials">
+          Free Posts &amp; Trials
+        </Link>
+        . Events are <strong>free</strong> by policy: they never use paid slots or trials, and are
+        controlled with the free event fair-use limits and per-account allowances.
+      </p>
       <CommercialSettingsPanel
         settings={resolveCommercialSettings(settings.data)}
         plans={(plans.data ?? []) as AdminPlanRow[]}

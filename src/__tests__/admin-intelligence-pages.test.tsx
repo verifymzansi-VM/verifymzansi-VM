@@ -177,63 +177,43 @@ describe("admin intelligence page regressions", () => {
     expect(mockAdminFrom).not.toHaveBeenCalledWith("flagged_content");
   });
 
-  it("sums payment revenue from amount_cents", async () => {
-    const paymentQueries: Array<ReturnType<typeof createQuery>> = [];
+  it("shows revenue from the database summary without reading payment rows", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: {
+        transactions: 10,
+        completed_count: 8,
+        completed_cents: 5000,
+        failed_count: 2,
+        failed_cents: 500,
+        pending_cents: 0,
+        by_area: [{ area: "MZANSI_MARKET", cents: 5000 }],
+        by_month: [{ month: "2026-09", cents: 5000 }],
+        invoice_vat_cents: 650,
+        invoice_total_cents: 5000,
+      },
+      error: null,
+    });
+    mockCreateAdminClient.mockReturnValue({ from: mockAdminFrom, rpc });
 
-    mockAdminFrom.mockImplementation((table: string) => {
-      if (table === "invoices") {
-        return createQuery({ data: [{ amount_cents: 4350, vat_cents: 650, total_cents: 5000 }] });
-      }
+    render(await IntelligenceRevenuePage());
 
-      if (table !== "payments") {
-        throw new Error(`Unexpected table ${table}`);
-      }
+    expect(rpc).toHaveBeenCalledWith("revenue_summary");
+    expect(mockAdminFrom).not.toHaveBeenCalled();
+    expectMetric("R 50.00");
+    expectMetric("10");
+    expectMetric("80%");
+    expectMetric("R 5.00 not captured");
+  });
 
-      const callCount = mockAdminFrom.mock.calls.length;
-      if (callCount === 1) {
-        const query = createQuery({ count: 10 });
-        paymentQueries.push(query);
-        return query;
-      }
-      if (callCount === 2) {
-        const query = createQuery({
-          data: [
-            { amount_cents: 1250 },
-            { amount_cents: 3750 },
-            { amount_cents: 0 },
-            { amount_cents: 0 },
-            { amount_cents: 0 },
-            { amount_cents: 0 },
-            { amount_cents: 0 },
-            { amount_cents: 0 },
-          ],
-        });
-        paymentQueries.push(query);
-        return query;
-      }
-      if (callCount === 3) {
-        const query = createQuery({
-          data: [
-            { amount_cents: 500, status: "failed", area: "MZANSI_MARKET" },
-            { amount_cents: 0, status: "failed", area: "MZANSI_MARKET" },
-          ],
-        });
-        paymentQueries.push(query);
-        return query;
-      }
-      const query = createQuery({ data: [] });
-      paymentQueries.push(query);
-      return query;
+  it("shows an error, not zero revenue, when the summary fails", async () => {
+    mockCreateAdminClient.mockReturnValue({
+      from: mockAdminFrom,
+      rpc: vi.fn().mockResolvedValue({ data: null, error: { message: "timeout" } }),
     });
 
     render(await IntelligenceRevenuePage());
 
-    expectMetric("R 50.00");
-    expectMetric("10");
-    expectMetric("80%");
-    expect(paymentQueries[1]?.eq).toHaveBeenCalledWith("status", "complete");
-    expect(paymentQueries[2]?.eq).toHaveBeenCalledWith("status", "failed");
-    expect(paymentQueries[3]?.eq).toHaveBeenCalledWith("status", "pending");
+    expect(screen.getByRole("alert")).toHaveTextContent("does not mean there was no revenue");
   });
 
   it("reads verification metrics from verification_steps", async () => {

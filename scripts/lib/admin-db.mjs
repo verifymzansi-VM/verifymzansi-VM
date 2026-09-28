@@ -37,7 +37,7 @@ export async function createAdminDb() {
   CREATE FUNCTION public.has_any_role(roles text[]) RETURNS boolean LANGUAGE sql STABLE AS $$ SELECT false $$;
   CREATE TABLE public.account_profiles(user_id uuid PRIMARY KEY, account_status account_status NOT NULL DEFAULT 'active',
     suspended_until timestamptz, banned_at timestamptz, ban_reason text, strikes integer NOT NULL DEFAULT 0,
-    legal_hold boolean NOT NULL DEFAULT false, account_verification_status text, updated_at timestamptz DEFAULT now());
+    legal_hold boolean NOT NULL DEFAULT false, account_verification_status text, display_name text, updated_at timestamptz DEFAULT now());
   CREATE FUNCTION public.guard_account_enforcement_columns() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
   CREATE TRIGGER guard_account_enforcement_columns BEFORE UPDATE ON public.account_profiles
     FOR EACH ROW EXECUTE FUNCTION public.guard_account_enforcement_columns();

@@ -1,7 +1,11 @@
 import { requireStaff } from "@/lib/auth/require-staff";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { roleHasCapability } from "@/lib/auth/admin-access";
+import Link from "next/link";
 import { PaymentsPanel, type AdminPaymentRow } from "@/components/admin/commercial/partners-panel";
+import { PageHeader } from "@/components/layout/page-header";
+
+const PAGE_SIZE = 50;
 
 export const metadata = { title: "Payments & Refunds" };
 export const dynamic = "force-dynamic";
@@ -23,19 +27,25 @@ function describe(providerData: unknown): string {
 export default async function PaymentsAdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; page?: string }>;
 }) {
   const { role } = await requireStaff("bi:view");
   const canRefund = roleHasCapability(role, "payments:refund");
 
-  const { status } = await searchParams;
+  const params = await searchParams;
+  const status = params.status && /^[a-z_]{3,20}$/.test(params.status) ? params.status : undefined;
+  const parsedPage = Number(params.page || 1);
+  const page =
+    Number.isSafeInteger(parsedPage) && parsedPage > 0 ? Math.min(parsedPage, 100_000) : 1;
   let query = createAdminClient()
     .from("payments")
-    .select("id, user_id, area, amount_cents, status, created_at, provider_data")
+    .select("id, user_id, area, amount_cents, status, created_at, provider_data", {
+      count: status ? "exact" : "estimated",
+    })
     .order("created_at", { ascending: false })
-    .limit(200);
-  if (status && /^[a-z_]{3,20}$/.test(status)) query = query.eq("status", status);
-  const { data, error } = await query;
+    .order("id", { ascending: false });
+  if (status) query = query.eq("status", status);
+  const { data, error, count } = await query.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
   if (error) throw new Error("Unable to load payments");
 
   const rows: AdminPaymentRow[] = (data ?? []).map((row) => ({
@@ -48,9 +58,22 @@ export default async function PaymentsAdminPage({
     description: describe(row.provider_data),
   }));
 
+  const total = count ?? rows.length;
+  const hrefFor = (nextPage: number) => {
+    const query = new URLSearchParams();
+    if (status) query.set("status", status);
+    if (nextPage > 1) query.set("page", String(nextPage));
+    const qs = query.toString();
+    return qs ? `/admin/payments?${qs}` : "/admin/payments";
+  };
+
   return (
-    <div className="space-y-6 p-4">
-      <h1 className="text-2xl font-bold">Payments &amp; Refunds</h1>
+    <div className="space-y-6">
+      <PageHeader
+        title="Payments & Refunds"
+        description="Newest first. Refunds and chargebacks are for admins only."
+        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Payments & Refunds" }]}
+      />
       <form method="get" className="flex flex-wrap items-end gap-2 text-sm">
         <label>
           Status
@@ -80,7 +103,26 @@ export default async function PaymentsAdminPage({
           Filter
         </button>
       </form>
+      <p className="text-sm text-muted-foreground">
+        {status ? "" : "About "}
+        {total.toLocaleString("en-ZA")} {total === 1 ? "payment" : "payments"}
+        {total > PAGE_SIZE && ` · Page ${page} of ${Math.ceil(total / PAGE_SIZE)}`}
+      </p>
       <PaymentsPanel payments={rows} canRefund={canRefund} />
+      {(page > 1 || rows.length === PAGE_SIZE) && (
+        <nav aria-label="Payment pages" className="flex gap-4 text-sm">
+          {page > 1 && (
+            <Link href={hrefFor(page - 1)} className="underline">
+              Newer payments
+            </Link>
+          )}
+          {rows.length === PAGE_SIZE && page * PAGE_SIZE < total && (
+            <Link href={hrefFor(page + 1)} className="underline">
+              Older payments
+            </Link>
+          )}
+        </nav>
+      )}
     </div>
   );
 }

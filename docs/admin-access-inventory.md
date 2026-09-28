@@ -143,6 +143,42 @@ Legend for "Authorised by":
   would drift from them. Page and menu access comes from the capability map in
   `src/lib/auth/roles.ts`.
 
+## Status after Phase 5 (sub-page fixes and cleanup)
+
+- **Queues show what you hold.** The verification and moderation queues always
+  load the items the viewer has claimed, even when they fall beyond the page's
+  limit (claims take the highest-risk or oldest items, which may not be among
+  those shown). Both show the true total with "Showing X of Y", and a failed
+  read shows an error rather than an empty queue.
+- **No writes from staff pages.** The verification queue no longer creates
+  account profiles or calls the Auth admin API once per member; a missing name
+  shows as "New Member".
+- **Paging with totals:**
+  - audit log: 50 per page, filters kept, a link to clear filters, and a notice
+    when an ID filter is not a full ID
+  - staff roles: 50 per page, with a filter by role
+  - payments: 50 per page, so older payments can be found and refunded
+- **Totals computed in the database** (migration
+  `20260929130000_admin_list_helpers.sql`):
+  - `staff_directory`: names and emails in one query (was one Auth call per
+    person on the roles page)
+  - `organisation_list_counts` and `partner_referral_counts` (were reads of
+    every active affiliation, sponsorship, application and referred account)
+  - `revenue_summary` (was a read of every payment and invoice, 1,000 rows at a
+    time, with errors ignored)
+  - `trial_entitlements_for` (was one call per search result on Programmes)
+- **Area pages** filter reports by area in the database instead of taking the
+  first 100 across all areas.
+- **Removed.** `POST /api/admin/promotions/[id]/moderate`: no caller, and it
+  skipped the claim and self-review checks that `content/decide` enforces.
+- **`/admin/tourism-events`** now redirects to `/admin/promotions-events`.
+- **Consistent pages.** The admin error page no longer draws a second header
+  inside the admin layout. Commercial, organisations, partners, payments and
+  programmes use the standard page header.
+- **Rollout.** The old dashboard was removed in Phase 4, so there is no flag to
+  switch back to it. Roll back a release with `git revert` of the Phase 4
+  commit; the database changes are additive and safe to keep.
+
 ## Gates in front of every admin request
 
 | Layer                   | File                                                | Check                                                                                      |
@@ -194,7 +230,6 @@ Legend for "Authorised by":
 | `governance/appeal`                  | POST      | Guard `appeal:decide`                                                                                                | overturn does not reverse enforcement                                                                        |
 | `governance/decide`                  | POST      | Guard `decision:approve`                                                                                             | secondary approver is a typed user ID                                                                        |
 | `governance/roles`                   | POST      | DB admin                                                                                                             | fail-closed limiter added in Phase 0                                                                         |
-| `promotions/[id]/moderate`           | POST      | DB any staff                                                                                                         | no UI caller; duplicates `content/decide`                                                                    |
 | `support/update`                     | POST      | Guard `case:recommend`                                                                                               |                                                                                                              |
 | `trials`                             | POST      | Guard `trials:manage`                                                                                                |                                                                                                              |
 | `verification/decide`                | POST      | DB any staff                                                                                                         | no self-review check; high-risk override is single-person; fail-closed limiter on overrides added in Phase 0 |

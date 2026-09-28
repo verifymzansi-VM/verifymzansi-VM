@@ -3,9 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { staffGuard } from "@/test/staff-guard";
 import AdminAuditLogPage from "./page";
 
-const { mockGetUser, mockSessionFrom, mockAdminFrom, redirectMock } = vi.hoisted(() => ({
-  mockGetUser: vi.fn(),
-  mockSessionFrom: vi.fn(),
+const { mockAdminFrom, redirectMock } = vi.hoisted(() => ({
   mockAdminFrom: vi.fn(),
   redirectMock: vi.fn(),
 }));
@@ -14,108 +12,124 @@ vi.mock(
   "@/lib/auth/require-staff",
   async () => (await import("@/test/staff-guard")).staffGuardModule
 );
-
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(async () => ({
-    auth: {
-      getUser: mockGetUser,
-    },
-    from: mockSessionFrom,
-  })),
-}));
-
 vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: vi.fn(() => ({
-    from: mockAdminFrom,
-  })),
+  createAdminClient: vi.fn(() => ({ from: mockAdminFrom })),
 }));
-
-vi.mock("@/lib/auth/admin-access", () => ({
-  verifyCapabilityFromDb: vi.fn(async () => true),
-}));
-
-vi.mock("next/navigation", () => ({
-  redirect: redirectMock,
-}));
-
+vi.mock("next/navigation", () => ({ redirect: redirectMock }));
 vi.mock("@/components/layout/page-header", () => ({
-  PageHeader: ({ title, description }: { title: string; description: string }) => (
-    <div>
-      <h1>{title}</h1>
-      <p>{description}</p>
-    </div>
-  ),
+  PageHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
 }));
+
+type Result = { data: unknown[] | null; count?: number | null; error?: { message: string } | null };
+
+/** audit_logs resolves at .range(); account_profiles at .in(). */
+function tables(result: Result, names: Array<{ user_id: string; display_name: string }> = []) {
+  const audit: Record<string, ReturnType<typeof vi.fn>> = {};
+  for (const m of ["select", "order", "ilike", "eq", "gte", "lt"]) audit[m] = vi.fn(() => audit);
+  audit.range = vi.fn().mockResolvedValue({ count: null, error: null, ...result });
+  mockAdminFrom.mockImplementation((table: string) =>
+    table === "audit_logs"
+      ? audit
+      : { select: () => ({ in: vi.fn().mockResolvedValue({ data: names }) }) }
+  );
+  return audit;
+}
+
+const entry = (overrides: Record<string, unknown> = {}) => ({
+  id: "log-1",
+  action: "dsar_completed",
+  actor_id: "admin-1",
+  target_type: "dsar_case",
+  metadata: {},
+  created_at: "2026-03-17T10:00:00.000Z",
+  ...overrides,
+});
 
 describe("AdminAuditLogPage", () => {
   beforeEach(() => {
     staffGuard.reset();
     vi.clearAllMocks();
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: "admin-1", app_metadata: { role: "admin" } } },
-    });
   });
 
-  it("reads audit logs through the admin client after auth gating", async () => {
-    mockAdminFrom.mockImplementation((table: string) => {
-      if (table === "audit_logs") {
-        return {
-          select: vi.fn().mockReturnValue({
-            order: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue({
-                data: [
-                  {
-                    id: "log-1",
-                    action: "dsar_completed",
-                    actor_id: "admin-1",
-                    target_type: "dsar_case",
-                    metadata: { requestId: "req-1" },
-                    created_at: "2026-03-17T10:00:00.000Z",
-                  },
-                ],
-              }),
-            }),
-          }),
-        };
-      }
-      // account_profiles lookup for actor names
-      return {
-        select: vi.fn().mockReturnValue({
-          in: vi.fn().mockResolvedValue({
-            data: [{ user_id: "admin-1", display_name: "Admin User" }],
-          }),
-        }),
-      };
-    });
+  it("needs audit:view", async () => {
+    tables({ data: [] });
+    render(await AdminAuditLogPage({ searchParams: Promise.resolve({}) }));
+    expect(staffGuard.requireStaff).toHaveBeenCalledWith("audit:view");
+  });
+
+  it("shows entries with the actor's name, and system events without crashing", async () => {
+    tables(
+      {
+        data: [entry(), entry({ id: "log-2", action: "expire_due_items", actor_id: null })],
+        count: 2,
+      },
+      [{ user_id: "admin-1", display_name: "Admin User" }]
+    );
 
     render(await AdminAuditLogPage({ searchParams: Promise.resolve({}) }));
 
-    expect(mockSessionFrom).not.toHaveBeenCalled();
-    expect(mockAdminFrom).toHaveBeenCalledWith("audit_logs");
     expect(screen.getByText("dsar_completed")).toBeInTheDocument();
-    expect(screen.getByText(/Admin User/i)).toBeInTheDocument();
+    expect(screen.getByText(/Admin User/)).toBeInTheDocument();
+    expect(screen.getByText(/System/)).toBeInTheDocument();
   });
 
-  it("shows the empty state when there are no audit entries", async () => {
-    mockAdminFrom.mockImplementation((table: string) => {
-      if (table === "audit_logs") {
-        return {
-          select: vi.fn().mockReturnValue({
-            order: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue({ data: [] }),
-            }),
-          }),
-        };
-      }
-      return {
-        select: vi.fn().mockReturnValue({
-          in: vi.fn().mockResolvedValue({ data: [] }),
-        }),
-      };
+  it("pages through every entry, keeping the filters", async () => {
+    const audit = tables({
+      data: Array.from({ length: 50 }, (_, i) => entry({ id: `l${i}` })),
+      count: 120,
     });
 
-    render(await AdminAuditLogPage({ searchParams: Promise.resolve({}) }));
+    render(
+      await AdminAuditLogPage({ searchParams: Promise.resolve({ action: "dsar_", page: "2" }) })
+    );
 
+    expect(audit.range).toHaveBeenCalledWith(50, 99);
+    expect(audit.select).toHaveBeenCalledWith("*", { count: "exact" });
+    expect(screen.getByText(/120 entries · Page 2 of 3/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Older entries" })).toHaveAttribute(
+      "href",
+      "/admin/audit-log?action=dsar_&page=3"
+    );
+    expect(screen.getByRole("link", { name: "Newer entries" })).toHaveAttribute(
+      "href",
+      "/admin/audit-log?action=dsar_"
+    );
+  });
+
+  it("estimates the unfiltered total rather than counting the whole table", async () => {
+    const audit = tables({ data: [entry()], count: 90_000 });
+    render(await AdminAuditLogPage({ searchParams: Promise.resolve({}) }));
+    expect(audit.select).toHaveBeenCalledWith("*", { count: "estimated" });
+    expect(screen.getByText(/About 90[\s,]000 entries/)).toBeInTheDocument();
+  });
+
+  it("says when a filter matches nothing, and how to clear it", async () => {
+    tables({ data: [], count: 0 });
+    render(await AdminAuditLogPage({ searchParams: Promise.resolve({ type: "dsar_case" }) }));
+    expect(screen.getByText(/No audit entries match these filters/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Clear the filters" })).toHaveAttribute(
+      "href",
+      "/admin/audit-log"
+    );
+  });
+
+  it("explains an ID filter it could not use instead of ignoring it", async () => {
+    const audit = tables({ data: [], count: 0 });
+    render(await AdminAuditLogPage({ searchParams: Promise.resolve({ actor: "not-an-id" }) }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Staff / actor ID must be a full ID");
+    expect(audit.eq).not.toHaveBeenCalledWith("actor_id", expect.anything());
+  });
+
+  it("shows an error, not an empty log, when the read fails", async () => {
+    tables({ data: null, error: { message: "timeout" } });
+    render(await AdminAuditLogPage({ searchParams: Promise.resolve({}) }));
+    expect(screen.getByRole("alert")).toHaveTextContent("could not be loaded");
+    expect(screen.queryByText("No audit entries recorded yet.")).not.toBeInTheDocument();
+  });
+
+  it("shows the empty state when nothing has been recorded", async () => {
+    tables({ data: [], count: 0 });
+    render(await AdminAuditLogPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("No audit entries recorded yet.")).toBeInTheDocument();
   });
 });

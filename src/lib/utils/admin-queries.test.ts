@@ -149,72 +149,82 @@ describe("admin-queries", () => {
       expect(result[0].primary_step_type).toBe("id_doc");
     });
 
-    it("repairs missing display names using ensureAccountProfile fallback", async () => {
-      const steps = [
-        {
-          id: "s1",
-          user_id: "u-repair",
-          step_type: "id_doc",
-          status: "pending",
-          created_at: "2024-01-03T00:00:00.000Z",
-          reviewed_at: null,
-          risk_level: null,
-          risk_score: null,
-          auto_status: null,
-        },
-      ];
-
+    it("never writes from a staff page: a missing name shows as New Member", async () => {
       let callCount = 0;
       mockFrom.mockImplementation(() => {
         callCount += 1;
         if (callCount === 1) {
-          return createChainableMock({ data: steps });
-        }
-
-        if (callCount === 2) {
           return createChainableMock({
             data: [
               {
-                user_id: "u-repair",
-                display_name: "   ",
-                account_verification_status: "pending_review",
+                id: "s1",
+                user_id: "u-blank",
+                step_type: "id_doc",
+                status: "pending",
+                created_at: "2024-01-03T00:00:00.000Z",
+                reviewed_at: null,
+                risk_level: null,
+                risk_score: null,
+                auto_status: null,
               },
             ],
           });
         }
-
         return createChainableMock({
-          data: [
-            {
-              user_id: "u-repair",
-              display_name: "Recovered Name",
-              account_verification_status: "pending_review",
-            },
-          ],
+          data: [{ user_id: "u-blank", display_name: "   ", account_verification_status: null }],
         });
-      });
-
-      mockGetUserById.mockResolvedValue({
-        data: {
-          user: {
-            id: "u-repair",
-            email: "recovered@example.com",
-            user_metadata: { display_name: "Recovered Name" },
-          },
-        },
-        error: null,
-      });
-      mockEnsureAccountProfile.mockResolvedValue({
-        id: "profile-repair",
-        display_name: "Recovered Name",
       });
 
       const result = await getPendingVerificationGroups();
 
-      expect(mockGetUserById).toHaveBeenCalledWith("u-repair");
-      expect(mockEnsureAccountProfile).toHaveBeenCalledTimes(1);
-      expect(result).toHaveLength(1);
-      expect(result[0].account_display_name).toBe("Recovered Name");
+      expect(mockGetUserById).not.toHaveBeenCalled();
+      expect(mockEnsureAccountProfile).not.toHaveBeenCalled();
+      expect(result[0].account_display_name).toBe("New Member");
+    });
+
+    it("includes the steps a moderator holds even beyond the limit", async () => {
+      const queries: Array<{ in?: unknown[]; limit?: number }> = [];
+      mockFrom.mockImplementation((table: string) => {
+        const record: { in?: unknown[]; limit?: number } = {};
+        if (table === "verification_steps") queries.push(record);
+        const builder: Record<string, unknown> = {};
+        for (const m of ["select", "eq", "neq", "order"]) builder[m] = () => builder;
+        builder.in = (_col: string, values: unknown[]) => {
+          record.in = values;
+          return builder;
+        };
+        builder.limit = (n: number) => {
+          record.limit = n;
+          return builder;
+        };
+        builder.then = (resolve: (v: unknown) => void) =>
+          resolve({
+            data:
+              table !== "verification_steps"
+                ? []
+                : [
+                    {
+                      id: record.in ? "claimed" : "oldest",
+                      user_id: "u1",
+                      step_type: "id_doc",
+                      created_at: "2024-01-01",
+                    },
+                  ],
+            error: null,
+          });
+        return builder;
+      });
+
+      const result = await getPendingVerifications(1, { includeIds: ["claimed"] });
+
+      expect(result.map((s) => s.id).sort()).toEqual(["claimed", "oldest"]);
+      expect(queries.some((q) => q.limit === 1)).toBe(true);
+      expect(queries.some((q) => (q.in as string[] | undefined)?.includes("claimed"))).toBe(true);
+    });
+
+    it("throws instead of reporting an empty queue when the read fails", async () => {
+      mockFrom.mockReturnValue(createChainableMock({ data: null, error: { message: "timeout" } }));
+      await expect(getPendingVerificationGroups()).rejects.toThrow("could not be read");
     });
   });
 
@@ -290,45 +300,28 @@ describe("admin-queries", () => {
   });
 
   describe("getAreaReports", () => {
-    it("fetches reports by area target type", async () => {
-      mockFrom.mockReturnValue(
-        createChainableMock({ data: [{ id: "r1", status: "open", target_type: "listing" }] })
-      );
-
-      const result = await getAreaReports("MZANSI_MARKET");
-      expect(result).toHaveLength(1);
-      expect(mockFrom).toHaveBeenCalledWith("reports");
-    });
-
-    it("prefers the explicit report area over the target type", async () => {
-      mockFrom.mockReturnValue(
-        createChainableMock({
-          data: [
-            { id: "r1", status: "open", target_type: "listing", area: "MZANSI_BUSINESS" },
-            { id: "r2", status: "open", target_type: "listing", area: "MZANSI_MARKET" },
-          ],
-        })
-      );
-
-      const result = await getAreaReports("MZANSI_MARKET");
-      expect(result).toHaveLength(1);
-      expect(result[0].id).toBe("r2");
-    });
-
-    it("includes business-profile and storefront reports in the Mzansi Business area", async () => {
-      mockFrom.mockReturnValue(
-        createChainableMock({
-          data: [
-            { id: "r1", status: "open", target_type: "business" },
-            { id: "r2", status: "open", target_type: "business_profile" },
-            { id: "r3", status: "open", target_type: "storefront" },
-            { id: "r4", status: "open", target_type: "listing" },
-          ],
-        })
-      );
+    it("filters by area in the database, not after a shared limit", async () => {
+      const eq = vi.fn();
+      const builder: Record<string, unknown> = {};
+      for (const m of ["select", "in", "order", "limit"]) builder[m] = () => builder;
+      builder.eq = (...args: unknown[]) => {
+        eq(...args);
+        return builder;
+      };
+      builder.then = (resolve: (v: unknown) => void) =>
+        resolve({ data: [{ id: "r1", area: "MZANSI_BUSINESS" }], error: null });
+      mockFrom.mockReturnValue(builder);
 
       const result = await getAreaReports("MZANSI_BUSINESS");
-      expect(result.map((r) => r.id)).toEqual(["r1", "r2", "r3"]);
+
+      expect(mockFrom).toHaveBeenCalledWith("reports");
+      expect(eq).toHaveBeenCalledWith("area", "MZANSI_BUSINESS");
+      expect(result).toHaveLength(1);
+    });
+
+    it("throws when reports cannot be read", async () => {
+      mockFrom.mockReturnValue(createChainableMock({ data: null, error: { message: "timeout" } }));
+      await expect(getAreaReports("MZANSI_MARKET")).rejects.toThrow("could not be read");
     });
   });
 

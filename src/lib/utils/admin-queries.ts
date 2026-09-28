@@ -6,7 +6,6 @@ import { toContentEditModerationItem } from "@/lib/content-edit-moderation";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ACCOUNT_PROFILE_WRITE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
-import { ensureAccountProfile } from "@/lib/account/ensure-profile";
 import type { MarketplaceArea } from "@/types/enums";
 
 // ── Types ────────────────────────────────────────────────────
@@ -135,27 +134,56 @@ export async function getRecentOtpAttempts(limit = 12): Promise<RecentOtpAttempt
 
 // ── Queries ──────────────────────────────────────────────────
 
-// ── Dashboard Area Summary ───────────────────────────────────
+const PENDING_STEP_FIELDS =
+  "id, user_id, step_type, status, created_at, updated_at, risk_level, risk_score, auto_status, reviewed_at";
 
-/** Get pending verification steps with account display name */
-export async function getPendingVerifications(limit = 50): Promise<PendingVerification[]> {
+/**
+ * Pending identity checks (the KYC queue: everything except location), oldest
+ * first, with the member's display name. `includeIds` adds specific steps
+ * that may lie beyond `limit`, such as the ones the viewer has claimed.
+ * Throws when the queue cannot be read, so callers never show a failed read
+ * as an empty queue.
+ */
+export async function getPendingVerifications(
+  limit = 50,
+  options: { includeIds?: string[] } = {}
+): Promise<PendingVerification[]> {
   const supabase = createAdminClient();
+  const includeIds = options.includeIds ?? [];
 
-  const { data: steps } = await supabase
-    .from("verification_steps")
-    .select(
-      "id, user_id, step_type, status, created_at, updated_at, risk_level, risk_score, auto_status, reviewed_at"
-    )
-    .eq("status", "pending")
-    .neq("step_type", "location")
-    .order("created_at", { ascending: true })
-    .limit(limit);
+  const [oldest, included] = await Promise.all([
+    supabase
+      .from("verification_steps")
+      .select(PENDING_STEP_FIELDS)
+      .eq("status", "pending")
+      .neq("step_type", "location")
+      .order("created_at", { ascending: true })
+      .limit(limit),
+    includeIds.length
+      ? supabase
+          .from("verification_steps")
+          .select(PENDING_STEP_FIELDS)
+          .eq("status", "pending")
+          .in("id", includeIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (oldest.error || included.error) {
+    throw new Error(
+      `Pending verifications could not be read: ${(oldest.error ?? included.error)?.message}`
+    );
+  }
 
-  if (!steps?.length) return [];
+  const byId = new Map<string, PendingVerificationRow>();
+  for (const step of [
+    ...(included.data ?? []),
+    ...(oldest.data ?? []),
+  ] as PendingVerificationRow[]) {
+    byId.set(step.id, step);
+  }
+  const steps = [...byId.values()];
+  if (!steps.length) return [];
 
-  // Get account profiles for each user
-
-  const userIds = Array.from(new Set(steps.map((s) => s.user_id))) as string[];
+  const userIds = Array.from(new Set(steps.map((s) => s.user_id)));
   const profileMap = await getVerificationProfileMap(
     supabase,
     userIds,
@@ -166,11 +194,27 @@ export async function getPendingVerifications(limit = 50): Promise<PendingVerifi
     const profile = profileMap.get(s.user_id);
     return {
       ...s,
-      account_display_name: profile?.display_name || null,
+      account_display_name: normalizeDisplayName(profile?.display_name),
       account_verification_status: readAccountVerificationStatus(profile),
     };
   });
 }
+
+/** How many identity checks are waiting in total, whatever is shown. */
+export async function countPendingVerifications(): Promise<number> {
+  const { count, error } = await createAdminClient()
+    .from("verification_steps")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "pending")
+    .neq("step_type", "location");
+  if (error) throw new Error(`Pending verifications could not be counted: ${error.message}`);
+  return count ?? 0;
+}
+
+type PendingVerificationRow = Omit<
+  PendingVerification,
+  "account_display_name" | "account_verification_status"
+>;
 
 type VerificationProfileRecord = {
   user_id: string;
@@ -189,6 +233,12 @@ function normalizeDisplayName(value: string | null | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+/**
+ * Account profiles for the given members, in one read. Profiles are created
+ * at sign-in, OTP verification and upload, so a member with a pending step
+ * has one; a missing name shows as "New Member" rather than triggering a
+ * write from a staff page.
+ */
 async function getVerificationProfileMap(
   supabase: ReturnType<typeof createAdminClient>,
   userIds: string[],
@@ -204,46 +254,7 @@ async function getVerificationProfileMap(
     .in("user_id", userIds);
 
   const profileRows = (profiles || []) as unknown as VerificationProfileRecord[];
-  const profileMap = new Map(profileRows.map((profile) => [profile.user_id, profile] as const));
-
-  const missingProfileUserIds = userIds.filter(
-    (userId) => !normalizeDisplayName(profileMap.get(userId)?.display_name)
-  );
-
-  if (missingProfileUserIds.length === 0) {
-    return profileMap;
-  }
-
-  const repairedUserIds = (
-    await Promise.all(
-      missingProfileUserIds.map(async (userId) => {
-        const { data, error } = await supabase.auth.admin.getUserById(userId);
-        if (error || !data.user) {
-          return null;
-        }
-
-        const repairedProfile = await ensureAccountProfile(supabase, data.user);
-        return repairedProfile ? userId : null;
-      })
-    )
-  ).filter((userId): userId is string => Boolean(userId));
-
-  if (repairedUserIds.length === 0) {
-    return profileMap;
-  }
-
-  const { data: repairedProfiles } = await supabase
-    .from(ACCOUNT_PROFILE_WRITE_TABLE)
-    .select(fields)
-    .in("user_id", repairedUserIds);
-
-  const repairedRows = (repairedProfiles || []) as unknown as VerificationProfileRecord[];
-
-  for (const profile of repairedRows) {
-    profileMap.set(profile.user_id, profile);
-  }
-
-  return profileMap;
+  return new Map(profileRows.map((profile) => [profile.user_id, profile] as const));
 }
 
 const VERIFICATION_STEP_DISPLAY_ORDER: Record<string, number> = {
@@ -264,9 +275,10 @@ function sortPendingVerificationSteps(a: PendingVerification, b: PendingVerifica
 }
 
 export async function getPendingVerificationGroups(
-  limit = 50
+  limit = 50,
+  options: { includeIds?: string[] } = {}
 ): Promise<PendingVerificationGroup[]> {
-  const pendingSteps = await getPendingVerifications(limit);
+  const pendingSteps = await getPendingVerifications(limit, options);
 
   if (pendingSteps.length === 0) {
     return [];
@@ -340,28 +352,21 @@ export async function getRecentActivity(limit = 20, area?: string): Promise<Audi
   return (data as AuditLogEntry[]) || [];
 }
 
-/** Get open reports for an area with all needed fields */
+/**
+ * Open and in-progress reports for an area, oldest first. Filtered in the
+ * database (`reports.area` is required), so a busy area never hides another
+ * area's reports behind a shared limit. Throws when the read fails.
+ */
 export async function getAreaReports(area: MarketplaceArea) {
-  const supabase = createAdminClient();
-
-  const targetTypeMap: Record<MarketplaceArea, string[]> = {
-    MZANSI_MARKET: ["listing", "account_profile"],
-    MZANSI_BUSINESS: ["business", "business_profile", "storefront"],
-    PROMOTIONS_EVENTS: ["promotion"],
-  };
-
-  const { data } = await supabase
+  const { data, error } = await createAdminClient()
     .from("reports")
     .select("*")
+    .eq("area", area)
     .in("status", ["open", "in_progress"])
     .order("created_at", { ascending: true })
     .limit(100);
-
-  return (data || []).filter((report) => {
-    const explicitArea = (report as { area?: MarketplaceArea | null }).area;
-    if (explicitArea) return explicitArea === area;
-    return targetTypeMap[area].includes((report as { target_type: string }).target_type);
-  });
+  if (error) throw new Error(`Area reports could not be read: ${error.message}`);
+  return data ?? [];
 }
 
 /** Get content pending moderation for an area */

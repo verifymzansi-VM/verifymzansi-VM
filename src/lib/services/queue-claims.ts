@@ -166,6 +166,28 @@ export async function getClaimsForItems(
   return views;
 }
 
+/**
+ * The items the viewer holds in a queue. Queue screens always load these,
+ * even when they fall outside the page's usual limit, so a moderator can
+ * always see what they have claimed. Empty when claims cannot be read.
+ */
+export async function getMyClaimedItems(
+  viewerId: string,
+  queue: ClaimQueue
+): Promise<Array<{ type: ClaimItemType; id: string }>> {
+  const { data, error } = await createAdminClient()
+    .from("queue_claims")
+    .select("item_type, item_id")
+    .eq("claimed_by", viewerId)
+    .eq("queue", queue)
+    .gt("expires_at", new Date().toISOString());
+  if (error) {
+    log.warn("Could not read the viewer's claims", { error: error.message, queue });
+    return [];
+  }
+  return (data ?? []).map((c) => ({ type: c.item_type as ClaimItemType, id: c.item_id as string }));
+}
+
 /** How many live claims the viewer holds in a queue. */
 export async function countMyClaims(viewerId: string, queue: ClaimQueue): Promise<number> {
   const { count } = await createAdminClient()

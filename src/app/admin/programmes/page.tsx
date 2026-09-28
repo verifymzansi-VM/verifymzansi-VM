@@ -1,6 +1,7 @@
 import { requireStaff } from "@/lib/auth/require-staff";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveCommercialSettings } from "@/lib/commercial/settings";
+import { PageHeader } from "@/components/layout/page-header";
 import {
   ProgrammesPanel,
   type ProgrammeAccount,
@@ -28,14 +29,25 @@ export default async function ProgrammesPage({
       p_search: search,
     });
     if (found.error) throw new Error("Unable to search accounts");
-    accounts = await Promise.all(
-      (
-        (found.data ?? []) as Array<{ user_id: string; display_name: string; email: string | null }>
-      ).map(async (row) => {
-        const kind = await admin.rpc("trial_entitlement_for", { p_user: row.user_id });
-        return { ...row, trialEntitlement: typeof kind.data === "string" ? kind.data : "NONE" };
-      })
+    const matches = (found.data ?? []) as Array<{
+      user_id: string;
+      display_name: string;
+      email: string | null;
+    }>;
+    // Trial entitlements for every result in one call.
+    const kinds = matches.length
+      ? await admin.rpc("trial_entitlements_for", { p_ids: matches.map((row) => row.user_id) })
+      : { data: [] };
+    const kindByUser = new Map(
+      ((kinds.data ?? []) as Array<{ user_id: string; entitlement: string | null }>).map((k) => [
+        k.user_id,
+        k.entitlement,
+      ])
     );
+    accounts = matches.map((row) => ({
+      ...row,
+      trialEntitlement: kindByUser.get(row.user_id) ?? "NONE",
+    }));
   }
 
   const [contracts, settings] = await Promise.all([
@@ -70,25 +82,34 @@ export default async function ProgrammesPage({
     contract_id: string;
     activation_count: number;
   }>;
-  const assignments = entitlementRows.length
-    ? await admin
-        .from("slot_assignments")
-        .select("entitlement_id")
-        .is("released_at", null)
-        .in(
-          "entitlement_id",
-          entitlementRows.map((row) => row.id)
-        )
-    : { data: [] as Array<{ entitlement_id: string }> };
-  const members = entitlementRows.length
-    ? await admin
-        .from("slot_entitlement_members")
-        .select("entitlement_id, user_id")
-        .in(
-          "entitlement_id",
-          entitlementRows.map((row) => row.id)
-        )
-    : { data: [] as Array<{ entitlement_id: string; user_id: string }> };
+  const entitlementIds = entitlementRows.map((row) => row.id);
+  const [assignments, members] = await Promise.all([
+    entitlementIds.length
+      ? admin
+          .from("slot_assignments")
+          .select("entitlement_id")
+          .is("released_at", null)
+          .in("entitlement_id", entitlementIds)
+      : Promise.resolve({ data: [] as Array<{ entitlement_id: string }> }),
+    entitlementIds.length
+      ? admin
+          .from("slot_entitlement_members")
+          .select("entitlement_id, user_id")
+          .in("entitlement_id", entitlementIds)
+      : Promise.resolve({ data: [] as Array<{ entitlement_id: string; user_id: string }> }),
+  ]);
+  const entitlementByContract = new Map(entitlementRows.map((row) => [row.contract_id, row]));
+  const usageByEntitlement = new Map<string, number>();
+  for (const a of assignments.data ?? []) {
+    usageByEntitlement.set(a.entitlement_id, (usageByEntitlement.get(a.entitlement_id) ?? 0) + 1);
+  }
+  const delegatesByEntitlement = new Map<string, string[]>();
+  for (const m of members.data ?? []) {
+    delegatesByEntitlement.set(m.entitlement_id, [
+      ...(delegatesByEntitlement.get(m.entitlement_id) ?? []),
+      m.user_id,
+    ]);
+  }
 
   const names = new Map(
     ((profiles.data ?? []) as Array<{ user_id: string; display_name: string | null }>).map((p) => [
@@ -98,32 +119,23 @@ export default async function ProgrammesPage({
   );
 
   const rows: ProgrammeContract[] = contractRows.map((contract) => {
-    const entitlement = entitlementRows.find((row) => row.contract_id === contract.id);
+    const entitlement = entitlementByContract.get(contract.id);
     return {
       ...contract,
       holderName: contract.user_id ? (names.get(contract.user_id) ?? null) : null,
-      activeUsage: entitlement
-        ? (assignments.data ?? []).filter((a) => a.entitlement_id === entitlement.id).length
-        : 0,
+      activeUsage: entitlement ? (usageByEntitlement.get(entitlement.id) ?? 0) : 0,
       activationCount: entitlement?.activation_count ?? 0,
-      delegateIds: entitlement
-        ? (members.data ?? [])
-            .filter((m) => m.entitlement_id === entitlement.id)
-            .map((m) => m.user_id)
-        : [],
+      delegateIds: entitlement ? (delegatesByEntitlement.get(entitlement.id) ?? []) : [],
     };
   });
 
   return (
-    <div className="space-y-6 p-4">
-      <div>
-        <h1 className="text-2xl font-bold">Programmes &amp; Contracts</h1>
-        <p className="text-sm text-muted-foreground">
-          Invitation-only programmes. Every grant has a ceiling (slots and activations), never
-          renews automatically, and consumes the person&apos;s one free programme unless an audited
-          override is recorded.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Programmes & Contracts"
+        description="Invitation-only programmes. Every grant has a ceiling (slots and activations), never renews automatically, and uses up the person's one free programme unless an audited override is recorded."
+        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Programmes & Contracts" }]}
+      />
       <ProgrammesPanel
         accounts={accounts}
         accountSearch={search}

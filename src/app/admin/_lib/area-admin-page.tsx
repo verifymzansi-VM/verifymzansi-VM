@@ -77,10 +77,17 @@ export async function AreaAdminPage({ area, areaLabel, description }: AreaAdminP
         <Badge variant="outline">{area}</Badge>
       </PageHeader>
 
-      {settled[1].status === "rejected" && (
-        <p role="alert" className="text-sm text-destructive">
-          The content review queue could not be loaded. Refresh to try again.
-        </p>
+      {[
+        [settled[0], "identity checks"],
+        [settled[1], "content review queue"],
+        [settled[2], "reports"],
+      ].map(([result, label]) =>
+        (result as PromiseSettledResult<unknown>).status === "rejected" ? (
+          <p key={label as string} role="alert" className="text-sm text-destructive">
+            The {label as string} could not be loaded. Refresh to try again. This does not mean
+            there is nothing waiting.
+          </p>
+        ) : null
       )}
 
       <p className="text-sm text-muted-foreground">

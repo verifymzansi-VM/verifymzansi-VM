@@ -20,6 +20,7 @@ vi.mock("@/lib/services/queue-claims", async (importOriginal) => ({
   releaseDecidedClaim: vi.fn(async () => undefined),
   getClaimsForItems: vi.fn(async () => ({})),
   countMyClaims: vi.fn(async () => 0),
+  getMyClaimedItems: vi.fn(async () => []),
 }));
 
 // Mock next/font/google — the font loader only runs at Next.js build time;

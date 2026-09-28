@@ -1,7 +1,7 @@
 import { BrandShield as Shield } from "@/components/shared/brand-shield";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { roleHasCapability } from "@/lib/auth/admin-access";
-import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
+import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
 import { formatSaLongDate } from "@/lib/utils/format";
@@ -25,7 +25,12 @@ const ROLE_LABELS: Record<string, string> = {
   member: "Member",
 };
 
-const RANK: Record<string, number> = { member: 0, moderator: 1, governance_controller: 2, admin: 3 };
+const RANK: Record<string, number> = {
+  member: 0,
+  moderator: 1,
+  governance_controller: 2,
+  admin: 3,
+};
 
 /** Mirrors role_change_approver_allowed() in SQL; the database has the final say. */
 function canReview(reviewerRole: StaffRole, from: string, to: string): boolean {
@@ -35,23 +40,39 @@ function canReview(reviewerRole: StaffRole, from: string, to: string): boolean {
   return reviewerRole === "admin";
 }
 
+const STAFF_PAGE_SIZE = 50;
+const ROLE_FILTERS = ["moderator", "governance_controller", "admin"] as const;
+
 interface Person {
   name: string;
   email: string | null;
 }
 
-export default async function GovernanceRolesPage() {
+export default async function GovernanceRolesPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ page?: string; role?: string }>;
+}) {
   const { user, role } = await requireStaff("role:review");
+  const params = (await searchParams) ?? {};
+  const roleFilter = ROLE_FILTERS.find((r) => r === params.role);
+  const parsedPage = Number(params.page || 1);
+  const page =
+    Number.isSafeInteger(parsedPage) && parsedPage > 0 ? Math.min(parsedPage, 10_000) : 1;
   const canAssign = roleHasCapability(role, "role:assign");
   const admin = createAdminClient();
 
+  let staffQuery = admin
+    .from("staff_roles")
+    .select("user_id, role, granted_at, mfa_required_after", { count: "exact" })
+    .eq("status", "active");
+  if (roleFilter) staffQuery = staffQuery.eq("role", roleFilter);
+
   const [staffResult, pendingResult, historyResult] = await Promise.all([
-    admin
-      .from("staff_roles")
-      .select("user_id, role, granted_at, mfa_required_after")
-      .eq("status", "active")
+    staffQuery
       .order("granted_at", { ascending: false })
-      .limit(500),
+      .order("user_id", { ascending: true })
+      .range((page - 1) * STAFF_PAGE_SIZE, page * STAFF_PAGE_SIZE - 1),
     admin
       .from("decision_records")
       .select("id, payload, payload_version, recommender_id, rationale, created_at, expires_at")
@@ -79,6 +100,15 @@ export default async function GovernanceRolesPage() {
   }
 
   const staff = staffResult.data ?? [];
+  const staffTotal = staffResult.count ?? staff.length;
+  const rosterHref = (next: { page?: number; role?: string }) => {
+    const query = new URLSearchParams();
+    const nextRole = "role" in next ? next.role : roleFilter;
+    if (nextRole) query.set("role", nextRole);
+    if (next.page && next.page > 1) query.set("page", String(next.page));
+    const qs = query.toString();
+    return qs ? `/admin/governance/roles?${qs}` : "/admin/governance/roles";
+  };
   const pending = (pendingResult.data ?? []).map((row) => {
     const payload = (row.payload ?? {}) as Record<string, unknown>;
     return {
@@ -90,8 +120,7 @@ export default async function GovernanceRolesPage() {
   });
   const history = historyResult.data ?? [];
 
-  // Names for everyone shown on the page, in one profile query plus one Auth
-  // lookup per person (staff lists are small).
+  // Names and emails for everyone shown on the page, in one query.
   const ids = [
     ...new Set([
       ...staff.map((s) => s.user_id),
@@ -99,18 +128,23 @@ export default async function GovernanceRolesPage() {
       ...history.flatMap((h) => [h.target_user_id, h.assigned_by]),
     ]),
   ].filter(Boolean);
-  const [{ data: profiles }, authUsers] = await Promise.all([
-    admin.from(ACCOUNT_PROFILE_WRITE_TABLE).select("user_id, display_name").in("user_id", ids),
-    Promise.all(ids.map((id) => admin.auth.admin.getUserById(id))),
-  ]);
-  const nameById = new Map((profiles ?? []).map((p) => [p.user_id, p.display_name] as const));
+  const { data: directory } = ids.length
+    ? await admin.rpc("staff_directory", { p_ids: ids })
+    : { data: [] };
   const people = new Map<string, Person>(
-    ids.map((id, i) => {
-      const email = authUsers[i]?.data?.user?.email ?? null;
-      return [id, { name: nameById.get(id) || email || `${id.slice(0, 8)}…`, email }];
-    })
+    (
+      (directory ?? []) as Array<{
+        user_id: string;
+        email: string | null;
+        display_name: string | null;
+      }>
+    ).map((d) => [
+      d.user_id,
+      { name: d.display_name || d.email || `${d.user_id.slice(0, 8)}…`, email: d.email },
+    ])
   );
-  const person = (id: string): Person => people.get(id) ?? { name: `${id.slice(0, 8)}…`, email: null };
+  const person = (id: string): Person =>
+    people.get(id) ?? { name: `${id.slice(0, 8)}…`, email: null };
 
   return (
     <div className="space-y-6">
@@ -182,9 +216,28 @@ export default async function GovernanceRolesPage() {
             Current staff
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
+          <nav aria-label="Filter staff by role" className="flex flex-wrap gap-2 text-sm">
+            {[undefined, ...ROLE_FILTERS].map((r) => (
+              <Link
+                key={r ?? "all"}
+                href={rosterHref({ role: r })}
+                aria-current={r === roleFilter ? "page" : undefined}
+                className={`rounded-full border px-3 py-1.5 ${r === roleFilter ? "bg-muted font-medium" : ""}`}
+              >
+                {r ? `${ROLE_LABELS[r]}s` : "Everyone"}
+              </Link>
+            ))}
+          </nav>
+          <p className="text-sm text-muted-foreground">
+            {staffTotal} {staffTotal === 1 ? "person" : "people"}
+            {staffTotal > STAFF_PAGE_SIZE &&
+              ` · Page ${page} of ${Math.ceil(staffTotal / STAFF_PAGE_SIZE)}`}
+          </p>
           {staff.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No staff found.</p>
+            <p className="text-sm text-muted-foreground">
+              {roleFilter ? `No ${ROLE_LABELS[roleFilter].toLowerCase()}s.` : "No staff found."}
+            </p>
           ) : (
             <ul className="space-y-3">
               {staff.map((s) => {
@@ -210,6 +263,20 @@ export default async function GovernanceRolesPage() {
                 );
               })}
             </ul>
+          )}
+          {staffTotal > STAFF_PAGE_SIZE && (
+            <nav aria-label="Staff pages" className="flex gap-4 text-sm">
+              {page > 1 && (
+                <Link href={rosterHref({ page: page - 1 })} className="underline">
+                  Previous page
+                </Link>
+              )}
+              {page * STAFF_PAGE_SIZE < staffTotal && (
+                <Link href={rosterHref({ page: page + 1 })} className="underline">
+                  Next page
+                </Link>
+              )}
+            </nav>
           )}
         </CardContent>
       </Card>

@@ -249,10 +249,19 @@ describe("governance page regressions", () => {
         { user_id: "admin-1", display_name: "Head Admin" },
       ],
     };
+    const directory = vi.fn(async () => ({
+      data: [
+        { user_id: "gov-1", email: "gov@example.com", display_name: "Gov Controller" },
+        { user_id: "admin-1", email: "admin@example.com", display_name: "Head Admin" },
+        { user_id: "new-1", email: "newbie@example.com", display_name: null },
+      ],
+      error: null,
+    }));
     const chain = (data: unknown[]) => {
       const q: Record<string, unknown> = {};
       for (const m of ["select", "eq", "order", "in"]) q[m] = vi.fn(() => q);
       q.limit = vi.fn(async () => ({ data, error: null }));
+      q.range = vi.fn(async () => ({ data, error: null, count: data.length }));
       q.then = (resolve: (v: unknown) => unknown) => resolve({ data, error: null });
       return q;
     };
@@ -261,18 +270,17 @@ describe("governance page regressions", () => {
         if (!(table in rows)) throw new Error(`Unexpected table ${table}`);
         return chain(rows[table]);
       }),
-      auth: {
-        admin: {
-          getUserById: vi.fn(async (id: string) => ({
-            data: { user: { id, email: id === "new-1" ? "newbie@example.com" : null } },
-            error: null,
-          })),
-        },
-      },
+      // Names and emails for everyone on the page, in one call.
+      rpc: directory,
     });
 
-    render(await GovernanceRolesPage());
+    render(await GovernanceRolesPage({}));
 
+    expect(directory).toHaveBeenCalledTimes(1);
+    expect(directory).toHaveBeenCalledWith("staff_directory", {
+      p_ids: expect.arrayContaining(["gov-1", "new-1", "admin-1"]),
+    });
+    expect(screen.getByText("1 person")).toBeDefined();
     expect(staffGuard.requireStaff).toHaveBeenCalledWith("role:review");
     expect(screen.getAllByText("Gov Controller").length).toBeGreaterThan(0);
     expect(screen.getByText("newbie@example.com")).toBeDefined();

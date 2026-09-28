@@ -65,6 +65,8 @@ function createQuery(data: unknown[], error: { message: string } | null = null) 
     eq: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
     limit: vi.fn().mockResolvedValue({ data, error }),
+    // The viewer's claimed items: none in these tests.
+    in: vi.fn().mockResolvedValue({ data: [], error: null }),
   };
 
   return builder;
@@ -165,14 +167,16 @@ describe("AdminModerationPage", () => {
   it("aggregates listings, businesses, and promotions into a single moderation queue", async () => {
     render(await AdminModerationPage());
 
-    expect(screen.getByText("4 Pending")).toBeInTheDocument();
+    expect(screen.getByText("4 pending")).toBeInTheDocument();
     expect(screen.getByText("queue-size:4")).toBeInTheDocument();
     expect(screen.getByText("Listing:Used iPhone 15")).toBeInTheDocument();
     expect(screen.getByText("Business:Nomsa Beauty Studio")).toBeInTheDocument();
     expect(screen.getByText("Promotion:Weekend Sale")).toBeInTheDocument();
     expect(screen.getByText(/Listing edit:Used iPhone 15 - updated/)).toBeInTheDocument();
     expect(screen.getByText(/changes:Category,Title/i)).toBeInTheDocument();
-    expect(listingQuery?.select).toHaveBeenCalledWith(expect.stringContaining("video_thumbnail"));
+    expect(listingQuery?.select).toHaveBeenCalledWith(expect.stringContaining("video_thumbnail"), {
+      count: "exact",
+    });
     expect(businessQuery?.select).toHaveBeenCalledWith(expect.stringContaining("business_details"));
     expect(businessQuery?.select).toHaveBeenCalledWith(expect.stringContaining("cover_photo"));
     expect(businessQuery?.select).toHaveBeenCalledWith(
@@ -227,7 +231,7 @@ describe("AdminModerationPage", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Some moderation items could not be loaded for: Tourism & Events."
     );
-    expect(screen.getByText("2 Pending")).toBeInTheDocument();
+    expect(screen.getByText("2 pending")).toBeInTheDocument();
     expect(screen.getByText("queue-size:2")).toBeInTheDocument();
     expect(mockLoggerError).toHaveBeenCalledWith("Failed to load some moderation queues", {
       failedAreas: ["Tourism & Events"],
@@ -236,5 +240,43 @@ describe("AdminModerationPage", () => {
       promotionsError: "column promotions.logo_url does not exist",
       editRequestsError: undefined,
     });
+  });
+
+  it("always shows the items a moderator holds, and the true total", async () => {
+    const { getMyClaimedItems } = await import("@/lib/services/queue-claims");
+    vi.mocked(getMyClaimedItems).mockResolvedValue([{ type: "listing", id: "listing-held" }]);
+    const row = (id: string, title: string) => ({
+      id,
+      title,
+      status: "pending_moderation",
+      created_at: "2026-03-20T08:00:00.000Z",
+      category: "electronics",
+      owner_id: "user-1",
+    });
+    let listingCalls = 0;
+    mockCreateAdminClient.mockReturnValue({
+      from: (table: string) => {
+        if (table === "listings") {
+          listingCalls += 1;
+          const q = createQuery([row("listing-old", "Oldest listing")]);
+          q.limit = vi.fn().mockResolvedValue({
+            data: listingCalls === 1 ? [row("listing-old", "Oldest listing")] : [],
+            error: null,
+            count: 60,
+          });
+          q.in = vi
+            .fn()
+            .mockResolvedValue({ data: [row("listing-held", "Held listing")], error: null });
+          return q;
+        }
+        return createQuery([]);
+      },
+    });
+
+    render(await AdminModerationPage());
+
+    expect(screen.getByText("Listing:Held listing")).toBeInTheDocument();
+    expect(screen.getByText("60 pending")).toBeInTheDocument();
+    expect(screen.getByText(/Showing 2 of 60 waiting items/)).toBeInTheDocument();
   });
 });
