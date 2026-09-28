@@ -22,6 +22,27 @@ import { calculateSlaState, slaSortPriority } from "@/lib/utils/sla";
 import type { ReportSeverity } from "@/types/enums";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { useToast } from "@/hooks/use-toast";
+import { ClaimBadge, useQueueClaim } from "./queue-claims";
+
+/** "Take action" for one report, disabled while someone else holds it. */
+function ReportActionButton({ reportId, onOpen }: { reportId: string; onOpen: () => void }) {
+  const { blocked, blockedReason } = useQueueClaim("report", reportId);
+  return (
+    <div className="flex flex-shrink-0 flex-col items-end gap-1">
+      <ClaimBadge type="report" id={reportId} />
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={onOpen}
+        disabled={blocked}
+        title={blockedReason ?? undefined}
+      >
+        Take action
+      </Button>
+      {blockedReason && <p className="text-[11px] text-muted-foreground">{blockedReason}</p>}
+    </div>
+  );
+}
 
 interface ReportItem {
   id: string;
@@ -207,14 +228,7 @@ export function FlaggingQueueTable({
                   </p>
                 </div>
                 {!readOnly && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="flex-shrink-0"
-                    onClick={() => openAction(report)}
-                  >
-                    Take Action
-                  </Button>
+                  <ReportActionButton reportId={report.id} onOpen={() => openAction(report)} />
                 )}
               </div>
             </CardContent>

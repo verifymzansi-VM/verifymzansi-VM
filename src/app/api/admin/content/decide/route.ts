@@ -10,6 +10,7 @@ import { createNotification } from "@/lib/notifications";
 import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
 import { getApprovedPostExpiryIso } from "@/lib/posting/post-lifecycle";
 import { isValidCategoryForArea, type ModerationArea } from "@/lib/constants/categories";
+import { checkQueueClaim, releaseDecidedClaim } from "@/lib/services/queue-claims";
 
 const log = createLogger("AdminContentDecide");
 
@@ -58,6 +59,13 @@ export async function POST(request: Request) {
     if (!table) {
       return NextResponse.json({ error: "Invalid area" }, { status: 400 });
     }
+
+    const claimItem = {
+      type: table === "listings" ? "listing" : table === "businesses" ? "business" : "promotion",
+      id: itemId,
+    } as const;
+    const claimBlock = await checkQueueClaim(guard.user.id, claimItem);
+    if (claimBlock) return claimBlock;
 
     const newStatus = decision === "approve" ? "live" : "rejected";
 
@@ -247,6 +255,7 @@ export async function POST(request: Request) {
       });
     }
 
+    await releaseDecidedClaim(guard.user.id, claimItem);
     return NextResponse.json({ success: true, decision });
   } catch (err) {
     log.error("Content decide failed", {

@@ -1,4 +1,7 @@
 import { requireStaff } from "@/lib/auth/require-staff";
+import { roleHasCapability } from "@/lib/auth/admin-access";
+import { countMyClaims, getClaimsForItems } from "@/lib/services/queue-claims";
+import { QueueClaimBar, QueueClaimsProvider } from "@/components/admin/queue-claims";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { ModerationQueueClient } from "./moderation-queue-client";
@@ -18,7 +21,7 @@ function daysAgoIso(days: number): string {
 }
 
 export default async function AdminModerationPage() {
-  await requireStaff("queue:view");
+  const { user, role } = await requireStaff("queue:view");
 
   const admin = createAdminClient();
 
@@ -153,6 +156,21 @@ export default async function AdminModerationPage() {
   ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
   const totalPending = allItems.length;
+  const [claims, myClaims] = await Promise.all([
+    getClaimsForItems(
+      user.id,
+      allItems.map((item) => ({
+        type:
+          "isEditRequest" in item && item.isEditRequest
+            ? ("content_edit" as const)
+            : "contentType" in item && item.contentType
+              ? item.contentType
+              : ("listing" as const),
+        id: item.id,
+      }))
+    ),
+    countMyClaims(user.id, "content"),
+  ]);
 
   return (
     <div className="min-w-0 w-full max-w-full space-y-6 overflow-x-hidden">
@@ -175,7 +193,19 @@ export default async function AdminModerationPage() {
         </div>
       )}
 
-      <ModerationQueueClient items={allItems} />
+      <QueueClaimBar
+        queue="content"
+        myClaims={myClaims}
+        canClaim={roleHasCapability(role, "queue:claim")}
+      />
+
+      <QueueClaimsProvider
+        claims={claims}
+        mustClaim={role === "moderator"}
+        canFree={roleHasCapability(role, "decision:approve")}
+      >
+        <ModerationQueueClient items={allItems} />
+      </QueueClaimsProvider>
     </div>
   );
 }

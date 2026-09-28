@@ -19,6 +19,8 @@ import { ContentDecisionDialog } from "@/components/admin/content-decision-dialo
 import { useContentDecision } from "@/components/admin/use-content-decision";
 import type { ContentEditChange } from "@/lib/content-edit-diff";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
+import { ClaimBadge, ClaimGate } from "./queue-claims";
+import type { ClaimItemType } from "@/lib/services/queue-claims";
 
 export interface ContentItem {
   isEditRequest?: boolean;
@@ -54,6 +56,14 @@ interface ContentQueueTableProps {
   items: ContentItem[];
   area: string;
   onDecisionComplete?: () => void;
+}
+
+/** Which queue claim covers a content item. */
+function claimTypeOf(item: {
+  isEditRequest?: boolean;
+  contentType?: ClaimItemType;
+}): ClaimItemType {
+  return item.isEditRequest ? "content_edit" : (item.contentType ?? "listing");
 }
 
 export function ContentQueueTable({ items, area, onDecisionComplete }: ContentQueueTableProps) {
@@ -211,38 +221,48 @@ export function ContentQueueTable({ items, area, onDecisionComplete }: ContentQu
                     </p>
                   )}
                 </div>
-                <div className="flex gap-1 flex-shrink-0 flex-wrap">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8"
-                    onClick={() => setPreviewItem(item)}
-                    disabled={loading}
-                  >
-                    <Eye className="h-4 w-4 mr-1" />
-                    <span className="text-xs">Review</span>
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
-                    onClick={() => openReview(item, "approve")}
-                    disabled={loading}
-                  >
-                    <CheckCircle className="h-4 w-4 mr-1" />
-                    <span className="text-xs">Approve</span>
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 text-destructive hover:bg-destructive/10"
-                    onClick={() => openReview(item, "reject")}
-                    disabled={loading}
-                  >
-                    <XCircle className="h-4 w-4 mr-1" />
-                    <span className="text-xs">Reject</span>
-                  </Button>
-                </div>
+                <ClaimGate type={claimTypeOf(item)} id={item.id}>
+                  {(claim) => (
+                    <div className="flex flex-col items-end gap-1">
+                      <ClaimBadge type={claimTypeOf(item)} id={item.id} />
+                      <div className="flex gap-1 flex-shrink-0 flex-wrap">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8"
+                          onClick={() => setPreviewItem(item)}
+                          disabled={loading}
+                        >
+                          <Eye className="h-4 w-4 mr-1" />
+                          <span className="text-xs">Review</span>
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
+                          onClick={() => openReview(item, "approve")}
+                          disabled={loading || claim.blocked}
+                        >
+                          <CheckCircle className="h-4 w-4 mr-1" />
+                          <span className="text-xs">Approve</span>
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 text-destructive hover:bg-destructive/10"
+                          onClick={() => openReview(item, "reject")}
+                          disabled={loading || claim.blocked}
+                        >
+                          <XCircle className="h-4 w-4 mr-1" />
+                          <span className="text-xs">Reject</span>
+                        </Button>
+                      </div>
+                      {claim.blockedReason && (
+                        <p className="text-[11px] text-muted-foreground">{claim.blockedReason}</p>
+                      )}
+                    </div>
+                  )}
+                </ClaimGate>
               </div>
             </CardContent>
           </Card>

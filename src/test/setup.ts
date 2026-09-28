@@ -11,6 +11,17 @@ vi.mock("@/lib/auth/staff-mfa-guard", () => ({
   checkStaffApiMfa: vi.fn(async () => null),
 }));
 
+// Queue claims are enforced on every decision route. Route tests default to
+// an actor who holds the claim; src/lib/services/queue-claims.test.ts and
+// the claim assertions in route tests cover the real behaviour.
+vi.mock("@/lib/services/queue-claims", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  checkQueueClaim: vi.fn(async () => null),
+  releaseDecidedClaim: vi.fn(async () => undefined),
+  getClaimsForItems: vi.fn(async () => ({})),
+  countMyClaims: vi.fn(async () => 0),
+}));
+
 // Mock next/font/google — the font loader only runs at Next.js build time;
 // under vitest it returns undefined unless mocked.
 vi.mock("next/font/google", () => {

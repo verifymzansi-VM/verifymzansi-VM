@@ -15,6 +15,7 @@ vi.mock("@/lib/services/decision-ledger", async (importOriginal) => ({
 }));
 
 import { POST } from "@/app/api/admin/flagging/action/route";
+import { checkQueueClaim, releaseDecidedClaim } from "@/lib/services/queue-claims";
 
 const STAFF = "11111111-1111-4111-8111-111111111111";
 const REPORT = "22222222-2222-4222-8222-222222222222";
@@ -133,5 +134,20 @@ describe("POST /api/admin/flagging/action", () => {
     const res = await POST(request({ reportId: REPORT, action: "warn" }));
     expect(res.status).toBe(500);
     expect(await res.text()).not.toContain("moderate_report");
+  });
+
+  it("requires the moderator's claim on the report, and releases it afterwards", async () => {
+    await POST(request({ reportId: REPORT, action: "warn", reason: "Rude" }));
+    expect(checkQueueClaim).toHaveBeenCalledWith(STAFF, { type: "report", id: REPORT });
+    expect(releaseDecidedClaim).toHaveBeenCalledWith(STAFF, { type: "report", id: REPORT });
+  });
+
+  it("stops before acting when someone else holds the report", async () => {
+    vi.mocked(checkQueueClaim).mockResolvedValueOnce(
+      new Response(JSON.stringify({ code: "claimed_by_other" }), { status: 409 }) as never
+    );
+    const res = await POST(request({ reportId: REPORT, action: "warn", reason: "Rude" }));
+    expect(res.status).toBe(409);
+    expect(moderateReport).not.toHaveBeenCalled();
   });
 });

@@ -5,6 +5,7 @@ import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/li
 import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
 import { checkSensitiveActionRateLimit } from "@/lib/utils/rate-limit";
 import { decisionRefusalResponse, moderateReport } from "@/lib/services/decision-ledger";
+import { checkQueueClaim, releaseDecidedClaim } from "@/lib/services/queue-claims";
 
 const log = createLogger("AdminFlagging");
 
@@ -45,6 +46,9 @@ export async function POST(request: Request) {
 
     const { reportId, action, reason, durationDays, emergency } = parsedBody.data;
 
+    const claimBlock = await checkQueueClaim(guard.user.id, { type: "report", id: reportId });
+    if (claimBlock) return claimBlock;
+
     // Bans and suspensions fail closed when the shared limiter is unavailable.
     if (action === "ban" || action === "suspend") {
       const enforceRl = await checkSensitiveActionRateLimit(
@@ -67,6 +71,7 @@ export async function POST(request: Request) {
       emergency: emergency ?? false,
     });
     if (!result.ok) return decisionRefusalResponse(result.error);
+    await releaseDecidedClaim(guard.user.id, { type: "report", id: reportId });
 
     return NextResponse.json({
       success: true,

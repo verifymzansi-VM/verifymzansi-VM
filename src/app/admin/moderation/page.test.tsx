@@ -32,6 +32,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("next/navigation", () => ({
   redirect: mockRedirect,
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }),
 }));
 
 vi.mock("@/lib/utils/logger", () => ({

@@ -16,6 +16,7 @@ import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { checkStaffApiMfa } from "@/lib/auth/staff-mfa-guard";
 import { applyVerificationDecision, isHighRiskStep } from "@/lib/services/verification-decision";
 import { decisionRefusalResponse } from "@/lib/services/decision-ledger";
+import { checkQueueClaim, releaseDecidedClaim } from "@/lib/services/queue-claims";
 
 const log = createLogger("AdminVerification");
 const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" };
@@ -76,6 +77,9 @@ export async function POST(request: Request) {
       );
     }
 
+    const claimBlock = await checkQueueClaim(user.id, { type: "verification_step", id: step.id });
+    if (claimBlock) return claimBlock;
+
     if (decision === "approved" && isHighRiskStep(step)) {
       if (!overrideReasonCode) {
         return NextResponse.json(
@@ -121,6 +125,7 @@ export async function POST(request: Request) {
             )
           : decisionRefusalResponse(result.error ?? "forbidden");
       }
+      await releaseDecidedClaim(user.id, { type: "verification_step", id: step.id });
       return NextResponse.json(
         {
           success: true,
@@ -149,6 +154,7 @@ export async function POST(request: Request) {
       );
     }
 
+    await releaseDecidedClaim(user.id, { type: "verification_step", id: step.id });
     return NextResponse.json({ success: true, decision }, { headers: NO_STORE });
   } catch (err) {
     log.error("Verification decide failed", {

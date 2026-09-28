@@ -1,4 +1,6 @@
 import { requireStaff } from "@/lib/auth/require-staff";
+import { getClaimsForItems, type ClaimItemType } from "@/lib/services/queue-claims";
+import { QueueClaimsProvider } from "@/components/admin/queue-claims";
 import { roleHasCapability } from "@/lib/auth/admin-access";
 import { AreaAdminTabs } from "@/components/admin/area-admin-tabs";
 import { PageHeader } from "@/components/layout/page-header";
@@ -25,7 +27,7 @@ function fulfilledValue<T>(result: PromiseSettledResult<T>, fallback: T): T {
 }
 
 export async function AreaAdminPage({ area, areaLabel, description }: AreaAdminPageConfig) {
-  const { role } = await requireStaff("queue:view");
+  const { user, role } = await requireStaff("queue:view");
 
   const settled = await Promise.allSettled([
     getPendingVerificationGroups(),
@@ -44,6 +46,20 @@ export async function AreaAdminPage({ area, areaLabel, description }: AreaAdminP
     (count, group) => count + group.steps.length,
     0
   );
+
+  const claimItems: Array<{ type: ClaimItemType; id: string }> = [
+    ...pendingVerifications.flatMap((group) =>
+      group.steps.map((step) => ({ type: "verification_step" as const, id: step.id }))
+    ),
+    ...pendingContent.map((item) => ({
+      type: (item.isEditRequest
+        ? "content_edit"
+        : (item.contentType ?? "listing")) as ClaimItemType,
+      id: item.id,
+    })),
+    ...reports.map((report: DashboardReport) => ({ type: "report" as const, id: report.id })),
+  ];
+  const claims = await getClaimsForItems(user.id, claimItems);
 
   const highSeverityOverdue = reports.filter((report: DashboardReport) => {
     if (report.severity !== "high") return false;
@@ -67,22 +83,32 @@ export async function AreaAdminPage({ area, areaLabel, description }: AreaAdminP
         </p>
       )}
 
-      <AreaAdminTabs
-        canEnforceDirectly={roleHasCapability(role, "enforcement:execute")}
-        area={area}
-        areaLabel={areaLabel}
-        pendingVerifications={pendingVerifications}
-        pendingContent={pendingContent}
-        reports={reports}
-        activityEntries={activity}
-        overviewStats={{
-          pendingVerificationCount,
-          pendingFlagCount: reports.length,
-          highSeverityOverdue,
-          pendingContentCount: pendingContent.length,
-          actionsToday,
-        }}
-      />
+      <p className="text-sm text-muted-foreground">
+        Claim items from the Verification, Moderation and Reports queues to work on them here.
+      </p>
+
+      <QueueClaimsProvider
+        claims={claims}
+        mustClaim={role === "moderator"}
+        canFree={roleHasCapability(role, "decision:approve")}
+      >
+        <AreaAdminTabs
+          canEnforceDirectly={roleHasCapability(role, "enforcement:execute")}
+          area={area}
+          areaLabel={areaLabel}
+          pendingVerifications={pendingVerifications}
+          pendingContent={pendingContent}
+          reports={reports}
+          activityEntries={activity}
+          overviewStats={{
+            pendingVerificationCount,
+            pendingFlagCount: reports.length,
+            highSeverityOverdue,
+            pendingContentCount: pendingContent.length,
+            actionsToday,
+          }}
+        />
+      </QueueClaimsProvider>
     </div>
   );
 }
