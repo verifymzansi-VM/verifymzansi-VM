@@ -90,11 +90,21 @@ export const adminFlaggingActionSchema = z
       message: "action must be warn, hide, suspend, ban, or dismiss",
     }),
     reason: optionalTrimmedStringSchema.pipe(z.string().max(500).optional()),
-    durationDays: z.number().int().positive().max(365).optional(),
+    durationDays: z.number().int().min(1).max(30).optional(),
+    /** Governor/admin emergency containment: a 72-hour suspension now, full action reviewed by someone else. */
+    emergency: z.boolean().optional(),
   })
   .refine((data) => data.action !== "dismiss" || data.reason, {
     message: "Reason is required when dismissing a report",
     path: ["reason"],
+  })
+  .refine((data) => data.action !== "suspend" || data.durationDays, {
+    message: "Choose how many days the suspension lasts",
+    path: ["durationDays"],
+  })
+  .refine((data) => !data.emergency || data.action === "suspend" || data.action === "ban", {
+    message: "Emergency containment applies to suspensions and bans only",
+    path: ["emergency"],
   });
 
 export const adminDsarDecideSchema = z.object({

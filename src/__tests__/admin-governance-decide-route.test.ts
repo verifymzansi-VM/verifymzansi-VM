@@ -1,334 +1,239 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type * as DecisionLedger from "@/lib/services/decision-ledger";
 
 const {
-  mockCreateClient,
-  mockVerifyCapabilityRoleFromDb,
-  mockVerifyCapabilityFromDb,
-  mockApproveDecision,
-  mockRejectDecision,
-  mockEscalateDecision,
-  mockEnforceSameOriginMutation,
-  mockEnforceCsrfToken,
-  mockCheckLocalRateLimit,
-  mockLogApiError,
-  mockAdminFrom,
+  guard,
+  approveDecision,
+  rejectDecision,
+  escalateDecision,
+  markDecisionExecution,
+  applyVerificationDecision,
+  adminFrom,
+  reportCriticalIncident,
 } = vi.hoisted(() => ({
-  mockCreateClient: vi.fn(),
-  mockVerifyCapabilityRoleFromDb: vi.fn(),
-  mockVerifyCapabilityFromDb: vi.fn(),
-  mockApproveDecision: vi.fn(),
-  mockRejectDecision: vi.fn(),
-  mockEscalateDecision: vi.fn(),
-  mockEnforceSameOriginMutation: vi.fn(),
-  mockEnforceCsrfToken: vi.fn(),
-  mockCheckLocalRateLimit: vi.fn(),
-  mockLogApiError: vi.fn(),
-  mockAdminFrom: vi.fn(),
+  guard: vi.fn(),
+  approveDecision: vi.fn(),
+  rejectDecision: vi.fn(),
+  escalateDecision: vi.fn(),
+  markDecisionExecution: vi.fn(),
+  applyVerificationDecision: vi.fn(),
+  adminFrom: vi.fn(),
+  reportCriticalIncident: vi.fn(),
 }));
 
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: mockCreateClient,
+vi.mock("@/lib/utils/admin-route-guard", () => ({ enforceAdminMutationGuard: guard }));
+vi.mock("@/lib/services/decision-ledger", async (importOriginal) => ({
+  ...(await importOriginal<typeof DecisionLedger>()),
+  approveDecision,
+  rejectDecision,
+  escalateDecision,
+  markDecisionExecution,
 }));
-
-vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: () => ({ from: mockAdminFrom }),
-}));
-
-vi.mock("@/lib/auth/admin-access", () => ({
-  verifyCapabilityRoleFromDb: mockVerifyCapabilityRoleFromDb,
-  verifyCapabilityFromDb: mockVerifyCapabilityFromDb,
-}));
-
-vi.mock("@/lib/services/decision-ledger", () => ({
-  approveDecision: mockApproveDecision,
-  rejectDecision: mockRejectDecision,
-  escalateDecision: mockEscalateDecision,
-}));
-
-vi.mock("@/lib/utils/mutation-origin", () => ({
-  enforceSameOriginMutation: mockEnforceSameOriginMutation,
-}));
-
-vi.mock("@/lib/utils/csrf", () => ({
-  enforceCsrfToken: mockEnforceCsrfToken,
-}));
-
-vi.mock("@/lib/utils/rate-limit", () => ({
-  checkLocalRateLimit: mockCheckLocalRateLimit,
-}));
-
-vi.mock("@/lib/utils/logger", () => ({
-  createLogger: () => ({
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
-}));
-
-vi.mock("@/lib/utils/api", async () => {
-  const actual = await vi.importActual("@/lib/utils/api");
-  return {
-    ...actual,
-    logApiError: mockLogApiError,
-  };
-});
+vi.mock("@/lib/services/verification-decision", () => ({ applyVerificationDecision }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ from: adminFrom }) }));
+vi.mock("@/lib/utils/alerts", () => ({ reportCriticalIncident }));
 
 import { POST } from "@/app/api/admin/governance/decide/route";
 
-function createRequest(body: unknown, headers?: HeadersInit) {
-  return new Request("http://localhost:3000/api/admin/governance/decide", {
+const GOV = "11111111-1111-4111-8111-111111111111";
+const DECISION = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
+const STEP = "b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22";
+
+const request = (body: Record<string, unknown>) =>
+  new Request("http://localhost:3000/api/admin/governance/decide", {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      ...(headers ?? {}),
-    },
+    headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
+
+function tableReturns(data: unknown) {
+  const maybeSingle = vi.fn().mockResolvedValue({ data });
+  adminFrom.mockReturnValue({ select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle })) })) });
 }
 
 describe("POST /api/admin/governance/decide", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockEnforceSameOriginMutation.mockReturnValue(null);
-    mockEnforceCsrfToken.mockReturnValue(null);
-    mockCheckLocalRateLimit.mockReturnValue({ limited: false });
-    mockVerifyCapabilityRoleFromDb.mockResolvedValue("governance_controller");
-    mockCreateClient.mockResolvedValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({
-          data: { user: { id: "gov-1", app_metadata: { role: "governance_controller" } } },
-        }),
-      },
-    });
-    // Default admin mock: decision_records query returns a non-blocking decision
-    mockAdminFrom.mockImplementation((table: string) => {
-      if (table === "decision_records") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({
-                data: { recommender_id: "mod-1", action_category: "report_review" },
-                error: null,
-              }),
-            }),
-          }),
-        };
-      }
-      return {};
+    guard.mockResolvedValue({
+      success: true,
+      user: { id: GOV },
+      actorRole: "governance_controller",
     });
   });
 
-  it("returns 401 when unauthenticated", async () => {
-    mockCreateClient.mockResolvedValue({
-      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) },
-    });
-
+  it("requires decision:approve", async () => {
+    guard.mockResolvedValue({ success: false, response: new Response(null, { status: 403 }) });
     const res = await POST(
-      createRequest({
-        decisionId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        action: "approve",
-        rationale: "Approved",
-      })
+      request({ action: "approve", decisionId: DECISION, payloadVersion: 1, rationale: "ok" })
     );
-
-    expect(res.status).toBe(401);
-  });
-
-  it("returns 403 when capability verification fails", async () => {
-    mockVerifyCapabilityRoleFromDb.mockResolvedValue(null);
-
-    const res = await POST(
-      createRequest({
-        decisionId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        action: "approve",
-        rationale: "Approved",
-      })
-    );
-
     expect(res.status).toBe(403);
+    expect(guard).toHaveBeenCalledWith(expect.objectContaining({ capability: "decision:approve" }));
   });
 
-  it("uses the DB-verified role for approval records", async () => {
-    mockVerifyCapabilityRoleFromDb.mockResolvedValue("admin");
-    mockApproveDecision.mockResolvedValue({
-      decisionId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+  it("approves the exact payload version with the verified approver", async () => {
+    approveDecision.mockResolvedValue({ ok: true, status: "applied", decision_id: DECISION });
+    const res = await POST(
+      request({
+        action: "approve",
+        decisionId: DECISION,
+        payloadVersion: 2,
+        rationale: "Evidence is clear",
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(approveDecision).toHaveBeenCalledWith(GOV, DECISION, 2, "Evidence is clear");
+    expect(applyVerificationDecision).not.toHaveBeenCalled();
+  });
+
+  it("no longer accepts a typed secondary approver", async () => {
+    const res = await POST(
+      request({
+        action: "approve",
+        decisionId: DECISION,
+        rationale: "ok",
+        secondaryApproverId: GOV,
+      })
+    );
+    expect(res.status).toBe(400);
+    expect(approveDecision).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["not_independent", 403],
+    ["payload_changed", 409],
+    ["expired", 410],
+    ["not_pending", 409],
+  ])("maps the %s refusal to %i", async (error, status) => {
+    approveDecision.mockResolvedValue({ ok: false, error });
+    const res = await POST(
+      request({ action: "approve", decisionId: DECISION, payloadVersion: 1, rationale: "ok" })
+    );
+    expect(res.status).toBe(status);
+  });
+
+  it("runs an approved KYC override and records success", async () => {
+    approveDecision.mockResolvedValue({
+      ok: true,
       status: "approved",
+      decision_id: DECISION,
+      execution: "pending",
+      payload: { step_id: STEP, user_id: "member-1", override_reason_code: "verified_in_person" },
     });
+    tableReturns({ id: STEP, user_id: "member-1", step_type: "id_doc", status: "pending" });
+    applyVerificationDecision.mockResolvedValue({ ok: true });
 
     const res = await POST(
-      createRequest({
-        decisionId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        action: "approve",
-        rationale: "DB role wins",
-      })
+      request({ action: "approve", decisionId: DECISION, payloadVersion: 1, rationale: "ok" })
     );
 
     expect(res.status).toBe(200);
-    expect(mockApproveDecision).toHaveBeenCalledWith(
+    expect(applyVerificationDecision).toHaveBeenCalledWith(
       expect.objectContaining({
-        approverRole: "admin",
+        decision: "approved",
+        overrideReasonCode: "verified_in_person",
+        reviewerId: GOV,
+        allowAlreadyApplied: false,
       })
     );
+    expect(markDecisionExecution).toHaveBeenCalledWith(DECISION, true);
   });
 
-  it("returns 429 when locally rate limited", async () => {
-    mockCheckLocalRateLimit.mockReturnValue({ limited: true, retryAfter: 42 });
-
-    const res = await POST(
-      createRequest({
-        decisionId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        action: "approve",
-        rationale: "Approved",
-      })
-    );
-
-    expect(res.status).toBe(429);
-    expect(res.headers.get("Retry-After")).toBe("42");
-  });
-
-  it("approves a decision", async () => {
-    mockApproveDecision.mockResolvedValue({
-      decisionId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+  it("keeps a failed KYC override visible, alerts, and returns 502", async () => {
+    approveDecision.mockResolvedValue({
+      ok: true,
       status: "approved",
+      decision_id: DECISION,
+      execution: "pending",
+      payload: { step_id: STEP, user_id: "member-1" },
+    });
+    tableReturns({ id: STEP, user_id: "member-1", step_type: "id_doc", status: "pending" });
+    applyVerificationDecision.mockResolvedValue({
+      ok: false,
+      status: 500,
+      error: "profile update failed",
     });
 
     const res = await POST(
-      createRequest({
-        decisionId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        action: "approve",
-        rationale: "Meets policy",
-        afterState: { enforcement: "suspended" },
-      })
+      request({ action: "approve", decisionId: DECISION, payloadVersion: 1, rationale: "ok" })
     );
 
-    expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toMatchObject({ status: "approved" });
-    expect(mockApproveDecision).toHaveBeenCalledWith(
-      expect.objectContaining({
-        decisionId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        approverId: "gov-1",
-        approverRole: "governance_controller",
-        rationale: "Meets policy",
-        afterState: { enforcement: "suspended" },
-      })
-    );
+    expect(res.status).toBe(502);
+    await expect(res.json()).resolves.toMatchObject({ code: "execution_failed" });
+    expect(markDecisionExecution).toHaveBeenCalledWith(DECISION, false, "profile update failed");
+    expect(reportCriticalIncident).toHaveBeenCalled();
   });
 
-  it("rejects a decision", async () => {
-    mockRejectDecision.mockResolvedValue({
-      decisionId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-      status: "rejected",
+  it("lets only admins retry a failed execution, idempotently", async () => {
+    const res = await POST(request({ action: "retry_execution", decisionId: DECISION }));
+    expect(res.status).toBe(403);
+
+    guard.mockResolvedValue({ success: true, user: { id: GOV }, actorRole: "admin" });
+    tableReturns({
+      id: DECISION,
+      status: "approved",
+      action_category: "kyc_override",
+      execution_status: "failed",
+      payload: { step_id: STEP },
     });
+    const step = { id: STEP, user_id: "member-1", step_type: "id_doc", status: "approved" };
+    adminFrom
+      .mockReturnValueOnce({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: DECISION,
+                status: "approved",
+                action_category: "kyc_override",
+                execution_status: "failed",
+                payload: { step_id: STEP },
+              },
+            }),
+          })),
+        })),
+      })
+      .mockReturnValueOnce({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: step }) })),
+        })),
+      });
+    applyVerificationDecision.mockResolvedValue({ ok: true });
 
+    const retry = await POST(request({ action: "retry_execution", decisionId: DECISION }));
+
+    expect(retry.status).toBe(200);
+    expect(applyVerificationDecision).toHaveBeenCalledWith(
+      expect.objectContaining({ allowAlreadyApplied: true })
+    );
+    expect(markDecisionExecution).toHaveBeenCalledWith(DECISION, true);
+  });
+
+  it("rejects through the database", async () => {
+    rejectDecision.mockResolvedValue({ ok: true, status: "rejected" });
     const res = await POST(
-      createRequest({
-        decisionId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        action: "reject",
-        rationale: "Insufficient evidence",
-      })
+      request({ action: "reject", decisionId: DECISION, rationale: "Not enough evidence" })
     );
-
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toMatchObject({ status: "rejected" });
-    expect(mockRejectDecision).toHaveBeenCalledWith(
-      expect.objectContaining({
-        approverId: "gov-1",
-        approverRole: "governance_controller",
-      })
-    );
+    expect(rejectDecision).toHaveBeenCalledWith(GOV, DECISION, "Not enough evidence");
   });
 
   it("escalates a decision", async () => {
-    mockEscalateDecision.mockResolvedValue({
-      decisionId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-      status: "escalated",
-    });
-
+    escalateDecision.mockResolvedValue({ decisionId: DECISION, status: "escalated" });
     const res = await POST(
-      createRequest({
-        decisionId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        action: "escalate",
-        rationale: "Needs senior review",
-      })
+      request({ action: "escalate", decisionId: DECISION, rationale: "Needs admin" })
     );
-
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toMatchObject({ status: "escalated" });
-    expect(mockEscalateDecision).toHaveBeenCalledWith(
-      expect.objectContaining({
-        actorId: "gov-1",
-        actorRole: "governance_controller",
-        reason: "Needs senior review",
-      })
+    expect(escalateDecision).toHaveBeenCalledWith(
+      expect.objectContaining({ decisionId: DECISION, actorId: GOV })
     );
   });
 
-  it("returns 500 when the service throws unexpectedly", async () => {
-    mockApproveDecision.mockRejectedValue(new Error("db offline"));
-
+  it("returns 500 without details when the database fails", async () => {
+    approveDecision.mockRejectedValue(new Error("Decision RPC approve_decision failed"));
     const res = await POST(
-      createRequest({
-        decisionId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        action: "approve",
-        rationale: "Approved",
-      })
+      request({ action: "approve", decisionId: DECISION, payloadVersion: 1, rationale: "ok" })
     );
-
     expect(res.status).toBe(500);
-    expect(mockLogApiError).toHaveBeenCalled();
-  });
-
-  function decisionRow(data: Record<string, unknown>) {
-    mockAdminFrom.mockImplementation((table: string) =>
-      table === "decision_records"
-        ? {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                maybeSingle: vi.fn().mockResolvedValue({ data, error: null }),
-              }),
-            }),
-          }
-        : {}
-    );
-  }
-
-  it.each(["approve", "reject", "escalate"])(
-    "refuses to %s staff role changes, which have their own approval flow",
-    async (action) => {
-      decisionRow({ recommender_id: "admin-1", action_category: "role_change", case_type: "staff_role" });
-      const res = await POST(
-        createRequest({
-          decisionId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-          action,
-          rationale: "Looks right",
-        })
-      );
-      expect(res.status).toBe(409);
-      expect(mockApproveDecision).not.toHaveBeenCalled();
-      expect(mockRejectDecision).not.toHaveBeenCalled();
-      expect(mockEscalateDecision).not.toHaveBeenCalled();
-    }
-  );
-
-  it("checks the secondary approver against the staff role table, not auth metadata", async () => {
-    decisionRow({ recommender_id: "mod-1", action_category: "account_ban", case_type: "report" });
-    mockVerifyCapabilityFromDb.mockResolvedValue(false);
-    const secondaryApproverId = "b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22";
-
-    const res = await POST(
-      createRequest({
-        decisionId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        action: "approve",
-        rationale: "Approved",
-        secondaryApproverId,
-      })
-    );
-
-    expect(res.status).toBe(422);
-    expect(mockVerifyCapabilityFromDb).toHaveBeenCalledWith(
-      expect.objectContaining({ id: secondaryApproverId }),
-      "decision:approve"
-    );
-    expect(mockApproveDecision).not.toHaveBeenCalled();
+    expect(await res.text()).not.toContain("approve_decision");
   });
 });

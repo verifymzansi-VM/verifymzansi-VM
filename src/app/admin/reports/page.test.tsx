@@ -30,11 +30,6 @@ vi.mock("@/lib/supabase/admin", () => ({
   })),
 }));
 
-vi.mock("@/lib/auth/roles", () => ({
-  isStaff: vi.fn(() => true),
-  isModeratorOrAdmin: vi.fn(() => true),
-}));
-
 vi.mock("next/navigation", () => ({
   redirect: redirectMock,
 }));

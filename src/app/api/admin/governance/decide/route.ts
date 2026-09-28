@@ -1,79 +1,55 @@
 import { NextResponse } from "next/server";
-import { approveDecision, rejectDecision, escalateDecision } from "@/lib/services/decision-ledger";
-import { enforceAction, type EnforcementAction } from "@/lib/services/enforcement";
-import { logAuditEvent } from "@/lib/services/audit";
+import { z } from "zod";
+import {
+  approveDecision,
+  decisionRefusalResponse,
+  escalateDecision,
+  markDecisionExecution,
+  rejectDecision,
+} from "@/lib/services/decision-ledger";
+import { applyVerificationDecision } from "@/lib/services/verification-decision";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
+import { reportCriticalIncident } from "@/lib/utils/alerts";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
-import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
-import { z } from "zod";
 import { uuidSchema } from "@/lib/validations/shared";
+import type { StaffRole } from "@/types/enums";
 
 const log = createLogger("GovernanceDecide");
 
-const governanceDecideSchema = z.object({
-  decisionId: uuidSchema,
-  action: z.enum(["approve", "reject", "escalate"]),
-  rationale: z.string().min(1).max(2000),
-  afterState: z.record(z.string(), z.unknown()).optional(),
-  secondaryApproverId: uuidSchema.optional(),
-});
-
-/**
- * High-stakes action categories that require dual approval (four-eyes principle).
- * For these categories, the approver must not be the recommender, and a
- * secondaryApproverId is required.
- */
-const DUAL_APPROVAL_CATEGORIES: ReadonlySet<string> = new Set([
-  "kyc_override",
-  "account_ban",
-  "data_deletion",
-  "role_change",
-  "policy_exception",
+const governanceDecideSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("approve"),
+    decisionId: uuidSchema,
+    payloadVersion: z.number().int().min(1),
+    rationale: z.string().trim().min(1).max(2000),
+  }),
+  z.object({
+    action: z.literal("reject"),
+    decisionId: uuidSchema,
+    rationale: z.string().trim().min(1).max(2000),
+  }),
+  z.object({
+    action: z.literal("escalate"),
+    decisionId: uuidSchema,
+    rationale: z.string().trim().min(1).max(2000),
+  }),
+  z.object({
+    action: z.literal("retry_execution"),
+    decisionId: uuidSchema,
+  }),
 ]);
-
-/**
- * Decision categories whose approval executes account enforcement.
- * The recommendation text (e.g. "ban"/"suspend" from the flagging workflow)
- * wins when it is itself an enforceable action; otherwise the category maps
- * to its canonical enforcement action.
- */
-const ENFORCEMENT_CATEGORY_ACTIONS: Record<string, EnforcementAction> = {
-  account_ban: "ban",
-  account_suspend: "suspend",
-};
-const ENFORCEABLE_RECOMMENDATIONS: ReadonlySet<string> = new Set([
-  "warning",
-  "suspend",
-  "ban",
-  "unban",
-]);
-
-interface DecisionRow {
-  recommender_id: string;
-  action_category: string;
-  case_type: string;
-  case_id: string;
-  recommendation: string;
-  before_state: unknown;
-}
-
-/**
- * Resolve the enforcement action implied by an approved decision, or null
- * when the decision category carries no direct account enforcement.
- */
-function resolveEnforcementAction(decision: DecisionRow): EnforcementAction | null {
-  if (ENFORCEABLE_RECOMMENDATIONS.has(decision.recommendation)) {
-    return decision.recommendation as EnforcementAction;
-  }
-  return ENFORCEMENT_CATEGORY_ACTIONS[decision.action_category] ?? null;
-}
 
 /**
  * POST /api/admin/governance/decide
  *
- * Governance controller approves, rejects, or escalates a pending decision.
- * Requires decision:approve or decision:reject capability.
+ * Approve, reject or escalate a pending decision, or retry the execution of
+ * an approved one. Approval runs in one database transaction that checks
+ * the approver's role and independence (not the proposer, the person
+ * affected, the reporter or anyone who already took part) and applies the
+ * decision's effects. KYC overrides then run the verification workflow and
+ * record whether it succeeded; a failure stays visible and retryable.
  */
 export async function POST(request: Request) {
   try {
@@ -85,190 +61,20 @@ export async function POST(request: Request) {
     });
     if (!guard.success) return guard.response;
 
-    const bodyResult = await parseAndValidateJsonRequest(request, governanceDecideSchema, {
+    const body = await parseAndValidateJsonRequest(request, governanceDecideSchema, {
       invalidJsonMessage: "Invalid JSON payload",
       validationErrorMessage: "Invalid request",
       includeValidationDetails: false,
     });
-    if (!bodyResult.success) {
-      return bodyResult.response;
-    }
+    if (!body.success) return body.response;
+    const input = body.data;
 
-    const { decisionId, action, rationale, afterState, secondaryApproverId } = bodyResult.data;
-
-    // ── Dual approval enforcement for high-stakes actions ────
-    const { createAdminClient } = await import("@/lib/supabase/admin");
-    const adminSupabase = createAdminClient();
-    const { data: decisionRow } = await adminSupabase
-      .from("decision_records")
-      .select("recommender_id, action_category, case_type, case_id, recommendation, before_state")
-      .eq("id", decisionId)
-      .maybeSingle();
-
-    if (!decisionRow) {
-      return NextResponse.json({ error: "Decision record not found" }, { status: 404 });
-    }
-    // Staff role changes are decided on the Role management page, where the
-    // database enforces the role-change approval policy.
-    if ((decisionRow as DecisionRow).case_type === "staff_role") {
-      return NextResponse.json(
-        { error: "Review staff role changes on the Role management page" },
-        { status: 409 }
-      );
-    }
-
-    let decision: DecisionRow | null = null;
-    if (action === "approve" || action === "reject") {
-      decision = decisionRow as DecisionRow;
-
-      // Four-eyes principle: approver must differ from recommender
-      if (decision.recommender_id === guard.user.id) {
-        return NextResponse.json(
-          { error: "Cannot approve/reject your own recommendation" },
-          { status: 403 }
-        );
-      }
-
-      // High-stakes categories require a secondary approver
-      if (action === "approve" && DUAL_APPROVAL_CATEGORIES.has(decision.action_category)) {
-        if (!secondaryApproverId) {
-          return NextResponse.json(
-            {
-              error: "Dual approval required",
-              detail:
-                "High-stakes decisions require a secondary approver. Provide secondaryApproverId.",
-            },
-            { status: 422 }
-          );
-        }
-
-        // The secondary approver must be a distinct, independent staff member:
-        // not the primary approver and not the original recommender.
-        if (secondaryApproverId === guard.user.id) {
-          return NextResponse.json(
-            { error: "Secondary approver must differ from the primary approver" },
-            { status: 422 }
-          );
-        }
-        if (secondaryApproverId === decision.recommender_id) {
-          return NextResponse.json(
-            { error: "Secondary approver must differ from the recommender" },
-            { status: 422 }
-          );
-        }
-
-        // DB-verify the secondary approver exists and actually holds the
-        // decision:approve capability (presence of a UUID is not approval).
-        const secondaryIsApprover = await verifyCapabilityFromDb(
-          { id: secondaryApproverId, app_metadata: {}, is_anonymous: false },
-          "decision:approve"
-        );
-        if (!secondaryIsApprover) {
-          return NextResponse.json(
-            { error: "Secondary approver is not an authorized decision approver" },
-            { status: 422 }
-          );
-        }
-      }
-    }
-
-    if (action === "approve") {
-      const result = await approveDecision({
-        decisionId,
-        approverId: guard.user.id,
-        approverRole: guard.actorRole,
-        rationale,
-        afterState: afterState ?? {},
-        secondaryApproverId,
-      });
-      if (!result) {
-        return NextResponse.json(
-          { error: "Decision not found or not in approvable state" },
-          { status: 409 }
-        );
-      }
-
-      // ── Execute approved enforcement ─────────────────────
-      // Approving an enforcement recommendation (ban/suspend/warn) must
-      // actually apply it — the ledger records intent, enforceAction acts.
-      if (decision) {
-        const enforcementAction = resolveEnforcementAction(decision);
-        const beforeState =
-          decision.before_state && typeof decision.before_state === "object"
-            ? (decision.before_state as Record<string, unknown>)
-            : {};
-        const ownerId = typeof beforeState.ownerId === "string" ? beforeState.ownerId : null;
-
-        if (enforcementAction && ownerId) {
-          try {
-            await enforceAction({
-              ownerId,
-              action: enforcementAction,
-              reason: rationale,
-              moderatorId: guard.user.id,
-              actorRole: guard.actorRole,
-              reportId: decision.case_type === "report" ? decision.case_id : undefined,
-            });
-          } catch (enforcementErr) {
-            // The decision IS finalized (retrying this route now 409s), so
-            // surface the failure distinctly — an operator must re-apply the
-            // enforcement manually (e.g. via the flagging action route).
-            log.error("Decision approved but enforcement execution failed", {
-              decisionId,
-              enforcementAction,
-              ownerId,
-              error: enforcementErr instanceof Error ? enforcementErr.message : "Unknown",
-            });
-            await logAuditEvent({
-              actorId: guard.user.id,
-              actorRole: guard.actorRole,
-              action: "moderation_action",
-              targetType: decision.case_type,
-              targetId: decision.case_id,
-              metadata: {
-                decisionId,
-                enforcement: "failed",
-                enforcementAction,
-                error: enforcementErr instanceof Error ? enforcementErr.message : "Unknown",
-              },
-            });
-            return NextResponse.json(
-              {
-                error: "Decision approved but enforcement execution failed — re-apply manually",
-                code: "enforcement_failed",
-                decisionId,
-              },
-              { status: 502 }
-            );
-          }
-        }
-      }
-
-      return NextResponse.json({ status: "approved", decisionId });
-    }
-
-    if (action === "reject") {
-      const result = await rejectDecision({
-        decisionId,
-        approverId: guard.user.id,
-        approverRole: guard.actorRole,
-        rationale,
-      });
-      if (!result) {
-        return NextResponse.json(
-          { error: "Decision not found or not in rejectable state" },
-          { status: 409 }
-        );
-      }
-      return NextResponse.json({ status: "rejected", decisionId });
-    }
-
-    if (action === "escalate") {
+    if (input.action === "escalate") {
       const result = await escalateDecision({
-        decisionId,
+        decisionId: input.decisionId,
         actorId: guard.user.id,
         actorRole: guard.actorRole,
-        reason: rationale,
+        reason: input.rationale,
       });
       if (!result) {
         return NextResponse.json(
@@ -276,12 +82,131 @@ export async function POST(request: Request) {
           { status: 409 }
         );
       }
-      return NextResponse.json({ status: "escalated", decisionId });
+      return NextResponse.json({ status: "escalated", decisionId: input.decisionId });
     }
 
-    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+    if (input.action === "reject") {
+      const result = await rejectDecision(guard.user.id, input.decisionId, input.rationale);
+      if (!result.ok) return decisionRefusalResponse(result.error);
+      return NextResponse.json({ status: result.status, decisionId: input.decisionId });
+    }
+
+    if (input.action === "retry_execution") {
+      if (guard.actorRole !== "admin") {
+        return NextResponse.json(
+          { error: "Only an admin can retry an execution" },
+          { status: 403 }
+        );
+      }
+      return await retryExecution(input.decisionId, guard.user.id, guard.actorRole);
+    }
+
+    const result = await approveDecision(
+      guard.user.id,
+      input.decisionId,
+      input.payloadVersion,
+      input.rationale
+    );
+    if (!result.ok) return decisionRefusalResponse(result.error);
+
+    if (result.execution === "pending" && result.payload) {
+      const executed = await executeKycOverride(
+        input.decisionId,
+        result.payload,
+        guard.user.id,
+        guard.actorRole,
+        false
+      );
+      if (!executed.ok) {
+        return NextResponse.json(
+          {
+            error: "Approved, but the verification update failed. An admin can retry it.",
+            code: "execution_failed",
+            decisionId: input.decisionId,
+          },
+          { status: 502 }
+        );
+      }
+    }
+
+    return NextResponse.json({ status: result.status, decisionId: input.decisionId });
   } catch (err) {
     logApiError(log, "Unexpected error", err);
     return internalApiError();
   }
+}
+
+async function executeKycOverride(
+  decisionId: string,
+  payload: Record<string, unknown>,
+  reviewerId: string,
+  reviewerRole: StaffRole,
+  isRetry: boolean
+): Promise<{ ok: boolean }> {
+  const stepId = typeof payload.step_id === "string" ? payload.step_id : null;
+  const overrideReasonCode =
+    typeof payload.override_reason_code === "string" ? payload.override_reason_code : null;
+
+  let error = "Verification step not found";
+  if (stepId) {
+    const { data: step } = await createAdminClient()
+      .from("verification_steps")
+      .select("*")
+      .eq("id", stepId)
+      .maybeSingle();
+    if (step) {
+      const applied = await applyVerificationDecision({
+        step,
+        decision: "approved",
+        overrideReasonCode,
+        reviewerId,
+        reviewerRole,
+        allowAlreadyApplied: isRetry,
+      });
+      if (applied.ok) {
+        await markDecisionExecution(decisionId, true);
+        return { ok: true };
+      }
+      error = applied.error;
+    }
+  }
+
+  await markDecisionExecution(decisionId, false, error);
+  reportCriticalIncident("GovernanceDecide", "Approved KYC override could not be applied", {
+    decisionId,
+    stepId,
+    error,
+  });
+  return { ok: false };
+}
+
+async function retryExecution(decisionId: string, actorId: string, actorRole: StaffRole) {
+  const { data: decision } = await createAdminClient()
+    .from("decision_records")
+    .select("id, status, action_category, execution_status, payload, approver_id")
+    .eq("id", decisionId)
+    .maybeSingle();
+  if (
+    !decision ||
+    decision.status !== "approved" ||
+    decision.action_category !== "kyc_override" ||
+    decision.execution_status !== "failed"
+  ) {
+    return NextResponse.json({ error: "Nothing to retry for this decision" }, { status: 409 });
+  }
+
+  // The admin who retries is recorded as the reviewer of the step.
+  const executed = await executeKycOverride(
+    decisionId,
+    (decision.payload ?? {}) as Record<string, unknown>,
+    actorId,
+    actorRole,
+    true
+  );
+  return executed.ok
+    ? NextResponse.json({ status: "executed", decisionId })
+    : NextResponse.json(
+        { error: "The verification update failed again.", code: "execution_failed", decisionId },
+        { status: 502 }
+      );
 }

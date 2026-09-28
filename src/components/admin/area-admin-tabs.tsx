@@ -16,6 +16,8 @@ import type { PendingVerificationGroup } from "@/lib/utils/admin-queries";
 
 interface AreaAdminTabsProps {
   area: MarketplaceArea;
+  /** Governors and admins may hide content and apply emergency containment. */
+  canEnforceDirectly?: boolean;
   areaLabel: string;
   pendingVerifications: PendingVerificationGroup[];
   pendingContent: ContentItem[];
@@ -56,6 +58,7 @@ export function AreaAdminTabs({
   reports,
   activityEntries,
   overviewStats,
+  canEnforceDirectly = false,
 }: AreaAdminTabsProps) {
   const router = useRouter();
 
@@ -187,7 +190,11 @@ export function AreaAdminTabs({
 
       {/* Flagging Tab */}
       <TabsContent value="flagging">
-        <FlaggingQueueTable reports={reports} onActionComplete={handleRefresh} />
+        <FlaggingQueueTable
+          reports={reports}
+          onActionComplete={handleRefresh}
+          canEnforceDirectly={canEnforceDirectly}
+        />
       </TabsContent>
     </Tabs>
   );

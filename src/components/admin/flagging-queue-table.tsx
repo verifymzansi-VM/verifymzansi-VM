@@ -21,6 +21,7 @@ import { AlertTriangle, EyeOff, Ban, XCircle, Flag, Loader2 } from "lucide-react
 import { calculateSlaState, slaSortPriority } from "@/lib/utils/sla";
 import type { ReportSeverity } from "@/types/enums";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { useToast } from "@/hooks/use-toast";
 
 interface ReportItem {
   id: string;
@@ -38,30 +39,30 @@ interface FlaggingQueueTableProps {
   reports: ReportItem[];
   onActionComplete?: () => void;
   readOnly?: boolean;
+  /** Governors and admins may hide content and apply emergency containment. */
+  canEnforceDirectly?: boolean;
 }
 
 const SEVERITY_FILTER = ["all", "high", "standard"] as const;
 
 const ENFORCEMENT_ACTIONS = [
-  { value: "warn", label: "Warn Account", icon: AlertTriangle, variant: "default" as const },
-  { value: "hide", label: "Hide Content", icon: EyeOff, variant: "default" as const },
-  { value: "suspend", label: "Suspend Account", icon: Shield, variant: "destructive" as const },
-  { value: "ban", label: "Ban Account", icon: Ban, variant: "destructive" as const },
-  { value: "dismiss", label: "Dismiss Report", icon: XCircle, variant: "secondary" as const },
+  { value: "warn", label: "Warn account", icon: AlertTriangle, direct: false },
+  { value: "hide", label: "Hide this content", icon: EyeOff, direct: true },
+  { value: "suspend", label: "Suspend account", icon: Shield, direct: false },
+  { value: "ban", label: "Ban account", icon: Ban, direct: false },
+  { value: "dismiss", label: "Dismiss report", icon: XCircle, direct: false },
 ];
 
-const SUSPEND_DURATIONS = [
-  { value: 7, label: "7 days" },
-  { value: 14, label: "14 days" },
-  { value: 30, label: "30 days" },
-  { value: 90, label: "90 days" },
-];
+const SUSPEND_DURATIONS = [1, 3, 7, 14, 30];
 
 export function FlaggingQueueTable({
   reports,
   onActionComplete,
   readOnly = false,
+  canEnforceDirectly = false,
 }: FlaggingQueueTableProps) {
+  const { toast } = useToast();
+  const [emergency, setEmergency] = useState(false);
   const [severityFilter, setSeverityFilter] = useState<string>("all");
   const [selectedReport, setSelectedReport] = useState<ReportItem | null>(null);
   const [action, setAction] = useState("");
@@ -84,6 +85,7 @@ export function FlaggingQueueTable({
     setAction("");
     setReason("");
     setDuration(7);
+    setEmergency(false);
     setError("");
   }
 
@@ -116,14 +118,16 @@ export function FlaggingQueueTable({
           action,
           reason: reason || undefined,
           durationDays: action === "suspend" ? duration : undefined,
+          emergency: emergency && (action === "suspend" || action === "ban") ? true : undefined,
         }),
       });
 
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to submit action");
+        throw new Error(data.error || "The action could not be saved. Try again.");
       }
 
+      toast({ title: data.message ?? "Done." });
       closeDialog();
       onActionComplete?.();
     } catch (err) {
@@ -225,7 +229,7 @@ export function FlaggingQueueTable({
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Enforcement Action</DialogTitle>
+            <DialogTitle>Act on report</DialogTitle>
             <DialogDescription>
               Report #{selectedReport?.id.slice(0, 8)} &middot;{" "}
               {selectedReport?.category.replace(/_/g, " ")} &middot; {selectedReport?.severity}{" "}
@@ -238,7 +242,7 @@ export function FlaggingQueueTable({
             <div>
               <Label className="text-sm font-medium">Action</Label>
               <div className="grid grid-cols-1 gap-2 mt-2">
-                {ENFORCEMENT_ACTIONS.map((ea) => {
+                {ENFORCEMENT_ACTIONS.filter((ea) => canEnforceDirectly || !ea.direct).map((ea) => {
                   const Icon = ea.icon;
                   return (
                     <button
@@ -269,9 +273,9 @@ export function FlaggingQueueTable({
                   onChange={(e) => setDuration(Number(e.target.value))}
                   className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 >
-                  {SUSPEND_DURATIONS.map((d) => (
-                    <option key={d.value} value={d.value}>
-                      {d.label}
+                  {SUSPEND_DURATIONS.map((days) => (
+                    <option key={days} value={days}>
+                      {days === 1 ? "1 day" : `${days} days`}
                     </option>
                   ))}
                 </select>
@@ -292,13 +296,24 @@ export function FlaggingQueueTable({
               />
             </div>
 
-            {/* Ban Confirmation */}
-            {action === "ban" && (
-              <div className="rounded-md bg-destructive/10 border border-destructive/30 p-3">
-                <p className="text-sm text-destructive font-medium">
-                  Warning: This will permanently ban the account and hide all associated content.
-                  This action cannot be easily reversed.
+            {(action === "suspend" || action === "ban") && (
+              <div className="space-y-3 rounded-md border border-destructive/30 bg-destructive/10 p-3">
+                <p className="text-sm text-destructive">
+                  {emergency
+                    ? "The account is suspended for 72 hours now. Someone else must approve the full action before then, or it lapses."
+                    : "This is a proposal. It takes effect only when another governor or admin approves it."}
                 </p>
+                {canEnforceDirectly && (
+                  <label className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={emergency}
+                      onChange={(e) => setEmergency(e.target.checked)}
+                      className="mt-1"
+                    />
+                    <span>Contain now (emergency, up to 72 hours) — for ongoing fraud or harm</span>
+                  </label>
+                )}
               </div>
             )}
           </div>
@@ -315,7 +330,11 @@ export function FlaggingQueueTable({
               variant={action === "ban" || action === "suspend" ? "destructive" : "default"}
             >
               {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Confirm Action
+              {action === "suspend" || action === "ban"
+                ? emergency
+                  ? "Contain account"
+                  : "Send for approval"
+                : "Apply action"}
             </Button>
           </DialogFooter>
         </DialogContent>

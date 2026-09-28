@@ -1,4 +1,5 @@
 import { requireStaff } from "@/lib/auth/require-staff";
+import { roleHasCapability } from "@/lib/auth/admin-access";
 import { AreaAdminTabs } from "@/components/admin/area-admin-tabs";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -24,7 +25,7 @@ function fulfilledValue<T>(result: PromiseSettledResult<T>, fallback: T): T {
 }
 
 export async function AreaAdminPage({ area, areaLabel, description }: AreaAdminPageConfig) {
-  await requireStaff("queue:view");
+  const { role } = await requireStaff("queue:view");
 
   const settled = await Promise.allSettled([
     getPendingVerificationGroups(),
@@ -67,6 +68,7 @@ export async function AreaAdminPage({ area, areaLabel, description }: AreaAdminP
       )}
 
       <AreaAdminTabs
+        canEnforceDirectly={roleHasCapability(role, "enforcement:execute")}
         area={area}
         areaLabel={areaLabel}
         pendingVerifications={pendingVerifications}

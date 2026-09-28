@@ -1,53 +1,172 @@
-/**
- * Decision Ledger Service.
- * Manages the recommendation → approval chain for sensitive actions.
- * All decision records are immutable once finalized.
- */
-
+import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "./audit";
 import { createLogger } from "@/lib/utils/logger";
-import type {
-  DecisionStatus,
-  SensitiveActionCategory,
-  AppealStatus,
-  StaffRole,
-} from "@/types/enums";
+import type { DecisionStatus, StaffRole } from "@/types/enums";
 
 const log = createLogger("DecisionLedger");
 
-/* ── Types ─────────────────────────────────────────────── */
+/**
+ * The decision ledger. Every enforcement decision, appeal and lift runs in
+ * one database transaction (see 20260927120000_decision_execution_layer.sql):
+ * the state change, recorded effects, events and audit row commit together
+ * or not at all. These wrappers pass the verified actor from the server
+ * route; the database re-checks their role and independence.
+ */
 
-export interface CreateDecisionParams {
-  caseType: string;
-  caseId: string;
-  actionCategory: SensitiveActionCategory;
-  recommenderId: string;
-  recommenderRole: StaffRole;
-  recommendation: string;
-  rationale: string;
-  evidenceRefs?: string[];
-  policyClause?: string;
-  beforeState: Record<string, unknown>;
-  correlationId?: string;
-  parentDecisionId?: string;
+export type DecisionResult<T extends Record<string, unknown> = Record<string, unknown>> =
+  ({ ok: true; status: string } & T) | { ok: false; error: string };
+
+async function callDecisionRpc<T extends Record<string, unknown>>(
+  fn: string,
+  args: Record<string, unknown>
+): Promise<DecisionResult<T>> {
+  const { data, error } = await createAdminClient().rpc(fn, args);
+  if (error) {
+    log.error("Decision RPC failed", { fn, error: error.message });
+    throw new Error(`Decision RPC ${fn} failed`);
+  }
+  return data as DecisionResult<T>;
 }
 
-export interface ApproveDecisionParams {
-  decisionId: string;
-  approverId: string;
-  approverRole: StaffRole;
-  rationale: string;
-  afterState: Record<string, unknown>;
-  secondaryApproverId?: string;
+export type ReportAction = "dismiss" | "warn" | "hide" | "suspend" | "ban";
+
+export function moderateReport(
+  actorId: string,
+  input: {
+    reportId: string;
+    action: ReportAction;
+    reason: string | null;
+    durationDays?: number | null;
+    emergency?: boolean;
+  }
+) {
+  return callDecisionRpc<{ decision_id?: string; review_decision_id?: string }>("moderate_report", {
+    p_actor: actorId,
+    p_report: input.reportId,
+    p_action: input.action,
+    p_reason: input.reason,
+    p_duration_days: input.durationDays ?? null,
+    p_emergency: input.emergency ?? false,
+  });
 }
 
-export interface RejectDecisionParams {
-  decisionId: string;
-  approverId: string;
-  approverRole: StaffRole;
-  rationale: string;
+export function approveDecision(
+  actorId: string,
+  decisionId: string,
+  payloadVersion: number,
+  note: string
+) {
+  return callDecisionRpc<{
+    decision_id: string;
+    execution?: "pending";
+    payload?: Record<string, unknown>;
+  }>("approve_decision", {
+    p_actor: actorId,
+    p_decision: decisionId,
+    p_payload_version: payloadVersion,
+    p_note: note,
+  });
 }
+
+export function rejectDecision(actorId: string, decisionId: string, note: string) {
+  return callDecisionRpc("reject_decision", {
+    p_actor: actorId,
+    p_decision: decisionId,
+    p_note: note,
+  });
+}
+
+export function liftRestriction(actorId: string, restrictionId: string, reason: string) {
+  return callDecisionRpc<{ decision_id: string }>("lift_restriction", {
+    p_actor: actorId,
+    p_restriction: restrictionId,
+    p_reason: reason,
+  });
+}
+
+export function submitAppeal(
+  userId: string,
+  decisionId: string,
+  reason: string,
+  evidence: string[] = []
+) {
+  return callDecisionRpc<{ appeal_id: string }>("submit_appeal", {
+    p_user: userId,
+    p_decision: decisionId,
+    p_reason: reason,
+    p_evidence: evidence,
+  });
+}
+
+export type AppealOutcome = "upheld" | "overturned" | "partially_overturned" | "dismissed";
+
+export function resolveAppeal(
+  actorId: string,
+  appealId: string,
+  outcome: AppealOutcome,
+  rationale: string,
+  shortenTo?: string | null
+) {
+  return callDecisionRpc<{ restrictions_changed: number }>("resolve_appeal", {
+    p_actor: actorId,
+    p_appeal: appealId,
+    p_outcome: outcome,
+    p_rationale: rationale,
+    p_shorten_to: shortenTo ?? null,
+  });
+}
+
+/** Record the outcome of application-side work for an approved decision. */
+export async function markDecisionExecution(decisionId: string, ok: boolean, error?: string) {
+  const { error: rpcError } = await createAdminClient().rpc("mark_decision_execution", {
+    p_decision: decisionId,
+    p_ok: ok,
+    p_error: error ?? null,
+  });
+  if (rpcError) {
+    log.error("Failed to record decision execution", { decisionId, error: rpcError.message });
+  }
+}
+
+/** How each refusal from the decision RPCs is shown to staff and members. */
+const REFUSALS: Record<string, [number, string]> = {
+  forbidden: [403, "Your role cannot make this decision."],
+  not_independent: [
+    403,
+    "Someone who took no part in this case, and is not the person affected or the reporter, must decide it.",
+  ],
+  not_found: [404, "That case could not be found."],
+  already_actioned: [409, "Someone has already acted on this report."],
+  not_pending: [409, "This has already been decided."],
+  expired: [410, "This proposal expired. Propose it again if it is still needed."],
+  payload_changed: [409, "The proposal changed after you opened it. Refresh and review it again."],
+  invalid_action: [400, "Choose a valid action."],
+  invalid_duration: [400, "Suspensions last between 1 and 30 days."],
+  target_missing: [404, "The reported content or account no longer exists."],
+  unmappable_hide_target: [422, "This kind of report target cannot be hidden."],
+  unsupported_decision: [422, "This decision cannot be approved here."],
+  reason_required: [400, "Give a reason of at least 10 characters."],
+  not_active: [409, "This restriction is no longer active."],
+  invalid_outcome: [400, "Choose a valid outcome."],
+  shorten_to_required: [400, "Choose the new end date for a partial overturn."],
+  nothing_to_shorten: [409, "There is no active suspension to shorten."],
+  reason_length: [400, "Explain your appeal in 20 to 2000 characters."],
+  too_much_evidence: [400, "Attach at most 5 pieces of evidence."],
+  not_appealable: [409, "This decision cannot be appealed."],
+  appeal_open: [409, "You already have an open appeal for this decision."],
+  already_appealed: [
+    409,
+    "This decision has already been appealed. Contact support if something new has come up.",
+  ],
+};
+
+export function decisionRefusalResponse(error: string): NextResponse {
+  const [status, message] = REFUSALS[error] ?? [400, "This action was refused."];
+  return NextResponse.json({ error: message, code: error }, { status });
+}
+
+/* ── Escalation ────────────────────────────────────────── */
 
 export interface EscalateDecisionParams {
   decisionId: string;
@@ -56,205 +175,7 @@ export interface EscalateDecisionParams {
   reason: string;
 }
 
-export interface CreateAppealParams {
-  decisionId: string;
-  appellantId: string;
-  reason: string;
-  evidenceRefs?: string[];
-}
-
-export interface ResolveAppealParams {
-  appealId: string;
-  reviewerId: string;
-  reviewerRole: StaffRole;
-  status: Extract<AppealStatus, "upheld" | "overturned" | "partially_overturned" | "dismissed">;
-  rationale: string;
-  outcomeDetail?: Record<string, unknown>;
-}
-
-/* ── Decision Lifecycle ────────────────────────────────── */
-
-/**
- * Create a new decision record (recommendation from a moderator).
- * Status starts as "recommended" and moves to "pending_approval".
- */
-export async function createDecisionRecord(params: CreateDecisionParams) {
-  const supabase = createAdminClient();
-
-  const { data, error } = await supabase
-    .from("decision_records")
-    .insert({
-      case_type: params.caseType,
-      case_id: params.caseId,
-      action_category: params.actionCategory,
-      status: "pending_approval" as DecisionStatus,
-      recommender_id: params.recommenderId,
-      recommendation: params.recommendation,
-      rationale: params.rationale,
-      evidence_refs: params.evidenceRefs ?? [],
-      policy_clause: params.policyClause ?? null,
-      before_state: params.beforeState,
-      correlation_id: params.correlationId ?? undefined,
-      parent_decision_id: params.parentDecisionId ?? null,
-    })
-    .select("id, correlation_id")
-    .single();
-
-  if (error || !data) {
-    log.error("Failed to create decision record", {
-      caseType: params.caseType,
-      caseId: params.caseId,
-      error: error?.message,
-    });
-    throw new Error("Failed to create decision record");
-  }
-
-  // Log immutable event
-  await appendDecisionEvent(data.id, params.recommenderId, params.recommenderRole, "recommended", {
-    recommendation: params.recommendation,
-    rationale: params.rationale,
-  });
-
-  // Audit trail
-  await logAuditEvent({
-    actorId: params.recommenderId,
-    actorRole: params.recommenderRole,
-    action: "decision_recommended",
-    targetType: params.caseType,
-    targetId: params.caseId,
-    metadata: {
-      decisionId: data.id,
-      actionCategory: params.actionCategory,
-      correlationId: data.correlation_id,
-    },
-  });
-
-  return data;
-}
-
-/**
- * Approve a pending decision (governance controller action).
- *
- * The status transition is guarded by a compare-and-swap update: only a row
- * still in `pending_approval`/`escalated` is finalized, so two concurrent
- * approvers cannot both win. Returns null when the decision is not in an
- * approvable state (callers map this to 409); genuine DB errors throw.
- */
-export async function approveDecision(params: ApproveDecisionParams) {
-  const supabase = createAdminClient();
-
-  const { data: decision, error: fetchError } = await supabase
-    .from("decision_records")
-    .select("id, status, case_type, case_id, recommender_id")
-    .eq("id", params.decisionId)
-    .single();
-
-  if (fetchError || !decision) {
-    return null;
-  }
-
-  const { data: updatedRows, error } = await supabase
-    .from("decision_records")
-    .update({
-      status: "approved" as DecisionStatus,
-      approver_id: params.approverId,
-      approval_rationale: params.rationale,
-      secondary_approver_id: params.secondaryApproverId ?? null,
-      after_state: params.afterState,
-      decided_at: new Date().toISOString(),
-    })
-    .eq("id", params.decisionId)
-    .in("status", ["pending_approval", "escalated"])
-    .select("id");
-
-  if (error) {
-    throw new Error("Failed to approve decision");
-  }
-
-  if (!updatedRows || updatedRows.length === 0) {
-    // Lost the race — another approver finalized it first.
-    return null;
-  }
-
-  await appendDecisionEvent(params.decisionId, params.approverId, params.approverRole, "approved", {
-    rationale: params.rationale,
-    afterState: params.afterState,
-  });
-
-  await logAuditEvent({
-    actorId: params.approverId,
-    actorRole: params.approverRole,
-    action: "decision_approved",
-    targetType: decision.case_type,
-    targetId: decision.case_id,
-    metadata: {
-      decisionId: params.decisionId,
-      recommenderId: decision.recommender_id,
-    },
-  });
-
-  return { decisionId: params.decisionId, status: "approved" };
-}
-
-/**
- * Reject a pending decision (governance controller action).
- * Compare-and-swap guarded like `approveDecision` — returns null when the
- * decision is not in a rejectable state (callers map this to 409).
- */
-export async function rejectDecision(params: RejectDecisionParams) {
-  const supabase = createAdminClient();
-
-  const { data: decision, error: fetchError } = await supabase
-    .from("decision_records")
-    .select("id, status, case_type, case_id")
-    .eq("id", params.decisionId)
-    .single();
-
-  if (fetchError || !decision) {
-    return null;
-  }
-
-  const { data: updatedRows, error } = await supabase
-    .from("decision_records")
-    .update({
-      status: "rejected" as DecisionStatus,
-      approver_id: params.approverId,
-      approval_rationale: params.rationale,
-      decided_at: new Date().toISOString(),
-    })
-    .eq("id", params.decisionId)
-    .in("status", ["pending_approval", "escalated"])
-    .select("id");
-
-  if (error) {
-    throw new Error("Failed to reject decision");
-  }
-
-  if (!updatedRows || updatedRows.length === 0) {
-    return null;
-  }
-
-  await appendDecisionEvent(params.decisionId, params.approverId, params.approverRole, "rejected", {
-    rationale: params.rationale,
-  });
-
-  await logAuditEvent({
-    actorId: params.approverId,
-    actorRole: params.approverRole,
-    action: "decision_rejected",
-    targetType: decision.case_type,
-    targetId: decision.case_id,
-    metadata: { decisionId: params.decisionId },
-  });
-
-  return { decisionId: params.decisionId, status: "rejected" };
-}
-
-/**
- * Escalate a decision for additional review.
- * Only open decisions (`recommended`/`pending_approval`) can be escalated —
- * finalized or already-escalated decisions return null (callers map to 409).
- */
+/** Flag a pending decision for a senior reviewer; it stays approvable. */
 export async function escalateDecision(params: EscalateDecisionParams) {
   const supabase = createAdminClient();
 
@@ -263,19 +184,29 @@ export async function escalateDecision(params: EscalateDecisionParams) {
     .update({ status: "escalated" as DecisionStatus })
     .eq("id", params.decisionId)
     .in("status", ["recommended", "pending_approval"])
+    .neq("case_type", "staff_role")
     .select("id");
 
   if (error) {
     throw new Error("Failed to escalate decision");
   }
-
   if (!updatedRows || updatedRows.length === 0) {
     return null;
   }
 
-  await appendDecisionEvent(params.decisionId, params.actorId, params.actorRole, "escalated", {
-    reason: params.reason,
+  const { error: eventError } = await supabase.from("decision_record_events").insert({
+    decision_id: params.decisionId,
+    actor_id: params.actorId,
+    actor_role: params.actorRole,
+    event_type: "escalated",
+    detail: { reason: params.reason },
   });
+  if (eventError) {
+    log.error("Failed to append decision event", {
+      decisionId: params.decisionId,
+      error: eventError.message,
+    });
+  }
 
   await logAuditEvent({
     actorId: params.actorId,
@@ -287,123 +218,6 @@ export async function escalateDecision(params: EscalateDecisionParams) {
   });
 
   return { decisionId: params.decisionId, status: "escalated" };
-}
-
-/* ── Appeals ───────────────────────────────────────────── */
-
-/** Maximum number of appeals allowed in a chain. */
-const MAX_APPEAL_DEPTH = 2;
-
-/**
- * Submit an appeal against a finalized decision.
- */
-export async function createAppeal(params: CreateAppealParams) {
-  const supabase = createAdminClient();
-
-  // Enforce appeal depth limit by walking the parent_decision_id chain.
-  const { data: decision } = await supabase
-    .from("decision_records")
-    .select("id, parent_decision_id")
-    .eq("id", params.decisionId)
-    .single();
-
-  if (!decision) {
-    throw new Error("Decision record not found");
-  }
-
-  let depth = 0;
-  let parentId = decision.parent_decision_id as string | null;
-  while (parentId && depth < MAX_APPEAL_DEPTH + 1) {
-    depth++;
-    const { data: parent } = await supabase
-      .from("decision_records")
-      .select("parent_decision_id")
-      .eq("id", parentId)
-      .single();
-    parentId = (parent?.parent_decision_id as string | null) ?? null;
-  }
-
-  if (depth > MAX_APPEAL_DEPTH) {
-    throw new Error(
-      `Maximum appeal depth of ${MAX_APPEAL_DEPTH} reached. Please contact support for further assistance.`
-    );
-  }
-
-  // Mark the parent decision as appealed
-  await supabase
-    .from("decision_records")
-    .update({ status: "appealed" as DecisionStatus })
-    .eq("id", params.decisionId);
-
-  const { data, error } = await supabase
-    .from("appeal_cases")
-    .insert({
-      decision_id: params.decisionId,
-      appellant_id: params.appellantId,
-      reason: params.reason,
-      evidence_refs: params.evidenceRefs ?? [],
-    })
-    .select("id")
-    .single();
-
-  if (error || !data) {
-    throw new Error("Failed to create appeal");
-  }
-
-  await logAuditEvent({
-    actorId: params.appellantId,
-    actorRole: "member",
-    action: "appeal_submitted",
-    targetType: "decision",
-    targetId: params.decisionId,
-    metadata: { appealId: data.id },
-  });
-
-  return data;
-}
-
-/**
- * Resolve an appeal (governance controller action).
- * Only unresolved appeals (`submitted`/`under_review`) can be resolved —
- * an already-resolved appeal returns null (callers map to 409).
- */
-export async function resolveAppeal(params: ResolveAppealParams) {
-  const supabase = createAdminClient();
-
-  const { data: updatedRows, error } = await supabase
-    .from("appeal_cases")
-    .update({
-      status: params.status,
-      reviewer_id: params.reviewerId,
-      reviewer_rationale: params.rationale,
-      outcome_detail: params.outcomeDetail ?? null,
-      resolved_at: new Date().toISOString(),
-    })
-    .eq("id", params.appealId)
-    .in("status", ["submitted", "under_review"])
-    .select("id");
-
-  if (error) {
-    throw new Error("Failed to resolve appeal");
-  }
-
-  if (!updatedRows || updatedRows.length === 0) {
-    return null;
-  }
-
-  await logAuditEvent({
-    actorId: params.reviewerId,
-    actorRole: params.reviewerRole,
-    action: params.status === "upheld" ? "appeal_upheld" : "appeal_overturned",
-    targetType: "appeal",
-    targetId: params.appealId,
-    metadata: {
-      status: params.status,
-      rationale: params.rationale,
-    },
-  });
-
-  return { appealId: params.appealId, status: params.status };
 }
 
 /* ── Query Helpers ─────────────────────────────────────── */
@@ -453,32 +267,4 @@ export async function getPendingAppeals(limit = 50) {
   }
 
   return data;
-}
-
-/* ── Internal Helpers ──────────────────────────────────── */
-
-async function appendDecisionEvent(
-  decisionId: string,
-  actorId: string,
-  actorRole: string,
-  eventType: string,
-  detail: Record<string, unknown>
-) {
-  const supabase = createAdminClient();
-
-  const { error } = await supabase.from("decision_record_events").insert({
-    decision_id: decisionId,
-    actor_id: actorId,
-    actor_role: actorRole,
-    event_type: eventType,
-    detail,
-  });
-
-  if (error) {
-    log.error("Failed to append decision event", {
-      decisionId,
-      eventType,
-      error: error.message,
-    });
-  }
 }

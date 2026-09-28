@@ -34,11 +34,6 @@ vi.mock("next/navigation", () => ({
   redirect: mockRedirect,
 }));
 
-vi.mock("@/lib/auth/roles", () => ({
-  isStaff: vi.fn(() => true),
-  isModeratorOrAdmin: vi.fn(() => true),
-}));
-
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ error: mockLoggerError, info: vi.fn(), warn: vi.fn() }),
 }));

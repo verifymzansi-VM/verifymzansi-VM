@@ -52,8 +52,19 @@ function createAdminClientMock(
     legalHold?: boolean;
     cleanupError?: { code?: string; message?: string } | null;
     deleteUserError?: { message: string } | null;
+    staffRole?: string | null;
+    redactError?: { message: string } | null;
   } = {}
 ) {
+  const rpc = vi.fn(async (fn: string) => {
+    if (fn === "staff_access_of") {
+      return {
+        data: options.staffRole ? [{ role: options.staffRole, mfa_required_after: null }] : [],
+        error: null,
+      };
+    }
+    return { data: 0, error: options.redactError ?? null };
+  });
   const deleteUser = vi.fn().mockResolvedValue({ error: options.deleteUserError ?? null });
   const cleanupError = options.cleanupError ?? null;
   const firstCleanupUpdate = vi.fn().mockReturnValue(createMutationBuilder(cleanupError));
@@ -86,12 +97,13 @@ function createAdminClientMock(
 
   const admin = {
     from,
+    rpc,
     auth: {
       admin: { deleteUser },
     },
   };
   mockCreateAdminClient.mockReturnValue(admin);
-  return { admin, deleteUser, firstCleanupUpdate };
+  return { admin, deleteUser, firstCleanupUpdate, rpc };
 }
 
 function createSupabaseClientMock(user: unknown, options: { passwordError?: boolean } = {}) {
@@ -220,6 +232,21 @@ describe("POST /api/account/delete", () => {
     expect(signInWithPassword).not.toHaveBeenCalled();
     expect(admin.from).toHaveBeenCalledWith("consent_records");
     expect(admin.from).toHaveBeenCalledWith("content_edit_requests");
+    // The audit trail and decision ledger are kept and redacted, not deleted.
+    for (const kept of [
+      "audit_logs",
+      "decision_records",
+      "decision_record_events",
+      "appeal_cases",
+      "role_assignments_history",
+      "moderation_actions",
+    ]) {
+      expect(admin.from).not.toHaveBeenCalledWith(kept);
+    }
+    expect(admin.rpc).toHaveBeenCalledWith("redact_personal_audit_data", {
+      p_user: "user-1",
+      p_reason: "Account deleted by the account holder",
+    });
     expect(deleteUser).toHaveBeenCalledWith("user-1");
     expect(signOut).toHaveBeenCalled();
   });
@@ -268,5 +295,36 @@ describe("POST /api/account/delete", () => {
     const res = await POST(createRequest({ confirmation: "DELETE" }));
 
     expect(res.status).toBe(500);
+  });
+
+  it("keeps staff accounts until their role is removed", async () => {
+    createSupabaseClientMock({
+      id: "user-1",
+      email: "admin@gmail.com",
+      identities: [{ provider: "google" }],
+      app_metadata: { provider: "google" },
+    });
+    const { deleteUser } = createAdminClientMock({ staffRole: "admin" });
+
+    const res = await POST(createRequest({ confirmation: "DELETE" }));
+
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({ code: "STAFF_ROLE_ACTIVE" });
+    expect(deleteUser).not.toHaveBeenCalled();
+  });
+
+  it("does not delete the account if the audit redaction fails", async () => {
+    createSupabaseClientMock({
+      id: "user-1",
+      email: "user@gmail.com",
+      identities: [{ provider: "google" }],
+      app_metadata: { provider: "google" },
+    });
+    const { deleteUser } = createAdminClientMock({ redactError: { message: "db down" } });
+
+    const res = await POST(createRequest({ confirmation: "DELETE" }));
+
+    expect(res.status).toBe(500);
+    expect(deleteUser).not.toHaveBeenCalled();
   });
 });

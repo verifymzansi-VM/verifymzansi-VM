@@ -1,0 +1,416 @@
+// Isolated PostgreSQL checks for the decision execution layer: enforcement
+// decisions, recorded effects, appeals, expiry, jobs and append-only audit.
+// PGlite only: no environment loading, sockets or remote database.
+import { PGlite } from "@electric-sql/pglite";
+import fs from "node:fs";
+import assert from "node:assert/strict";
+
+process.on("uncaughtException", (error) => {
+  const at = (error.stack ?? "").split(/\r?\n/).find((l) => l.includes("test-decision-execution"));
+  console.error(error.message, error.where ?? "", at ?? "");
+  process.exit(1);
+});
+
+const read = (file) => fs.readFileSync(`supabase/migrations/${file}`, "utf8");
+const initial = read("20240101000000_initial_schema.sql");
+const definition = (pattern, source = initial) => {
+  const match = source.match(pattern);
+  assert(match, `Missing schema definition ${pattern}`);
+  return match[0];
+};
+const type = (name) => definition(new RegExp(`CREATE TYPE ${name} AS ENUM \\([\\s\\S]*?;`));
+const table = (name) => definition(new RegExp(`CREATE TABLE ${name} \\([\\s\\S]*?\\n\\);`));
+const transitionFn = definition(
+  /CREATE OR REPLACE FUNCTION public\.validate_listing_status_transition\(\)[\s\S]*?\$\$;/,
+  read("20260925090100_commercial_foundation.sql")
+);
+
+const db = new PGlite();
+await db.exec(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;
+CREATE SCHEMA auth;
+CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT nullif(current_setting('test.uid',true),'')::uuid $$;
+CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql AS $$ SELECT nullif(current_setting('test.role',true),'') $$;
+CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql AS $$ SELECT '{}'::jsonb $$;
+CREATE TABLE auth.users(id uuid PRIMARY KEY, raw_app_meta_data jsonb DEFAULT '{}', email text);
+GRANT USAGE ON SCHEMA auth TO anon, authenticated, service_role;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA auth TO anon, authenticated, service_role;
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+${["marketplace_area", "listing_status", "report_category", "report_severity", "report_status", "enforcement_action", "account_status", "user_role"].map(type).join("\n")}
+ALTER TYPE listing_status ADD VALUE 'sold'; ALTER TYPE listing_status ADD VALUE 'suspended'; ALTER TYPE listing_status ADD VALUE 'archived';
+ALTER TYPE marketplace_area ADD VALUE 'MZANSI_BUSINESS'; ALTER TYPE marketplace_area ADD VALUE 'PROMOTIONS_EVENTS';
+CREATE FUNCTION public.has_role(required_role text) RETURNS boolean LANGUAGE sql STABLE AS $$ SELECT false $$;
+CREATE FUNCTION public.has_any_role(roles text[]) RETURNS boolean LANGUAGE sql STABLE AS $$ SELECT false $$;
+CREATE TABLE public.account_profiles(user_id uuid PRIMARY KEY, account_status account_status NOT NULL DEFAULT 'active',
+  suspended_until timestamptz, banned_at timestamptz, ban_reason text, strikes integer NOT NULL DEFAULT 0,
+  legal_hold boolean NOT NULL DEFAULT false, account_verification_status text, updated_at timestamptz DEFAULT now());
+CREATE FUNCTION public.guard_account_enforcement_columns() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+CREATE TRIGGER guard_account_enforcement_columns BEFORE UPDATE ON public.account_profiles
+  FOR EACH ROW EXECUTE FUNCTION public.guard_account_enforcement_columns();
+CREATE TABLE public.listings(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), owner_id uuid NOT NULL,
+  status listing_status NOT NULL DEFAULT 'draft', expires_at timestamptz);
+CREATE TABLE public.businesses(LIKE public.listings INCLUDING ALL);
+CREATE TABLE public.promotions(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), owner_id uuid NOT NULL,
+  status text NOT NULL DEFAULT 'draft', expires_at timestamptz, end_date timestamptz);
+${transitionFn}
+CREATE TRIGGER trg_listings_status_transition BEFORE UPDATE OF status ON public.listings FOR EACH ROW EXECUTE FUNCTION public.validate_listing_status_transition();
+CREATE TRIGGER trg_businesses_status_transition BEFORE UPDATE OF status ON public.businesses FOR EACH ROW EXECUTE FUNCTION public.validate_listing_status_transition();
+CREATE TRIGGER trg_promotions_status_transition BEFORE UPDATE OF status ON public.promotions FOR EACH ROW EXECUTE FUNCTION public.validate_listing_status_transition();
+${table("reports")}
+ALTER TABLE reports DROP CONSTRAINT reports_target_type_check;
+${table("moderation_actions")}
+ALTER TABLE moderation_actions RENAME COLUMN target_seller_id TO target_owner_id;
+${table("audit_logs")}
+ALTER TABLE audit_logs ALTER COLUMN actor_role TYPE text USING actor_role::text;
+ALTER TABLE audit_logs ADD COLUMN previous_value jsonb, ADD COLUMN new_value jsonb, ADD COLUMN reason text;
+CREATE TABLE public.notifications(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid NOT NULL, type text NOT NULL DEFAULT 'info',
+  title text NOT NULL, message text, href text, read boolean NOT NULL DEFAULT false, created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE public.feature_flags(id uuid DEFAULT gen_random_uuid() PRIMARY KEY, key text NOT NULL UNIQUE,
+  enabled boolean NOT NULL DEFAULT false, description text);`);
+
+await db.exec(read("20260326000000_decision_ledger_and_role_lifecycle.sql"));
+
+const uuid = () => crypto.randomUUID();
+async function person(role, status = "active") {
+  const id = uuid();
+  await db.query(`INSERT INTO auth.users(id, raw_app_meta_data) VALUES ($1, $2)`, [id, role ? { role } : {}]);
+  await db.query(`INSERT INTO account_profiles(user_id, account_status) VALUES ($1, $2)`, [id, status]);
+  return id;
+}
+
+const admin = await person("admin");
+const admin2 = await person("admin");
+const governor = await person("governance_controller");
+const governor2 = await person("governance_controller");
+const moderator = await person("moderator");
+const legacyBanned = await person(null, "banned");
+
+await db.exec(read("20260927110000_staff_roles_authority.sql"));
+await db.exec(read("20260927110100_staff_role_changes.sql"));
+await db.exec(read("20260927120000_decision_execution_layer.sql"));
+await db.exec(`GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;`);
+
+const rows = async (sql, args) => (await db.query(sql, args)).rows;
+const scalar = async (sql, args) => Object.values((await db.query(sql, args)).rows[0] ?? { v: null })[0];
+
+// Every RPC runs as the service role, like the API routes.
+async function asService(fn) {
+  await db.exec(`SET ROLE service_role; SELECT set_config('test.role','service_role',false)`);
+  try {
+    return await fn();
+  } finally {
+    await db.exec(`RESET ROLE; SELECT set_config('test.role','',false)`);
+  }
+}
+const call = (sql, args) => asService(async () => (await db.query(sql, args)).rows[0].result);
+const moderate = (actor, report, action, opts = {}) =>
+  call(`SELECT public.moderate_report($1,$2,$3,$4,$5,$6) AS result`, [
+    actor, report, action, opts.reason ?? "Clear policy breach", opts.days ?? null, opts.emergency ?? false,
+  ]);
+const approve = (actor, decision, version = 1) =>
+  call(`SELECT public.approve_decision($1,$2,$3,'Approved') AS result`, [actor, decision, version]);
+const reject = (actor, decision) => call(`SELECT public.reject_decision($1,$2,'No') AS result`, [actor, decision]);
+const appeal = (user, decision, reason = "I did not do this and have proof of my identity.") =>
+  call(`SELECT public.submit_appeal($1,$2,$3,'[]'::jsonb) AS result`, [user, decision, reason]);
+const resolve = (actor, appealId, outcome, shortenTo = null) =>
+  call(`SELECT public.resolve_appeal($1,$2,$3,'Reviewed all the evidence',$4) AS result`, [
+    actor, appealId, outcome, shortenTo,
+  ]);
+const statusOf = (user) => scalar(`SELECT account_status::text FROM account_profiles WHERE user_id=$1`, [user]);
+const listingStatus = (id) => scalar(`SELECT status::text FROM listings WHERE id=$1`, [id]);
+
+async function seller() {
+  const id = await person("member");
+  const live = await scalar(`INSERT INTO listings(owner_id,status) VALUES ($1,'live') RETURNING id`, [id]);
+  const pending = await scalar(`INSERT INTO listings(owner_id,status) VALUES ($1,'pending_moderation') RETURNING id`, [id]);
+  const ownHidden = await scalar(`INSERT INTO listings(owner_id,status) VALUES ($1,'hidden') RETURNING id`, [id]);
+  return { id, live, pending, ownHidden };
+}
+async function reportOn(listing, reporter = null) {
+  return scalar(
+    `INSERT INTO reports(target_id,target_type,area,category,severity,description,reporter_user_id,reporter_ip_hash)
+     VALUES ($1,'listing','MZANSI_MARKET','scam','high','This listing asks for payment outside the platform',$2,'hash') RETURNING id`,
+    [listing, reporter]
+  );
+}
+
+// ── Legacy backfill ─────────────────────────────────────────────────────────
+const legacy = await rows(`SELECT kind, lifted_at FROM account_restrictions WHERE user_id=$1`, [legacyBanned]);
+assert.deepEqual(legacy.map((r) => r.kind), ["ban"], "existing bans become restrictions");
+assert.equal(
+  await scalar(`SELECT count(*)::int FROM decision_records WHERE case_type='legacy_enforcement' AND recommender_id IS NULL`),
+  1
+);
+
+// ── A ban is proposed by one person and applied by another ──────────────────
+const s1 = await seller();
+const reporter = await person("member");
+let rep = await reportOn(s1.live, reporter);
+
+let r = await moderate(moderator, rep, "ban");
+assert.equal(r.status, "proposed");
+assert.equal(await statusOf(s1.id), "active", "a proposal changes nothing");
+assert.equal(await scalar(`SELECT status::text FROM reports WHERE id=$1`, [rep]), "in_progress");
+assert.equal((await moderate(governor, rep, "warn")).error, "already_actioned");
+const banDecision = r.decision_id;
+
+assert.equal((await approve(moderator, banDecision)).error, "forbidden");
+assert.equal((await approve(reporter, banDecision)).error, "forbidden");
+assert.equal((await approve(governor, banDecision, 2)).error, "payload_changed");
+r = await approve(governor, banDecision);
+assert.equal(r.status, "applied");
+assert.equal(await statusOf(s1.id), "banned");
+assert.equal(await listingStatus(s1.live), "suspended");
+assert.equal(await listingStatus(s1.pending), "hidden");
+assert.equal(await listingStatus(s1.ownHidden), "hidden", "content the owner hid is not touched");
+assert.equal(await scalar(`SELECT count(*)::int FROM content_effects WHERE decision_id=$1`, [banDecision]), 2);
+assert.equal(await scalar(`SELECT status::text FROM reports WHERE id=$1`, [rep]), "resolved");
+assert.equal(await scalar(`SELECT execution_status FROM decision_records WHERE id=$1`, [banDecision]), "succeeded");
+assert.equal(await scalar(`SELECT count(*)::int FROM operation_jobs WHERE decision_id=$1 AND kind='email_notice'`, [banDecision]), 1);
+assert.equal(await scalar(`SELECT count(*)::int FROM audit_logs WHERE action='account_banned' AND target_id=$1`, [s1.id]), 1);
+assert.equal((await approve(governor2, banDecision)).error, "not_pending", "no double finalisation");
+
+// A proposer cannot approve their own proposal; the reporter cannot act on it.
+const s2 = await seller();
+rep = await reportOn(s2.live, governor2);
+assert.equal((await moderate(governor2, rep, "warn")).error, "not_independent", "reporters do not decide their reports");
+r = await moderate(governor, rep, "suspend", { days: 7 });
+assert.equal((await approve(governor, r.decision_id)).error, "not_independent");
+assert.equal((await approve(governor2, r.decision_id)).error, "not_independent", "the reporter cannot approve");
+assert.equal((await approve(admin, r.decision_id)).status, "applied");
+assert.equal(await statusOf(s2.id), "suspended");
+assert.equal((await moderate(moderator, await reportOn(s2.live), "suspend", { days: 45 })).error, "invalid_duration");
+
+// ── Guards ──────────────────────────────────────────────────────────────────
+await asService(async () => {
+  await assert.rejects(
+    db.query(`UPDATE account_profiles SET account_status='active' WHERE user_id=$1`, [s1.id]),
+    /enforcement decisions/,
+    "even the service role cannot write account status directly"
+  );
+  await assert.rejects(
+    db.query(`UPDATE listings SET status='live' WHERE id=$1`, [s1.ownHidden]),
+    /banned or suspended/,
+    "a banned owner's content cannot be republished"
+  );
+  await assert.rejects(db.query(`DELETE FROM audit_logs`), /append-only/);
+  await assert.rejects(db.query(`UPDATE decision_record_events SET event_type='x'`), /append-only/);
+  await db.query(
+    `INSERT INTO role_assignments_history(target_user_id,previous_role,new_role,assigned_by,reason)
+     VALUES ($1,'member','moderator',$2,'test row')`,
+    [moderator, admin]
+  );
+  await assert.rejects(db.query(`DELETE FROM role_assignments_history`), /append-only/);
+  await assert.rejects(db.query(`TRUNCATE audit_logs`), /append-only/);
+});
+
+// ── Appeals ─────────────────────────────────────────────────────────────────
+const stranger = await person("member");
+assert.equal((await appeal(stranger, banDecision)).error, "not_found", "only the affected person may appeal");
+assert.equal((await appeal(s1.id, banDecision, "too short")).error, "reason_length");
+r = await appeal(s1.id, banDecision);
+assert.equal(r.status, "submitted");
+const appealId = r.appeal_id;
+assert.equal((await appeal(s1.id, banDecision)).error, "appeal_open");
+assert.equal((await resolve(governor, appealId, "overturned")).error, "not_independent", "the approver cannot review");
+assert.equal((await resolve(moderator, appealId, "overturned")).error, "forbidden");
+assert.equal((await resolve(admin, appealId, "overturned")).status, "overturned");
+assert.equal(await statusOf(s1.id), "active");
+assert.equal(await listingStatus(s1.live), "live", "restored exactly");
+assert.equal(await listingStatus(s1.pending), "pending_moderation");
+assert.equal(await listingStatus(s1.ownHidden), "hidden", "owner-hidden content stays hidden");
+assert.equal(await scalar(`SELECT status::text FROM decision_records WHERE id=$1`, [banDecision]), "overridden");
+assert.equal(await scalar(`SELECT count(*)::int FROM notifications WHERE user_id=$1`, [s1.id]), 1);
+assert.equal((await appeal(s1.id, banDecision)).error, "not_appealable");
+
+// ── Warnings never change status and never lift a ban ──────────────────────
+const s3 = await seller();
+r = await moderate(moderator, await reportOn(s3.live), "warn");
+assert.equal(r.status, "applied");
+assert.equal(await statusOf(s3.id), "active");
+assert.equal(await scalar(`SELECT strikes FROM account_profiles WHERE user_id=$1`, [s3.id]), 1);
+const banS3 = await moderate(moderator, await reportOn(s3.live), "ban");
+await approve(governor, banS3.decision_id);
+await moderate(moderator, await reportOn(s3.pending), "warn");
+assert.equal(await statusOf(s3.id), "banned", "a later warning keeps the ban");
+
+// ── Two restrictions: lifting one keeps the other's effects ─────────────────
+const s4 = await seller();
+const susp = await moderate(moderator, await reportOn(s4.live), "suspend", { days: 10 });
+await approve(governor, susp.decision_id);
+const ban4 = await moderate(moderator, await reportOn(s4.pending), "ban");
+await approve(admin, ban4.decision_id);
+const suspRestriction = await scalar(`SELECT id FROM account_restrictions WHERE decision_id=$1`, [susp.decision_id]);
+const banRestriction = await scalar(`SELECT id FROM account_restrictions WHERE decision_id=$1`, [ban4.decision_id]);
+assert.equal((await call(`SELECT public.lift_restriction($1,$2,'Suspension served early') AS result`, [governor, suspRestriction])).error,
+  "not_independent");
+r = await call(`SELECT public.lift_restriction($1,$2,'Suspension served early') AS result`, [governor2, suspRestriction]);
+assert.equal(r.status, "lifted");
+assert.equal(await statusOf(s4.id), "banned");
+assert.equal(await listingStatus(s4.live), "suspended", "still hidden while the ban stands");
+await call(`SELECT public.lift_restriction($1,$2,'Ban reversed after review') AS result`, [governor2, banRestriction]);
+assert.equal(await statusOf(s4.id), "active");
+assert.equal(await listingStatus(s4.live), "live");
+
+// ── Expiry: suspensions end, ended listings stay hidden ─────────────────────
+const s5 = await seller();
+await db.query(`UPDATE listings SET expires_at = now() + interval '1 day' WHERE id=$1`, [s5.live]);
+const s5Other = await scalar(`INSERT INTO listings(owner_id,status) VALUES ($1,'live') RETURNING id`, [s5.id]);
+const susp5 = await moderate(moderator, await reportOn(s5.live), "suspend", { days: 3 });
+await approve(governor, susp5.decision_id);
+await db.query(`UPDATE account_restrictions SET ends_at = now() - interval '1 minute' WHERE decision_id=$1`, [susp5.decision_id]);
+await db.query(`SELECT set_config('test.role','service_role',false)`);
+await db.query(`ALTER TABLE listings DISABLE TRIGGER trg_listings_status_transition`);
+await db.query(`UPDATE listings SET expires_at = now() - interval '1 hour' WHERE id=$1`, [s5.live]);
+await db.query(`ALTER TABLE listings ENABLE TRIGGER trg_listings_status_transition`);
+await db.query(`SELECT set_config('test.role','',false)`);
+r = await scalar(`SELECT public.expire_due_items()`);
+assert.equal(r.lifted, 1);
+assert.equal(await statusOf(s5.id), "active");
+assert.equal(await listingStatus(s5Other), "live");
+assert.equal(await listingStatus(s5.live), "hidden", "a listing whose period ended is not republished");
+assert.equal(await scalar(`SELECT revert_outcome FROM content_effects WHERE row_id=$1`, [s5.live]), "kept_hidden:listing_period_ended");
+assert(await scalar(`SELECT last_run_at FROM ops_heartbeats WHERE name='expire_due_items'`));
+
+// ── Emergency containment ───────────────────────────────────────────────────
+const s6 = await seller();
+const rep6 = await reportOn(s6.live);
+assert.equal((await moderate(moderator, rep6, "ban", { emergency: true })).error, "forbidden");
+r = await moderate(governor, rep6, "ban", { emergency: true });
+assert.equal(r.status, "emergency_applied");
+assert.equal(await statusOf(s6.id), "suspended");
+assert.equal((await approve(governor, r.review_decision_id)).error, "not_independent");
+assert.equal((await approve(governor2, r.review_decision_id)).status, "applied");
+assert.equal(await statusOf(s6.id), "banned");
+assert.equal(await listingStatus(s6.live), "suspended");
+assert.equal(
+  await scalar(`SELECT count(*)::int FROM account_restrictions WHERE user_id=$1 AND lifted_at IS NULL`, [s6.id]),
+  1,
+  "the containment is replaced, not stacked"
+);
+
+const s7 = await seller();
+r = await moderate(admin, await reportOn(s7.live), "suspend", { days: 14, emergency: true });
+await db.query(`UPDATE account_restrictions SET ends_at = now() - interval '1 minute' WHERE decision_id=$1`, [r.decision_id]);
+await db.query(`UPDATE decision_records SET expires_at = now() - interval '1 minute' WHERE id=$1`, [r.review_decision_id]);
+await scalar(`SELECT public.expire_due_items()`);
+assert.equal(await statusOf(s7.id), "active", "unconfirmed containment lapses");
+assert.equal(await listingStatus(s7.live), "live");
+assert.equal(await scalar(`SELECT status::text FROM decision_records WHERE id=$1`, [r.review_decision_id]), "expired");
+
+// Rejecting an emergency review ends the containment at once.
+const s8 = await seller();
+const rep8 = await reportOn(s8.live);
+r = await moderate(governor, rep8, "suspend", { days: 5, emergency: true });
+assert.equal((await reject(admin, r.review_decision_id)).status, "rejected");
+assert.equal(await statusOf(s8.id), "active");
+assert.equal(await scalar(`SELECT status::text FROM reports WHERE id=$1`, [rep8]), "open", "the report returns to the queue");
+
+// ── Hiding one item; moderators cannot hide ─────────────────────────────────
+const s9 = await seller();
+const rep9 = await reportOn(s9.live);
+assert.equal((await moderate(moderator, rep9, "hide")).error, "forbidden");
+r = await moderate(governor, rep9, "hide");
+assert.equal(await listingStatus(s9.live), "suspended");
+assert.equal(await statusOf(s9.id), "active");
+const hideAppeal = await appeal(s9.id, r.decision_id);
+assert.equal((await resolve(admin, hideAppeal.appeal_id, "overturned")).status, "overturned");
+assert.equal(await listingStatus(s9.live), "live");
+
+// ── Partial overturn shortens a suspension ──────────────────────────────────
+const s10 = await seller();
+const susp10 = await moderate(moderator, await reportOn(s10.live), "suspend", { days: 20 });
+await approve(governor, susp10.decision_id);
+const a10 = await appeal(s10.id, susp10.decision_id);
+const shorter = new Date(Date.now() + 2 * 86_400_000).toISOString();
+assert.equal((await resolve(admin, a10.appeal_id, "partially_overturned")).error, "shorten_to_required");
+assert.equal((await resolve(admin, a10.appeal_id, "partially_overturned", shorter)).status, "partially_overturned");
+assert.equal(
+  new Date(await scalar(`SELECT suspended_until FROM account_profiles WHERE user_id=$1`, [s10.id])).toISOString(),
+  shorter
+);
+
+// ── Withdrawal and rejection send the report back ───────────────────────────
+const s11 = await seller();
+const rep11 = await reportOn(s11.live);
+r = await moderate(moderator, rep11, "ban");
+assert.equal((await reject(moderator, r.decision_id)).status, "withdrawn");
+assert.equal(await scalar(`SELECT status::text FROM reports WHERE id=$1`, [rep11]), "open");
+
+// ── Atomicity: a failed audit write leaves nothing applied ──────────────────
+const s12 = await seller();
+r = await moderate(moderator, await reportOn(s12.live), "ban");
+await db.exec(`ALTER TABLE audit_logs ADD CONSTRAINT test_block_ban CHECK (action <> 'account_banned') NOT VALID`);
+await assert.rejects(approve(governor, r.decision_id), /test_block_ban/);
+assert.equal(await statusOf(s12.id), "active");
+assert.equal(await listingStatus(s12.live), "live");
+assert.equal(await scalar(`SELECT count(*)::int FROM account_restrictions WHERE decision_id=$1`, [r.decision_id]), 0);
+await db.exec(`ALTER TABLE audit_logs DROP CONSTRAINT test_block_ban`);
+assert.equal((await approve(governor, r.decision_id)).status, "applied", "and can be approved again");
+
+// ── KYC override execution tracking ─────────────────────────────────────────
+const kycUser = await person("member");
+const stepId = uuid();
+const proposeKyc = (actor, user = kycUser) =>
+  call(`SELECT public.propose_kyc_override($1,$2,$3,'high','verified_in_person','Checked the original ID') AS result`, [
+    actor, stepId, user,
+  ]);
+assert.equal((await proposeKyc(moderator, moderator)).error, "not_independent", "staff cannot override their own KYC");
+assert.equal((await proposeKyc(kycUser)).error, "forbidden", "members cannot propose overrides");
+r = await proposeKyc(moderator);
+assert.equal(r.status, "proposed");
+const kyc = r.decision_id;
+assert.equal((await proposeKyc(governor2)).error, "pending_exists");
+assert.equal((await approve(moderator, kyc)).error, "forbidden");
+r = await approve(governor, kyc);
+assert.equal(r.execution, "pending");
+await asService(() => db.query(`SELECT public.mark_decision_execution($1,false,'upstream timeout')`, [kyc]));
+assert.equal(await scalar(`SELECT execution_status FROM decision_records WHERE id=$1`, [kyc]), "failed");
+assert.equal(await scalar(`SELECT count(*)::int FROM ops_events WHERE kind='decision_execution_failed'`), 1);
+await asService(() => db.query(`SELECT public.mark_decision_execution($1,true,NULL)`, [kyc]));
+assert.equal(await scalar(`SELECT execution_status FROM decision_records WHERE id=$1`, [kyc]), "succeeded");
+
+// ── Operation jobs retry, die, alert, and can be retried by an admin ────────
+const jobs = await asService(async () => (await db.query(`SELECT * FROM public.claim_operation_jobs(50)`)).rows);
+assert(jobs.length > 0);
+const job = jobs[0].id;
+await db.query(`UPDATE operation_jobs SET max_attempts = 1 WHERE id=$1`, [job]);
+assert.equal(await call(`SELECT public.complete_operation_job($1,false,'smtp down') AS result`, [job]), "dead");
+assert.equal(await scalar(`SELECT count(*)::int FROM ops_events WHERE kind='operation_job_dead'`), 1);
+assert.equal((await call(`SELECT public.retry_operation_job($1,$2) AS result`, [governor, job])).error, "forbidden");
+assert.equal((await call(`SELECT public.retry_operation_job($1,$2) AS result`, [admin, job])).status, "pending");
+const again = await asService(async () => (await db.query(`SELECT id FROM public.claim_operation_jobs(50)`)).rows);
+assert(again.some((j) => j.id === job));
+assert.equal(await call(`SELECT public.complete_operation_job($1,true,NULL) AS result`, [job]), "succeeded");
+
+// ── Retention and redaction are the only ways to change audit rows ──────────
+const oldRow = await scalar(
+  `INSERT INTO audit_logs(actor_id,actor_role,action,target_type,target_id,metadata,created_at)
+   VALUES ($1,'member','old_event','user',$1,'{}', now() - interval '25 months') RETURNING id`,
+  [stranger]
+);
+await db.query(
+  `INSERT INTO audit_logs(actor_id,actor_role,action,target_type,target_id,metadata)
+   VALUES ($1,'member','contact','user',$1,'{"email":"a@b.co","channel":"email"}')`,
+  [stranger]
+);
+assert.equal(await call(`SELECT public.purge_expired_audit_logs() AS result`), 1);
+assert.equal(await scalar(`SELECT count(*)::int FROM audit_logs WHERE id=$1`, [oldRow]), 0);
+assert.equal(await call(`SELECT public.redact_personal_audit_data($1,'Account deleted') AS result`, [stranger]), 1);
+assert.deepEqual(
+  await scalar(`SELECT metadata FROM audit_logs WHERE actor_id=$1 AND action='contact'`, [stranger]),
+  { channel: "email" }
+);
+
+// ── Members cannot call any of it ───────────────────────────────────────────
+await db.exec(`SET ROLE authenticated`);
+for (const sql of [
+  `SELECT public.moderate_report('${uuid()}','${uuid()}','ban','x')`,
+  `SELECT public.approve_decision('${uuid()}','${uuid()}',1,'x')`,
+  `SELECT public.submit_appeal('${uuid()}','${uuid()}','x')`,
+  `SELECT public.expire_due_items()`,
+]) {
+  await assert.rejects(db.query(sql), /permission denied/);
+}
+await db.exec(`RESET ROLE`);
+
+console.log("Decision execution layer checks passed.");

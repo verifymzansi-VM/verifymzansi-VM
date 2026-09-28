@@ -81,18 +81,19 @@ async function allowMissingSchema(
   return result;
 }
 
+/**
+ * Clear references that would block deleting the auth user. The audit trail,
+ * decision ledger, appeals, role history and moderation log are kept: they
+ * reference the user only by id, and personal details in audit metadata are
+ * redacted by redact_personal_audit_data() before the user is deleted.
+ */
 async function cleanupBlockingUserReferences(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   admin: any,
   userId: string
 ): Promise<SupabaseMutationResult> {
   const operations: Array<[string, PromiseLike<SupabaseMutationResult>]> = [
-    ["audit_logs.actor_id", admin.from("audit_logs").delete().eq("actor_id", userId)],
     ["consent_records.user_id", admin.from("consent_records").delete().eq("user_id", userId)],
-    [
-      "audit_logs.target_seller_id",
-      admin.from("audit_logs").update({ target_seller_id: null }).eq("target_seller_id", userId),
-    ],
     [
       "reports.reporter_user_id",
       admin.from("reports").update({ reporter_user_id: null }).eq("reporter_user_id", userId),
@@ -132,46 +133,6 @@ async function cleanupBlockingUserReferences(
     [
       "kyc_evidence_access_logs.user_id",
       admin.from("kyc_evidence_access_logs").delete().eq("user_id", userId),
-    ],
-    [
-      "decision_record_events.actor_id",
-      admin.from("decision_record_events").delete().eq("actor_id", userId),
-    ],
-    [
-      "decision_records.approver_id",
-      admin.from("decision_records").update({ approver_id: null }).eq("approver_id", userId),
-    ],
-    [
-      "decision_records.secondary_approver_id",
-      admin
-        .from("decision_records")
-        .update({ secondary_approver_id: null })
-        .eq("secondary_approver_id", userId),
-    ],
-    [
-      "decision_records.recommender_id",
-      admin.from("decision_records").delete().eq("recommender_id", userId),
-    ],
-    [
-      "appeal_cases.reviewer_id",
-      admin.from("appeal_cases").update({ reviewer_id: null }).eq("reviewer_id", userId),
-    ],
-    ["appeal_cases.appellant_id", admin.from("appeal_cases").delete().eq("appellant_id", userId)],
-    [
-      "role_assignments_history.target_user_id",
-      admin.from("role_assignments_history").delete().eq("target_user_id", userId),
-    ],
-    [
-      "role_assignments_history.assigned_by",
-      admin.from("role_assignments_history").delete().eq("assigned_by", userId),
-    ],
-    [
-      "moderation_actions.actor_id",
-      admin.from("moderation_actions").delete().eq("actor_id", userId),
-    ],
-    [
-      "moderation_actions.target_owner_id",
-      admin.from("moderation_actions").delete().eq("target_owner_id", userId),
     ],
   ];
 
@@ -288,6 +249,41 @@ export async function POST(request: NextRequest) {
         },
         { status: 409 }
       );
+    }
+
+    // Staff give up their role first (Admin → Role Management), so the last
+    // admin can never delete themselves out of the platform.
+    const { data: staffAccess, error: staffError } = await admin.rpc("staff_access_of", {
+      p_user: user.id,
+    });
+    if (staffError) {
+      log.error("Failed to check staff role before account deletion", {
+        userId: user.id,
+        error: staffError.message,
+      });
+      return internalApiError("Unable to delete account right now");
+    }
+    if (Array.isArray(staffAccess) && staffAccess.length > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Staff accounts cannot be deleted while they hold a staff role. Ask an admin to remove your role first.",
+          code: "STAFF_ROLE_ACTIVE",
+        },
+        { status: 409 }
+      );
+    }
+
+    const { error: redactError } = await admin.rpc("redact_personal_audit_data", {
+      p_user: user.id,
+      p_reason: "Account deleted by the account holder",
+    });
+    if (redactError) {
+      log.error("Audit redaction failed before account deletion", {
+        userId: user.id,
+        error: redactError.message,
+      });
+      return internalApiError("Unable to delete account right now");
     }
 
     const cleanupResult = await cleanupBlockingUserReferences(admin, user.id);

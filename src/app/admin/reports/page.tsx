@@ -1,4 +1,5 @@
 import { requireStaff } from "@/lib/auth/require-staff";
+import { roleHasCapability } from "@/lib/auth/admin-access";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +14,7 @@ export const metadata = {
 };
 
 export default async function AdminReportsPage() {
-  await requireStaff("queue:view");
+  const { role } = await requireStaff("queue:view");
 
   const admin = createAdminClient();
 
@@ -44,7 +45,10 @@ export default async function AdminReportsPage() {
           <p>No reports to review.</p>
         </div>
       ) : (
-        <ReportsClient reports={reportsData} />
+        <ReportsClient
+          reports={reportsData}
+          canEnforceDirectly={roleHasCapability(role, "enforcement:execute")}
+        />
       )}
     </div>
   );
