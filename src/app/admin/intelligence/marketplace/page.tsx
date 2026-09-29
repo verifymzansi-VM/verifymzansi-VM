@@ -6,7 +6,7 @@ import { DecisionPanel, HorizontalBarPanel } from "@/components/admin/intelligen
 import { ShoppingBag, Package, Store, TrendingUp } from "lucide-react";
 
 export const metadata = {
-  title: "Marketplace Health — Intelligence",
+  title: "Marketplace health — Intelligence",
   description: "Marketplace listing and activity analytics.",
 };
 
@@ -37,15 +37,15 @@ export default async function IntelligenceMarketplacePage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Marketplace Health"
+        title="Marketplace health"
         description="Marketplace ecosystem activity and health metrics."
-        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Marketplace Health" }]}
+        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Marketplace health" }]}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Listings</CardTitle>
+            <CardTitle className="text-sm font-medium">Total listings</CardTitle>
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -55,7 +55,7 @@ export default async function IntelligenceMarketplacePage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Live Listings</CardTitle>
+            <CardTitle className="text-sm font-medium">Live listings</CardTitle>
             <ShoppingBag className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
@@ -99,7 +99,7 @@ export default async function IntelligenceMarketplacePage() {
           ]}
         />
         <DecisionPanel
-          title="Decision notes"
+          title="What this means"
           description="Signals for marketplace liquidity and content quality."
           items={[
             {

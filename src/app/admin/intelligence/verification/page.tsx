@@ -7,7 +7,7 @@ import { DecisionPanel, HorizontalBarPanel } from "@/components/admin/intelligen
 import { Clock, CheckCircle, XCircle } from "lucide-react";
 
 export const metadata = {
-  title: "Verification Metrics — Intelligence",
+  title: "Verification metrics — Intelligence",
   description: "Identity verification pipeline analytics.",
 };
 
@@ -48,15 +48,15 @@ export default async function IntelligenceVerificationPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Verification Metrics"
+        title="Verification metrics"
         description="Identity verification pipeline performance."
-        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Verification Metrics" }]}
+        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Verification metrics" }]}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Verification Steps</CardTitle>
+            <CardTitle className="text-sm font-medium">Verification steps</CardTitle>
             <ShieldCheck className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -65,7 +65,7 @@ export default async function IntelligenceVerificationPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Review</CardTitle>
+            <CardTitle className="text-sm font-medium">Pending review</CardTitle>
             <Clock className="h-4 w-4 text-yellow-500" />
           </CardHeader>
           <CardContent>
@@ -119,7 +119,7 @@ export default async function IntelligenceVerificationPage() {
           ]}
         />
         <DecisionPanel
-          title="Decision notes"
+          title="What this means"
           description="Use this to balance conversion, fraud control, and reviewer staffing."
           items={[
             {

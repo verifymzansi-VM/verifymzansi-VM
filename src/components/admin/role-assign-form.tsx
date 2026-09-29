@@ -106,7 +106,7 @@ export function RoleAssignForm({ mode }: { mode: "admin" | "governor" }) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <UserCog className="h-5 w-5" />
-            Assign Role
+            Assign role
             <Badge variant="outline" className="ml-auto text-xs">
               <ShieldAlert className="h-3 w-3 mr-1" />
               {mode === "admin" ? "Admin" : "Governor"}
@@ -162,7 +162,7 @@ export function RoleAssignForm({ mode }: { mode: "admin" | "governor" }) {
 
           <Button onClick={handleSubmitClick} disabled={!isValid || busy} className="w-full">
             {busy ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-            {busy ? "Processing…" : "Assign Role"}
+            {busy ? "Processing…" : "Assign role"}
           </Button>
         </CardContent>
       </Card>

@@ -32,7 +32,7 @@ describe("OperatingHoursCard", () => {
         operatingHours={{ Mon_Fri: "08:00 - 17:00", Sat: "09:00 - 13:00", Sun: "Closed" }}
       />
     );
-    expect(screen.getByText("Operating Hours")).toBeInTheDocument();
+    expect(screen.getByText("Opening hours")).toBeInTheDocument();
     expect(screen.getByText("08:00 - 17:00")).toBeInTheDocument();
     expect(screen.getByText("09:00 - 13:00")).toBeInTheDocument();
     expect(screen.getByText("Closed")).toBeInTheDocument();

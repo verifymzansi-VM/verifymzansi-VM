@@ -178,7 +178,7 @@ describe("ProfilePage", () => {
     render(<ProfilePage />);
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "My Profile" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "My profile" })).toBeInTheDocument();
     });
 
     expect(screen.queryByText("Legal first name")).not.toBeInTheDocument();
@@ -190,7 +190,7 @@ describe("ProfilePage", () => {
     render(<ProfilePage />);
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "My Profile" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "My profile" })).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: /^Delete$/i }));
@@ -261,7 +261,7 @@ describe("ProfilePage", () => {
     render(<ProfilePage />);
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "My Profile" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "My profile" })).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: /^Delete$/i }));
@@ -281,7 +281,7 @@ describe("ProfilePage", () => {
     render(<ProfilePage />);
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "My Profile" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "My profile" })).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: /^Delete$/i }));

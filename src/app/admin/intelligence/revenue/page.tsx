@@ -12,7 +12,7 @@ import { TrendingUp, DollarSign, CreditCard, ArrowUpRight } from "lucide-react";
 import { createLogger } from "@/lib/utils/logger";
 
 export const metadata = {
-  title: "Revenue & Costs — Intelligence",
+  title: "Revenue & costs — Intelligence",
   description: "Financial overview and transaction analytics.",
 };
 
@@ -113,15 +113,15 @@ export default async function IntelligenceRevenuePage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Revenue & Costs"
+        title="Revenue & costs"
         description="Financial analytics and transaction tracking."
-        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Revenue & Costs" }]}
+        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Revenue & costs" }]}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+            <CardTitle className="text-sm font-medium">Total revenue</CardTitle>
             <DollarSign className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
@@ -142,7 +142,7 @@ export default async function IntelligenceRevenuePage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Success Rate</CardTitle>
+            <CardTitle className="text-sm font-medium">Success rate</CardTitle>
             <ArrowUpRight className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
@@ -186,7 +186,7 @@ export default async function IntelligenceRevenuePage() {
           }
         />
         <DecisionPanel
-          title="Decision notes"
+          title="What this means"
           description="Use these signals to decide where to focus commercial and finance work."
           items={[
             {

@@ -115,7 +115,7 @@ export function EvidenceViewer({ artifact }: { artifact: Artifact }) {
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-sm font-medium">
             <Eye className="h-4 w-4 text-brand-blue" />
-            Evidence Viewer
+            Evidence viewer
           </CardTitle>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             {isImage ? <ImageIcon className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}

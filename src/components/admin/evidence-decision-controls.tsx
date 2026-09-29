@@ -122,7 +122,7 @@ export function EvidenceDecisionControls({
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm font-medium">
           <Gavel className="h-4 w-4 text-brand-blue" />
-          Make Decision
+          Record decision
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -177,7 +177,7 @@ export function EvidenceDecisionControls({
         {/* Reason code (for reject/resubmit) */}
         {decision && decision !== "approved" && (
           <div className="space-y-1.5">
-            <Label className="text-xs">Reason Code</Label>
+            <Label className="text-xs">Reason code</Label>
             <select
               title="Reason code"
               aria-label="Reason code"

@@ -10,7 +10,7 @@ import { uuidSchema } from "@/lib/validations/shared";
 import { createLogger } from "@/lib/utils/logger";
 
 export const metadata = {
-  title: "Support Inbox — Admin",
+  title: "Support inbox — Admin",
   description: "Review and respond to contact form submissions.",
 };
 
@@ -96,7 +96,7 @@ export default async function AdminSupportPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Support Inbox"
+        title="Support inbox"
         description="Requests submitted through the website appear here. Direct domain email and email replies stay in your mail provider's inbox."
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Support" }]}
       >

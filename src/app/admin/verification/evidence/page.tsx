@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { EvidenceDeskClient } from "@/components/admin/evidence-desk";
 
 export const metadata = {
-  title: "Evidence Desk — Admin",
+  title: "Evidence desk — Admin",
   description: "Examine uploaded KYC evidence — ID documents and selfies.",
 };
 
@@ -27,12 +27,12 @@ export default async function EvidenceDeskPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Evidence Desk"
+        title="Evidence desk"
         description="Review encrypted KYC evidence."
         breadcrumbs={[
           { label: "Admin", href: "/admin" },
           { label: "Verification", href: "/admin/verification" },
-          { label: "Evidence Desk" },
+          { label: "Evidence desk" },
         ]}
       />
 

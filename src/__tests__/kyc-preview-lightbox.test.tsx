@@ -367,7 +367,7 @@ describe("KycPreviewLightbox", () => {
     await renderOpenLightbox({ evidenceDeskEnabled: true });
 
     await waitFor(() => {
-      expect(screen.getByText("Full Evidence Desk")).toBeDefined();
+      expect(screen.getByText("Open in evidence desk")).toBeDefined();
     });
   });
 
@@ -380,7 +380,7 @@ describe("KycPreviewLightbox", () => {
     await renderOpenLightbox({ evidenceDeskEnabled: false });
 
     await waitFor(() => {
-      expect(screen.queryByText("Full Evidence Desk")).toBeNull();
+      expect(screen.queryByText("Open in evidence desk")).toBeNull();
     });
   });
 

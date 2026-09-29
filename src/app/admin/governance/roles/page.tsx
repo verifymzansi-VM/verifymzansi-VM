@@ -14,7 +14,7 @@ import { RoleChangeReviewActions } from "@/components/admin/role-change-review-a
 import type { StaffRole } from "@/types/enums";
 
 export const metadata = {
-  title: "Role Management — Governance",
+  title: "Staff roles — Governance",
   description: "Manage staff role assignments with independent approval and a full audit trail.",
 };
 
@@ -149,9 +149,9 @@ export default async function GovernanceRolesPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Role Management"
+        title="Staff roles"
         description="Promotions need an independent approver. Removals by an admin take effect immediately."
-        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Role Management" }]}
+        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Staff roles" }]}
       />
 
       <RoleAssignForm mode={canAssign ? "admin" : "governor"} />

@@ -2078,7 +2078,7 @@ function CreateBusinessContent() {
                         <div className="space-y-3">
                           <Label className="flex items-center gap-2">
                             <CreditCard className="h-4 w-4 text-muted-foreground" />
-                            Payment Methods Accepted
+                            Payment methods accepted
                           </Label>
                           <div className="flex flex-wrap gap-3">
                             {PAYMENT_METHOD_OPTIONS.map((option) => (

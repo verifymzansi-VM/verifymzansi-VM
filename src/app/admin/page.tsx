@@ -35,9 +35,10 @@ const DESCRIPTIONS = {
 export default async function AdminHomePage() {
   const { user, role } = await requireStaff();
   const dashboard = await getStaffDashboard(user.id);
+  const hasSideColumn = role === "admin" || (dashboard !== null && "oversight" in dashboard);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         title={HOME_TITLES[role]}
         description={DESCRIPTIONS[role]}
@@ -74,48 +75,56 @@ export default async function AdminHomePage() {
             </section>
           )}
 
-          {role === "admin" && (
-            <PlatformPanel
-              platform={dashboard.platform}
-              retention={dashboard.retention}
-              breachedReports={dashboard.queues.reports?.breached}
-            />
-          )}
+          {/* Work on the left; health, team and oversight beside it on wide screens. */}
+          <div className={hasSideColumn ? "grid gap-6 xl:grid-cols-3" : undefined}>
+            <div className="min-w-0 space-y-6 xl:col-span-2">
+              <section className="space-y-3" aria-labelledby="home-queues">
+                <div id="home-queues">
+                  <SectionHeading
+                    title="Queues"
+                    description={
+                      role === "moderator"
+                        ? "When you claim, the most urgent items come first."
+                        : "What moderators are working through."
+                    }
+                  />
+                </div>
+                <QueueOverview queues={dashboard.queues} />
+              </section>
 
-          {"decisions" in dashboard && (
-            <DecisionsPanel
-              decisions={dashboard.decisions}
-              restrictions={dashboard.restrictions}
-              dsar={dashboard.dsar}
-            />
-          )}
-
-          <section className="space-y-3" aria-labelledby="home-queues">
-            <div id="home-queues">
-              <SectionHeading
-                title="Queues"
-                description={
-                  role === "moderator"
-                    ? "Most urgent first when you claim."
-                    : "What moderators are working through."
-                }
-              />
+              {"decisions" in dashboard && (
+                <DecisionsPanel
+                  decisions={dashboard.decisions}
+                  restrictions={dashboard.restrictions}
+                  dsar={dashboard.dsar}
+                />
+              )}
             </div>
-            <QueueOverview queues={dashboard.queues} />
-          </section>
 
-          {"oversight" in dashboard && <OversightPanel oversight={dashboard.oversight} />}
+            {hasSideColumn && (
+              <div className="grid content-start gap-6 sm:grid-cols-2 xl:grid-cols-1">
+                {role === "admin" && (
+                  <PlatformPanel
+                    platform={dashboard.platform}
+                    retention={dashboard.retention}
+                    breachedReports={dashboard.queues.reports?.breached}
+                  />
+                )}
+                {role === "admin" && (
+                  <TeamPanel
+                    platform={dashboard.platform}
+                    roleChanges={dashboard.decisions?.role_changes_pending}
+                  />
+                )}
+                {"oversight" in dashboard && <OversightPanel oversight={dashboard.oversight} />}
+              </div>
+            )}
+          </div>
 
           {role === "admin" && (
-            <>
-              <TeamPanel
-                platform={dashboard.platform}
-                roleChanges={dashboard.decisions?.role_changes_pending}
-              />
-              <Suspense fallback={<TrafficPanelSkeleton />}>
-                <TrafficPanel />
-              </Suspense>
-            </>
+            <Suspense fallback={<TrafficPanelSkeleton />}>
+              <TrafficPanel />
+            </Suspense>
           )}
         </>
       )}

@@ -274,7 +274,7 @@ describe("Dashboard listings page", () => {
 
     render(await ListingsPage({ searchParams: Promise.resolve({}) }));
 
-    expect(screen.getByRole("heading", { name: "My Posts" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "My posts" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Live (2)" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "In review (1)" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Rejected (3)" })).toBeInTheDocument();

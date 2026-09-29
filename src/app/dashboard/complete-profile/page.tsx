@@ -96,7 +96,7 @@ export default function CompleteProfilePage() {
 
   /**
    * Send OTP to the entered phone number.
-   * Called both by the "Send Verification Code" button and the "Resend code" button.
+   * Called both by the "Send code" button and the "Resend code" button.
    */
   const doSendOtp = useCallback(async () => {
     const phoneResult = saPhoneSchema.safeParse(phone);
@@ -219,28 +219,25 @@ export default function CompleteProfilePage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Verify Your Phone Number"
-        description="Verify your phone number before you continue."
-        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Verify Phone" }]}
+        title="Verify your phone number"
+        description="We send a 6-digit code by SMS to confirm the number is yours."
+        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Verify phone" }]}
       />
 
-      <Card className="mx-auto w-full max-w-xl">
+      <Card className="w-full max-w-xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Phone className="h-5 w-5" />
             {step === "phone"
-              ? "Add Your Phone Number"
+              ? "Your mobile number"
               : step === "otp"
-                ? "Enter Verification Code"
-                : "Phone Number Verified"}
+                ? "Enter the code"
+                : "Phone number verified"}
           </CardTitle>
         </CardHeader>
         <CardContent>
           {step === "phone" ? (
             <>
-              <p className="mb-4 text-sm text-muted-foreground">
-                Enter your SA mobile number to continue.
-              </p>
               <form noValidate onSubmit={handleSendOtp} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="phone">SA mobile number *</Label>
@@ -267,14 +264,14 @@ export default function CompleteProfilePage() {
                   ) : (
                     <ArrowRight className="h-4 w-4" />
                   )}
-                  Send Verification Code
+                  Send code
                 </Button>
               </form>
             </>
           ) : step === "otp" ? (
             <>
               <p className="mb-4 text-sm text-muted-foreground">
-                A 6-digit code was sent to <strong>{formatPhone(phone)}</strong>. Enter it below.
+                We sent a 6-digit code to <strong>{formatPhone(phone)}</strong>. Enter it below.
               </p>
               <form noValidate onSubmit={handleVerifyOtp} className="space-y-4">
                 <div className="space-y-2">

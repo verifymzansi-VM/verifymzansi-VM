@@ -171,15 +171,15 @@ export function MzansiBusinessGrid() {
     const hasFilters = activeFilterCount > 0 && !fetchError;
     const hasQueryError = Boolean(fetchError);
     const emptyTitle = hasQueryError
-      ? "Unable to load businesses"
+      ? "Businesses could not load"
       : hasFilters
         ? "No businesses match your filters"
-        : "No representative profiles yet";
+        : "No businesses yet";
     const emptyBody = hasQueryError
-      ? "We could not fetch businesses right now. Please try again."
+      ? "Something went wrong on our side. Try again in a moment."
       : hasFilters
-        ? "Try adjusting or clearing your filters."
-        : "Be the first identity-reviewed representative to post a business profile on Mzansi Business.";
+        ? "Change or clear your filters to see more."
+        : "Be the first verified business owner to list on Mzansi Business.";
 
     return (
       <GridStateMessage
@@ -198,7 +198,7 @@ export function MzansiBusinessGrid() {
 
         {hasFilters && (
           <Button variant="outline" onClick={resetFilters}>
-            Clear Filters
+            Clear filters
           </Button>
         )}
 
@@ -206,7 +206,7 @@ export function MzansiBusinessGrid() {
           <Button asChild size="lg">
             <Link href="/post/create-business">
               <Plus className="mr-1.5 h-4 w-4" />
-              Create Business Profile
+              Add a business
             </Link>
           </Button>
         )}

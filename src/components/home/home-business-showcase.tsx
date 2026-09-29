@@ -46,10 +46,10 @@ export async function HomeBusinessShowcase() {
     return (
       <HomeShowcaseShell title="Mzansi Business" href="/mzansi-business" tone="blue">
         <HomeShowcaseEmptyState
-          title="No representative profiles yet."
-          description="The directory is ready for its first identity-reviewed representative profile. Add a business profile and it will appear here."
+          title="No businesses yet"
+          description="Add your business and it will show here. Your first post is free."
           ctaHref="/post/create-business"
-          ctaLabel="Create First Profile"
+          ctaLabel="Add a business"
           tone="blue"
           icon={<Building2 className="h-7 w-7" />}
         />

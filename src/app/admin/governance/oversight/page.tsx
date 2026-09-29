@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart3, TrendingUp, AlertTriangle, CheckCircle } from "lucide-react";
 
 export const metadata = {
-  title: "Oversight Hub — Governance",
+  title: "Oversight — Governance",
   description: "Oversight analytics for governance controllers.",
 };
 
@@ -46,12 +46,12 @@ export default async function GovernanceOversightPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Oversight Hub"
+        title="Oversight"
         description="Governance quality metrics and decision analytics."
-        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Oversight Hub" }]}
+        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Oversight" }]}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Decisions</CardTitle>

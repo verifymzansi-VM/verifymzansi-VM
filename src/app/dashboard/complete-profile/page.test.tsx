@@ -79,11 +79,13 @@ describe("CompleteProfilePage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole("heading", { level: 1, name: "Verify Your Phone Number" })
+        screen.getByRole("heading", { level: 1, name: "Verify your phone number" })
       ).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Verify your phone number before you continue.")).toBeInTheDocument();
+    expect(
+      screen.getByText("We send a 6-digit code by SMS to confirm the number is yours.")
+    ).toBeInTheDocument();
   });
 
   it("continues to the requested returnUrl when the phone is already present", async () => {
@@ -142,7 +144,7 @@ describe("CompleteProfilePage", () => {
     await user.clear(phoneInput);
     await user.type(phoneInput, "0711234567");
 
-    const sendBtn = screen.getByRole("button", { name: /Send Verification Code/i });
+    const sendBtn = screen.getByRole("button", { name: /Send code/i });
     await user.click(sendBtn);
 
     await waitFor(() => {
@@ -166,7 +168,7 @@ describe("CompleteProfilePage", () => {
 
     await waitFor(() => screen.getByLabelText(/SA mobile number/i));
     await user.type(screen.getByLabelText(/SA mobile number/i), "0711234567");
-    await user.click(screen.getByRole("button", { name: /Send Verification Code/i }));
+    await user.click(screen.getByRole("button", { name: /Send code/i }));
 
     await waitFor(() => screen.getByLabelText(/6-digit code/i));
     await user.type(screen.getByLabelText(/6-digit code/i), "123456");
@@ -204,7 +206,7 @@ describe("CompleteProfilePage", () => {
 
     await waitFor(() => screen.getByLabelText(/SA mobile number/i));
     await user.type(screen.getByLabelText(/SA mobile number/i), "0711234567");
-    await user.click(screen.getByRole("button", { name: /Send Verification Code/i }));
+    await user.click(screen.getByRole("button", { name: /Send code/i }));
 
     await waitFor(() => screen.getByLabelText(/6-digit code/i));
     await user.type(screen.getByLabelText(/6-digit code/i), "123456");
@@ -226,7 +228,7 @@ describe("CompleteProfilePage", () => {
 
     await waitFor(() => screen.getByLabelText(/SA mobile number/i));
     await user.type(screen.getByLabelText(/SA mobile number/i), "0711234567");
-    await user.click(screen.getByRole("button", { name: /Send Verification Code/i }));
+    await user.click(screen.getByRole("button", { name: /Send code/i }));
 
     await waitFor(() => screen.getByRole("button", { name: /Change number/i }));
     await user.click(screen.getByRole("button", { name: /Change number/i }));

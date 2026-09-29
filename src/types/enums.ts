@@ -231,10 +231,10 @@ export const CATEGORY_LABELS: Record<ListingCategory, string> = {
 
 export const LISTING_CONDITION_LABELS: Record<ListingCondition, string> = {
   new: "New",
-  like_new: "Like New",
+  like_new: "Like new",
   good: "Good",
   fair: "Fair",
-  for_parts: "For Parts",
+  for_parts: "For parts",
 };
 
 export const BUSINESS_TYPE_LABELS: Record<BusinessType, string> = {

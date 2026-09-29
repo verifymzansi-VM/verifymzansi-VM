@@ -424,7 +424,7 @@ export function KycPreviewLightbox({
                 ) : (
                   <FileText className="h-5 w-5 text-brand-blue" />
                 )}
-                Document Preview
+                Document preview
               </DialogTitle>
               <DialogDescription className="flex flex-wrap items-center gap-2 mt-1 text-left">
                 <span className="font-medium">{displayName}</span>
@@ -583,7 +583,7 @@ export function KycPreviewLightbox({
               <Button asChild variant="outline" size="sm" className="gap-1">
                 <Link href="/admin/verification/evidence">
                   <ExternalLink className="h-3.5 w-3.5" />
-                  Full Evidence Desk
+                  Open in evidence desk
                 </Link>
               </Button>
             )}

@@ -8,7 +8,7 @@ import { FileText, MessageSquare } from "lucide-react";
 import { AppealResolveForm } from "./appeal-resolve-form";
 
 export const metadata = {
-  title: "Appeal Detail — Governance",
+  title: "Appeal — Governance",
 };
 
 interface Props {
@@ -57,7 +57,7 @@ export default async function AppealDetailPage({ params }: Props) {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Appeal Detail"
+        title="Appeal"
         description={`Appeal ${appeal.id.slice(0, 8)}…`}
         breadcrumbs={[
           { label: "Admin", href: "/admin" },
@@ -71,7 +71,7 @@ export default async function AppealDetailPage({ params }: Props) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5" />
-            Appeal Information
+            Appeal details
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -89,7 +89,7 @@ export default async function AppealDetailPage({ params }: Props) {
               <p className="font-mono text-sm">{appeal.appellant_id?.slice(0, 12)}…</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Linked Decision</p>
+              <p className="text-sm text-muted-foreground">Linked decision</p>
               <p className="font-mono text-sm">{appeal.decision_id?.slice(0, 12)}…</p>
             </div>
           </div>
@@ -118,7 +118,7 @@ export default async function AppealDetailPage({ params }: Props) {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <MessageSquare className="h-5 w-5" />
-              Resolve Appeal
+              Resolve appeal
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -133,7 +133,7 @@ export default async function AppealDetailPage({ params }: Props) {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" />
-              Linked Decision
+              Linked decision
             </CardTitle>
           </CardHeader>
           <CardContent>

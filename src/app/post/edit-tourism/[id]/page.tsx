@@ -750,7 +750,7 @@ export default function EditPromotionPage() {
                     <PostSelect
                       id="eventType"
                       className={selectClass}
-                      aria-label="Event Type"
+                      aria-label="Event type"
                       value={eventType}
                       onChange={(e) => setEventType(e.target.value)}
                     >
@@ -763,14 +763,14 @@ export default function EditPromotionPage() {
                     </PostSelect>
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor="age_restriction">Age Restriction</Label>
+                    <Label htmlFor="age_restriction">Age restriction</Label>
                     <p className="text-xs text-muted-foreground">
                       Minimum age for attendees, if any.
                     </p>
                     <PostSelect
                       id="age_restriction"
                       className={selectClass}
-                      aria-label="Age Restriction"
+                      aria-label="Age restriction"
                       value={ageRestriction}
                       onChange={(e) => setAgeRestriction(e.target.value)}
                     >
@@ -1065,7 +1065,7 @@ export default function EditPromotionPage() {
                   </div>
                 )}
                 <MediaUpload
-                  label="Upload Logo"
+                  label="Upload logo"
                   maxFiles={1}
                   files={newLogoFile}
                   onChange={setNewLogoFile}

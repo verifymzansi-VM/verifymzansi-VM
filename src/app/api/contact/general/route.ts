@@ -52,7 +52,7 @@ const contactFormSchema = z.object({
 /**
  * POST /api/contact/general
  *
- * Handles general "Contact Us" form submissions.
+ * Handles general "Contact us" form submissions.
  * Validates input, verifies Turnstile CAPTCHA, rate-limits, and stores the inquiry.
  */
 export async function POST(request: NextRequest) {

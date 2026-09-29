@@ -173,7 +173,7 @@ export function BusinessFilterDrawer() {
       <SheetTrigger asChild>
         <button
           type="button"
-          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 md:bottom-[calc(1rem+env(safe-area-inset-bottom))] z-40 inline-flex h-11 -translate-x-1/2 items-center justify-center gap-2 rounded-full bg-foreground px-5 text-sm font-semibold text-background shadow-xl shadow-black/20 ring-1 ring-white/10 transition-all hover:bg-foreground/90 active:scale-[0.98] lg:hidden motion-reduce:transition-none motion-reduce:active:scale-100"
+          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 md:bottom-[calc(1rem+env(safe-area-inset-bottom))] z-40 inline-flex h-11 items-center justify-center gap-2 rounded-full bg-foreground px-5 text-sm font-semibold text-background shadow-xl shadow-black/20 ring-1 ring-white/10 transition-all hover:bg-foreground/90 active:scale-[0.98] lg:hidden motion-reduce:transition-none motion-reduce:active:scale-100"
           aria-label="Open business filters"
           disabled={!isInteractive}
         >

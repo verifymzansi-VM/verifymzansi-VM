@@ -64,20 +64,20 @@ describe("EvidenceDecisionControls", () => {
   it("shows reason code selector when reject is selected", () => {
     render(<EvidenceDecisionControls step={baseStep} onComplete={onComplete} />);
     fireEvent.click(screen.getByText("Reject"));
-    expect(screen.getByText("Reason Code")).toBeInTheDocument();
+    expect(screen.getByText("Reason code")).toBeInTheDocument();
     expect(screen.getByTitle("Reason code")).toBeInTheDocument();
   });
 
   it("shows reason code selector when resubmit is selected", () => {
     render(<EvidenceDecisionControls step={baseStep} onComplete={onComplete} />);
     fireEvent.click(screen.getByText("Resubmit"));
-    expect(screen.getByText("Reason Code")).toBeInTheDocument();
+    expect(screen.getByText("Reason code")).toBeInTheDocument();
   });
 
   it("does not show reason code selector when approved is selected", () => {
     render(<EvidenceDecisionControls step={baseStep} onComplete={onComplete} />);
     fireEvent.click(screen.getByText("Approve"));
-    expect(screen.queryByText("Reason Code")).not.toBeInTheDocument();
+    expect(screen.queryByText("Reason code")).not.toBeInTheDocument();
   });
 
   it("toasts error when submitting non-approved without reason code", async () => {

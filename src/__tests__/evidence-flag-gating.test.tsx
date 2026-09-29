@@ -140,7 +140,7 @@ describe("Feature-flag gating: Evidence Desk", () => {
         />
       );
 
-      expect(screen.queryByTitle("View Evidence")).toBeNull();
+      expect(screen.queryByTitle("View evidence")).toBeNull();
     });
 
     it("shows Evidence button when evidenceDeskEnabled is true", async () => {
@@ -154,7 +154,7 @@ describe("Feature-flag gating: Evidence Desk", () => {
         />
       );
 
-      expect(screen.getByTitle("View Evidence")).toBeDefined();
+      expect(screen.getByTitle("View evidence")).toBeDefined();
     });
   });
 });

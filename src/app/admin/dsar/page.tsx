@@ -15,7 +15,7 @@ import type { DsarCase } from "@/types/database";
 import type { DsarStatus } from "@/types/enums";
 
 export const metadata = {
-  title: "Data Requests — Admin",
+  title: "Data requests — Admin",
   description: "Process POPIA data requests before their deadlines.",
 };
 
@@ -143,9 +143,9 @@ export default async function AdminDSARPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Data Requests"
+        title="Data requests"
         description="POPIA data requests, most urgent deadline first."
-        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Data Requests" }]}
+        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Data requests" }]}
       >
         <Button asChild size="sm" className="gap-2">
           <Link href="/admin/dsar/new">

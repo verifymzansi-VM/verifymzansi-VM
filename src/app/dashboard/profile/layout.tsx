@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "My Profile",
+  title: "My profile",
   description: "View and update your VerifyMzansi profile information.",
   robots: { index: false, follow: false },
 };

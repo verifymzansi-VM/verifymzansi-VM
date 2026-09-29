@@ -76,7 +76,7 @@ for (const journey of journeys) {
       await page.getByLabel("City or town", { exact: true }).selectOption("Johannesburg");
     }
     if (journey.name === "home-salon") {
-      await page.getByLabel("Detailed Address", { exact: true }).fill("PRIVATE TEST ADDRESS 42");
+      await page.getByLabel("Detailed address", { exact: true }).fill("PRIVATE TEST ADDRESS 42");
       await expect(
         page.getByRole("checkbox", { name: "Show my exact visitor address publicly" })
       ).not.toBeChecked();

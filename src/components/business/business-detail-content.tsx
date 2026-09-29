@@ -126,7 +126,7 @@ export function BusinessDetailsCard({
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Business Details</CardTitle>
+        <CardTitle className="text-base">Business details</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         {businessType === "mall_store" && (
@@ -287,7 +287,7 @@ export function BusinessDetailsCard({
                   rel="noopener noreferrer nofollow ugc"
                 >
                   <Globe className="h-4 w-4" />
-                  Order Online
+                  Order online
                 </a>
               </Button>
             )}
@@ -339,7 +339,7 @@ export function BusinessDetailsCard({
               rel="noopener noreferrer nofollow ugc"
             >
               <MapPin className="h-4 w-4" />
-              Open Map Directions
+              Get directions
             </a>
           </Button>
         )}
@@ -547,7 +547,7 @@ export function TourismDetailsCard({ details }: { details: TourismCategoryDetail
               rel="noopener noreferrer nofollow ugc"
             >
               <Globe className="h-4 w-4" />
-              Book Online
+              Book online
             </a>
           </Button>
         )}

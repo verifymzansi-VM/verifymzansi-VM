@@ -192,7 +192,7 @@ export function EvidenceDeskClient({
               ) : (
                 <Search className="h-4 w-4" />
               )}
-              Load Evidence
+              Load evidence
             </Button>
           </form>
         </CardContent>
@@ -305,7 +305,7 @@ export function EvidenceDeskClient({
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-sm font-medium">
                     <AlertTriangle className="h-4 w-4 text-amber-500" />
-                    Risk Signals
+                    Risk signals
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">

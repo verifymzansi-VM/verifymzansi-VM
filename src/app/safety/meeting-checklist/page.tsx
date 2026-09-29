@@ -6,7 +6,7 @@ import { InfoHero } from "@/components/safety/info-hero";
 import { MeetingChecklist } from "./meeting-checklist";
 
 export const metadata = {
-  title: "Meeting Safety Checklist",
+  title: "Meeting safety checklist",
   description:
     "Your checklist for safe in-person meetups when buying or selling on VerifyMzansi. Stay safe in South Africa.",
 };
@@ -18,7 +18,7 @@ export default function MeetingChecklistPage() {
 
       <main id="main-content" className="flex-1">
         <InfoHero
-          title="Meeting Safety Checklist"
+          title="Meeting safety checklist"
           description="Stay safe when meeting buyers or sellers."
           breadcrumbs={[{ label: "Safety", href: "/safety" }, { label: "Meeting Checklist" }]}
         />

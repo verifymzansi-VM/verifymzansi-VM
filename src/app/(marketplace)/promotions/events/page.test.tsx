@@ -140,7 +140,7 @@ describe("EventsPage", () => {
 
     render(await EventsPage());
 
-    const links = screen.getAllByRole("link", { name: /Create Event/i });
+    const links = screen.getAllByRole("link", { name: /List an event/i });
     expect(links).toHaveLength(2);
     for (const link of links) {
       expect(link).toHaveAttribute("href", "/post/create-tourism?type=event");

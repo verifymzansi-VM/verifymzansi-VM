@@ -223,12 +223,12 @@ const PAGES = [
   { href: "/safety", title: "Safety Centre", description: "Report problems, scams and appeals." },
   {
     href: "/safety/scam-alerts",
-    title: "Scam Alerts",
+    title: "Scam alerts",
     description: "Avoid fraud and common scams.",
   },
   {
     href: "/safety/meeting-checklist",
-    title: "Meeting Safety Checklist",
+    title: "Meeting safety checklist",
     description: "Stay safe when meeting buyers and sellers.",
   },
   { href: "/terms", title: "Terms of Service", description: "Website rules and terms." },

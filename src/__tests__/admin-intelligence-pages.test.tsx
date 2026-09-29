@@ -228,7 +228,7 @@ describe("admin intelligence page regressions", () => {
 
     render(await IntelligenceVerificationPage());
 
-    expect(screen.getByRole("heading", { name: "Total Verification Steps" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Verification steps" })).toBeInTheDocument();
     expectMetric("20");
     expectMetric("5");
     expectMetric("12");
@@ -264,7 +264,7 @@ describe("admin intelligence page regressions", () => {
     expectMetric("14");
     expectMetric("4");
     expect(screen.getAllByText("6").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByRole("heading", { name: "Content Posted (30d)" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Posts created, 30 days" })).toBeInTheDocument();
     expect(mockAdminFrom).not.toHaveBeenCalledWith("profiles");
     expect(mockAdminFrom).not.toHaveBeenCalledWith("posts");
   });

@@ -192,7 +192,7 @@ export function ListingFilterSidebar() {
       {/* ── Condition ──────────────────────────────── */}
       <fieldset className="space-y-2">
         <legend className="mb-2 text-sm font-semibold leading-none">Condition</legend>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {LISTING_CONDITIONS.map((cond) => (
             <button
               key={cond.value}
@@ -202,7 +202,7 @@ export function ListingFilterSidebar() {
                 setFilter("condition", filters.condition === cond.value ? undefined : cond.value)
               }
               className={cn(
-                "rounded-full border px-3 py-1.5 text-xs font-medium transition-all active:scale-[0.97] motion-reduce:transition-none",
+                "whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-all active:scale-[0.97] motion-reduce:transition-none",
                 filters.condition === cond.value
                   ? "border-brand-green bg-brand-green/10 text-brand-green shadow-xs"
                   : "border-border/80 text-muted-foreground hover:text-foreground hover:border-brand-green/40 hover:bg-brand-green/5"

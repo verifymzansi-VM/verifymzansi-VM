@@ -2096,7 +2096,7 @@ function CreateTourismContent() {
 
                             {/* Meal options */}
                             <fieldset className="space-y-2">
-                              <legend className="text-sm font-medium">Meal Options</legend>
+                              <legend className="text-sm font-medium">Meal options</legend>
                               <p className="text-xs text-muted-foreground">
                                 Tick all meal plans or dining options available to guests.
                               </p>
@@ -2190,7 +2190,7 @@ function CreateTourismContent() {
 
                             {/* Tour duration */}
                             <div className="space-y-2">
-                              <Label htmlFor="tourDuration">Tour Duration</Label>
+                              <Label htmlFor="tourDuration">Tour duration</Label>
                               <p className="text-xs text-muted-foreground">
                                 Typical length of the tour or experience.
                               </p>
@@ -2199,7 +2199,7 @@ function CreateTourismContent() {
                                 value={tourDuration}
                                 onChange={(e) => setTourDuration(e.target.value)}
                                 className={SELECT_CLASS}
-                                aria-label="Tour Duration"
+                                aria-label="Tour duration"
                               >
                                 <option value="">Select...</option>
                                 {TOURISM_TOUR_DURATIONS.map((d) => (
@@ -2229,7 +2229,7 @@ function CreateTourismContent() {
                             {/* Difficulty (adventure only) */}
                             {subcategory === "adventure_activities" && (
                               <div className="space-y-2">
-                                <Label htmlFor="difficultyLevel">Difficulty Level</Label>
+                                <Label htmlFor="difficultyLevel">Difficulty level</Label>
                                 <p className="text-xs text-muted-foreground">
                                   Physical effort required for this activity.
                                 </p>
@@ -2238,7 +2238,7 @@ function CreateTourismContent() {
                                   value={difficultyLevel}
                                   onChange={(e) => setDifficultyLevel(e.target.value)}
                                   className={SELECT_CLASS}
-                                  aria-label="Difficulty Level"
+                                  aria-label="Difficulty level"
                                 >
                                   <option value="">Select...</option>
                                   {TOURISM_DIFFICULTY_LEVELS.map((d) => (
@@ -2259,7 +2259,7 @@ function CreateTourismContent() {
                                   onChange={(e) => setEquipmentProvided(e.target.checked)}
                                   className="rounded border-gray-300"
                                 />
-                                Equipment Provided
+                                Equipment provided
                               </label>
                             )}
 
@@ -2280,7 +2280,7 @@ function CreateTourismContent() {
 
                             {/* Age restriction */}
                             <div className="space-y-2">
-                              <Label htmlFor="tourismAgeRestriction">Age Restriction</Label>
+                              <Label htmlFor="tourismAgeRestriction">Age restriction</Label>
                               <p className="text-xs text-muted-foreground">
                                 Minimum age requirement, if any.
                               </p>
@@ -2289,7 +2289,7 @@ function CreateTourismContent() {
                                 value={tourismAgeRestriction}
                                 onChange={(e) => setTourismAgeRestriction(e.target.value)}
                                 className={SELECT_CLASS}
-                                aria-label="Age Restriction"
+                                aria-label="Age restriction"
                               >
                                 <option value="">No restriction</option>
                                 {TOURISM_AGE_RESTRICTIONS.map((a) => (
@@ -2360,7 +2360,7 @@ function CreateTourismContent() {
                                   onChange={(e) => setGuidedTours(e.target.checked)}
                                   className="rounded border-gray-300"
                                 />
-                                Guided Tours Available
+                                Guided tours available
                               </label>
                               <label className="flex items-center gap-2 text-sm">
                                 <input
@@ -2369,13 +2369,13 @@ function CreateTourismContent() {
                                   onChange={(e) => setAudioGuide(e.target.checked)}
                                   className="rounded border-gray-300"
                                 />
-                                Audio Guide Available
+                                Audio guide available
                               </label>
                             </div>
 
                             {/* Visit duration */}
                             <div className="space-y-2">
-                              <Label htmlFor="visitDuration">Typical Visit Duration</Label>
+                              <Label htmlFor="visitDuration">Typical visit duration</Label>
                               <p className="text-xs text-muted-foreground">
                                 How long a typical visit takes.
                               </p>
@@ -2384,7 +2384,7 @@ function CreateTourismContent() {
                                 value={visitDuration}
                                 onChange={(e) => setVisitDuration(e.target.value)}
                                 className={SELECT_CLASS}
-                                aria-label="Typical Visit Duration"
+                                aria-label="Typical visit duration"
                               >
                                 <option value="">Select...</option>
                                 {TOURISM_VISIT_DURATIONS.map((d) => (
@@ -2397,7 +2397,7 @@ function CreateTourismContent() {
 
                             {/* Age restriction */}
                             <div className="space-y-2">
-                              <Label htmlFor="tourismAgeRestrictionAttr">Age Restriction</Label>
+                              <Label htmlFor="tourismAgeRestrictionAttr">Age restriction</Label>
                               <p className="text-xs text-muted-foreground">
                                 Minimum age requirement, if any.
                               </p>
@@ -2406,7 +2406,7 @@ function CreateTourismContent() {
                                 value={tourismAgeRestriction}
                                 onChange={(e) => setTourismAgeRestriction(e.target.value)}
                                 className={SELECT_CLASS}
-                                aria-label="Age Restriction"
+                                aria-label="Age restriction"
                               >
                                 <option value="">No restriction</option>
                                 {TOURISM_AGE_RESTRICTIONS.map((a) => (
@@ -2478,7 +2478,7 @@ function CreateTourismContent() {
                                   onChange={(e) => setInsuranceIncluded(e.target.checked)}
                                   className="rounded border-gray-300"
                                 />
-                                Insurance Included
+                                Insurance included
                               </label>
                               <label className="flex items-center gap-2 text-sm">
                                 <input
@@ -2498,7 +2498,7 @@ function CreateTourismContent() {
                           <>
                             {/* Price range */}
                             <div className="space-y-2">
-                              <Label htmlFor="priceRange">Price Range</Label>
+                              <Label htmlFor="priceRange">Price range</Label>
                               <p className="text-xs text-muted-foreground">
                                 Gives visitors a quick idea of your pricing.
                               </p>
@@ -2507,7 +2507,7 @@ function CreateTourismContent() {
                                 value={priceRange}
                                 onChange={(e) => setPriceRange(e.target.value)}
                                 className={SELECT_CLASS}
-                                aria-label="Price Range"
+                                aria-label="Price range"
                               >
                                 <option value="">Select...</option>
                                 {TOURISM_PRICE_RANGES.map((r) => (
@@ -2557,7 +2557,7 @@ function CreateTourismContent() {
 
                             {/* Cancellation policy */}
                             <div className="space-y-2">
-                              <Label htmlFor="cancellationPolicy">Cancellation Policy</Label>
+                              <Label htmlFor="cancellationPolicy">Cancellation policy</Label>
                               <p className="text-xs text-muted-foreground">
                                 Your standard terms for cancellations and refunds.
                               </p>
@@ -2566,7 +2566,7 @@ function CreateTourismContent() {
                                 value={cancellationPolicy}
                                 onChange={(e) => setCancellationPolicy(e.target.value)}
                                 className={SELECT_CLASS}
-                                aria-label="Cancellation Policy"
+                                aria-label="Cancellation policy"
                               >
                                 <option value="">Select...</option>
                                 {TOURISM_CANCELLATION_POLICIES.map((c) => (
@@ -2625,7 +2625,7 @@ function CreateTourismContent() {
                                 </div>
 
                                 <div className="space-y-1">
-                                  <Label htmlFor="minimumStayNights">Minimum Stay</Label>
+                                  <Label htmlFor="minimumStayNights">Minimum stay</Label>
                                   <Input
                                     id="minimumStayNights"
                                     type="number"
@@ -2639,7 +2639,7 @@ function CreateTourismContent() {
                               </div>
 
                               <div className="space-y-1">
-                                <Label htmlFor="childPolicy">Child Policy</Label>
+                                <Label htmlFor="childPolicy">Child policy</Label>
                                 <PostSelect
                                   id="childPolicy"
                                   aria-label="Child policy"
@@ -2656,7 +2656,7 @@ function CreateTourismContent() {
                               </div>
 
                               <div className="space-y-1">
-                                <Label htmlFor="nearbyAttractions">Nearby Attractions</Label>
+                                <Label htmlFor="nearbyAttractions">Nearby attractions</Label>
                                 <Input
                                   id="nearbyAttractions"
                                   value={nearbyAttractions}
@@ -2883,7 +2883,7 @@ function CreateTourismContent() {
                         )}
                         {/* Age restriction */}
                         <div className="space-y-2">
-                          <Label htmlFor="ageRestriction">Age Restriction</Label>
+                          <Label htmlFor="ageRestriction">Age restriction</Label>
                           <p className="text-xs text-muted-foreground">
                             Minimum age for attendees, if any.
                           </p>
@@ -2892,7 +2892,7 @@ function CreateTourismContent() {
                             value={ageRestriction}
                             onChange={(e) => setAgeRestriction(e.target.value)}
                             className={SELECT_CLASS}
-                            aria-label="Age Restriction"
+                            aria-label="Age restriction"
                           >
                             <option value="">No restriction</option>
                             {EVENT_AGE_RESTRICTIONS.map((a) => (
@@ -3230,7 +3230,7 @@ function CreateTourismContent() {
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                           <div className="space-y-2">
                             <Label htmlFor="phone" required={contactMethods.includes("call")}>
-                              Phone Number
+                              Phone number
                             </Label>
                             <Input
                               id="phone"
@@ -3356,7 +3356,7 @@ function CreateTourismContent() {
                     {/* Operating hours (tourism business only) */}
                     {listingType === "tourism_business" && (
                       <div className="space-y-3">
-                        <p className="text-sm font-medium">Operating Hours</p>
+                        <p className="text-sm font-medium">Opening hours</p>
                         {(
                           [
                             {

@@ -9,7 +9,7 @@ const BUSINESS_CONTACT_CHOICES = [
     method: "call",
     field: "phone",
     label: "Phone calls",
-    inputLabel: "Phone Number",
+    inputLabel: "Phone number",
     example: "082 123 4567",
     hint: "Publish a number customers can call.",
   },

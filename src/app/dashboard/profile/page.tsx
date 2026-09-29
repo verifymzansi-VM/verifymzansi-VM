@@ -597,7 +597,7 @@ export default function ProfilePage() {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="font-display text-[1.75rem] font-bold leading-tight tracking-tight sm:text-[2.25rem]">
-            My Profile
+            My profile
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">Your details, security and account.</p>
         </div>
@@ -955,7 +955,7 @@ export default function ProfilePage() {
                         ) : (
                           <KeyRound className="h-4 w-4" />
                         )}
-                        Update Password
+                        Update password
                       </Button>
                       <Button
                         type="button"
@@ -1047,7 +1047,7 @@ export default function ProfilePage() {
                         ) : (
                           <Mail className="h-4 w-4" />
                         )}
-                        Send Confirmation
+                        Send confirmation
                       </Button>
                       <Button
                         type="button"

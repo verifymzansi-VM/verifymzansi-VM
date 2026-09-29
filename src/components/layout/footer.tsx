@@ -21,9 +21,9 @@ const footerSections = [
     links: [
       { href: "/trust-safety", label: "Trust & Safety" },
       { href: "/safety", label: "Safety Centre" },
-      { href: "/safety/scam-alerts", label: "Scam Alerts" },
-      { href: "/safety/meeting-checklist", label: "Meeting Safety" },
-      { href: "/verify-buyer", label: "Verify a Buyer" },
+      { href: "/safety/scam-alerts", label: "Scam alerts" },
+      { href: "/safety/meeting-checklist", label: "Meeting safety" },
+      { href: "/verify-buyer", label: "Verify a buyer" },
     ],
   },
   {

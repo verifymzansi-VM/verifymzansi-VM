@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Data Access Request",
+  title: "Data access request",
   description:
     "Submit a POPIA data subject access request to view or delete your personal data on VerifyMzansi.",
 };

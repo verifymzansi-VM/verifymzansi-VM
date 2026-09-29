@@ -193,7 +193,7 @@ test.describe("Mobile UX smoke", () => {
     {
       name: "promotion",
       path: "/tourism-events",
-      createLink: /create event/i,
+      createLink: /list a stay or place|list an event/i,
       buttonLabel: "Open tourism and events filters",
       drawerHeading: { name: "Filters" as string | RegExp },
     },

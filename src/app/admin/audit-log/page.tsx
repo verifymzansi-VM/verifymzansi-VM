@@ -11,7 +11,7 @@ import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
 import type { AuditLogEntry } from "@/lib/utils/admin-queries";
 
 export const metadata = {
-  title: "Audit Log — Admin",
+  title: "Audit log — Admin",
   description: "Review admin actions, moderation decisions, and system events.",
 };
 
@@ -114,9 +114,9 @@ export default async function AdminAuditLogPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Audit Log"
+        title="Audit log"
         description="Track admin actions and system events."
-        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Audit Log" }]}
+        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Audit log" }]}
       />
 
       <form method="get" className="grid gap-2 rounded-xl border p-3 text-sm sm:grid-cols-4">

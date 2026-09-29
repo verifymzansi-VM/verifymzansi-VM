@@ -118,7 +118,7 @@ function getTourismQuickFacts(business: BusinessDetailRecord): QuickFact[] {
     facts.push({ label: "Star Rating", value: `${details.star_rating}-star` });
   }
   if (typeof details.price_range === "string") {
-    facts.push({ label: "Price Range", value: details.price_range.replace(/_/g, " ") });
+    facts.push({ label: "Price range", value: details.price_range.replace(/_/g, " ") });
   }
   if (typeof details.number_of_rooms === "number") {
     facts.push({ label: "Rooms / Units", value: String(details.number_of_rooms) });
@@ -130,7 +130,7 @@ function getTourismQuickFacts(business: BusinessDetailRecord): QuickFact[] {
     facts.push({ label: "Check-out", value: details.check_out_time });
   }
   if (typeof details.tour_duration === "string") {
-    facts.push({ label: "Tour Duration", value: details.tour_duration.replace(/_/g, " ") });
+    facts.push({ label: "Tour duration", value: details.tour_duration.replace(/_/g, " ") });
   }
   if (typeof details.visit_duration === "string") {
     facts.push({ label: "Visit Duration", value: details.visit_duration.replace(/_/g, " ") });
@@ -725,7 +725,7 @@ export function UnifiedLayout({
               rel="noopener noreferrer nofollow ugc"
             >
               <Globe className="h-4 w-4" />
-              Visit Website
+              Visit website
             </a>
           </Button>
         ) : null}
@@ -738,7 +738,7 @@ export function UnifiedLayout({
               rel="noopener noreferrer nofollow ugc"
             >
               <MapPin className="h-4 w-4" />
-              Open Map
+              Open map
             </a>
           </Button>
         ) : null}
@@ -780,7 +780,7 @@ export function UnifiedLayout({
           {normalizeList(tourismDetails.meal_options).length > 0 ? (
             <div className="rounded-2xl bg-muted/40 p-3">
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Meal Options
+                Meal options
               </p>
               <p className="mt-1 text-sm font-medium">
                 {normalizeList(tourismDetails.meal_options).join(", ")}
@@ -810,7 +810,7 @@ export function UnifiedLayout({
           {typeof tourismDetails.minimum_stay_nights === "number" ? (
             <div className="rounded-2xl bg-muted/40 p-3">
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Minimum Stay
+                Minimum stay
               </p>
               <p className="mt-1 text-sm font-medium">
                 {tourismDetails.minimum_stay_nights}{" "}
@@ -821,7 +821,7 @@ export function UnifiedLayout({
           {typeof tourismDetails.child_policy === "string" && tourismDetails.child_policy ? (
             <div className="rounded-2xl bg-muted/40 p-3">
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Child Policy
+                Child policy
               </p>
               <p className="mt-1 text-sm font-medium">
                 {CHILD_POLICY_LABELS[tourismDetails.child_policy] ??
@@ -832,7 +832,7 @@ export function UnifiedLayout({
           {tourismDetails.seasonal_pricing === true ? (
             <div className="rounded-2xl bg-muted/40 p-3">
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Seasonal Pricing
+                Seasonal pricing
               </p>
               <p className="mt-1 text-sm font-medium">Peak / off-peak rates apply</p>
             </div>
@@ -841,7 +841,7 @@ export function UnifiedLayout({
           tourismDetails.nearby_attractions ? (
             <div className="rounded-2xl bg-muted/40 p-3 sm:col-span-2">
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Nearby Attractions
+                Nearby attractions
               </p>
               <p className="mt-1 text-sm font-medium">{tourismDetails.nearby_attractions}</p>
             </div>
@@ -852,7 +852,7 @@ export function UnifiedLayout({
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-2xl bg-muted/40 p-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Service Model
+            Service model
           </p>
           <p className="mt-1 text-sm font-medium">{typeLabel ?? "Not listed"}</p>
         </div>
@@ -869,7 +869,7 @@ export function UnifiedLayout({
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-2xl bg-muted/40 p-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Visual Showcase
+            Photos and videos
           </p>
           <p className="mt-1 text-sm font-medium">
             {galleryPhotos.length > 0
@@ -879,7 +879,7 @@ export function UnifiedLayout({
         </div>
         <div className="rounded-2xl bg-muted/40 p-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Live Offers
+            Live offers
           </p>
           <p className="mt-1 text-sm font-medium">
             {promotions.length > 0
@@ -991,7 +991,7 @@ export function UnifiedLayout({
         <div className="space-y-3">
           <div className="space-y-1">
             <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-              Active Posts
+              Active posts
             </p>
             <h2 className="font-display text-xl font-semibold">Tourism & Events posts</h2>
           </div>

@@ -4,7 +4,7 @@ import { getAllFeatureFlags } from "@/lib/services/feature-flags";
 import { FeatureFlagsClient } from "./feature-flags-client";
 
 export const metadata = {
-  title: "Feature Flags — Admin",
+  title: "Feature flags — Admin",
   description: "Toggle platform features on or off for gradual rollouts.",
 };
 
@@ -16,9 +16,9 @@ export default async function FeatureFlagsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Feature Flags"
+        title="Feature flags"
         description="Toggle features for phased rollouts."
-        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Feature Flags" }]}
+        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Feature flags" }]}
       />
 
       <FeatureFlagsClient initialFlags={flags} />

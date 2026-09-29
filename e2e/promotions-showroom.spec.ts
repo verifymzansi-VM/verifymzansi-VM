@@ -55,7 +55,7 @@ test.describe("Promotions showroom", () => {
       }
     }
 
-    await expect(page.getByRole("link", { name: /create event/i }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: /list an event/i }).first()).toBeVisible();
     await expect(page.getByRole("status")).toContainText(/event|loading events/i);
 
     expect(

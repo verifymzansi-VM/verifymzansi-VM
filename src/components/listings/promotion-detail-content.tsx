@@ -661,7 +661,7 @@ export function PromotionDetailContent({
                 {eventTypeLabel ? (
                   <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      Event Type
+                      Event type
                     </p>
                     <p className="mt-1 text-sm font-medium">{eventTypeLabel}</p>
                   </div>
@@ -864,7 +864,7 @@ export function PromotionDetailContent({
                   <CardContent className="space-y-4 p-4 text-sm">
                     <h2 className="flex items-center gap-2 font-semibold">
                       <Music2 className="h-4 w-4 text-muted-foreground" />
-                      Event Details
+                      Event details
                     </h2>
 
                     <dl className="grid grid-cols-1 gap-x-4 gap-y-2.5 sm:grid-cols-2">
@@ -1000,7 +1000,7 @@ export function PromotionDetailContent({
                           rel="noopener noreferrer nofollow ugc"
                         >
                           <Globe className="h-4 w-4" />
-                          Buy Tickets
+                          Buy tickets
                         </a>
                       </Button>
                     )}

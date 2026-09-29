@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Contact Us",
+  title: "Contact us",
   description:
     "Get in touch with the VerifyMzansi team — report issues, ask questions, or give feedback.",
 };

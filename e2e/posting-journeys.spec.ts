@@ -162,7 +162,7 @@ test.describe("Tourism journeys", () => {
     await page.getByLabel(/^Province/i).selectOption("Western Cape");
     await page.getByLabel(/^City/i).selectOption({ index: 1 });
     await page.getByLabel(/^Town \/ Suburb/).fill("Prince Albert");
-    await page.getByLabel(/^Detailed Address/).fill("12 Church Street");
+    await page.getByLabel(/^Detailed address/).fill("12 Church Street");
     await tourismContactAndSubmit(page);
   });
 

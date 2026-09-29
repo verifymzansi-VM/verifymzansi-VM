@@ -355,7 +355,7 @@ export function ListingDetailContent({
                 <CardContent className="space-y-4 p-5">
                   <div className="space-y-1">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                      Quick Facts
+                      Quick facts
                     </p>
                     <h2 className="font-display text-xl font-semibold">
                       {variantCopy.detailsHeading}
@@ -419,7 +419,7 @@ export function ListingDetailContent({
               <CardContent className="space-y-4 p-5">
                 <div className="space-y-1">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                    More Details
+                    More details
                   </p>
                   <h2 className="font-display text-xl font-semibold">Full listing breakdown</h2>
                 </div>
@@ -443,7 +443,7 @@ export function ListingDetailContent({
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                    Keep Browsing
+                    Keep browsing
                   </p>
                   <h2 className="font-display text-xl font-semibold">Similar listings</h2>
                 </div>

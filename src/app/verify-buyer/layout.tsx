@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Verify a Buyer",
+  title: "Verify a buyer",
   description: "Check if a buyer is verified on VerifyMzansi before completing a transaction.",
 };
 

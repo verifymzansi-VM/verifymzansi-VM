@@ -76,8 +76,8 @@ describe("DSAR page", () => {
       target: { value: "8001015009087" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Complete captcha" }));
-    fireEvent.click(screen.getByRole("button", { name: /submit request/i }));
-    await screen.findByText("Request Submitted");
+    fireEvent.click(screen.getByRole("button", { name: /send request/i }));
+    await screen.findByText("Request submitted");
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -94,11 +94,11 @@ describe("DSAR page", () => {
       target: { value: "8001015009087" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Complete captcha" }));
-    fireEvent.click(screen.getByRole("button", { name: /submit request/i }));
+    fireEvent.click(screen.getByRole("button", { name: /send request/i }));
     await waitFor(() => expect(mockToast).toHaveBeenCalled());
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe("/api/csrf");
-    expect(screen.getByRole("button", { name: /submit request/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /send request/i })).toBeDisabled();
   });
 
   it("uses a fresh single-use challenge after a server failure", async () => {
@@ -124,12 +124,12 @@ describe("DSAR page", () => {
       target: { value: "8001015009087" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Complete captcha" }));
-    fireEvent.click(screen.getByRole("button", { name: /submit request/i }));
+    fireEvent.click(screen.getByRole("button", { name: /send request/i }));
     await waitFor(() => expect(mockToast).toHaveBeenCalled());
-    expect(screen.getByRole("button", { name: /submit request/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /send request/i })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Complete captcha" }));
-    fireEvent.click(screen.getByRole("button", { name: /submit request/i }));
-    await screen.findByText("Request Submitted");
+    fireEvent.click(screen.getByRole("button", { name: /send request/i }));
+    await screen.findByText("Request submitted");
     expect(consumed.size).toBe(2);
   });
 
@@ -150,10 +150,10 @@ describe("DSAR page", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Complete captcha" }));
-    fireEvent.click(screen.getByRole("button", { name: /submit request/i }));
+    fireEvent.click(screen.getByRole("button", { name: /send request/i }));
 
     await waitFor(() => {
-      expect(screen.getByText("Request Submitted")).toBeInTheDocument();
+      expect(screen.getByText("Request submitted")).toBeInTheDocument();
     });
 
     expect(screen.getByText(/Reference: DSAR-ABCD1234/)).toBeInTheDocument();
@@ -186,7 +186,7 @@ describe("DSAR page", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Complete captcha" }));
-    fireEvent.click(screen.getByRole("button", { name: /submit request/i }));
+    fireEvent.click(screen.getByRole("button", { name: /send request/i }));
 
     await waitFor(() => {
       expect(mockToast).toHaveBeenCalled();

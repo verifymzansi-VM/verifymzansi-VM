@@ -20,7 +20,7 @@ export function VerificationAlertBanner({ pendingCount }: VerificationAlertBanne
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-200">
-            Verification Requests Pending
+            Verification requests waiting
           </h3>
           <p className="text-sm text-amber-700 dark:text-amber-300 mt-0.5">
             {pendingCount} verification {pendingCount === 1 ? "request" : "requests"} awaiting
@@ -31,7 +31,7 @@ export function VerificationAlertBanner({ pendingCount }: VerificationAlertBanne
           href="/admin/verification"
           className="flex-shrink-0 inline-flex items-center rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 transition-colors"
         >
-          Review Now
+          Review now
         </Link>
       </div>
     </div>

@@ -492,7 +492,7 @@ export function ContentContactActions({
                   className="gap-2"
                 >
                   {reportSending && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Submit Report
+                  Send report
                 </Button>
               </DialogFooter>
             </div>

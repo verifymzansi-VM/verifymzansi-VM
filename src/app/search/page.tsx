@@ -4,7 +4,7 @@ import { Footer } from "@/components/layout/footer";
 import { SiteSearch } from "@/components/search/site-search";
 
 export const metadata: Metadata = {
-  title: "Search VerifyMzansi",
+  title: "Search",
   description: "Search listings, businesses, tourism, events and website pages.",
   robots: { index: false, follow: true },
 };

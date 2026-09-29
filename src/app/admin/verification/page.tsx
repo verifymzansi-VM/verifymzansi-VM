@@ -11,7 +11,7 @@ import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { createLogger } from "@/lib/utils/logger";
 
 export const metadata = {
-  title: "Verification Queue — Admin",
+  title: "Verify accounts — Admin",
   description: "Review pending identity verification submissions and make approval decisions.",
 };
 
@@ -52,7 +52,7 @@ export default async function AdminVerificationPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Verification Queue"
+        title="Verify accounts"
         description="Claim verification requests to review them. Highest risk comes first."
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Verification" }]}
       >

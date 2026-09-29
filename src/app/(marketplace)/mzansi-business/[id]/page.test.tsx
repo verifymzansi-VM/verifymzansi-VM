@@ -240,7 +240,7 @@ describe("BusinessDetailPage", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Share/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Report/i })).toBeInTheDocument();
-    expect(screen.queryByText("Open Map Directions")).not.toBeInTheDocument();
+    expect(screen.queryByText("Get directions")).not.toBeInTheDocument();
   });
 
   it("loads detail records without hard-coding the removed seller_id column", async () => {

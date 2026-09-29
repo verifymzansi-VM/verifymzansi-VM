@@ -151,7 +151,7 @@ export default function ContactPage() {
 
       <main id="main-content" className="flex-1">
         <InfoHero
-          title="Contact Us"
+          title="Contact us"
           description="Pick a topic and we'll route it to the right team."
           breadcrumbs={[{ label: "Contact" }]}
         />

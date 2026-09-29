@@ -193,7 +193,7 @@ export default async function EventsPage() {
           ]}
         >
           <Button asChild size="sm" className="h-11 gap-1">
-            <Link href="/post/create-tourism?type=event">Create Event</Link>
+            <Link href="/post/create-tourism?type=event">List an event</Link>
           </Button>
         </PageHeader>
 
@@ -289,7 +289,7 @@ export default async function EventsPage() {
                 businesses. Past events may appear below.
               </p>
               <Button asChild size="sm" className="mx-auto h-11 w-fit gap-1">
-                <Link href="/post/create-tourism?type=event">Create Event</Link>
+                <Link href="/post/create-tourism?type=event">List an event</Link>
               </Button>
             </CardContent>
           </Card>

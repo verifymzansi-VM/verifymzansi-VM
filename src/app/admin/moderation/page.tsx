@@ -12,7 +12,7 @@ import { toContentEditModerationItem } from "@/lib/content-edit-moderation";
 const log = createLogger("AdminModerationPage");
 
 export const metadata = {
-  title: "Moderation Queue — Admin",
+  title: "Content moderation — Admin",
   description: "Review and moderate flagged content, listings, and user reports.",
 };
 
@@ -241,7 +241,7 @@ export default async function AdminModerationPage() {
   return (
     <div className="min-w-0 w-full max-w-full space-y-6 overflow-x-hidden">
       <PageHeader
-        title="Moderation Queue"
+        title="Content moderation"
         description="Review and approve pending content."
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Moderation" }]}
       >

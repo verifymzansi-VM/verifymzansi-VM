@@ -122,6 +122,8 @@ export function ColumnChartPanel({
   valuePrefix?: string;
 }) {
   const max = maxValue(data);
+  // Many bars (a day-by-day series) need tighter spacing and smaller labels to stay readable.
+  const dense = data.length > 8;
 
   return (
     <Card>
@@ -130,7 +132,12 @@ export function ColumnChartPanel({
         {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
       </CardHeader>
       <CardContent>
-        <div className="flex h-56 items-end gap-3 border-b border-l px-3 pt-6">
+        <div
+          className={cn(
+            "flex h-56 items-end border-b border-l pt-6",
+            dense ? "gap-1 px-1 sm:gap-2 sm:px-2" : "gap-3 px-3"
+          )}
+        >
           {data.map((item) => {
             const tone = toneClasses[item.tone ?? "slate"];
             const height =
@@ -149,8 +156,20 @@ export function ColumnChartPanel({
                   />
                 </div>
                 <div className="min-h-10 text-center">
-                  <p className="truncate text-xs font-medium">{item.label}</p>
-                  <p className="text-[11px] text-muted-foreground">
+                  <p
+                    className={cn(
+                      "font-medium",
+                      dense ? "whitespace-nowrap text-[11px]" : "text-xs leading-tight"
+                    )}
+                  >
+                    {item.label}
+                  </p>
+                  <p
+                    className={cn(
+                      "tabular-nums text-muted-foreground",
+                      dense ? "text-[10px]" : "text-[11px]"
+                    )}
+                  >
                     {valuePrefix}
                     {formatNumber(item.value)}
                   </p>

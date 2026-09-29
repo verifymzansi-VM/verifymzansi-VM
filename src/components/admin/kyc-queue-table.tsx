@@ -290,7 +290,7 @@ export function KycQueueTable({
                             size="sm"
                             variant="ghost"
                             className="h-8 text-brand-blue hover:text-brand-blue/80 hover:bg-brand-blue/10"
-                            title="View Evidence"
+                            title="View evidence"
                           >
                             <Link href="/admin/verification/evidence">
                               <Eye className="h-4 w-4 mr-1" />
@@ -624,7 +624,7 @@ export function KycQueueTable({
               </div>
               <div>
                 <Label htmlFor="reason-note" className="text-sm font-medium">
-                  Additional Notes
+                  Additional notes
                 </Label>
                 <Textarea
                   id="reason-note"

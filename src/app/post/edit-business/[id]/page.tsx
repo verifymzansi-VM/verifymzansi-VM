@@ -1225,7 +1225,7 @@ export default function EditBusinessPage() {
               {/* Operating Hours */}
               {businessType === "market_stall" && !categoryDetails.customer_access ? (
                 <div className="rounded-lg border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground">
-                  <p className="font-medium text-foreground">Operating Hours</p>
+                  <p className="font-medium text-foreground">Opening hours</p>
                   <p className="mt-1">
                     Your operating hours are derived from the trading days and hours above.
                   </p>
@@ -1427,7 +1427,7 @@ export default function EditBusinessPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <MediaUpload
-                      label="Replace Logo"
+                      label="Replace logo"
                       maxFiles={1}
                       files={newLogoFile}
                       onChange={(files) => {
@@ -1442,7 +1442,7 @@ export default function EditBusinessPage() {
                   </div>
                   <div className="space-y-2">
                     <MediaUpload
-                      label="Replace Cover Photo"
+                      label="Replace cover photo"
                       maxFiles={1}
                       files={newCoverFile}
                       onChange={(files) => {

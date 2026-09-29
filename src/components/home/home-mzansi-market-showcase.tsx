@@ -49,10 +49,10 @@ export async function HomeMzansiMarketShowcase() {
     return (
       <HomeShowcaseShell title="Mzansi Market" href="/mzansi-market" tone="green">
         <HomeShowcaseEmptyState
-          title="No listings yet."
-          description="The marketplace is clean. Publish the first ad and this rail will fill with fresh posts."
+          title="No listings yet"
+          description="Post something to sell or rent out and it will show here. Your first post is free."
           ctaHref="/post/create-listing"
-          ctaLabel="Post First Listing"
+          ctaLabel="Post a listing"
           tone="green"
           icon={<PackageOpen className="h-7 w-7" />}
         />

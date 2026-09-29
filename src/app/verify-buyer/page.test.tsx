@@ -49,7 +49,7 @@ describe("VerifyBuyerPage", () => {
 
   it("renders the page title", () => {
     render(<VerifyBuyerPage />);
-    expect(screen.getByRole("heading", { name: "Verify a Buyer" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Verify a buyer" })).toBeInTheDocument();
   });
 
   it("shows valid result state", async () => {
@@ -69,7 +69,7 @@ describe("VerifyBuyerPage", () => {
       );
     });
 
-    expect(await screen.findByText("Verified Buyer")).toBeInTheDocument();
+    expect(await screen.findByText("Verified buyer")).toBeInTheDocument();
     expect(screen.getByText("S")).toBeInTheDocument();
   });
 

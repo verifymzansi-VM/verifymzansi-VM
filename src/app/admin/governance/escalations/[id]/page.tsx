@@ -70,7 +70,7 @@ export default async function DecisionDetailPage({ params }: Props) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
-            Decision Summary
+            Decision summary
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -179,7 +179,7 @@ export default async function DecisionDetailPage({ params }: Props) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Clock className="h-5 w-5" />
-            Decision Timeline
+            Decision timeline
           </CardTitle>
         </CardHeader>
         <CardContent>

@@ -159,9 +159,9 @@ export default function VerifyBuyerPage() {
       <main id="main-content" className="flex-1">
         <div className="container-page space-y-8 py-6 sm:py-10">
           <PageHeader
-            title="Verify a Buyer"
+            title="Verify a buyer"
             description="Check a buyer token directly before continuing a deal."
-            breadcrumbs={[{ label: "Safety", href: "/safety" }, { label: "Verify a Buyer" }]}
+            breadcrumbs={[{ label: "Safety", href: "/safety" }, { label: "Verify a buyer" }]}
           />
 
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:gap-10">
@@ -238,7 +238,7 @@ export default function VerifyBuyerPage() {
                 )}
 
                 {result === "valid" && buyerInfo && (
-                  <ResultPanel tone="success" icon={CheckCircle2} title="Verified Buyer">
+                  <ResultPanel tone="success" icon={CheckCircle2} title="Verified buyer">
                     <p className="text-base font-semibold text-foreground">
                       {buyerInfo.displayName}
                     </p>

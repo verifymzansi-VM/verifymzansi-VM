@@ -7,7 +7,7 @@ import { DecisionPanel, HorizontalBarPanel } from "@/components/admin/intelligen
 import { Clock, Flag, Activity } from "lucide-react";
 
 export const metadata = {
-  title: "Ops Summary — Intelligence",
+  title: "Operations summary — Intelligence",
   description: "Read-only operational summary for admin review.",
 };
 
@@ -61,15 +61,15 @@ export default async function IntelligenceOperationsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Ops Summary"
+        title="Operations summary"
         description="Read-only operational overview — current queue depths and workload."
-        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Ops Summary" }]}
+        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Operations summary" }]}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Open Reports</CardTitle>
+            <CardTitle className="text-sm font-medium">Open reports</CardTitle>
             <Flag className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
@@ -78,7 +78,7 @@ export default async function IntelligenceOperationsPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Verifications</CardTitle>
+            <CardTitle className="text-sm font-medium">Pending verifications</CardTitle>
             <ShieldCheck className="h-4 w-4 text-yellow-500" />
           </CardHeader>
           <CardContent>
@@ -87,7 +87,7 @@ export default async function IntelligenceOperationsPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Moderation</CardTitle>
+            <CardTitle className="text-sm font-medium">Pending moderation</CardTitle>
             <Clock className="h-4 w-4 text-orange-500" />
           </CardHeader>
           <CardContent>
@@ -96,7 +96,7 @@ export default async function IntelligenceOperationsPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Decisions</CardTitle>
+            <CardTitle className="text-sm font-medium">Pending decisions</CardTitle>
             <Activity className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
@@ -117,7 +117,7 @@ export default async function IntelligenceOperationsPage() {
           ]}
         />
         <DecisionPanel
-          title="Decision notes"
+          title="What this means"
           description="Signals for staffing, escalation, and queue triage."
           items={[
             {

@@ -12,7 +12,7 @@ import { AlertTriangle, Clock } from "lucide-react";
 import { LiftRestrictionButton } from "./lift-restriction-button";
 
 export const metadata = {
-  title: "Enforcement Review — Governance",
+  title: "Restrictions — Governance",
   description: "Active suspensions and bans, and recent enforcement actions.",
 };
 
@@ -75,9 +75,9 @@ export default async function GovernanceEnforcementPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Enforcement Review"
+        title="Restrictions"
         description="Active suspensions and bans. Lifting one restores only the content it hid, once nothing else restricts the account."
-        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Enforcement Review" }]}
+        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Restrictions" }]}
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

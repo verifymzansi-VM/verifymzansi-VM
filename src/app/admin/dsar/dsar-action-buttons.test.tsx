@@ -167,7 +167,7 @@ describe("DsarActionButtons", () => {
     fireEvent.click(screen.getByRole("button", { name: /complete request/i }));
     const confirm = screen.getByRole("button", { name: /confirm completion/i });
     expect(confirm).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("Completion Summary"), {
+    fireEvent.change(screen.getByLabelText("Completion summary"), {
       target: { value: "Request fulfilled" },
     });
     expect(confirm).toBeDisabled();

@@ -30,10 +30,10 @@ export default async function GovernanceEscalationsPage() {
       </PageHeader>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Approval</CardTitle>
+            <CardTitle className="text-sm font-medium">Pending approval</CardTitle>
             <Gavel className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -51,7 +51,7 @@ export default async function GovernanceEscalationsPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Queue</CardTitle>
+            <CardTitle className="text-sm font-medium">Total in queue</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>

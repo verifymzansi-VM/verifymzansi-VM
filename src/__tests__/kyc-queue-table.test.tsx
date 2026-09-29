@@ -267,7 +267,7 @@ describe("KycQueueTable", () => {
         evidenceDeskEnabled: true,
       })
     );
-    const evidenceLinks = screen.getAllByTitle("View Evidence");
+    const evidenceLinks = screen.getAllByTitle("View evidence");
     expect(evidenceLinks.length).toBeGreaterThan(0);
     const links = screen.getAllByRole("link", { name: /evidence/i });
     expect(links[0]).toHaveAttribute("href", "/admin/verification/evidence");
@@ -276,7 +276,7 @@ describe("KycQueueTable", () => {
 
   it("hides evidence link when evidenceDeskEnabled is false", () => {
     render(React.createElement(KycQueueTable, { groups: groupedItems }));
-    expect(screen.queryAllByTitle("View Evidence")).toHaveLength(0);
+    expect(screen.queryAllByTitle("View evidence")).toHaveLength(0);
   });
 
   it("opens side-by-side comparison from the group-level view docs button", async () => {

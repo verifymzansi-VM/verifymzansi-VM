@@ -8,7 +8,7 @@ import {
   type AdminPlanRow,
 } from "@/components/admin/commercial/commercial-settings-panel";
 
-export const metadata = { title: "Commercial Settings" };
+export const metadata = { title: "Commercial settings" };
 export const dynamic = "force-dynamic";
 
 export default async function CommercialSettingsPage() {
@@ -30,9 +30,9 @@ export default async function CommercialSettingsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Commercial Settings"
+        title="Commercial settings"
         description="Prices, trial durations, programme ceilings, commission and fair-use limits. Every change needs a reason and is written to the audit log."
-        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Commercial Settings" }]}
+        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Commercial settings" }]}
       />
       <p className="text-sm text-muted-foreground">
         30-day trial capacity and switches are managed in{" "}

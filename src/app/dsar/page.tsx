@@ -163,11 +163,11 @@ export default function DsarPage() {
       <main id="main-content" className="flex-1">
         <div className="container-page space-y-8 py-6 sm:py-10">
           <PageHeader
-            title="Data Access Request"
+            title="Data access request"
             description="See, correct or delete the data we hold about you."
             breadcrumbs={[
               { label: "Privacy Policy", href: "/privacy" },
-              { label: "Data Access Request" },
+              { label: "Data access request" },
             ]}
           />
 
@@ -184,7 +184,7 @@ export default function DsarPage() {
                   id="dsar-success-title"
                   className="mt-4 font-display text-2xl font-bold tracking-tight"
                 >
-                  Request Submitted
+                  Request submitted
                 </h2>
                 <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground sm:text-base sm:leading-7">
                   We&apos;ve received your request and will respond within 30 days as required by
@@ -225,7 +225,7 @@ export default function DsarPage() {
                 <form onSubmit={handleSubmit} className="mt-6 space-y-5">
                   <div className="space-y-2">
                     <p id="request-type-label" className="text-sm font-medium leading-none">
-                      Request Type
+                      Request type
                     </p>
                     <div
                       role="group"
@@ -407,7 +407,7 @@ export default function DsarPage() {
                     ) : (
                       <Send className="h-4 w-4" aria-hidden="true" />
                     )}
-                    Submit Request
+                    Send request
                   </Button>
 
                   {!turnstileToken && !turnstileUnavailable && (

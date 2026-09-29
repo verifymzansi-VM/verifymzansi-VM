@@ -120,7 +120,7 @@ export function PromotionsExplorer() {
       : "tourism";
   const createHref =
     activeTab === "events" ? "/post/create-tourism?type=event" : "/post/create-tourism";
-  const createLabel = activeTab === "events" ? "Create Event" : "List Tourism Business";
+  const createLabel = activeTab === "events" ? "List an event" : "List a stay or place";
 
   /* ── Events state ── */
   const [eventsResponse, setEventsResponse] = useState<PromotionsResponse>({
@@ -536,9 +536,9 @@ export function PromotionsExplorer() {
             <p className="text-sm text-muted-foreground" aria-live="polite" role="status">
               {loading ? (
                 activeTab === "tourism" ? (
-                  "Loading tourism businesses..."
+                  "Loading stays and places…"
                 ) : (
-                  "Loading events..."
+                  "Loading events…"
                 )
               ) : (
                 <>
@@ -550,12 +550,6 @@ export function PromotionsExplorer() {
                 </>
               )}
             </p>
-            <Button asChild variant="outline" size="sm" className="h-11 gap-1">
-              <Link href={createHref}>
-                {createLabel}
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
           </div>
 
           {/* ── Grid / Loading / Error / Empty ── */}

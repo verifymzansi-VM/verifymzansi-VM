@@ -11,7 +11,7 @@ import {
 import { TrendingUp, Calendar, BarChart3, Activity } from "lucide-react";
 
 export const metadata = {
-  title: "Trend Analysis — Intelligence",
+  title: "Trends",
   description: "Platform activity trends over time.",
 };
 
@@ -81,15 +81,15 @@ export default async function IntelligenceTrendsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Trend Analysis"
-        description="Activity trends and growth indicators."
-        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Trend Analysis" }]}
+        title="Trends"
+        description="Sign-ups, verification and new posts over the last 30 days."
+        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Trends" }]}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Signups (30d)</CardTitle>
+            <CardTitle className="text-sm font-medium">Sign-ups, 30 days</CardTitle>
             <TrendingUp className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
@@ -98,7 +98,7 @@ export default async function IntelligenceTrendsPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Signups (7d)</CardTitle>
+            <CardTitle className="text-sm font-medium">Sign-ups, 7 days</CardTitle>
             <Calendar className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
@@ -107,7 +107,7 @@ export default async function IntelligenceTrendsPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Verifications (30d)</CardTitle>
+            <CardTitle className="text-sm font-medium">Verification steps, 30 days</CardTitle>
             <BarChart3 className="h-4 w-4 text-purple-500" />
           </CardHeader>
           <CardContent>
@@ -116,7 +116,7 @@ export default async function IntelligenceTrendsPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Content Posted (30d)</CardTitle>
+            <CardTitle className="text-sm font-medium">Posts created, 30 days</CardTitle>
             <Activity className="h-4 w-4 text-orange-500" />
           </CardHeader>
           <CardContent>
@@ -127,50 +127,48 @@ export default async function IntelligenceTrendsPage() {
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <ColumnChartPanel
-          title="Growth run-rate"
-          description="Compares the latest 7-day signup pace with the last 30 days."
+          title="Sign-up pace"
+          description="Sign-ups in the last 30 days, next to the pace of the last 7 days scaled up to 30 days (7-day sign-ups × 4)."
           data={[
-            { label: "30d signups", value: s30, tone: "sky" },
+            { label: "Last 30 days", value: s30, tone: "sky" },
             {
-              label: "7d x4 run-rate",
+              label: "Current pace",
               value: weeklyRunRate,
               tone: signupMomentum >= 0 ? "emerald" : "amber",
             },
-            { label: "30d verifications", value: v30, tone: "violet" },
-            { label: "30d content", value: content30d, tone: "amber" },
           ]}
         />
         <HorizontalBarPanel
-          title="Content creation mix"
-          description="Breaks recent supply creation into listing, business, and Tourism & Events activity."
+          title="New posts by type"
+          description="Listings, business profiles and Tourism & Events posts created in the last 30 days."
           data={[
             { label: "Listings", value: listingPosts, tone: "emerald" },
-            { label: "Businesses", value: businessPosts, tone: "sky" },
+            { label: "Business profiles", value: businessPosts, tone: "sky" },
             { label: "Tourism & Events", value: promotionPosts, tone: "violet" },
           ]}
         />
       </div>
 
       <DecisionPanel
-        title="Decision notes"
-        description="Signals for growth pacing and whether supply creation is keeping up."
+        title="What this means"
+        description="Whether sign-ups are speeding up, and whether new posts keep up with new members."
         items={[
           {
-            label: "Signup momentum",
+            label: "Sign-up momentum",
             value: `${signupMomentum >= 0 ? "+" : ""}${signupMomentum}%`,
             detail:
               signupMomentum >= 0
-                ? "The latest week is pacing ahead of the 30-day baseline. Check onboarding capacity before increasing acquisition."
-                : "The latest week is below the 30-day baseline. Review acquisition channels and activation friction.",
+                ? "The last week is ahead of the 30-day pace. Make sure verification can keep up before spending more on marketing."
+                : "The last week is behind the 30-day pace. Check where new members come from and where they drop off during sign-up.",
             tone: signupMomentum >= 0 ? "emerald" : "amber",
           },
           {
-            label: "Supply creation",
+            label: "New posts",
             value: `${content30d}`,
             detail:
               content30d >= s30
-                ? "Content creation is keeping pace with signups, which supports marketplace liquidity."
-                : "Content creation trails signups. Nudge new users toward first listing, business, or Tourism & Events post creation.",
+                ? "At least one new post per new member, so buyers keep finding fresh content."
+                : "Fewer new posts than new members. Encourage new members to post their first listing, business or event.",
             tone: content30d >= s30 ? "emerald" : "amber",
           },
         ]}

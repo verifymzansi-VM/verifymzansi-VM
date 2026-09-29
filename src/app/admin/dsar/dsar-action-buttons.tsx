@@ -234,7 +234,7 @@ export function DsarActionButtons({
 
           <div className="space-y-1.5">
             <Label htmlFor={`dsar-complete-notes-${requestId}`} className="text-sm font-medium">
-              Completion Summary
+              Completion summary
             </Label>
             <Textarea
               id={`dsar-complete-notes-${requestId}`}
@@ -293,7 +293,7 @@ export function DsarActionButtons({
               disabled={busy || !identityVerified || (isDeletion && !deletionAttestation.trim())}
             >
               {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Confirm Completion
+              Confirm completion
             </Button>
           </DialogFooter>
         </DialogContent>

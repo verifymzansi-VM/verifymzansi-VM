@@ -57,7 +57,7 @@ const BUSINESS_DASHBOARD_FALLBACK_FIELDS = ["view_count", "expires_at"] as const
 const PROMOTION_DASHBOARD_FALLBACK_FIELDS = ["view_count", "urgent_until", "expires_at"] as const;
 
 export const metadata = {
-  title: "My Posts",
+  title: "My posts",
   description:
     "Manage your marketplace content across Mzansi Market, Mzansi Business, and Tourism & Events.",
 };
@@ -573,9 +573,9 @@ export default async function ListingsPage({
       )}
 
       <PageHeader
-        title="My Posts"
+        title="My posts"
         description="Edit, promote or take posts offline."
-        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "My Posts" }]}
+        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "My posts" }]}
       >
         <Button
           asChild

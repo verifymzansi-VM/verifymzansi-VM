@@ -362,7 +362,7 @@ function FlagCard({
               onClick={() => onModeChange(flag.key, editMode, editPercent, editRoles, reason)}
               className="inline-flex items-center justify-center rounded-md bg-brand-green px-4 py-2 text-sm font-medium text-white hover:bg-brand-green/90 disabled:opacity-50"
             >
-              Apply Configuration
+              Apply changes
             </button>
           </div>
         )}

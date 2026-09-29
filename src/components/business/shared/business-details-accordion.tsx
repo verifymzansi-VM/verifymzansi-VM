@@ -106,7 +106,7 @@ function PaymentDeliveryInline({
       {hasPayment && (
         <div>
           <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Payment Methods
+            Payment methods
           </p>
           <div className="flex flex-wrap gap-2">
             {paymentMethods.map((method) => (
@@ -163,7 +163,7 @@ export function BusinessDetailsAccordion({
     <div className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm">
       {hasDetails && (
         <DetailSection
-          title="Business Details"
+          title="Business details"
           icon={<Info className="h-4 w-4 text-muted-foreground" />}
         >
           {/* Re-use BusinessDetailsCard but render without its own Card wrapper */}
@@ -215,7 +215,7 @@ export function BusinessDetailsAccordion({
 
       {hasHours && (
         <DetailSection
-          title="Operating Hours"
+          title="Opening hours"
           icon={<Clock className="h-4 w-4 text-muted-foreground" />}
         >
           <OperatingHoursInline hours={operatingHours!} />

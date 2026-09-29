@@ -35,41 +35,41 @@ export function EvidenceMetadataPanel({
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium">
               <Info className="h-4 w-4 text-muted-foreground" />
-              Step Details
+              Step details
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-xs">
             <Row label="Step ID" value={step.id} mono />
             <Row label="Type" value={step.step_type.replace("_", " ")} />
             {step.step_type === "id_doc" && step.first_name && (
-              <Row label="First Name" value={step.first_name} />
+              <Row label="First name" value={step.first_name} />
             )}
             {step.step_type === "id_doc" && step.last_name && (
               <Row label="Surname" value={step.last_name} />
             )}
             <Row label="Status" value={step.status} />
             <Row label="Submitted" value={formatDate(step.created_at)} dateTime={step.created_at} />
-            {step.risk_level && <Row label="Risk Level" value={step.risk_level} />}
-            {step.risk_score !== null && <Row label="Risk Score" value={String(step.risk_score)} />}
-            {step.auto_status && <Row label="Auto Status" value={step.auto_status} />}
-            {step.location_method && <Row label="Location Method" value={step.location_method} />}
+            {step.risk_level && <Row label="Risk level" value={step.risk_level} />}
+            {step.risk_score !== null && <Row label="Risk score" value={String(step.risk_score)} />}
+            {step.auto_status && <Row label="Automatic check" value={step.auto_status} />}
+            {step.location_method && <Row label="Location method" value={step.location_method} />}
             {(step.location_city || step.location_province) && (
               <Row
-                label="Resolved Area"
+                label="Resolved area"
                 value={[step.location_city, step.location_province].filter(Boolean).join(", ")}
               />
             )}
             {step.location_address_line && (
-              <Row label="Proof Address" value={step.location_address_line} />
+              <Row label="Proof of address" value={step.location_address_line} />
             )}
             {step.gps_lat !== null && step.gps_lon !== null && (
               <Row label="GPS Coords" value={`${step.gps_lat}, ${step.gps_lon}`} />
             )}
-            {step.reason_code && <Row label="Reason Code" value={step.reason_code} />}
-            {step.reviewed_by && <Row label="Reviewed By" value={step.reviewed_by} mono />}
+            {step.reason_code && <Row label="Reason code" value={step.reason_code} />}
+            {step.reviewed_by && <Row label="Reviewed by" value={step.reviewed_by} mono />}
             {step.reviewed_at && (
               <Row
-                label="Reviewed At"
+                label="Reviewed at"
                 value={formatDate(step.reviewed_at)}
                 dateTime={step.reviewed_at}
               />
@@ -92,12 +92,12 @@ export function EvidenceMetadataPanel({
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium">
               <Shield className="h-4 w-4 text-muted-foreground" />
-              Artifact Details
+              File details
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-xs">
             <Row label="Artifact ID" value={artifact.id} mono />
-            <Row label="Step Type" value={artifact.step_type.replace("_", " ")} />
+            <Row label="Step type" value={artifact.step_type.replace("_", " ")} />
             <Row label="Kind" value={artifact.artifact_kind} />
             <Row label="MIME" value={artifact.content_type} />
             <Row label="Size" value={formatBytes(artifact.file_size_bytes)} />
@@ -109,7 +109,7 @@ export function EvidenceMetadataPanel({
             />
             {artifact.purge_after && (
               <Row
-                label="Purge After"
+                label="Delete after"
                 value={formatDate(artifact.purge_after)}
                 dateTime={artifact.purge_after}
               />
@@ -126,7 +126,7 @@ export function EvidenceMetadataPanel({
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium">
               <Shield className="h-4 w-4 text-brand-blue" />
-              Provider Results
+              Provider results
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -181,7 +181,7 @@ export function EvidenceMetadataPanel({
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium">
               <Clock className="h-4 w-4 text-muted-foreground" />
-              Recent Access Log
+              Recent access
             </CardTitle>
           </CardHeader>
           <CardContent>

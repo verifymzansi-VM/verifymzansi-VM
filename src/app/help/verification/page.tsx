@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { SUPPORT_CONTACT_EMAIL } from "@/lib/contact-email";
 
 export const metadata: Metadata = {
-  title: "Verification Help",
+  title: "Verification help",
   description: "Common reasons for verification rejection and how to fix them on VerifyMzansi.",
 };
 
@@ -183,7 +183,7 @@ export default function VerificationHelpPage() {
 
       <main id="main-content" className="flex-1">
         <InfoHero
-          title="Verification Help"
+          title="Verification help"
           description="Fix common verification issues quickly."
           breadcrumbs={[{ label: "Verification", href: "/verification" }, { label: "Help" }]}
           actions={

@@ -216,7 +216,7 @@ describe("PromotionsExplorer", () => {
       expect(fetchMock).toHaveBeenCalled();
     });
 
-    const links = screen.getAllByRole("link", { name: /List Tourism Business/i });
+    const links = screen.getAllByRole("link", { name: /List a stay or place/i });
     expect(links.length).toBeGreaterThan(0);
     for (const link of links) {
       expect(link).toHaveAttribute("href", "/post/create-tourism");
@@ -237,7 +237,7 @@ describe("PromotionsExplorer", () => {
       );
     });
 
-    const links = screen.getAllByRole("link", { name: /Create Event/i });
+    const links = screen.getAllByRole("link", { name: /List an event/i });
     expect(links.length).toBeGreaterThan(0);
     for (const link of links) {
       expect(link).toHaveAttribute("href", "/post/create-tourism?type=event");
@@ -258,6 +258,6 @@ describe("PromotionsExplorer", () => {
       );
     });
 
-    expect(screen.getAllByRole("link", { name: /Create Event/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /List an event/i }).length).toBeGreaterThan(0);
   });
 });

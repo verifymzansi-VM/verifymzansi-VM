@@ -17,7 +17,7 @@ export default async function NewDsarPage() {
         description="For requests received by email, post or phone from someone who cannot sign in."
         breadcrumbs={[
           { label: "Admin", href: "/admin" },
-          { label: "Data Requests", href: "/admin/dsar" },
+          { label: "Data requests", href: "/admin/dsar" },
           { label: "Record a request" },
         ]}
       />

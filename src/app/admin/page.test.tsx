@@ -78,6 +78,11 @@ function card(label: string) {
   return screen.getByText(label).closest("div.rounded-xl") as HTMLElement;
 }
 
+/** A figure in one of the side lists (platform health, team, oversight). */
+function row(label: string) {
+  return screen.getByText(label).closest("li") as HTMLElement;
+}
+
 describe("Admin home", () => {
   beforeEach(() => {
     staffGuard.reset();
@@ -115,13 +120,13 @@ describe("Admin home", () => {
     expect(screen.getByRole("heading", { level: 1, name: "Decisions" })).toBeInTheDocument();
     expect(screen.queryByRole("list", { name: "Items you are holding" })).not.toBeInTheDocument();
     expect(within(card("Escalations")).getByText("3")).toBeInTheDocument();
-    expect(screen.getByText("1 expire within 24 hours")).toBeInTheDocument();
+    expect(screen.getByText("1 expires within 24 hours")).toBeInTheDocument();
     expect(card("Data requests overdue").closest("a")).toHaveAttribute(
       "href",
       "/admin/dsar?view=overdue"
     );
     expect(screen.getByText("of 10 appeals decided (20%)")).toBeInTheDocument();
-    expect(screen.getByText("1 emergency suspensions need review")).toBeInTheDocument();
+    expect(screen.getByText("1 emergency suspension needs review")).toBeInTheDocument();
     expect(screen.queryByText("Platform health")).not.toBeInTheDocument();
   });
 
@@ -148,7 +153,7 @@ describe("Admin home", () => {
 
     expect(screen.getByRole("heading", { level: 1, name: "Platform" })).toBeInTheDocument();
     expect(screen.getByText("Platform health")).toBeInTheDocument();
-    expect(within(card("Reports past deadline")).getByText("3")).toBeInTheDocument();
+    expect(within(row("Reports past deadline")).getByText("3")).toBeInTheDocument();
     expect(screen.getByText("Running")).toBeInTheDocument();
     expect(screen.getByText("Keep at least two admins for recovery")).toBeInTheDocument();
     expect(screen.getByText("Website traffic")).toBeInTheDocument();

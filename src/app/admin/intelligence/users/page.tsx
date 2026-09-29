@@ -7,7 +7,7 @@ import { DecisionPanel, HorizontalBarPanel } from "@/components/admin/intelligen
 import { Users, UserPlus, TrendingUp, CheckCircle } from "lucide-react";
 
 export const metadata = {
-  title: "Users & Growth — Intelligence",
+  title: "Users & growth — Intelligence",
   description: "User acquisition, retention, and growth analytics.",
 };
 
@@ -49,15 +49,15 @@ export default async function IntelligenceUsersPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Users & Growth"
+        title="Users & growth"
         description="User base analytics and growth tracking."
-        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Users & Growth" }]}
+        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Users & growth" }]}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+            <CardTitle className="text-sm font-medium">Total users</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -66,7 +66,7 @@ export default async function IntelligenceUsersPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Verified Users</CardTitle>
+            <CardTitle className="text-sm font-medium">Verified users</CardTitle>
             <CheckCircle className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
@@ -76,7 +76,7 @@ export default async function IntelligenceUsersPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Suspended Accounts</CardTitle>
+            <CardTitle className="text-sm font-medium">Suspended accounts</CardTitle>
             <UserPlus className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
@@ -85,7 +85,7 @@ export default async function IntelligenceUsersPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Banned Accounts</CardTitle>
+            <CardTitle className="text-sm font-medium">Banned accounts</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -125,7 +125,7 @@ export default async function IntelligenceUsersPage() {
       </div>
 
       <DecisionPanel
-        title="Decision notes"
+        title="What this means"
         description="Signals for growth, trust, and operational planning."
         items={[
           {

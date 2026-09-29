@@ -264,8 +264,8 @@ export function MzansiMarketGrid() {
     const emptyBody = fetchError?.body
       ? fetchError.body
       : hasFilters
-        ? "Try adjusting your search or filters to find what you're looking for."
-        : "Be the first identity-reviewed seller to post on Mzansi Market.";
+        ? "Change your search or clear your filters to see more."
+        : "Be the first verified seller to post on Mzansi Market.";
     const suggestedCats = CATEGORIES.slice(0, 4);
 
     return (
@@ -316,7 +316,7 @@ export function MzansiMarketGrid() {
 
         {hasFilters && (
           <Button variant="outline" onClick={resetFilters}>
-            Clear Filters
+            Clear filters
           </Button>
         )}
 
@@ -324,7 +324,7 @@ export function MzansiMarketGrid() {
           <Button asChild size="lg">
             <Link href="/post/create">
               <Plus className="mr-1.5 h-4 w-4" />
-              Post Your First Ad
+              Post a listing
             </Link>
           </Button>
         )}

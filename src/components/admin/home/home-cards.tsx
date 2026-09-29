@@ -41,7 +41,7 @@ export function StatCard({
   const body = (
     <div
       className={cn(
-        "flex h-full flex-col gap-1 rounded-xl border bg-card p-4 transition-colors",
+        "flex h-full flex-col gap-1 rounded-xl border bg-card p-3 transition-colors sm:p-4",
         href && "hover:bg-muted/40",
         alarming && "border-destructive/40 bg-destructive/5"
       )}
@@ -76,6 +76,90 @@ export function StatCard({
   );
 }
 
+export type MetricRow = {
+  label: string;
+  /** A number, or a short status word such as "Running". Null or undefined reads as "Unavailable". */
+  value: number | string | null | undefined;
+  detail?: React.ReactNode;
+  href?: string;
+  /** Highlight when a numeric value is above zero. */
+  urgent?: boolean;
+  /** Force the highlight, for status values. */
+  alarming?: boolean;
+};
+
+/**
+ * Several related figures in one card, one row each. Used for side panels
+ * where a card per number would waste space.
+ */
+export function MetricList({
+  id,
+  title,
+  description,
+  rows,
+}: {
+  id: string;
+  title: string;
+  description?: string;
+  rows: MetricRow[];
+}) {
+  return (
+    <section aria-labelledby={id} className="rounded-xl border bg-card">
+      <div className="border-b px-4 py-3">
+        <h2 id={id} className="text-base font-semibold">
+          {title}
+        </h2>
+        {description && <p className="text-xs text-muted-foreground">{description}</p>}
+      </div>
+      <ul className="divide-y">
+        {rows.map((row) => {
+          const available = row.value !== null && row.value !== undefined;
+          const alarming =
+            row.alarming || (row.urgent && typeof row.value === "number" && row.value > 0);
+          const content = (
+            <>
+              <div className="min-w-0">
+                <p className="text-sm">{row.label}</p>
+                {available && row.detail && (
+                  <div className="text-xs text-muted-foreground">{row.detail}</div>
+                )}
+              </div>
+              <span
+                className={cn(
+                  "shrink-0 text-lg font-bold tabular-nums",
+                  typeof row.value === "string" && "text-sm",
+                  !available && "text-sm font-medium text-muted-foreground",
+                  alarming && "text-destructive"
+                )}
+              >
+                {!available
+                  ? "Unavailable"
+                  : typeof row.value === "number"
+                    ? formatCount(row.value)
+                    : row.value}
+              </span>
+            </>
+          );
+          return (
+            <li key={row.label}>
+              {row.href ? (
+                <Link
+                  href={row.href}
+                  className="flex items-center justify-between gap-3 px-4 py-2.5 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                >
+                  {content}
+                </Link>
+              ) : (
+                <div className="flex items-center justify-between gap-3 px-4 py-2.5">{content}</div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
 export function oldestLabel(oldestAt: string | null | undefined): string | null {
   return oldestAt ? `Oldest arrived ${formatRelativeTime(oldestAt)}` : null;
 }
@@ -84,7 +168,7 @@ export function oldestLabel(oldestAt: string | null | undefined): string | null 
 export function QueueOverview({ queues }: { queues: StaffDashboard["queues"] }) {
   const { reports, kyc, content, support } = queues;
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 2xl:grid-cols-4">
       <StatCard
         label="Open reports"
         value={reports?.open}

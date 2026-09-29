@@ -204,7 +204,7 @@ export function LocationSelector({
       {showAddress && (
         <div className="space-y-1.5">
           <Label htmlFor={addressId} className="text-sm">
-            Detailed Address{" "}
+            Detailed address{" "}
             {addressRequired ? (
               <span className="font-normal text-muted-foreground">(Required)</span>
             ) : (
@@ -213,7 +213,7 @@ export function LocationSelector({
           </Label>
           <Textarea
             id={addressId}
-            aria-label="Detailed Address"
+            aria-label="Detailed address"
             aria-describedby={errors?.address ? errorId("address") : undefined}
             placeholder="e.g. 123 Main Street, Corner of 5th Avenue"
             value={value.address ?? ""}

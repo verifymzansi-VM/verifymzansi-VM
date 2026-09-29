@@ -6,7 +6,7 @@ import { InfoHero, SectionHeading } from "@/components/safety/info-hero";
 import { Button } from "@/components/ui/button";
 
 export const metadata = {
-  title: "Scam Alerts",
+  title: "Scam alerts",
   description:
     "Learn how to spot and avoid scams on online marketplaces. Stay safe when buying and selling in South Africa.",
 };
@@ -72,10 +72,10 @@ export default function ScamAlertsPage() {
 
       <main id="main-content" className="flex-1">
         <InfoHero
-          title="Scam Alerts"
+          title="Scam alerts"
           tone="gold"
           description="Spot the most common scams in South Africa, and what to do instead."
-          breadcrumbs={[{ label: "Safety", href: "/safety" }, { label: "Scam Alerts" }]}
+          breadcrumbs={[{ label: "Safety", href: "/safety" }, { label: "Scam alerts" }]}
         />
 
         <div className="container-page space-y-14 py-10 sm:space-y-16 sm:py-14">

@@ -1,5 +1,4 @@
-import { Globe, TrendingUp, Users, Eye } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { TrendingUp, Users, Eye } from "lucide-react";
 import { ColumnChartPanel, HorizontalBarPanel } from "@/components/admin/intelligence-panels";
 import { getSiteVisitStats } from "@/lib/utils/admin-queries";
 import { formatCount, SectionHeading } from "./home-cards";
@@ -13,12 +12,51 @@ const AREA_LABELS: Record<string, string> = {
   shared_listings: "Listing details (all areas)",
 };
 
-function dayLabel(dateKey: string, index: number, total: number) {
-  if (index === total - 1) return "Today";
-  return new Date(`${dateKey}T00:00:00`).toLocaleDateString("en-ZA", {
+/** Bars are narrow, so each gets the day of the month; the description names the range. */
+function dayLabel(dateKey: string) {
+  return String(new Date(`${dateKey}T00:00:00`).getDate());
+}
+
+function dayRange(daily: { date: string }[]): string {
+  if (daily.length === 0) return "";
+  const first = new Date(`${daily[0].date}T00:00:00`).toLocaleDateString("en-ZA", {
     day: "numeric",
     month: "short",
   });
+  return `${first} to today`;
+}
+
+const PAGE_LABELS: Record<string, string> = {
+  "/": "Home",
+  "/mzansi-market": "Mzansi Market",
+  "/mzansi-business": "Mzansi Business",
+  "/tourism-events": "Tourism & Events",
+  "/pricing": "Pricing",
+  "/advertise": "Advertise",
+  "/trust-safety": "Trust & Safety",
+  "/safety": "Safety Centre",
+  "/search": "Search",
+  "/contact": "Contact",
+  "/verify-buyer": "Verify a buyer",
+  "/privacy": "Privacy policy",
+  "/terms": "Terms of service",
+  "/login": "Sign in",
+  "/register": "Register",
+};
+
+const UUID_SEGMENT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Readable name for a visited path; single posts show their area and a short ID. */
+export function pageLabel(path: string): string {
+  if (PAGE_LABELS[path]) return PAGE_LABELS[path];
+  const segments = path.split("/").filter(Boolean);
+  const last = segments.at(-1) ?? "";
+  if (UUID_SEGMENT.test(last)) {
+    const parent = `/${segments.slice(0, -1).join("/")}`;
+    const area = PAGE_LABELS[parent] ?? "Post";
+    return `${area} post ${last.slice(0, 6)}`;
+  }
+  return path;
 }
 
 function Figure({
@@ -62,14 +100,11 @@ export async function TrafficPanel() {
 
   return (
     <section className="space-y-3" aria-labelledby="home-traffic">
-      <div id="home-traffic" className="flex flex-wrap items-start justify-between gap-2">
+      <div id="home-traffic">
         <SectionHeading
           title="Website traffic"
-          description="Estimated browsers on public pages, by South African calendar day. Repeat views of a page count once per 30 minutes."
+          description="Public pages only, counted by South African day. Visitors are estimated per browser, and repeat views of a page within 30 minutes count once."
         />
-        <Badge variant="outline" className="gap-1">
-          <Globe className="h-3 w-3" aria-hidden="true" /> Recorded traffic
-        </Badge>
       </div>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Figure
@@ -79,13 +114,13 @@ export async function TrafficPanel() {
           icon={Users}
         />
         <Figure
-          label="Visitors (7 days)"
+          label="Visitors, 7 days"
           value={formatCount(visits.uniqueVisitors7d)}
           detail={`${formatCount(visits.visits7d)} page views`}
           icon={Users}
         />
         <Figure
-          label="Visitors (30 days)"
+          label="Visitors, 30 days"
           value={formatCount(visits.uniqueVisitors30d)}
           detail={`${formatCount(visits.visits30d)} page views`}
           icon={TrendingUp}
@@ -93,16 +128,16 @@ export async function TrafficPanel() {
         <Figure
           label="Pages per visitor"
           value={pagesPerVisitor}
-          detail="Average, 30 days"
+          detail="Average over 30 days"
           icon={Eye}
         />
       </div>
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <ColumnChartPanel
-          title="Daily visits, last 14 days"
-          description="Page views per day."
-          data={visits.daily.map((point, i) => ({
-            label: dayLabel(point.date, i, visits.daily.length),
+          title="Daily page views, last 14 days"
+          description={`Page views per day, ${dayRange(visits.daily)}.`}
+          data={visits.daily.map((point) => ({
+            label: dayLabel(point.date),
             value: point.visits,
             caption: `${formatCount(point.visitors)} visitors`,
             tone: "sky" as const,
@@ -110,17 +145,17 @@ export async function TrafficPanel() {
         />
         <div className="grid gap-4">
           <HorizontalBarPanel
-            title="Top pages (30 days)"
-            description="Where visitors spend their time."
+            title="Most viewed pages, 30 days"
+            description="Page views per page."
             data={visits.topPages.map((p) => ({
-              label: p.path,
+              label: pageLabel(p.path),
               value: p.visits,
               tone: "sky" as const,
             }))}
           />
           <HorizontalBarPanel
-            title="Traffic by area (30 days)"
-            description="Which marketplace areas attract the most visits."
+            title="Page views by area, 30 days"
+            description="Which parts of the site people visit most."
             data={visits.byArea.map((a) => ({
               label: AREA_LABELS[a.area] ?? a.area,
               value: a.visits,

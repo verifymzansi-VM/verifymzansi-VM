@@ -180,10 +180,10 @@ describe("MzansiBusinessGrid", () => {
     render(<MzansiBusinessGrid />);
 
     await waitFor(() => {
-      expect(screen.getByText("No representative profiles yet")).toBeInTheDocument();
+      expect(screen.getByText("No businesses yet")).toBeInTheDocument();
     });
 
-    expect(screen.getByRole("link", { name: /create business profile/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /add a business/i })).toHaveAttribute(
       "href",
       "/post/create-business"
     );
@@ -234,7 +234,7 @@ describe("MzansiBusinessGrid", () => {
     render(<MzansiBusinessGrid />);
 
     await waitFor(() => {
-      expect(screen.getByText("Unable to load businesses")).toBeInTheDocument();
+      expect(screen.getByText("Businesses could not load")).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: /retry/i }));

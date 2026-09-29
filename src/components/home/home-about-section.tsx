@@ -57,7 +57,7 @@ export function HomeAboutSection() {
               className="home-link-arrow h-12 w-full rounded-full bg-brand-green-700 px-7 text-base font-semibold text-white hover:bg-brand-green-800 sm:w-auto"
             >
               <Link href="/post/create" prefetch={false}>
-                Post for Free
+                Post for free
                 <ArrowRight className="h-5 w-5" aria-hidden="true" />
               </Link>
             </Button>
