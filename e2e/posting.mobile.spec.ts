@@ -1,6 +1,7 @@
 import path from "node:path";
 import { test, type Locator, type Page } from "@playwright/test";
 import { POSTING_MOBILE_STATE } from "./auth-state";
+import { eventDateInput } from "./event-dates";
 
 const IMAGE_FIXTURE = path.join(process.cwd(), "src", "app", "icon.png");
 const RUN_SUFFIX = Date.now().toString().slice(-6);
@@ -125,7 +126,7 @@ async function completeMobilePromotionCreate(page: Page) {
     .getByLabel(/^Description/)
     .fill("Mobile Chrome promotion description with enough detail for the validation rules.");
   await page.getByRole("button", { name: "Next", exact: true }).click();
-  await page.getByLabel(/^Start date/).fill("2099-12-15");
+  await page.getByLabel(/^Start date/).fill(eventDateInput());
   await page.getByLabel(/^Start time/).fill("18:00");
   await page.getByLabel("Free entry").check();
   await page.getByRole("button", { name: "Next", exact: true }).click();

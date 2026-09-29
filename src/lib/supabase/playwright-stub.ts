@@ -696,6 +696,32 @@ export function createPlaywrightStubSupabaseClient(
     },
     async rpc(fn: string, params?: Record<string, unknown>) {
       if (fn === "fulfill_ozow_payment") return fulfillPlaywrightPayment(params);
+      if (fn === "increment_otp_attempt") {
+        // Mirrors public.increment_otp_attempt: count every attempt on an
+        // unverified challenge and lock it once max_attempts is reached.
+        const rows = listPlaywrightTableRows("otp_challenges");
+        const challenge = rows.find(
+          (row) => row.id === params?.challenge_id && row.verified_at == null
+        );
+        if (!challenge) {
+          return { data: [{ new_attempt_count: null, new_locked_until: null }], error: null };
+        }
+        const attemptCount = Number(challenge.attempt_count ?? 0) + 1;
+        challenge.attempt_count = attemptCount;
+        if (attemptCount >= Number(params?.max_attempts ?? 5)) {
+          challenge.locked_until = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+        }
+        writePlaywrightTableRows("otp_challenges", rows);
+        return {
+          data: [
+            {
+              new_attempt_count: attemptCount,
+              new_locked_until: (challenge.locked_until as string | null | undefined) ?? null,
+            },
+          ],
+          error: null,
+        };
+      }
       if (fn === "reserve_intro_trial") {
         // E2E personas are always verified members, so the identity gate from
         // intro_trial_identity() is treated as satisfied. Mirror the claim

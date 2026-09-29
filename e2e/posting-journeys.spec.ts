@@ -1,5 +1,6 @@
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
+import { eventDateInput } from "./event-dates";
 
 // Representative Market, Tourism and Event journeys from the posting guidance plan.
 test.describe.configure({ timeout: 150_000 });
@@ -198,7 +199,7 @@ async function eventBasics(page: Page, persona: string, name: string) {
     .getByLabel(/^Description/)
     .fill("A hands-on session with everything you need to take part provided on the day.");
   await next(page);
-  await page.getByLabel(/^Start date/).fill("2099-11-14");
+  await page.getByLabel(/^Start date/).fill(eventDateInput());
   await page.getByLabel(/^Start time/).fill("10:00");
 }
 
