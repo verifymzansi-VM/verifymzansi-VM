@@ -47,7 +47,7 @@ const PAGE_LABELS: Record<string, string> = {
 const UUID_SEGMENT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Readable name for a visited path; single posts show their area and a short ID. */
-export function pageLabel(path: string): string {
+function pageLabel(path: string): string {
   if (PAGE_LABELS[path]) return PAGE_LABELS[path];
   const segments = path.split("/").filter(Boolean);
   const last = segments.at(-1) ?? "";
