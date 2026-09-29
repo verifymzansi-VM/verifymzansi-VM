@@ -72,7 +72,7 @@ test.describe("Commercial model", () => {
     expect(headingBox!.y).toBeLessThan(eventBox!.y);
     expect(eventBox!.y).toBeLessThan(planBox!.y);
     await page.screenshot({ path: info.outputPath("tourism-gate.png"), fullPage: true });
-    await eventOption.getByRole("button", { name: /create a free event/i }).click();
+    await eventOption.getByRole("button", { name: /create an event/i }).click();
     await expect(page.getByRole("heading", { name: /create an event/i })).toBeVisible();
   });
 
