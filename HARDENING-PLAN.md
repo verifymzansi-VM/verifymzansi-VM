@@ -299,13 +299,10 @@ All findings have been addressed — **102/107 items implemented, 5 deferred**
 - **Fix:** Replace raw `error.message` with `"Failed to update account status"`.
   Wrap moderation action insert (L67-73) in try/catch.
 
-### 28. ✅ Add input validation for geocoding
+### 28. Geocoding retired
 
-- **File:**
-  [src/lib/services/geocoding.ts#L57-L59](src/lib/services/geocoding.ts#L57-L59)
-- **Fix:** Add SA bounding box validation (lat: -35 to -22, lon: 16 to 33).
-  Validate `GEOCODING_API_URL` is a proper URL. Wrap `response.json()` in
-  try/catch.
+The GPS endpoint and geocoding service were removed when province/city
+confirmation replaced address verification.
 
 ### 29. ✅ Validate OTP format before sending
 
@@ -472,7 +469,7 @@ All findings have been addressed — **102/107 items implemented, 5 deferred**
 ### 52. ✅ Use `parseJsonRequest` consistently
 
 - **Files:**
-  [src/app/api/verification/location/gps/route.ts#L55](src/app/api/verification/location/gps/route.ts#L55),
+  [src/app/api/verification/location/detect/route.ts](src/app/api/verification/location/detect/route.ts),
   [src/app/api/admin/feature-flags/toggle/route.ts#L51](src/app/api/admin/feature-flags/toggle/route.ts#L51)
 - **Fix:** Replace `request.json()` with project's `parseJsonRequest` helper.
 
@@ -523,25 +520,25 @@ All findings have been addressed — **102/107 items implemented, 5 deferred**
 
 ### API Route Tests (17 missing routes)
 
-| #   | Test File                                              | Routes Covered                         | Key Test Cases                                                                           |
-| --- | ------------------------------------------------------ | -------------------------------------- | ---------------------------------------------------------------------------------------- |
-| 81  | `src/app/api/auth/login/route.test.ts`                 | `POST /api/auth/login`                 | Valid login, invalid credentials, missing fields, Turnstile validation, anti-enumeration |
-| 81  | `src/app/api/auth/register/route.test.ts`              | `POST /api/auth/register`              | Valid registration, duplicate email, weak password, Turnstile                            |
-| 81  | `src/app/api/auth/sign-out/route.test.ts`              | `POST /api/auth/sign-out`              | Authenticated sign-out, unauthenticated call                                             |
-| 81  | `src/app/api/auth/forgot-password/route.test.ts`       | `POST /api/auth/forgot-password`       | Always-success (anti-enumeration), invalid email format                                  |
-| 82  | `src/app/api/listings/[id]/boost/route.test.ts`        | `POST /api/listings/[id]/boost`        | Auth, ownership, entitlement, duplicate boost, invalid UUID                              |
-| 82  | `src/app/api/storefronts/[id]/boost/route.test.ts`     | `POST /api/storefronts/[id]/boost`     | Same as above                                                                            |
-| 82  | `src/app/api/business-ads/[id]/boost/route.test.ts`    | `POST /api/business-ads/[id]/boost`    | Same as above                                                                            |
-| 83  | `src/app/api/dsar/submit/route.test.ts`                | `POST /api/dsar/submit`                | Valid submission, invalid SA ID, 30-day deadline, Turnstile                              |
-| 83  | `src/app/api/admin/dsar/decide/route.test.ts`          | `POST /api/admin/dsar/decide`          | Admin-only gate, already-processed rejection                                             |
-| 84  | `src/app/api/contact/route.test.ts`                    | `POST /api/contact`                    | Valid submission, Turnstile, empty fields, XSS payload                                   |
-| 85  | `src/app/api/reports/route.test.ts`                    | `POST /api/reports`                    | Valid report, missing IP_HASH_SECRET in production, Turnstile                            |
-| 86  | `src/app/api/admin/flagging/action/route.test.ts`      | `POST /api/admin/flagging/action`      | RBAC (admin vs moderator vs user), all action types                                      |
-| 86  | `src/app/api/admin/content/decide/route.test.ts`       | `POST /api/admin/content/decide`       | RBAC, valid actions, invalid payloads                                                    |
-| 86  | `src/app/api/admin/feature-flags/toggle/route.test.ts` | `POST /api/admin/feature-flags/toggle` | Admin-only (not moderator), legacy + canary formats                                      |
-| 87  | `src/app/api/health/route.test.ts`                     | `GET /api/health`                      | Returns 200, correct JSON shape                                                          |
-| 88  | `src/app/api/verification/location/gps/route.test.ts`  | `POST /api/.../gps`                    | Auth, GPS bounds, province whitelist, feature flag                                       |
-| 88  | `src/app/api/verification/status/route.test.ts`        | `GET /api/verification/status`         | Auth, user-scoped data only                                                              |
+| #   | Test File                                                | Routes Covered                         | Key Test Cases                                                                           |
+| --- | -------------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------- |
+| 81  | `src/app/api/auth/login/route.test.ts`                   | `POST /api/auth/login`                 | Valid login, invalid credentials, missing fields, Turnstile validation, anti-enumeration |
+| 81  | `src/app/api/auth/register/route.test.ts`                | `POST /api/auth/register`              | Valid registration, duplicate email, weak password, Turnstile                            |
+| 81  | `src/app/api/auth/sign-out/route.test.ts`                | `POST /api/auth/sign-out`              | Authenticated sign-out, unauthenticated call                                             |
+| 81  | `src/app/api/auth/forgot-password/route.test.ts`         | `POST /api/auth/forgot-password`       | Always-success (anti-enumeration), invalid email format                                  |
+| 82  | `src/app/api/listings/[id]/boost/route.test.ts`          | `POST /api/listings/[id]/boost`        | Auth, ownership, entitlement, duplicate boost, invalid UUID                              |
+| 82  | `src/app/api/storefronts/[id]/boost/route.test.ts`       | `POST /api/storefronts/[id]/boost`     | Same as above                                                                            |
+| 82  | `src/app/api/business-ads/[id]/boost/route.test.ts`      | `POST /api/business-ads/[id]/boost`    | Same as above                                                                            |
+| 83  | `src/app/api/dsar/submit/route.test.ts`                  | `POST /api/dsar/submit`                | Valid submission, invalid SA ID, 30-day deadline, Turnstile                              |
+| 83  | `src/app/api/admin/dsar/decide/route.test.ts`            | `POST /api/admin/dsar/decide`          | Admin-only gate, already-processed rejection                                             |
+| 84  | `src/app/api/contact/route.test.ts`                      | `POST /api/contact`                    | Valid submission, Turnstile, empty fields, XSS payload                                   |
+| 85  | `src/app/api/reports/route.test.ts`                      | `POST /api/reports`                    | Valid report, missing IP_HASH_SECRET in production, Turnstile                            |
+| 86  | `src/app/api/admin/flagging/action/route.test.ts`        | `POST /api/admin/flagging/action`      | RBAC (admin vs moderator vs user), all action types                                      |
+| 86  | `src/app/api/admin/content/decide/route.test.ts`         | `POST /api/admin/content/decide`       | RBAC, valid actions, invalid payloads                                                    |
+| 86  | `src/app/api/admin/feature-flags/toggle/route.test.ts`   | `POST /api/admin/feature-flags/toggle` | Admin-only (not moderator), legacy + canary formats                                      |
+| 87  | `src/app/api/health/route.test.ts`                       | `GET /api/health`                      | Returns 200, correct JSON shape                                                          |
+| 88  | `src/app/api/verification/location/detect/route.test.ts` | `POST /api/.../detect`                 | Auth, province/city catalogue, feature flag                                              |
+| 88  | `src/app/api/verification/status/route.test.ts`          | `GET /api/verification/status`         | Auth, user-scoped data only                                                              |
 
 ### Hook Tests (all new)
 

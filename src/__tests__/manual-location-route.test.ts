@@ -277,6 +277,80 @@ describe("POST /api/verification/location/manual", () => {
     expect(body.city).toBe("Johannesburg");
     expect(body.riskScore).toBe(20);
     expect(body.riskLevel).toBe("low");
+    expect(mockCheckRateLimit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: "u1",
+        action: "verification:manual-location",
+        degradedMode: "block",
+      })
+    );
+  });
+
+  it.each(["approved", "pending"])(
+    "resumes a finalized %s location without admin review",
+    async (status) => {
+      setupAuthenticatedUser();
+      mockParseAndValidateJsonRequest.mockResolvedValue({
+        success: true,
+        data: { province: "Gauteng", city: "Johannesburg" },
+      });
+      const fallback = mockAdminFrom.getMockImplementation()!;
+      const stepTable = createVerificationStepsTable({
+        locationStep: {
+          status,
+          location_method: "manual",
+          location_province: "Gauteng",
+          location_city: "Johannesburg",
+        },
+      });
+      const sessionTable = createVerificationSessionsTable({
+        existingSession: { finalized_at: "2026-09-01", location_submitted_at: "2026-09-01" },
+      });
+      mockAdminFrom.mockImplementation((table: string) =>
+        table === "verification_steps"
+          ? stepTable
+          : table === "verification_sessions"
+            ? sessionTable
+            : fallback(table)
+      );
+      const response = await POST(makeRequest({ province: "Gauteng", city: "Johannesburg" }));
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ stepStatus: "approved" });
+      expect(stepTable.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: "approved",
+          auto_status: "approved",
+          gps_lat: null,
+          gps_lon: null,
+          location_address_line: null,
+          location_town: null,
+          metadata: { location_assurance: "self_declared" },
+        }),
+        expect.anything()
+      );
+      expect(sessionTable.upsert).toHaveBeenCalledWith(
+        expect.not.objectContaining({ finalized_at: null }),
+        expect.anything()
+      );
+    }
+  );
+
+  it("reports session persistence failure instead of claiming completion", async () => {
+    setupAuthenticatedUser();
+    mockParseAndValidateJsonRequest.mockResolvedValue({
+      success: true,
+      data: { province: "Gauteng", city: "Johannesburg" },
+    });
+    const fallback = mockAdminFrom.getMockImplementation()!;
+    const sessionTable = createVerificationSessionsTable({
+      upsert: vi.fn().mockResolvedValue({ error: { message: "unavailable" } }),
+    });
+    mockAdminFrom.mockImplementation((table: string) =>
+      table === "verification_sessions" ? sessionTable : fallback(table)
+    );
+    expect((await POST(makeRequest({ province: "Gauteng", city: "Johannesburg" }))).status).toBe(
+      500
+    );
   });
 
   it("normalizes province aliases and city casing before persistence", async () => {
@@ -297,7 +371,7 @@ describe("POST /api/verification/location/manual", () => {
     expect(body.city).toBe("Durban");
   });
 
-  it("rejects a duplicate manual location when a location step is already submitted", async () => {
+  it("rejects changing an already approved location", async () => {
     const upsertVerificationStep = vi.fn();
 
     mockGetUser.mockResolvedValue({
@@ -320,7 +394,7 @@ describe("POST /api/verification/location/manual", () => {
             status: "approved",
             location_method: "manual",
             location_province: "Gauteng",
-            location_city: "Johannesburg",
+            location_city: "Pretoria",
           },
         });
       }

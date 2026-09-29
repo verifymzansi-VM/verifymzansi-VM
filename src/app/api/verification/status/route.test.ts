@@ -374,7 +374,7 @@ describe("GET /api/verification/status", () => {
     );
   });
 
-  it("returns persisted GPS mismatch and confidence context for the location step", async () => {
+  it("keeps historical location methods readable after GPS retirement", async () => {
     mockFrom.mockImplementation((table: string) => {
       if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
@@ -432,13 +432,8 @@ describe("GET /api/verification/status", () => {
     expect(body.steps[0]).toMatchObject({
       step_type: "location",
       location_method: "manual_with_gps",
-      gps_mismatch: {
-        province: false,
-        city: true,
-      },
-      gps_resolved_province: "Gauteng",
-      gps_resolved_city: "Pretoria",
-      gps_confidence: "medium",
+      location_province: "Gauteng",
+      location_city: "Johannesburg",
     });
   });
 

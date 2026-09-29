@@ -24,6 +24,9 @@ const listingBase = z.object({
   province: z.string().min(1, "Province is required").max(50),
   city: z.string().min(1, "City is required").max(80),
   category: z.enum([
+    "clothing_accessories",
+    "sports_hobbies",
+    "other_items",
     "property",
     "vehicles",
     "auto_parts",
@@ -260,7 +263,29 @@ export const listingSchema = z
     listingBase.extend({ category: z.literal("auto_parts"), attributes: autoPartsAttrs }),
     listingBase.extend({ category: z.literal("electronics"), attributes: electronicsAttrs }),
     listingBase.extend({ category: z.literal("home_lifestyle"), attributes: homeLifestyleAttrs }),
-    listingBase.extend({ category: z.literal("jobs_services"), attributes: jobsAttrs }),
+    listingBase.extend({
+      category: z.literal("clothing_accessories"),
+      attributes: homeLifestyleAttrs.omit({ sub_category: true }),
+    }),
+    listingBase.extend({
+      category: z.literal("sports_hobbies"),
+      attributes: homeLifestyleAttrs.extend({
+        sub_category: z
+          .enum(["sports_outdoor", "musical_instruments", "books_stationery"])
+          .optional(),
+      }),
+    }),
+    listingBase.extend({
+      category: z.literal("other_items"),
+      attributes: homeLifestyleAttrs.omit({ sub_category: true }),
+    }),
+
+    listingBase.extend({
+      category: z.literal("jobs_services"),
+      attributes: jobsAttrs,
+      price_zar: priceSchema.optional().default(0),
+      images: z.array(trustedMediaUrl).max(10),
+    }),
     listingBase.extend({
       category: z.literal("farming_agriculture"),
       attributes: farmingAgricultureAttrs,

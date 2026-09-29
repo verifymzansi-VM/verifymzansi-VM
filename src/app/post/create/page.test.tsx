@@ -25,6 +25,7 @@ vi.mock("next/link", () => ({
   default: ({
     children,
     href,
+    prefetch: _prefetch,
     ...props
   }: {
     children: React.ReactNode;
@@ -100,13 +101,13 @@ describe("CreatePostPage", () => {
     expect(screen.getByRole("heading", { name: "Mzansi Market" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Mzansi Business" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Tourism & Events" })).toBeInTheDocument();
-    expect(screen.getByText("What is it?")).toBeInTheDocument();
-    expect(screen.getByText("How do customers reach you?")).toBeInTheDocument();
-    expect(screen.getByText("What are you listing?")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Vehicle:/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Mobile service:/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Event:/ })).toBeInTheDocument();
-    expect(screen.getByText("Not sure where it fits? See common examples")).toBeInTheDocument();
+    expect(screen.getByText("Sell an item, list property or advertise a job")).toBeInTheDocument();
+    expect(screen.getByText("Help customers find your business")).toBeInTheDocument();
+    expect(screen.getByText("Free to post")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Create a market listing:/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Create a business profile:/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Create an event:/ })).toBeInTheDocument();
+    expect(screen.getByText("Not sure where to post?")).toBeInTheDocument();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /See advertising options/i })).toHaveAttribute(
       "href",
@@ -117,17 +118,17 @@ describe("CreatePostPage", () => {
   it("opens each form with the chosen category or type preselected", async () => {
     render(await CreatePostPage());
 
-    fireEvent.click(screen.getByRole("button", { name: /^Mobile service:/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Create a business profile:/ }));
 
     await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith("/post/create-business?type=mobile_service");
+      expect(mockPush).toHaveBeenCalledWith("/post/create-business");
     });
   });
 
   it("routes common examples to the right area", async () => {
     render(await CreatePostPage());
 
-    fireEvent.click(screen.getByRole("button", { name: /Renting out rooms by the night/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Advertising holiday accommodation/ }));
 
     await waitFor(() => {
       expect(mockPush).toHaveBeenCalledWith("/post/create-tourism?type=tourism_business");
@@ -137,10 +138,10 @@ describe("CreatePostPage", () => {
   it("sends verified users directly to the create forms", async () => {
     render(await CreatePostPage());
 
-    fireEvent.click(screen.getByRole("button", { name: /^Vehicle:/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Create a market listing:/ }));
 
     await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith("/post/create-listing?category=vehicles");
+      expect(mockPush).toHaveBeenCalledWith("/post/create-listing");
     });
   });
 
@@ -155,12 +156,10 @@ describe("CreatePostPage", () => {
       expect(screen.getByText("Verification required before posting")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /^Vehicle:/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Create a market listing:/ }));
 
     await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith(
-        "/verification?returnUrl=%2Fpost%2Fcreate-listing%3Fcategory%3Dvehicles"
-      );
+      expect(mockPush).toHaveBeenCalledWith("/verification?returnUrl=%2Fpost%2Fcreate-listing");
     });
   });
 
@@ -173,7 +172,7 @@ describe("CreatePostPage", () => {
 
     await waitFor(() => {
       expect(screen.queryByText("Verification required before posting")).not.toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /^Vehicle:/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /^Create a market listing:/ })).toBeInTheDocument();
     });
   });
 
@@ -181,7 +180,7 @@ describe("CreatePostPage", () => {
     render(await CreatePostPage());
 
     expect(screen.queryByText("Checking access")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Vehicle:/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Create a market listing:/ })).toBeInTheDocument();
   });
 
   it("updates the posting gate copy when the verification status refresh resolves to pending review", async () => {
@@ -203,25 +202,23 @@ describe("CreatePostPage", () => {
       ).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /^Vehicle:/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Create a market listing:/ }));
 
     await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith(
-        "/verification?returnUrl=%2Fpost%2Fcreate-listing%3Fcategory%3Dvehicles"
-      );
+      expect(mockPush).toHaveBeenCalledWith("/verification?returnUrl=%2Fpost%2Fcreate-listing");
     });
   });
 
   it("shows pending loading feedback and blocks repeated category clicks", async () => {
     render(await CreatePostPage());
 
-    const marketButton = screen.getByRole("button", { name: /^Vehicle:/ });
-    const businessButton = screen.getByRole("button", { name: /^Event:/ });
+    const marketButton = screen.getByRole("button", { name: /^Create a market listing:/ });
+    const businessButton = screen.getByRole("button", { name: /^Create an event:/ });
 
     fireEvent.click(marketButton);
 
     expect(mockPush).toHaveBeenCalledTimes(1);
-    expect(mockPush).toHaveBeenCalledWith("/post/create-listing?category=vehicles");
+    expect(mockPush).toHaveBeenCalledWith("/post/create-listing");
     expect(marketButton).toBeDisabled();
     expect(screen.getByText("Opening form...")).toBeInTheDocument();
     expect(businessButton).toBeDisabled();

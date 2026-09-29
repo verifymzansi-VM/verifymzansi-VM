@@ -75,6 +75,7 @@ docs/*
 !docs/showroom-artwork.md
 !docs/introductory-trial-strategy.md
 !docs/verification-capture-review.md
+!docs/location-confirmation.md
 !docs/video-upload-r2-design.md
 !docs/payment-fulfillment-rollout.md
 !docs/domain-email-gmail-setup.md

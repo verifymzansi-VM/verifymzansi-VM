@@ -174,7 +174,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/api/verification/location/gps": {
+  "/api/verification/location/detect": {
     parameters: {
       query?: never;
       header?: never;
@@ -183,15 +183,15 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Submit GPS coordinates for location verification */
-    post: operations["submitGps"];
+    /** Suggest province and city from the current network; does not save or approve */
+    post: operations["detectLocation"];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  "/api/verification/location/proof": {
+  "/api/verification/location/manual": {
     parameters: {
       query?: never;
       header?: never;
@@ -200,8 +200,8 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Upload proof of address */
-    post: operations["uploadAddressProof"];
+    /** Save a valid province/city pair and automatically approve the location step */
+    post: operations["submitLocation"];
     delete?: never;
     options?: never;
     head?: never;
@@ -726,7 +726,7 @@ export interface operations {
           /** Format: binary */
           file: string;
           /** @enum {string} */
-          type: "id_document" | "selfie";
+          docType: "id_document" | "selfie";
         };
       };
     };
@@ -740,6 +740,13 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
+      /** @description Proof-of-address upload retired; select province and city instead */
+      410: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
     };
   };
   getVerificationStatus: {
@@ -763,7 +770,53 @@ export interface operations {
       401: components["responses"]["Unauthorized"];
     };
   };
-  submitGps: {
+  detectLocation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Approximate location, or manual selection required */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            detected: boolean;
+            province: string | null;
+            city: string | null;
+          };
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      /** @description CSRF validation or email confirmation required */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Location flow disabled */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Detection cap reached; manual submission remains available */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  submitLocation: {
     parameters: {
       query?: never;
       header?: never;
@@ -773,13 +826,13 @@ export interface operations {
     requestBody: {
       content: {
         "application/json": {
-          latitude: number;
-          longitude: number;
+          province: string;
+          city: string;
         };
       };
     };
     responses: {
-      /** @description Location recorded */
+      /** @description Location approved automatically; identity review is separate */
       200: {
         headers: {
           [name: string]: unknown;
@@ -787,32 +840,35 @@ export interface operations {
         content?: never;
       };
       400: components["responses"]["BadRequest"];
-    };
-  };
-  uploadAddressProof: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "multipart/form-data": {
-          /** Format: binary */
-          file: string;
-        };
-      };
-    };
-    responses: {
-      /** @description Proof uploaded */
-      200: {
+      401: components["responses"]["Unauthorized"];
+      /** @description CSRF validation or email confirmation required */
+      403: {
         headers: {
           [name: string]: unknown;
         };
         content?: never;
       };
-      401: components["responses"]["Unauthorized"];
+      /** @description An approved location cannot be changed here */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Too many requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Rate limit protection unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
     };
   };
   uploadMedia: {
@@ -925,6 +981,13 @@ export interface operations {
         content?: never;
       };
       400: components["responses"]["BadRequest"];
+      /** @description The owner has not chosen inbox enquiries for this post or business profile (its contact methods exclude the contact form) */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
     };
   };
   submitReport: {

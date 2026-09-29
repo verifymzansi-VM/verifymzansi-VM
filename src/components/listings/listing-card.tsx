@@ -45,6 +45,8 @@ export const ListingCard = memo(function ListingCard({
   title,
   price,
   negotiable,
+  category,
+  attributes,
   imageUrl,
   posterUrl,
   isVideo,
@@ -60,7 +62,14 @@ export const ListingCard = memo(function ListingCard({
   mediaWidth,
   mediaHeight,
 }: ListingCardProps) {
-  const priceLabel = price > 0 ? formatZARShort(price) : null;
+  const priceLabel =
+    category === "jobs_services"
+      ? price > 0
+        ? `${formatZARShort(price)}${attributes?.salary_period ? ` / ${String(attributes.salary_period).replace(/^per_/, "")}` : ""}`
+        : "Salary not provided"
+      : price > 0
+        ? formatZARShort(price)
+        : null;
   const eyebrow = priceLabel && negotiable ? `${priceLabel} · Neg` : priceLabel;
 
   return (

@@ -22,8 +22,6 @@ export type ArtifactKind = "document" | "selfie" | "proof_of_address" | "livenes
 
 export type ProviderDecision = "approved" | "rejected" | "needs_manual_review";
 
-export type LocationConfidence = "high" | "medium" | "low" | "none";
-
 export type ListingStatus =
   | "draft"
   | "pending_moderation"
@@ -44,7 +42,10 @@ export type ListingCategory =
   | "home_lifestyle"
   | "jobs_services"
   | "farming_agriculture"
-  | "baby_kids";
+  | "baby_kids"
+  | "clothing_accessories"
+  | "sports_hobbies"
+  | "other_items";
 
 export type ListingCondition = "new" | "like_new" | "good" | "fair" | "for_parts";
 
@@ -70,7 +71,15 @@ export type BusinessCategory =
   | "events_entertainment"
   | "automotive_transport"
   | "tourism_hospitality"
-  | "general_other";
+  | "general_other"
+  | "health_medical"
+  | "beauty_personal"
+  | "fitness_wellness"
+  | "cleaning_garden"
+  | "automotive_services"
+  | "transport_storage"
+  | "pets_animals"
+  | "community_personal";
 
 /* ── Promotion Enums ────────────────────────────────────── */
 export type PromotionType = "product" | "service" | "event" | "deal" | "general";
@@ -209,12 +218,15 @@ export const AREA_SLUGS: Record<MarketplaceArea, string> = {
 export const CATEGORY_LABELS: Record<ListingCategory, string> = {
   property: "Property (For Sale & To Rent)",
   vehicles: "Vehicles (Cars, Bakkies & Commercial)",
-  auto_parts: "Auto Parts & Accessories",
-  electronics: "Electronics & Tech",
-  home_lifestyle: "Home & Lifestyle",
-  jobs_services: "Jobs, Services & Other",
+  auto_parts: "Vehicle Parts & Accessories",
+  electronics: "Electronics & Technology",
+  home_lifestyle: "Furniture & Home",
+  jobs_services: "Jobs",
   farming_agriculture: "Farming & Agriculture",
   baby_kids: "Baby & Kids",
+  clothing_accessories: "Clothing & Accessories",
+  sports_hobbies: "Sports, Hobbies & Leisure",
+  other_items: "Other Items",
 };
 
 export const LISTING_CONDITION_LABELS: Record<ListingCondition, string> = {
@@ -235,19 +247,27 @@ export const BUSINESS_TYPE_LABELS: Record<BusinessType, string> = {
 };
 
 export const BUSINESS_CATEGORY_LABELS: Record<BusinessCategory, string> = {
-  fashion_accessories: "Fashion & Accessories",
-  electronics_tech: "Electronics & Tech",
-  groceries_essentials: "Groceries & Essentials",
+  fashion_accessories: "Clothing & Accessories",
+  electronics_tech: "Electronics & Technology",
+  groceries_essentials: "Groceries & Food Shops",
   health_beauty: "Health, Beauty & Wellness",
-  home_living: "Home & Living",
-  food_dining: "Food & Dining",
-  trade_maintenance: "Trade & Maintenance",
-  professional_services: "Professional Services",
-  education_training: "Education & Training",
-  events_entertainment: "Events & Entertainment",
+  home_living: "Furniture & Homeware",
+  food_dining: "Restaurants & Catering",
+  trade_maintenance: "Building & Trade Services",
+  professional_services: "Professional & Business Services",
+  education_training: "Education & Childcare",
+  events_entertainment: "Events & Entertainment Services",
   automotive_transport: "Automotive & Transport",
   tourism_hospitality: "Tourism & Hospitality",
-  general_other: "General & Other",
+  general_other: "Other Businesses",
+  health_medical: "Health & Medical",
+  beauty_personal: "Beauty & Personal Care",
+  fitness_wellness: "Fitness & Wellness",
+  cleaning_garden: "Cleaning & Garden Services",
+  automotive_services: "Automotive Sales & Services",
+  transport_storage: "Transport, Delivery & Storage",
+  pets_animals: "Pets & Animal Services",
+  community_personal: "Community & Personal Services",
 };
 
 export const PLAN_TIER_LABELS: Record<PlanTier, string> = {

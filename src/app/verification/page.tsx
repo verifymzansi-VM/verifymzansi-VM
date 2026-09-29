@@ -42,11 +42,9 @@ import { sanitizeReturnUrl } from "@/lib/utils/navigation";
 import { formatPhone } from "@/lib/utils/format";
 import type {
   VerificationStepType,
-  LocationConfidence,
   VerificationStatus,
   AccountVerificationStatus,
 } from "@/types/enums";
-import { GPS_REQUEST_TIMEOUT_MS } from "@/lib/constants/verification";
 import {
   VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE,
   VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_MESSAGE,
@@ -82,13 +80,6 @@ type StepStatusEntry = {
   location_province?: string | null;
   location_city?: string | null;
   location_town?: string | null;
-  gps_mismatch?: {
-    province: boolean;
-    city: boolean;
-  } | null;
-  gps_resolved_province?: string | null;
-  gps_resolved_city?: string | null;
-  gps_confidence?: string | null;
 };
 
 const REVIEWABLE_STEP_ORDER: VerificationStepType[] = ["phone", "id_doc", "selfie", "location"];
@@ -108,8 +99,6 @@ const EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION =
   "Check your inbox for the confirmation link, then return here to continue. You can still verify your phone while waiting.";
 const VERIFICATION_TEMPORARILY_UNAVAILABLE_DESCRIPTION =
   "Verification is temporarily unavailable right now. Please try again later.";
-const GPS_TARGET_ACCURACY_METERS = 50;
-const GPS_WATCH_SETTLE_MS = 4000;
 
 type VerificationApiResponse = {
   success?: boolean;
@@ -118,7 +107,7 @@ type VerificationApiResponse = {
   warning?: string;
   verified?: boolean;
   stepStatus?: VerificationStatus;
-  confidence?: LocationConfidence;
+  confidence?: string;
   resolvedProvince?: string | null;
   resolvedCity?: string | null;
   mismatch?: {
@@ -164,153 +153,6 @@ const SA_MONTHS_LONG = [
   "November",
   "December",
 ];
-
-const GEOLOCATION_PERMISSION_DENIED = 1;
-const COARSE_FIX_TIMEOUT_MS = 5000;
-
-type CoarseFix = { latitude: number; longitude: number; accuracy: number };
-
-/**
- * Best-effort coarse network-based fix (enableHighAccuracy: false). Used as a
- * cross-check against the GPS fix — mock location apps usually only hook the
- * GPS provider, so a large gap between the two is a spoofing signature.
- * Never throws: returns null when unavailable or too slow.
- */
-function requestCoarseNetworkFix(): Promise<CoarseFix | null> {
-  if (!navigator.geolocation) return Promise.resolve(null);
-
-  return new Promise((resolve) => {
-    const timeoutId = window.setTimeout(() => resolve(null), COARSE_FIX_TIMEOUT_MS);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        window.clearTimeout(timeoutId);
-        resolve({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-        });
-      },
-      () => {
-        window.clearTimeout(timeoutId);
-        resolve(null);
-      },
-      { enableHighAccuracy: false, timeout: COARSE_FIX_TIMEOUT_MS, maximumAge: 60_000 }
-    );
-  });
-}
-
-function isBetterGpsFix(
-  nextPosition: GeolocationPosition,
-  currentBest: GeolocationPosition | null
-): boolean {
-  if (!currentBest) return true;
-
-  const nextAccuracy = nextPosition.coords.accuracy;
-  const currentAccuracy = currentBest.coords.accuracy;
-  if (nextAccuracy !== currentAccuracy) {
-    return nextAccuracy < currentAccuracy;
-  }
-
-  return nextPosition.timestamp > currentBest.timestamp;
-}
-
-function isGeolocationPermissionDenied(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    error.code === GEOLOCATION_PERMISSION_DENIED
-  );
-}
-
-async function requestDeviceGpsPosition(): Promise<GeolocationPosition> {
-  if (!navigator.geolocation) {
-    throw new Error("GPS is not supported in this browser");
-  }
-
-  if (navigator.permissions?.query) {
-    try {
-      const permission = await navigator.permissions.query({ name: "geolocation" });
-      if (permission.state === "denied") {
-        const deniedError = new Error("GPS permission denied") as Error & { code?: number };
-        deniedError.code = GEOLOCATION_PERMISSION_DENIED;
-        throw deniedError;
-      }
-    } catch (error) {
-      if (isGeolocationPermissionDenied(error)) {
-        throw error;
-      }
-    }
-  }
-
-  const options: PositionOptions = {
-    enableHighAccuracy: true,
-    timeout: GPS_REQUEST_TIMEOUT_MS,
-    maximumAge: 0,
-  };
-
-  return new Promise<GeolocationPosition>((resolve, reject) => {
-    let settled = false;
-    let watchId: number | null = null;
-    let bestPosition: GeolocationPosition | null = null;
-
-    const cleanup = () => {
-      if (watchId !== null) {
-        navigator.geolocation.clearWatch(watchId);
-        watchId = null;
-      }
-      window.clearTimeout(timeoutId);
-      window.clearTimeout(settleId);
-    };
-
-    const finish = (position: GeolocationPosition) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      resolve(position);
-    };
-
-    const fail = (error: GeolocationPositionError | Error) => {
-      if (settled) return;
-      if (bestPosition) {
-        finish(bestPosition);
-        return;
-      }
-      settled = true;
-      cleanup();
-      reject(error);
-    };
-
-    const acceptPosition = (position: GeolocationPosition) => {
-      if (isBetterGpsFix(position, bestPosition)) {
-        bestPosition = position;
-      }
-
-      if (position.coords.accuracy <= GPS_TARGET_ACCURACY_METERS) {
-        finish(position);
-      }
-    };
-
-    const timeoutId = window.setTimeout(() => {
-      fail(new Error("GPS request timed out"));
-    }, GPS_REQUEST_TIMEOUT_MS);
-
-    const settleId = window.setTimeout(
-      () => {
-        if (bestPosition) {
-          finish(bestPosition);
-        }
-      },
-      Math.min(GPS_WATCH_SETTLE_MS, GPS_REQUEST_TIMEOUT_MS)
-    );
-
-    navigator.geolocation.getCurrentPosition(acceptPosition, fail, options);
-
-    if (navigator.geolocation.watchPosition) {
-      watchId = navigator.geolocation.watchPosition(acceptPosition, fail, options);
-    }
-  });
-}
 
 class SubmissionError extends Error {
   code?: string;
@@ -371,7 +213,7 @@ const REJECTION_GUIDANCE: Record<string, string> = {
   fraudulent: "Submission could not be verified. Contact support if this is an error.",
   wrong_document_type: "Wrong document type. Upload an SA ID card, book, or passport.",
   not_sa_document: "Only SA documents accepted. Upload an SA ID book, card, or passport.",
-  location_mismatch: "GPS doesn't match your province. Verify your location.",
+  location_mismatch: "Confirm your province and city manually, then save your location.",
   high_risk_override: "Flagged for admin review. No action needed from you.",
   other: "Needs attention. See the admin note above for instructions.",
   insufficient_face_visibility:
@@ -426,7 +268,7 @@ function getFallbackRejectionReason(stepType: VerificationStepType): string {
     case "selfie":
       return "Your selfie was not accepted. Retake a clear live selfie with your face fully visible.";
     case "location":
-      return "Your location could not be verified. Confirm your province and city, then save your address again.";
+      return "Your location could not be verified. Confirm your province and city, then save your location again.";
     case "phone":
       return "Your phone verification was not accepted. Please verify your number again.";
     default:
@@ -505,7 +347,7 @@ function areAllReviewStepsSubmitted(statusSteps: StepStatusEntry[]) {
 
   return REVIEWABLE_STEP_ORDER.every((stepType) => {
     const status = stepStatusMap.get(stepType);
-    return status === "approved" || status === "pending";
+    return status === "approved" || (stepType !== "location" && status === "pending");
   });
 }
 
@@ -532,6 +374,16 @@ function getInitialWizardStep({
 
   if (accountVerificationStatus === "verified") {
     return "complete";
+  }
+
+  if (
+    phoneDone &&
+    stepStatusMap.get("location") === "pending" &&
+    (["id_doc", "selfie"] as const).every((stepType) =>
+      ["approved", "pending"].includes(stepStatusMap.get(stepType) ?? "")
+    )
+  ) {
+    return "location";
   }
 
   if (phoneDone && allSubmitted) {
@@ -682,7 +534,6 @@ export default function VerificationPage() {
   const [selfieLivenessPassed, setSelfieLivenessPassed] = useState(false);
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
-  const [locationTown, setLocationTown] = useState("");
 
   // Session-driven state
   const [_sessionId, setSessionId] = useState<string | null>(null);
@@ -692,24 +543,12 @@ export default function VerificationPage() {
   const [accountVerificationStatus, setAccountVerificationStatus] =
     useState<AccountVerificationStatus | null>(null);
 
-  // GPS state
-  const [gpsStatus, setGpsStatus] = useState<
-    "idle" | "requesting" | "success" | "denied" | "error"
-  >("idle");
-  const [gpsCoords, setGpsCoords] = useState<{ lat: number; lon: number; accuracy: number } | null>(
-    null
-  );
-  const [coarseFix, setCoarseFix] = useState<CoarseFix | null>(null);
-  const [gpsTimestamp, setGpsTimestamp] = useState<number | null>(null);
-  const [gpsConfidence, setGpsConfidence] = useState<LocationConfidence | null>(null);
-  const [gpsProvince, setGpsProvince] = useState<string | null>(null);
-  const [gpsFeatureAvailable, setGpsFeatureAvailable] = useState(true);
-  const [gpsApproved, setGpsApproved] = useState(false);
+  const [detectingLocation, setDetectingLocation] = useState(false);
+  const [locationDetectionMessage, setLocationDetectionMessage] = useState("");
 
   // Manual location state
   const [manualSubmitted, setManualSubmitted] = useState(false);
   const [manualSubmitting, setManualSubmitting] = useState(false);
-  const [gpsMismatch, setGpsMismatch] = useState<{ province: boolean; city: boolean } | null>(null);
 
   // SA ID validation feedback
   const [idDob, setIdDob] = useState<string | null>(null);
@@ -780,21 +619,14 @@ export default function VerificationPage() {
   const isPhoneReady = phoneVerified || persistedPhoneVerified || completedSteps.includes("phone");
   const isIdReady = persistedIdUploaded || isIdFormReady;
   const isSelfieReady = persistedSelfieUploaded || isSelfieFormReady;
-  const persistedLocationSubmitted = ["approved", "pending"].includes(
+  const persistedLocationSubmitted = ["approved"].includes(
     serverStepMap.get("location")?.status ?? ""
   );
   const persistedLocationStep = serverStepMap.get("location");
   const locationSaved = persistedLocationSubmitted || manualSubmitted;
-  const persistedGpsMismatch = persistedLocationStep?.gps_mismatch ?? null;
-  const persistedGpsVerified =
-    persistedLocationStep?.status === "approved" &&
-    (persistedLocationStep.location_method === "gps" ||
-      persistedLocationStep.location_method === "manual_with_gps") &&
-    !persistedGpsMismatch?.province &&
-    !persistedGpsMismatch?.city;
-  const locationVerified = persistedGpsVerified || gpsApproved;
+  const locationVerified = persistedLocationStep?.status === "approved" || manualSubmitted;
   const hasSelectedLocation = Boolean(province && city);
-  const locationSummary = formatLocationSummary(locationTown, city, province);
+  const locationSummary = formatLocationSummary("", city, province);
   const allStepsResolved = useMemo(
     () =>
       REVIEWABLE_STEP_ORDER.every((stepType) => {
@@ -813,7 +645,10 @@ export default function VerificationPage() {
   );
   const locationSubmissionLocked = locationSaved && !reviewAttentionStep;
   const verificationInAdminReview =
-    !reviewAttentionStep && accountVerificationStatus === "pending_review" && allStepsResolved;
+    !reviewAttentionStep &&
+    accountVerificationStatus === "pending_review" &&
+    allStepsResolved &&
+    serverStepMap.get("location")?.status !== "pending";
   const verificationSubmissionBlocked =
     emailConfirmationRequired || verificationUnavailable || verificationInAdminReview;
   const blockedSubmissionTitle = verificationInAdminReview
@@ -862,26 +697,7 @@ export default function VerificationPage() {
       if (nextLocationStep) {
         setProvince(nextLocationStep.location_province ?? "");
         setCity(nextLocationStep.location_city ?? "");
-        setLocationTown(nextLocationStep.location_town ?? "");
-        setManualSubmitted(
-          nextLocationStep.status === "approved" || nextLocationStep.status === "pending"
-        );
-
-        const gpsBackedLocation =
-          nextLocationStep.location_method === "gps" ||
-          nextLocationStep.location_method === "manual_with_gps";
-
-        setGpsMismatch(nextLocationStep.gps_mismatch ?? null);
-        setGpsProvince(nextLocationStep.gps_resolved_province ?? null);
-        setGpsConfidence(
-          (nextLocationStep.gps_confidence as LocationConfidence | null | undefined) ?? null
-        );
-        setGpsApproved(
-          nextLocationStep.status === "approved" &&
-            gpsBackedLocation &&
-            !nextLocationStep.gps_mismatch?.province &&
-            !nextLocationStep.gps_mismatch?.city
-        );
+        setManualSubmitted(nextLocationStep.status === "approved");
       }
 
       const approvedSteps = nextSteps
@@ -1072,227 +888,37 @@ export default function VerificationPage() {
     }
   }, [idNumber]);
 
-  // GPS capture handler
-  const handleRequestGps = useCallback(async () => {
-    if (gpsStatus === "requesting") return;
-
-    if (!navigator.geolocation) {
-      setGpsFeatureAvailable(false);
-      setGpsStatus("error");
-      toast({ title: "GPS not supported in this browser", variant: "destructive" });
-      return;
-    }
-
-    setGpsFeatureAvailable(true);
-    setGpsApproved(false);
-    setGpsMismatch(null);
-    setGpsConfidence(null);
-    setGpsProvince(null);
-    setGpsCoords(null);
-    setGpsTimestamp(null);
-    setCoarseFix(null);
-    setGpsStatus("requesting");
-
+  async function handleDetectLocation() {
+    if (detectingLocation) return;
+    setDetectingLocation(true);
+    setLocationDetectionMessage("");
     try {
-      const position = await requestDeviceGpsPosition();
-      const { latitude, longitude, accuracy } = position.coords;
-      setGpsCoords({ lat: latitude, lon: longitude, accuracy });
-      setGpsTimestamp(position.timestamp);
-      setGpsStatus("success");
-
-      // Best-effort coarse network fix for the dual-provider spoofing check.
-      const coarse = await requestCoarseNetworkFix();
-      setCoarseFix(coarse);
-
-      try {
-        const gpsBody: Record<string, unknown> = {
-          latitude,
-          longitude,
-          accuracy,
-          timestamp: position.timestamp,
-          ...(coarse ? { coarseLocation: coarse } : {}),
-        };
-        // Before saving, GPS is only a preview/confirmation pass. The location
-        // step is persisted by Save Address & Finish.
-        if (province && city) {
-          gpsBody.declaredProvince = province;
-          gpsBody.declaredCity = city;
-          if (locationTown) gpsBody.declaredTown = locationTown;
-        }
-        const previewGpsCheck = !manualSubmitted;
-        const res = await fetch(
-          `/api/verification/location/gps${previewGpsCheck ? "?preview=1" : ""}`,
-          {
-            method: "POST",
-            headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-            body: JSON.stringify(gpsBody),
-          }
-        );
-        if (res.ok) {
-          const data = await res.json();
-          if (data.preview === true) {
-            setGpsConfidence(data.confidence);
-            setGpsProvince(data.resolvedProvince ?? null);
-            setGpsMismatch(data.mismatch ?? null);
-            if (!province || !city) {
-              setProvince(data.resolvedProvince ?? "");
-              setCity(data.resolvedCity ?? "");
-              setGpsApproved(Boolean(data.resolvedProvince && data.resolvedCity));
-            } else {
-              setGpsApproved(Boolean(data.verified));
-            }
-
-            const gpsMismatchDescription = data.mismatch?.province
-              ? `GPS detected a different province${data.resolvedProvince ? ` (${data.resolvedProvince})` : ""}. Check your selected address before saving.`
-              : data.mismatch?.city
-                ? "GPS detected a different city. Check your selected address before saving."
-                : province && city
-                  ? "GPS captured your location, but it did not match the province and city you selected closely enough."
-                  : data.resolvedProvince && data.resolvedCity
-                    ? "GPS estimated your address. Review it before saving."
-                    : "GPS captured your location, but could not estimate both province and city.";
-
-            toast({
-              title:
-                data.verified || (!province && !city && data.resolvedProvince && data.resolvedCity)
-                  ? "Address confirmed by GPS"
-                  : "GPS check complete",
-              description:
-                province && city && data.verified
-                  ? "GPS matched the province and city you selected. You can save the address now."
-                  : !province && !city && data.resolvedProvince && data.resolvedCity
-                    ? "GPS estimated your province and city. Confirm the details, then save to finish."
-                    : gpsMismatchDescription,
-              variant:
-                data.verified || (!province && !city && data.resolvedProvince && data.resolvedCity)
-                  ? "success"
-                  : "default",
-            });
-            return;
-          }
-          if (data.persisted === false) {
-            setGpsStatus("idle");
-            setGpsApproved(false);
-            toast({
-              title: "GPS check not saved",
-              description:
-                data.warning ||
-                "Your saved address remains in place. GPS confirmation is optional, so you can continue or try again.",
-              variant: "default",
-            });
-            return;
-          }
-          if (!province || !city) {
-            setProvince(data.resolvedProvince ?? "");
-            setCity(data.resolvedCity ?? "");
-          }
-          setGpsConfidence(data.confidence);
-          setGpsProvince(data.resolvedProvince ?? null);
-          setGpsMismatch(data.mismatch ?? null);
-          setGpsApproved(Boolean(data.verified));
-          await syncVerificationStatus();
-
-          const gpsMismatchDescription = data.mismatch?.province
-            ? `GPS detected a different province${data.resolvedProvince ? ` (${data.resolvedProvince})` : ""}. Your saved address stays in place, but it was not GPS-verified.`
-            : data.mismatch?.city
-              ? "GPS detected a different city. Your saved address stays in place, but it was not GPS-verified."
-              : "Your saved address was kept, but GPS could not verify it for automatic approval.";
-
-          toast({
-            title: data.verified ? "Address verified by GPS" : "GPS check recorded",
-            description: data.verified
-              ? "GPS matched the province and city you selected."
-              : gpsMismatchDescription,
-            variant: data.verified ? "success" : "default",
-          });
-        } else if (res.status === 404) {
-          setGpsFeatureAvailable(false);
-          setGpsStatus("idle");
-          setGpsApproved(false);
-          toast({
-            title: "GPS verification unavailable",
-            description: "GPS verification is temporarily unavailable. Please try again later.",
-            variant: "destructive",
-          });
-        } else {
-          const data = (await res.json().catch(() => ({}))) as VerificationApiResponse;
-          if (applyEmailConfirmationBlocker(data)) {
-            setGpsStatus("idle");
-            setGpsApproved(false);
-            toast({
-              title: "Confirm your email first",
-              description: EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION,
-              variant: "destructive",
-            });
-            return;
-          }
-          const optionalGpsPersistenceFailure =
-            province &&
-            city &&
-            (res.status >= 500 || data.error === "Failed to save location verification");
-
-          if (optionalGpsPersistenceFailure) {
-            setGpsStatus("idle");
-            setGpsApproved(false);
-            toast({
-              title: "GPS check not saved",
-              description:
-                "Your saved address remains in place. GPS confirmation is optional, so you can continue or try again.",
-              variant: "default",
-            });
-            return;
-          }
-
-          setGpsStatus("error");
-          setGpsApproved(false);
-          toast({
-            title: "GPS could not verify this location",
-            description:
-              data.error ||
-              "Please allow location access, then request your current location again.",
-            variant: "destructive",
-          });
-        }
-      } catch (err) {
-        setGpsApproved(false);
-        setGpsMismatch(null);
-        setGpsStatus("error");
-        setGpsTimestamp(null);
-        setCoarseFix(null);
-        toast({
-          title: "GPS verification failed",
-          description: err instanceof Error ? err.message : "Please try again.",
-          variant: "destructive",
-        });
-      }
-    } catch (err) {
-      setGpsApproved(false);
-      setGpsMismatch(null);
-      setGpsTimestamp(null);
-      setCoarseFix(null);
-      const permissionDenied = isGeolocationPermissionDenied(err);
-      setGpsStatus(permissionDenied ? "denied" : "error");
-      toast({
-        title: permissionDenied ? "GPS permission denied" : "GPS error",
-        description: locationSaved
-          ? "Your saved address stays in place. GPS confirmation is optional."
-          : "You can still save the selected address without GPS confirmation.",
-        variant: "destructive",
+      const response = await fetch("/api/verification/location/detect", {
+        method: "POST",
+        headers: withCsrfHeaders(),
+        signal: AbortSignal.timeout(8000),
       });
+      const data = await response.json();
+      if (applyEmailConfirmationBlocker(data)) return;
+      if (response.ok && data.province && data.city) {
+        setProvince(data.province);
+        setCity(data.city);
+        setLocationDetectionMessage(
+          "Location suggested. Check your province and city before submitting."
+        );
+      } else {
+        setLocationDetectionMessage(
+          "We could not detect your province and city. Select them below to continue."
+        );
+      }
+    } catch {
+      setLocationDetectionMessage(
+        "Location detection is unavailable. Select your province and city below."
+      );
+    } finally {
+      setDetectingLocation(false);
     }
-  }, [
-    applyEmailConfirmationBlocker,
-    gpsStatus,
-    toast,
-    manualSubmitted,
-    locationSaved,
-    province,
-    city,
-    locationTown,
-    syncVerificationStatus,
-  ]);
-
-  // GPS stays user-triggered so the browser permission prompt opens only after an explicit click.
+  }
 
   const idPreviewUrl = useMemo(
     () => (idFile && idFile.type.startsWith("image/") ? URL.createObjectURL(idFile) : null),
@@ -1664,7 +1290,7 @@ export default function VerificationPage() {
     if (locationSubmissionLocked) {
       toast({
         title: "Location already submitted",
-        description: "Your saved address is already pending review and cannot be submitted again.",
+        description: "Your province and city have already been approved.",
         variant: "default",
       });
       return;
@@ -1685,59 +1311,20 @@ export default function VerificationPage() {
     }
     setManualSubmitting(true);
     try {
-      const submitManualAddress = () =>
-        fetch("/api/verification/location/manual", {
-          method: "POST",
-          headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-          body: JSON.stringify({ province, city, town: locationTown || undefined }),
-        });
-      const gpsConfirmation =
-        gpsApproved && gpsCoords && gpsTimestamp
-          ? {
-              latitude: gpsCoords.lat,
-              longitude: gpsCoords.lon,
-              accuracy: gpsCoords.accuracy,
-              timestamp: gpsTimestamp,
-              ...(coarseFix ? { coarseLocation: coarseFix } : {}),
-            }
-          : null;
-      let savedWithGps = false;
-      let res = gpsConfirmation
-        ? await fetch("/api/verification/location/gps", {
-            method: "POST",
-            headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-            body: JSON.stringify({
-              ...gpsConfirmation,
-              declaredProvince: province,
-              declaredCity: city,
-              declaredTown: locationTown || undefined,
-            }),
-          })
-        : await submitManualAddress();
-
-      let data = (await res.json().catch(() => ({}))) as VerificationApiResponse;
-
-      if (gpsConfirmation && res.ok) {
-        savedWithGps = data.persisted !== false && data.verified !== false;
-        if (!savedWithGps) {
-          setGpsApproved(false);
-          res = await submitManualAddress();
-          data = (await res.json().catch(() => ({}))) as VerificationApiResponse;
-        }
-      }
+      const res = await fetch("/api/verification/location/manual", {
+        method: "POST",
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ province, city }),
+      });
+      const data = (await res.json().catch(() => ({}))) as VerificationApiResponse;
 
       if (res.ok) {
-        setManualSubmitted(true);
-        setGpsApproved(savedWithGps);
-        setGpsStatus("idle");
         await syncVerificationStatus();
+        setManualSubmitted(true);
         toast({
-          title: "Address saved",
-          description: savedWithGps
-            ? "Your GPS-confirmed address has been sent to admin for review."
-            : gpsConfirmation
-              ? "Your address was submitted for review. GPS confirmation could not be saved, so it was sent without GPS evidence."
-              : "Your verification has been sent to admin for review.",
+          title: "Location approved",
+          description:
+            "Your province and city are saved and automatically approved. No admin review is needed for your location.",
           variant: "success",
         });
         setStep("complete");
@@ -1746,18 +1333,6 @@ export default function VerificationPage() {
           toast({
             title: "Confirm your email first",
             description: EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION,
-            variant: "destructive",
-          });
-          return;
-        }
-        if (gpsConfirmation) {
-          setGpsApproved(false);
-          toast({
-            title: "GPS confirmation could not be saved",
-            description:
-              data.detail ||
-              data.error ||
-              "Your address is still selected. Click Save Address & Finish to submit it without GPS confirmation.",
             variant: "destructive",
           });
           return;
@@ -1814,7 +1389,6 @@ export default function VerificationPage() {
   const currentStepStatus = step === "complete" ? null : serverStepMap.get(step);
   const idDocumentStatus = serverStepMap.get("id_doc")?.status;
   const selfieStatus = serverStepMap.get("selfie")?.status;
-  const locationStatus = serverStepMap.get("location")?.status;
   const currentStepStatusDetail = getStepStatusDetail(currentStepStatus);
 
   const doneStepCount = accountVerified
@@ -1858,10 +1432,14 @@ export default function VerificationPage() {
         : "Four quick checks. Your details stay private.";
   const breadcrumbs = [{ label: "Dashboard", href: "/dashboard" }, { label: "Verification" }];
   const inAdminReviewMessage =
-    "Your verification is in admin review. We will notify you if anything needs to be resubmitted.";
+    "Your identity documents are in admin review. Your location needs no admin approval.";
 
   const renderStepStatusNotice = (showHelp: boolean) =>
-    currentStepStatus ? (
+    step === "location" && currentStepStatus?.status === "pending" ? (
+      <StatusCallout tone="neutral" title="Confirm your location">
+        Select your province and city, then submit for immediate location approval.
+      </StatusCallout>
+    ) : currentStepStatus ? (
       <StatusCallout
         tone={getStatusTone(currentStepStatus.status)}
         title={formatStatusLabel(currentStepStatus.status)}
@@ -2495,201 +2073,61 @@ export default function VerificationPage() {
                   <StepCard
                     id="verification-step-location"
                     stepNumber={4}
-                    title="Verify your address"
+                    title="Confirm your province and city"
                     icon={MapPin}
                     why={STEP_WHY.location}
                   >
                     {renderStepStatusNotice(true)}
 
-                    <div className="space-y-3">
-                      <FieldGroupHeading title="Select your location" />
-
+                    <div className="space-y-4">
+                      <p className="text-sm text-muted-foreground">
+                        Confirm your province and city. Your location is approved immediately when
+                        you submit. No street address or proof of residence is required. If your
+                        city is not listed, select the nearest listed city in your province.
+                      </p>
                       {!locationSubmissionLocked && (
-                        <LocationSelector
-                          value={{ province, city, town: locationTown }}
-                          onChange={(v) => {
-                            setProvince(v.province);
-                            setCity(v.city);
-                            setLocationTown(v.town ?? "");
-                            setGpsApproved(false);
-                            setGpsStatus("idle");
-                            setGpsCoords(null);
-                            setGpsTimestamp(null);
-                            setCoarseFix(null);
-                            setGpsConfidence(null);
-                            setGpsProvince(null);
-                            setGpsMismatch(null);
-                          }}
-                          cityLabel="City"
-                          showTown
-                          suggestTownOptions={false}
-                          showAddress={false}
-                          disabled={manualSubmitting || verificationSubmissionBlocked}
-                        />
+                        <>
+                          <Button
+                            onClick={handleDetectLocation}
+                            variant="outline"
+                            disabled={
+                              detectingLocation || manualSubmitting || verificationSubmissionBlocked
+                            }
+                          >
+                            {detectingLocation ? (
+                              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                            ) : (
+                              <Navigation className="h-4 w-4" aria-hidden="true" />
+                            )}
+                            {detectingLocation
+                              ? "Detecting location..."
+                              : "Detect province and city"}
+                          </Button>
+                          <p className="text-sm text-muted-foreground" role="status">
+                            {locationDetectionMessage ||
+                              "Detection is approximate. You can also select your location manually."}
+                          </p>
+                          <LocationSelector
+                            value={{ province, city }}
+                            onChange={(value) => {
+                              setProvince(value.province);
+                              setCity(value.city);
+                            }}
+                            cityLabel="City"
+                            showTown={false}
+                            showAddress={false}
+                            disabled={
+                              detectingLocation || manualSubmitting || verificationSubmissionBlocked
+                            }
+                          />
+                        </>
                       )}
-
                       {locationSaved && locationSummary && (
-                        <div className="rounded-2xl border border-border bg-muted/50 p-4 text-sm">
-                          <div className="flex items-center gap-2 text-foreground">
-                            <CheckCircle2
-                              className="h-4 w-4 text-brand-green-700 dark:text-brand-green-300"
-                              aria-hidden="true"
-                            />
-                            <span className="font-semibold">
-                              {locationVerified ? "GPS-verified address" : "Saved address"}
-                            </span>
-                          </div>
-                          <p className="mt-1 text-muted-foreground">{locationSummary}</p>
-                          {!locationVerified && (
-                            <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                              Your selected address is saved and the verification is ready for admin
-                              review.
-                            </p>
-                          )}
-                          {locationSubmissionLocked && (
-                            <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                              This address has already been submitted and cannot be submitted again.
-                            </p>
-                          )}
-                        </div>
+                        <StatusCallout tone="success" title="Location approved">
+                          {locationSummary}
+                        </StatusCallout>
                       )}
                     </div>
-
-                    {!locationSubmissionLocked && !locationSaved && !locationVerified && (
-                      <div className="space-y-3 rounded-2xl border border-brand-green-600/20 bg-brand-green-50/60 p-4 dark:border-brand-green-400/20 dark:bg-brand-green-500/[0.07]">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="flex items-center gap-2 font-body text-sm font-semibold text-foreground">
-                            <Navigation
-                              className="h-4 w-4 text-brand-green-700 dark:text-brand-green-300"
-                              aria-hidden="true"
-                            />
-                            Confirm with GPS
-                          </h3>
-                          <span className="rounded-full bg-brand-green-600/10 px-2 py-0.5 text-[11px] font-semibold text-brand-green-800 dark:bg-brand-green-400/15 dark:text-brand-green-200">
-                            Recommended
-                          </span>
-                        </div>
-
-                        {gpsFeatureAvailable && gpsStatus === "idle" && (
-                          <Button
-                            onClick={handleRequestGps}
-                            variant="outline"
-                            className="h-11 w-full sm:w-auto"
-                            disabled={verificationSubmissionBlocked}
-                          >
-                            <Navigation className="h-4 w-4" aria-hidden="true" />
-                            {hasSelectedLocation
-                              ? "Verify address with GPS"
-                              : "Estimate address with GPS"}
-                          </Button>
-                        )}
-
-                        {gpsStatus === "requesting" && (
-                          <p
-                            className="flex items-center gap-2 text-sm text-muted-foreground"
-                            role="status"
-                          >
-                            <Loader2
-                              className="h-4 w-4 animate-spin motion-reduce:animate-none"
-                              aria-hidden="true"
-                            />
-                            Requesting GPS access…
-                          </p>
-                        )}
-
-                        {(gpsStatus === "denied" || gpsStatus === "error") && (
-                          <div className="space-y-2">
-                            <p className="flex items-start gap-2 text-sm leading-6 text-muted-foreground">
-                              <AlertTriangle
-                                className="mt-1 h-4 w-4 shrink-0 text-brand-gold-700 dark:text-brand-gold-300"
-                                aria-hidden="true"
-                              />
-                              {gpsStatus === "denied"
-                                ? "GPS permission denied. You can still save the selected address without GPS."
-                                : "GPS unavailable. You can still save the selected address without GPS."}
-                            </p>
-                            <Button
-                              onClick={() => {
-                                setGpsStatus("idle");
-                                setGpsApproved(false);
-                                setGpsCoords(null);
-                                setGpsTimestamp(null);
-                                setCoarseFix(null);
-                                setGpsConfidence(null);
-                                setGpsProvince(null);
-                                setGpsMismatch(null);
-                              }}
-                              variant="ghost"
-                              className="h-11"
-                            >
-                              <Navigation className="h-4 w-4" aria-hidden="true" />
-                              Try GPS again
-                            </Button>
-                          </div>
-                        )}
-
-                        {!gpsFeatureAvailable && (
-                          <p className="text-sm leading-6 text-muted-foreground">
-                            GPS is not available on this device. You can still save the selected
-                            address without GPS confirmation.
-                          </p>
-                        )}
-                      </div>
-                    )}
-
-                    {gpsStatus === "success" && gpsCoords && (
-                      <div
-                        className={cn(
-                          "space-y-2 rounded-2xl border p-4 text-sm",
-                          locationVerified
-                            ? "border-brand-green-600/20 bg-brand-green-50 text-brand-green-900 dark:border-brand-green-400/20 dark:bg-brand-green-500/10 dark:text-brand-green-100"
-                            : "border-brand-gold-300/70 bg-brand-gold-50 text-brand-gold-900 dark:border-brand-gold-400/25 dark:bg-brand-gold-400/10 dark:text-brand-gold-100"
-                        )}
-                        role="status"
-                      >
-                        <div className="flex items-start gap-2 font-semibold">
-                          {locationVerified ? (
-                            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                          ) : (
-                            <Navigation className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                          )}
-                          {locationVerified
-                            ? `Address verified by GPS (accuracy: within ${Math.round(gpsCoords.accuracy)} metres)`
-                            : `GPS checked the selected address (accuracy: within ${Math.round(gpsCoords.accuracy)} metres)`}
-                        </div>
-                        {gpsMismatch?.province && (
-                          <p className="text-[13px] leading-5">
-                            GPS detected a different province ({gpsProvince}). The selected address
-                            was not GPS-verified.
-                          </p>
-                        )}
-                        {gpsMismatch && !gpsMismatch.province && gpsMismatch.city && (
-                          <p className="text-[13px] leading-5">
-                            GPS detected a different city. The selected address was not
-                            GPS-verified.
-                          </p>
-                        )}
-                        {!gpsMismatch && !locationVerified && (
-                          <p className="text-[13px] leading-5">
-                            GPS captured your location, but it did not match the province and city
-                            you selected closely enough to add GPS verification.
-                          </p>
-                        )}
-                        {locationVerified && (
-                          <p className="text-[13px] leading-5">
-                            {hasSelectedLocation
-                              ? "GPS matches the province and city you selected."
-                              : "GPS estimated your province and city. Review the details before saving."}
-                          </p>
-                        )}
-                        {gpsConfidence && (
-                          <p className="text-xs opacity-80">
-                            Confidence:{" "}
-                            <span className="font-semibold capitalize">{gpsConfidence}</span>
-                          </p>
-                        )}
-                      </div>
-                    )}
 
                     <StepActions>
                       <Button
@@ -2706,7 +2144,11 @@ export default function VerificationPage() {
                         <Button
                           onClick={handleManualLocationSubmit}
                           disabled={
-                            !province || !city || manualSubmitting || verificationSubmissionBlocked
+                            !province ||
+                            !city ||
+                            detectingLocation ||
+                            manualSubmitting ||
+                            verificationSubmissionBlocked
                           }
                           variant="trust-verified"
                           size="lg"
@@ -2720,7 +2162,7 @@ export default function VerificationPage() {
                           ) : (
                             <MapPin className="h-4 w-4" aria-hidden="true" />
                           )}
-                          Save address & finish
+                          Save location & finish
                         </Button>
                       )}
                     </StepActions>
@@ -2766,7 +2208,7 @@ export default function VerificationPage() {
                       <p className="mx-auto mt-1.5 max-w-md text-sm leading-6 text-muted-foreground sm:text-base">
                         {accountVerificationStatus === "verified"
                           ? "Your account is verified."
-                          : "Everything was submitted to admin. Your application is pending review."}
+                          : "Your location is approved. Your identity documents are pending review."}
                       </p>
                       {verificationInAdminReview && (
                         <StatusCallout tone="pending" className="mx-auto mt-5 max-w-lg text-left">
@@ -2780,7 +2222,8 @@ export default function VerificationPage() {
                         const statusEntry = serverStepMap.get(stepType);
                         const displayStatus: VerificationStatus = accountVerified
                           ? "approved"
-                          : stepType === "phone" && isPhoneReady
+                          : (stepType === "phone" && isPhoneReady) ||
+                              (stepType === "location" && manualSubmitted)
                             ? "approved"
                             : (statusEntry?.status ?? "pending");
                         const detail = getStepStatusDetail(statusEntry);
@@ -2869,18 +2312,10 @@ export default function VerificationPage() {
                         done={Boolean((locationSaved && locationSummary) || hasSelectedLocation)}
                         value={locationSummary || "Not set"}
                         detail={
-                          locationSaved && locationSummary
-                            ? `${
-                                locationVerified
-                                  ? "GPS verified"
-                                  : locationStatus
-                                    ? formatStatusLabel(locationStatus)
-                                    : "Address saved"
-                              }${locationVerified && gpsConfidence ? ` (GPS: ${gpsConfidence})` : ""}`
+                          locationSaved
+                            ? "Location approved"
                             : hasSelectedLocation
-                              ? locationVerified
-                                ? `GPS verified — not saved yet${gpsConfidence ? ` (GPS: ${gpsConfidence})` : ""}`
-                                : "Selected — not saved yet"
+                              ? "Selected - not saved yet"
                               : null
                         }
                         detailTone={

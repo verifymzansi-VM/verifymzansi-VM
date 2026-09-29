@@ -168,7 +168,14 @@ export function applyBaseMarketFilters<T>(
   let builder = query as T & MarketQueryOps;
 
   if (filters.category) {
-    builder = builder.eq("category", filters.category) as T & MarketQueryOps;
+    // Older Home & Lifestyle links included these item groups.
+    builder = (
+      filters.category === "home_lifestyle"
+        ? builder.or(
+            "category.eq.home_lifestyle,category.eq.clothing_accessories,category.eq.sports_hobbies,category.eq.other_items"
+          )
+        : builder.eq("category", filters.category)
+    ) as T & MarketQueryOps;
   }
   if (filters.province) {
     builder = builder.eq("location_province", filters.province) as T & MarketQueryOps;

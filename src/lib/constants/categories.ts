@@ -734,7 +734,7 @@ export const CATEGORIES: CategoryDefinition[] = [
     attributeFields: [
       {
         name: "job_type",
-        label: "Category",
+        label: "Job type",
         type: "select",
         required: true,
         options: [
@@ -1051,6 +1051,86 @@ export const CATEGORIES: CategoryDefinition[] = [
   },
 ];
 
+// Reuse applicable details while exposing distinct customer-facing categories.
+const homeCategory = CATEGORIES.find((c) => c.value === "home_lifestyle")!;
+const homeSubcategory = homeCategory.attributeFields.find((f) => f.name === "sub_category");
+const formerHomeOptions = homeSubcategory?.options ?? [];
+const clothingFields = homeCategory.attributeFields.filter((f) =>
+  ["material", "brand", "dimensions", "delivery_available"].includes(f.name)
+);
+CATEGORIES.push(
+  {
+    value: "clothing_accessories",
+    label: "Clothing & Accessories",
+    icon: Shirt,
+    description: "Clothing, shoes, bags and accessories",
+    attributeFields: clothingFields,
+  },
+  {
+    value: "sports_hobbies",
+    label: "Sports, Hobbies & Leisure",
+    icon: Store,
+    description: "Sports equipment, musical instruments, books and hobbies",
+    attributeFields: [
+      {
+        name: "sub_category",
+        label: "Item type",
+        type: "select",
+        required: false,
+        options: formerHomeOptions.filter(
+          (o) =>
+            typeof o !== "string" &&
+            ["sports_outdoor", "musical_instruments", "books_stationery"].includes(o.value)
+        ),
+      },
+      ...clothingFields,
+    ],
+  },
+  {
+    value: "other_items",
+    label: "Other Items",
+    icon: ShoppingBag,
+    description: "Items that do not fit the categories above",
+    attributeFields: clothingFields,
+  }
+);
+if (homeSubcategory?.options)
+  homeSubcategory.options = homeSubcategory.options.filter(
+    (o) =>
+      typeof o === "string" ||
+      ![
+        "clothing",
+        "baby_kids",
+        "sports_outdoor",
+        "musical_instruments",
+        "books_stationery",
+        "other",
+      ].includes(o.value)
+  );
+for (const c of CATEGORIES) {
+  if (c.value === "home_lifestyle") {
+    c.label = "Furniture & Home";
+    const itemType = c.attributeFields.find((field) => field.name === "sub_category");
+    if (itemType) itemType.label = "Item type";
+  }
+  const intent =
+    c.value === "property"
+      ? c.attributeFields.find((field) => field.name === "listing_intent")
+      : undefined;
+  if (intent) intent.label = "For sale or to rent?";
+  if (c.value === "auto_parts") c.label = "Vehicle Parts & Accessories";
+  // Rent is entered once, in the main price field (labelled Monthly rent).
+  if (c.value === "property")
+    c.attributeFields = c.attributeFields.filter((field) => field.name !== "monthly_rent_zar");
+  if (c.value === "jobs_services") {
+    c.label = "Jobs";
+    c.description = "Advertise a vacancy. To offer services, create a business profile.";
+    c.attributeFields = c.attributeFields.filter(
+      (field) => !["salary_min", "salary_max"].includes(field.name)
+    );
+  }
+}
+
 /**
  * Get a category by its value.
  */
@@ -1077,7 +1157,7 @@ export function isValidCategoryForArea(
   if (!category || !category.trim()) return false;
   const value = category.trim();
   if (area === "MZANSI_MARKET") return CATEGORIES.some((c) => c.value === value);
-  if (area === "MZANSI_BUSINESS") return BUSINESS_CATEGORIES.some((c) => c.value === value);
+  if (area === "MZANSI_BUSINESS") return ALL_BUSINESS_CATEGORIES.some((c) => c.value === value);
   // PROMOTIONS_EVENTS: free-text category, always considered valid.
   return true;
 }
@@ -1097,7 +1177,7 @@ export interface BusinessCategoryDefinition {
   serviceSuggestions: string[];
 }
 
-export const BUSINESS_CATEGORIES: BusinessCategoryDefinition[] = [
+const LEGACY_BUSINESS_CATEGORIES: BusinessCategoryDefinition[] = [
   {
     value: "fashion_accessories",
     label: BUSINESS_CATEGORY_LABELS.fashion_accessories,
@@ -1391,6 +1471,165 @@ export const BUSINESS_CATEGORIES: BusinessCategoryDefinition[] = [
     serviceSuggestions: [],
   },
 ];
+
+const movedActivities: Record<string, BusinessCategory> = {
+  doctor_medical: "health_medical",
+  dentist: "health_medical",
+  optometrist: "health_medical",
+  pharmacy: "health_medical",
+  physio_chiro: "health_medical",
+  traditional_healer: "health_medical",
+  mental_health: "health_medical",
+  hair_salon_barber: "beauty_personal",
+  beauty_nail_salon: "beauty_personal",
+  spa_wellness: "fitness_wellness",
+  gym_fitness: "fitness_wellness",
+  cleaning_service: "cleaning_garden",
+  landscaping: "cleaning_garden",
+  pest_control: "cleaning_garden",
+  courier_logistics: "transport_storage",
+  shuttle_transport: "transport_storage",
+  storage_warehousing: "transport_storage",
+  driving_school_auto: "education_training",
+  printing_signage: "professional_services",
+  pet_services: "pets_animals",
+  religious_org: "community_personal",
+  ngo_npo: "community_personal",
+  funeral_services: "community_personal",
+  bakery_retail: "food_dining",
+};
+const automotiveActivities = LEGACY_BUSINESS_CATEGORIES.find(
+  (c) => c.value === "automotive_transport"
+)!.subcategories;
+for (const activity of automotiveActivities)
+  movedActivities[activity.value] ??= "automotive_services";
+export function migrateBusinessCategory(
+  category: BusinessCategory,
+  activity?: string | null
+): BusinessCategory {
+  return (activity && movedActivities[activity]) || category;
+}
+const newCategoryKeys: BusinessCategory[] = [
+  "health_medical",
+  "beauty_personal",
+  "fitness_wellness",
+  "cleaning_garden",
+  "automotive_services",
+  "transport_storage",
+  "pets_animals",
+  "community_personal",
+];
+export const BUSINESS_CATEGORIES: BusinessCategoryDefinition[] = [
+  ...LEGACY_BUSINESS_CATEGORIES.filter(
+    (c) => !["health_beauty", "automotive_transport"].includes(c.value)
+  ).map((c) => ({
+    ...c,
+    subcategories: c.subcategories.filter(
+      (s) => !movedActivities[s.value] && s.value !== "community_notice"
+    ),
+  })),
+  ...newCategoryKeys.map((value) => ({
+    value,
+    label: BUSINESS_CATEGORY_LABELS[value],
+    icon: Store,
+    description: "",
+    subcategories: [] as BusinessSubcategoryOption[],
+    serviceSuggestions: [] as string[],
+  })),
+];
+for (const category of LEGACY_BUSINESS_CATEGORIES) {
+  for (const activity of category.subcategories) {
+    const destination = movedActivities[activity.value];
+    if (
+      !destination ||
+      activity.value === "driving_school_auto" ||
+      activity.value === "bakery_retail"
+    )
+      continue;
+    BUSINESS_CATEGORIES.find((c) => c.value === destination)!.subcategories.push(activity);
+  }
+}
+// Common activities for the categories introduced in the September 2026 reorganisation.
+const addedActivities: Partial<Record<BusinessCategory, BusinessSubcategoryOption[]>> = {
+  beauty_personal: [
+    { value: "braiding_extensions", label: "Braiding / Hair Extensions" },
+    { value: "makeup_artist", label: "Makeup Artist" },
+    { value: "lashes_brows", label: "Lashes & Brows" },
+  ],
+  fitness_wellness: [
+    { value: "personal_trainer", label: "Personal Trainer" },
+    { value: "yoga_pilates", label: "Yoga / Pilates Studio" },
+    { value: "massage_therapist", label: "Massage Therapist" },
+  ],
+  pets_animals: [
+    { value: "vet_clinic", label: "Veterinary Clinic" },
+    { value: "pet_grooming", label: "Pet Grooming" },
+    { value: "pet_shop", label: "Pet Shop" },
+    { value: "pet_boarding", label: "Boarding / Kennels" },
+  ],
+  transport_storage: [{ value: "removals_moving", label: "Removals / Moving" }],
+  community_personal: [{ value: "home_based_care", label: "Home-Based Care" }],
+};
+for (const [value, activities] of Object.entries(addedActivities)) {
+  BUSINESS_CATEGORIES.find((c) => c.value === value)?.subcategories.push(...(activities ?? []));
+}
+for (const category of BUSINESS_CATEGORIES)
+  category.description = category.subcategories
+    .map((s) => s.label)
+    .slice(0, 4)
+    .join(", ");
+BUSINESS_CATEGORIES.sort((a, b) =>
+  a.value === "general_other"
+    ? 1
+    : b.value === "general_other"
+      ? -1
+      : a.label.localeCompare(b.label)
+);
+export const ALL_BUSINESS_CATEGORIES = [
+  ...BUSINESS_CATEGORIES,
+  ...LEGACY_BUSINESS_CATEGORIES.filter(
+    (c) => !BUSINESS_CATEGORIES.some((n) => n.value === c.value)
+  ),
+];
+export const BUSINESS_CATEGORY_SYNONYMS: Record<string, string> = {
+  beauty_personal: "braids braiding weave wig nails haircut barber salon hairdresser makeup lashes",
+  health_medical: "doctor gp clinic medical dentist chemist pharmacy nurse physio optician",
+  fitness_wellness: "gym trainer yoga pilates spa massage boxing",
+  cleaning_garden: "cleaner cleaning domestic garden gardener landscaping pest fumigation",
+  transport_storage: "courier taxi shuttle delivery moving removals truck storage",
+  automotive_services: "mechanic car dealer panel beater tyres fitment car wash towing",
+  food_dining: "baking bakery cakes shisanyama braai takeaway kota catering",
+  groceries_essentials: "spaza tuckshop supermarket groceries butchery fruit veg bottle store",
+  trade_maintenance:
+    "plumber electrician builder bricklayer tiler painter repairs handyman roofing",
+  professional_services: "accountant lawyer attorney tax consultant printing marketing insurance",
+  education_training: "tutor lessons creche daycare school driving",
+  pets_animals: "vet pet dog cat grooming kennel",
+  community_personal: "church ngo funeral burial undertaker care",
+  events_entertainment: "dj photographer venue decor party planner",
+  electronics_tech: "cellphone phone repair computer laptop",
+  fashion_accessories: "clothes tailor shoes boutique",
+  home_living: "furniture hardware decor",
+};
+export function businessCategoryMatches(
+  category: BusinessCategoryDefinition,
+  query: string
+): boolean {
+  return `${category.label} ${category.description} ${category.subcategories.map((s) => s.label).join(" ")} ${BUSINESS_CATEGORY_SYNONYMS[category.value] ?? ""}`
+    .toLowerCase()
+    .includes(query.trim().toLowerCase());
+}
+export function businessCategoryFilterValues(category: BusinessCategory): BusinessCategory[] {
+  const legacy = LEGACY_BUSINESS_CATEGORIES.find((c) => c.value === category);
+  return [
+    ...new Set([
+      category,
+      ...(legacy?.subcategories
+        .map((activity) => movedActivities[activity.value])
+        .filter((value): value is BusinessCategory => Boolean(value)) ?? []),
+    ]),
+  ];
+}
 
 /* ── Tourism & Events Constants ──────────────────────────── */
 

@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { readStaffAccessFromDb } from "@/lib/auth/admin-access";
-import {
-  evaluateStaffMfa,
-  hasRecentSecondFactor,
-  STAFF_MFA_PATH,
-} from "@/lib/auth/staff-mfa";
+import { evaluateStaffMfa, hasRecentSecondFactor, STAFF_MFA_PATH } from "@/lib/auth/staff-mfa";
 
 /**
  * Enforce the staff MFA policy on a back-office API request, after the

@@ -161,7 +161,6 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 60, ttl: 3600 }, // 60 per hour
   ],
   "verification:status": [{ limit: 30, ttl: 60 }], // polling-friendly
-  "verification:gps": [{ limit: 10, ttl: 60 }],
   "verification:manual-location": [{ limit: 10, ttl: 60 }],
   "verify-buyer": [
     { limit: 10, ttl: 60 }, // 10 per minute

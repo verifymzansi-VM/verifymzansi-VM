@@ -9,7 +9,9 @@ import {
 import { getModelsForMake } from "@/lib/constants/sa-vehicles";
 import type { ListingCategory } from "@/types/enums";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { PostLabel as Label } from "@/components/post/post-label";
+import { FieldHelp } from "@/components/post/field-help";
+import { POST_FIELD_GUIDANCE } from "@/lib/forms/post-guidance";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
@@ -108,9 +110,14 @@ export function CategoryPicker({
   return (
     <div className="space-y-4">
       <p id={categoryLabelId} className="text-sm font-medium leading-none">
-        Category *
+        What are you listing? (Required)
       </p>
 
+      <FieldHelp label="market category">
+        Choose the item you are advertising. Property is for sales and residential rentals. Holiday
+        stays belong in Tourism. Jobs are vacancies; if you provide services, create a business
+        profile instead.
+      </FieldHelp>
       {/* Category Grid */}
       <div
         role="group"
@@ -196,7 +203,12 @@ export function CategoryPicker({
 
           {(() => {
             const groups = COLLAPSIBLE_GROUPS[selectedCategory.value as ListingCategory] ?? [];
-            const groupedFieldNames = new Set(groups.flatMap((g) => g.fields));
+            // Required questions are never hidden inside a collapsed group.
+            const isRequiredField = (name: string) =>
+              selectedCategory.attributeFields.some((f) => f.name === name && f.required);
+            const groupedFieldNames = new Set(
+              groups.flatMap((g) => g.fields).filter((name) => !isRequiredField(name))
+            );
             const mainFields = selectedCategory.attributeFields.filter(
               (f) => !groupedFieldNames.has(f.name) && isConditionallyVisible(f)
             );
@@ -232,9 +244,13 @@ export function CategoryPicker({
                 {groups.map((group) => {
                   const groupFields = group.fields
                     .map((name) => selectedCategory.attributeFields.find((f) => f.name === name))
-                    .filter((f): f is AttributeField => !!f && isConditionallyVisible(f));
+                    .filter(
+                      (f): f is AttributeField => !!f && !f.required && isConditionallyVisible(f)
+                    );
                   if (groupFields.length === 0) return null;
-                  const isOpen = expandedGroups.has(group.label);
+                  const isOpen =
+                    expandedGroups.has(group.label) ||
+                    groupFields.some((f) => Boolean(errors[`attributes.${f.name}`]));
                   return (
                     <div key={group.label} className="rounded-lg border border-border/60">
                       <button
@@ -319,6 +335,12 @@ function AttributeInput({
           <Label htmlFor={inputId}>
             {field.label} {field.required && "*"}
           </Label>
+          {POST_FIELD_GUIDANCE[field.name] && (
+            <FieldHelp label={field.label}>{POST_FIELD_GUIDANCE[field.name]}</FieldHelp>
+          )}
+          {field.placeholder && (
+            <p className="text-xs text-muted-foreground">{field.placeholder}</p>
+          )}
           <select
             id={inputId}
             data-listing-attribute={field.name}
@@ -335,6 +357,11 @@ function AttributeInput({
                 ? `Select ${field.dependsOn} first`
                 : `Select ${field.label.toLowerCase()}`}
             </option>
+            {typeof value === "string" &&
+              value &&
+              !options.some(
+                (option) => (typeof option === "string" ? option : option.value) === value
+              ) && <option value={value}>{value.replace(/_/g, " ")} (previous selection)</option>}
             {options.map((opt) => {
               const optionValue = typeof opt === "string" ? opt : opt.value;
               const optionLabel = typeof opt === "string" ? opt : opt.label;
@@ -359,6 +386,12 @@ function AttributeInput({
             {field.unit ? ` (${field.unit})` : ""}
             {field.required ? " *" : ""}
           </Label>
+          {POST_FIELD_GUIDANCE[field.name] && (
+            <FieldHelp label={field.label}>{POST_FIELD_GUIDANCE[field.name]}</FieldHelp>
+          )}
+          {field.placeholder && (
+            <p className="text-xs text-muted-foreground">{field.placeholder}</p>
+          )}
           <Input
             id={inputId}
             data-listing-attribute={field.name}
@@ -407,6 +440,12 @@ function AttributeInput({
           <Label htmlFor={inputId}>
             {field.label} {field.required && "*"}
           </Label>
+          {POST_FIELD_GUIDANCE[field.name] && (
+            <FieldHelp label={field.label}>{POST_FIELD_GUIDANCE[field.name]}</FieldHelp>
+          )}
+          {field.placeholder && (
+            <p className="text-xs text-muted-foreground">{field.placeholder}</p>
+          )}
           <Input
             id={inputId}
             data-listing-attribute={field.name}

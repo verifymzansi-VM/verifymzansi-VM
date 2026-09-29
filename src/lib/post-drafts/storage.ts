@@ -8,7 +8,7 @@
 
 import type { TourismCategorySpecificFormFields } from "@/types/tourism-details";
 
-const STORAGE_VERSION = 1;
+const STORAGE_VERSION = 2;
 const DRAFT_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
 
 /* ------------------------------------------------------------------ */
@@ -114,6 +114,10 @@ export interface TourismDraftData extends TourismCategorySpecificFormFields {
   city: string;
   locationTown: string;
   locationAddress: string;
+  /** Tours & experiences: how visitors join (meeting point and/or pickup). */
+  joinMethods?: string[];
+  meetingPoint?: string;
+  pickupAreas?: string;
   contactMethods: string[];
   phone: string;
   whatsapp: string;
@@ -164,7 +168,28 @@ export function loadDraft<T>(flow: DraftFlow, userId: string): DraftEnvelope<T> 
 
     const envelope: DraftEnvelope<T> = JSON.parse(raw);
 
-    // Version mismatch → discard
+    if (envelope.v === 1) {
+      if (flow === "business" && envelope.step === 2) envelope.step = 3;
+      if (flow === "listing") {
+        const data = envelope.data as ListingDraftData;
+        const knownParents: Record<string, string> = {
+          clothing: "clothing_accessories",
+          sports_outdoor: "sports_hobbies",
+          musical_instruments: "sports_hobbies",
+          books_stationery: "sports_hobbies",
+          other: "other_items",
+        };
+        const activity = data.categoryAttributes?.sub_category;
+        if (
+          data.category === "home_lifestyle" &&
+          typeof activity === "string" &&
+          knownParents[activity]
+        )
+          data.category = knownParents[activity];
+      }
+      envelope.v = STORAGE_VERSION;
+    }
+    // Unknown future formats cannot be safely restored.
     if (envelope.v !== STORAGE_VERSION) {
       clearDraft(flow, userId);
       return null;

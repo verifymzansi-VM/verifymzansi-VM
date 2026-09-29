@@ -1,311 +1,220 @@
 # VerifyMzansi Posting Guide
 
-This guide explains how to create a post in VerifyMzansi, what to enter at every
-step, and which extra fields appear for each category.
+This guide explains how to create a post in VerifyMzansi, what each step asks
+for, and which questions appear only in particular situations.
 
 ## Before you start
 
 1. Sign in to your VerifyMzansi account.
-2. Complete account verification. You may browse the three posting options
-   before verification is approved, but you cannot submit a post until your
-   status is **Verified**.
-3. Prepare a clear title, an accurate description, location details, a way for
-   customers to contact you, and at least one good photo where it is required.
-4. Open **Post** and choose one of the following:
-   - **Mzansi Market** — sell, buy, rent, or advertise a single item.
-   - **Mzansi Business** — create an ongoing public business profile.
-   - **Tourism & Events** — add a tourism business, attraction, experience, or
-     event.
+2. Complete account verification. You can look at the posting options before
+   verification is approved, but you cannot submit a post until your status is
+   **Verified**. The form explains any verification or plan requirement before
+   it interrupts you.
+3. Prepare a clear title, an accurate description, your location, a way for
+   people to contact you, and at least one good photo where one is required.
+4. Open **Post** and choose what you want to do:
+   - **Sell an item, list property or advertise a job** — Mzansi Market.
+   - **Help customers find your business** — Mzansi Business.
+   - **List a stay, experience or event** — Tourism & Events, with separate
+     buttons for **List a stay, experience or attraction** and **Create an
+     event**.
 
-The forms save a draft while you work. The number of photos and videos available
-is shown on the media step and can depend on your plan.
+   You choose a category inside the form, not on this page. **Not sure where to
+   post?** gives examples: selling a cake mixer is Market; advertising a baking
+   business is Business; a baking workshop on a particular date is an Event;
+   renting out a residential flat is Market; holiday accommodation is Tourism; a
+   venue for hire is Business; and a concert at that venue is an Event.
 
-## What every post needs
+The selected route is shown at the top of every form with a **Change** action.
+Changing route warns you first if your answers would not carry over.
 
-Fields marked with an asterisk (`*`) are required by the form. Be accurate: your
-final step includes a preview and a checkbox to accept the VerifyMzansi posting
-terms.
+The forms save a draft while you work. Answers you give for one category are
+kept if you temporarily switch to another category and back, but only the
+answers for your final choice are submitted.
 
-- Use a specific title. For example, use `2019 Toyota Hilux 2.8 GD-6` rather
-  than `Bakkie for sale`.
-- Explain the important facts in the description: condition, dimensions,
-  inclusions, price terms, availability, and anything a customer should know
-  before contacting you.
-- Choose a truthful location. Only share a full street address when you are
-  comfortable showing it publicly.
-- Put the strongest image first. The first photo is normally used as the public
-  cover image.
-- Use a valid South African mobile number for phone or WhatsApp fields, and full
-  `https://` URLs for websites, booking links, and social links.
+## How the forms explain themselves
 
-## 1. Mzansi Market: sell, buy, rent, or advertise an item
+- Every field says **Required** or **Optional**.
+- A question-mark button next to a question opens more help directly below it.
+  Press it again to close the help. It never changes your answers.
+- For dropdowns, the explanation of the option you selected appears beneath the
+  dropdown.
+- Privacy and publication notes appear next to the field they apply to.
+- If something needs fixing, an error summary at the top links to each field.
 
-Choose **Mzansi Market** for a one-off listing such as a car, house, phone,
-furniture item, job, farm product, or baby item.
+**Free to post** means posting costs nothing. **Free entry** on an event means
+visitors do not pay to attend. They are unrelated.
 
-### Step 1 — Details
+## 1. Mzansi Market
 
-Complete the following:
+Choose Market for a one-off listing such as a car, a room to rent, a phone, or a
+job vacancy. Service providers such as plumbers or hairdressers should create a
+business profile instead.
 
-- **Category\*** — choose one of the eight categories below. Category fields
-  change immediately after you choose it.
-- **Condition** — optional: New, Like New, Good, Fair, or For Parts. It is not
-  available for Jobs, Services & Other.
-- **Title\*** — 5–100 characters.
-- **Description\*** — 20–5,000 characters.
+### Step 1 — What are you listing?
 
-### Marketplace categories and their fields
+- **Category** (Required) — Property; Vehicles; Vehicle Parts & Accessories;
+  Electronics & Tech; Furniture & Home; Clothing & Accessories; Sports, Hobbies
+  & Leisure; Baby & Kids; Farming & Agriculture; Jobs; Other Items.
+- **Category details** — only the questions for the chosen category appear.
+  Required category questions are always shown; optional extras sit in
+  expandable groups.
+- **Condition** (Optional) — not asked for Jobs or Vehicle Parts (parts have
+  their own condition question).
+- **Title** (Required) — 5–100 characters.
+- **Description** (Required) — 20–5,000 characters.
 
-Only the fields marked **required** must be completed for that category; all
-remaining listed fields are optional.
+| Category                    | Required category questions                                          |
+| --------------------------- | -------------------------------------------------------------------- |
+| Property                    | Property type; For sale or to rent                                   |
+| Vehicles                    | Make; Model; Year; Mileage; Transmission; Fuel type; Service history |
+| Vehicle Parts & Accessories | Part type; Condition                                                 |
+| Electronics & Tech          | Device type; Brand                                                   |
+| Furniture & Home            | Item type                                                            |
+| Jobs                        | Job type; Location type                                              |
+| Farming & Agriculture       | Farm category                                                        |
+| Baby & Kids                 | Item type                                                            |
 
-| Category                                  | Required category fields                                             | Other fields available                                                                                                                                                                                                                                                                                                                        |
-| ----------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Property (For Sale & To Rent)**         | Property Type; Listing Intent                                        | Monthly Rent (only for To Rent); Bedrooms; Bathrooms; Parking Spaces; Floor Size; Erf / Stand Size; Furnished; Pets Allowed; Levy / Body Corporate; Rates & Taxes; Property Sub-type; Security Features; Swimming Pool; Garden; Domestic Quarters / Flatlet; Garages; Carports; Energy Features; Water Source; Fibre Internet; Available From |
-| **Vehicles (Cars, Bakkies & Commercial)** | Make; Model; Year; Mileage; Transmission; Fuel Type; Service History | Body Type; Colour; Variant / Trim; Engine Size; Drive Type; Doors; Previous Owners; Accident Free; Registration Province; Vehicle Extras; Finance Available; Trade-In Accepted                                                                                                                                                                |
-| **Auto Parts & Accessories**              | Part Type; Condition                                                 | Compatible Make(s); Compatible Model(s); OEM or Aftermarket; Warranty Included; Fitment / Installation Included; Compatible Year Range                                                                                                                                                                                                        |
-| **Electronics & Tech**                    | Device Type; Brand                                                   | Model; Storage Capacity; Screen Size; Warranty; Network Lock; Battery Health; RAM; Original Accessories Included; Activation Lock Cleared                                                                                                                                                                                                     |
-| **Home & Lifestyle**                      | Category                                                             | Material; Brand; Dimensions; Delivery Available; Power Rating                                                                                                                                                                                                                                                                                 |
-| **Jobs, Services & Other**                | Category; Location Type                                              | Industry; Experience Level; Qualification Required; Salary Min; Salary Max; Salary Period; Company Name; Benefits; Employment Equity; Application Deadline                                                                                                                                                                                    |
-| **Farming & Agriculture**                 | Farm Category                                                        | Livestock Type; Breed; Age; Quantity Available; Equipment Condition; Farm Size; Irrigation; Delivery Available. Some of these fields appear only when relevant to the Farm Category selected.                                                                                                                                                 |
-| **Baby & Kids**                           | Item Type                                                            | Age Group; Gender; Brand; Safety Certified (SABS)                                                                                                                                                                                                                                                                                             |
+Clothing & Accessories, Sports, Hobbies & Leisure and Other Items have no
+required category questions.
 
-Useful category choices include:
+Existing listings keep their saved answers. If a saved choice is no longer
+offered, it is shown as a "previous selection" until you change it. Existing
+"Job or service" adverts can still be edited.
 
-- Property Type: House, Apartment / Flat, Land / Plot, Commercial, or Room;
-  Listing Intent: For Sale or To Rent.
-- Vehicle Make is followed by the matching Model list. Fuel Type: Petrol,
-  Diesel, Electric, or Hybrid.
-- Electronics Device Type includes smartphones, tablets, laptops, desktop PCs,
-  gaming, TVs/monitors, components, wearables, audio, cameras/drones, and
-  accessories.
-- Home & Lifestyle category includes furniture, appliances, garden/outdoor,
-  décor, clothing/beauty, sports/outdoor, books/stationery, tools/equipment, and
-  more.
-- Job category includes full-time, part-time, contract, freelance, internship,
-  learnership, and volunteer; Location Type is on-site, remote, or hybrid.
-- Farm Category includes livestock, crops/seeds, equipment/machinery, farm land,
-  feeds/supplements, farming services, and other.
+### Step 2 — Price, location & contact
 
-### Step 2 — Price, location, and contact
+- **Asking price (ZAR)** (Required) — for property to rent, this is labelled
+  **Monthly Rent (ZAR)**. Rent is asked once.
+- **Negotiable** (Optional) — choose this if you will discuss a different price.
+  Not shown for jobs.
+- **Jobs:** **Salary (ZAR)** is optional, with an optional payment period. A
+  blank salary is shown as "Salary not provided", never R0.
+- **Province** and **City or town** (Required); Town / Suburb and address are
+  optional. Your street address stays private.
+- **Contact methods** (Required) — choose at least one.
 
-- **Asking Price (ZAR)\*** — enter the full price. For a rental property, this
-  becomes **Monthly Rent (ZAR)**.
-- **Negotiable** — switch this on if you will consider offers.
-- **Location** — **Province** and **City** are required. You can also add
-  Town/Suburb and Street Address.
-- **Contact Methods\*** — select at least one: Phone Call, WhatsApp, Contact
-  Form, or In-App Chat.
+### Step 3 — Photos & review
 
-### Step 3 — Media and review
+- **Photos** — at least one is required, except for Jobs.
+- Listing logo, video and cover position are optional; video depends on your
+  plan.
+- Accept the posting terms, check the preview, and submit for review.
 
-- **Listing logo** — optional square brand image.
-- **Photos\*** — upload at least one. Reorder them if needed; the first photo
-  becomes the card and hero cover.
-- **Cover crop position** — adjust the focal point of the first photo when no
-  video is used.
-- **Video** — optional and available only when your plan allows it.
-- **Video frame or custom cover** — optional if you add video.
-- **Posting terms\*** — accept the terms, check the preview, then submit.
+## 2. Mzansi Business
 
-## 2. Mzansi Business: create a business profile
+Choose Business when customers should be able to find your business over time.
 
-Choose **Mzansi Business** when customers should be able to find your business
-over time, see its services, contact details, hours, location, and media.
+### Step 1 — About your business
 
-### Step 1 — Details
+- **Business name** (Required).
+- **What does your business mainly do?** (Required) — choose one of 18
+  categories. Type a familiar word such as "braids", "plumber" or "spaza" to
+  search categories, activities and common alternative words; you still choose
+  the category yourself. Categories: Clothing & Accessories; Electronics &
+  Technology; Groceries & Food Shops; Restaurants & Catering; Health & Medical;
+  Beauty & Personal Care; Fitness & Wellness; Furniture & Homeware; Building &
+  Trade Services; Cleaning & Garden Services; Automotive Sales & Services;
+  Transport, Delivery & Storage; Professional & Business Services; Education &
+  Childcare; Events & Entertainment Services; Pets & Animal Services; Community
+  & Personal Services; Other Businesses.
+- **Specific business activity** (Optional) — one activity, for example Plumber,
+  Dentist, Hair Salon or Accountant.
+- **About your business** (Required).
+- **Products and services** (Optional) — list anything else you offer.
+- **Custom profile link** (Optional) — created from your business name.
+- **Additional business information** (Optional) — year established, number of
+  employees, CIPC registration number, B-BBEE level, languages and load-shedding
+  readiness.
 
-First choose a **Business Type\***. It determines the location and
-operating-detail fields you see.
+Tourism providers use the Tourism route instead.
 
-| Business type      | Required fields                          | Other fields available                                                                             |
-| ------------------ | ---------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| **Mall Store**     | Store Number; Mall Name                  | Mall Address; Mall Information; Floor or Wing; Nearest Entrance; Parking Notes; Map Directions URL |
-| **Own Premises**   | Street Address; Suburb                   | Building / Complex Name; Suite / Unit Number; Landmark; Walk-in Policy; Map Directions URL         |
-| **Home Business**  | Service Suburb                           | Appointment Required; Customer Pickup Allowed; Visitor Notes; Map Directions URL                   |
-| **Mobile Service** | Service Areas                            | Travel Radius; Callout Fee From; Emergency Callouts Available                                      |
-| **Online Only**    | Primary Order Channel; Order URL         | Delivery available Yes/No; Delivery Areas (shown when delivery is enabled); Support Response Time  |
-| **Market Stall**   | Market Name; Trading Days; Trading Hours | Stall Label; Map Directions URL                                                                    |
+### Step 2 — Location & customer access
 
-Then complete the shared business details:
+**How do you serve customers?** (Required, choose all that apply):
 
-- **Business Name\*** — 2–100 characters.
-- **URL Slug** — optional custom ending for the public link; it is generated
-  automatically from the name. It can contain lowercase letters, numbers, and
-  hyphens only.
-- **Category\*** and optional **Subcategory**.
-- **Extra category details** — shown only for selected categories that support
-  them.
-- **About Your Business\*** — up to 3,000 characters.
-- **Services Offered** — add individual services, or choose from the category’s
-  suggested service tags.
-- **Additional Business Details** — optional: Year Established, Number of
-  Employees, CIPC Registration, B-BBEE Level, Languages Spoken, and
-  Load-shedding Ready.
+| Choice                            | What it then asks                                                 |
+| --------------------------------- | ----------------------------------------------------------------- |
+| Customers visit me                | Where they visit: shop/office/practice/workshop, shopping centre, |
+|                                   | home, or market stall. Centre or market name is required; unit or |
+|                                   | stall number and directions are optional.                         |
+| I travel to customers             | Service areas (Required), e.g. "Soweto, Sandton"                  |
+| I deliver orders                  | Delivery areas, or nationwide delivery (one is required)          |
+| I sell or provide services online | No visitor address is needed                                      |
 
-### Business categories
+- Province and City or town are required unless you only serve customers online.
+- **Home businesses show only their area by default.** Your exact address, map
+  link and directions are published only if you tick **Show my exact visitor
+  address publicly**.
 
-The business category selector includes:
+### Step 3 — Contact & opening hours
 
-1. Fashion & Accessories
-2. Electronics & Tech
-3. Groceries & Essentials
-4. Health & Beauty
-5. Home & Living
-6. Food & Dining
-7. Trade & Maintenance
-8. Professional Services
-9. Education & Training
-10. Events & Entertainment
-11. Automotive & Transport
-12. Tourism & Hospitality
-13. General & Other
+- **How should customers contact you?** (Required, choose at least one) — phone
+  call, WhatsApp, email, website, or the VerifyMzansi inbox. You only need to
+  enter details for the methods you choose. Deselected details are not
+  published, and the inbox button only appears if you choose it.
+- **Opening hours** (Optional) — each day can be open, closed, by appointment
+  only, or left blank (not provided).
+- Payment methods and social links are optional.
 
-Every category has an optional subcategory selector. Examples include
-restaurant/café/catering under Food & Dining; plumber/electrician/builder under
-Trade & Maintenance; attorney/accounting/IT under Professional Services; and
-mechanic/panel beater/towing/courier under Automotive & Transport.
+### Step 4 — Photos & review
 
-### Business category-specific fields
+- Logo, cover photo and gallery photos are optional; limits for your plan are
+  shown before you upload.
+- The review shows exactly what will be public, with an **Edit** link for each
+  section. Submit for review.
 
-Most business categories use the shared fields only. These categories add the
-following optional fields:
+## 3. Tourism & Events
 
-| Category                   | Extra fields available                                                                                                                                                                                                                                                                                                                                                                                 |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Health & Beauty**        | Practice Number; Medical Aid Accepted; Accepted Medical Aids                                                                                                                                                                                                                                                                                                                                           |
-| **Automotive & Transport** | Brands Serviced; Roadside Assistance                                                                                                                                                                                                                                                                                                                                                                   |
-| **Professional Services**  | Professional Body; Registration / Practice Number; Virtual / Online Consultations Available                                                                                                                                                                                                                                                                                                            |
-| **Education & Training**   | Accreditation; Age Group                                                                                                                                                                                                                                                                                                                                                                               |
-| **Food & Dining**          | Dietary Options; Seating Capacity; BYOB Allowed; Halal Certified; Liquor License                                                                                                                                                                                                                                                                                                                       |
-| **Trade & Maintenance**    | 24/7 or Emergency Callouts; Free Quotes Available                                                                                                                                                                                                                                                                                                                                                      |
-| **Tourism & Hospitality**  | Star Rating; Number of Rooms / Units; Accommodation Types; Check-in and Check-out Times; Price Range; Amenities; Meal Options; Languages Spoken; Cancellation Policy; Booking URL; Pets Allowed; Smoking Allowed; plus tourism-specific experience, attraction, travel-agency, or car-rental details where applicable. For a richer tourism form, choose **Tourism & Events** from the main Post page. |
+### Stays, experiences and attractions
 
-### Step 2 — Location and contact
+Steps: **About your listing**, **Visitor details**, **Location & contact**,
+**Photos & review**.
 
-- **Province** and **City** are required for every business type except Online
-  Only.
-- You can add Town/Suburb, Street Address, and map directions where applicable.
-- Add Phone, WhatsApp, Email, and Website. These are individually optional, but
-  at least one reliable contact channel is strongly recommended.
-- Set operating hours for Monday–Friday, Saturday, and Sunday/Public Holidays.
-- Choose delivery/collection availability and accepted payment methods where
-  applicable.
-- Add Facebook, Instagram, X/Twitter, and TikTok links if you use them.
+- **Tourism category** (Required), grouped as Accommodation; Tours &
+  Experiences; Attractions; Travel Services; Wellness Retreats. The meaning of
+  your choice is shown below the dropdown.
+- **Visitor details** depend on the group: accommodation asks about rooms,
+  check-in and meals; tours ask about duration, group size and what is included;
+  attractions ask about visiting; travel services are never asked accommodation
+  questions.
+- **Official star grading** (Optional) is an official grading, not guest
+  reviews. It starts as "Not rated".
+- **Location**: accommodation, wellness retreats and attractions give a street
+  address and suburb. Tours and experiences instead answer **How do visitors
+  join your tour or experience?** — a meeting point, pickup areas, or both.
+  Travel services may leave the address blank.
+- **Contact methods** (Required) and the numbers or details for the methods you
+  choose.
+- At least one **photo** is required.
 
-### Step 3 — Media and review
+### Events
 
-- **Business logo** — optional square image.
-- **Cover photo** — optional wide brand backdrop.
-- **Gallery photos** — optional but recommended; the first photo is used on
-  cards when no video is shown.
-- **Mall photos** — optional, up to 10, for Mall Store wayfinding.
-- **Cover video** — optional single introduction video when your plan allows it.
-- **Video thumbnail** — choose a frame or upload a custom poster image.
-- **Posting terms\*** — accept the terms, check the preview, then submit.
+Steps: **About your event**, **When, where & entry**, **Contact & visitor
+information**, **Photos & review**. The event route never asks you to choose
+between a tourism business and an event again.
 
-## 3. Tourism & Events: tourism businesses and event posts
-
-Choose **Tourism & Events**, then choose one of two post types:
-
-- **Tourism Business** — a lasting profile for accommodation, a tour,
-  attraction, travel agency, rental business, or similar tourism operator.
-- **Event** — a dated festival, concert, market, workshop, sports event, or
-  community event.
-
-Both versions use four steps: **Type & Basics**, **Details**, **Location &
-Contact**, and **Media & Review**.
-
-### Tourism Business — Type & Basics
-
-Complete:
-
-- **Business Name\*** — 5–120 characters.
-- **Description\*** — 20–5,000 characters.
-- **Tourism Category\*** — choose one of: Hotel / Resort; Guest House / B&B;
-  Lodge / Game Lodge; Backpackers / Hostel; Self-Catering / Vacation Rental;
-  Tour Operator; Travel Agency; Safari & Wildlife Experience; Adventure
-  Activities; Cultural & Heritage Site; Car Rental (Tourism); Campground /
-  Caravan Park; Spa & Wellness Retreat; or Tourist Attraction / Theme Park.
-
-### Tourism Business — category details
-
-The detail fields depend on the tourism category selected. All are optional
-unless noted above.
-
-| Category group          | Categories                                                                                                                              | Fields available                                                                                                                      |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| **Accommodation**       | Hotel / Resort; Guest House / B&B; Lodge / Game Lodge; Backpackers / Hostel; Self-Catering / Vacation Rental; Campground / Caravan Park | Star Rating; Number of Rooms / Units; Accommodation Types; Check-in Time; Check-out Time; Meal Options; Pets Allowed; Smoking Allowed |
-| **Spa & Wellness**      | Spa & Wellness Retreat                                                                                                                  | Star Rating; Number of Rooms / Units; Treatment Types                                                                                 |
-| **Tours & Safaris**     | Tour Operator; Safari & Wildlife Experience; Adventure Activities                                                                       | Activity Types; Tour Duration; Max Group Size; Difficulty Level; Equipment Provided; What’s Included; Age Restriction                 |
-| **Travel Agency**       | Travel Agency                                                                                                                           | Services Offered; Specializations                                                                                                     |
-| **Attractions & Sites** | Cultural & Heritage Site; Tourist Attraction / Theme Park                                                                               | Guided Tours Available; Audio Guide Available; Typical Visit Duration; Age Restriction                                                |
-| **Car Rental**          | Car Rental (Tourism)                                                                                                                    | Vehicle Types; Minimum Driver Age; Delivery & Collection; Insurance Included; GPS Available                                           |
-
-After selecting a tourism category, the following shared fields are also
-available:
-
-- Price Range: Budget, Mid-range, Premium, or Luxury.
-- Amenities (not shown for Travel Agency or Car Rental): e.g. Wi-Fi, parking,
-  restaurant, spa, airport shuttle, guided tours, accessibility, and
-  pet-friendly access.
-- Languages Spoken, Cancellation Policy, and Booking URL.
-- South African Tourism Details: TGCSA Grading, Minimum Stay, Child Policy,
-  Nearby Attractions, and Seasonal Pricing.
-
-### Event — Type & Basics and details
-
-Complete the common **Event Title\*** and **Description\***, then select an
-**Event Type\***:
-
-Festival / Concert; Conference / Seminar; Market / Expo / Fair; Sports Event;
-Cultural Event / Heritage Day; Food & Wine Event; Outdoor / Adventure; Workshop
-/ Masterclass; Charity / Fundraiser; Community Gathering; Comedy / Theatre /
-Show; Kids / Family Event; or Nightlife / Party.
-
-The Event Details step provides:
-
-- **Start Date\*** and optional End Date (use only Start Date for a single-day
-  event).
-- Venue Name and Venue Capacity.
-- Ticket / Entry Price, a Price Negotiable switch, and up to 10 Ticket Tiers.
-- Tickets URL.
-- Age Restriction: All Ages, 12+, 16+, 18+, or 21+.
-- Dress Code and Lineup / Performers / Speakers.
-- Parking Available and Food & Drinks Available switches.
-- What to Bring.
-- Accessibility: Wheelchair Accessible, Sign Language Interpreter, Hearing Loop,
-  Accessible Parking, and Accessible Restrooms.
-- Event Details (SA): Recurring (One-off, Weekly, Monthly, Annual), Rain Policy,
-  Early Bird Deadline, and Group Discounts Available.
-
-### Tourism & Events — location, contact, media, and review
-
-- **Province** and **City** are required for both tourism businesses and events.
-- Tourism businesses also require **Street Address** and **Suburb/Town**. Events
-  may provide location detail without those two required fields.
-- **Contact Methods\*** — choose at least one of Phone Call, WhatsApp, or
-  Contact Form.
-- Add Phone, WhatsApp, Email, Website, and optional Facebook, Instagram,
-  X/Twitter, and TikTok URLs. Tourism businesses can also set operating hours.
-- **Logo** is optional.
-- Tourism businesses require at least one **Photo**. Events require at least one
-  **Photo or Video**.
-- The first photo is the public cover; you can reorder photos and adjust its
-  crop position.
-- Video and a video thumbnail are optional when the plan supports video.
-- Accept the **posting terms\***, review the preview, and submit.
+- **Event name**, **Description** and **Event category** (Required). Each event
+  category shows an explanation and example.
+- **Start date** and **Start time** (Required); **End date** and **End time**
+  (Optional). Leave the end blank for a single-day event. Times are South
+  African Standard Time (SAST), and an event must end after it starts.
+- **Entry** (Required): **Free entry** or **Paid entry**. Paid events need a
+  starting entry price; ticket tiers and a ticket link are optional.
+- **Recurring** describes how often the event happens. It does not create extra
+  dated events.
+- Dress code, age restriction, accessibility and "What to bring" are optional.
+  No accessibility feature is preselected.
+- **Contact**: Phone and WhatsApp use the number on your VerifyMzansi account;
+  contact form enquiries go to your VerifyMzansi inbox.
+- At least one photo or video is required.
 
 ## Final checklist before submitting
 
 - The title and description are specific, complete, and truthful.
-- Every required field for the selected form and category is completed.
+- Every Required field is complete; Optional fields can stay blank.
 - Price, dates, availability, and contact information are current.
-- Links open to the correct website, booking page, ticket page, map, or social
-  profile.
-- Your best photo is first and does not misrepresent the item, business,
-  accommodation, or event.
+- Only information you are happy to publish appears in the review.
 - You have accepted the posting terms and reviewed the preview.
 
-After submitting, manage your posts from your account dashboard. You can return
-to a post later to update its details or media.
+After submitting, manage your posts from your account dashboard.

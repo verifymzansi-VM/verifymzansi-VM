@@ -177,11 +177,12 @@ function main() {
   const env = createDeterministicEnv();
   // Local iteration escape hatch: when the .next output was already built with
   // the deterministic e2e env, skip the lengthy rebuild and just serve it.
-  if (process.env.PLAYWRIGHT_SKIP_BUILD !== "1") {
+  const useDevServer = process.env.PLAYWRIGHT_DEV_SERVER === "1";
+  if (!useDevServer && process.env.PLAYWRIGHT_SKIP_BUILD !== "1") {
     runBuild(env);
   }
 
-  const server = spawnPnpm(["start"], env);
+  const server = spawnPnpm(useDevServer ? ["dev", "--webpack", "--hostname", PLAYWRIGHT_HOST, "--port", String(PLAYWRIGHT_PORT)] : ["start"], env);
   wireOutputFilters(server);
 
   server.on("error", (error) => {

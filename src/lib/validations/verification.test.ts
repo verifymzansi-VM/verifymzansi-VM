@@ -110,14 +110,23 @@ describe("verificationLocationSchema", () => {
     ).toBe(false);
   });
 
-  it("rejects latitude outside SA bounds", () => {
+  it("trims location names and strips retired GPS/address fields", () => {
     expect(
-      verificationLocationSchema.safeParse({
-        province: "gauteng",
-        city: "Jozi",
+      verificationLocationSchema.parse({
+        province: " Gauteng ",
+        city: " Johannesburg ",
         latitude: 50,
-        longitude: 28,
-      }).success
+        address: "private",
+      })
+    ).toEqual({ province: "Gauteng", city: "Johannesburg" });
+  });
+
+  it("rejects whitespace-only and oversized selections", () => {
+    expect(
+      verificationLocationSchema.safeParse({ province: "   ", city: "Johannesburg" }).success
+    ).toBe(false);
+    expect(
+      verificationLocationSchema.safeParse({ province: "Gauteng", city: "x".repeat(81) }).success
     ).toBe(false);
   });
 });
@@ -153,10 +162,8 @@ describe("fileUploadSchema", () => {
       fileUploadSchema.safeParse({ docType: "id_document", firstName: "Jane", lastName: "Doe" })
         .success
     ).toBe(true);
-    // selfie and proof_of_address don't require names
-    for (const t of ["selfie", "proof_of_address"]) {
-      expect(fileUploadSchema.safeParse({ docType: t }).success).toBe(true);
-    }
+    expect(fileUploadSchema.safeParse({ docType: "selfie" }).success).toBe(true);
+    expect(fileUploadSchema.safeParse({ docType: "proof_of_address" }).success).toBe(false);
   });
 
   it("rejects id_document without required name fields", () => {

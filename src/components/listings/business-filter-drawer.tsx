@@ -15,7 +15,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useDebouncedCallback } from "@/hooks/use-debounce";
 import { useMarketplaceStore } from "@/stores";
-import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
+import {
+  ALL_BUSINESS_CATEGORIES,
+  BUSINESS_CATEGORIES,
+  BUSINESS_TYPE_OPTIONS,
+} from "@/lib/constants/categories";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { triggerHaptic } from "@/lib/utils/haptics";
 import { useHydrated } from "@/hooks/use-hydrated";
@@ -97,8 +101,11 @@ export function BusinessFilterDrawer() {
   }
   if (filters.businessCategory) {
     const catLabel =
-      BUSINESS_CATEGORIES.find((c) => c.value === filters.businessCategory)?.label ||
-      String(filters.businessCategory).replace(/_/g, " ");
+      (ALL_BUSINESS_CATEGORIES.find((c) => c.value === filters.businessCategory)?.label ||
+        String(filters.businessCategory).replace(/_/g, " ")) +
+      (BUSINESS_CATEGORIES.some((c) => c.value === filters.businessCategory)
+        ? ""
+        : " (previous category)");
     activeChips.push({
       key: "category",
       label: catLabel,
@@ -106,7 +113,7 @@ export function BusinessFilterDrawer() {
     });
   }
   if (filters.businessSubcategory) {
-    const catDef = BUSINESS_CATEGORIES.find((c) => c.value === filters.businessCategory);
+    const catDef = ALL_BUSINESS_CATEGORIES.find((c) => c.value === filters.businessCategory);
     const subLabel =
       catDef?.subcategories.find((s) => s.value === filters.businessSubcategory)?.label ||
       String(filters.businessSubcategory).replace(/_/g, " ");
@@ -117,9 +124,10 @@ export function BusinessFilterDrawer() {
     });
   }
   if (filters.businessType) {
-    const typeLabel =
+    const typeLabel = `${
       BUSINESS_TYPE_OPTIONS.find((t) => t.value === filters.businessType)?.label ||
-      String(filters.businessType).replace(/_/g, " ");
+      String(filters.businessType).replace(/_/g, " ")
+    } (previous filter)`;
     activeChips.push({
       key: "type",
       label: typeLabel,
@@ -231,6 +239,14 @@ export function BusinessFilterDrawer() {
               }
             >
               <option value="">All categories</option>
+              {filters.businessCategory &&
+                !BUSINESS_CATEGORIES.some((c) => c.value === filters.businessCategory) && (
+                  <option value={filters.businessCategory}>
+                    {ALL_BUSINESS_CATEGORIES.find((c) => c.value === filters.businessCategory)
+                      ?.label ?? filters.businessCategory}{" "}
+                    (previous category)
+                  </option>
+                )}
               {BUSINESS_CATEGORIES.map((item) => (
                 <option key={item.value} value={item.value}>
                   {item.label}
@@ -242,15 +258,17 @@ export function BusinessFilterDrawer() {
           {/* Subcategory (cascading from category) */}
           {filters.businessCategory &&
             (() => {
-              const catDef = BUSINESS_CATEGORIES.find((c) => c.value === filters.businessCategory);
+              const catDef = ALL_BUSINESS_CATEGORIES.find(
+                (c) => c.value === filters.businessCategory
+              );
               const subs = catDef?.subcategories ?? [];
               if (subs.length === 0) return null;
               return (
                 <div className="space-y-1.5">
-                  <Label htmlFor="drawer-business-subcategory">Subcategory</Label>
+                  <Label htmlFor="drawer-business-subcategory">Specific business activity</Label>
                   <select
                     id="drawer-business-subcategory"
-                    aria-label="Subcategory"
+                    aria-label="Specific business activity"
                     className={selectClassName}
                     value={filters.businessSubcategory || ""}
                     disabled={!isInteractive}
@@ -258,7 +276,7 @@ export function BusinessFilterDrawer() {
                       setFilter("businessSubcategory", event.target.value || undefined)
                     }
                   >
-                    <option value="">All subcategories</option>
+                    <option value="">All activities</option>
                     {subs.map((sub) => (
                       <option key={sub.value} value={sub.value}>
                         {sub.label}
@@ -268,33 +286,6 @@ export function BusinessFilterDrawer() {
                 </div>
               );
             })()}
-
-          {/* Business Type */}
-          <div className="space-y-1.5">
-            <Label htmlFor="drawer-business-type">Business type</Label>
-            <select
-              id="drawer-business-type"
-              aria-label="Business type"
-              className={selectClassName}
-              value={filters.businessType || ""}
-              disabled={!isInteractive}
-              onChange={(event) =>
-                setFilter(
-                  "businessType",
-                  event.target.value
-                    ? (event.target.value as typeof filters.businessType)
-                    : undefined
-                )
-              }
-            >
-              <option value="">All types</option>
-              {BUSINESS_TYPE_OPTIONS.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </div>
 
           {/* Province */}
           <div className="space-y-1.5">
@@ -321,7 +312,7 @@ export function BusinessFilterDrawer() {
 
           {/* City (cascading) */}
           <div className="space-y-1.5">
-            <Label htmlFor="drawer-business-city">City</Label>
+            <Label htmlFor="drawer-business-city">City or town</Label>
             <select
               id="drawer-business-city"
               aria-label="City"

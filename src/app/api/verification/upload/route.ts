@@ -47,12 +47,12 @@ import { getDefaultDisplayName } from "@/lib/account/ensure-profile";
 /**
  * POST /api/verification/upload
  *
- * Upload a KYC document (ID document, selfie, or proof of address).
+ * Upload an ID document or selfie. Location is submitted as province and city.
  * Files are encrypted before storage for POPIA compliance.
  *
  * Accepts multipart/form-data with:
  * - file: the document file (image or PDF, max 5MB)
- * - docType: "id_document" | "selfie" | "proof_of_address"
+ * - docType: "id_document" | "selfie"
  * - idNumber: (optional) SA ID number for id_document step
  * - idDocumentType: (optional) "sa_id"
  */
@@ -211,6 +211,17 @@ export async function POST(request: NextRequest) {
       return jsonError({ error: "Invalid form data. Send multipart/form-data." }, { status: 400 });
     }
 
+    // Retired clients must not recreate pending address-review steps or store address files.
+    if (formData.get("docType") === "proof_of_address") {
+      return jsonError(
+        {
+          error: "Proof of address is no longer required. Select your province and city instead.",
+          code: "address_upload_retired",
+        },
+        { status: 410 }
+      );
+    }
+
     const file = formData.get("file");
     if (!file || !(file instanceof File) || file.size === 0) {
       return jsonError({ error: "File is required" }, { status: 400 });
@@ -264,7 +275,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Validate file type and size ──────────────────────────
-    const allowPdf = docType === "id_document" || docType === "proof_of_address";
+    const allowPdf = docType === "id_document";
     const fileValidation = validateUploadedFile(
       { size: file.size, type: file.type, name: file.name },
       { allowPdf }
@@ -347,12 +358,10 @@ export async function POST(request: NextRequest) {
     const stepTypeMap: Record<string, string> = {
       id_document: "id_doc",
       selfie: "selfie",
-      proof_of_address: "location",
     };
     const artifactKindMap: Record<string, string> = {
       id_document: "document",
       selfie: "selfie",
-      proof_of_address: "proof_of_address",
     };
     const stepType = stepTypeMap[docType];
     const artifactKind = artifactKindMap[docType];
@@ -912,11 +921,6 @@ export async function POST(request: NextRequest) {
       sessionPatch.id_artifact_id = artifact.id;
     } else if (docType === "selfie") {
       sessionPatch.selfie_artifact_id = artifact.id;
-    } else if (docType === "proof_of_address") {
-      // A PoA upload IS the location-step submission — stamp it so the
-      // session can finalize once the other artifacts are present. The
-      // pending location step stays reviewable via the admin decide route.
-      sessionPatch.location_submitted_at = new Date().toISOString();
     }
 
     const { error: sessionUpsertError } = await admin

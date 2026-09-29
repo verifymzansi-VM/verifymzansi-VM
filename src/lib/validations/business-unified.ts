@@ -1,6 +1,10 @@
+import { customerAccessSchema } from "@/lib/forms/customer-access";
 import { z } from "zod";
 import { isTrustedPlatformMediaUrl } from "@/lib/utils/media-url";
 import { externalUrlOrEmptySchema, externalUrlSchema } from "./shared";
+
+/** Tourism activities whose visitors join at a meeting point or are collected. */
+const TOUR_ACTIVITIES = new Set(["tour_operator", "safari_wildlife", "adventure_activities"]);
 
 const saPhoneRegex = /^(\+27|0)[6-8][0-9]{8}$/;
 
@@ -14,6 +18,15 @@ const BUSINESS_TYPES = [
 ] as const;
 
 const BUSINESS_CATEGORIES = [
+  "health_medical",
+  "beauty_personal",
+  "fitness_wellness",
+  "cleaning_garden",
+  "automotive_services",
+  "transport_storage",
+  "pets_animals",
+  "community_personal",
+
   "fashion_accessories",
   "electronics_tech",
   "groceries_essentials",
@@ -191,6 +204,10 @@ export const businessSchema = z
       .default([]),
 
     // Details
+    contact_methods: z
+      .array(z.enum(["call", "whatsapp", "email", "website", "form"]))
+      .min(1)
+      .optional(),
     services_offered: z.array(z.string().max(200)).max(30).optional().default([]),
     service_areas: serviceAreasSchema.optional(),
     business_details: businessDetailsSchema.nullable().optional(),
@@ -239,6 +256,88 @@ export const businessSchema = z
     termsAccepted: z.boolean().optional().default(false),
   })
   .superRefine((data, ctx) => {
+    if (data.category_details?.customer_access !== undefined) {
+      const result = customerAccessSchema.safeParse(data.category_details.customer_access);
+      if (!result.success) {
+        for (const issue of result.error.issues)
+          ctx.addIssue({
+            code: "custom",
+            path: ["category_details", "customer_access", ...issue.path],
+            message: issue.message,
+          });
+      } else {
+        if (result.data.methods.some((m) => m !== "online")) {
+          if (!data.location_province?.trim())
+            ctx.addIssue({
+              code: "custom",
+              path: ["location_province"],
+              message: "Select a province.",
+            });
+          if (!data.location_city?.trim())
+            ctx.addIssue({
+              code: "custom",
+              path: ["location_city"],
+              message: "Select a city or town.",
+            });
+        }
+        if (result.data.publishAddress && !data.location_address?.trim())
+          ctx.addIssue({
+            code: "custom",
+            path: ["location_address"],
+            message:
+              "Enter the visitor address you want to publish, or turn off public address visibility.",
+          });
+        // Tours and experiences that meet visitors need a meeting point or an address.
+        const meetingPoint = data.category_details?.meeting_point;
+        if (
+          data.category === "tourism_hospitality" &&
+          TOUR_ACTIVITIES.has(data.subcategory ?? "") &&
+          result.data.methods.includes("visit") &&
+          !data.location_address?.trim() &&
+          !(typeof meetingPoint === "string" && meetingPoint.trim())
+        )
+          ctx.addIssue({
+            code: "custom",
+            path: ["category_details", "meeting_point"],
+            message: "Describe where visitors meet you, or add a visitor address.",
+          });
+        if (typeof meetingPoint === "string" && meetingPoint.length > 200)
+          ctx.addIssue({
+            code: "custom",
+            path: ["category_details", "meeting_point"],
+            message: "Keep the meeting point to 200 characters or fewer.",
+          });
+      }
+      if (!data.description?.trim())
+        ctx.addIssue({
+          code: "custom",
+          path: ["description"],
+          message: "Tell customers about your business.",
+        });
+      if (data.contact_methods?.includes("call") && !data.phone?.trim())
+        ctx.addIssue({
+          code: "custom",
+          path: ["phone"],
+          message: "Add a phone number for phone calls.",
+        });
+      if (data.contact_methods?.includes("whatsapp") && !data.whatsapp?.trim())
+        ctx.addIssue({ code: "custom", path: ["whatsapp"], message: "Add a WhatsApp number." });
+      if (data.contact_methods?.includes("email") && !data.email?.trim())
+        ctx.addIssue({ code: "custom", path: ["email"], message: "Add an email address." });
+      if (data.contact_methods?.includes("website") && !data.website?.trim())
+        ctx.addIssue({ code: "custom", path: ["website"], message: "Add a website address." });
+      if (
+        !data.contact_methods?.includes("form") &&
+        ![data.phone, data.whatsapp, data.email, data.website].some((v) => v?.trim())
+      )
+        ctx.addIssue({
+          code: "custom",
+          path: ["phone"],
+          message: "Add at least one contact method: phone, WhatsApp, email or website.",
+        });
+      return;
+    }
+
     // Province + city required for all types except online_only
     if (data.business_type !== "online_only") {
       if (!data.location_province?.trim()) {

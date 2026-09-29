@@ -4,11 +4,10 @@
  */
 
 import { type NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
-import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { rateLimitExceededResponse } from "@/lib/utils/rate-limit-responses";
@@ -20,7 +19,7 @@ import {
   normalizeProvinceName,
   resolveCityName,
 } from "@/lib/constants/sa-provinces";
-import { trimmedStringSchema } from "@/lib/validations/shared";
+import { verificationLocationSchema } from "@/lib/validations/verification";
 import {
   ensureLocationVerificationWritable,
   persistLocationVerificationLifecycle,
@@ -28,12 +27,6 @@ import {
 import { enforceConfirmedVerificationRequest } from "../../_lib/verification-request-prelude";
 
 const log = createLogger("ManualLocationVerification");
-
-const manualLocationSchema = z.object({
-  province: trimmedStringSchema,
-  city: trimmedStringSchema,
-  town: z.string().trim().max(120).optional(),
-});
 
 export async function POST(request: NextRequest) {
   try {
@@ -55,7 +48,7 @@ export async function POST(request: NextRequest) {
     }
 
     const rateCheck = await checkRateLimit({
-      key: getClientIp(request),
+      key: user.id,
       action: "verification:manual-location",
       degradedMode: "block",
     });
@@ -70,7 +63,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse and validate body
-    const bodyResult = await parseAndValidateJsonRequest(request, manualLocationSchema, {
+    const bodyResult = await parseAndValidateJsonRequest(request, verificationLocationSchema, {
       invalidJsonMessage: "Invalid JSON payload",
       validationErrorMessage: "Invalid input",
     });
@@ -78,7 +71,7 @@ export async function POST(request: NextRequest) {
       return bodyResult.response;
     }
 
-    const { province, city, town } = bodyResult.data;
+    const { province, city } = bodyResult.data;
     const normalizedProvince = normalizeProvinceName(province);
 
     // Validate province
@@ -107,6 +100,7 @@ export async function POST(request: NextRequest) {
       profileClient: supabase,
       userId: user.id,
       logger: log,
+      submittedLocation: { province: normalizedProvince, city: normalizedCity },
     });
     if ("response" in ensureWritable) {
       return ensureWritable.response;
@@ -128,7 +122,9 @@ export async function POST(request: NextRequest) {
             gps_lon: null,
             location_province: normalizedProvince,
             location_city: normalizedCity,
-            location_town: town || null,
+            location_town: null,
+            location_address_line: null,
+            metadata: { location_assurance: "self_declared" },
             risk_score: riskScore,
             risk_level: riskLevel,
             auto_status: "approved",
@@ -159,7 +155,6 @@ export async function POST(request: NextRequest) {
       value_json: {
         province: normalizedProvince,
         city: normalizedCity,
-        town: town || undefined,
         note: "Location submitted via manual selection without GPS confirmation",
       },
     });
@@ -201,6 +196,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      stepStatus: "approved",
       stepId: step.id,
       province: normalizedProvince,
       city: normalizedCity,

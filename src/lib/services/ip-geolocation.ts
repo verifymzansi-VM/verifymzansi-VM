@@ -1,15 +1,9 @@
 /**
- * IP geolocation cross-signal for location verification.
- *
- * Reads Cloudflare request metadata (request.cf via the OpenNext context) and
- * maps the IP-derived region to an SA province. The client cannot fake this
- * without a VPN/proxy, so it is a useful independent cross-check against
- * client-supplied GPS coordinates.
- *
- * Never used as a hard block — mobile/cellular IPs legitimately resolve to a
- * different province (carrier NAT egress). Warn-severity signal only.
+ * Suggests an approximate province and city from Cloudflare request metadata.
+ * Mobile networks and VPNs may resolve elsewhere; users confirm or select manually.
  */
 
+import { normalizeProvinceName } from "@/lib/constants/sa-provinces";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("IpGeolocation");
@@ -26,6 +20,7 @@ export interface IpGeoSignal {
 /** Cloudflare ISO 3166-2 subdivision codes for South African provinces. */
 const CF_REGION_TO_PROVINCE: Record<string, string> = {
   GP: "Gauteng",
+  GT: "Gauteng",
   WC: "Western Cape",
   KZN: "KwaZulu-Natal",
   NL: "KwaZulu-Natal", // legacy/alternate code used for KwaZulu-Natal
@@ -74,8 +69,9 @@ export async function resolveIpGeolocation(): Promise<IpGeoSignal | null> {
     return null;
   }
 
-  const regionCode = (cf.regionCode ?? null)?.toUpperCase() ?? null;
-  const province = regionCode ? (CF_REGION_TO_PROVINCE[regionCode] ?? null) : null;
+  const regionCode = cf.regionCode?.toUpperCase().replace(/^ZA-/, "") ?? null;
+  const province =
+    (regionCode ? CF_REGION_TO_PROVINCE[regionCode] : null) ?? normalizeProvinceName(cf.region);
 
   if (cf.country && cf.country !== "ZA") {
     log.info("IP geolocation resolved outside South Africa", { country: cf.country });

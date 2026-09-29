@@ -293,43 +293,10 @@ describe("CreateTourismPage type switch behavior", () => {
     );
   });
 
-  it("preserves shared fields and clears tourism-specific fields on confirmed switch", () => {
+  it("does not repeat the route selection inside the form", () => {
     render(<CreateTourismPage />);
-
-    fireEvent.change(screen.getByLabelText("Business Name *"), {
-      target: { value: "Kruger Sunset Lodge" },
-    });
-    fireEvent.change(screen.getByLabelText("Description *"), {
-      target: { value: "A beautiful place for travel and nature stays in South Africa." },
-    });
-    fireEvent.change(screen.getByLabelText("Tourism Category"), {
-      target: { value: "hotel_resort" },
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /Event/ }));
-
-    expect(screen.getByLabelText("Event Title *")).toHaveValue("Kruger Sunset Lodge");
-    expect(screen.getByLabelText("Description *")).toHaveValue(
-      "A beautiful place for travel and nature stays in South Africa."
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: /Tourism Business/ }));
-
-    expect(screen.getByLabelText("Tourism Category")).toHaveValue("");
-  });
-
-  it("does not switch listing type when confirmation is cancelled", () => {
-    vi.stubGlobal(
-      "confirm",
-      vi.fn(() => false)
-    );
-
-    render(<CreateTourismPage />);
-
-    fireEvent.click(screen.getByRole("button", { name: /Event/ }));
-
-    expect(screen.getByLabelText("Business Name *")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Event Title *")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Event$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Tourism Business$/ })).not.toBeInTheDocument();
   });
 
   it("honors the canonical event creation query param on first render", () => {
@@ -337,8 +304,8 @@ describe("CreateTourismPage type switch behavior", () => {
 
     render(<CreateTourismPage />);
 
-    expect(screen.getByLabelText("Event Title *")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Business Name *")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Event name (Required)")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Business Name (Required)")).not.toBeInTheDocument();
   });
 
   it("maps event API 422 photo-limit errors to the media step", async () => {
@@ -366,25 +333,30 @@ describe("CreateTourismPage type switch behavior", () => {
       }
     );
 
+    searchParamGetMock.mockImplementation((key: string) => (key === "type" ? "event" : null));
     render(<CreateTourismPage />);
-
-    fireEvent.click(screen.getByRole("button", { name: /Event/ }));
-    fireEvent.change(screen.getByLabelText("Event Title *"), {
+    fireEvent.change(screen.getByLabelText("Event name (Required)"), {
       target: { value: "Soweto Food Festival" },
     });
-    fireEvent.change(screen.getByLabelText("Description *"), {
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
       target: { value: "A detailed event description with enough content to pass validation." },
     });
-    fireEvent.change(screen.getByLabelText("Event Type"), {
+    fireEvent.change(screen.getByLabelText("Event category (Required)"), {
       target: { value: "festival_concert" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.change(screen.getByLabelText("Start Date *"), {
+    fireEvent.change(screen.getByLabelText("Start date (Required)"), {
       target: { value: "2099-12-01" },
     });
+    fireEvent.change(screen.getByLabelText("Start time (Required)"), {
+      target: { value: "18:00" },
+    });
+    fireEvent.click(screen.getByLabelText("Free entry"));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
+    fireEvent.click(screen.getByLabelText("Phone Call"));
+    fireEvent.click(screen.getByLabelText("Contact Form"));
     fireEvent.change(screen.getByLabelText("Province"), {
       target: { value: "Gauteng" },
     });
@@ -430,25 +402,30 @@ describe("CreateTourismPage type switch behavior", () => {
       }
     );
 
+    searchParamGetMock.mockImplementation((key: string) => (key === "type" ? "event" : null));
     render(<CreateTourismPage />);
-
-    fireEvent.click(screen.getByRole("button", { name: /Event/ }));
-    fireEvent.change(screen.getByLabelText("Event Title *"), {
+    fireEvent.change(screen.getByLabelText("Event name (Required)"), {
       target: { value: "Soweto Food Festival" },
     });
-    fireEvent.change(screen.getByLabelText("Description *"), {
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
       target: { value: "A detailed event description with enough content to pass validation." },
     });
-    fireEvent.change(screen.getByLabelText("Event Type"), {
+    fireEvent.change(screen.getByLabelText("Event category (Required)"), {
       target: { value: "festival_concert" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.change(screen.getByLabelText("Start Date *"), {
+    fireEvent.change(screen.getByLabelText("Start date (Required)"), {
       target: { value: "2099-12-01" },
     });
+    fireEvent.change(screen.getByLabelText("Start time (Required)"), {
+      target: { value: "18:00" },
+    });
+    fireEvent.click(screen.getByLabelText("Free entry"));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
+    fireEvent.click(screen.getByLabelText("Phone Call"));
+    fireEvent.click(screen.getByLabelText("Contact Form"));
     fireEvent.change(screen.getByLabelText("Province"), {
       target: { value: "Gauteng" },
     });
@@ -496,21 +473,23 @@ describe("CreateTourismPage type switch behavior", () => {
 
     render(<CreateTourismPage />);
 
-    fireEvent.change(screen.getByLabelText("Business Name *"), {
+    fireEvent.change(screen.getByLabelText("Business Name (Required)"), {
       target: { value: "Kruger Sunset Lodge" },
     });
-    fireEvent.change(screen.getByLabelText("Description *"), {
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
       target: {
         value: "A detailed tourism business description with enough content to pass validation.",
       },
     });
-    fireEvent.change(screen.getByLabelText("Tourism Category"), {
+    fireEvent.change(screen.getByLabelText("Tourism category (Required)"), {
       target: { value: "hotel_resort" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
+    fireEvent.click(screen.getByLabelText("Phone Call"));
+    fireEvent.click(screen.getByLabelText("Contact Form"));
     fireEvent.change(screen.getByLabelText("Province"), {
       target: { value: "Gauteng" },
     });
@@ -548,24 +527,26 @@ describe("CreateTourismPage type switch behavior", () => {
 
     render(<CreateTourismPage />);
 
-    fireEvent.change(screen.getByLabelText("Business Name *"), {
+    fireEvent.change(screen.getByLabelText("Business Name (Required)"), {
       target: { value: "Kruger Sunset Lodge" },
     });
-    fireEvent.change(screen.getByLabelText("Description *"), {
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
       target: {
         value: "A detailed tourism business description with enough content to pass validation.",
       },
     });
-    fireEvent.change(screen.getByLabelText("Tourism Category"), {
+    fireEvent.change(screen.getByLabelText("Tourism category (Required)"), {
       target: { value: "hotel_resort" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.change(screen.getByLabelText("Booking URL"), {
+    fireEvent.change(screen.getByLabelText("Booking URL (Optional)"), {
       target: { value: "https:// www.booking.co.za" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
+    fireEvent.click(screen.getByLabelText("Phone Call"));
+    fireEvent.click(screen.getByLabelText("Contact Form"));
     fireEvent.change(screen.getByLabelText("Province"), {
       target: { value: "Gauteng" },
     });
@@ -578,7 +559,7 @@ describe("CreateTourismPage type switch behavior", () => {
     fireEvent.change(screen.getByLabelText("Town"), {
       target: { value: "Orlando West" },
     });
-    fireEvent.change(screen.getByLabelText("Website"), {
+    fireEvent.change(screen.getByLabelText("Website (Optional)"), {
       target: { value: "https:// www.kruger.example" },
     });
     fireEvent.change(screen.getByPlaceholderText("Facebook URL"), {
@@ -635,21 +616,23 @@ describe("CreateTourismPage type switch behavior", () => {
 
     render(<CreateTourismPage />);
 
-    fireEvent.change(screen.getByLabelText("Business Name *"), {
+    fireEvent.change(screen.getByLabelText("Business Name (Required)"), {
       target: { value: "Kruger Sunset Lodge" },
     });
-    fireEvent.change(screen.getByLabelText("Description *"), {
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
       target: {
         value: "A detailed tourism business description with enough content to pass validation.",
       },
     });
-    fireEvent.change(screen.getByLabelText("Tourism Category"), {
+    fireEvent.change(screen.getByLabelText("Tourism category (Required)"), {
       target: { value: "hotel_resort" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
+    fireEvent.click(screen.getByLabelText("Phone Call"));
+    fireEvent.click(screen.getByLabelText("Contact Form"));
     fireEvent.change(screen.getByLabelText("Province"), {
       target: { value: "Gauteng" },
     });
@@ -711,25 +694,30 @@ describe("CreateTourismPage type switch behavior", () => {
       }
     );
 
+    searchParamGetMock.mockImplementation((key: string) => (key === "type" ? "event" : null));
     render(<CreateTourismPage />);
-
-    fireEvent.click(screen.getByRole("button", { name: /Event/ }));
-    fireEvent.change(screen.getByLabelText("Event Title *"), {
+    fireEvent.change(screen.getByLabelText("Event name (Required)"), {
       target: { value: "Soweto Food Festival" },
     });
-    fireEvent.change(screen.getByLabelText("Description *"), {
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
       target: { value: "A detailed event description with enough content to pass validation." },
     });
-    fireEvent.change(screen.getByLabelText("Event Type"), {
+    fireEvent.change(screen.getByLabelText("Event category (Required)"), {
       target: { value: "festival_concert" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.change(screen.getByLabelText("Start Date *"), {
+    fireEvent.change(screen.getByLabelText("Start date (Required)"), {
       target: { value: "2099-12-01" },
     });
+    fireEvent.change(screen.getByLabelText("Start time (Required)"), {
+      target: { value: "18:00" },
+    });
+    fireEvent.click(screen.getByLabelText("Free entry"));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
+    fireEvent.click(screen.getByLabelText("Phone Call"));
+    fireEvent.click(screen.getByLabelText("Contact Form"));
     fireEvent.change(screen.getByLabelText("Province"), {
       target: { value: "Gauteng" },
     });
@@ -802,25 +790,30 @@ describe("CreateTourismPage type switch behavior", () => {
       }
     );
 
+    searchParamGetMock.mockImplementation((key: string) => (key === "type" ? "event" : null));
     render(<CreateTourismPage />);
-
-    fireEvent.click(screen.getByRole("button", { name: /Event/ }));
-    fireEvent.change(screen.getByLabelText("Event Title *"), {
+    fireEvent.change(screen.getByLabelText("Event name (Required)"), {
       target: { value: "Soweto Food Festival" },
     });
-    fireEvent.change(screen.getByLabelText("Description *"), {
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
       target: { value: "A detailed event description with enough content to pass validation." },
     });
-    fireEvent.change(screen.getByLabelText("Event Type"), {
+    fireEvent.change(screen.getByLabelText("Event category (Required)"), {
       target: { value: "festival_concert" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.change(screen.getByLabelText("Start Date *"), {
+    fireEvent.change(screen.getByLabelText("Start date (Required)"), {
       target: { value: "2099-12-01" },
     });
+    fireEvent.change(screen.getByLabelText("Start time (Required)"), {
+      target: { value: "18:00" },
+    });
+    fireEvent.click(screen.getByLabelText("Free entry"));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
+    fireEvent.click(screen.getByLabelText("Phone Call"));
+    fireEvent.click(screen.getByLabelText("Contact Form"));
     fireEvent.change(screen.getByLabelText("Province"), {
       target: { value: "Gauteng" },
     });
@@ -855,25 +848,30 @@ describe("CreateTourismPage type switch behavior", () => {
   it("marks the event preview card as video media for blob-based uploads", async () => {
     mediaFilesByLabel.set("Upload video", [new File(["video"], "clip.mp4", { type: "video/mp4" })]);
 
+    searchParamGetMock.mockImplementation((key: string) => (key === "type" ? "event" : null));
     render(<CreateTourismPage />);
-
-    fireEvent.click(screen.getByRole("button", { name: /Event/ }));
-    fireEvent.change(screen.getByLabelText("Event Title *"), {
+    fireEvent.change(screen.getByLabelText("Event name (Required)"), {
       target: { value: "Soweto Food Festival" },
     });
-    fireEvent.change(screen.getByLabelText("Description *"), {
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
       target: { value: "A detailed event description with enough content to pass validation." },
     });
-    fireEvent.change(screen.getByLabelText("Event Type"), {
+    fireEvent.change(screen.getByLabelText("Event category (Required)"), {
       target: { value: "festival_concert" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.change(screen.getByLabelText("Start Date *"), {
+    fireEvent.change(screen.getByLabelText("Start date (Required)"), {
       target: { value: "2099-12-01" },
     });
+    fireEvent.change(screen.getByLabelText("Start time (Required)"), {
+      target: { value: "18:00" },
+    });
+    fireEvent.click(screen.getByLabelText("Free entry"));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
+    fireEvent.click(screen.getByLabelText("Phone Call"));
+    fireEvent.click(screen.getByLabelText("Contact Form"));
     fireEvent.change(screen.getByLabelText("Province"), {
       target: { value: "Gauteng" },
     });
@@ -906,25 +904,30 @@ describe("CreateTourismPage type switch behavior", () => {
       }),
     });
 
+    searchParamGetMock.mockImplementation((key: string) => (key === "type" ? "event" : null));
     render(<CreateTourismPage />);
-
-    fireEvent.click(screen.getByRole("button", { name: /Event/ }));
-    fireEvent.change(screen.getByLabelText("Event Title *"), {
+    fireEvent.change(screen.getByLabelText("Event name (Required)"), {
       target: { value: "Soweto Food Festival" },
     });
-    fireEvent.change(screen.getByLabelText("Description *"), {
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
       target: { value: "A detailed event description with enough content to pass validation." },
     });
-    fireEvent.change(screen.getByLabelText("Event Type"), {
+    fireEvent.change(screen.getByLabelText("Event category (Required)"), {
       target: { value: "festival_concert" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.change(screen.getByLabelText("Start Date *"), {
+    fireEvent.change(screen.getByLabelText("Start date (Required)"), {
       target: { value: "2099-12-01" },
     });
+    fireEvent.change(screen.getByLabelText("Start time (Required)"), {
+      target: { value: "18:00" },
+    });
+    fireEvent.click(screen.getByLabelText("Free entry"));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
+    fireEvent.click(screen.getByLabelText("Phone Call"));
+    fireEvent.click(screen.getByLabelText("Contact Form"));
     fireEvent.change(screen.getByLabelText("Province"), {
       target: { value: "Gauteng" },
     });
@@ -955,25 +958,30 @@ describe("CreateTourismPage type switch behavior", () => {
       new TypeError("Failed to fetch")
     );
 
+    searchParamGetMock.mockImplementation((key: string) => (key === "type" ? "event" : null));
     render(<CreateTourismPage />);
-
-    fireEvent.click(screen.getByRole("button", { name: /Event/ }));
-    fireEvent.change(screen.getByLabelText("Event Title *"), {
+    fireEvent.change(screen.getByLabelText("Event name (Required)"), {
       target: { value: "Soweto Food Festival" },
     });
-    fireEvent.change(screen.getByLabelText("Description *"), {
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
       target: { value: "A detailed event description with enough content to pass validation." },
     });
-    fireEvent.change(screen.getByLabelText("Event Type"), {
+    fireEvent.change(screen.getByLabelText("Event category (Required)"), {
       target: { value: "festival_concert" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.change(screen.getByLabelText("Start Date *"), {
+    fireEvent.change(screen.getByLabelText("Start date (Required)"), {
       target: { value: "2099-12-01" },
     });
+    fireEvent.change(screen.getByLabelText("Start time (Required)"), {
+      target: { value: "18:00" },
+    });
+    fireEvent.click(screen.getByLabelText("Free entry"));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
+    fireEvent.click(screen.getByLabelText("Phone Call"));
+    fireEvent.click(screen.getByLabelText("Contact Form"));
     fireEvent.change(screen.getByLabelText("Province"), {
       target: { value: "Gauteng" },
     });
@@ -1011,25 +1019,30 @@ describe("CreateTourismPage type switch behavior", () => {
       )
     );
 
+    searchParamGetMock.mockImplementation((key: string) => (key === "type" ? "event" : null));
     render(<CreateTourismPage />);
-
-    fireEvent.click(screen.getByRole("button", { name: /Event/ }));
-    fireEvent.change(screen.getByLabelText("Event Title *"), {
+    fireEvent.change(screen.getByLabelText("Event name (Required)"), {
       target: { value: "Soweto Food Festival" },
     });
-    fireEvent.change(screen.getByLabelText("Description *"), {
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
       target: { value: "A detailed event description with enough content to pass validation." },
     });
-    fireEvent.change(screen.getByLabelText("Event Type"), {
+    fireEvent.change(screen.getByLabelText("Event category (Required)"), {
       target: { value: "festival_concert" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.change(screen.getByLabelText("Start Date *"), {
+    fireEvent.change(screen.getByLabelText("Start date (Required)"), {
       target: { value: "2099-12-01" },
     });
+    fireEvent.change(screen.getByLabelText("Start time (Required)"), {
+      target: { value: "18:00" },
+    });
+    fireEvent.click(screen.getByLabelText("Free entry"));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
+    fireEvent.click(screen.getByLabelText("Phone Call"));
+    fireEvent.click(screen.getByLabelText("Contact Form"));
     fireEvent.change(screen.getByLabelText("Province"), {
       target: { value: "Gauteng" },
     });

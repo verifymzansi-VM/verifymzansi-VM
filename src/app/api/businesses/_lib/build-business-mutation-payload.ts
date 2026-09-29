@@ -1,3 +1,8 @@
+import {
+  customerAccessSchema,
+  cleanCustomerAccess,
+  primaryBusinessType,
+} from "@/lib/forms/customer-access";
 import type { z } from "zod";
 
 import { type businessSchema } from "@/lib/validations/business-unified";
@@ -30,10 +35,15 @@ export function buildBusinessMutationPayload(
     businessProfile.load_shedding_ready = data.load_shedding_ready;
   if (data.number_of_employees) businessProfile.number_of_employees = data.number_of_employees;
 
-  const categoryDetails = data.category_details ?? {};
+  const categoryDetails = { ...(data.category_details ?? {}) };
+  if (data.contact_methods) categoryDetails.contact_methods = data.contact_methods;
+  const parsedAccess = customerAccessSchema.safeParse(categoryDetails.customer_access);
+  const access = parsedAccess.success ? cleanCustomerAccess(parsedAccess.data) : undefined;
+  if (access) categoryDetails.customer_access = access;
+  const hideAddress = access ? !access.publishAddress : false;
 
   return {
-    business_type: data.business_type,
+    business_type: access ? primaryBusinessType(access) : data.business_type,
     business_name: data.business_name,
     slug: data.slug,
     description: data.description,
@@ -51,20 +61,51 @@ export function buildBusinessMutationPayload(
     location_province: data.location_province,
     location_city: data.location_city,
     location_town: data.location_town || null,
-    location_address: data.location_address || null,
-    store_number: data.store_number || null,
-    map_directions: data.map_directions || null,
-    phone: data.phone || null,
-    whatsapp: data.whatsapp || null,
-    email: data.email || null,
-    website: data.website || null,
+    location_address: hideAddress ? null : data.location_address || null,
+    store_number:
+      hideAddress || (access && !access.methods.includes("visit"))
+        ? null
+        : data.store_number || null,
+    map_directions: hideAddress ? null : data.map_directions || null,
+    phone:
+      data.contact_methods && !data.contact_methods.includes("call") ? null : data.phone || null,
+    whatsapp:
+      data.contact_methods && !data.contact_methods.includes("whatsapp")
+        ? null
+        : data.whatsapp || null,
+    email:
+      data.contact_methods && !data.contact_methods.includes("email") ? null : data.email || null,
+    website:
+      data.contact_methods && !data.contact_methods.includes("website")
+        ? null
+        : data.website || null,
     social_links: data.social_links || null,
     services_offered: data.services_offered,
-    service_areas: data.service_areas || null,
-    business_details: data.business_details || null,
+    service_areas: access
+      ? access.methods.includes("travel")
+        ? {
+            areas: access
+              .serviceAreas!.split(",")
+              .map((a) => a.trim())
+              .filter(Boolean),
+          }
+        : null
+      : data.service_areas || null,
+    // Legacy details survive only while they still describe the derived business type.
+    business_details: access
+      ? data.business_details && primaryBusinessType(access) === data.business_type
+        ? data.business_details
+        : null
+      : data.business_details || null,
     operating_hours: data.operating_hours,
     payment_methods_accepted: data.payment_methods_accepted,
-    delivery_options: data.delivery_options,
+    delivery_options: access
+      ? access.methods.includes("delivery")
+        ? access.nationwide
+          ? ["delivery", "nationwide"]
+          : ["delivery"]
+        : []
+      : data.delivery_options,
     layout_template: data.layout_template || null,
     media_width:
       data.media_width !== undefined ? data.media_width : (mediaFallbacks?.media_width ?? null),

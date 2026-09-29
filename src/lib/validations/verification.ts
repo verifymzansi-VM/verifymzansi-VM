@@ -41,32 +41,11 @@ export const verificationSelfieSchema = z.object({
   selfieUrl: z.string().url("Upload your selfie"),
 });
 
-/** Zod schema for location verification (province, city, optional GPS). */
+/** Province/city payload shared by the self-service location endpoint. */
 export const verificationLocationSchema = z.object({
-  province: z.string().min(1, "Province is required").max(50),
-  city: z.string().min(1, "City is required").max(80),
-  latitude: z.number().min(-35).max(-22).optional(),
-  longitude: z.number().min(16).max(33).optional(),
-});
-
-/**
- * Extended schema used by POST /api/verification/location.
- * Accepts GPS coordinates and accuracy in addition to province/city.
- */
-const _verificationLocationSubmitSchema = z.object({
   province: z.string().trim().min(1, "Province is required").max(50),
   city: z.string().trim().min(1, "City is required").max(80),
-  latitude: z.number().min(-35).max(-22).optional(),
-  longitude: z.number().min(16).max(33).optional(),
-  locationMethod: z.enum(["gps", "proof_of_address"]).default("proof_of_address"),
-  gpsAccuracyMeters: z.number().positive().finite().optional(),
 });
-
-const _proofOfAddressLineSchema = z
-  .string()
-  .trim()
-  .min(5, "Enter the residential address shown on your proof of residence")
-  .max(240, "Address line cannot exceed 240 characters");
 
 // ── V2M Buyer verification ──────────────────────────────────
 
@@ -96,7 +75,7 @@ export const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 /** Zod schema for the KYC file-upload form payload. */
 export const fileUploadSchema = z
   .object({
-    docType: z.enum(["id_document", "selfie", "proof_of_address"], {
+    docType: z.enum(["id_document", "selfie"], {
       error: "Document type is required",
     }),
     idNumber: z.string().max(13).optional(),
@@ -216,10 +195,6 @@ type _VerificationIdDocInput = z.infer<typeof verificationIdDocSchema>;
 type _VerificationSelfieInput = z.infer<typeof verificationSelfieSchema>;
 /** Inferred input type for {@link verificationLocationSchema}. */
 type _VerificationLocationInput = z.infer<typeof verificationLocationSchema>;
-/** Inferred input type for {@link verificationLocationSubmitSchema}. */
-type _VerificationLocationSubmitInput = z.infer<typeof _verificationLocationSubmitSchema>;
-/** Inferred input type for {@link proofOfAddressLineSchema}. */
-type _ProofOfAddressLineInput = z.infer<typeof _proofOfAddressLineSchema>;
 /** Inferred input type for {@link buyerVerifySchema}. */
 type _BuyerVerifyInput = z.infer<typeof buyerVerifySchema>;
 /** Inferred input type for {@link fileUploadSchema}. */

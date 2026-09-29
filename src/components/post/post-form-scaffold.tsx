@@ -13,6 +13,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Breadcrumbs, type BreadcrumbItem } from "@/components/layout/breadcrumbs";
 import { cn } from "@/lib/utils";
@@ -99,6 +100,8 @@ interface PostFormScaffoldProps {
   /** Per-step boolean: true if that step currently has validation errors. */
   stepHasErrors?: boolean[];
   onRetry?: () => void;
+  onStepChange?: (step: number) => void;
+  onFieldError?: (key: string) => void;
   children: React.ReactNode;
   footer?: React.ReactNode;
   /** Optional completeness percentage (0-100). Shows a progress bar when provided. */
@@ -150,6 +153,8 @@ export function PostFormScaffold({
   errorStepLabel,
   stepHasErrors,
   onRetry,
+  onStepChange,
+  onFieldError,
   children,
   footer,
   completeness,
@@ -178,11 +183,35 @@ export function PostFormScaffold({
   return (
     <div
       id="post-form-top"
-      className={cn("mx-auto space-y-5", showAside ? "max-w-6xl" : "max-w-3xl")}
+      className={cn(
+        "mx-auto space-y-5 scroll-mt-32 [&_input]:scroll-mt-40 [&_select]:scroll-mt-40 [&_textarea]:scroll-mt-40",
+        showAside ? "max-w-6xl" : "max-w-3xl"
+      )}
     >
       <header>
         <div className="relative space-y-4">
           <Breadcrumbs items={breadcrumbs} />
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span>Posting in {badgeLabel}</span>
+            <Link
+              href="/post/create"
+              onClick={(event) => {
+                if (
+                  !window.confirm(
+                    "Change posting route? Your saved draft stays on this device, but unsaved uploads will need to be selected again."
+                  )
+                )
+                  event.preventDefault();
+              }}
+              className="inline-flex min-h-11 items-center underline"
+            >
+              Change
+            </Link>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Complete fields marked Required. You can leave Optional fields blank. Use the
+            question-mark help for examples.
+          </p>
           <div className="flex items-start gap-4">
             <span
               aria-hidden="true"
@@ -219,7 +248,16 @@ export function PostFormScaffold({
                     const label = formatFieldSummaryLabel(key, fieldLabels);
                     return (
                       <li key={i}>
-                        <strong>{label}:</strong> {msg}
+                        <button
+                          type="button"
+                          className="text-left underline underline-offset-2 focus-visible:outline focus-visible:outline-2"
+                          onClick={() => {
+                            if (onFieldError) onFieldError(key);
+                            else document.getElementById(key)?.focus();
+                          }}
+                        >
+                          <strong>{label}:</strong> {msg}
+                        </button>
                       </li>
                     );
                   })}
@@ -235,6 +273,20 @@ export function PostFormScaffold({
         </Alert>
       )}
 
+      {safeStep === steps.length - 1 && onStepChange && (
+        <nav aria-label="Review and edit your answers" className="flex flex-wrap gap-2">
+          {steps.slice(0, -1).map((item, index) => (
+            <button
+              key={item.label}
+              type="button"
+              className="min-h-11 rounded-lg border px-3 text-sm underline"
+              onClick={() => onStepChange(index)}
+            >
+              Edit {item.label.toLowerCase()}
+            </button>
+          ))}
+        </nav>
+      )}
       <div
         className={cn(
           showAside && "grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)]"

@@ -103,12 +103,12 @@ const REJECTIONS: RejectionEntry[] = [
   },
   {
     code: "location_mismatch",
-    title: "Location mismatch",
-    description: "GPS coordinates don't match your selected province.",
+    title: "Location detection did not match",
+    description: "Automatic detection can be approximate or unavailable.",
     tips: [
-      "Enable location services before verifying.",
-      "Make sure you're in the province you selected.",
-      "If you moved, update your province selection.",
+      "Select your province and city manually.",
+      "Check the details, then choose Save location & finish.",
+      "Your location is automatically approved. No proof of address is required.",
     ],
   },
   {

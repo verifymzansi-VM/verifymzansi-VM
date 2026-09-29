@@ -144,19 +144,23 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
     ? (listingViewCounts.data.get(listing.id) ?? 0)
     : (listing.view_count ?? 0);
 
+  // A job with no disclosed salary must not be published as a free (R0) offer.
+  const hidesPrice = listing.category === "jobs_services" && !listing.price_cents;
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
     name: listing.title,
     description: listing.description?.slice(0, 300),
     ...(listing.photos?.[0] && { image: listing.photos[0] }),
-    offers: {
-      "@type": "Offer",
-      priceCurrency: "ZAR",
-      price: listing.price_cents ? (listing.price_cents / 100).toFixed(2) : "0",
-      availability: "https://schema.org/InStock",
-      seller: safeSeller ? { "@type": "Person", name: safeSeller.display_name } : undefined,
-    },
+    ...(!hidesPrice && {
+      offers: {
+        "@type": "Offer",
+        priceCurrency: "ZAR",
+        price: listing.price_cents ? (listing.price_cents / 100).toFixed(2) : "0",
+        availability: "https://schema.org/InStock",
+        seller: safeSeller ? { "@type": "Person", name: safeSeller.display_name } : undefined,
+      },
+    }),
   };
 
   return (

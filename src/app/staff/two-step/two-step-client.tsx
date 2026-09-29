@@ -137,7 +137,11 @@ export function StaffTwoStepClient({ next }: { next: string }) {
           <p className="text-sm">Scan this code with your authenticator app.</p>
           {step.qrUrl && (
             // eslint-disable-next-line @next/next/no-img-element -- local blob URL of a generated QR code
-            <img src={step.qrUrl} alt="QR code for your authenticator app" className="mx-auto h-44 w-44 bg-white p-2" />
+            <img
+              src={step.qrUrl}
+              alt="QR code for your authenticator app"
+              className="mx-auto h-44 w-44 bg-white p-2"
+            />
           )}
           <p className="text-xs text-muted-foreground">
             Can&apos;t scan it? Enter this key instead:{" "}

@@ -1,3 +1,4 @@
+import { eventTimeToIso, eventTimeForInput } from "@/lib/forms/event-time";
 import { z } from "zod";
 import {
   platformMediaUrlArraySchema,
@@ -10,6 +11,14 @@ import {
 import type { BusinessCategory } from "@/types/enums";
 
 const BUSINESS_CATEGORY_VALUES = [
+  "health_medical",
+  "beauty_personal",
+  "fitness_wellness",
+  "cleaning_garden",
+  "automotive_services",
+  "transport_storage",
+  "pets_animals",
+  "community_personal",
   "fashion_accessories",
   "electronics_tech",
   "groceries_essentials",
@@ -45,6 +54,7 @@ export const promotionSchema = z
     category: z.string().trim().min(1).max(100).optional(),
     category_key: z.enum(BUSINESS_CATEGORY_VALUES).optional(),
     price_zar: priceSchema.optional(),
+    form_version: z.literal(2).optional(),
     negotiable: z.boolean().default(false),
     ...postLocationFields,
     contact_methods: z
@@ -108,6 +118,33 @@ export const promotionSchema = z
       })
       .optional(),
   })
+  .superRefine((data, ctx) => {
+    if (data.form_version !== 2) return;
+    if (data.price_zar === undefined)
+      ctx.addIssue({
+        code: "custom",
+        path: ["price_zar"],
+        message: "Choose free entry or enter a starting entry price.",
+      });
+    if (!data.start_date)
+      ctx.addIssue({
+        code: "custom",
+        path: ["start_date"],
+        message: "Enter the event start date and time.",
+      });
+    if (!data.event_details?.event_type)
+      ctx.addIssue({
+        code: "custom",
+        path: ["event_details", "event_type"],
+        message: "Choose an event category.",
+      });
+    if (data.start_date && data.end_date && new Date(data.end_date) <= new Date(data.start_date))
+      ctx.addIssue({
+        code: "custom",
+        path: ["end_date"],
+        message: "The end must be after the start.",
+      });
+  })
   .refine((data) => data.images.length > 0 || data.videos.length > 0, {
     message: "Add at least 1 photo or video",
     path: ["images"],
@@ -120,7 +157,23 @@ export const promotionSchema = z
       return true;
     },
     { message: "End date must be on or after start date", path: ["end_date"] }
-  );
+  )
+  .transform((data) => {
+    if (data.form_version !== 2) return data;
+    const endDate =
+      data.end_date ??
+      (data.start_date
+        ? eventTimeToIso(eventTimeForInput(data.start_date).slice(0, 10), true)
+        : undefined);
+    const details = data.event_details ? { ...data.event_details } : undefined;
+    if (data.price_zar === 0 && details) {
+      delete details.ticket_tiers;
+      delete details.tickets_url;
+      delete details.early_bird_deadline;
+      delete details.group_discount_available;
+    }
+    return { ...data, end_date: endDate, negotiable: false, event_details: details };
+  });
 
 /** Inferred input type for {@link promotionSchema}. */
 type _PromotionInput = z.infer<typeof promotionSchema>;

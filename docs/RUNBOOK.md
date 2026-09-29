@@ -331,13 +331,17 @@ To register or update the VerifyMzansi webhook endpoint with Ozow:
 - Admin Panel: `/admin/feature-flags`
 - Database: `SELECT * FROM feature_flags ORDER BY key;`
 
+Province/city confirmation uses `kyc_v2_flow`. The old GPS endpoint has been
+removed. New proof-of-address uploads are retired (HTTP 410); users select
+province and city and receive automatic location approval.
+
 ### Toggling a Flag (Legacy)
 
 ```bash
 curl -X POST https://verifymzansi.pages.dev/api/admin/feature-flags/toggle \
   -H "Authorization: Bearer <admin-token>" \
   -H "Content-Type: application/json" \
-  -d '{"key": "kyc_gps_location", "enabled": true}'
+  -d '{"key": "kyc_v2_flow", "enabled": true}'
 ```
 
 ### Canary Rollout

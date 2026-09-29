@@ -13,22 +13,64 @@
     }
   },
   "servers": [
-    { "url": "https://verifymzansi.com", "description": "Production" },
-    { "url": "http://localhost:3000", "description": "Local development" }
+    {
+      "url": "https://verifymzansi.com",
+      "description": "Production"
+    },
+    {
+      "url": "http://localhost:3000",
+      "description": "Local development"
+    }
   ],
   "tags": [
-    { "name": "Health", "description": "Service health checks" },
-    { "name": "Auth", "description": "Authentication & registration" },
-    { "name": "OTP", "description": "One-time password verification" },
-    { "name": "Verification", "description": "KYC identity verification" },
-    { "name": "Listings", "description": "Marketplace listing operations" },
-    { "name": "Media", "description": "File upload & management" },
-    { "name": "Billing", "description": "Payments & checkout" },
-    { "name": "Contact", "description": "Contact form & reports" },
-    { "name": "DSAR", "description": "Data Subject Access Requests (POPIA)" },
-    { "name": "Buyer", "description": "Buyer verification" },
-    { "name": "Admin", "description": "Admin panel operations" },
-    { "name": "Webhooks", "description": "Third-party webhook receivers" }
+    {
+      "name": "Health",
+      "description": "Service health checks"
+    },
+    {
+      "name": "Auth",
+      "description": "Authentication & registration"
+    },
+    {
+      "name": "OTP",
+      "description": "One-time password verification"
+    },
+    {
+      "name": "Verification",
+      "description": "KYC identity verification"
+    },
+    {
+      "name": "Listings",
+      "description": "Marketplace listing operations"
+    },
+    {
+      "name": "Media",
+      "description": "File upload & management"
+    },
+    {
+      "name": "Billing",
+      "description": "Payments & checkout"
+    },
+    {
+      "name": "Contact",
+      "description": "Contact form & reports"
+    },
+    {
+      "name": "DSAR",
+      "description": "Data Subject Access Requests (POPIA)"
+    },
+    {
+      "name": "Buyer",
+      "description": "Buyer verification"
+    },
+    {
+      "name": "Admin",
+      "description": "Admin panel operations"
+    },
+    {
+      "name": "Webhooks",
+      "description": "Third-party webhook receivers"
+    }
   ],
   "paths": {
     "/api/health": {
@@ -44,7 +86,10 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "status": { "type": "string", "example": "ok" }
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    }
                   }
                 }
               }
@@ -69,9 +114,15 @@
           }
         },
         "responses": {
-          "200": { "description": "Registration successful" },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "429": { "$ref": "#/components/responses/TooManyRequests" }
+          "200": {
+            "description": "Registration successful"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
         }
       }
     },
@@ -91,8 +142,12 @@
           }
         },
         "responses": {
-          "200": { "description": "Login successful" },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "200": {
+            "description": "Login successful"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
         }
       }
     },
@@ -101,9 +156,15 @@
         "tags": ["Auth"],
         "summary": "Sign out the current session",
         "operationId": "signOut",
-        "security": [{ "cookieAuth": [] }],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
         "responses": {
-          "200": { "description": "Signed out successfully" }
+          "200": {
+            "description": "Signed out successfully"
+          }
         }
       }
     },
@@ -120,14 +181,19 @@
                 "type": "object",
                 "required": ["email"],
                 "properties": {
-                  "email": { "type": "string", "format": "email" }
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Reset email sent (if account exists)" }
+          "200": {
+            "description": "Reset email sent (if account exists)"
+          }
         }
       }
     },
@@ -136,7 +202,11 @@
         "tags": ["OTP"],
         "summary": "Send an OTP via SMS",
         "operationId": "sendOtp",
-        "security": [{ "cookieAuth": [] }],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -145,15 +215,22 @@
                 "type": "object",
                 "required": ["phone"],
                 "properties": {
-                  "phone": { "type": "string", "pattern": "^\\+27[0-9]{9}$" }
+                  "phone": {
+                    "type": "string",
+                    "pattern": "^\\+27[0-9]{9}$"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "OTP sent" },
-          "429": { "$ref": "#/components/responses/TooManyRequests" }
+          "200": {
+            "description": "OTP sent"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
         }
       }
     },
@@ -162,7 +239,11 @@
         "tags": ["OTP"],
         "summary": "Verify an OTP code",
         "operationId": "verifyOtp",
-        "security": [{ "cookieAuth": [] }],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -171,16 +252,26 @@
                 "type": "object",
                 "required": ["phone", "code"],
                 "properties": {
-                  "phone": { "type": "string" },
-                  "code": { "type": "string", "minLength": 6, "maxLength": 6 }
+                  "phone": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string",
+                    "minLength": 6,
+                    "maxLength": 6
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "OTP verified" },
-          "400": { "$ref": "#/components/responses/BadRequest" }
+          "200": {
+            "description": "OTP verified"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
         }
       }
     },
@@ -189,7 +280,11 @@
         "tags": ["Verification"],
         "summary": "Start a KYC verification session",
         "operationId": "startVerificationSession",
-        "security": [{ "cookieAuth": [] }],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Session created",
@@ -198,13 +293,18 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "sessionId": { "type": "string", "format": "uuid" }
+                    "sessionId": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
                   }
                 }
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
         }
       }
     },
@@ -213,26 +313,45 @@
         "tags": ["Verification"],
         "summary": "Upload a KYC document or selfie",
         "operationId": "uploadVerificationDoc",
-        "security": [{ "cookieAuth": [] }],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "multipart/form-data": {
               "schema": {
                 "type": "object",
-                "required": ["file", "type"],
+                "required": ["file", "docType"],
                 "properties": {
-                  "file": { "type": "string", "format": "binary" },
-                  "type": { "type": "string", "enum": ["id_document", "selfie"] }
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "docType": {
+                    "type": "string",
+                    "enum": ["id_document", "selfie"]
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Upload successful" },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "200": {
+            "description": "Upload successful"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "410": {
+            "description": "Proof-of-address upload retired; select province and city instead"
+          }
         }
       }
     },
@@ -241,70 +360,131 @@
         "tags": ["Verification"],
         "summary": "Get current KYC verification status",
         "operationId": "getVerificationStatus",
-        "security": [{ "cookieAuth": [] }],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Verification status",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/VerificationStatus" }
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationStatus"
+                }
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
         }
       }
     },
-    "/api/verification/location/gps": {
+    "/api/verification/location/detect": {
       "post": {
         "tags": ["Verification"],
-        "summary": "Submit GPS coordinates for location verification",
-        "operationId": "submitGps",
-        "security": [{ "cookieAuth": [] }],
+        "summary": "Suggest province and city from the current network; does not save or approve",
+        "operationId": "detectLocation",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Approximate location, or manual selection required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["detected", "province", "city"],
+                  "properties": {
+                    "detected": {
+                      "type": "boolean"
+                    },
+                    "province": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "city": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "CSRF validation or email confirmation required"
+          },
+          "404": {
+            "description": "Location flow disabled"
+          },
+          "429": {
+            "description": "Detection cap reached; manual submission remains available"
+          }
+        }
+      }
+    },
+    "/api/verification/location/manual": {
+      "post": {
+        "tags": ["Verification"],
+        "summary": "Save a valid province/city pair and automatically approve the location step",
+        "operationId": "submitLocation",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["latitude", "longitude"],
+                "required": ["province", "city"],
                 "properties": {
-                  "latitude": { "type": "number" },
-                  "longitude": { "type": "number" }
+                  "province": {
+                    "type": "string",
+                    "maxLength": 50
+                  },
+                  "city": {
+                    "type": "string",
+                    "maxLength": 80
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Location recorded" },
-          "400": { "$ref": "#/components/responses/BadRequest" }
-        }
-      }
-    },
-    "/api/verification/location/proof": {
-      "post": {
-        "tags": ["Verification"],
-        "summary": "Upload proof of address",
-        "operationId": "uploadAddressProof",
-        "security": [{ "cookieAuth": [] }],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "type": "object",
-                "required": ["file"],
-                "properties": {
-                  "file": { "type": "string", "format": "binary" }
-                }
-              }
-            }
+          "200": {
+            "description": "Location approved automatically; identity review is separate"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "CSRF validation or email confirmation required"
+          },
+          "409": {
+            "description": "An approved location cannot be changed here"
+          },
+          "429": {
+            "description": "Too many requests"
+          },
+          "503": {
+            "description": "Rate limit protection unavailable"
           }
-        },
-        "responses": {
-          "200": { "description": "Proof uploaded" },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
         }
       }
     },
@@ -313,7 +493,11 @@
         "tags": ["Media"],
         "summary": "Upload media (images/videos) for listings",
         "operationId": "uploadMedia",
-        "security": [{ "cookieAuth": [] }],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -322,7 +506,10 @@
                 "type": "object",
                 "required": ["file"],
                 "properties": {
-                  "file": { "type": "string", "format": "binary" }
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
                 }
               }
             }
@@ -336,15 +523,24 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "url": { "type": "string", "format": "uri" },
-                    "key": { "type": "string" }
+                    "url": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "key": {
+                      "type": "string"
+                    }
                   }
                 }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
         }
       }
     },
@@ -353,13 +549,29 @@
         "tags": ["Listings"],
         "summary": "Boost a listing for increased visibility",
         "operationId": "boostListing",
-        "security": [{ "cookieAuth": [] }],
-        "parameters": [{ "$ref": "#/components/parameters/ResourceId" }],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ResourceId"
+          }
+        ],
         "responses": {
-          "200": { "description": "Listing boosted" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "200": {
+            "description": "Listing boosted"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     },
@@ -368,7 +580,11 @@
         "tags": ["Billing"],
         "summary": "Create a hosted checkout session",
         "operationId": "createCheckout",
-        "security": [{ "cookieAuth": [] }],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -377,7 +593,9 @@
                 "type": "object",
                 "required": ["planId"],
                 "properties": {
-                  "planId": { "type": "string" }
+                  "planId": {
+                    "type": "string"
+                  }
                 }
               }
             }
@@ -391,15 +609,24 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "checkoutUrl": { "type": "string", "format": "uri" },
-                    "paymentId": { "type": "string" }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "checkoutUrl": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "paymentId": {
+                      "type": "string"
+                    }
                   }
                 }
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
         }
       }
     },
@@ -412,13 +639,22 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ContactRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/ContactRequest"
+              }
             }
           }
         },
         "responses": {
-          "200": { "description": "Message sent" },
-          "400": { "$ref": "#/components/responses/BadRequest" }
+          "200": {
+            "description": "Message sent"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "description": "The owner has not chosen inbox enquiries for this post or business profile (its contact methods exclude the contact form)"
+          }
         }
       }
     },
@@ -431,13 +667,19 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ReportRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/ReportRequest"
+              }
             }
           }
         },
         "responses": {
-          "200": { "description": "Report submitted" },
-          "400": { "$ref": "#/components/responses/BadRequest" }
+          "200": {
+            "description": "Report submitted"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
         }
       }
     },
@@ -446,7 +688,11 @@
         "tags": ["Buyer"],
         "summary": "Verify a buyer before a transaction",
         "operationId": "verifyBuyer",
-        "security": [{ "cookieAuth": [] }],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -455,15 +701,22 @@
                 "type": "object",
                 "required": ["buyerId"],
                 "properties": {
-                  "buyerId": { "type": "string", "format": "uuid" }
+                  "buyerId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Buyer verification result" },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "200": {
+            "description": "Buyer verification result"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
         }
       }
     },
@@ -476,13 +729,19 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/DsarRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/DsarRequest"
+              }
             }
           }
         },
         "responses": {
-          "200": { "description": "DSAR submitted" },
-          "400": { "$ref": "#/components/responses/BadRequest" }
+          "200": {
+            "description": "DSAR submitted"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
         }
       }
     },
@@ -491,7 +750,11 @@
         "tags": ["Admin"],
         "summary": "Approve or reject a KYC verification",
         "operationId": "decideVerification",
-        "security": [{ "cookieAuth": [] }],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -500,18 +763,32 @@
                 "type": "object",
                 "required": ["verificationId", "decision"],
                 "properties": {
-                  "verificationId": { "type": "string", "format": "uuid" },
-                  "decision": { "type": "string", "enum": ["approve", "reject"] },
-                  "reason": { "type": "string" }
+                  "verificationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "decision": {
+                    "type": "string",
+                    "enum": ["approve", "reject"]
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Decision recorded" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" }
+          "200": {
+            "description": "Decision recorded"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
         }
       }
     },
@@ -520,19 +797,32 @@
         "tags": ["Admin"],
         "summary": "Retrieve KYC evidence (images) for review",
         "operationId": "getEvidence",
-        "security": [{ "cookieAuth": [] }],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
         "parameters": [
           {
             "name": "verificationId",
             "in": "query",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
-          "200": { "description": "Evidence image (proxied, with strict CSP)" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" }
+          "200": {
+            "description": "Evidence image (proxied, with strict CSP)"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
         }
       }
     },
@@ -541,7 +831,11 @@
         "tags": ["Admin"],
         "summary": "Moderate flagged content",
         "operationId": "decideContent",
-        "security": [{ "cookieAuth": [] }],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -550,17 +844,29 @@
                 "type": "object",
                 "required": ["contentId", "action"],
                 "properties": {
-                  "contentId": { "type": "string", "format": "uuid" },
-                  "action": { "type": "string", "enum": ["approve", "remove", "warn"] },
-                  "reason": { "type": "string" }
+                  "contentId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": ["approve", "remove", "warn"]
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Action taken" },
-          "403": { "$ref": "#/components/responses/Forbidden" }
+          "200": {
+            "description": "Action taken"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
         }
       }
     },
@@ -569,7 +875,11 @@
         "tags": ["Admin"],
         "summary": "Toggle a feature flag",
         "operationId": "toggleFeatureFlag",
-        "security": [{ "cookieAuth": [] }],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -578,16 +888,24 @@
                 "type": "object",
                 "required": ["flagName", "enabled"],
                 "properties": {
-                  "flagName": { "type": "string" },
-                  "enabled": { "type": "boolean" }
+                  "flagName": {
+                    "type": "string"
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Flag updated" },
-          "403": { "$ref": "#/components/responses/Forbidden" }
+          "200": {
+            "description": "Flag updated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
         }
       }
     },
@@ -603,16 +921,24 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "payment_status": { "type": "string" },
-                  "pf_payment_id": { "type": "string" },
-                  "signature": { "type": "string" }
+                  "payment_status": {
+                    "type": "string"
+                  },
+                  "pf_payment_id": {
+                    "type": "string"
+                  },
+                  "signature": {
+                    "type": "string"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Webhook processed" }
+          "200": {
+            "description": "Webhook processed"
+          }
         }
       }
     }
@@ -631,7 +957,10 @@
         "name": "id",
         "in": "path",
         "required": true,
-        "schema": { "type": "string", "format": "uuid" },
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
         "description": "Resource UUID"
       }
     },
@@ -640,51 +969,102 @@
         "type": "object",
         "required": ["email", "password", "fullName"],
         "properties": {
-          "email": { "type": "string", "format": "email" },
-          "password": { "type": "string", "minLength": 8 },
-          "fullName": { "type": "string" },
-          "turnstileToken": { "type": "string" }
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8
+          },
+          "fullName": {
+            "type": "string"
+          },
+          "turnstileToken": {
+            "type": "string"
+          }
         }
       },
       "LoginRequest": {
         "type": "object",
         "required": ["email", "password"],
         "properties": {
-          "email": { "type": "string", "format": "email" },
-          "password": { "type": "string" }
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "password": {
+            "type": "string"
+          }
         }
       },
       "ContactRequest": {
         "type": "object",
         "required": ["name", "email", "subject", "message"],
         "properties": {
-          "name": { "type": "string" },
-          "email": { "type": "string", "format": "email" },
-          "subject": { "type": "string" },
-          "message": { "type": "string" },
-          "turnstileToken": { "type": "string" }
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "turnstileToken": {
+            "type": "string"
+          }
         }
       },
       "ReportRequest": {
         "type": "object",
         "required": ["reason", "targetType", "targetId"],
         "properties": {
-          "reason": { "type": "string" },
-          "description": { "type": "string" },
-          "targetType": { "type": "string", "enum": ["listing", "user", "storefront"] },
-          "targetId": { "type": "string", "format": "uuid" },
-          "turnstileToken": { "type": "string" }
+          "reason": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "targetType": {
+            "type": "string",
+            "enum": ["listing", "user", "storefront"]
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "turnstileToken": {
+            "type": "string"
+          }
         }
       },
       "DsarRequest": {
         "type": "object",
         "required": ["requestType", "email"],
         "properties": {
-          "requestType": { "type": "string", "enum": ["access", "delete", "rectify"] },
-          "email": { "type": "string", "format": "email" },
-          "idNumber": { "type": "string", "description": "SA ID number (masked on storage)" },
-          "details": { "type": "string" },
-          "turnstileToken": { "type": "string" }
+          "requestType": {
+            "type": "string",
+            "enum": ["access", "delete", "rectify"]
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "idNumber": {
+            "type": "string",
+            "description": "SA ID number (masked on storage)"
+          },
+          "details": {
+            "type": "string"
+          },
+          "turnstileToken": {
+            "type": "string"
+          }
         }
       },
       "VerificationStatus": {
@@ -694,16 +1074,26 @@
             "type": "string",
             "enum": ["none", "pending", "approved", "rejected"]
           },
-          "submittedAt": { "type": "string", "format": "date-time" },
-          "decidedAt": { "type": "string", "format": "date-time" },
-          "rejectionReason": { "type": "string" }
+          "submittedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "decidedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "rejectionReason": {
+            "type": "string"
+          }
         }
       },
       "Error": {
         "type": "object",
         "required": ["error"],
         "properties": {
-          "error": { "type": "string" }
+          "error": {
+            "type": "string"
+          }
         }
       }
     },
@@ -712,7 +1102,9 @@
         "description": "Invalid request parameters",
         "content": {
           "application/json": {
-            "schema": { "$ref": "#/components/schemas/Error" }
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
           }
         }
       },
@@ -720,7 +1112,9 @@
         "description": "Authentication required",
         "content": {
           "application/json": {
-            "schema": { "$ref": "#/components/schemas/Error" }
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
           }
         }
       },
@@ -728,7 +1122,9 @@
         "description": "Insufficient permissions",
         "content": {
           "application/json": {
-            "schema": { "$ref": "#/components/schemas/Error" }
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
           }
         }
       },
@@ -736,7 +1132,9 @@
         "description": "Resource not found",
         "content": {
           "application/json": {
-            "schema": { "$ref": "#/components/schemas/Error" }
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
           }
         }
       },
@@ -744,7 +1142,9 @@
         "description": "Rate limit exceeded",
         "content": {
           "application/json": {
-            "schema": { "$ref": "#/components/schemas/Error" }
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
           }
         }
       }

@@ -55,8 +55,10 @@ function FreeEventOption({ onChoose }: { onChoose: () => void }) {
       className="flex flex-col gap-3 rounded-2xl border border-sunset/30 bg-sunset-50 p-4 sm:flex-row sm:items-center sm:justify-between dark:bg-sunset/10"
     >
       <div>
-        <p className="font-semibold">Post an event — Free</p>
-        <p className="text-sm text-muted-foreground">No plan or trial needed.</p>
+        <p className="font-semibold">Post an event — Free to post</p>
+        <p className="text-sm text-muted-foreground">
+          No plan or trial needed. You can advertise free or paid entry.
+        </p>
       </div>
       <Button
         type="button"
@@ -64,7 +66,7 @@ function FreeEventOption({ onChoose }: { onChoose: () => void }) {
         className="h-11 shrink-0 rounded-full"
         onClick={onChoose}
       >
-        Create a free event
+        Create an event
       </Button>
     </div>
   );

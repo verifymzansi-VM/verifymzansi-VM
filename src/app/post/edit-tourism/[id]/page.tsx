@@ -1,4 +1,7 @@
 "use client";
+import { EventDateFields } from "@/components/post/event-date-fields";
+import { eventTimeToIso, eventTimeForInput } from "@/lib/forms/event-time";
+import { PostSelect } from "@/components/post/post-select";
 
 import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
 
@@ -8,7 +11,7 @@ import Link from "next/link";
 import { Loader2, X, Building2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { PostLabel as Label } from "@/components/post/post-label";
 import { Textarea } from "@/components/ui/textarea";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
@@ -143,15 +146,16 @@ export default function EditPromotionPage() {
         setDescription(p.description || "");
         setCategory(p.category || "");
         setCategoryKey((p.category_key as BusinessCategory | null) || "");
-        setPriceZar(p.price_cents ? (p.price_cents / 100).toString() : "");
+        // A stored 0 is free entry; a missing price stays blank so the owner chooses.
+        setPriceZar(p.price_cents != null ? (p.price_cents / 100).toString() : "");
         setNegotiable(p.price_negotiable || false);
         setProvince(p.location_province || "");
         setCity(p.location_city || "");
         setLocationTown(p.location_town || "");
         setLocationAddress(p.location_address || "");
         setContactMethods(p.contact_methods || ["call"]);
-        setStartDate(p.start_date ? p.start_date.split("T")[0] : "");
-        setEndDate(p.end_date ? p.end_date.split("T")[0] : "");
+        setStartDate(p.start_date ? eventTimeForInput(p.start_date) : "");
+        setEndDate(p.end_date ? eventTimeForInput(p.end_date) : "");
         setExistingImages(p.photos || []);
         setExistingVideos(p.videos || []);
         setVideoThumbnail(p.video_thumbnail || "");
@@ -259,6 +263,11 @@ export default function EditPromotionPage() {
         endDate,
         contactMethods,
       });
+      if (!startDate || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(startDate))
+        validationErrors.start_date = "Choose a start date and time (SAST).";
+      if (!priceZar.trim())
+        validationErrors.price_zar = "Choose free entry or enter a starting entry price.";
+      if (!eventType) validationErrors.event_type = "Choose an event category.";
       if (!title.trim()) validationErrors.title = "Enter an event title.";
       else if (title.trim().length < 5)
         validationErrors.title = "Title must be at least 5 characters.";
@@ -274,6 +283,8 @@ export default function EditPromotionPage() {
       }
 
       if (!province) validationErrors.province = "Select a province.";
+      if (contactMethods.length === 0)
+        validationErrors.contact_methods = "Choose at least one contact method.";
       if (!city) validationErrors.city = "Select a city.";
       if (province.trim().length > 50) {
         validationErrors.province = "Province must be 50 characters or fewer.";
@@ -394,6 +405,7 @@ export default function EditPromotionPage() {
       setUploadStatuses((c) => ({ ...c, saving: "uploading" }));
 
       const body = {
+        form_version: 2,
         title: title.trim(),
         description: description.trim(),
         promotion_type: promotionType,
@@ -414,8 +426,8 @@ export default function EditPromotionPage() {
         media_height: mediaDimensions?.height,
         focal_x: focalPoint.x,
         focal_y: focalPoint.y,
-        start_date: startDate ? new Date(startDate).toISOString() : undefined,
-        end_date: endDate ? new Date(endDate).toISOString() : undefined,
+        start_date: startDate ? eventTimeToIso(startDate) : undefined,
+        end_date: endDate ? eventTimeToIso(endDate, true) : undefined,
         business_id: businessId || undefined,
         event_details: {
           event_type: eventType || undefined,
@@ -426,9 +438,9 @@ export default function EditPromotionPage() {
           age_restriction: ageRestriction || undefined,
           dress_code: dressCode || undefined,
           lineup: lineup || undefined,
-          parking_available: parkingAvailable,
+          parking_available: parkingAvailable || undefined,
           accessibility: accessibility.length > 0 ? accessibility : undefined,
-          food_drinks_available: foodDrinksAvailable,
+          food_drinks_available: foodDrinksAvailable || undefined,
           bring_your_own: bringYourOwn || undefined,
         },
       };
@@ -538,7 +550,7 @@ export default function EditPromotionPage() {
           <div className="surface-card">
             <div className="space-y-5 p-4 sm:p-6">
               <div className="space-y-2">
-                <Label htmlFor="title">Event Title</Label>
+                <Label htmlFor="title">Event name *</Label>
                 <Input
                   id="title"
                   value={title}
@@ -548,7 +560,7 @@ export default function EditPromotionPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
+                <Label htmlFor="description">Description *</Label>
                 <Textarea
                   id="description"
                   value={description}
@@ -559,8 +571,8 @@ export default function EditPromotionPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="category_key">Category</Label>
-                <select
+                <Label htmlFor="category_key">Directory category (optional)</Label>
+                <PostSelect
                   id="category_key"
                   aria-label="Canonical category"
                   className={selectClass}
@@ -573,11 +585,11 @@ export default function EditPromotionPage() {
                       {item.label}
                     </option>
                   ))}
-                </select>
+                </PostSelect>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="category">Category (optional)</Label>
+                <Label htmlFor="category">Custom label (optional)</Label>
                 <Input
                   id="category"
                   value={category}
@@ -593,7 +605,7 @@ export default function EditPromotionPage() {
                     <Building2 className="h-4 w-4 text-brand-blue" />
                     Link to Business (optional)
                   </Label>
-                  <select
+                  <PostSelect
                     id="business_id"
                     aria-label="Link to Business"
                     className={selectClass}
@@ -606,7 +618,7 @@ export default function EditPromotionPage() {
                         {b.business_name}
                       </option>
                     ))}
-                  </select>
+                  </PostSelect>
                   <p className="text-xs text-muted-foreground">
                     Links this event to a business profile.
                   </p>
@@ -614,29 +626,60 @@ export default function EditPromotionPage() {
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="price">Price (ZAR, optional)</Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    inputMode="decimal"
-                    min="0"
-                    step="0.01"
-                    value={priceZar}
-                    onChange={(e) => setPriceZar(e.target.value)}
-                  />
-                </div>
-                <div className="flex items-end pb-2">
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <fieldset className="space-y-1">
+                  <legend className="text-sm font-medium">Entry (Required)</legend>
+                  <p className="text-xs text-muted-foreground">
+                    Free entry means visitors do not pay to attend. This is separate from posting
+                    being free.
+                  </p>
+                  <label className="flex min-h-11 items-center gap-2">
                     <input
-                      type="checkbox"
-                      checked={negotiable}
-                      onChange={(e) => setNegotiable(e.target.checked)}
-                      className="rounded"
+                      type="radio"
+                      name="entry"
+                      checked={priceZar === "0"}
+                      onChange={() => {
+                        setPriceZar("0");
+                        setNegotiable(false);
+                      }}
                     />
-                    Negotiable
+                    Free entry
                   </label>
-                </div>
+                  <label className="flex min-h-11 items-center gap-2">
+                    <input
+                      type="radio"
+                      name="entry"
+                      checked={priceZar !== "0"}
+                      onChange={() => {
+                        setPriceZar("");
+                        setNegotiable(false);
+                      }}
+                    />
+                    Paid entry
+                  </label>
+                </fieldset>
+                {priceZar !== "0" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="price" required>
+                      Starting entry price (ZAR)
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      The lowest ticket price. Add ticket tiers below if prices vary.
+                    </p>
+                    <Input
+                      id="price"
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="0.01"
+                      value={priceZar}
+                      onChange={(e) => setPriceZar(e.target.value)}
+                      aria-invalid={!!fieldErrors.price_zar}
+                    />
+                    {fieldErrors.price_zar && (
+                      <p className="inline-form-error">{fieldErrors.price_zar}</p>
+                    )}
+                  </div>
+                )}
               </div>
 
               <LocationSelector
@@ -657,8 +700,14 @@ export default function EditPromotionPage() {
                 errors={fieldErrors}
               />
 
-              <div className="space-y-2">
-                <Label>Contact Methods</Label>
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-medium">
+                  How should people contact you? (Required)
+                </legend>
+                <p className="text-sm text-muted-foreground">
+                  Choose at least one. Phone and WhatsApp use the number on your VerifyMzansi
+                  account. Contact form enquiries go to your VerifyMzansi inbox.
+                </p>
                 <div className="flex flex-wrap gap-3">
                   {(["call", "whatsapp", "form"] as const).map((method) => (
                     <label key={method} className="flex items-center gap-2 text-sm cursor-pointer">
@@ -676,41 +725,30 @@ export default function EditPromotionPage() {
                     </label>
                   ))}
                 </div>
-              </div>
+                {fieldErrors.contact_methods && (
+                  <p className="inline-form-error">{fieldErrors.contact_methods}</p>
+                )}
+              </fieldset>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="start_date">Start Date</Label>
-                  <Input
-                    id="start_date"
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="end_date">End Date</Label>
-                  <Input
-                    id="end_date"
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                  />
-                </div>
-              </div>
+              <EventDateFields
+                start={startDate}
+                end={endDate}
+                onStart={setStartDate}
+                onEnd={setEndDate}
+              />
 
               {/* ── Event Details ─────────────────────────── */}
               <div className="space-y-4 rounded-2xl border border-border bg-muted/30 p-4">
-                <p className="text-sm font-medium">Event Details (optional)</p>
+                <p className="text-sm font-medium">Event details</p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <Label htmlFor="event_type">Event Type</Label>
+                    <Label htmlFor="eventType">Event category (Required)</Label>
                     <p className="text-xs text-muted-foreground">
                       Category that best describes your event.
                     </p>
-                    <select
-                      id="event_type"
+                    <PostSelect
+                      id="eventType"
                       className={selectClass}
                       aria-label="Event Type"
                       value={eventType}
@@ -722,14 +760,14 @@ export default function EditPromotionPage() {
                           {t.label}
                         </option>
                       ))}
-                    </select>
+                    </PostSelect>
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="age_restriction">Age Restriction</Label>
                     <p className="text-xs text-muted-foreground">
                       Minimum age for attendees, if any.
                     </p>
-                    <select
+                    <PostSelect
                       id="age_restriction"
                       className={selectClass}
                       aria-label="Age Restriction"
@@ -742,7 +780,7 @@ export default function EditPromotionPage() {
                           {r.label}
                         </option>
                       ))}
-                    </select>
+                    </PostSelect>
                   </div>
                 </div>
 
@@ -1058,8 +1096,8 @@ export default function EditPromotionPage() {
                     location_town: locationTown || null,
                     location_address: locationAddress || null,
                     contact_methods: contactMethods,
-                    start_date: startDate ? new Date(startDate).toISOString() : null,
-                    end_date: endDate ? new Date(endDate).toISOString() : null,
+                    start_date: startDate ? eventTimeToIso(startDate) : null,
+                    end_date: endDate ? eventTimeToIso(endDate, true) : null,
                     boost_until: null,
                     featured_until: null,
                     view_count: null,

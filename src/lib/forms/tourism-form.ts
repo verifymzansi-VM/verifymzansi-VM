@@ -3,6 +3,7 @@ import type {
   TourismListingType,
 } from "@/types/tourism-details";
 import { TOURISM_SUBCATEGORY_FIELD_GROUPS } from "@/lib/constants/categories";
+import { eventTimeToIso } from "./event-time";
 import { isValidUserEnteredUrl } from "@/lib/utils/external-url";
 
 /* ── Regex ───────────────────────────────────────────────── */
@@ -24,6 +25,9 @@ export interface TourismFormValues extends TourismCategorySpecificFormFields {
   city: string;
   locationAddress?: string;
   locationTown?: string;
+  joinMethods?: string[];
+  meetingPoint?: string;
+  pickupAreas?: string;
   contactMethods: string[];
 
   /* tourism business */
@@ -126,6 +130,7 @@ function validateStep1Tourism(v: TourismFormValues, errors: Record<string, strin
 }
 
 function validateStep1Event(v: TourismFormValues, errors: Record<string, string>) {
+  if (v.startDate && !v.startDate.includes("T")) errors.startDate = "Choose a start time (SAST).";
   if (!v.startDate) {
     errors.startDate = "Start date is required.";
   } else if (Number.isNaN(new Date(v.startDate).getTime())) {
@@ -136,14 +141,18 @@ function validateStep1Event(v: TourismFormValues, errors: Record<string, string>
     if (Number.isNaN(new Date(v.endDate).getTime())) {
       errors.endDate = "Enter a valid end date.";
     } else if (v.startDate) {
-      const start = new Date(v.startDate);
-      const end = new Date(v.endDate);
-      if (!Number.isNaN(start.getTime()) && end < start) {
-        errors.endDate = "End date must be on or after the start date.";
+      const start = new Date(eventTimeToIso(v.startDate));
+      const end = new Date(eventTimeToIso(v.endDate, true));
+      if (
+        !Number.isNaN(start.getTime()) &&
+        (end < start || (v.endDate.includes("T") && end.getTime() === start.getTime()))
+      ) {
+        errors.endDate = "The event must end after it starts.";
       }
     }
   }
 
+  if (!v.priceZar.trim()) errors.priceZar = "Choose free entry or enter a starting entry price.";
   if (v.priceZar.trim()) {
     const numericPrice = Number(v.priceZar);
     if (!Number.isFinite(numericPrice) || numericPrice < 0) {
@@ -171,7 +180,16 @@ function validateStep2(v: TourismFormValues, errors: Record<string, string>) {
   if (!v.province) errors.province = "Province is required.";
   if (!v.city) errors.city = "City is required.";
 
-  if (v.listingType === "tourism_business") {
+  if (
+    v.listingType === "tourism_business" &&
+    ![
+      "travel_agency",
+      "car_rental_tourism",
+      "tour_operator",
+      "safari_wildlife",
+      "adventure_activities",
+    ].includes(v.subcategory)
+  ) {
     if (!v.locationAddress?.trim()) {
       errors.locationAddress = "Street address is required for tourism businesses.";
     }
@@ -180,9 +198,33 @@ function validateStep2(v: TourismFormValues, errors: Record<string, string>) {
     }
   }
 
+  if (
+    v.listingType === "tourism_business" &&
+    TOURISM_SUBCATEGORY_FIELD_GROUPS[v.subcategory] === "C"
+  ) {
+    const methods = v.joinMethods ?? [];
+    if (methods.length === 0) errors.joinMethods = "Choose at least one way visitors join you.";
+    if (methods.includes("meeting_point") && !v.meetingPoint?.trim()) {
+      errors.meetingPoint =
+        "Describe where visitors meet you, or deselect the meeting point option.";
+    }
+    if (methods.includes("pickup") && !v.pickupAreas?.split(",").some((area) => area.trim())) {
+      errors.pickupAreas = "Add at least one pickup area, or deselect the pickup option.";
+    }
+  }
+
   if (v.contactMethods.length === 0) {
     errors.contactMethods = "Choose at least one contact method.";
   }
+
+  // Events reuse the poster's account phone and inbox, so per-event contact
+  // details are not collected or validated.
+  if (v.listingType === "event") return;
+
+  if (v.contactMethods.includes("call") && !v.phone.trim())
+    errors.phone = "Add a phone number for phone calls.";
+  if (v.contactMethods.includes("whatsapp") && !v.whatsapp.trim())
+    errors.whatsapp = "Add a WhatsApp number.";
 
   if (v.phone && !SA_PHONE_REGEX.test(v.phone.trim())) {
     errors.phone = "Enter a valid South African number.";

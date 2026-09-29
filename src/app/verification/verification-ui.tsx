@@ -275,7 +275,11 @@ export function PrivacyPanel() {
 export function WhatHappensNextPanel({ verified = false }: { verified?: boolean }) {
   const items = verified
     ? ["Your badge shows on your profile and posts", "Update your details if they change"]
-    : ["Finish the four checks", "Our team reviews them", "Your badge appears"];
+    : [
+        "Finish the four checks",
+        "Location is approved automatically; our team reviews identity",
+        "Your badge appears",
+      ];
 
   return (
     <section aria-labelledby="verification-next-title" className="surface-card p-4 sm:p-5">

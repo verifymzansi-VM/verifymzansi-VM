@@ -1,0 +1,12 @@
+-- Commit enum expansion before running the data migration.
+ALTER TYPE public.business_category ADD VALUE IF NOT EXISTS 'health_medical';
+ALTER TYPE public.business_category ADD VALUE IF NOT EXISTS 'beauty_personal';
+ALTER TYPE public.business_category ADD VALUE IF NOT EXISTS 'fitness_wellness';
+ALTER TYPE public.business_category ADD VALUE IF NOT EXISTS 'cleaning_garden';
+ALTER TYPE public.business_category ADD VALUE IF NOT EXISTS 'automotive_services';
+ALTER TYPE public.business_category ADD VALUE IF NOT EXISTS 'transport_storage';
+ALTER TYPE public.business_category ADD VALUE IF NOT EXISTS 'pets_animals';
+ALTER TYPE public.business_category ADD VALUE IF NOT EXISTS 'community_personal';
+ALTER TYPE public.listing_category ADD VALUE IF NOT EXISTS 'clothing_accessories';
+ALTER TYPE public.listing_category ADD VALUE IF NOT EXISTS 'sports_hobbies';
+ALTER TYPE public.listing_category ADD VALUE IF NOT EXISTS 'other_items';

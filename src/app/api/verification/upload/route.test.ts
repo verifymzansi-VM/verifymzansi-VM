@@ -1492,48 +1492,18 @@ describe("POST /api/verification/upload", () => {
     expect(mockDeleteFromR2).toHaveBeenCalled();
   });
 
-  it("stamps location_submitted_at on the session for proof_of_address uploads", async () => {
+  it("rejects retired proof-of-address uploads before storage or database changes", async () => {
     mockAuth({ id: "user-1" });
-    setupDefaultAdminMocks();
-
-    const baseFromImpl = mockFrom.getMockImplementation();
-    if (!baseFromImpl) {
-      throw new Error("Expected default admin mock implementation");
-    }
-
-    const sessionUpsert = vi.fn().mockResolvedValue({ error: null });
-    mockFrom.mockImplementation((table: string) => {
-      if (table === "verification_sessions") {
-        return {
-          upsert: sessionUpsert,
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-            }),
-          }),
-          update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockResolvedValue({ error: null }),
-          }),
-        };
-      }
-
-      return baseFromImpl(table);
-    });
-
     const response = await POST(
       createFormDataRequest({
         file: createTestFile("poa-data", "image/jpeg", "poa.jpg"),
         docType: "proof_of_address",
       })
     );
-
-    expect(response.status).toBe(200);
-    expect(sessionUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        user_id: "user-1",
-        location_submitted_at: expect.any(String),
-      }),
-      { onConflict: "user_id" }
-    );
+    expect(response.status).toBe(410);
+    expect(await response.json()).toMatchObject({ code: "address_upload_retired" });
+    expect(mockUploadKycDocument).not.toHaveBeenCalled();
+    expect(mockProcessKycArtifact).not.toHaveBeenCalled();
+    expect(mockCreateAdminClient).not.toHaveBeenCalled();
   });
 });
