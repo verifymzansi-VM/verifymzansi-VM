@@ -206,7 +206,9 @@ export async function POST(request: NextRequest) {
       bucket,
       key,
       contentType,
-      3600, // 1 hour expiry
+      // Expiry is checked when the PUT starts, so slow uploads still finish.
+      // A short window limits re-uploading over a validated or rejected object.
+      600,
       size
     );
 

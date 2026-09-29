@@ -7,7 +7,7 @@ import { sendOtpSms } from "@/lib/services/sms";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { createLogger } from "@/lib/utils/logger";
 import { ACCOUNT_PHONE_IN_USE_ERROR, normalizeSaPhone } from "@/lib/utils/phone";
-import { checkRateLimit } from "@/lib/utils/rate-limit";
+import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
@@ -200,10 +200,12 @@ export async function POST(request: NextRequest) {
     // Rate limit by user+phone — using phone alone lets attackers reset
     // the counter by staging a different number.  Including the userId
     // ensures the per-user send cadence is enforced regardless of phone.
+    // Every OTP is a paid SMS: fail closed when the shared limiter is down,
+    // since per-isolate fallback counters would not cap a distributed abuser.
     const externalLimit = await checkRateLimit({
       key: `${user.id}:${phone}`,
       action: "otp:send",
-      degradedMode: "local",
+      degradedMode: "block",
     });
     if (externalLimit.limited) {
       return otpSendError("Too many OTP requests. Please wait before trying again.", 429, {
@@ -218,7 +220,7 @@ export async function POST(request: NextRequest) {
     const userAggregateLimit = await checkRateLimit({
       key: user.id,
       action: "otp:send:user",
-      degradedMode: "local",
+      degradedMode: "block",
     });
     if (userAggregateLimit.limited) {
       return otpSendError("Too many OTP requests. Please wait before trying again.", 429, {
@@ -227,8 +229,21 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Many accounts from one network must not multiply the per-user cap.
+    const ipLimit = await checkRateLimit({
+      key: getClientIp(request),
+      action: "otp:send:ip",
+      degradedMode: "block",
+    });
+    if (ipLimit.limited) {
+      return otpSendError("Too many OTP requests. Please wait before trying again.", 429, {
+        code: "rate_limited",
+        retryAfter: ipLimit.retryAfter ?? 60,
+      });
+    }
+
     // Keep verification staging aligned with the phone that received this OTP.
-    const { error: stagePendingPhoneError } = await supabase
+    const { error: stagePendingPhoneError } = await adminSupabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .update({ pending_phone: phone })
       .eq("user_id", user.id);

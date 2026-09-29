@@ -5,12 +5,14 @@ const {
   mockCreateClient,
   mockCreateAdminClient,
   mockGetR2ObjectBytes,
+  mockGetR2ObjectSize,
   mockDeleteFromR2,
   mockCheckRateLimit,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
   mockGetR2ObjectBytes: vi.fn(),
+  mockGetR2ObjectSize: vi.fn(),
   mockDeleteFromR2: vi.fn(),
   mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
 }));
@@ -25,6 +27,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("@/lib/services/storage", () => ({
   getR2ObjectBytes: mockGetR2ObjectBytes,
+  getR2ObjectSize: mockGetR2ObjectSize,
   deleteFromR2: mockDeleteFromR2,
 }));
 
@@ -110,6 +113,7 @@ describe("POST /api/media/upload-complete", () => {
 
   it("accepts a direct R2 upload after verifying the stored object", async () => {
     mockTrackedUpload();
+    mockGetR2ObjectSize.mockResolvedValue(MP4_HEADER.byteLength);
     mockGetR2ObjectBytes.mockResolvedValue({
       bytes: MP4_HEADER,
       contentType: "video/mp4",
@@ -131,7 +135,62 @@ describe("POST /api/media/upload-complete", () => {
       success: true,
       publicUrl: "https://media.example.com/media/listing/user-1/clip.mp4",
     });
+    expect(mockGetR2ObjectSize).toHaveBeenCalledWith(
+      "verifymzansi-public",
+      "media/listing/user-1/clip.mp4"
+    );
     expect(mockDeleteFromR2).not.toHaveBeenCalled();
+  });
+
+  it("rejects an oversized stored object without downloading it", async () => {
+    mockTrackedUpload();
+    // The client declared a tiny file but uploaded something much larger.
+    mockGetR2ObjectSize.mockResolvedValue(200 * 1024 * 1024);
+
+    const res = await POST(
+      createRequest({
+        key: "media/listing/user-1/clip.mp4",
+        publicUrl: "https://media.example.com/media/listing/user-1/clip.mp4",
+        contentType: "video/mp4",
+        size: MP4_HEADER.byteLength,
+        area: "listing",
+      })
+    );
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      code: "uploaded_object_size_mismatch",
+    });
+    expect(mockGetR2ObjectBytes).not.toHaveBeenCalled();
+    expect(mockDeleteFromR2).toHaveBeenCalledWith(
+      "verifymzansi-public",
+      "media/listing/user-1/clip.mp4"
+    );
+  });
+
+  it("treats a missing stored object as not found without downloading it", async () => {
+    mockTrackedUpload();
+    mockGetR2ObjectSize.mockResolvedValue(null);
+
+    const res = await POST(
+      createRequest({
+        key: "media/listing/user-1/clip.mp4",
+        publicUrl: "https://media.example.com/media/listing/user-1/clip.mp4",
+        contentType: "video/mp4",
+        size: MP4_HEADER.byteLength,
+        area: "listing",
+      })
+    );
+
+    expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toMatchObject({
+      code: "uploaded_object_missing",
+    });
+    expect(mockGetR2ObjectBytes).not.toHaveBeenCalled();
+    expect(mockDeleteFromR2).toHaveBeenCalledWith(
+      "verifymzansi-public",
+      "media/listing/user-1/clip.mp4"
+    );
   });
 
   it("rejects and cleans up when the request does not match the tracking row", async () => {
@@ -155,11 +214,13 @@ describe("POST /api/media/upload-complete", () => {
       "verifymzansi-public",
       "media/listing/user-1/clip.mp4"
     );
+    expect(mockGetR2ObjectSize).not.toHaveBeenCalled();
     expect(mockGetR2ObjectBytes).not.toHaveBeenCalled();
   });
 
   it("rejects and cleans up direct uploads with invalid video bytes", async () => {
     mockTrackedUpload({ file_size: 12 });
+    mockGetR2ObjectSize.mockResolvedValue(12);
     mockGetR2ObjectBytes.mockResolvedValue({
       bytes: new Uint8Array([
         0x25, 0x50, 0x44, 0x46, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -190,6 +251,7 @@ describe("POST /api/media/upload-complete", () => {
 
   it("rejects and cleans up direct uploads when bytes do not match declared type", async () => {
     mockTrackedUpload({ file_size: 12 });
+    mockGetR2ObjectSize.mockResolvedValue(12);
     mockGetR2ObjectBytes.mockResolvedValue({
       bytes: new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0, 0, 0, 0, 0, 0, 0, 0]),
       contentType: "video/mp4",

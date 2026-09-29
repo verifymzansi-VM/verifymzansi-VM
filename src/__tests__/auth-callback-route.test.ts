@@ -208,12 +208,31 @@ describe("GET /auth/callback", () => {
       },
     });
 
+    const mockUserScopedUpsert = vi.fn();
+
+    // The user-scoped client is only used to detect whether the profile already existed.
     mockFrom.mockImplementation((table: string) => {
       if (table === "account_profiles") {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+            }),
+          }),
+          upsert: mockUserScopedUpsert,
+        };
+      }
+
+      return {};
+    });
+
+    // Profile creation goes through the admin client.
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === "account_profiles") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
             }),
           }),
           upsert: mockUpsert.mockReturnValue({
@@ -248,6 +267,7 @@ describe("GET /auth/callback", () => {
       }),
       { onConflict: "user_id" }
     );
+    expect(mockUserScopedUpsert).not.toHaveBeenCalled();
   });
 
   it("clears pending email and marks the latest email change as applied when the confirmed email matches", async () => {

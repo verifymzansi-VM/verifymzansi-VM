@@ -38,6 +38,7 @@ interface ListingRow {
   logo_url: string | null;
   boost_until: string | null;
   featured: boolean;
+  featured_until?: string | null;
   seller: SellerRow | null;
   focal_x: number | null;
   focal_y: number | null;
@@ -107,7 +108,11 @@ function getListingCardProps(listing: ListingRow) {
     createdAt: listing.created_at,
     ownerName: seller?.display_name,
     boosted: listing.boost_until ? new Date(listing.boost_until) > new Date() : false,
-    featured: listing.featured,
+    // The stored flag stays true after the paid window ends; trust the date.
+    featured:
+      listing.featured_until !== undefined
+        ? Boolean(listing.featured_until && new Date(listing.featured_until) > new Date())
+        : listing.featured,
     focalX: listing.focal_x,
     focalY: listing.focal_y,
     mediaWidth: listing.media_width,

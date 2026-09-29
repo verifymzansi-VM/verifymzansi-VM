@@ -28,7 +28,12 @@ const schema = z.object({
 
 /** Hash the viewer key so stored analytics cannot be linked back to a visitor. */
 function hashViewer(viewerKey: string): string {
-  const secret = process.env.IP_HASH_SECRET || process.env.HMAC_SECRET || "vm-analytics";
+  const configuredSecret = process.env.IP_HASH_SECRET || process.env.HMAC_SECRET;
+  // A public fallback key would make the hashes reversible for IP addresses.
+  if (!configuredSecret && process.env.NODE_ENV === "production") {
+    throw new Error("IP_HASH_SECRET is not configured");
+  }
+  const secret = configuredSecret || "vm-analytics-dev";
   return createHash("sha256").update(`${secret}:${viewerKey}`).digest("hex").slice(0, 40);
 }
 

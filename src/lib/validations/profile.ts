@@ -15,8 +15,20 @@ export const profileUpdateSchema = z.object({
   phone: z.union([saPhoneSchema, z.literal("")]).optional(),
   province: z.string().max(100, "Province value is too long").optional().or(z.literal("")),
   city: z.string().max(100, "City value is too long").optional().or(z.literal("")),
-  avatarUrl: z.string().url("Invalid avatar URL").max(500).optional().or(z.literal("")),
+  avatarUrl: z
+    .string()
+    .url("Invalid avatar URL")
+    .max(500)
+    .refine(isOwnAvatarStorageUrl, "Upload your avatar through the profile page")
+    .optional()
+    .or(z.literal("")),
 });
+
+/** Avatars are only ever served from this project's Supabase avatars bucket. */
+function isOwnAvatarStorageUrl(url: string): boolean {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
+  return Boolean(supabaseUrl) && url.startsWith(`${supabaseUrl}/storage/v1/object/public/avatars/`);
+}
 
 /** Inferred type for profile update payloads. */
 type _ProfileUpdateInput = z.infer<typeof profileUpdateSchema>;

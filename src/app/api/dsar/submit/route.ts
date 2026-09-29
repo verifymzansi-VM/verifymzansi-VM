@@ -75,7 +75,10 @@ export async function POST(request: NextRequest) {
       return parsedBody.response;
     }
 
-    const { type, name, email, idNumber, details, turnstileToken } = parsedBody.data;
+    const { type, name, idNumber, details, turnstileToken } = parsedBody.data;
+    // The session is the identity check, so replies (and any data export) go
+    // to the account's confirmed address, never to an address typed here.
+    const email = user.email ?? parsedBody.data.email;
 
     // Per-email rate limit to prevent mass DSAR submissions with different addresses
     const emailRl = checkLocalRateLimit(email.toLowerCase(), "dsar:submit:email");

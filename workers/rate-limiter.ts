@@ -84,6 +84,16 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 5, ttl: 60 }, // stricter than auth:login — no Turnstile token
     { limit: 15, ttl: 3600 }, // 15 per hour
   ],
+  // Platform-wide budget for CAPTCHA-less logins, so a botnet spread over many
+  // IPs cannot use the widget-failed fallback for credential stuffing.
+  "auth:login:nocaptcha:global": [
+    { limit: 30, ttl: 60 },
+    { limit: 300, ttl: 3600 },
+  ],
+  "appeals:submit": [
+    { limit: 3, ttl: 3600 }, // 3 per hour
+    { limit: 10, ttl: 86400 }, // 10 per day
+  ],
   "auth:register": [
     { limit: 10, ttl: 600 }, // 10 per 10 minutes
     { limit: 30, ttl: 3600 }, // 30 per hour
@@ -140,9 +150,24 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 5, ttl: 3600 }, // 5 per hour
     { limit: 10, ttl: 86400 }, // 10 per day
   ],
+  // Per account across every number it stages. Without an entry this fell
+  // back to the 30/minute default, which allowed SMS pumping by rotating
+  // target numbers.
+  "otp:send:user": [
+    { limit: 5, ttl: 3600 }, // 5 per hour
+    { limit: 10, ttl: 86400 }, // 10 per day
+  ],
+  "otp:send:ip": [
+    { limit: 10, ttl: 3600 }, // 10 per hour per network
+    { limit: 30, ttl: 86400 }, // 30 per day per network
+  ],
   "otp:verify": [
     { limit: 5, ttl: 60 }, // 5 per minute
     { limit: 20, ttl: 3600 }, // 20 per hour
+  ],
+  "otp:verify:user": [
+    { limit: 10, ttl: 600 }, // 10 per 10 minutes per account
+    { limit: 30, ttl: 86400 }, // 30 per day per account
   ],
 
   // ── Public reads (generous — browsing with filters/pagination) ──

@@ -118,10 +118,19 @@ export async function POST(request: NextRequest) {
 
   if (result.error) {
     const mapped = mapCommercialError(result.error.message);
-    if (!mapped) log.warn("Affiliation request failed", { code: result.error.code });
+    if (mapped) {
+      return NextResponse.json({ error: mapped.message }, { status: mapped.status });
+    }
+    // RPC business rules raise "CODE: message" for the member; any other
+    // error text is database detail and stays in the logs.
+    const coded = /^[A-Z_]+: (.+)$/.exec(result.error.message);
+    log.warn("Affiliation request failed", {
+      code: result.error.code,
+      error: coded ? undefined : result.error.message,
+    });
     return NextResponse.json(
-      { error: mapped?.message ?? result.error.message.replace(/^[A-Z_]+: /, "") },
-      { status: mapped?.status ?? 409 }
+      { error: coded?.[1] ?? "This affiliation request could not be completed." },
+      { status: 409 }
     );
   }
 

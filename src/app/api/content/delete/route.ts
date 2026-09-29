@@ -57,22 +57,12 @@ type DeletableContentItem = {
   business_details?: unknown;
 };
 
-function collectStringValues(value: unknown): string[] {
-  if (typeof value === "string") {
-    return value.trim() ? [value] : [];
-  }
-
-  if (Array.isArray(value)) {
-    return value.flatMap((item) => collectStringValues(item));
-  }
-
-  if (value && typeof value === "object") {
-    return Object.values(value as Record<string, unknown>).flatMap((item) =>
-      collectStringValues(item)
-    );
-  }
-
-  return [];
+/** Media fields inside business_details: only a mall store's photo gallery. */
+function getMallPhotoUrls(details: unknown): string[] {
+  if (!details || typeof details !== "object") return [];
+  const record = details as { type?: unknown; mall_photos?: unknown };
+  if (record.type !== "mall_store" || !Array.isArray(record.mall_photos)) return [];
+  return record.mall_photos.filter((url): url is string => typeof url === "string");
 }
 
 function collectDeletedMediaUrls(table: string, item: DeletableContentItem): string[] {
@@ -83,7 +73,7 @@ function collectDeletedMediaUrls(table: string, item: DeletableContentItem): str
       item.cover_video,
       item.video_thumbnail,
       item.gallery_photos ?? undefined,
-      collectStringValues(item.business_details)
+      getMallPhotoUrls(item.business_details)
     );
   }
 
@@ -180,14 +170,22 @@ export async function POST(request: Request) {
         return forbiddenResponse();
       }
 
+      // Select the deleted id: row-level security silently skips rows the
+      // owner may not delete in this state (e.g. a live Tourism & Events post).
       const deleteQuery = applyOwnerFilter(
         supabase.from(config.table).delete().eq("id", itemId),
         ownerColumn,
         user.id
-      );
+      ).select("id");
       const deleteResult = await deleteQuery;
       deleteErrorMessage =
         (deleteResult.error as unknown as { message?: string | null } | null)?.message ?? null;
+      if (!deleteErrorMessage && (deleteResult.data ?? []).length === 0) {
+        return NextResponse.json(
+          { error: "This post cannot be deleted in its current state", code: "CONTENT_STATE" },
+          { status: 409 }
+        );
+      }
     } else {
       const admin = createAdminClient();
       // Storefronts (MALL_SHOPS) — probe owner column since the table
@@ -244,7 +242,8 @@ export async function POST(request: Request) {
         await queuePublicMediaCleanup(
           createAdminClient(),
           deletedMediaUrls,
-          `${targetTypeMap[config.table] || config.table}_deleted`
+          `${targetTypeMap[config.table] || config.table}_deleted`,
+          user.id
         );
       } catch (cleanupError) {
         log.error("Failed to queue deleted content media for cleanup", {

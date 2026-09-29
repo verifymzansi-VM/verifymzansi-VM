@@ -166,7 +166,7 @@ export async function POST(request: NextRequest) {
     const versionedUrl = `${publicUrl}?v=${Date.now()}`;
 
     // Update profile with avatar URL
-    const { error: updateError } = await supabase
+    const { error: updateError } = await getAdmin()
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .update({ avatar_url: versionedUrl })
       .eq("user_id", user.id);

@@ -155,12 +155,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // ── Check listing exists and user owns it ────────────────
-    const { data: rawListing } = await applyOwnerFilter(
+    const { data: rawListing, error: listingError } = await applyOwnerFilter(
       supabase
         .from("listings")
         .select(
           withOwnerColumn(
-            "id, owner_id, status, area, title, description, price_cents, price_negotiable, category, attributes, condition, location_province, location_city, location_town, location_suburb, location_address, photos, videos, video_thumbnail, logo_url, contact_methods, media_width, media_height, focal_x, focal_y, updated_at, approved_edit_count",
+            "id, owner_id, status, area, title, description, price_cents, price_negotiable, category, attributes, condition, location_province, location_city, location_suburb, location_address, photos, videos, video_thumbnail, logo_url, contact_methods, media_width, media_height, focal_x, focal_y, updated_at, approved_edit_count",
             ownerColumn
           )
         )
@@ -168,6 +168,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       ownerColumn,
       user.id
     ).maybeSingle();
+
+    if (listingError) {
+      log.error("Failed to load listing for update", {
+        error: listingError.message,
+        code: listingError.code,
+        listingId,
+      });
+      return NextResponse.json({ error: "Unable to load listing" }, { status: 503 });
+    }
     const listing = rawListing as ListingUpdateRow | null;
 
     if (!listing) {
@@ -222,7 +231,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       condition: data.condition || null,
       location_province: data.province || null,
       location_city: data.city || null,
-      location_town: data.town || null,
+      // Listings store the town in location_suburb (there is no location_town column).
       location_suburb: data.town || null,
       location_address: data.address || null,
       photos: data.images,
@@ -397,7 +406,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     if (removedMediaUrls.length > 0) {
       try {
-        await queuePublicMediaCleanup(admin, removedMediaUrls, "listing_media_replaced");
+        await queuePublicMediaCleanup(admin, removedMediaUrls, "listing_media_replaced", user.id);
       } catch (cleanupError) {
         log.error("Failed to queue replaced listing media for cleanup", {
           error: cleanupError instanceof Error ? cleanupError.message : "Unknown error",

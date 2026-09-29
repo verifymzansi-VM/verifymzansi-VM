@@ -22,19 +22,31 @@ interface Env {
   OPS_JOBS_SECRET: string;
 }
 
+const RUN_TIMEOUT_MS = 50_000;
+
 async function trigger(env: Env): Promise<void> {
-  const response = await fetch(`${env.APP_URL.replace(/\/$/, "")}/api/webhooks/ops-jobs`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${env.OPS_JOBS_SECRET}` },
-  });
-  if (!response.ok) {
-    // Logged by Workers observability; the jobs stay queued for the next run.
-    console.error(`ops-jobs run failed with status ${response.status}`);
-    return;
+  try {
+    const response = await fetch(`${env.APP_URL.replace(/\/$/, "")}/api/webhooks/ops-jobs`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.OPS_JOBS_SECRET}` },
+      signal: AbortSignal.timeout(RUN_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      // Logged by Workers observability; the jobs stay queued for the next run.
+      console.error(`ops-jobs run failed with status ${response.status}`);
+    }
+  } catch (error) {
+    console.error(
+      `ops-jobs run failed: ${error instanceof Error ? error.message : "unknown error"}`
+    );
   }
 }
 
 const worker = {
+  // Scheduled-only worker; answer HTTP probes instead of throwing (error 1101).
+  async fetch(): Promise<Response> {
+    return Response.json({ worker: "verifymzansi-ops-jobs", status: "healthy" });
+  },
   async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil(trigger(env));
   },

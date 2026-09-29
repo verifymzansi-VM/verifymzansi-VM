@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { getLaunchHealthSnapshot, type LaunchHealthSnapshot } from "@/lib/health/launch-health";
 import { createLogger } from "@/lib/utils/logger";
@@ -80,6 +81,21 @@ async function getLaunchHealthSnapshotWithinTimeout() {
   }
 }
 
+/**
+ * Per-subsystem detail (e.g. which protections are degraded) is only for
+ * operators holding HEALTH_DIAGNOSTIC_TOKEN; everyone else gets the overall
+ * status.
+ */
+function hasDiagnosticAccess(request: Request): boolean {
+  const expectedToken = process.env.HEALTH_DIAGNOSTIC_TOKEN;
+  if (!expectedToken) return false;
+  const authHeader = request.headers.get("authorization") ?? "";
+  const providedToken = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : "";
+  const provided = Buffer.from(providedToken);
+  const expected = Buffer.from(expectedToken);
+  return provided.length === expected.length && crypto.timingSafeEqual(provided, expected);
+}
+
 function healthHeaders() {
   // This path is excluded from the middleware matcher, so it never passes
   // through withSecurityHeaders — set the baseline security headers here.
@@ -115,10 +131,13 @@ export async function GET(request: Request) {
       logger.error("Health snapshot degraded", { snapshot });
     }
 
-    return NextResponse.json(publicHealthPayload(status, snapshot), {
-      status: 200,
-      headers: healthHeaders(),
-    });
+    return NextResponse.json(
+      publicHealthPayload(status, hasDiagnosticAccess(request) ? snapshot : undefined),
+      {
+        status: 200,
+        headers: healthHeaders(),
+      }
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     logger.error("Health snapshot generation failed", { error: message });

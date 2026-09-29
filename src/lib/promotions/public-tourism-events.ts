@@ -13,8 +13,8 @@ export function buildPublicTourismBusinessesQuery(supabase: SupabaseServerClient
       .eq("status", "live")
       .eq("category", TOURISM_HOSPITALITY_CATEGORY)
   )
-    .order("boost_until", { ascending: false, nullsFirst: false })
-    .order("featured_until", { ascending: false, nullsFirst: false })
+    .order("active_boost_until", { ascending: false, nullsFirst: false })
+    .order("active_featured_until", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false });
 }
 
@@ -32,7 +32,7 @@ export function buildPublicEventPromotionsQuery(
       .or(`end_date.is.null,end_date.gte.${nowIso}`),
     nowIso
   )
-    .order("boost_until", { ascending: false, nullsFirst: false })
-    .order("featured_until", { ascending: false, nullsFirst: false })
+    .order("active_boost_until", { ascending: false, nullsFirst: false })
+    .order("active_featured_until", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false });
 }

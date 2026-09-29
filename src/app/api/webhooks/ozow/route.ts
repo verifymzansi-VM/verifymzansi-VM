@@ -32,6 +32,13 @@ import { getAuthAdminUserSummary } from "@/lib/supabase/auth-admin-user";
 
 const log = createLogger("OzowWebhook");
 const SUPPORTED_OZOW_EVENT_TYPE = "transaction.complete";
+/** Payment states already closed on our side: never charged, or reversed. */
+const TERMINAL_UNPAID_STATUSES: ReadonlySet<string> = new Set([
+  "expired",
+  "cancelled",
+  "refunded",
+  "chargeback",
+]);
 const SUBSCRIPTION_DURATION_DAYS = 30;
 
 /**
@@ -394,6 +401,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: true, duplicate: true });
       }
 
+      // Already closed on our side (checkout expired or cancelled, or money
+      // returned): a provider failure changes nothing, and a 5xx here would
+      // only make the provider retry for days.
+      if (TERMINAL_UNPAID_STATUSES.has(payment.status)) {
+        return NextResponse.json({ success: true, ignored: true });
+      }
+
       // A claimed or terminal payment must never be downgraded by a late or
       // contradictory error webhook. The entitlements are already live; the
       // payment record must stay consistent with them.
@@ -413,7 +427,8 @@ export async function POST(request: NextRequest) {
         if (
           currentPayment?.status === "complete" ||
           currentPayment?.status === "failed" ||
-          currentPayment?.status === "processing"
+          currentPayment?.status === "processing" ||
+          (currentPayment && TERMINAL_UNPAID_STATUSES.has(currentPayment.status))
         ) {
           log.info("Failure webhook superseded by concurrent payment transition", {
             paymentId: payment.id,
@@ -454,6 +469,15 @@ export async function POST(request: NextRequest) {
     // Payloads with a missing/unsupported event type or a missing/non-success
     // status must never reach fulfillment — they are acknowledged and ignored.
     if (eventType !== SUPPORTED_OZOW_EVENT_TYPE || !isSuccessfulTransactionStatus(status)) {
+      if (eventType === SUPPORTED_OZOW_EVENT_TYPE) {
+        // A completion we cannot classify may be a paid customer we would
+        // otherwise never fulfil; surface it for reconciliation.
+        log.error("Unrecognised Ozow transaction status; payment not fulfilled", {
+          paymentId: payment.id,
+          providerPaymentId: payload.providerPaymentId,
+          status,
+        });
+      }
       return NextResponse.json({ success: true, ignored: true });
     }
 
@@ -481,8 +505,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (result.outcome === "duplicate" || result.outcome === "ignored") {
-      return NextResponse.json({ success: true, [result.outcome]: true });
+    if (result.outcome === "ignored") {
+      // Money was taken for a payment we will not fulfil (e.g. cancelled or
+      // refunded on our side). It needs a refund or a manual grant.
+      log.error("Successful Ozow payment was not fulfilled; needs reconciliation", {
+        paymentId: payment.id,
+        providerPaymentId: payload.providerPaymentId,
+        paymentStatus: payment.status,
+      });
+      return NextResponse.json({ success: true, ignored: true });
+    }
+
+    if (result.outcome === "duplicate") {
+      return NextResponse.json({ success: true, duplicate: true });
     }
 
     const completedPayment = { ...payment, provider_payment_id: payload.providerPaymentId };

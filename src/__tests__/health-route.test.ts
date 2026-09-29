@@ -23,7 +23,12 @@ describe("Health route", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllEnvs();
   });
+
+  const DIAGNOSTIC_TOKEN = "test-health-diagnostic-token";
+  const deepRequest = (headers?: Record<string, string>) =>
+    new Request("https://verifymzansi.com/api/health?deep=1", { headers });
 
   it("returns a fast liveness payload by default", async () => {
     const { GET } = await import("@/app/api/health/route");
@@ -38,7 +43,7 @@ describe("Health route", () => {
     expect(getLaunchHealthSnapshot).not.toHaveBeenCalled();
   });
 
-  it("returns HTTP 200 when the launch snapshot is healthy", async () => {
+  it("returns per-subsystem detail for a healthy deep check with the diagnostic token", async () => {
     vi.mocked(getLaunchHealthSnapshot).mockResolvedValue({
       status: "ok",
       mode: "production",
@@ -58,8 +63,9 @@ describe("Health route", () => {
       },
     });
 
+    vi.stubEnv("HEALTH_DIAGNOSTIC_TOKEN", DIAGNOSTIC_TOKEN);
     const { GET } = await import("@/app/api/health/route");
-    const response = await GET(new Request("https://verifymzansi.com/api/health?deep=1"));
+    const response = await GET(deepRequest({ Authorization: `Bearer ${DIAGNOSTIC_TOKEN}` }));
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toBe(
@@ -80,7 +86,7 @@ describe("Health route", () => {
     });
   });
 
-  it("returns HTTP 200 with degraded readiness when the launch snapshot is degraded", async () => {
+  it("returns degraded readiness with per-subsystem detail for the diagnostic token holder", async () => {
     vi.mocked(getLaunchHealthSnapshot).mockResolvedValue({
       status: "degraded",
       mode: "production",
@@ -100,8 +106,9 @@ describe("Health route", () => {
       },
     });
 
+    vi.stubEnv("HEALTH_DIAGNOSTIC_TOKEN", DIAGNOSTIC_TOKEN);
     const { GET } = await import("@/app/api/health/route");
-    const response = await GET(new Request("https://verifymzansi.com/api/health?deep=1"));
+    const response = await GET(deepRequest({ Authorization: `Bearer ${DIAGNOSTIC_TOKEN}` }));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
@@ -113,6 +120,66 @@ describe("Health route", () => {
         config: expect.objectContaining({ status: "degraded", errorCount: 1 }),
         supabase: expect.objectContaining({ status: "degraded" }),
       }),
+    });
+  });
+
+  describe("deep check without diagnostic access", () => {
+    const degradedSnapshot = {
+      status: "degraded" as const,
+      mode: "production" as const,
+      timestamp: "2026-03-06T00:00:00.000Z",
+      checks: {
+        config: { status: "degraded" as const, errorCount: 1, warningCount: 0 },
+        supabase: { status: "degraded" as const, detail: "Supabase launch probe failed" },
+        rateLimiter: { status: "ok" as const, detail: "Shared rate limiter env is present" },
+        audit: { status: "ok" as const, failureCount: 0 },
+      },
+    };
+    const summaryOnly = (status: "ok" | "degraded") => ({
+      status,
+      readiness: status,
+      timestamp: expect.any(String),
+    });
+
+    it("omits mode and checks when no Authorization header is sent", async () => {
+      vi.stubEnv("HEALTH_DIAGNOSTIC_TOKEN", DIAGNOSTIC_TOKEN);
+      vi.mocked(getLaunchHealthSnapshot).mockResolvedValue(
+        degradedSnapshot as unknown as Awaited<ReturnType<typeof getLaunchHealthSnapshot>>
+      );
+
+      const { GET } = await import("@/app/api/health/route");
+      const response = await GET(deepRequest());
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual(summaryOnly("degraded"));
+      expect(getLaunchHealthSnapshot).toHaveBeenCalledTimes(1);
+    });
+
+    it("omits mode and checks when the bearer token is wrong", async () => {
+      vi.stubEnv("HEALTH_DIAGNOSTIC_TOKEN", DIAGNOSTIC_TOKEN);
+      vi.mocked(getLaunchHealthSnapshot).mockResolvedValue(
+        degradedSnapshot as unknown as Awaited<ReturnType<typeof getLaunchHealthSnapshot>>
+      );
+
+      const { GET } = await import("@/app/api/health/route");
+      const response = await GET(deepRequest({ Authorization: "Bearer wrong-token-value-xxxxxx" }));
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual(summaryOnly("degraded"));
+    });
+
+    it("omits mode and checks when HEALTH_DIAGNOSTIC_TOKEN is not configured", async () => {
+      vi.stubEnv("HEALTH_DIAGNOSTIC_TOKEN", "");
+      vi.mocked(getLaunchHealthSnapshot).mockResolvedValue({
+        ...degradedSnapshot,
+        status: "ok",
+      } as unknown as Awaited<ReturnType<typeof getLaunchHealthSnapshot>>);
+
+      const { GET } = await import("@/app/api/health/route");
+      const response = await GET(deepRequest({ Authorization: "Bearer " }));
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual(summaryOnly("ok"));
     });
   });
 

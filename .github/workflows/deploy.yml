@@ -200,6 +200,14 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm exec wrangler deploy --config wrangler.retention-cleanup.toml
 
+      # Expires abandoned checkouts. It was missing here, so production kept
+      # running a build from before the payment fulfillment hardening.
+      - name: Deploy Payment Cleanup Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler deploy --config wrangler.payment-cleanup.toml
+
       # Runs moderation notices, DSAR notices and auth metadata syncs every
       # minute. Needs OPS_JOBS_SECRET set on this worker and on the app; until
       # then the app's endpoint refuses its calls and jobs wait in the queue.

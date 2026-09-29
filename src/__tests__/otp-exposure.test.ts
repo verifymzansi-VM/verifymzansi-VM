@@ -76,6 +76,14 @@ function mockAuthenticatedUser(id = "user-123") {
 function mockOtpDbSuccess() {
   // Mock based on table name for challenge state + audit logs.
   mockAdminFrom.mockImplementation((table: string) => {
+    if (table === "account_profiles") {
+      // pending_phone staging is performed with the admin client.
+      return {
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ error: null }),
+        }),
+      };
+    }
     if (table === "otp_challenges") {
       const challengeQuery = {
         select: vi.fn(),
@@ -128,12 +136,9 @@ describe("OTP send — no OTP exposure", () => {
           maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
         }),
       };
-      const updateQuery = {
-        eq: vi.fn().mockResolvedValue({ error: null }),
-      };
+      // Reads only: pending_phone staging goes through the admin client.
       return {
         select: vi.fn().mockReturnValue(selectQuery),
-        update: vi.fn().mockReturnValue(updateQuery),
       };
     });
     mockCheckRateLimit.mockResolvedValue({ limited: false });

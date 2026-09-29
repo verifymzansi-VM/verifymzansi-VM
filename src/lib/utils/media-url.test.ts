@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import {
   isTrustedPlatformMediaUrl,
   extractMediaStorageKey,
@@ -7,16 +7,26 @@ import {
 } from "./media-url";
 
 describe("isTrustedPlatformMediaUrl", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("trusts media.verifymzansi.com", () => {
     expect(isTrustedPlatformMediaUrl("https://media.verifymzansi.com/photos/abc.jpg")).toBe(true);
   });
 
-  it("trusts r2.cloudflarestorage.com", () => {
+  it("trusts only this project's R2 account", () => {
+    vi.stubEnv("R2_ACCOUNT_ID", "xyz");
     expect(isTrustedPlatformMediaUrl("https://xyz.r2.cloudflarestorage.com/img.png")).toBe(true);
+    expect(isTrustedPlatformMediaUrl("https://other.r2.cloudflarestorage.com/img.png")).toBe(false);
   });
 
-  it("trusts supabase.co", () => {
+  it("trusts only this project's Supabase host", () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://abc.supabase.co");
     expect(isTrustedPlatformMediaUrl("https://abc.supabase.co/storage/v1/img.jpg")).toBe(true);
+    expect(isTrustedPlatformMediaUrl("https://attacker.supabase.co/storage/v1/img.jpg")).toBe(
+      false
+    );
   });
 
   it("rejects unknown hosts", () => {

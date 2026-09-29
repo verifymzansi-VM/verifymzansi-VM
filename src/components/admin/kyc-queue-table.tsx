@@ -44,6 +44,7 @@ interface VerificationStep {
   step_type: string;
   status: string;
   created_at: string;
+  updated_at?: string | null;
   reviewed_at?: string | null;
   account_display_name?: string | null;
   account_verification_status?: string | null;
@@ -217,6 +218,7 @@ export function KycQueueTable({
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           stepId: selectedStep.id,
+          ...(selectedStep.updated_at ? { expectedUpdatedAt: selectedStep.updated_at } : {}),
           decision,
           reasonCode: decision !== "approved" ? reasonCode : undefined,
           reasonNote: reasonNote || undefined,

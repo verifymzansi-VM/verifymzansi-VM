@@ -100,7 +100,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
       .from("listings")
       .select(
         withOwnerColumn(
-          "id, title, price_cents, price_negotiable, condition, photos, videos, video_thumbnail, media_width, media_height, focal_x, focal_y, logo_url, location_province, location_city, category, attributes, created_at, boost_until, featured, owner_id",
+          "id, title, price_cents, price_negotiable, condition, photos, videos, video_thumbnail, media_width, media_height, focal_x, focal_y, logo_url, location_province, location_city, category, attributes, created_at, boost_until, featured, featured_until, owner_id",
           listingOwnerColumn
         )
       )
@@ -113,11 +113,21 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
     .limit(4);
 
   // Fetch owner profiles for similar listings
-  const similarItems = normalizeOwnerRecords(
-    (similarListings ?? []) as unknown as Array<
-      SimilarListingRow & { owner_id?: string | null; seller_id?: string | null }
-    >
-  ) as SimilarListingRow[];
+  const similarItems = (
+    normalizeOwnerRecords(
+      (similarListings ?? []) as unknown as Array<
+        SimilarListingRow & {
+          owner_id?: string | null;
+          seller_id?: string | null;
+          featured_until?: string | null;
+        }
+      >
+    ) as Array<SimilarListingRow & { featured_until?: string | null }>
+  ).map(({ featured_until, ...item }) => ({
+    ...item,
+    // The stored flag stays true after the paid window ends; trust the date.
+    featured: Boolean(featured_until && new Date(featured_until) > new Date()),
+  })) as SimilarListingRow[];
   let similarSellers = new Map<string, SimilarSellerRow>();
   if (similarItems.length > 0) {
     const ownerIds = Array.from(

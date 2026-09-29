@@ -759,11 +759,15 @@ export async function GET(request: NextRequest) {
         query = query.eq("event_details->>event_type" as never, eventTypeFilter);
       }
 
-      return query
-        .order("boost_until", { ascending: false, nullsFirst: false })
-        .order("featured_until", { ascending: false, nullsFirst: false })
-        .order("created_at", { ascending: false })
-        .range(offset, offset + limit - 1);
+      return (
+        query
+          // active_* are computed fields (see 20260929150000): null once the
+          // paid window has ended, so expired add-ons never outrank anything.
+          .order("active_boost_until", { ascending: false, nullsFirst: false })
+          .order("active_featured_until", { ascending: false, nullsFirst: false })
+          .order("created_at", { ascending: false })
+          .range(offset, offset + limit - 1)
+      );
     };
 
     const primarySelect = withOwnerColumn(

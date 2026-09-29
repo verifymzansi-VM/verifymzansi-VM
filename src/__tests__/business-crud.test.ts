@@ -1759,7 +1759,8 @@ describe("GET /api/businesses", () => {
     expect(json.businesses[0].email).toBeUndefined();
   });
 
-  it("returns owner_id for business responses", async () => {
+  it("does not return owner_id or seller_id in public business responses", async () => {
+    const orderSpy = vi.fn().mockReturnThis();
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
         if (table === "businesses") {
@@ -1773,12 +1774,13 @@ describe("GET /api/businesses", () => {
               return {
                 eq: vi.fn().mockReturnThis(),
                 not: vi.fn().mockReturnThis(),
-                order: vi.fn().mockReturnThis(),
+                order: orderSpy,
                 range: vi.fn().mockResolvedValue({
                   data: [
                     {
                       id: "business-1",
                       owner_id: USER_ID,
+                      seller_id: USER_ID,
                       business_name: "Nomsa Fashion",
                       description: "A valid business profile description.",
                     },
@@ -1808,8 +1810,17 @@ describe("GET /api/businesses", () => {
     const json = await response.json();
     expect(json.businesses[0]).toMatchObject({
       id: "business-1",
-      owner_id: USER_ID,
+      business_name: "Nomsa Fashion",
     });
+    // Account ids stay server-side (POPIA) on the public list.
+    expect(json.businesses[0]).not.toHaveProperty("owner_id");
+    expect(json.businesses[0]).not.toHaveProperty("seller_id");
+    // Ranking uses computed active_* windows so expired add-ons never outrank.
+    expect(orderSpy.mock.calls).toEqual([
+      ["active_boost_until", { ascending: false, nullsFirst: false }],
+      ["active_featured_until", { ascending: false, nullsFirst: false }],
+      ["created_at", { ascending: false }],
+    ]);
   });
 
   it.each([
@@ -1922,9 +1933,9 @@ describe("GET /api/businesses", () => {
       const json = await response.json();
       expect(json.businesses[0]).toMatchObject({
         id: "business-1",
-        owner_id: USER_ID,
         [expectedNullField]: null,
       });
+      expect(json.businesses[0]).not.toHaveProperty("owner_id");
     }
   );
 

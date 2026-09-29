@@ -3,6 +3,7 @@ import {
   PutObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { encryptFile, decryptFile } from "@/lib/utils/encryption";
@@ -26,6 +27,7 @@ interface R2BucketBinding {
     options?: { customMetadata?: Record<string, string>; httpMetadata?: { contentType?: string } }
   ): Promise<unknown>;
   delete(keys: string | string[]): Promise<void>;
+  head(key: string): Promise<{ size: number } | null>;
   get(
     key: string,
     options?: Record<string, unknown>
@@ -426,6 +428,30 @@ export async function deleteFromR2(bucket: string, key: string): Promise<void> {
   });
 
   await client.send(command);
+}
+
+/**
+ * Size of a stored object without downloading it, or null when it is missing.
+ * Check this before reading an uploaded object into memory.
+ */
+export async function getR2ObjectSize(bucket: string, key: string): Promise<number | null> {
+  assertSafeStorageKey(key);
+
+  const r2Binding = await getR2BucketBinding(bucket);
+  if (r2Binding) {
+    const object = await r2Binding.head(key);
+    return object ? object.size : null;
+  }
+
+  const client = getR2Client();
+  try {
+    const response = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+    return response.ContentLength ?? null;
+  } catch (error) {
+    const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
+    if (status === 404) return null;
+    throw error;
+  }
 }
 
 export async function getR2ObjectBytes(

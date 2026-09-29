@@ -20,6 +20,34 @@ import { checkQueueClaim, releaseDecidedClaim } from "@/lib/services/queue-claim
 
 const log = createLogger("AdminContentEditDecide");
 
+/** Columns only system workflows (billing, moderation, lifecycle) may write. */
+const SYSTEM_CONTROLLED_COLUMNS = new Set([
+  "id",
+  "owner_id",
+  "seller_id",
+  "area",
+  "status",
+  "status_reason",
+  "entitlement_id",
+  "created_at",
+  "updated_at",
+  "published_at",
+  "expires_at",
+  "boost_until",
+  "featured_until",
+  "urgent_until",
+  "featured",
+  "urgent",
+  "view_count",
+  "click_count",
+  "approved_edit_count",
+  "edited_since_review",
+  "search_vector",
+  "social_distribution_authorized",
+  "social_distribution_authorized_at",
+  "social_distribution_revoked_at",
+]);
+
 const targetConfig: Record<
   ContentEditTargetType,
   {
@@ -175,7 +203,12 @@ export async function POST(request: Request) {
       );
       if (pendingOnlyMedia.length > 0) {
         try {
-          await queuePublicMediaCleanup(admin, pendingOnlyMedia, "content_edit_rejected");
+          await queuePublicMediaCleanup(
+            admin,
+            pendingOnlyMedia,
+            "content_edit_rejected",
+            editRequest.owner_id
+          );
         } catch (cleanupError) {
           log.warn("Failed to queue rejected edit media cleanup", {
             requestId,
@@ -271,8 +304,16 @@ export async function POST(request: Request) {
       );
     }
 
+    // proposed_data is stored JSON applied with the service role, which skips
+    // the owner guards; never let it set ownership, lifecycle, paid windows
+    // or counters.
+    const proposedContent = Object.fromEntries(
+      Object.entries(editRequest.proposed_data ?? {}).filter(
+        ([column]) => !SYSTEM_CONTROLLED_COLUMNS.has(column)
+      )
+    );
     const updatePayload = {
-      ...editRequest.proposed_data,
+      ...proposedContent,
       status: "live",
       approved_edit_count: approvedEditCount + 1,
     };
@@ -341,7 +382,12 @@ export async function POST(request: Request) {
     );
     if (removedLiveMedia.length > 0) {
       try {
-        await queuePublicMediaCleanup(admin, removedLiveMedia, "content_edit_approved");
+        await queuePublicMediaCleanup(
+          admin,
+          removedLiveMedia,
+          "content_edit_approved",
+          editRequest.owner_id
+        );
       } catch (cleanupError) {
         log.warn("Failed to queue approved edit media cleanup", {
           requestId,

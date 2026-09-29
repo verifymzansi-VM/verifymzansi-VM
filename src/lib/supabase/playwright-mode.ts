@@ -1,4 +1,9 @@
 function isExplicitE2eRuntime(): boolean {
+  // The production worker sets ENVIRONMENT=production; test modes can never
+  // switch on there, whatever other variables are present.
+  if (process.env.ENVIRONMENT === "production") {
+    return false;
+  }
   return process.env.VERIFYMZANSI_RUNTIME_MODE === "e2e";
 }
 

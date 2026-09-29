@@ -176,6 +176,21 @@ function createOwnerColumnSelect(base: Record<string, unknown>) {
   });
 }
 
+/**
+ * Models `admin.from("media_uploads").select("r2_key").eq("user_id", ...).in("r2_key", keys)`.
+ * queuePublicMediaCleanup only queues keys the content owner uploaded; this
+ * double reports every requested key as owned by the queried user.
+ */
+function createOwnedMediaUploads() {
+  const inFn = vi.fn(async (_column: string, keys: string[]) => ({
+    data: keys.map((r2_key) => ({ r2_key })),
+    error: null,
+  }));
+  const eq = vi.fn().mockReturnValue({ in: inFn });
+  const select = vi.fn().mockReturnValue({ eq });
+  return { table: { select }, select, eq, in: inFn };
+}
+
 describe("content media cleanup queueing", () => {
   it("returns 404 when the user does not own the business being updated", async () => {
     mockCreateClient.mockResolvedValue(
@@ -249,6 +264,7 @@ describe("content media cleanup queueing", () => {
 
   it("queues removed listing media after a successful update", async () => {
     const queueInsert = vi.fn().mockResolvedValue({ error: null });
+    const ownedMedia = createOwnedMediaUploads();
     const clientFrom = (table: string) => {
       if (table === "entitlements") {
         return {
@@ -301,6 +317,9 @@ describe("content media cleanup queueing", () => {
         if (table === "r2_cleanup_queue") {
           return { insert: queueInsert };
         }
+        if (table === "media_uploads") {
+          return ownedMedia.table;
+        }
         if (table === "businesses") {
           return {
             select: vi.fn().mockReturnThis(),
@@ -344,6 +363,9 @@ describe("content media cleanup queueing", () => {
     );
 
     expect(res.status).toBe(200);
+    // Only media the content owner uploaded is eligible for cleanup.
+    expect(ownedMedia.select).toHaveBeenCalledWith("r2_key");
+    expect(ownedMedia.eq).toHaveBeenCalledWith("user_id", USER_ID);
     expect(queueInsert).toHaveBeenCalledWith(
       withVariants([
         {
@@ -372,6 +394,7 @@ describe("content media cleanup queueing", () => {
 
   it("queues removed promotion media after a successful update", async () => {
     const queueInsert = vi.fn().mockResolvedValue({ error: null });
+    const ownedMedia = createOwnedMediaUploads();
     const clientFrom = (table: string) => {
       if (table === "entitlements") {
         return {
@@ -418,6 +441,9 @@ describe("content media cleanup queueing", () => {
         if (table === "r2_cleanup_queue") {
           return { insert: queueInsert };
         }
+        if (table === "media_uploads") {
+          return ownedMedia.table;
+        }
         if (table === "businesses") {
           return {
             select: vi.fn().mockReturnThis(),
@@ -459,6 +485,9 @@ describe("content media cleanup queueing", () => {
     );
 
     expect(await res.json()).toEqual({ success: true });
+    // Only media the content owner uploaded is eligible for cleanup.
+    expect(ownedMedia.select).toHaveBeenCalledWith("r2_key");
+    expect(ownedMedia.eq).toHaveBeenCalledWith("user_id", USER_ID);
     expect(queueInsert).toHaveBeenCalledWith(
       withVariants([
         {
@@ -482,6 +511,7 @@ describe("content media cleanup queueing", () => {
 
   it("queues deleted business media after a successful delete", async () => {
     const queueInsert = vi.fn().mockResolvedValue({ error: null });
+    const ownedMedia = createOwnedMediaUploads();
     mockCreateClient.mockResolvedValue(
       createAuthenticatedClient((table: string) => {
         if (table === "businesses") {
@@ -499,7 +529,17 @@ describe("content media cleanup queueing", () => {
                 gallery_photos: ["https://media.verifymzansi.com/business/gallery-1.jpg"],
               },
             }),
-            delete: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
+            // delete → eq(id) → eq(owner) → select("id") reports the deleted row.
+            delete: vi.fn().mockReturnValue(
+              (() => {
+                const chain = {
+                  eq: vi.fn(),
+                  select: vi.fn().mockResolvedValue({ data: [{ id: VALID_UUID }], error: null }),
+                };
+                chain.eq.mockReturnValue(chain);
+                return chain;
+              })()
+            ),
           };
           return {
             ...builder,
@@ -518,6 +558,9 @@ describe("content media cleanup queueing", () => {
         if (table === "r2_cleanup_queue") {
           return { insert: queueInsert };
         }
+        if (table === "media_uploads") {
+          return ownedMedia.table;
+        }
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
@@ -532,6 +575,9 @@ describe("content media cleanup queueing", () => {
     );
 
     expect(await res.json()).toEqual({ success: true });
+    // Only media the content owner uploaded is eligible for cleanup.
+    expect(ownedMedia.select).toHaveBeenCalledWith("r2_key");
+    expect(ownedMedia.eq).toHaveBeenCalledWith("user_id", USER_ID);
     expect(queueInsert).toHaveBeenCalledWith(
       withVariants([
         {
@@ -565,6 +611,7 @@ describe("content media cleanup queueing", () => {
 
   it("queues removed business media after a successful update", async () => {
     const queueInsert = vi.fn().mockResolvedValue({ error: null });
+    const ownedMedia = createOwnedMediaUploads();
     mockCreateClient.mockResolvedValue(
       createAuthenticatedClient((table: string) => {
         if (table === "entitlements") {
@@ -617,6 +664,9 @@ describe("content media cleanup queueing", () => {
         if (table === "r2_cleanup_queue") {
           return { insert: queueInsert };
         }
+        if (table === "media_uploads") {
+          return ownedMedia.table;
+        }
         if (table === "businesses") {
           return {
             select: vi.fn().mockReturnThis(),
@@ -665,6 +715,9 @@ describe("content media cleanup queueing", () => {
     );
 
     expect(await res.json()).toEqual({ success: true });
+    // Only media the content owner uploaded is eligible for cleanup.
+    expect(ownedMedia.select).toHaveBeenCalledWith("r2_key");
+    expect(ownedMedia.eq).toHaveBeenCalledWith("user_id", USER_ID);
     expect(queueInsert).toHaveBeenCalledWith(
       withVariants([
         {

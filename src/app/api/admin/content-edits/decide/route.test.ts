@@ -83,7 +83,7 @@ function createMockRequest(body: Record<string, unknown>) {
   } as unknown as Request;
 }
 
-function makeEditRequest() {
+function makeEditRequest(proposedOverrides: Record<string, unknown> = {}) {
   return {
     id: requestId,
     target_type: "listing",
@@ -96,6 +96,7 @@ function makeEditRequest() {
       description: "Updated description",
       photos: ["new.jpg"],
       status: "live",
+      ...proposedOverrides,
     },
     current_snapshot: {
       title: "Old iPhone",
@@ -214,7 +215,8 @@ describe("POST /api/admin/content-edits/decide", () => {
       expect(mockQueuePublicMediaCleanup).toHaveBeenCalledWith(
         expect.anything(),
         ["old.jpg"],
-        "content_edit_approved"
+        "content_edit_approved",
+        "owner-1"
       );
       expect(mockCreateNotification).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -224,6 +226,116 @@ describe("POST /api/admin/content-edits/decide", () => {
       );
     }
   );
+
+  it("strips system-controlled columns from proposed_data before the service-role update", async () => {
+    mockGetStaffActorRole.mockReturnValue("admin");
+    const tamperedRequest = makeEditRequest({
+      owner_id: "attacker-1",
+      seller_id: "attacker-1",
+      featured_until: "2099-01-01T00:00:00.000Z",
+      boost_until: "2099-01-01T00:00:00.000Z",
+      urgent_until: "2099-01-01T00:00:00.000Z",
+      featured: true,
+      urgent: true,
+      view_count: 999999,
+      expires_at: "2099-01-01T00:00:00.000Z",
+      entitlement_id: "c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a33",
+      approved_edit_count: 0,
+      status: "draft",
+    });
+    const targetUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            select: vi.fn().mockResolvedValue({ data: [{ id: targetId }], error: null }),
+          }),
+        }),
+      }),
+    });
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "content_edit_requests") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: tamperedRequest, error: null }),
+              }),
+            }),
+          }),
+          update: vi.fn((payload: { status?: string }) => {
+            if (payload.status === "processing") {
+              return {
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    select: vi.fn().mockReturnValue({
+                      maybeSingle: vi
+                        .fn()
+                        .mockResolvedValue({ data: tamperedRequest, error: null }),
+                    }),
+                  }),
+                }),
+              };
+            }
+            return {
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    select: vi.fn().mockResolvedValue({ data: [{ id: requestId }], error: null }),
+                  }),
+                }),
+              }),
+            };
+          }),
+        };
+      }
+
+      if (table === "listings") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: targetId, owner_id: "owner-1", status: "live", approved_edit_count: 1 },
+                error: null,
+              }),
+            }),
+          }),
+          update: targetUpdate,
+        };
+      }
+
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    const response = await POST(createMockRequest({ requestId, decision: "approve" }));
+
+    expect(response.status).toBe(200);
+    expect(targetUpdate).toHaveBeenCalledTimes(1);
+    const payload = targetUpdate.mock.calls[0]?.[0] as Record<string, unknown>;
+    // Owner-editable content is applied...
+    expect(payload).toMatchObject({
+      title: "Updated iPhone",
+      description: "Updated description",
+      photos: ["new.jpg"],
+    });
+    // ...but ownership, paid windows, lifecycle and counters never come from proposed_data.
+    for (const column of [
+      "owner_id",
+      "seller_id",
+      "featured_until",
+      "boost_until",
+      "urgent_until",
+      "featured",
+      "urgent",
+      "view_count",
+      "expires_at",
+      "entitlement_id",
+    ]) {
+      expect(payload).not.toHaveProperty(column);
+    }
+    expect(payload.status).toBe("live");
+    expect(payload.approved_edit_count).toBe(2);
+  });
 
   it.each(["admin", "moderator"])(
     "allows %s to reject an edit without changing the live post",
@@ -268,7 +380,8 @@ describe("POST /api/admin/content-edits/decide", () => {
       expect(mockQueuePublicMediaCleanup).toHaveBeenCalledWith(
         expect.anything(),
         ["new.jpg"],
-        "content_edit_rejected"
+        "content_edit_rejected",
+        "owner-1"
       );
       expect(mockCreateNotification).toHaveBeenCalledWith(
         expect.objectContaining({

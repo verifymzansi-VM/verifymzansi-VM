@@ -45,10 +45,15 @@ export function isTrustedPlatformMediaUrl(url: string): boolean {
     const parsed = new URL(url);
     const appUrl = process.env.NEXT_PUBLIC_APP_URL;
     const appHostname = appUrl ? new URL(appUrl).hostname : null;
+    // Only this project's own storage: any other *.supabase.co or R2 account
+    // is attacker-controllable, and its content could change after review.
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseHostname = supabaseUrl ? new URL(supabaseUrl).hostname : null;
+    const r2AccountId = process.env.R2_ACCOUNT_ID;
     return (
       parsed.hostname === "media.verifymzansi.com" ||
-      parsed.hostname.endsWith(".r2.cloudflarestorage.com") ||
-      parsed.hostname.endsWith(".supabase.co") ||
+      (Boolean(r2AccountId) && parsed.hostname === `${r2AccountId}.r2.cloudflarestorage.com`) ||
+      (supabaseHostname !== null && parsed.hostname === supabaseHostname) ||
       ((process.env.PLAYWRIGHT_TEST_MODE === "1" ||
         process.env.NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE === "1") &&
         appHostname !== null &&

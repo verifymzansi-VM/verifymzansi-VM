@@ -40,6 +40,10 @@ const BUSINESS_CATEGORY_VALUES = [
  * listing, storefront, or business profile.
  * Optionally links to a Mzansi Business via business_id.
  */
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_EVENT_LEAD_MS = 365 * DAY_MS;
+const MAX_EVENT_SPAN_MS = 90 * DAY_MS;
+
 export const promotionSchema = z
   .object({
     title: z
@@ -157,6 +161,22 @@ export const promotionSchema = z
       return true;
     },
     { message: "End date must be on or after start date", path: ["end_date"] }
+  )
+  // Events are free posts that stay visible until they end, so bound how far
+  // ahead and how long they can run (mirrors promotions_event_window).
+  .refine(
+    (data) =>
+      [data.start_date, data.end_date].every(
+        (value) => !value || new Date(value).getTime() <= Date.now() + MAX_EVENT_LEAD_MS
+      ),
+    { message: "Events can be posted up to 12 months ahead.", path: ["start_date"] }
+  )
+  .refine(
+    (data) =>
+      !data.start_date ||
+      !data.end_date ||
+      new Date(data.end_date).getTime() - new Date(data.start_date).getTime() <= MAX_EVENT_SPAN_MS,
+    { message: "An event can run for at most 90 days.", path: ["end_date"] }
   )
   .transform((data) => {
     if (data.form_version !== 2) return data;

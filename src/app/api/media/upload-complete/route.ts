@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { deleteFromR2, getR2ObjectBytes } from "@/lib/services/storage";
+import { deleteFromR2, getR2ObjectBytes, getR2ObjectSize } from "@/lib/services/storage";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { parseAndValidateJsonRequest } from "@/lib/utils/api";
@@ -177,7 +177,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const object = await getR2ObjectBytes(row.bucket, key);
+    // Check the stored size before reading the object into Worker memory.
+    const storedSize = await getR2ObjectSize(row.bucket, key);
+    if (storedSize != null && storedSize !== size) {
+      await cleanupRejectedUpload({
+        bucket: row.bucket,
+        key,
+        userId: user.id,
+        publicUrl,
+        reason: "size_mismatch",
+      });
+      return NextResponse.json(
+        { error: "Uploaded object size mismatch", code: "uploaded_object_size_mismatch", traceId },
+        { status: 400, headers: { "x-upload-trace-id": traceId } }
+      );
+    }
+
+    const object = storedSize == null ? null : await getR2ObjectBytes(row.bucket, key);
     if (!object) {
       await cleanupRejectedUpload({
         bucket: row.bucket,

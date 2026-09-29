@@ -369,7 +369,7 @@ export async function POST(request: NextRequest) {
     // ── Guard: prevent re-uploading over already-approved steps ──
     const { data: existingStep, error: existingStepErr } = await admin
       .from("verification_steps")
-      .select("status, risk_score, risk_level, auto_status")
+      .select("id, status, risk_score, risk_level, auto_status")
       .eq("user_id", user.id)
       .eq("step_type", stepType)
       .maybeSingle();
@@ -394,6 +394,38 @@ export async function POST(request: NextRequest) {
         },
         { status: 409 }
       );
+    }
+
+    // A high-risk approval waiting for its second reviewer applies to the
+    // document that was proposed; replacing it now would get a different
+    // document approved.
+    if (existingStep?.id) {
+      const { count: pendingOverrides, error: overrideLookupErr } = await admin
+        .from("decision_records")
+        .select("id", { count: "exact", head: true })
+        .eq("case_type", "verification_step")
+        .eq("case_id", existingStep.id)
+        .in("status", ["pending_approval", "escalated"]);
+      if (overrideLookupErr) {
+        log.error("Failed to check pending verification decisions", {
+          error: overrideLookupErr.message,
+          userId: user.id,
+          stepType,
+        });
+        return jsonError(
+          { error: "Unable to verify step status. Please try again." },
+          { status: 500 }
+        );
+      }
+      if ((pendingOverrides ?? 0) > 0) {
+        return jsonError(
+          {
+            error: "This document is in final review. You can upload again once it is decided.",
+            code: "step_in_final_review",
+          },
+          { status: 409 }
+        );
+      }
     }
 
     const fileAnalysis = await analyzeKycUploadFile({

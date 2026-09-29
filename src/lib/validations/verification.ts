@@ -111,6 +111,15 @@ export const fileUploadSchema = z
   })
   .superRefine((data, ctx) => {
     if (data.docType === "id_document") {
+      // The ID number drives duplicate-identity, ban-evasion and trial checks;
+      // an ID upload without one would skip all of them.
+      if (!/^\d{13}$/.test(data.idNumber?.trim() ?? "")) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "A 13-digit SA ID number is required for ID document uploads",
+          path: ["idNumber"],
+        });
+      }
       if (!data.firstName?.trim()) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,

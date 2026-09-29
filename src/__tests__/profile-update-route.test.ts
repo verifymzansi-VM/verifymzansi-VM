@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
 const { mockCreateClient, mockCreateAdminClient, mockCheckRateLimit } = vi.hoisted(() => ({
@@ -43,15 +43,36 @@ function createRequest(body: unknown, headers: Record<string, string> = {}) {
   } as unknown as NextRequest;
 }
 
+/**
+ * The profile UPDATE is performed with the admin client (reads of the current
+ * profile still use the user-scoped client from the route prelude).
+ */
+function mockAdminClient(
+  updateResult: { data: unknown; error: unknown } = { data: null, error: null },
+  auditInsert = vi.fn().mockResolvedValue({ error: null })
+) {
+  const updateMaybeSingle = vi.fn().mockResolvedValue(updateResult);
+  const updateSelect = vi.fn().mockReturnValue({ maybeSingle: updateMaybeSingle });
+  const updateEq = vi.fn().mockReturnValue({ select: updateSelect });
+  const update = vi.fn().mockReturnValue({ eq: updateEq });
+  const from = vi.fn((table: string) => {
+    if (table === "account_profiles") {
+      return { update };
+    }
+    if (table === "profile_change_history") {
+      return { insert: auditInsert };
+    }
+    return {};
+  });
+  mockCreateAdminClient.mockReturnValue({ from });
+  return { from, update, updateEq, updateMaybeSingle, auditInsert };
+}
+
 describe("POST /api/profile/update", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCheckRateLimit.mockResolvedValue({ limited: false });
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        insert: vi.fn().mockResolvedValue({ error: null }),
-      }),
-    });
+    mockAdminClient();
   });
 
   it("rejects cross-site profile updates", async () => {
@@ -98,7 +119,7 @@ describe("POST /api/profile/update", () => {
   });
 
   it("returns 409 when the new phone number is already used elsewhere", async () => {
-    const updateSingle = vi.fn().mockResolvedValue({
+    const { update } = mockAdminClient({
       data: null,
       error: { code: "23505", message: "duplicate key value violates unique constraint" },
     });
@@ -109,13 +130,6 @@ describe("POST /api/profile/update", () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            select: vi.fn().mockReturnValue({
-              maybeSingle: updateSingle,
-            }),
-          }),
-        }),
       }),
       auth: {
         getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
@@ -130,14 +144,11 @@ describe("POST /api/profile/update", () => {
     );
 
     expect(res.status).toBe(409);
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ pending_phone: "+27821234567" }));
   });
 
   it("updates the profile successfully", async () => {
-    const auditInsert = vi.fn().mockResolvedValue({ error: null });
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn().mockReturnValue({ insert: auditInsert }),
-    });
-    const updateSingle = vi.fn().mockResolvedValue({
+    const { update, updateEq, auditInsert } = mockAdminClient({
       data: {
         user_id: "user-1",
         display_name: "Nomsa",
@@ -146,6 +157,7 @@ describe("POST /api/profile/update", () => {
       },
       error: null,
     });
+    const userScopedUpdate = vi.fn();
     const from = vi.fn().mockReturnValue({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
@@ -162,13 +174,7 @@ describe("POST /api/profile/update", () => {
         },
         error: null,
       }),
-      update: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            maybeSingle: updateSingle,
-          }),
-        }),
-      }),
+      update: userScopedUpdate,
     });
 
     mockCreateClient.mockResolvedValue({
@@ -210,27 +216,28 @@ describe("POST /api/profile/update", () => {
       new_value: { province: "Gauteng", city: "Johannesburg" },
       source: "user",
     });
+    // The write goes through the admin client, scoped to the signed-in user.
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        display_name: "Nomsa",
+        bio: "Trusted seller",
+        location_province: "Gauteng",
+        location_city: "Johannesburg",
+      })
+    );
+    expect(updateEq).toHaveBeenCalledWith("user_id", "user-1");
+    expect(userScopedUpdate).not.toHaveBeenCalled();
   });
 
   it("does not update or log location changes after location verification", async () => {
-    const auditInsert = vi.fn().mockResolvedValue({ error: null });
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn().mockReturnValue({ insert: auditInsert }),
-    });
-    const update = vi.fn().mockReturnValue({
-      eq: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          maybeSingle: vi.fn().mockResolvedValue({
-            data: {
-              user_id: "user-1",
-              display_name: "Nomsa",
-              location_province: "Free State",
-              location_city: "Sasolburg",
-            },
-            error: null,
-          }),
-        }),
-      }),
+    const { update, auditInsert } = mockAdminClient({
+      data: {
+        user_id: "user-1",
+        display_name: "Nomsa",
+        location_province: "Free State",
+        location_city: "Sasolburg",
+      },
+      error: null,
     });
 
     const from = vi.fn().mockReturnValue({
@@ -248,7 +255,6 @@ describe("POST /api/profile/update", () => {
         },
         error: null,
       }),
-      update,
     });
 
     mockCreateClient.mockResolvedValue({
@@ -291,7 +297,7 @@ describe("POST /api/profile/update", () => {
         error: null,
       });
 
-    const updateSingle = vi.fn().mockResolvedValue({
+    const { update } = mockAdminClient({
       data: { user_id: "user-1", display_name: "Nomsa" },
       error: null,
     });
@@ -300,13 +306,6 @@ describe("POST /api/profile/update", () => {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       maybeSingle,
-      update: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            maybeSingle: updateSingle,
-          }),
-        }),
-      }),
     });
 
     mockCreateClient.mockResolvedValue({
@@ -328,6 +327,7 @@ describe("POST /api/profile/update", () => {
 
     expect(res.status).toBe(200);
     expect(maybeSingle).toHaveBeenCalledTimes(2);
+    expect(update).toHaveBeenCalledTimes(1);
   });
 
   it("returns 403 when phone is changed but account is not verified", async () => {
@@ -344,11 +344,6 @@ describe("POST /api/profile/update", () => {
         },
         error: null,
       }),
-      update: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({ maybeSingle: vi.fn() }),
-        }),
-      }),
     });
 
     mockCreateClient.mockResolvedValue({
@@ -358,22 +353,19 @@ describe("POST /api/profile/update", () => {
       },
     });
 
+    const { update } = mockAdminClient();
+
     const res = await POST(createRequest({ displayName: "Nomsa", phone: "+27829876543" }));
 
     expect(res.status).toBe(403);
+    expect(update).not.toHaveBeenCalled();
     await expect(res.json()).resolves.toMatchObject({ code: "PHONE_REVERIFICATION_REQUIRED" });
   });
 
   it("does not enforce phone re-verification when phone is unchanged", async () => {
-    const update = vi.fn().mockReturnValue({
-      eq: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          maybeSingle: vi.fn().mockResolvedValue({
-            data: { user_id: "user-1", display_name: "Nomsa" },
-            error: null,
-          }),
-        }),
-      }),
+    const { update } = mockAdminClient({
+      data: { user_id: "user-1", display_name: "Nomsa" },
+      error: null,
     });
 
     const from = vi.fn().mockReturnValue({
@@ -389,7 +381,6 @@ describe("POST /api/profile/update", () => {
         },
         error: null,
       }),
-      update,
     });
 
     mockCreateClient.mockResolvedValue({
@@ -424,11 +415,6 @@ describe("POST /api/profile/update", () => {
         },
         error: null,
       }),
-      update: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({ maybeSingle: vi.fn() }),
-        }),
-      }),
     });
 
     mockCreateClient.mockResolvedValue({
@@ -438,14 +424,17 @@ describe("POST /api/profile/update", () => {
       },
     });
 
+    const { update } = mockAdminClient();
+
     const res = await POST(createRequest({ displayName: "Nomsa", phone: "+27829876543" }));
 
     expect(res.status).toBe(429);
+    expect(update).not.toHaveBeenCalled();
     await expect(res.json()).resolves.toMatchObject({ code: "PHONE_COOLDOWN" });
   });
 
   it("returns 403 POLICY_VIOLATION when the DB trigger rejects a locked field change", async () => {
-    const updateSingle = vi.fn().mockResolvedValue({
+    mockAdminClient({
       data: null,
       error: { code: "P0001", message: "identity lock violation" },
     });
@@ -454,11 +443,6 @@ describe("POST /api/profile/update", () => {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-      update: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({ maybeSingle: updateSingle }),
-        }),
-      }),
     });
 
     mockCreateClient.mockResolvedValue({
@@ -472,5 +456,77 @@ describe("POST /api/profile/update", () => {
 
     expect(res.status).toBe(403);
     await expect(res.json()).resolves.toMatchObject({ code: "POLICY_VIOLATION" });
+  });
+
+  describe("avatarUrl validation", () => {
+    const SUPABASE_URL = "https://project.supabase.co";
+    const AVATARS_BASE = `${SUPABASE_URL}/storage/v1/object/public/avatars`;
+
+    function mockUserClientWithoutProfile() {
+      const from = vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      });
+      mockCreateClient.mockResolvedValue({
+        from,
+        auth: {
+          getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
+        },
+      });
+      return { from };
+    }
+
+    beforeEach(() => {
+      vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", SUPABASE_URL);
+    });
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it("rejects avatar URLs outside this project's avatars bucket", async () => {
+      mockUserClientWithoutProfile();
+      const { update } = mockAdminClient();
+
+      const res = await POST(
+        createRequest({ displayName: "Nomsa", avatarUrl: "https://evil.example/avatar.png" })
+      );
+
+      expect(res.status).toBe(400);
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it("rejects avatar URLs in another member's avatars folder before reading the profile", async () => {
+      const { from: userFrom } = mockUserClientWithoutProfile();
+      const { update } = mockAdminClient();
+
+      const res = await POST(
+        createRequest({
+          displayName: "Nomsa",
+          avatarUrl: `${AVATARS_BASE}/user-2/avatar.jpg`,
+        })
+      );
+
+      expect(res.status).toBe(400);
+      await expect(res.json()).resolves.toMatchObject({ error: "Invalid avatar URL" });
+      expect(update).not.toHaveBeenCalled();
+      expect(userFrom).not.toHaveBeenCalled();
+    });
+
+    it("accepts avatar URLs in the caller's own avatars folder and writes them via the admin client", async () => {
+      mockUserClientWithoutProfile();
+      const avatarUrl = `${AVATARS_BASE}/user-1/avatar.jpg?v=123`;
+      const { update, updateEq } = mockAdminClient({
+        data: { user_id: "user-1", display_name: "Nomsa", avatar_url: avatarUrl },
+        error: null,
+      });
+
+      const res = await POST(createRequest({ displayName: "Nomsa", avatarUrl }));
+
+      expect(res.status).toBe(200);
+      expect(update).toHaveBeenCalledWith(expect.objectContaining({ avatar_url: avatarUrl }));
+      expect(updateEq).toHaveBeenCalledWith("user_id", "user-1");
+    });
   });
 });

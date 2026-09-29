@@ -103,8 +103,29 @@ const baseStep = {
   status: "pending",
   risk_level: "low",
   risk_score: 10,
+  // Approving an id_doc step requires the ID number hash (duplicate-identity check).
+  id_number_hmac: "hmac-seller-1",
   submitted_at: new Date().toISOString(),
 };
+
+/** Duplicate-ID lookup run before approving an id_doc step:
+ *  .select("id, user_id").eq().eq().eq().neq().limit().maybeSingle() — no conflict.
+ */
+function idConflictLookupChain() {
+  return {
+    eq: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          neq: vi.fn().mockReturnValue({
+            limit: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+            }),
+          }),
+        }),
+      }),
+    }),
+  };
+}
 
 // ── Tests ────────────────────────────────────────────────────
 
@@ -153,6 +174,7 @@ describe("Retention & Legal Hold", () => {
                   }),
                 };
               }
+              if (args[0] === "id, user_id") return idConflictLookupChain();
               if (typeof args[0] === "string" && args[0].includes("first_name")) {
                 return {
                   eq: vi.fn().mockReturnValue({
@@ -292,6 +314,7 @@ describe("Retention & Legal Hold", () => {
                   }),
                 };
               }
+              if (args[0] === "id, user_id") return idConflictLookupChain();
               if (typeof args[0] === "string" && args[0].includes("first_name")) {
                 return {
                   eq: vi.fn().mockReturnValue({

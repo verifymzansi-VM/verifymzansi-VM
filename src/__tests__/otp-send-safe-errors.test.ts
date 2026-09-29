@@ -71,12 +71,9 @@ describe("POST /api/otp/send safe error envelopes", () => {
           maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
         }),
       };
-      const updateQuery = {
-        eq: vi.fn().mockResolvedValue({ error: null }),
-      };
+      // Reads only: pending_phone staging goes through the admin client.
       return {
         select: vi.fn().mockReturnValue(selectQuery),
-        update: vi.fn().mockReturnValue(updateQuery),
       };
     });
     mockCheckRateLimit.mockResolvedValue({ limited: false });
@@ -89,6 +86,15 @@ describe("POST /api/otp/send safe error envelopes", () => {
 
   it("does not leak database details when challenge creation fails", async () => {
     mockAdminFrom.mockImplementation((table: string) => {
+      if (table === "account_profiles") {
+        // pending_phone staging is performed with the admin client.
+        return {
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ error: null }),
+          }),
+        };
+      }
+
       if (table === "otp_logs") {
         const otpLogsQuery = {
           select: vi.fn(),

@@ -150,7 +150,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         .eq("business_id", id)
         .eq("status", "live")
     )
-      .order("boost_until", { ascending: false, nullsFirst: false })
+      .order("active_boost_until", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .limit(12);
 
@@ -476,7 +476,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     if (removedMediaUrls.length > 0) {
       try {
-        await queuePublicMediaCleanup(admin, removedMediaUrls, "business_media_replaced");
+        await queuePublicMediaCleanup(admin, removedMediaUrls, "business_media_replaced", user.id);
       } catch (cleanupError) {
         log.error("Failed to queue replaced business media for cleanup", {
           error: cleanupError instanceof Error ? cleanupError.message : "Unknown error",

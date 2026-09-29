@@ -197,7 +197,10 @@ export async function checkRateLimit(opts: RateLimitOptions): Promise<RateLimitR
     if (opts.degradedMode === "block") {
       // In e2e test mode, fall back to local rate limiter instead of blocking
       // every request — the external worker is intentionally absent.
-      if (process.env.VERIFYMZANSI_RUNTIME_MODE === "e2e") {
+      if (
+        process.env.VERIFYMZANSI_RUNTIME_MODE === "e2e" &&
+        process.env.ENVIRONMENT !== "production"
+      ) {
         return { ...checkLocalRateLimit(opts.key, opts.action), degraded: true };
       }
       logger.error("Shared rate limiter is not configured for a fail-closed action", {

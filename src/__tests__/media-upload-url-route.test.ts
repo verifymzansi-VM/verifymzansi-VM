@@ -326,7 +326,7 @@ describe("POST /api/media/upload-url", () => {
       "verifymzansi-public",
       "media/listing/user-1/video.mp4",
       "video/mp4",
-      3600,
+      600,
       2048
     );
     expect(insert).toHaveBeenCalledWith(

@@ -104,22 +104,28 @@ export function createOwnedContentDeleteRoute<Params extends Record<string, stri
         return NextResponse.json({ error: invalidStatusMessage }, { status: 400 });
       }
 
-      const { error: deleteError } = await applyOwnerFilter(
+      // Select the deleted id: row-level security silently skips rows the
+      // owner may not delete, which must not be reported as a success.
+      const { data: deletedRows, error: deleteError } = await applyOwnerFilter(
         supabase.from(table).delete().eq("id", entityId),
         ownerColumn,
         user.id
-      );
+      ).select("id");
 
       if (deleteError) {
         log.error(deleteErrorLogMessage, { error: deleteError.message });
         return NextResponse.json({ error: deleteErrorMessage }, { status: 500 });
       }
 
+      if ((deletedRows ?? []).length === 0) {
+        return NextResponse.json({ error: invalidStatusMessage }, { status: 409 });
+      }
+
       const deletedMediaUrls = collectDeletedMediaUrls(existing);
       if (deletedMediaUrls.length > 0) {
         try {
           const admin = createAdminClient();
-          await queuePublicMediaCleanup(admin, deletedMediaUrls, cleanupReason);
+          await queuePublicMediaCleanup(admin, deletedMediaUrls, cleanupReason, user.id);
         } catch (cleanupError) {
           log.error(cleanupErrorLogMessage, {
             error: cleanupError instanceof Error ? cleanupError.message : "Unknown error",

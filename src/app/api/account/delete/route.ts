@@ -8,6 +8,7 @@ import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { queuePublicMediaCleanup } from "@/lib/services/media-cleanup";
 
 const log = createLogger("AccountDelete");
 
@@ -127,8 +128,9 @@ async function cleanupBlockingUserReferences(
       admin.from("listing_views").update({ viewer_user_id: null }).eq("viewer_user_id", userId),
     ],
     [
+      // Keep the record that an ID document was viewed; only drop who viewed it.
       "kyc_evidence_access_logs.actor_id",
-      admin.from("kyc_evidence_access_logs").delete().eq("actor_id", userId),
+      admin.from("kyc_evidence_access_logs").update({ actor_id: null }).eq("actor_id", userId),
     ],
     [
       "kyc_evidence_access_logs.user_id",
@@ -140,6 +142,47 @@ async function cleanupBlockingUserReferences(
     const result = await allowMissingSchema(action, operation);
     if (result.error) {
       return result;
+    }
+  }
+
+  return { error: null };
+}
+
+/**
+ * Queue the user's uploaded public media (with its responsive variants) for
+ * deletion and remove their avatar objects.
+ */
+async function removeUserStoredFiles(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string
+): Promise<{ error: string | null }> {
+  const { data: uploads, error: uploadsError } = await admin
+    .from("media_uploads")
+    .select("url")
+    .eq("user_id", userId);
+  if (uploadsError) {
+    return { error: uploadsError.message };
+  }
+
+  const urls = (uploads ?? []).map((upload) => upload.url as string).filter(Boolean);
+  if (urls.length > 0) {
+    try {
+      await queuePublicMediaCleanup(admin, urls, "account_deleted", userId);
+    } catch (queueError) {
+      return { error: queueError instanceof Error ? queueError.message : "Media cleanup failed" };
+    }
+  }
+
+  const avatars = admin.storage.from("avatars");
+  const { data: avatarFiles, error: listError } = await avatars.list(userId);
+  if (listError) {
+    return { error: listError.message };
+  }
+  const avatarPaths = (avatarFiles ?? []).map((file) => `${userId}/${file.name}`);
+  if (avatarPaths.length > 0) {
+    const { error: removeError } = await avatars.remove(avatarPaths);
+    if (removeError) {
+      return { error: removeError.message };
     }
   }
 
@@ -292,6 +335,18 @@ export async function POST(request: NextRequest) {
         userId: user.id,
         error: cleanupResult.error.message,
         code: cleanupResult.error.code,
+      });
+      return internalApiError("Unable to delete account right now");
+    }
+
+    // Stored files are not removed by the database cascade. KYC documents are
+    // queued by a delete trigger on kyc_artifacts; public media and the avatar
+    // are handled here, before the rows that reference them disappear.
+    const storageResult = await removeUserStoredFiles(admin, user.id);
+    if (storageResult.error) {
+      log.error("Account deletion storage cleanup failed", {
+        userId: user.id,
+        error: storageResult.error,
       });
       return internalApiError("Unable to delete account right now");
     }

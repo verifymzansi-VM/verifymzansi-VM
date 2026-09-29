@@ -73,6 +73,9 @@ export async function GET(request: NextRequest) {
     const { count: unreadCount, error: countError } = await supabase
       .from("leads")
       .select("id", { count: "exact", head: true })
+      // RLS also lets admins read every lead; this inbox is only ever the
+      // caller's own.
+      .eq("owner_id", user.id)
       .eq("status", "new");
 
     if (countError) {
@@ -87,6 +90,7 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from("leads")
       .select("id, target_id, target_type, message, status, buyer_name, buyer_email, created_at")
+      .eq("owner_id", user.id)
       .order("created_at", { ascending: false })
       .limit(limit);
 
@@ -153,6 +157,7 @@ export async function PATCH(request: NextRequest) {
       .from("leads")
       .update({ status: parsedBody.data.status })
       .eq("id", parsedBody.data.id)
+      .eq("owner_id", user.id)
       .select("id, status")
       .maybeSingle();
 

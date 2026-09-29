@@ -155,11 +155,18 @@ export async function POST(request: NextRequest) {
           ip,
           rateLimitKeySource: clientIdentity.source,
         });
-        const strictCheck = await checkRateLimit({
+        const perClientCheck = await checkRateLimit({
           key: `strict:${clientIdentity.key}`,
           action: "auth:login:nocaptcha",
           degradedMode: "block",
         });
+        const strictCheck = perClientCheck.limited
+          ? perClientCheck
+          : await checkRateLimit({
+              key: "global",
+              action: "auth:login:nocaptcha:global",
+              degradedMode: "block",
+            });
         if (strictCheck.limited) {
           logAuthProtectionWarning("Login no-CAPTCHA rate limit triggered", {
             ip,

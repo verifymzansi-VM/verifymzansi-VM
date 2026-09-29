@@ -32,7 +32,7 @@ export async function HomeBusinessShowcase() {
   const { data: businesses } = await applyVisibleExpiryFilter(
     supabase.from("businesses").select("*").eq("status", "live").eq("area", "MZANSI_BUSINESS")
   )
-    .order("boost_until", { ascending: false, nullsFirst: false })
+    .order("active_boost_until", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(16);
 

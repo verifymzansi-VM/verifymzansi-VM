@@ -171,7 +171,8 @@ export async function GET(request: Request) {
 
         isNewOAuthUser = !existingProfile;
 
-        let profile = await ensureAccountProfile(supabase, user);
+        const profileAdmin = createAdminClient();
+        let profile = await ensureAccountProfile(profileAdmin, user);
         if (!profile) {
           // Exponential backoff for transient DB errors — ensureAccountProfile uses upsert so retries are safe
           const retryDelays = [200, 500, 1500];
@@ -181,7 +182,7 @@ export async function GET(request: Request) {
               delayMs: delay,
             });
             await new Promise((resolve) => setTimeout(resolve, delay));
-            profile = await ensureAccountProfile(supabase, user);
+            profile = await ensureAccountProfile(profileAdmin, user);
             if (profile) break;
           }
         }

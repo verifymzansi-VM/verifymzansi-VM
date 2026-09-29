@@ -26,6 +26,8 @@ export interface VerificationStepRow {
   risk_level?: string | null;
   risk_score?: number | null;
   id_number_hmac?: string | null;
+  /** Version of the step that was reviewed (optimistic lock). */
+  updated_at?: string | null;
 }
 
 export type ApplyVerificationResult =
@@ -64,6 +66,17 @@ export async function applyVerificationDecision({
   allowAlreadyApplied?: boolean;
 }): Promise<ApplyVerificationResult> {
   const admin = createAdminClient();
+
+  // Without the ID number hash the duplicate-identity check cannot run, so the
+  // same person could verify several accounts.
+  if (decision === "approved" && step.step_type === "id_doc" && !step.id_number_hmac) {
+    return {
+      ok: false,
+      status: 409,
+      error: "This ID submission has no ID number. Request a resubmission instead.",
+      code: "id_number_missing",
+    };
+  }
 
   if (decision === "approved" && step.step_type === "id_doc" && step.id_number_hmac) {
     const { data: idConflict, error: idConflictError } = await admin
@@ -111,12 +124,17 @@ export async function applyVerificationDecision({
 
   // CAS guard: only update steps that are still in a reviewable state.
   // Prevents two admins from overwriting each other's decisions.
-  const { data: updatedRows, error: updateError } = await admin
+  let stepUpdate = admin
     .from("verification_steps")
     .update(updateData)
     .eq("id", step.id)
-    .in("status", ["pending", "needs_resubmission"])
-    .select("id");
+    .in("status", ["pending", "needs_resubmission"]);
+  // Optimistic lock: a re-upload between reading and deciding bumps
+  // updated_at, so the decision cannot land on evidence nobody reviewed.
+  if (step.updated_at) {
+    stepUpdate = stepUpdate.eq("updated_at", step.updated_at);
+  }
+  const { data: updatedRows, error: updateError } = await stepUpdate.select("id");
 
   if (updateError) {
     const isApprovedIdConflict =

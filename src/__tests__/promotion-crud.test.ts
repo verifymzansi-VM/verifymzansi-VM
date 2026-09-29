@@ -1459,8 +1459,15 @@ describe("DELETE /api/promotions/[id]", () => {
     expect(json.error).toMatch(/draft or rejected/i);
   });
 
-  it("deletes draft promotion successfully", async () => {
-    const deleteEq = vi.fn().mockResolvedValue({ error: null });
+  function createDeleteChain(deletedRows: Array<{ id: string }> = [{ id: VALID_UUID }]) {
+    const select = vi.fn().mockResolvedValue({ data: deletedRows, error: null });
+    const chain = { eq: vi.fn(), select };
+    chain.eq.mockReturnValue(chain);
+    return chain;
+  }
+
+  it("returns 409 when row-level security deletes zero rows", async () => {
+    const deleteChain = createDeleteChain([]);
     mockCreateClient.mockResolvedValue({
       from: vi.fn((table: string) => {
         if (table === "promotions") {
@@ -1470,7 +1477,42 @@ describe("DELETE /api/promotions/[id]", () => {
             maybeSingle: vi.fn().mockResolvedValue({
               data: { id: VALID_UUID, owner_id: USER_ID, status: "draft" },
             }),
-            delete: vi.fn().mockReturnValue({ eq: deleteEq }),
+            delete: vi.fn().mockReturnValue(deleteChain),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } }, error: null }),
+      },
+    });
+    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`, {
+      method: "DELETE",
+    });
+    const res = await DELETE(req, { params: Promise.resolve({ id: VALID_UUID }) });
+    expect(res.status).toBe(409);
+    const json = await res.json();
+    expect(json.error).toMatch(/draft or rejected/i);
+    expect(deleteChain.select).toHaveBeenCalledWith("id");
+    expect(mockCreateAdminClient).not.toHaveBeenCalled();
+  });
+
+  it("deletes draft promotion successfully", async () => {
+    const deleteChain = createDeleteChain();
+    mockCreateClient.mockResolvedValue({
+      from: vi.fn((table: string) => {
+        if (table === "promotions") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: VALID_UUID, owner_id: USER_ID, status: "draft" },
+            }),
+            delete: vi.fn().mockReturnValue(deleteChain),
           };
         }
         return {
@@ -1493,11 +1535,13 @@ describe("DELETE /api/promotions/[id]", () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.success).toBe(true);
-    expect(deleteEq).toHaveBeenCalledWith("id", VALID_UUID);
+    expect(deleteChain.eq).toHaveBeenCalledWith("id", VALID_UUID);
+    expect(deleteChain.eq).toHaveBeenCalledWith("owner_id", USER_ID);
+    expect(deleteChain.select).toHaveBeenCalledWith("id");
   });
 
   it("deletes rejected promotion successfully", async () => {
-    const deleteEq = vi.fn().mockResolvedValue({ error: null });
+    const deleteChain = createDeleteChain();
     mockCreateClient.mockResolvedValue({
       from: vi.fn((table: string) => {
         if (table === "promotions") {
@@ -1507,7 +1551,7 @@ describe("DELETE /api/promotions/[id]", () => {
             maybeSingle: vi.fn().mockResolvedValue({
               data: { id: VALID_UUID, owner_id: USER_ID, status: "rejected" },
             }),
-            delete: vi.fn().mockReturnValue({ eq: deleteEq }),
+            delete: vi.fn().mockReturnValue(deleteChain),
           };
         }
         return {
@@ -1528,6 +1572,8 @@ describe("DELETE /api/promotions/[id]", () => {
     });
     const res = await DELETE(req, { params: Promise.resolve({ id: VALID_UUID }) });
     expect(res.status).toBe(200);
-    expect(deleteEq).toHaveBeenCalledWith("id", VALID_UUID);
+    expect(deleteChain.eq).toHaveBeenCalledWith("id", VALID_UUID);
+    expect(deleteChain.eq).toHaveBeenCalledWith("owner_id", USER_ID);
+    expect(deleteChain.select).toHaveBeenCalledWith("id");
   });
 });

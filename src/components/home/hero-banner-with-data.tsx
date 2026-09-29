@@ -44,7 +44,7 @@ export async function HeroBannerWithData() {
           )
           .eq("status", "live")
       )
-        .order("boost_until", { ascending: false, nullsFirst: false })
+        .order("active_boost_until", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
         .limit(perAreaFetchLimit),
       applyVisibleExpiryFilter(
@@ -56,7 +56,7 @@ export async function HeroBannerWithData() {
           .eq("status", "live")
           .eq("area", "MZANSI_MARKET")
       )
-        .order("featured", { ascending: false })
+        .order("active_featured_until", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
         .limit(perAreaFetchLimit),
       applyVisibleExpiryFilter(
@@ -67,8 +67,8 @@ export async function HeroBannerWithData() {
           )
           .eq("status", "live")
       )
-        .order("boost_until", { ascending: false, nullsFirst: false })
-        .order("featured_until", { ascending: false, nullsFirst: false })
+        .order("active_boost_until", { ascending: false, nullsFirst: false })
+        .order("active_featured_until", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
         .limit(perAreaFetchLimit),
     ]);

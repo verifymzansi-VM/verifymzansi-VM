@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import { promotionSchema } from "./promotion";
 
 const VALID_IMAGE = "https://media.verifymzansi.com/promotions/photo.jpg";
@@ -14,7 +14,14 @@ const VALID_INPUT = {
   images: [VALID_IMAGE],
 };
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const daysFromNow = (days: number) => new Date(Date.now() + days * DAY_MS).toISOString();
+
 describe("promotionSchema", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("accepts valid input", () => {
     const result = promotionSchema.safeParse(VALID_INPUT);
     expect(result.success).toBe(true);
@@ -131,7 +138,8 @@ describe("promotionSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("accepts images from supabase storage", () => {
+  it("accepts images from this project's supabase storage", () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://abc.supabase.co");
     const result = promotionSchema.safeParse({
       ...VALID_INPUT,
       images: ["https://abc.supabase.co/storage/v1/object/public/media/photo.jpg"],
@@ -139,12 +147,31 @@ describe("promotionSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("accepts images from R2 storage", () => {
+  it("rejects images from a foreign supabase project", () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://abc.supabase.co");
+    const result = promotionSchema.safeParse({
+      ...VALID_INPUT,
+      images: ["https://attacker.supabase.co/storage/v1/object/public/media/photo.jpg"],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts images from this account's R2 storage", () => {
+    vi.stubEnv("R2_ACCOUNT_ID", "bucket");
     const result = promotionSchema.safeParse({
       ...VALID_INPUT,
       images: ["https://bucket.r2.cloudflarestorage.com/photo.jpg"],
     });
     expect(result.success).toBe(true);
+  });
+
+  it("rejects images from a foreign R2 account", () => {
+    vi.stubEnv("R2_ACCOUNT_ID", "bucket");
+    const result = promotionSchema.safeParse({
+      ...VALID_INPUT,
+      images: ["https://other-account.r2.cloudflarestorage.com/photo.jpg"],
+    });
+    expect(result.success).toBe(false);
   });
 
   // Videos
@@ -206,6 +233,56 @@ describe("promotionSchema", () => {
       end_date: "2026-04-01T00:00:00.000Z",
     });
     expect(result.success).toBe(true);
+  });
+
+  it("accepts events starting up to 365 days ahead", () => {
+    const result = promotionSchema.safeParse({
+      ...VALID_INPUT,
+      start_date: daysFromNow(360),
+      end_date: daysFromNow(364),
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a start_date more than 365 days ahead", () => {
+    const result = promotionSchema.safeParse({
+      ...VALID_INPUT,
+      start_date: daysFromNow(370),
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.path[0] === "start_date")).toBe(true);
+    }
+  });
+
+  it("rejects an end_date more than 365 days ahead", () => {
+    const result = promotionSchema.safeParse({
+      ...VALID_INPUT,
+      start_date: daysFromNow(300),
+      end_date: daysFromNow(370),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts an event spanning exactly 90 days", () => {
+    const result = promotionSchema.safeParse({
+      ...VALID_INPUT,
+      start_date: "2026-03-01T00:00:00.000Z",
+      end_date: new Date(Date.parse("2026-03-01T00:00:00.000Z") + 90 * DAY_MS).toISOString(),
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects an event spanning more than 90 days", () => {
+    const result = promotionSchema.safeParse({
+      ...VALID_INPUT,
+      start_date: "2026-03-01T00:00:00.000Z",
+      end_date: new Date(Date.parse("2026-03-01T00:00:00.000Z") + 91 * DAY_MS).toISOString(),
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.path[0] === "end_date")).toBe(true);
+    }
   });
 
   it("accepts optional category", () => {

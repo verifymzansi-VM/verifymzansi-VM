@@ -214,15 +214,17 @@ export function applyBaseMarketFilters<T>(
       return builder
         .order("price_cents", { ascending: false })
         .order("created_at", { ascending: false }) as T;
+    // active_* are computed fields (see 20260929150000): null once the paid
+    // window has ended, so expired add-ons never outrank anything.
     case "popular":
       return builder
-        .order("featured", { ascending: false })
-        .order("boost_until", { ascending: false, nullsFirst: false })
+        .order("active_featured_until", { ascending: false, nullsFirst: false })
+        .order("active_boost_until", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false }) as T;
     case "newest":
     default:
       return builder
-        .order("featured", { ascending: false })
+        .order("active_featured_until", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false }) as T;
   }
 }
@@ -284,11 +286,21 @@ export function isPlaceholderListing(listing: {
   return isPlaceholderMarketplaceContent(listing.title, listing.description);
 }
 
+function isActiveUntil(value: unknown): boolean {
+  if (typeof value !== "string" || !value) return false;
+  const until = Date.parse(value);
+  return Number.isFinite(until) && until > Date.now();
+}
+
 export function normalizeListingSelectShape(
   listings: Record<string, unknown>[]
 ): Record<string, unknown>[] {
   return listings.map((listing) => ({
     ...listing,
+    // The stored `featured` flag is only recomputed when featured_until is
+    // written, so it stays true after the paid window ends.
+    featured:
+      "featured_until" in listing ? isActiveUntil(listing.featured_until) : listing.featured,
     featured_until: listing.featured_until ?? null,
     condition: listing.condition ?? null,
     video_thumbnail: listing.video_thumbnail ?? null,

@@ -78,7 +78,6 @@ async function verifyOtp(otp: string, storedHash: string): Promise<boolean> {
 }
 
 async function finalizePhoneVerification(
-  supabase: Awaited<ReturnType<typeof createClient>>,
   adminSupabase: ReturnType<typeof createAdminClient>,
   user: { id: string; email?: string | null; user_metadata?: unknown },
   accountPhoneFields: ReturnType<typeof buildAccountPhoneFields>,
@@ -94,65 +93,30 @@ async function finalizePhoneVerification(
     };
   }
 
-  const { data: profile } = await supabase
+  // Profile rows are written server-side only; scope the write to this user.
+  const profileId = ensuredProfile.id;
+  const { error: profileUpdateError } = await adminSupabase
     .from(ACCOUNT_PROFILE_WRITE_TABLE)
-    .select("id")
-    .eq("user_id", user.id)
-    .maybeSingle();
+    // Promote pending_phone to canonical phone, clear staging, and stamp cooldown.
+    .update({ ...accountPhoneFields, pending_phone: null, contact_last_phone_change_at: nowIso })
+    .eq("id", profileId)
+    .eq("user_id", user.id);
 
-  // Use the user-client profile ID if visible, otherwise fall back to the
-  // admin-ensured ID (covers RLS-restricted scenarios).
-  const profileId = profile?.id ?? ensuredProfile.id;
-
-  {
-    const { error: profileUpdateError } = await supabase
-      .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      // Promote pending_phone to canonical phone, clear staging, and stamp cooldown.
-      .update({ ...accountPhoneFields, pending_phone: null, contact_last_phone_change_at: nowIso })
-      .eq("id", profileId);
-
-    if (profileUpdateError) {
-      if (profileUpdateError.code === "23505") {
-        return { success: false, error: ACCOUNT_PHONE_IN_USE_ERROR, status: 409 };
-      }
-
-      log.warn(
-        "Profile update via user client failed during OTP verification; retrying with admin",
-        {
-          error: profileUpdateError.message,
-          code: profileUpdateError.code,
-          userId: user.id,
-        }
-      );
-
-      const { error: adminProfileUpdateError } = await adminSupabase
-        .from(ACCOUNT_PROFILE_WRITE_TABLE)
-        // Promote pending_phone to canonical phone, clear staging, and stamp cooldown.
-        .update({
-          ...accountPhoneFields,
-          pending_phone: null,
-          contact_last_phone_change_at: nowIso,
-        })
-        .eq("id", profileId)
-        .eq("user_id", user.id);
-
-      if (adminProfileUpdateError) {
-        if (adminProfileUpdateError.code === "23505") {
-          return { success: false, error: ACCOUNT_PHONE_IN_USE_ERROR, status: 409 };
-        }
-
-        log.error("Failed to save phone on account profile", {
-          error: adminProfileUpdateError.message,
-          code: adminProfileUpdateError.code,
-          userId: user.id,
-        });
-        return {
-          success: false,
-          error: "Failed to save the verified phone number on your account.",
-          status: 500,
-        };
-      }
+  if (profileUpdateError) {
+    if (profileUpdateError.code === "23505") {
+      return { success: false, error: ACCOUNT_PHONE_IN_USE_ERROR, status: 409 };
     }
+
+    log.error("Failed to save phone on account profile", {
+      error: profileUpdateError.message,
+      code: profileUpdateError.code,
+      userId: user.id,
+    });
+    return {
+      success: false,
+      error: "Failed to save the verified phone number on your account.",
+      status: 500,
+    };
   }
 
   const { error: stepsError } = await adminSupabase.from("verification_steps").upsert(
@@ -365,6 +329,20 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Per-account cap across challenges and IPs; the per-IP limit above can be
+    // spread over many addresses.
+    const userLimit = await checkRateLimit({
+      key: user.id,
+      action: "otp:verify:user",
+      degradedMode: "block",
+    });
+    if (userLimit.limited) {
+      return NextResponse.json(
+        { error: "Too many attempts. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(userLimit.retryAfter ?? 60) } }
+      );
+    }
+
     // If a pending_phone exists, OTP verification must target that exact staged value.
     // This prevents verifying a phone number that was not explicitly staged for this user.
     const { data: profileGuard, error: profileGuardErr } = await supabase
@@ -414,32 +392,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find matching OTP by verifying hash
-    if (!(await verifyOtp(otp, challenge.otp_hash))) {
-      // Atomic increment to avoid read-modify-write race (#39)
-      const { data: rpcResult, error: rpcError } = await adminSupabase.rpc(
-        "increment_otp_attempt",
-        {
-          challenge_id: challenge.id,
-          max_attempts: MAX_VERIFY_ATTEMPTS,
-          lockout_duration: "15 minutes",
-        }
+    // Reserve this attempt atomically BEFORE comparing. Counting only failed
+    // attempts let parallel guesses all be compared before the counter locked
+    // the challenge; now each comparison consumes one of MAX attempts.
+    const { data: rpcResult, error: rpcError } = await adminSupabase.rpc("increment_otp_attempt", {
+      challenge_id: challenge.id,
+      max_attempts: MAX_VERIFY_ATTEMPTS,
+      lockout_duration: "15 minutes",
+    });
+
+    if (rpcError) {
+      log.error("Failed to reserve OTP attempt", {
+        challengeId: challenge.id,
+        error: rpcError.message,
+      });
+      return NextResponse.json(
+        { error: "Verification temporarily unavailable. Please try again." },
+        { status: 503 }
       );
+    }
 
-      if (rpcError) {
-        log.error("Failed to increment OTP attempt counter", {
-          challengeId: challenge.id,
-          error: rpcError.message,
-        });
-        return NextResponse.json(
-          { error: "Verification temporarily unavailable. Please try again." },
-          { status: 503 }
-        );
-      }
+    const attemptNumber = rpcResult?.[0]?.new_attempt_count;
+    if (attemptNumber == null) {
+      // Claimed by a concurrent request.
+      return NextResponse.json({ error: "Invalid or expired OTP" }, { status: 400 });
+    }
+    if (attemptNumber > MAX_VERIFY_ATTEMPTS) {
+      return NextResponse.json(
+        { error: "Too many attempts. Please wait 15 minutes." },
+        { status: 429 }
+      );
+    }
 
-      const locked =
-        rpcResult?.[0]?.new_locked_until != null && new Date(rpcResult[0].new_locked_until) > now;
-
+    if (!(await verifyOtp(otp, challenge.otp_hash))) {
+      const locked = attemptNumber >= MAX_VERIFY_ATTEMPTS;
       return NextResponse.json(
         {
           error: locked ? "Too many attempts. Please wait 15 minutes." : "Invalid or expired OTP",
@@ -455,7 +441,6 @@ export async function POST(request: NextRequest) {
     }
 
     const verificationResult = await finalizePhoneVerification(
-      supabase,
       adminSupabase,
       user,
       accountPhoneFields,

@@ -39,7 +39,6 @@ export async function GET(request: NextRequest) {
   let dbMs = 0;
   let downloadMs = 0;
   let decryptMs = 0;
-  let fallbackUsed = false;
   let cacheHit = false;
   let responseStatus = 200;
   let targetUserId: string | null = null;
@@ -141,9 +140,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Log evidence access
+    // Log evidence access. cf-connecting-ip is set by Cloudflare and cannot be
+    // supplied by the client, unlike x-forwarded-for.
     const ipHash = hashIp(
-      request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown",
+      request.headers.get("cf-connecting-ip") ||
+        request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+        request.headers.get("x-real-ip") ||
+        "unknown",
       ipHashSecret
     );
 
@@ -154,14 +157,19 @@ export async function GET(request: NextRequest) {
       user_id: artifact.user_id,
       ip_hash: ipHash,
     });
-    let auditLogFailed = false;
     if (accessLogErr) {
-      auditLogFailed = true;
-      log.error("Failed to log evidence access (POPIA compliance gap)", {
+      // Fail closed: identity documents are never shown without a record of
+      // who viewed them.
+      log.error("Failed to log evidence access; refusing to serve", {
         error: accessLogErr.message,
         actorId: user.id,
         artifactId: artifact.id,
       });
+      responseStatus = 503;
+      return NextResponse.json(
+        { error: "Evidence access could not be recorded. Please try again.", code: "server_error" },
+        { status: 503 }
+      );
     }
 
     // Check for dev:// keys (development mode)
@@ -174,15 +182,15 @@ export async function GET(request: NextRequest) {
         "X-Content-Type-Options": "nosniff",
         "Content-Disposition": "inline",
       };
-      if (auditLogFailed) devHeaders["X-Audit-Warning"] = "log-failed";
       return new NextResponse(Buffer.from("Development mode \u2014 no real artifact stored"), {
         status: 200,
         headers: devHeaders,
       });
     }
 
-    // Download and decrypt the document. If the linked artifact points to a
-    // missing object, fall back to another authorized artifact for the same step.
+    // Download and decrypt exactly the requested document. Never substitute
+    // another artifact: the reviewer and the access log must refer to the same
+    // file.
     let decryptedBuffer: Buffer | null = null;
     try {
       const result = await downloadKycDocumentWithMetrics(artifact.r2_key);
@@ -191,108 +199,43 @@ export async function GET(request: NextRequest) {
       decryptMs += result.decryptMs;
     } catch (downloadErr) {
       const downloadMessage = downloadErr instanceof Error ? downloadErr.message : "unknown error";
-      const isMissingFile = isMissingArtifactError(downloadErr);
 
-      if (!isMissingFile) {
-        const isDecryptError = /decrypt|cipher|decipher|invalid auth/i.test(downloadMessage);
-        log.error("Failed to download/decrypt artifact", {
-          artifactId: artifact.id,
-          r2Key: artifact.r2_key,
-          error: downloadMessage,
-          errorType: isDecryptError ? "decryption" : "download",
-          stack: downloadErr instanceof Error ? downloadErr.stack : undefined,
-        });
-        return NextResponse.json(
-          {
-            error: isDecryptError
-              ? "Failed to decrypt artifact"
-              : "Failed to retrieve artifact from storage",
-            code: "server_error",
-          },
-          { status: 500 }
-        );
-      }
-
-      const { data: fallbackArtifacts, error: fallbackQueryError } = await adminClient
-        .from("kyc_artifacts")
-        .select("id, r2_key, created_at")
-        .eq("user_id", artifact.user_id)
-        .eq("step_type", artifact.step_type)
-        .order("created_at", { ascending: false })
-        .limit(20);
-
-      const sameStepCandidates = (fallbackQueryError ? [] : fallbackArtifacts || []).filter(
-        (candidate) => candidate.id !== artifact.id
-      );
-
-      log.warn("Requested KYC artifact missing in storage; attempting same-step fallback", {
-        artifactId: artifact.id,
-        userId: artifact.user_id,
-        stepType: artifact.step_type,
-        candidateCount: sameStepCandidates.length,
-      });
-
-      let recovered = false;
-      const failedFallbacks: Array<{ candidateId: string; reason: string }> = [];
-
-      for (const candidate of sameStepCandidates) {
-        try {
-          const result = await downloadKycDocumentWithMetrics(candidate.r2_key);
-          decryptedBuffer = result.buffer;
-          downloadMs += result.downloadMs;
-          decryptMs += result.decryptMs;
-          fallbackUsed = true;
-          recovered = true;
-          log.info("Recovered KYC artifact via same-step fallback", {
-            requestedArtifactId: artifact.id,
-            fallbackArtifactId: candidate.id,
-            userId: artifact.user_id,
-            fallbackAttempts: failedFallbacks.length,
-          });
-          break;
-        } catch (fallbackErr) {
-          const fallbackMessage =
-            fallbackErr instanceof Error ? fallbackErr.message : "unknown error";
-          const isMissing = isMissingArtifactError(fallbackErr);
-
-          if (!isMissing) {
-            // Track non-missing errors but continue trying other candidates
-            failedFallbacks.push({
-              candidateId: candidate.id,
-              reason: fallbackMessage.slice(0, 100),
-            });
-            log.warn("Fallback candidate has retrieval error (skipping, will try others)", {
-              requestedArtifactId: artifact.id,
-              fallbackArtifactId: candidate.id,
-              error: fallbackMessage,
-            });
-            continue;
-          }
-
-          // Fallback is also missing - continue to next candidate
-          failedFallbacks.push({
-            candidateId: candidate.id,
-            reason: "file_missing",
-          });
-        }
-      }
-
-      if (!recovered) {
-        log.error("All authorized KYC artifact candidates are missing in storage", {
+      if (isMissingArtifactError(downloadErr)) {
+        // Expected after the retention purge; otherwise a storage gap.
+        log.warn("Requested KYC artifact is missing in storage", {
           artifactId: artifact.id,
           userId: artifact.user_id,
           stepType: artifact.step_type,
-          requestedR2Key: artifact.r2_key,
-          fallbackAttempts: failedFallbacks.length,
-          totalCandidates: sameStepCandidates.length + 1,
           artifactStatus: artifact.status || "unknown",
-          failedFallbacks: failedFallbacks.slice(0, 5),
         });
+        responseStatus = 404;
         return NextResponse.json(
-          { error: "Artifact file is missing from storage", code: "missing_file" },
+          {
+            error: "This document is no longer stored. Ask the member to resubmit if needed.",
+            code: "missing_file",
+          },
           { status: 404 }
         );
       }
+
+      const isDecryptError = /decrypt|cipher|decipher|invalid auth/i.test(downloadMessage);
+      log.error("Failed to download/decrypt artifact", {
+        artifactId: artifact.id,
+        r2Key: artifact.r2_key,
+        error: downloadMessage,
+        errorType: isDecryptError ? "decryption" : "download",
+        stack: downloadErr instanceof Error ? downloadErr.stack : undefined,
+      });
+      responseStatus = 500;
+      return NextResponse.json(
+        {
+          error: isDecryptError
+            ? "Failed to decrypt artifact"
+            : "Failed to retrieve artifact from storage",
+          code: "server_error",
+        },
+        { status: 500 }
+      );
     }
 
     if (!decryptedBuffer) {
@@ -300,25 +243,25 @@ export async function GET(request: NextRequest) {
         artifactId: artifact.id,
         userId: artifact.user_id,
       });
+      responseStatus = 500;
       return NextResponse.json(
         { error: "Failed to retrieve artifact", code: "server_error" },
         { status: 500 }
       );
     }
 
-    // Determine content type — stored content_type may be 'application/octet-stream'
-    // because we encrypt before upload. Use the original content_type from the artifact record.
-    const contentType = artifact.content_type || "application/octet-stream";
+    // Serve the type the bytes actually are (images and PDF only), not the
+    // stored label; anything else downloads instead of rendering.
+    const contentType = detectEvidenceContentType(decryptedBuffer);
 
     const responseHeaders: Record<string, string> = {
-      "Content-Type": contentType,
-      "Content-Disposition": "inline",
+      "Content-Type": contentType ?? "application/octet-stream",
+      "Content-Disposition": contentType ? "inline" : "attachment",
       "Cache-Control": "no-store, no-cache, must-revalidate",
       "X-Content-Type-Options": "nosniff",
       "X-Frame-Options": "DENY",
-      "Content-Security-Policy": "default-src 'none'; img-src 'self'",
+      "Content-Security-Policy": "default-src 'none'; img-src 'self'; sandbox",
     };
-    if (auditLogFailed) responseHeaders["X-Audit-Warning"] = "log-failed";
 
     return new NextResponse(new Uint8Array(decryptedBuffer), {
       status: 200,
@@ -342,11 +285,34 @@ export async function GET(request: NextRequest) {
       downloadMs,
       decryptMs,
       cacheHit,
-      fallbackUsed,
       status: responseStatus,
       targetUserId,
     });
   }
+}
+
+/** Evidence formats accepted at upload, identified by their magic bytes. */
+function detectEvidenceContentType(buffer: Buffer): string | null {
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return "image/jpeg";
+  }
+  if (
+    buffer.length >= 8 &&
+    buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+  ) {
+    return "image/png";
+  }
+  if (
+    buffer.length >= 12 &&
+    buffer.subarray(0, 4).toString("latin1") === "RIFF" &&
+    buffer.subarray(8, 12).toString("latin1") === "WEBP"
+  ) {
+    return "image/webp";
+  }
+  if (buffer.length >= 5 && buffer.subarray(0, 5).toString("latin1") === "%PDF-") {
+    return "application/pdf";
+  }
+  return null;
 }
 
 /**

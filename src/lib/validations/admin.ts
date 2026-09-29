@@ -69,6 +69,8 @@ export const adminVerificationDecideSchema = z
     reasonCode: optionalTrimmedStringSchema.pipe(z.enum(REASON_CODES).optional()),
     reasonNote: optionalTrimmedStringSchema.pipe(z.string().max(500).optional()),
     overrideReasonCode: optionalTrimmedStringSchema.pipe(z.enum(OVERRIDE_REASON_CODES).optional()),
+    /** updated_at of the step the reviewer looked at; refuses stale decisions. */
+    expectedUpdatedAt: z.string().max(64).optional(),
   })
   .refine((data) => data.decision === "approved" || data.reasonCode, {
     message: "Reason code is required for rejection or resubmission",

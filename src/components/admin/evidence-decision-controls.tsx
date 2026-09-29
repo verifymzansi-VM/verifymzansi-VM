@@ -25,6 +25,7 @@ interface EvidenceStep {
   reviewed_by: string | null;
   reviewed_at: string | null;
   created_at: string;
+  updated_at?: string | null;
   metadata: Record<string, unknown> | null;
 }
 
@@ -80,6 +81,7 @@ export function EvidenceDecisionControls({
     try {
       const body: Record<string, string> = {
         stepId: step.id,
+        ...(step.updated_at ? { expectedUpdatedAt: step.updated_at } : {}),
         decision,
       };
       if (reasonCode) body.reasonCode = reasonCode;

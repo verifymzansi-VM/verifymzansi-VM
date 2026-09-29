@@ -19,6 +19,13 @@ import { decisionRefusalResponse } from "@/lib/services/decision-ledger";
 import { checkQueueClaim, releaseDecidedClaim } from "@/lib/services/queue-claims";
 
 const log = createLogger("AdminVerification");
+
+function sameInstant(stored: string | null | undefined, expected: string): boolean {
+  if (!stored) return false;
+  const a = Date.parse(stored);
+  const b = Date.parse(expected);
+  return Number.isFinite(a) && Number.isFinite(b) ? a === b : stored === expected;
+}
 const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" };
 
 /**
@@ -58,7 +65,8 @@ export async function POST(request: Request) {
     });
     if (!bodyResult.success) return bodyResult.response;
 
-    const { stepId, decision, reasonCode, reasonNote, overrideReasonCode } = bodyResult.data;
+    const { stepId, decision, reasonCode, reasonNote, overrideReasonCode, expectedUpdatedAt } =
+      bodyResult.data;
     const admin = createAdminClient();
 
     const { data: step, error: stepError } = await admin
@@ -68,6 +76,18 @@ export async function POST(request: Request) {
       .single();
     if (stepError || !step) {
       return NextResponse.json({ error: "Verification step not found" }, { status: 404 });
+    }
+
+    // The member may have re-uploaded while the reviewer was looking at the
+    // previous document; decide only on the submission that was reviewed.
+    if (expectedUpdatedAt && !sameInstant(step.updated_at, expectedUpdatedAt)) {
+      return NextResponse.json(
+        {
+          error: "This submission changed while you were reviewing it. Reload and review again.",
+          code: "step_changed",
+        },
+        { status: 409 }
+      );
     }
 
     if (step.user_id === user.id) {

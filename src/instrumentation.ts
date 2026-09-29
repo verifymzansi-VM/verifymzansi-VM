@@ -3,6 +3,10 @@ import * as Sentry from "@sentry/nextjs";
 let hasLoggedBootstrapValidationFailure = false;
 
 function isExplicitE2eRuntime(): boolean {
+  // Never on the production worker, so the dev-bypass checks below always run.
+  if (process.env.ENVIRONMENT === "production") {
+    return false;
+  }
   const e2eModes = new Set(["e2e", "playwright", "test"]);
   const runtimeMode = process.env.VERIFYMZANSI_RUNTIME_MODE?.trim().toLowerCase();
   const validationMode = process.env.VERIFYMZANSI_VALIDATION_MODE?.trim().toLowerCase();

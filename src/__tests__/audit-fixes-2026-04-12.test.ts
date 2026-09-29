@@ -122,10 +122,13 @@ describe("GET /api/leads — count query error handling", () => {
   });
 
   it("returns 500 when count query fails", async () => {
+    // select → eq("owner_id", user) → eq("status", "new")
     const selectChain = {
-      eq: vi.fn().mockResolvedValue({
-        count: null,
-        error: { message: "DB timeout" },
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({
+          count: null,
+          error: { message: "DB timeout" },
+        }),
       }),
     };
 
@@ -147,8 +150,11 @@ describe("GET /api/leads — count query error handling", () => {
   });
 
   it("returns count when query succeeds", async () => {
+    // select → eq("owner_id", user) → eq("status", "new")
     const selectChain = {
-      eq: vi.fn().mockResolvedValue({ count: 5, error: null }),
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ count: 5, error: null }),
+      }),
     };
 
     mockCreateClient.mockResolvedValue({
@@ -166,5 +172,6 @@ describe("GET /api/leads — count query error handling", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.unreadCount).toBe(5);
+    expect(selectChain.eq).toHaveBeenCalledWith("owner_id", "user-1");
   });
 });

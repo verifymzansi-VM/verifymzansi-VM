@@ -66,6 +66,7 @@ interface VerificationStep {
   step_type: string;
   status: string;
   created_at: string;
+  updated_at?: string | null;
   account_display_name?: string | null;
   account_verification_status?: string | null;
   risk_level?: string | null;
@@ -389,6 +390,7 @@ export function KycPreviewLightbox({
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           stepId: step.id,
+          ...(step.updated_at ? { expectedUpdatedAt: step.updated_at } : {}),
           decision,
           reasonCode: decision !== "approved" ? reasonCode : undefined,
           reasonNote: reasonNote || undefined,

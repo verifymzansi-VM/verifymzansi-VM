@@ -157,10 +157,14 @@ describe("buyerVerifySchema", () => {
 
 describe("fileUploadSchema", () => {
   it("accepts valid doc types", () => {
-    // id_document requires firstName + lastName
+    // id_document requires a 13-digit idNumber + firstName + lastName
     expect(
-      fileUploadSchema.safeParse({ docType: "id_document", firstName: "Jane", lastName: "Doe" })
-        .success
+      fileUploadSchema.safeParse({
+        docType: "id_document",
+        idNumber: "8001015009087",
+        firstName: "Jane",
+        lastName: "Doe",
+      }).success
     ).toBe(true);
     expect(fileUploadSchema.safeParse({ docType: "selfie" }).success).toBe(true);
     expect(fileUploadSchema.safeParse({ docType: "proof_of_address" }).success).toBe(false);
@@ -168,9 +172,32 @@ describe("fileUploadSchema", () => {
 
   it("rejects id_document without required name fields", () => {
     expect(fileUploadSchema.safeParse({ docType: "id_document" }).success).toBe(false);
-    expect(fileUploadSchema.safeParse({ docType: "id_document", firstName: "Jane" }).success).toBe(
-      false
-    );
+    expect(
+      fileUploadSchema.safeParse({
+        docType: "id_document",
+        idNumber: "8001015009087",
+        firstName: "Jane",
+      }).success
+    ).toBe(false);
+  });
+
+  it("rejects id_document without a 13-digit idNumber", () => {
+    for (const idNumber of [undefined, "", "   ", "800101500908", "80010150090AB"]) {
+      const result = fileUploadSchema.safeParse({
+        docType: "id_document",
+        idNumber,
+        firstName: "Jane",
+        lastName: "Doe",
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues.some((issue) => issue.path[0] === "idNumber")).toBe(true);
+      }
+    }
+  });
+
+  it("does not require idNumber for selfie uploads", () => {
+    expect(fileUploadSchema.safeParse({ docType: "selfie" }).success).toBe(true);
   });
 
   it("rejects invalid doc type", () => {

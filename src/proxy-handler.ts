@@ -2,6 +2,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { withSecurityHeaders } from "@/lib/middleware/security-headers";
 import { handlePlaywrightStubRouting } from "@/lib/middleware/playwright-stub";
+import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import {
   checkPhoneGate,
   checkAdminGate,
@@ -88,6 +89,16 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     }
 
     return NextResponse.redirect(callbackUrl);
+  }
+
+  // Local design previews. The pages call notFound() themselves, but streaming
+  // turns that into a 200 "not found" page, so answer with a real 404 here.
+  if (
+    matchesPrefix(pathname, "/dev") &&
+    process.env.NODE_ENV === "production" &&
+    !isPlaywrightTestMode()
+  ) {
+    return new NextResponse("Not found", { status: 404 });
   }
 
   // -- Playwright stub mode --------------------------------------------------

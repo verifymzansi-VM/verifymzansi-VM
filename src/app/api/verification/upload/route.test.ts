@@ -4,6 +4,8 @@ import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import type { ScanResult } from "@/lib/utils/malware-scan";
 
 const CSRF_TOKEN = "a".repeat(64);
+/** Valid SA ID number (DOB 1980-01-01, correct Luhn check digit). */
+const VALID_SA_ID_NUMBER = "8001015009087";
 
 // ── Hoisted mocks ────────────────────────────────────────────
 
@@ -103,13 +105,22 @@ import { POST } from "./route";
 
 // ── Helpers ──────────────────────────────────────────────────
 
-function createFormDataRequest(fields: Record<string, string | Blob>) {
+function createFormDataRequest(
+  fields: Record<string, string | Blob>,
+  options: { omitIdNumber?: boolean } = {}
+) {
   const formData = new FormData();
   const shouldAddLegalNames =
     fields.docType === "id_document" && !("firstName" in fields) && !("lastName" in fields);
-  const finalFields = shouldAddLegalNames
-    ? { ...fields, firstName: "Sipho", lastName: "Mokoena" }
-    : fields;
+  // id_document uploads require a 13-digit SA ID number; default to one with a
+  // valid Luhn checksum (DOB 1980-01-01) unless the test supplies its own.
+  const shouldAddIdNumber =
+    fields.docType === "id_document" && !("idNumber" in fields) && !options.omitIdNumber;
+  const finalFields = {
+    ...fields,
+    ...(shouldAddLegalNames ? { firstName: "Sipho", lastName: "Mokoena" } : {}),
+    ...(shouldAddIdNumber ? { idNumber: VALID_SA_ID_NUMBER } : {}),
+  };
   for (const [key, value] of Object.entries(finalFields)) {
     formData.append(key, value);
   }
@@ -283,6 +294,59 @@ function setupDefaultAdminMocks() {
   });
 
   mockLogAuditEvent.mockResolvedValue(undefined);
+}
+
+/**
+ * Default admin mocks, plus an existing pending step for the user and a stubbed
+ * decision_records lookup (pending high-risk approvals awaiting a second reviewer).
+ */
+function mockExistingPendingStep(decisionLookup: {
+  count: number | null;
+  error: { message: string } | null;
+}) {
+  setupDefaultAdminMocks();
+  const baseFromImpl = mockFrom.getMockImplementation();
+  if (!baseFromImpl) {
+    throw new Error("Expected default admin mock implementation");
+  }
+
+  const existingStep = {
+    id: "step-existing-1",
+    status: "pending",
+    risk_score: 0,
+    risk_level: "low",
+    auto_status: "needs_manual_review",
+  };
+  const stepSelect = vi.fn().mockReturnValue({
+    eq: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        maybeSingle: vi.fn().mockResolvedValue({ data: existingStep, error: null }),
+      }),
+    }),
+  });
+  const decisionIn = vi.fn().mockResolvedValue(decisionLookup);
+  const decisionCaseIdEq = vi.fn().mockReturnValue({ in: decisionIn });
+  const decisionCaseTypeEq = vi.fn().mockReturnValue({ eq: decisionCaseIdEq });
+  const decisionSelect = vi.fn().mockReturnValue({ eq: decisionCaseTypeEq });
+
+  mockFrom.mockImplementation((table: string) => {
+    if (table === "verification_steps") {
+      return { ...baseFromImpl(table), select: stepSelect };
+    }
+    if (table === "decision_records") {
+      return { select: decisionSelect };
+    }
+    return baseFromImpl(table);
+  });
+
+  return {
+    existingStep,
+    stepSelect,
+    decisionSelect,
+    decisionCaseTypeEq,
+    decisionCaseIdEq,
+    decisionIn,
+  };
 }
 
 // ── Tests ────────────────────────────────────────────────────
@@ -1151,13 +1215,33 @@ describe("POST /api/verification/upload", () => {
 
       if (table === "verification_steps") {
         return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
+          select: vi.fn().mockImplementation((...args: unknown[]) => {
+            if (args[0] === "user_id") {
+              // The pre-save uniqueness lookup finds no approved holder; the
+              // conflict is only raised by the unique index during step save.
+              return {
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    neq: vi.fn().mockReturnValue({
+                      eq: vi.fn().mockReturnValue({
+                        limit: vi.fn().mockReturnValue({
+                          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                        }),
+                      }),
+                    }),
+                  }),
+                }),
+              };
+            }
+
+            return {
               eq: vi.fn().mockReturnValue({
-                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-                single: vi.fn().mockResolvedValue({ data: { risk_score: 0 }, error: null }),
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                  single: vi.fn().mockResolvedValue({ data: { risk_score: 0 }, error: null }),
+                }),
               }),
-            }),
+            };
           }),
           update: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
@@ -1382,7 +1466,7 @@ describe("POST /api/verification/upload", () => {
     );
   });
 
-  it("rejects a too-short SA ID number before any storage writes", async () => {
+  it("rejects a too-short SA ID number at metadata validation before any storage writes", async () => {
     mockAuth({ id: "user-1" });
 
     const response = await POST(
@@ -1396,10 +1480,108 @@ describe("POST /api/verification/upload", () => {
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual(
       expect.objectContaining({
-        error: expect.stringContaining("Invalid SA ID number"),
+        error: "Invalid upload metadata",
       })
     );
     expect(mockUploadKycDocument).not.toHaveBeenCalled();
+    expect(mockCreateAdminClient).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["omitted", { omitIdNumber: true }, {}],
+    ["empty", {}, { idNumber: "" }],
+  ] as const)(
+    "rejects id_document uploads when the SA ID number is %s",
+    async (_label, options, extraFields) => {
+      mockAuth({ id: "user-1" });
+
+      const response = await POST(
+        createFormDataRequest(
+          {
+            file: createTestFile(),
+            docType: "id_document",
+            ...extraFields,
+          },
+          options
+        )
+      );
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual(
+        expect.objectContaining({ error: "Invalid upload metadata" })
+      );
+      expect(mockUploadKycDocument).not.toHaveBeenCalled();
+      expect(mockProcessKycArtifact).not.toHaveBeenCalled();
+    }
+  );
+
+  it("returns 409 step_in_final_review when an approval for the existing step awaits a second reviewer", async () => {
+    mockAuth({ id: "user-1", email: "test@example.com" });
+    const {
+      existingStep,
+      stepSelect,
+      decisionSelect,
+      decisionCaseTypeEq,
+      decisionCaseIdEq,
+      decisionIn,
+    } = mockExistingPendingStep({ count: 1, error: null });
+
+    const response = await POST(
+      createFormDataRequest({
+        file: createTestFile(),
+        docType: "id_document",
+      })
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({ code: "step_in_final_review" })
+    );
+    expect(stepSelect).toHaveBeenCalledWith("id, status, risk_score, risk_level, auto_status");
+    expect(decisionSelect).toHaveBeenCalledWith("id", { count: "exact", head: true });
+    expect(decisionCaseTypeEq).toHaveBeenCalledWith("case_type", "verification_step");
+    expect(decisionCaseIdEq).toHaveBeenCalledWith("case_id", existingStep.id);
+    expect(decisionIn).toHaveBeenCalledWith("status", ["pending_approval", "escalated"]);
+    expect(mockUploadKycDocument).not.toHaveBeenCalled();
+    expect(mockProcessKycArtifact).not.toHaveBeenCalled();
+  });
+
+  it("returns 500 when the pending-decision lookup for the existing step fails", async () => {
+    mockAuth({ id: "user-1", email: "test@example.com" });
+    const { decisionIn } = mockExistingPendingStep({
+      count: null,
+      error: { message: "decision_records unavailable" },
+    });
+
+    const response = await POST(
+      createFormDataRequest({
+        file: createTestFile(),
+        docType: "id_document",
+      })
+    );
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({ error: "Unable to verify step status. Please try again." })
+    );
+    expect(decisionIn).toHaveBeenCalled();
+    expect(mockUploadKycDocument).not.toHaveBeenCalled();
+  });
+
+  it("allows re-uploading an existing pending step when no decision is awaiting review", async () => {
+    mockAuth({ id: "user-1", email: "test@example.com" });
+    const { decisionIn } = mockExistingPendingStep({ count: 0, error: null });
+
+    const response = await POST(
+      createFormDataRequest({
+        file: createTestFile(),
+        docType: "id_document",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(decisionIn).toHaveBeenCalled();
+    expect(mockUploadKycDocument).toHaveBeenCalledTimes(1);
   });
 
   it("rejects an SA ID number that fails the Luhn checksum", async () => {

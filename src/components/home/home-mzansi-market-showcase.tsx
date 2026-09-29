@@ -31,8 +31,8 @@ export async function HomeMzansiMarketShowcase() {
   const { data: listings, error } = await applyVisibleExpiryFilter(
     supabase.from("listings").select("*").eq("status", "live").eq("area", "MZANSI_MARKET")
   )
-    .order("boost_until", { ascending: false, nullsFirst: false })
-    .order("featured", { ascending: false })
+    .order("active_boost_until", { ascending: false, nullsFirst: false })
+    .order("active_featured_until", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(16);
 

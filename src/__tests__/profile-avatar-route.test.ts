@@ -124,14 +124,18 @@ describe("POST /api/profile/avatar", () => {
     });
     const updateEq = vi.fn().mockResolvedValue({ error: null });
     const update = vi.fn().mockReturnValue({ eq: updateEq });
+    const userScopedFrom = vi.fn();
+    const adminFrom = vi.fn().mockReturnValue({ update });
 
     mockCreateClient.mockResolvedValue({
-      from: vi.fn().mockReturnValue({ update }),
+      from: userScopedFrom,
       auth: {
         getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
       },
     });
+    // The avatar_url profile write goes through the admin client.
     mockCreateAdminClient.mockReturnValue({
+      from: adminFrom,
       storage: {
         from: vi.fn().mockReturnValue({
           upload,
@@ -161,10 +165,45 @@ describe("POST /api/profile/avatar", () => {
       avatar_url: expect.stringMatching(/^https:\/\/cdn\.example\.com\/avatar\.png\?v=\d+$/),
     });
     expect(updateEq).toHaveBeenCalledWith("user_id", "user-1");
+    expect(adminFrom).toHaveBeenCalledWith("account_profiles");
+    expect(userScopedFrom).not.toHaveBeenCalled();
     await expect(res.json()).resolves.toMatchObject({
       success: true,
       avatarUrl: expect.stringContaining("?v="),
     });
+  });
+
+  it("returns 500 when the admin avatar_url write fails", async () => {
+    const update = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ error: { message: "db down" } }),
+    });
+
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
+      },
+    });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({ update }),
+      storage: {
+        from: vi.fn().mockReturnValue({
+          upload: vi.fn().mockResolvedValue({ error: null }),
+          remove: vi.fn().mockResolvedValue({ data: [], error: null }),
+          getPublicUrl: vi.fn().mockReturnValue({
+            data: { publicUrl: "https://cdn.example.com/avatar.png" },
+          }),
+        }),
+      },
+    });
+
+    const formData = new FormData();
+    formData.set("file", new File(["hello"], "avatar.png", { type: "image/png" }));
+
+    const res = await POST(createRequest(formData));
+
+    expect(res.status).toBe(500);
+    await expect(res.json()).resolves.toMatchObject({ error: "Failed to save avatar" });
+    expect(update).toHaveBeenCalled();
   });
 
   it("strips EXIF from JPEG avatars and removes stale png/webp variants", async () => {
@@ -176,12 +215,12 @@ describe("POST /api/profile/avatar", () => {
     const update = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) });
 
     mockCreateClient.mockResolvedValue({
-      from: vi.fn().mockReturnValue({ update }),
       auth: {
         getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
       },
     });
     mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({ update }),
       storage: {
         from: vi.fn().mockReturnValue({
           upload,
@@ -201,6 +240,7 @@ describe("POST /api/profile/avatar", () => {
     expect(mockStripMetadataFromPng).not.toHaveBeenCalled();
     expect(mockStripMetadataFromWebp).not.toHaveBeenCalled();
     expect(remove).toHaveBeenCalledWith(["user-1/avatar.png", "user-1/avatar.webp"]);
+    expect(update).toHaveBeenCalledWith({ avatar_url: expect.stringContaining("avatar.jpg?v=") });
   });
 
   it("strips metadata from WebP avatars", async () => {
@@ -212,12 +252,12 @@ describe("POST /api/profile/avatar", () => {
     const update = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) });
 
     mockCreateClient.mockResolvedValue({
-      from: vi.fn().mockReturnValue({ update }),
       auth: {
         getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
       },
     });
     mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({ update }),
       storage: {
         from: vi.fn().mockReturnValue({
           upload,
@@ -235,5 +275,6 @@ describe("POST /api/profile/avatar", () => {
     expect(res.status).toBe(200);
     expect(mockStripMetadataFromWebp).toHaveBeenCalled();
     expect(remove).toHaveBeenCalledWith(["user-1/avatar.jpg", "user-1/avatar.png"]);
+    expect(update).toHaveBeenCalledWith({ avatar_url: expect.stringContaining("avatar.webp?v=") });
   });
 });

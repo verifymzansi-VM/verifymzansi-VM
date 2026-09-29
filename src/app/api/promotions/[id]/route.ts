@@ -59,6 +59,8 @@ type PromotionOwnerRow = {
   category?: string | null;
   category_key?: string | null;
   price_cents?: number | null;
+  price_negotiable?: boolean | null;
+  business_id?: string | null;
   location_province?: string | null;
   location_city?: string | null;
   location_town?: string | null;
@@ -294,6 +296,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       existing.category !== (data.category || null) ||
       existing.category_key !== categoryKey ||
       existing.price_cents !== priceCents ||
+      (existing.price_negotiable ?? false) !== (data.negotiable ?? false) ||
+      (existing.business_id ?? null) !== (data.business_id || null) ||
       existing.location_province !== data.province ||
       existing.location_city !== data.city ||
       (existing.location_town ?? null) !== (data.location_town || null) ||
@@ -466,7 +470,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     if (removedMediaUrls.length > 0) {
       try {
-        await queuePublicMediaCleanup(admin, removedMediaUrls, "promotion_media_replaced");
+        await queuePublicMediaCleanup(admin, removedMediaUrls, "promotion_media_replaced", user.id);
       } catch (cleanupError) {
         log.error("Failed to queue replaced promotion media for cleanup", {
           error: cleanupError instanceof Error ? cleanupError.message : "Unknown error",

@@ -183,8 +183,29 @@ const baseStep = {
   status: "pending",
   risk_level: "low",
   risk_score: 10,
+  // Approving an id_doc step requires the ID number hash (duplicate-identity check).
+  id_number_hmac: "hmac-member-1",
   submitted_at: new Date().toISOString(),
 };
+
+/** Duplicate-ID lookup run before approving an id_doc step:
+ *  .select("id, user_id").eq().eq().eq().neq().limit().maybeSingle() — no conflict.
+ */
+function idConflictLookupChain() {
+  return {
+    eq: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          neq: vi.fn().mockReturnValue({
+            limit: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+            }),
+          }),
+        }),
+      }),
+    }),
+  };
+}
 
 // ── Tests ────────────────────────────────────────────────────
 
@@ -427,6 +448,7 @@ describe("POST /api/admin/verification/decide", () => {
                 }),
               };
             }
+            if (args[0] === "id, user_id") return idConflictLookupChain();
             // If selecting first_name / last_name, it's the legal-name propagation fetch
             if (typeof args[0] === "string" && args[0].includes("first_name")) {
               return {
@@ -527,6 +549,7 @@ describe("POST /api/admin/verification/decide", () => {
                 }),
               };
             }
+            if (args[0] === "id, user_id") return idConflictLookupChain();
 
             return {
               eq: vi.fn().mockResolvedValue({
@@ -599,6 +622,7 @@ describe("POST /api/admin/verification/decide", () => {
                 }),
               };
             }
+            if (args[0] === "id, user_id") return idConflictLookupChain();
 
             return {
               eq: vi.fn().mockResolvedValue({
@@ -731,6 +755,7 @@ describe("POST /api/admin/verification/decide", () => {
                 }),
               };
             }
+            if (args[0] === "id, user_id") return idConflictLookupChain();
 
             return {
               eq: vi.fn().mockResolvedValue({
@@ -792,6 +817,7 @@ describe("POST /api/admin/verification/decide", () => {
                 }),
               };
             }
+            if (args[0] === "id, user_id") return idConflictLookupChain();
             // Legal-name propagation fetch
             if (typeof args[0] === "string" && args[0].includes("first_name")) {
               return {
@@ -890,6 +916,7 @@ describe("POST /api/admin/verification/decide", () => {
                 }),
               };
             }
+            if (args[0] === "id, user_id") return idConflictLookupChain();
 
             return {
               eq: vi.fn().mockResolvedValue({
@@ -1124,6 +1151,7 @@ describe("POST /api/admin/verification/decide", () => {
                 }),
               };
             }
+            if (args[0] === "id, user_id") return idConflictLookupChain();
             // Legal-name propagation fetch
             if (typeof args[0] === "string" && args[0].includes("first_name")) {
               return {
@@ -1188,5 +1216,126 @@ describe("POST /api/admin/verification/decide", () => {
       "member@example.com",
       "Test Member"
     );
+  });
+
+  it("refuses to approve an ID step that has no ID number hash", async () => {
+    mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
+
+    const stepWithoutIdNumber = { ...baseStep, id_number_hmac: null };
+    const update = vi.fn();
+    mockFrom.mockImplementation((table: string) =>
+      table === "verification_steps"
+        ? {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: stepWithoutIdNumber, error: null }),
+              }),
+            }),
+            update,
+          }
+        : {}
+    );
+
+    const response = await POST(createMockRequest({ stepId: STEP_UUID, decision: "approved" }));
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ code: "id_number_missing" });
+    expect(update).not.toHaveBeenCalled();
+    expect(mockSendVerificationApprovedEmail).not.toHaveBeenCalled();
+  });
+
+  it("returns 409 step_changed when expectedUpdatedAt does not match the step version", async () => {
+    mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
+
+    const versionedStep = { ...baseStep, updated_at: "2026-09-01T10:00:00.000Z" };
+    const update = vi.fn();
+    mockFrom.mockImplementation((table: string) =>
+      table === "verification_steps"
+        ? {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: versionedStep, error: null }),
+              }),
+            }),
+            update,
+          }
+        : {}
+    );
+
+    const response = await POST(
+      createMockRequest({
+        stepId: STEP_UUID,
+        decision: "approved",
+        // The member re-uploaded after the reviewer loaded the step.
+        expectedUpdatedAt: "2026-09-01T09:55:00.000Z",
+      })
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ code: "step_changed" });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("applies the decision under an optimistic lock when expectedUpdatedAt matches the step version", async () => {
+    mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
+
+    // Same instant as the reviewer's copy, serialized differently.
+    const versionedStep = { ...baseStep, updated_at: "2026-09-01T10:00:00+00:00" };
+
+    const profileUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        in: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    });
+    const updatedAtEq = vi.fn().mockReturnValue({
+      select: vi.fn().mockResolvedValue({ data: [{ id: STEP_UUID }], error: null }),
+    });
+    const updateMock = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        in: vi.fn().mockReturnValue({ eq: updatedAtEq }),
+      }),
+    });
+
+    let artifactLookupReturned = false;
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: versionedStep, error: null }),
+            }),
+          }),
+          update: updateMock,
+        };
+      }
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          update: profileUpdate,
+        };
+      }
+      if (table === "kyc_artifacts") {
+        if (!artifactLookupReturned) {
+          artifactLookupReturned = true;
+          return artifactLookupChain();
+        }
+
+        return artifactStatusUpdateChain();
+      }
+      return {};
+    });
+
+    const response = await POST(
+      createMockRequest({
+        stepId: STEP_UUID,
+        decision: "rejected",
+        reasonCode: "blurry_image",
+        reasonNote: "The photo is very blurry",
+        expectedUpdatedAt: "2026-09-01T10:00:00.000Z",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({ status: "rejected" }));
+    expect(updatedAtEq).toHaveBeenCalledWith("updated_at", versionedStep.updated_at);
   });
 });

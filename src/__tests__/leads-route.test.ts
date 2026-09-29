@@ -81,17 +81,16 @@ describe("/api/leads", () => {
     });
   });
 
-  it("returns unread count for countOnly query", async () => {
-    const leadsSelectChain = {
-      eq: vi.fn().mockResolvedValue({ count: 3 }),
-    };
+  it("returns the caller's own unread count for countOnly query", async () => {
+    const statusEq = vi.fn().mockResolvedValue({ count: 3 });
+    const ownerEq = vi.fn().mockReturnValue({ eq: statusEq });
 
     mockCreateClient.mockResolvedValue({
       auth: {
         getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
       },
       from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue(leadsSelectChain),
+        select: vi.fn().mockReturnValue({ eq: ownerEq }),
       }),
     });
 
@@ -101,18 +100,55 @@ describe("/api/leads", () => {
 
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({ unreadCount: 3, leads: [] });
+    // RLS lets admins read every lead, so the inbox is explicitly owner-scoped.
+    expect(ownerEq).toHaveBeenCalledWith("owner_id", "user-1");
+    expect(statusEq).toHaveBeenCalledWith("status", "new");
+  });
+
+  it("scopes the lead list query to the caller's own leads", async () => {
+    const countChain = {
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ count: 1, error: null }),
+      }),
+    };
+    const lead = { id: "00000000-0000-4000-8000-000000000001", status: "new" };
+    const listChain = {
+      eq: vi.fn(),
+      order: vi.fn(),
+      limit: vi.fn(),
+      then: (resolve: (value: unknown) => unknown) => resolve({ data: [lead], error: null }),
+    };
+    listChain.eq.mockReturnValue(listChain);
+    listChain.order.mockReturnValue(listChain);
+    listChain.limit.mockReturnValue(listChain);
+    const select = vi.fn((columns: string) => (columns === "id" ? countChain : listChain));
+
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
+      from: vi.fn().mockReturnValue({ select }),
+    });
+
+    const res = await GET(createRequest("GET", "http://localhost:3000/api/leads"));
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ leads: [lead], unreadCount: 1 });
+    expect(countChain.eq).toHaveBeenCalledWith("owner_id", "user-1");
+    expect(listChain.eq).toHaveBeenCalledWith("owner_id", "user-1");
   });
 
   it("updates lead status via PATCH", async () => {
-    const updateChain = {
-      eq: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          maybeSingle: vi.fn().mockResolvedValue({
-            data: { id: "00000000-0000-4000-8000-000000000001", status: "read" },
-            error: null,
-          }),
+    const ownerEq = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: { id: "00000000-0000-4000-8000-000000000001", status: "read" },
+          error: null,
         }),
       }),
+    });
+    const updateChain = {
+      eq: vi.fn().mockReturnValue({ eq: ownerEq }),
     };
 
     mockCreateClient.mockResolvedValue({
@@ -136,6 +172,8 @@ describe("/api/leads", () => {
       success: true,
       lead: { id: "00000000-0000-4000-8000-000000000001", status: "read" },
     });
+    expect(updateChain.eq).toHaveBeenCalledWith("id", "00000000-0000-4000-8000-000000000001");
+    expect(ownerEq).toHaveBeenCalledWith("owner_id", "user-1");
   });
 
   it("returns 401 for unauthenticated PATCH", async () => {
@@ -157,12 +195,13 @@ describe("/api/leads", () => {
   });
 
   it("returns 404 when lead update matches no records", async () => {
-    const updateChain = {
-      eq: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-        }),
+    const ownerEq = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
       }),
+    });
+    const updateChain = {
+      eq: vi.fn().mockReturnValue({ eq: ownerEq }),
     };
 
     mockCreateClient.mockResolvedValue({
@@ -183,5 +222,6 @@ describe("/api/leads", () => {
 
     expect(res.status).toBe(404);
     await expect(res.json()).resolves.toEqual({ error: "Lead not found" });
+    expect(ownerEq).toHaveBeenCalledWith("owner_id", "user-1");
   });
 });

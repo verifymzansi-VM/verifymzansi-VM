@@ -278,6 +278,9 @@ export async function POST(request: NextRequest) {
           data.cover_video,
           data.video_thumbnail,
           ...(data.gallery_photos ?? []),
+          ...(data.business_details?.type === "mall_store"
+            ? (data.business_details.mall_photos ?? [])
+            : []),
         ],
       });
     } catch (mediaError) {
@@ -791,12 +794,13 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // Only ORDER BY featured_until when the column is in the SELECT clause
-      query = query.order("boost_until", { ascending: false, nullsFirst: false });
-      if (selectClause.includes("featured_until")) {
-        query = query.order("featured_until", { ascending: false, nullsFirst: false });
-      }
-      return query.order("created_at", { ascending: false }).range(offset, offset + limit - 1);
+      // active_* are computed fields (see 20260929150000): null once the paid
+      // window has ended, so expired add-ons never outrank anything.
+      return query
+        .order("active_boost_until", { ascending: false, nullsFirst: false })
+        .order("active_featured_until", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
+        .range(offset, offset + limit - 1);
     };
 
     const result = await queryWithSelectFallbacks({
@@ -850,9 +854,11 @@ export async function GET(request: NextRequest) {
     const serializedBusinesses = publicBusinesses.map((business) => {
       const businessId = String(business.id ?? "");
       const likeSummary = engagementAvailable ? likeSummaryResult.data.get(businessId) : undefined;
+      // Account ids stay server-side (POPIA), as for listings and promotions.
+      const { owner_id: _ownerId, seller_id: _sellerId, ...publicBusiness } = business;
 
       return {
-        ...business,
+        ...publicBusiness,
         view_count: engagementAvailable ? (viewCountResult.data.get(businessId) ?? null) : null,
         like_count: engagementAvailable ? (likeSummary?.likeCount ?? null) : null,
         viewer_has_liked: likeSummary?.viewerHasLiked ?? false,

@@ -67,6 +67,12 @@ vi.mock("@/lib/utils/rate-limit", () => ({
 
 import { GET as getEvidence } from "@/app/api/admin/verification/evidence/route";
 
+/** Real magic bytes: the evidence route sniffs Content-Type from the decrypted bytes. */
+const JPEG_BYTES = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+const PNG_BYTES = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+]);
+
 // ── Helpers ──────────────────────────────────────────────────
 
 function mockAuth(user: { id: string; app_metadata?: Record<string, unknown> } | null) {
@@ -102,7 +108,7 @@ describe("KYC Security", () => {
     mockLogAuditEvent.mockResolvedValue(undefined);
     mockGetLinkedEvidenceArtifactIds.mockResolvedValue(["art-1"]);
     mockDownloadKycDocumentWithMetrics.mockResolvedValue({
-      buffer: Buffer.from("fake-image-data"),
+      buffer: JPEG_BYTES,
       downloadMs: 1,
       decryptMs: 1,
     });
@@ -112,7 +118,7 @@ describe("KYC Security", () => {
     it("sets no-cache, no-store headers on evidence response", async () => {
       mockAuth({ id: "admin-1", app_metadata: { role: "admin" } });
       mockDownloadKycDocumentWithMetrics.mockResolvedValue({
-        buffer: Buffer.from("fake-image-data"),
+        buffer: JPEG_BYTES,
         downloadMs: 1,
         decryptMs: 1,
       });
@@ -178,12 +184,13 @@ describe("KYC Security", () => {
       expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
       expect(res.headers.get("X-Frame-Options")).toBe("DENY");
       expect(res.headers.get("Content-Disposition")).toBe("inline");
+      expect(res.headers.get("Content-Type")).toBe("image/jpeg");
     });
 
-    it("includes CSP header restricting to self images only", async () => {
+    it("includes a sandboxed CSP header restricting to self images only", async () => {
       mockAuth({ id: "admin-1", app_metadata: { role: "admin" } });
       mockDownloadKycDocumentWithMetrics.mockResolvedValue({
-        buffer: Buffer.from("fake-image-data"),
+        buffer: PNG_BYTES,
         downloadMs: 1,
         decryptMs: 1,
       });
@@ -244,8 +251,11 @@ describe("KYC Security", () => {
         )
       );
 
-      expect(res.headers.get("Content-Security-Policy")).toContain("default-src 'none'");
-      expect(res.headers.get("Content-Security-Policy")).toContain("img-src 'self'");
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Content-Type")).toBe("image/png");
+      expect(res.headers.get("Content-Security-Policy")).toBe(
+        "default-src 'none'; img-src 'self'; sandbox"
+      );
     });
   });
 
@@ -507,7 +517,7 @@ describe("KYC Security", () => {
       mockAuth({ id: "admin-1", app_metadata: { role: "admin" } });
       mockGetLinkedEvidenceArtifactIds.mockResolvedValue([]);
       mockDownloadKycDocumentWithMetrics.mockResolvedValue({
-        buffer: Buffer.from("fake-image-data"),
+        buffer: JPEG_BYTES,
         downloadMs: 1,
         decryptMs: 1,
       });

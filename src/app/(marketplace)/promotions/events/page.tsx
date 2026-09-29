@@ -107,8 +107,8 @@ export default async function EventsPage() {
       .or(`end_date.is.null,end_date.gte.${now}`),
     now
   )
-    .order("boost_until", { ascending: false, nullsFirst: false })
-    .order("featured_until", { ascending: false, nullsFirst: false })
+    .order("active_boost_until", { ascending: false, nullsFirst: false })
+    .order("active_featured_until", { ascending: false, nullsFirst: false })
     .order("start_date", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(48);

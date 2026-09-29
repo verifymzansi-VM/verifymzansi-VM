@@ -68,6 +68,17 @@ export async function POST(request: NextRequest) {
       return parsedBody.response;
     }
 
+    // The schema limits avatars to our avatars bucket; the file must also be
+    // in the caller's own folder, not another member's picture.
+    const requestedAvatar = parsedBody.data.avatarUrl;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
+    if (
+      requestedAvatar &&
+      !requestedAvatar.startsWith(`${supabaseUrl}/storage/v1/object/public/avatars/${user.id}/`)
+    ) {
+      return NextResponse.json({ error: "Invalid avatar URL" }, { status: 400 });
+    }
+
     // ── Fetch current profile for policy enforcement ─────────────────
     const { data: currentProfile, error: profileFetchError } = await supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
@@ -194,7 +205,9 @@ export async function POST(request: NextRequest) {
       updatePayload.pending_phone = normalizedPhone ?? null;
     }
 
-    const { data: updatedProfile, error: updateError } = await supabase
+    // Profile rows are written server-side only; the payload above is built
+    // from validated fields and the row is scoped to the signed-in user.
+    const { data: updatedProfile, error: updateError } = await createAdminClient()
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .update(updatePayload)
       .eq("user_id", user.id)
